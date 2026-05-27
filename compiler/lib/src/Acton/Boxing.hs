@@ -36,20 +36,29 @@ type BoxM a                        = State Int a
 
 runBoxM ss                         = evalState ss 0
 
-type BoxEnv                        = EnvF ()
+type BoxEnv                        = EnvF BoxX
 
 
--- data BoxX                          = BoxX { unboxedVarsX :: [(Name,Name)], isTopLevelX :: Bool, delayedUnboxX :: Bool }
+data BoxX                          = BoxX {inClassX :: Maybe (TCon, TEnv), inActionX :: Bool, returnTypeX :: Maybe Type}
 
 
 boxEnv                             :: Env0 -> BoxEnv
-boxEnv env0                        = setX env0 ()
+boxEnv env0                        = setX env0 BoxX{inClassX = Nothing, inActionX = False, returnTypeX = Nothing}
 
-{-
+
 setInClass mtc env                  = modX env $ \x -> x{ inClassX = mtc }
 
 getInClass env                      = inClassX $ envX env
 
+setInAction b env                   = modX env $ \x -> x{ inActionX = b }
+
+getInAction env                     = inActionX $ envX env
+
+setReturnType t env                 = modX env $ \x -> x{ returnTypeX = t }
+
+getReturnType env                   = returnTypeX $ envX env
+
+{-
 addUnboxedVars                     :: [(Name,Name)] -> BoxEnv -> BoxEnv
 addUnboxedVars ps env               = modX env $ \x -> x{unboxedVarsX = foldr (uncurry M.insert) (unboxedVarsX x) ps}
 
@@ -68,13 +77,15 @@ isDelayedUnbox env                 = delayedUnboxX $ envX env
 -- Unboxing helpers -------------------------------------
 
 -- returns the uninstantiated type of method n in class c, i.e. the type of the corresponding method in oldest superclass.
-generalTypeC                       :: EnvF x -> QName -> Name -> Type
-generalTypeC env c n                =  case fromJust (lookup n (findAttrSchemas env c)) of
-                                           NDef sc _ _ -> sctype sc
-                                           NSig sc _ _ -> sctype sc
-                                           ni -> error ("Internal error in CodeGen.generalType: found NameInfo "++show ni++ " for "++show n)
-
--- generalType env n returns the same info as generalType if n is a method of a class, but expects the TEnv of the class to be accessed via the env;
+-- n may be a method for which findAttrSchemas has no info, e.g. __init__, __str__, etc, in which case Nothing is returned.
+generalTypeC                       :: EnvF x -> QName -> Name -> Maybe Type
+generalTypeC env c n                =  case lookup n (findAttrSchemas env c) of
+                                           Just (NDef sc _ _) -> Just (sctype sc)
+                                           Just (NSig sc _ _) -> Just (sctype sc)
+                                           Just  _ -> Nothing
+                                           Nothing -> Nothing
+                                           
+-- generalType env n returns the same info as generalTypeC if n is a method of a class, but expects the TEnv of the class to be accessed via the env;
 -- for use while traversing the class.
 -- If n is a toplevel function it returns just the type in the NameInfo from the env.
 -- n may be a method for which findAttrSchemas has no info, e.g. __init__, __str__, etc, in which case Nothing is returned.
@@ -101,9 +112,17 @@ matchTypes TNil{} TNil{}            = posNil
 matchTypes t _                      = t    -- ignore possibilities for unboxing 
 
 
--- returns the representation type of method f selected from c with TUnbox annotations where appropriate
-rtypeOf env c f                     =  matchTypes (typeOf env (eVar f)) (generalTypeC env c f)
- 
+-- returns the representation type of method f selected from tc.
+-- If generalTypeC cannot find an uninstantiated type to match against, the instantiated type is matched against itself (so, unboxable types will be annotated with TUnboxed).
+rtypeOf                             :: EnvF x -> TCon -> Name -> Type
+rtypeOf env tc f                     = case generalTypeC env (tcname tc) f of
+                                           Just t -> matchTypes (sctype sc) t
+                                           Nothing -> matchTypes (sctype sc) (sctype sc)
+    where (sc,_)                     = findAttr' env tc f
+
+rtypeOf' env w f                     = rtypeOf env tc f
+    where NVar (TCon _ tc)           = findQName w env
+
 -- Auxiliaries ---------------------------------------------------------------------------------------------------
 
 -- unboxing
@@ -113,6 +132,94 @@ numericTypes                       = integralTypes ++ [tFloat]
 unboxableTypes                     = tail numericTypes
 
 isUnboxable t                      = t `elem` unboxableTypes
+
+isUnboxedRep TUnboxed{}            = True
+isUnboxedRep t                     = isUnboxable t
+
+asUnboxedRep t
+  | isUnboxable t                  = TUnboxed NoLoc t
+  | otherwise                      = t
+
+boxedRepType (TUnboxed _ t)         = t
+boxedRepType t                      = t
+
+unboxedRepType (TUnboxed _ t)       = Just t
+unboxedRepType t
+  | isUnboxable t                   = Just t
+  | otherwise                       = Nothing
+
+forceUnbox env t (Box _ e)
+  | boxedResultExpr env e            = UnBox t e
+  | otherwise                        = e
+forceUnbox env t e                   = UnBox t e
+
+boxedResultExpr env (Paren _ e)      = boxedResultExpr env e
+boxedResultExpr env (Call _ f _ KwdNil)
+                                      = callReturnsBoxed env f
+boxedResultExpr env _                = False
+
+callReturnsBoxed env f@(TApp _ f0 _)
+  | callIsClass env f0               = True
+  | otherwise                        = callableReturnsBoxed env f
+callReturnsBoxed env f@(Var _ n)
+  | NClass{} <- findQName n env      = True
+  | otherwise                        = callableReturnsBoxed env f
+callReturnsBoxed env f               = callableReturnsBoxed env f
+
+callIsClass env (TApp _ f _)         = callIsClass env f
+callIsClass env (Var _ n)            = case findQName n env of
+                                         NClass{} -> True
+                                         _        -> False
+callIsClass env _                    = False
+
+callableReturnsBoxed env f           = case rtypeOfFun env f of
+                                         TFun _ _ _ _ t -> isUnboxable t
+                                         _              -> False
+
+unboxedFieldType env e@(Var _ n) attr
+  | isTypeRef (findQName n env)     = Nothing
+  | otherwise                       = unboxedFieldType' env e attr
+unboxedFieldType env e n            = unboxedFieldType' env e n
+
+unboxedFieldType' env e n           = case typeOf env e of
+                                        TCon _ tc -> fieldType tc
+                                        TVar _ tv -> fieldType (findTVBound env tv)
+                                        _         -> Nothing
+  where fieldType tc                = let (_, tc') = splitTC env tc
+                                          t        = sctype $ fst $ findAttr' env tc' n
+                                      in if isUnboxedRep t then Just (boxedType t) else Nothing
+        boxedType (TUnboxed _ t)     = t
+        boxedType t                  = t
+
+isTypeRef NAct{}                    = True
+isTypeRef NClass{}                  = True
+isTypeRef NProto{}                  = True
+isTypeRef NExt{}                    = True
+isTypeRef _                         = False
+
+varType (NVar t)                    = Just t
+varType (NSVar t)                   = Just t
+varType _                           = Nothing
+
+qvarType env n                      = tryQName n env >>= varType . convHNameInfo2NameInfo
+
+envVarType n te                     = case lookup n te of
+                                        Just (NVar t)  -> Just t
+                                        Just (NSVar t) -> Just t
+                                        _              -> Nothing
+
+assignTargetType env s n e          = maybe (maybe (typeOf env e) id (qvarType env (NoQ n))) id (envVarType n (envOf s))
+
+targetType env (Dot _ e n)          = sctype sc
+  where t0                          = typeOf env e
+        (_,c0)                      = case t0 of
+                                         TCon _ tc -> splitTC env tc
+                                         TVar _ tv -> splitTC env (findTVBound env tv)
+        (sc, _)                     = findAttr' env c0 n
+targetType env (Var _ n)
+  | Just t <- qvarType env n
+                                    = t
+targetType env e                    = typeOf env e
 
 
 prims = [primISINSTANCE, primISNOTNONE, primISNONE]
@@ -140,30 +247,81 @@ unbox t e                       = UnBox t e
 tryUnbox, tryBox :: Type -> Expr -> Expr
 tryUnbox (TUnboxed _ t) e       = unbox t e
 tryUnbox _ e                    = e
-tryBox t e                      = if isUnboxable t then Box t e else e
+tryBox (TUnboxed _ _) (UnBox _ e)= e
+tryBox (TUnboxed _ t) e          = Box t e
+tryBox _ e                      = e
+
+fixarg env (TUnboxed _ t) e     = forceUnbox env t e
+fixarg env (TOpt _ t) e@Box{}   = e
+fixarg env (TOpt _ t) e
+  | isUnboxable t && boxedRepType (typeOf env e) == t
+                                  = Box t e
+fixarg env t e@Box{}             = e
+fixarg env t e
+  | isUnboxable t && isRawArg e   = Box t e
+  where isRawArg UnBox{}          = True
+        isRawArg e                = case typeOf env e of
+                                      TUnboxed{} -> True
+                                      _          -> False
+fixarg env t e
+  | Nothing <- unboxedRepType t,
+    Just rt <- unboxedRepType (typeOf env e)
+                                  = Box rt e
+fixarg env _ e                   = e
 
 fixargs                         :: BoxEnv -> PosArg -> Type -> PosArg
-fixargs env (PosArg e p) r      = PosArg (tryUnbox t e) (fixargs env p (rtail r))
-   where t                      = rtype r
--- fixargs env (PosStar e) r       = PosStar (tryUnbox t e) 
+fixargs env (PosArg e p) r      = PosArg (fixarg env (rtype r) e) (fixargs env p (rtail r))
+-- fixargs(PosStar e) r       = PosStar (tryUnbox t e) 
 --    where t                      = rtype r
-fixargs env PosNil _            = PosNil
+fixargs env PosNil _               = PosNil
 
-uType env w n                       = sctype sc
-   where NVar (TCon _ tc)           = findQName w env
-         (sc,_)                     = findAttr' env tc n
+fixpars (PosPar n (Just t) mbe p) r
+                                = PosPar n (Just t') mbe (fixpars p (rtail r))
+     where t'                   = rtype r
+fixpars PosNIL _            = PosNIL
 
-{-
-instance UnboxClass PosArg where
-   unbox t (PosArg e p)            = PosArg (unbox t e) (unbox t p)
-   unbox t (PosStar e)             = PosStar (unbox t e)
-   unbox t PosNil                  = PosNil
--}
+rtypeOfFun env f@(TApp _ (Var _ n) _)
+  | boxedCPrim n                    = typeOf env f
+rtypeOfFun env (TApp _ f0 [])       = rtypeOfFun env f0
+rtypeOfFun env f@(TApp _ f0 ts)     = matchTypes (typeOf env f) (typeInstOf env (map (const tWild) ts) f0)
+rtypeOfFun env (Async _ f)          = rtypeOfFun env f
+rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
+                                        TCon _ tc -> rtypeOf env tc n
+                                        TVar _ tv -> rtypeOf env (findTVBound env tv) n
+                                        _         -> typeOf env f
+rtypeOfFun env f@(Var _ n)
+  | boxedCPrim n                    = typeOf env f
+  | otherwise                       = case findQName n env of
+                                        NDef sc _ _
+                                          | isInternalQName n -> matchTypes (typeOf env f) (typeOf env f)
+                                          | otherwise         -> matchTypes (typeOf env f) (sctype sc)
+                                        NSig sc _ _  -> matchTypes (typeOf env f) (sctype sc)
+                                        NClass q _ _ _
+                                          | null q      -> matchTypes (typeOf env f) (typeOf env f)
+                                        _            -> typeOf env f
+rtypeOfFun env f                    = typeOf env f
+
+boxedCPrim n                        = n `elem` [primAFTER, primAFTERc, primAFTERf]
+
+isInternalQName (NoQ n)             = isInternal n
+isInternalQName (GName _ n)         = isInternal n
+isInternalQName (QName _ n)         = isInternal n
+
 -- Walking the syntax tree to place Box/UnBox annotations and sometimes restructure code to mimic C code on unboxed values ---------------
 -- Return list of used witnesses and restructured code
 
 class Boxing a where
     boxing :: BoxEnv -> a -> BoxM ([Name],a)
+
+boxingTarget env (Dot l e n)       = do (ws1,e1) <- boxing env e
+                                        return (ws1, Dot l e1 n)
+boxingTarget env (DotI l e i)      = do (ws1,e1) <- boxing env e
+                                        return (ws1, DotI l e1 i)
+boxingTarget env (Rest l e n)      = do (ws1,e1) <- boxing env e
+                                        return (ws1, Rest l e1 n)
+boxingTarget env (RestI l e i)     = do (ws1,e1) <- boxing env e
+                                        return (ws1, RestI l e1 i)
+boxingTarget env e                 = return ([], e)
 
 instance Boxing a => Boxing (Maybe a) where
     boxing env (Just x)           = do (ws1, x1) <- boxing env x
@@ -187,8 +345,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
             env1                      = define te env
 
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
-                                          
-                                          (ws2,xs') <- (if iterKW `elem` dom te then trace ("Added __iter__") else id) $ boxing (define te env) xs
+                                          (ws2,xs') <- boxing (define te env) xs
                                           return (ws1++ws2, x' : xs')
       where te                       = envOf x
 
@@ -200,22 +357,23 @@ instance Boxing Expr where
        | isWitness n                = return ([n], e)
        | isUnboxable t              = return ([], Box t e)
        where t                      = typeOf env e
---    boxing env v@Var{}
---       | isUnboxable t              = return ([], Box t v)               Needed for math.pi
---       | otherwise                  = return ([], v)
---       where t                      = typeOf env v                       ###### qInst [] __builtin__.Eq is [G_self] => () -> __builtin__.Eq[G_self]
+    -- Qualified imported constants such as math.pi need the same boxed read
+    -- as local unboxable variables, but typeOf is not safe for all Vars here.
+    boxing env v@(Var _ n)
+       | Just t <- varType (findQName n env), isUnboxable t
+                                    = return ([], Box t v)
     boxing env (Call _ (Dot _ e@(Var _ w@(NoQ n)) attr) p KwdNil)
       | isWitness n                 = do (ws1,p1) <- boxing env p
                                          (ws2,e1) <- boxingWitness env w attr ws1 p1 pr rest
                                          return (ws1++ws2,e1)
      where
-      TFun _ _ pr _ rest            = uType env w attr
+      TFun _ _ pr _ rest            = rtypeOf' env w attr
       boxingWitness                 :: BoxEnv -> QName -> Name -> [Name] -> PosArg -> Type -> Type ->BoxM ([Name],Expr)
       boxingWitness env w attr ws p pr rest = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
                                            | attr == fromatomKW      -> boxingFromAtom w ts es
-                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts pr rest  -- rest = "result type", not any form of reminder
+                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts pr rest  -- rest indicates "result type", not any form of remainder
                                            | attr `elem` unopKWs     -> boxingUnop w attr es ts pr rest
                                            | attr `elem` eqordKWs    -> boxingCompop w attr es ts pr rest
                                         _                            -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
@@ -251,12 +409,27 @@ instance Boxing Expr where
       | otherwise                   = do (ws1,p1) <- boxing env p
                                          return (ws1, tryBox t $ eCallP e (fixargs env p1 r))
        where e'                     = tApp (eQVar (unboxedPrim f)) ts
-             TFun _ _ r _ t         = typeOf env e
+             TFun _ _ r _ t         = rtypeOfFun env e
+    boxing env (Call l f@Async{} p KwdNil)
+                                    = do (ws1,f1) <- boxing env f
+                                         (ws2,p1) <- boxing env p
+                                         return (ws1++ws2, eCallP f1 (fixargs env p1 r))
+        where  TFun _ _ r _ _       = rtypeOfFun env f
+    -- boxing env c@(Call l e@(Var _ (NoQ n)) p KwdNil)
+    --                                 = do (ws1,p1) <- boxing env p
+    --                                      return (ws1, tryBox t (eCallP e (fixargs env p1 r)))
+    --    where TFun _ _ r _ t         = typeOf env c
+    -- boxing env (Call _ a@(TApp _ (Dot _ e n) ts) p KwdNil)
+    --                                 = do (ws1,p1) <- boxing env p
+    --                                      (ws2,e1) <- boxing env e
+    --                                      let res = eCallP (tApp (eDot e1 n) ts) (fixargs env p1 r)
+    --                                      return (ws1++ws2, tryBox t res)
+    --     where TFun _ _ r _ t        = typeOf env a
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f
                                          (ws2,p1) <- boxing env p
                                          let c = eCallP f1 (fixargs env p1 r)
                                          return (ws1++ws2, tryBox t c)
-        where  TFun _ _ r _ t       = typeOf env f
+        where  TFun _ _ r _ t       = rtypeOfFun env f
     boxing env (TApp l f ts)        = do (ws1,f1) <- boxing env f
                                          return (ws1, TApp l f1 ts)
     boxing env (Let l ss e)         = do (ws1, ss') <- boxing env ss
@@ -275,18 +448,30 @@ instance Boxing Expr where
         where t = typeOf env e1
     boxing env (IsInstance l e qn)  = do (ws1,e1) <- boxing env e
                                          return (ws1, IsInstance l e1 qn)
-    boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1   -- op is And or Or
+    boxing env e@(BinOp l e1 op e2)
+      | op `notElem` [And, Or],
+        Just rt <- unboxedRepType t
+                                    = do (ws1,e1') <- boxing env e1
+                                         (ws2,e2') <- boxing env e2
+                                         return (ws1++ws2, Box rt $ Paren NoLoc $ BinOp l (unboxArg e1 e1') op (unboxArg e2 e2'))
+      where t                       = typeOf env e
+            unboxArg e0 e'          = maybe e' (\t -> forceUnbox env t e') (unboxedRepType (typeOf env e0))
+    boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1
                                          (ws2,e2') <- boxing env e2
                                          return (ws1++ws2, BinOp l e1' op e2')
-         where t                    = typeOf env e
     boxing env (CompOp l e os)      = do (ws1,e1) <- boxing env e
                                          (ws2,e2) <- boxing env os
                                          return (ws1++ws2, CompOp l e1 e2)
-    boxing env (UnOp l uop e)       = do (ws1,e') <- boxing env e      --uop is Not
+    boxing env (UnOp l uop e)
+      | uop /= Not,
+        Just rt <- unboxedRepType (typeOf env e)
+                                    = do (ws1,e') <- boxing env e
+                                         return (ws1, Box rt $ Paren NoLoc $ UnOp l uop (unbox rt e'))
+    boxing env (UnOp l uop e)       = do (ws1,e') <- boxing env e
                                          return (ws1, UnOp l uop e')
-         where t                    = typeOf env e
     boxing env d@(Dot l e n)        = do (ws1,e1) <- boxing env e
-                                         return (ws1, Dot l e1 n)
+                                         let d' = Dot l e1 n
+                                         return (ws1, maybe d' (\t -> Box t d') (unboxedFieldType env e n))
     boxing env (DotI l e i)         = do (ws1,e1) <- boxing env e
                                          return (ws1, DotI l e1 i)
     boxing env (Rest l e n)         = do (ws1,e1) <- boxing env e
@@ -348,15 +533,17 @@ instance Boxing Stmt where
           where t                      = typeOf env e
                 op                     = bin2Aug attr
 
-    boxing env (x@(Assign l [p@(PVar _ n (Just t))] e))
-       | isUnboxable t               = do (ws1,p') <- boxing env p
-                                          (ws2, e') <- boxing env e
-                                          return (ws1++ws2, Assign l [p'] (unbox t e'))
-    boxing env (Assign l [pt@PVar{}] e)
+    boxing env (Assign l [p@(PVar _ n (Just t))] e)
+                                    = do (ws1,p') <- boxing env p
+                                         (ws2, e') <- boxing env e
+                                         return (ws1++ws2, Assign l [pvar p'] (if isUnboxable t then unbox t e' else e'))
+      where pvar (PVar l n _)       = PVar l n (Just (asUnboxedRep t))
+            pvar p                  = p
+    boxing env s@(Assign l [pt@(PVar _ n Nothing)] e)
                                    = do (ws1,pt1) <- boxing env pt
                                         (ws2,e2) <- boxing env e
-                                        return (ws1++ws2,Assign l [pt1] (if isUnboxable t then unbox t e2 else e2))
-             where t               = typeOf env e
+                                        return (ws1++ws2,Assign l [pt1] (maybe e2 (\t' -> forceUnbox env t' e2) (unboxedRepType t)))
+             where t               = assignTargetType env s n e
 
 
 {-  This does not work. It may cause mutable updates to integer-typed varibles.                                   
@@ -392,17 +579,19 @@ instance Boxing Stmt where
                                          return (ws, AugAssign l x1 op (unbox t x2'))
           where t                   = typeOf env e
                 op                  = bin2Aug attr
-    boxing env (MutAssign l tg e)   = do (ws0,tg1) <- boxing env tg
+    boxing env (MutAssign l tg e)   = do (ws0,tg1) <- boxingTarget env tg
                                          (ws1,e1) <- boxing env e
-                                         return (ws0++ws1, MutAssign l tg1 (if isUnboxable t then unbox t e1 else e1))
-          where t                   = typeOf env e
+                                         return (ws0++ws1, MutAssign l tg1 (maybe e1 (\t' -> forceUnbox env t' e1) (unboxedRepType t)))
+          where t                   = targetType env tg
     boxing env (Pass l)             = return ([], Pass l)
     boxing env (Delete l t)         = return ([], Delete l t)
     boxing env (Return l (Just e))  = do (ws1,e1) <- boxing env e
-                                         if isUnboxable t
-                                          then return (ws1, Return l (Just (unbox t e1)))
-                                          else return (ws1, Return l (Just e1))
-        where t                     = typeOf env e
+                                         case getReturnType env of
+                                           Just rt | Just t <- unboxedRepType rt, not (getInAction env)
+                                             -> return (ws1, Return l (Just (forceUnbox env t e1)))
+                                           Nothing | Just t <- unboxedRepType (typeOf env e), not (getInAction env)
+                                             -> return (ws1, Return l (Just (forceUnbox env t e1)))
+                                           _ -> return (ws1, Return l (Just e1))
     boxing env (Return l Nothing)   = return ([], Return l Nothing)
     boxing env (Break l)            = return ([], Break l)
     boxing env (Continue l)         = return ([], Continue l)
@@ -440,13 +629,24 @@ instance Boxing Decl where
         where ss'                   = vsubst [(tvSelf, tCon c)] ss
               c                     = TC (NoQ n) (map tVar $ qbound q)
               env1                  = defineTVars q env
-              env2                  = setGtypes env1 (findAttrSchemas env1 (NoQ n))
-    boxing env (Def l n q p KwdNIL t ss dec fx ddoc)
-                                    = do (ws1,p') <- boxing env p
-                                         (ws2,ss') <- boxing env1 ss
-                                         return (ws1++ws2, Def l n q p' KwdNIL t ss' dec fx ddoc)
-      where te                      = envOf p
-            env1                    = define te env
+              env2                  = Acton.Boxing.setInClass (Just(c,findAttrSchemas env1 (NoQ n))) env1
+    boxing env f@(Def l n q p KwdNIL t ss dec fx ddoc)
+                                    = do (ws2,ss') <- boxing env1 ss
+                                         return (ws2, Def l n q pFinal KwdNIL (Just t') ss' dec fx ddoc)
+      where ft                      = tFun fx (prowOf p) kwdNil (fromJust t)
+            (pFinal, t0@(TFun _ _ _ _ t'))
+                                    = case getInClass env of
+                                          Just(tc,_)
+                                            | dec == Static -> (fixpars p r, mt)
+                                            | otherwise     -> (keepSelf p r, mt)
+                                             where mt@(TFun _ _ r _ _) = rtypeOf env tc n
+                                          Nothing -> (fixpars p r, mt)
+                                             where mt@(TFun _ _ r _ _) = maybe (matchTypes ft ft) (matchTypes ft) (generalType env n)
+            keepSelf (PosPar a b c p') r
+                                    = PosPar a b c (fixpars p' r)
+            keepSelf p r            = fixpars p r
+            te                      = envOf pFinal
+            env1                    = setReturnType (Just t') $ setInAction (fx == fxAction) $ define te env
   
 instance Boxing Branch where
     boxing env (Branch e ss)       = do (ws1,e') <- boxing env e
@@ -457,7 +657,7 @@ instance Boxing PosPar where
     boxing env (PosPar n (Just t) e p)
                                    = do (ws1, e1) <- boxing env e
                                         (ws2, p2) <- boxing env p
-                                        return (ws1++ws2, PosPar n (Just t) (if isUnboxable t then maybe Nothing (Just . unbox t) e1 else e1)  p2)
+                                        return (ws1++ws2, PosPar n (Just t) e1 p2) -- keep boxed if has default value (if isUnboxable t then maybe Nothing (Just . unbox t) e1 else e1)  p2)
     boxing env (PosSTAR n t)       = return ([],PosSTAR n t)
     boxing env PosNIL              = return ([],PosNIL)
 

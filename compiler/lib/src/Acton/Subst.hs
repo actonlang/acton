@@ -63,6 +63,7 @@ instance VFree Type where
     vfree (TOpt _ t)                = vfree t
     vfree (TRow _ k n t r)          = vfree t ++ vfree r
     vfree (TStar _ k r)             = vfree r
+    vfree (TUnboxed _ t)            = vfree t
     vfree _                         = []
 
 instance VFree TCon where
@@ -228,7 +229,7 @@ instance VSubst Type where
     vsubst s (TWild l)              = TWild l
     vsubst s (TNil l k)             = TNil l k
     vsubst s (TFX l fx)             = TFX l fx
-
+    vsubst s (TUnboxed l t)         = TUnboxed l (vsubst s t)
 instance VSubst TCon where
     vsubst s (TC n ts)              = TC n (vsubst s ts)
 
