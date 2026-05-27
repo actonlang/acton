@@ -4,7 +4,7 @@ Overview
 
 This module implements the shared Acton compilation pipeline that both the
 acton CLI and the LSP server drive. It builds a dependency graph across
-projects, runs the front passes (parse, kinds, types) to produce .ty interface
+projects, runs the front passes (parse, kinds, types) to produce .tydb interface
 files and diagnostics, and then emits the back passes (normalizer through
 codegen) as separate jobs.
 
@@ -14,7 +14,7 @@ about a modified module, cancel running tasks and restart compilation of that
 module from that point. This is used by watch mode and LSP where updates to
 files or in-editor buffers trigger recompilation. Dependencies are considered so
 that updates to a module only cause the affected part of the subgraph, i.e. the
-modified module and downstream dependencies to be recompiled. Cached .ty headers
+modified module and downstream dependencies to be recompiled. Cached .tydb headers
 are reused when public module interfaces are unchanged. Per-name pub/impl hashes
 stored in the header drive front-pass vs back-pass decisions, and moduleImplHash
 is embedded in generated .c/.h to detect stale codegen. Inter-module
@@ -60,7 +60,7 @@ Call flow:
 
 State and orchestration:
   - Acton.Compile holds only small in-process caches (tyPathCache, pubHashCache,
-    and nameHashCache) to speed up .ty lookups; all orchestration state is
+    and nameHashCache) to speed up .tydb lookups; all orchestration state is
     owned by the caller.
   - Callers allocate and hold a CompileScheduler from this module. The
     scheduler encapsulates mutable state (generation id, cancelable async
@@ -167,6 +167,7 @@ module Acton.Compile
   , filterActFile
   , srcFile
   , outBase
+  , tyDbPath
   , srcBase
   , getModPath
   , modNameToFilename
@@ -248,7 +249,7 @@ import Network.HTTP.Types.Header (hContentDisposition, hContentType)
 import Network.HTTP.Types.Status (statusCode)
 import System.Clock
 import System.Directory
-import System.Directory.Recursive
+import System.Directory.Recursive (getFilesRecursive)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
@@ -808,12 +809,12 @@ dump mn h txt =
             ++ '\n' : replicate (38 + length h + length (modNameToString mn)) '=' ++ "\n")
 
 -- | Compute the subdirectory for a module within a types root.
--- Used when creating directories before writing .ty files.
+-- Used when creating directories before writing .tydb files.
 getModPath :: FilePath -> A.ModName -> FilePath
 getModPath path mn =
   joinPath [path, joinPath $ init $ A.modPath mn]
 
--- Global caches (process‑wide) to reduce repeated .ty lookups during parallel builds
+-- Global caches (process‑wide) to reduce repeated .tydb lookups during parallel builds
 --
 -- We deliberately create top‑level MVars via unsafePerformIO and mark them
 -- NOINLINE so their initializer runs exactly once. Without NOINLINE, GHC could
@@ -822,11 +823,11 @@ getModPath path mn =
 --
 -- Thread‑safety: all access goes through modifyMVar/modifyMVar_ so read/modify/
 -- write is atomic. These caches are best‑effort for performance; correctness
--- does not depend on them. On a miss we fall back to reading .ty headers from
+-- does not depend on them. On a miss we fall back to reading .tydb headers from
 -- disk. After a successful compile we update pubHashCache so dependents in
 -- this process see the new public hash.
 --
--- tyPathCache    :: ModName -> absolute .ty path (resolved from searchPath)
+-- tyPathCache    :: ModName -> absolute .tydb path (resolved from searchPath)
 -- pubHashCache :: ModName -> current public hash (from header or compile)
 -- nameHashCache  :: ModName -> per-name hash info (from header or compile)
 {-# NOINLINE tyPathCache #-}
@@ -841,7 +842,7 @@ pubHashCache = unsafePerformIO (newMVar M.empty)
 nameHashCache :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))
 nameHashCache = unsafePerformIO (newMVar M.empty)
 
--- | Resolve the on-disk .ty path for a module, using a process-wide cache.
+-- | Resolve the on-disk .tydb path for a module, using a process-wide cache.
 -- Avoids repeated filesystem walks when many modules share dependencies.
 getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
 getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
@@ -860,13 +861,13 @@ getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
   case M.lookup mn m of
     Just p -> do
       pNorm <- normalizePathSafe p
-      exists <- doesFileExist pNorm
+      exists <- InterfaceFiles.interfaceExists pNorm
       if exists && inSearchPath pNorm
         then return (m, Just pNorm)
         else refresh m
     Nothing -> refresh m
 
--- | Read a module's public hash using the cache and .ty header.
+-- | Read a module's public hash using the cache and .tydb header.
 -- This drives dependency invalidation when an imported interface changes.
 getPubHashCached :: Paths -> A.ModName -> IO (Maybe B.ByteString)
 getPubHashCached paths mn = modifyMVar pubHashCache $ \m -> do
@@ -897,7 +898,7 @@ publicIfaceTE = filter (Names.isPublicName . fst)
 publicNameHashes :: [InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]
 publicNameHashes = filter (Names.isPublicName . InterfaceFiles.nhName)
 
--- | Read a module's per-name hash map using the cache and .ty header.
+-- | Read a module's per-name hash map using the cache and .tydb header.
 getNameHashMapCached :: Paths -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
 getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
   case M.lookup mn m of
@@ -937,7 +938,7 @@ errsToDiagnostics :: String -> FilePath -> String -> [(SrcLoc, String)] -> [Diag
 errsToDiagnostics errKind filename src errs =
     [ Diag.actErrToDiagnostic errKind filename src loc msg | (loc, msg) <- errs ]
 
--- | Emit diagnostics when a dependency .ty file is missing or unreadable.
+-- | Emit diagnostics when a dependency .tydb file is missing or unreadable.
 -- Anchors the error to the owning module's filename for consistent reporting.
 missingIfaceDiagnostics :: A.ModName -> String -> A.ModName -> [Diagnostic String]
 missingIfaceDiagnostics ownerMn src missingMn =
@@ -1033,7 +1034,7 @@ parseActFile opts sp mn actFile mOnProgress = do
   emod <- parseActSource opts mn displayFile (Source.ssText snap) mOnProgress
   return $ fmap (\m -> (snap, m)) emod
 
--- | Read stable source metadata used for quick .ty reuse checks.
+-- | Read stable source metadata used for quick .tydb reuse checks.
 -- Device/inode act as file identity on POSIX so metadata drift from copies or
 -- restores falls back to content hashing instead of blindly trusting mtimes.
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
@@ -1320,7 +1321,7 @@ data ModuleHead
       }
 
 -- | Read the cheap module header used by discovery and doc indexing.
--- Reuse a valid .ty header when possible; otherwise read the source snapshot
+-- Reuse a valid .tydb header when possible; otherwise read the source snapshot
 -- and parse only the module docstring plus imports.
 readModuleHeader :: Source.SourceProvider
                  -> C.GlobalOptions
@@ -1330,19 +1331,18 @@ readModuleHeader :: Source.SourceProvider
                  -> IO ModuleHead
 readModuleHeader sp gopts opts paths actFile = do
     let mn      = modName paths
-        tyFile  = outBase paths mn ++ ".ty"
-    tyExists <- doesFileExist tyFile
+        tyFile  = tyDbPath paths mn
+    tyExists <- InterfaceFiles.interfaceExists tyFile
     if not tyExists
       then readSourceHead mn
       else do
-        -- .ty exists: read the cached header and validate it against compiler
+        -- .tydb exists: read the cached header and validate it against compiler
         -- compatibility plus source metadata/content as needed.
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> readSourceHead mn
           Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc) -> do
-            tyStatus <- getFileStatus tyFile
-            let tyMTimeNs = fileStatusMTimeNs tyStatus
+            tyMTimeNs <- InterfaceFiles.interfaceModifiedTimeNs tyFile
             newCompiler <- compilerNewerThan tyMTimeNs
             mOverlay <- Source.spReadOverlay sp actFile
             case mOverlay of
@@ -1414,7 +1414,7 @@ readModuleHeader sp gopts opts paths actFile = do
                 Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
 
     refreshCachedSourceMeta currentSourceMeta = do
-      let tyFilePath = outBase paths (modName paths) ++ ".ty"
+      let tyFilePath = tyDbPath paths (modName paths)
       tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFilePath
       case tyRes of
         Left _ -> return ()
@@ -1427,7 +1427,7 @@ readModuleHeader sp gopts opts paths actFile = do
           same = curHash == moduleSrcBytesHash
       when (C.verbose gopts && Source.ssIsOverlay snap) $ do
         actTime <- Source.spGetModTime sp actFile
-        tyTime <- getModificationTime (outBase paths mn ++ ".ty")
+        tyTime <- InterfaceFiles.interfaceModifiedTime (tyDbPath paths mn)
         let len = B.length (Source.ssBytes snap)
         putStrLn ("[debug] readModuleHeader " ++ modNameToString mn
                   ++ " act=" ++ show actTime
@@ -1444,7 +1444,7 @@ readModuleHeader sp gopts opts paths actFile = do
         else sourceHeadFromSnapshot mn snap
 
 -- | Prepare a task for dependency graph construction.
--- The full source parse is deferred for modules whose .ty header cannot be
+-- The full source parse is deferred for modules whose .tydb header cannot be
 -- reused, but discovery still gets accurate imports from the source header.
 readModuleTask :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> String -> IO CompileTask
 readModuleTask sp gopts opts paths actFile = do
@@ -1530,7 +1530,7 @@ materializeTask opts sp mn actFile mOnProgress task =
 
 
 -- | Recursively read imports for a set of tasks within the same project.
--- Any missing module is added by parsing or reading its .ty header via
+-- Any missing module is added by parsing or reading its .tydb header via
 -- readModuleTask, yielding a self-contained task list.
 readImports :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
 readImports sp gopts opts paths tasks = do
@@ -1569,7 +1569,7 @@ readImports sp gopts opts paths tasks = do
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
--- | Read an interface from a .ty file and return its NameInfo and public hash.
+-- | Read an interface from a .tydb file and return its NameInfo and public hash.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
 readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
@@ -1653,7 +1653,7 @@ formatCodegenDelta status =
 
 -- | Run the front passes for a single module.
 -- Builds the environment, runs kinds/types, computes per-name src/pub/impl
--- hashes plus module pub/impl hashes, and writes the .ty header. Returns the
+-- hashes plus module pub/impl hashes, and writes the .tydb header. Returns the
 -- front result plus a BackJob for later passes when compilation is needed.
 runFrontPasses :: C.GlobalOptions
                -> C.CompileOptions
@@ -1826,7 +1826,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
       let roots = [ n | (n,i) <- fullIface, rootEligible i ]
-      -- Import hashes are recorded in the .ty header so dep changes can be detected.
+      -- Import hashes are recorded in the .tydb header so dep changes can be detected.
       impsRes <- resolveImportHashes imps
       case impsRes of
         Left diags -> return (Left diags)
@@ -1874,7 +1874,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
               (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
               (_, pubExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubDepsRaw
               (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv nameKeys implDepsRaw
-              -- Load .ty maps for any external modules referenced by deps.
+              -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
           extMapsRes <- resolveNameHashMaps extMods
           case extMapsRes of
@@ -1889,7 +1889,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                 (_, Left diags, _) -> return (Left diags)
                 (_, _, Left diags) -> return (Left diags)
                 (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
-                  -- Build per-name hash records (src/pub/impl + deps) for .ty.
+                  -- Build per-name hash records (src/pub/impl + deps) for .tydb.
                   let nameHashes =
                         Hashing.buildNameHashes
                           nameKeys
@@ -1905,8 +1905,8 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                   -- Module-level hashes summarize the per-name hashes.
                   let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
-                  -- Write .ty now so later builds can reuse this front-pass work.
-                  InterfaceFiles.writeFile (outbase ++ ".ty") moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
+                  -- Write .tydb now so later builds can reuse this front-pass work.
+                  InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
                   iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn imps fullIface)
@@ -2095,11 +2095,10 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
                             hFile = outbase ++ ".h"
                         writeFile hFile h
                         writeFile cFile c
-                        let tyFileName = modNameToString(modName paths) ++ ".ty"
-                        iff (C.ty opts) $
-                             copyFileWithMetadata
-                               (joinPath [projTypes paths, tyFileName])
-                               (joinPath [srcDir paths, tyFileName])
+                        let tySrc = tyDbPath paths (modName paths)
+                            tyDst = srcBase paths (modName paths) ++ InterfaceFiles.interfaceExt
+                        iff (C.ty opts) $ do
+                             InterfaceFiles.copyInterface tySrc tyDst
                       return (Just tWrite)
             finishBack tRender mWriteTime
 
@@ -2127,14 +2126,14 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 --
 --   1) Construct a dependency graph over non-builtin tasks and topologically order it.
 --   2) Compile __builtin__ first if present.
---   3) Walk modules in topo order, deciding per module whether to compile or reuse cached .ty,
+--   3) Walk modules in topo order, deciding per module whether to compile or reuse cached .tydb,
 --      and update the shared environment.
 --   4) Track per-name pub/impl hashes and only redo the work that changed:
 --      pub changes trigger front passes; impl changes trigger back passes (with
 --      an impl-hash refresh); codegen hash mismatches trigger back passes only.
 --
 -- Key ideas (ActonTask vs TyTask caching):
---   - TyTask is lightweight, read from the .ty header: moduleSrcBytesHash, modulePubHash,
+--   - TyTask is lightweight, read from the .tydb header: moduleSrcBytesHash, modulePubHash,
 --     moduleImplHash, imports annotated with the pub hash used, per-name hashes (src/pub/impl
 --     + deps), roots, tests, and docstring. It avoids decoding heavy sections.
 --   - ParseTask carries source text plus discovered imports; full parsing is
@@ -2142,7 +2141,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 --   - ActonTask carries parsed source and must be compiled.
 --   - pubMap :: Map TaskKey ByteString and nameMap :: Map TaskKey (Map Name NameHashInfo) are
 --     maintained during the run. TyTask compares recorded dependency hashes against current
---     provider hashes (in-graph via pubMap/nameMap, otherwise via cached .ty headers). Pub deltas
+--     provider hashes (in-graph via pubMap/nameMap, otherwise via cached .tydb headers). Pub deltas
 --     trigger front passes; impl deltas trigger back passes with an impl-hash refresh.
 --   - When a TyTask is stale for public reasons (or altOutput on the root), we convert it to an
 --     ActonTask by parsing the .act file and run front passes; when it is fresh we reuse the
@@ -2358,7 +2357,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           optsT = optsFor key
           providers = gtImportProviders t
           actFile = srcFile paths mn
-          tyFile = outBase paths mn ++ ".ty"
+          tyFile = tyDbPath paths mn
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
           mkFrontResult imps ifaceTE mdoc pubHash nameHashes backJob =
             FrontResult
@@ -2566,7 +2565,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
             return (fmap M.fromList resolved)
 
-          -- For stale checks on cached .ty tasks we treat missing names/hashes
+          -- For stale checks on cached .tydb tasks we treat missing names/hashes
           -- as "stale cache" signals and force front passes, instead of failing
           -- early with internal hash diagnostics.
           resolveQNameHashForStaleCheck getHash qn =
@@ -2619,7 +2618,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                 Left _ ->
                   return (key, Right emptyFrontResult)
         _ -> do
-          -- For cached .ty tasks, compare recorded dep hashes against current deps.
+          -- For cached .tydb tasks, compare recorded dep hashes against current deps.
           -- This is the up-to-date check that decides if we can skip work. If
           -- any implDeps have changed we need to rerun out back passes and if
           -- any pubDeps have changed we need to rerun front passes (and back
@@ -2801,7 +2800,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                         cacheFrontResult fr
                   runReuse = do
                     when (C.verbose gopts) $
-                      ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .ty")
+                      ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
                                   TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
                                   _ -> readIfaceFromTy paths mn "" Nothing
@@ -3179,9 +3178,12 @@ srcFile                 :: Paths -> A.ModName -> FilePath
 srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
 
 -- | Compute the output base path (without extension) for a module.
--- Used to locate .ty/.c/.h output under the project's types directory.
+-- Used to locate .tydb/.c/.h output under the project's types directory.
 outBase                 :: Paths -> A.ModName -> FilePath
 outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
+
+tyDbPath                :: Paths -> A.ModName -> FilePath
+tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
@@ -3335,7 +3337,7 @@ enumerateProjectModules ctx = do
           return (f, mn)
 
 -- | Remove stale generated module artifacts when source modules disappear.
--- Prunes orphan .ty/.c/.h outputs under out/types before task planning so
+-- Prunes orphan .tydb/.c/.h outputs under out/types before task planning so
 -- cached headers cannot mask deleted .act modules.
 pruneMissingModuleOutputs :: ProjCtx -> IO ()
 pruneMissingModuleOutputs ctx = do
@@ -3353,6 +3355,8 @@ pruneMissingModuleOutputs ctx = do
                    else return Data.Set.empty
       outFiles <- getFilesRecursive typesRoot
       mapM_ (pruneFile srcMods typesRoot) outFiles
+      tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
+      mapM_ (pruneTyDb srcMods typesRoot) tyDbs
   where
     isRootStub rel ext =
       ext == ".c" &&
@@ -3365,11 +3369,17 @@ pruneMissingModuleOutputs ctx = do
 
     pruneFile srcMods typesRoot absFile = do
       let ext = takeExtension absFile
-      when (ext == ".ty" || ext == ".c" || ext == ".h") $ do
+      when (ext == ".c" || ext == ".h") $ do
         let rel = normalise (makeRelative typesRoot absFile)
             base = normalise (moduleBase rel ext)
         unless (Data.Set.member base srcMods) $
           removeFile absFile `catch` ignoreNotExists
+
+    pruneTyDb srcMods typesRoot absDir = do
+      let rel = normalise (makeRelative typesRoot absDir)
+          base = normalise (dropExtension rel)
+      unless (Data.Set.member base srcMods) $
+        removePathForcibly absDir `catch` ignoreNotExists
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
@@ -3391,7 +3401,8 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
       when (Data.List.isPrefixOf srcRoot' actPath') $ do
         let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
             outBase = projTypesDir ctx </> modBase
-        mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".ty", ".c", ".h"]
+        removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
+        mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
@@ -4087,7 +4098,7 @@ nameToString (A.Name _ s) = s
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.
--- Used to decide which roots to include in .ty headers and root generation.
+-- Used to decide which roots to include in .tydb headers and root generation.
 rootEligible :: I.NameInfo -> Bool
 rootEligible (I.NAct [] p k _ _) = case (p,k) of
                                       (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->

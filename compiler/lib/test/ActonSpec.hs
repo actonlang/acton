@@ -2,8 +2,8 @@
 
 module Main (main) where
 
+import Control.Concurrent.Async (mapConcurrently_)
 import Data.Char (toLower, isAlphaNum)
-
 
 import qualified Acton.Parser as P
 import qualified Acton.Syntax as S
@@ -44,14 +44,13 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist)
 import System.IO.Temp (withSystemTempDirectory)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Control.DeepSeq (rnf)
 import Utils (SrcLoc(..), loc, prstr)
 import qualified Acton.BuildSpec as BuildSpec
-import qualified Data.Binary as Binary
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
@@ -66,11 +65,125 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "InterfaceFiles" $ do
+      it "round-trips payloads and preserves ordered name entries" $ do
+        withSystemTempDirectory "acton-iface" $ \dir -> do
+          let mn = S.modName ["iface"]
+              tyPath = dir </> "iface.tydb"
+              firstName = S.name "first"
+              secondName = S.name "second"
+              firstishName = S.name "firstish"
+              sourcePlainName = S.name "foo_bar"
+              derivedName = S.Derived (S.name "encode") (S.name "witness")
+              longName = S.name (replicate 401 'x')
+              iface =
+                [ (firstName, I.NVar S.tWild)
+                , (secondName, I.NDef (S.tSchema [] S.tWild) S.NoDec Nothing)
+                , (sourcePlainName, I.NVar S.tWild)
+                , (derivedName, I.NVar S.tWild)
+                , (longName, I.NVar S.tWild)
+                ]
+              nameHashes =
+                [ InterfaceFiles.NameHashInfo derivedName "src4" "pub4" "impl4" [] []
+                , InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []
+                , InterfaceFiles.NameHashInfo sourcePlainName "src3" "pub3" "impl3" [] []
+                , InterfaceFiles.NameHashInfo secondName "src2" "pub2" "impl2" [] []
+                , InterfaceFiles.NameHashInfo longName "src5" "pub5" "impl5" [] []
+                ]
+              roots = [secondName, firstName]
+              tests = ["test_second", "test_first"]
+              nmod = I.NModule [] iface (Just "module docs")
+              tmod = S.Module mn [] (Just "typed docs") []
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes roots tests (Just "module docs") nmod tmod
+          InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
+          InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
+          InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
+          InterfaceFiles.keyNameInfo sourcePlainName `shouldBe` "name-info/p/foo_bar"
+          InterfaceFiles.keyNameInfo derivedName `shouldBe` "name-info/p/encodeD_witness"
+          InterfaceFiles.keyNameInfo longName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
+          (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, nameHashes', roots', tests', doc') <-
+            InterfaceFiles.readFile tyPath
+          te `shouldBe` iface
+          mdoc `shouldBe` Just "module docs"
+          tmod' `shouldBe` tmod
+          sourceMeta `shouldBe` Nothing
+          (srcHash, pubHash, implHash) `shouldBe` ("src", "pub", "impl")
+          imps `shouldBe` []
+          nameHashes' `shouldBe` nameHashes
+          roots' `shouldBe` roots
+          tests' `shouldBe` tests
+          doc' `shouldBe` Just "module docs"
+
+          (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, nameHashesH, rootsH, testsH, docH) <-
+            InterfaceFiles.readHeader tyPath
+          sourceMetaH `shouldBe` Nothing
+          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
+          impsH `shouldBe` []
+          nameHashesH `shouldBe` nameHashes
+          rootsH `shouldBe` roots
+          testsH `shouldBe` tests
+          docH `shouldBe` Just "module docs"
+
+      it "supports concurrent read-only access to one interface" $ do
+        withSystemTempDirectory "acton-iface-concurrent" $ \dir -> do
+          let mn = S.modName ["iface"]
+              tyPath = dir </> "iface.tydb"
+              firstName = S.name "first"
+              iface = [(firstName, I.NVar S.tWild)]
+              nameHashes = [InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
+          mapConcurrently_
+            (\_ -> do
+                (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, nameHashesH, _rootsH, _testsH, _docH) <-
+                  InterfaceFiles.readHeader tyPath
+                (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
+                nameHashesH `shouldBe` nameHashes)
+            [1..64 :: Int]
+
+      it "copies interface data without carrying LMDB lock state" $ do
+        withSystemTempDirectory "acton-iface-copy" $ \dir -> do
+          let mn = S.modName ["iface"]
+              srcPath = dir </> "iface.tydb"
+              dstPath = dir </> "iface-copy.tydb"
+              firstName = S.name "first"
+              iface = [(firstName, I.NVar S.tWild)]
+              nameHashes = [InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.copyInterface srcPath dstPath
+          doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
+          doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
+          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, nameHashesH, _rootsH, _testsH, _docH) <-
+            InterfaceFiles.readHeader dstPath
+          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
+          nameHashesH `shouldBe` nameHashes
+
+      it "treats corrupt .tydb directories as cache misses" $ do
+        withSystemTempDirectory "acton-iface-corrupt" $ \dir -> do
+          let tyPath = dir </> "corrupt.tydb"
+          createDirectoryIfMissing True tyPath
+          B8.writeFile (tyPath </> "data.mdb") "garbage"
+          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+
+      it "treats version mismatches as cache misses" $ do
+        withSystemTempDirectory "acton-iface-version" $ \dir -> do
+          let mn = S.modName ["iface_version"]
+              tyPath = dir </> "iface_version.tydb"
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module mn [] Nothing []
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+
     describe "Environment" $ do
-      it "treats mismatched .ty headers for loaded modules as stale" $ do
+      it "treats mismatched .tydb headers for loaded modules as stale" $ do
         withSystemTempDirectory "acton-env" $ \dir -> do
           let directMod = S.modName ["direct"]
-              directTy = dir </> "direct.ty"
+              directTy = dir </> "direct.tydb"
               valueName = S.name "value"
               iface = [(valueName, I.NVar S.tWild)]
               directIface = I.NModule [] iface Nothing
@@ -91,11 +204,20 @@ main = do
             directModule
           (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <-
             InterfaceFiles.readFile directTy
-          BL.writeFile directTy $
-            Binary.encode
-              ( (map (+ 1) S.version, sourceMeta, srcHash, pubHash, implHash)
-              , imps, nameHashes, roots, tests, mdoc, nmod, tmod
-              )
+          InterfaceFiles.writeFileWithVersion
+            (map (+ 1) S.version)
+            directTy
+            srcHash
+            pubHash
+            implHash
+            sourceMeta
+            imps
+            nameHashes
+            roots
+            tests
+            mdoc
+            nmod
+            tmod
           (_env2, te) <- Acton.Env.doImp [dir] env1 directMod
           map fst te `shouldBe` [valueName]
 
@@ -449,8 +571,8 @@ main = do
           withSystemTempDirectory "acton-completion" $ \dir -> do
             let directMod = S.modName ["direct"]
                 staleMod = S.modName ["stale"]
-                directTy = dir </> "direct.ty"
-                staleTy = dir </> "stale.ty"
+                directTy = dir </> "direct.tydb"
+                staleTy = dir </> "stale.tydb"
                 inputName = S.name "LocalInput"
                 routerName = S.name "Router"
                 inputType = S.tCon (S.TC (S.NoQ inputName) [])
@@ -475,7 +597,8 @@ main = do
                   , "        i.<CURSOR>"
                   ]
             createDirectoryIfMissing True dir
-            B8.writeFile staleTy "not a current ty file"
+            createDirectoryIfMissing True staleTy
+            B8.writeFile (staleTy </> "data.mdb") "not a current ty db"
             InterfaceFiles.writeFile
               directTy
               B8.empty

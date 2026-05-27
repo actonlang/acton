@@ -6,4 +6,4 @@ Implementation lives in `compiler/lib/src/Acton/Types.hs` and `compiler/lib/src/
 The type checker runs on top of an import-augmented environment produced by
 `Acton.Env.mkEnv`, not directly on the scheduler's raw module graph. See
 [Imports and environments](../imports_and_envs.md) for the environment layers
-and how transitive imports are materialized from `.ty` files.
+and how transitive imports are materialized from `.tydb` files.

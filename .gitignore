@@ -19,6 +19,7 @@
 **/.build/
 **/*.swp
 **/*.ty
+**/*.tydb/
 
 backend/actondb
 backend/failure_detector/db_messages_test

@@ -8,6 +8,7 @@ class Acton < Formula
 
   depends_on "ghc@9.6" => :build
   depends_on "haskell-stack" => :build
+  depends_on "lmdb"
 
   def install
     # Fix up stack config to not install project local GHC and use system GHC

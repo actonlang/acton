@@ -51,6 +51,15 @@ extra-deps:
 # Extra package databases containing global packages
 # extra-package-dbs: []
 
+# Homebrew installs native libraries outside the default GHC search paths.
+# Linux builds find liblmdb through the normal system library directories.
+extra-include-dirs:
+  - /opt/homebrew/include
+  - /usr/local/include
+extra-lib-dirs:
+  - /opt/homebrew/lib
+  - /usr/local/lib
+
 # Control whether we use the GHC we find on the path
 # NOTE: this is disabled so we can use a stack GHC in local dev environments but
 # we rewrite this in our Homebrew recipe to use the system GHC. Do NOT remove

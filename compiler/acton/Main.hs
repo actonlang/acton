@@ -150,7 +150,7 @@ runFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
 runFile gopts opts fname =
     case takeExtension fname of
       ".act" -> buildFile gopts (applyGlobalOpts gopts opts) fname
-      ".ty" -> printDocs gopts (C.DocOptions fname (Just C.AsciiFormat) Nothing)
+      ".tydb" -> printDocs gopts (C.DocOptions fname (Just C.AsciiFormat) Nothing)
       _ -> printErrorAndExit ("Unknown filetype: " ++ fname)
 
 -- Ensure enough capabilities: honor --jobs if set, otherwise at least 2 or #procs.
@@ -691,8 +691,8 @@ changedModulesFromPaths paths files = do
 
 readModuleImports :: Paths -> A.ModName -> IO [A.ModName]
 readModuleImports paths mn = do
-    let tyFile = outBase paths mn ++ ".ty"
-    exists <- doesFileExist tyFile
+    let tyFile = tyDbPath paths mn
+    exists <- InterfaceFiles.interfaceExists tyFile
     if not exists
       then return []
       else do
@@ -1005,7 +1005,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
                        Just ctx -> ctx
                        Nothing  -> targetCtx
     targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
-    return (outBase targetPaths mn ++ ".ty")
+    return (tyDbPath targetPaths mn)
 
 resolveSigTarget :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> String -> IO SigTarget
 resolveSigTarget opts paths rootProj projMap rawTarget = do
@@ -1089,7 +1089,7 @@ findSigTyFile = Acton.Env.findTyFile
 
 printSigInterface :: Paths -> A.ModName -> Maybe A.Name -> FilePath -> IO ()
 printSigInterface paths mn mName tyFile = do
-    exists <- doesFileExist tyFile
+    exists <- InterfaceFiles.interfaceExists tyFile
     unless exists $
       printErrorAndExit ("Type interface not found for " ++ modNameToString mn)
     tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
@@ -1241,7 +1241,7 @@ printDocs gopts opts = do
         let (fileBody,fileExt) = splitExtension $ takeFileName filename
 
         case fileExt of
-          ".ty" -> do
+          ".tydb" -> do
             paths <- findPaths filename defaultCompileOptions
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
@@ -1980,7 +1980,7 @@ runCliPostCompile cliHooks gopts plan env = do
             unless (altOutput opts') $
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
--- docstrings from cached .ty headers or source headers.
+-- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
 generateProjectDocIndex sp gopts opts paths srcFiles = do
     unless (C.skip_build opts || C.only_build opts || isTmp paths) $ do
@@ -2078,22 +2078,26 @@ removeOrphanFiles paths tasks roots = do
     forM_ absOutFiles $ \absFile -> do
         let isC  = takeExtension absFile == ".c"
             isH  = takeExtension absFile == ".h"
-            isTy = takeExtension absFile == ".ty"
             bext = takeExtension (takeBaseName absFile)
             isRootStub = isC && (bext == ".root" || bext == ".test_root")
             base = dropExtension absFile
             modBase = if isRootStub then dropExtension base else base
         if isRootStub
           then when (not (absFile `elem` roots) || not (modBase `elem` allowedBases)) (removeIfExists absFile)
-          else when (isC || isH || isTy) $ do
+          else when (isC || isH) $ do
                  unless (base `elem` allowedBases) (removeIfExists absFile)
+    tyDbs <- InterfaceFiles.listInterfaceDirsRecursive dir
+    forM_ tyDbs $ \tyDb -> do
+      let base = dropExtension tyDb
+      unless (base `elem` allowedBases) (removeDirIfExists tyDb)
   where
     removeIfExists f = removeFile f `catch` handleNotExists
+    removeDirIfExists f = removePathForcibly f `catch` handleNotExists
     handleNotExists :: IOException -> IO ()
     handleNotExists _ = return ()
 
 -- | Determine which root stub files should be preserved for the current build.
--- We read the freshly written .ty headers (post-compile) for each task to keep
+-- We read the freshly written .tydb headers (post-compile) for each task to keep
 -- whichever roots are still declared. This lets us drop stale root stubs when
 -- a module loses its root actor while still retaining stubs that belong to
 -- other build modes (e.g. keeping .root.c when running `acton test`).
@@ -2102,7 +2106,7 @@ expectedRootStubs paths tasks = do
     roots <- forM tasks $ \t -> do
         let mn     = name t
             outbase = outBase paths mn
-            tyPath = outbase ++ ".ty"
+            tyPath = tyDbPath paths mn
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
           Right (_sourceMeta, _, _, _implH, _imps, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
@@ -2129,8 +2133,8 @@ Build Pipeline Overview
 
 We want the compiler to be fast. The primary principle by which to achieve this
 is to avoid doing unnecessary work. Practically, this happens by caching
-information in .ty files and only selectively reading what we need. We do not
-eagerly load whole .ty files but rather read the header fields: moduleSrcBytesHash,
+information in .tydb files and only selectively reading what we need. We do not
+eagerly load whole .tydb files but rather read the header fields: moduleSrcBytesHash,
 modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
 roots, tests, and docstrings. This lets us quickly decide which passes to rerun and
 reuse work from previous compilations.
@@ -2150,30 +2154,30 @@ Terminology
 - ParseTask: a source-backed module whose imports are known but whose full AST
   has not been materialized yet
 - ActonTask: a fully parsed source module ready for front passes
-- TyTask: a module loaded from the cached .ty file on disk. Note how there are
+- TyTask: a module loaded from the cached .tydb file on disk. Note how there are
   two variants, a stubbed TyTask where only header fields are loaded and the
   full TyTask where all module content is available.
 
 High-level Steps
 1) Discover and read tasks using header-first strategy (readModuleTask)
-   - For each module, try to use its .ty header to avoid parsing:
-     - If .ty is missing/unreadable → read source and parse only the import
+   - For each module, try to use its .tydb header to avoid parsing:
+     - If .tydb is missing/unreadable → read source and parse only the import
        header (ParseTask).
      - If the compiler compatibility guard says the cache is stale
        → read source and parse the import header now (ParseTask).
-     - If source metadata in the .ty header still matches the current .act and
-       the source mtime is strictly older than the .ty mtime
-       → trust .ty header imports and create a TyTask stub (no heavy decode)
+     - If source metadata in the .tydb header still matches the current .act and
+       the source mtime is strictly older than the .tydb mtime
+       → trust .tydb header imports and create a TyTask stub (no heavy decode)
        for graph building.
-     - If metadata differs, or source/.ty mtimes are equal, verify by content
+     - If metadata differs, or source/.tydb mtimes are equal, verify by content
        hash:
        – If stored moduleSrcBytesHash == current bytes hash → header is still
          valid (TyTask) and refresh cached source metadata.
        – Else → read source and parse the import header now (ParseTask)
-     - Equal source/.ty mtimes are treated as ambiguous because coarse-mtime
+     - Equal source/.tydb mtimes are treated as ambiguous because coarse-mtime
        filesystems can assign the same visible timestamp to a changed source
-       and the cached .ty written from an earlier version of that source.
-   - This ensures that .ty is up to date with the .act source and lets us
+       and the cached .tydb written from an earlier version of that source.
+   - This ensures that .tydb is up to date with the .act source and lets us
      read module imports/roots/docstring from the header, which is much faster
      than parsing the full .act file.
 
@@ -2181,8 +2185,8 @@ High-level Steps
    - For project builds, we enumerate all modules under src/ upfront, so chasing
      is typically a no-op.
    - For single-file builds (or partial sets), we chase imports from the seeded
-     tasks to ensure all project-local dependencies are included. We prefer .ty
-     headers to avoid parsing; we parse only when a .ty is missing/unreadable.
+     tasks to ensure all project-local dependencies are included. We prefer .tydb
+     headers to avoid parsing; we parse only when a .tydb is missing/unreadable.
 
 3) Compile and build
    - compileTasks builds a stage graph and prefers front work over parse work:
@@ -2192,9 +2196,9 @@ High-level Steps
    - Front-stage rebuild decisions are then made per module:
      - Source changed (ParseTask/ActonTask) → run front passes
      - Otherwise, compare each used pub dependency hash from the dependent’s
-       .ty header with the provider’s current pub hash. If any differ → front.
+       .tydb header with the provider’s current pub hash. If any differ → front.
      - Otherwise, compare each used impl dependency hash from the dependent’s
-       .ty header with the provider’s current impl hash. If any differ → refresh
+       .tydb header with the provider’s current impl hash. If any differ → refresh
        impl hashes and run back passes.
      - Otherwise, if generated .c/.h hashes do not match moduleImplHash → run
        back passes.
@@ -2238,7 +2242,7 @@ writeRootC env gopts opts paths tasks binTask = do
     if C.only_build opts && existing
       then return (Just binTask)
       else do
-        -- Read the up-to-date roots from the on-disk .ty header (post-compile)
+        -- Read the up-to-date roots from the on-disk .tydb header (post-compile)
         -- Avoid using preloaded TyTask roots, which may be stale if the module
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m

@@ -8,6 +8,7 @@ Build-Depends:
  g++,
  haskell-stack,
  libgmp-dev,
+ liblmdb-dev,
  libncurses-dev,
  make,
  zlib1g-dev
