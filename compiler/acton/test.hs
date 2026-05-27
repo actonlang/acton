@@ -808,6 +808,35 @@ actonProjTests =
         testBuild "" ExitSuccess False "test/project/simple"
         testBuild "" ExitSuccess False "test/project/simple"
 
+  , testCase "project imports std.json" $ do
+        withSystemTempDirectory "acton-std-json-import" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "std_json_import"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"std_json_import\""
+            , "fingerprint = " ++ mkFp "std_json_import"
+            ]
+          writeFile (proj </> "src" </> "main.act") $ unlines
+            [ "import std.json as json"
+            , ""
+            , "actor main(env):"
+            , "    print(json.encode({\"answer\": 42}))"
+            , "    env.exit(0)"
+            ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--always-build", "--color", "never"]) { cwd = Just proj } ""
+          assertEqual ("project importing std.json should build\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
+            ExitSuccess returnCode
+          (runCode, runOut, runErr) <- readCreateProcessWithExitCode
+            (proc (proj </> "out/bin/main") []) ""
+          assertEqual ("project importing std.json should run\nstdout:\n" ++ runOut ++ "\nstderr:\n" ++ runErr)
+            ExitSuccess runCode
+          assertEqual "std.json output" "{\"answer\":42}\n" runOut
+
   , testCase "with missing src/ dir" $ do
         testBuild "" (ExitFailure 1) False "test/project/missing_src"
 

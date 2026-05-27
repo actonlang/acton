@@ -1,0 +1,709 @@
+import acton.rts
+import std.json as json
+import logging
+import net
+import time
+
+responses : dict[int,bytes] = {
+    100: b"Continue",
+    101: b"Switching Protocols",
+    102: b"Processing",
+    103: b"Early Hints",
+    200: b"OK",
+    201: b"Created",
+    202: b"Accepted",
+    203: b"Non-Authoritative Information",
+    204: b"No Content",
+    205: b"Reset Content",
+    206: b"Partial Content",
+    207: b"Multi-Status",
+    208: b"Already Reported",
+    226: b"IM Used",
+    300: b"Multiple Choices",
+    301: b"Moved Permanently",
+    302: b"Found",
+    303: b"See Other",
+    304: b"Not Modified",
+    305: b"Use Proxy",
+    306: b"(Unused)",
+    307: b"Temporary Redirect",
+    308: b"Permanent Redirect",
+    400: b"Bad Request",
+    401: b"Unauthorized",
+    402: b"Payment Required",
+    403: b"Forbidden",
+    404: b"Not Found",
+    405: b"Method Not Allowed",
+    406: b"Not Acceptable",
+    407: b"Proxy Authentication Required",
+    408: b"Request Timeout",
+    409: b"Conflict",
+    410: b"Gone",
+    411: b"Length Required",
+    412: b"Precondition Failed",
+    413: b"Content Too Large",
+    414: b"URI Too Long",
+    415: b"Unsupported Media Type",
+    416: b"Range Not Satisfiable",
+    417: b"Expectation Failed",
+    418: b"(Unused)",
+    421: b"Misdirected Request",
+    422: b"Unprocessable Content",
+    423: b"Locked",
+    424: b"Failed Dependency",
+    425: b"Too Early",
+    426: b"Upgrade Required",
+    428: b"Precondition Required",
+    429: b"Too Many Requests",
+    431: b"Request Header Fields Too Large",
+    451: b"Unavailable For Legal Reasons",
+    500: b"Internal Server Error",
+    501: b"Not Implemented",
+    502: b"Bad Gateway",
+    503: b"Service Unavailable",
+    504: b"Gateway Timeout",
+    505: b"HTTP Version Not Supported",
+    506: b"Variant Also Negotiates",
+    507: b"Insufficient Storage",
+    508: b"Loop Detected",
+    510: b"Not Extended (OBSOLETED)",
+    511: b"Network Authentication Required"
+}
+
+
+def build_request(host: str, method: bytes, path: bytes, version: bytes, headers: dict[str, str], body: bytes) -> bytes:
+    r = [ method + b" " + path + b" HTTP/" + version ]
+    lheaders: dict[str, str] = {}
+    for k in headers:
+        lheaders[k.lower()] = k
+
+    if "host" not in lheaders:
+        headers["Host"] = host
+    if "user-agent" not in lheaders:
+        headers["User-Agent"] = "Acton HTTP Client"
+    if "accept" not in lheaders:
+        headers["Accept"] = "*/*"
+#    if "accept-encoding" not in lheaders:
+#        headers["Accept-Encoding"] = "gzip, deflate"
+    if "connection" not in lheaders:
+        headers["Connection"] = "keep-alive"
+    if "content-length" not in lheaders:
+        headers["Content-Length"] = str(len(body))
+
+    for k, v in headers.items():
+        r.append(k.encode() + b": " + v.encode())
+
+    r.append(b"\r\n")
+    res = b"\r\n".join(r)
+    if len(body) > 0:
+        res += body
+    return res
+
+
+def build_response(version: bytes, status: int, headers: dict[str, str], body: str):
+    b = body.encode()
+    # TODO: Add Connection?
+    status_line: bytes = b"HTTP/" + version + b" " + str(status).encode()
+    if status in responses:
+        status_line += b" " + responses[status]
+
+    r = [ status_line ]
+    header_keys = [k.lower() for k in headers.keys()]
+    if "server" not in header_keys:
+        headers["Server"] = "Acton HTTP Server"
+    if "content-type" not in header_keys:
+        headers["Content-Type"] = "text/html; charset=utf-8"
+    if "date" not in header_keys:
+        headers["Date"] = time.now().str_rfc1123()
+
+    for k, v in headers.items():
+        if k.lower() == "content-length":
+            # Disregard content-length, we'll compute it from body length
+            continue
+        r.append(k.encode() + b": " + v.encode())
+
+    r.append(b"Content-Length: " + str(len(b)).encode())
+    r.append(b"\r\n")
+    res = b"\r\n".join(r)
+    if len(b) > 0:
+       res += b
+
+    return res
+
+
+class Message(object):
+    def __init__(self, start_line: bytes, headers: dict[str, str], body: bytes):
+        self.start_line = start_line
+        self.headers = headers
+        self.body = body
+
+
+class Request(object):
+    @property
+    method: str
+    @property
+    path: str
+    @property
+    version: bytes
+    @property
+    headers: dict[str, str]
+    @property
+    body: bytes
+
+    def __init__(self, method: str, path: str, version: bytes, headers: dict[str, str], body: bytes):
+        self.method = method
+        self.path = path
+        self.version = version
+        self.headers = headers
+        self.body = body
+
+    def __str__(self):
+        return f"<http.Request {self.method} {self.path} {str(self.version)} {self.headers.__str__()} {str(self.body)}>"
+
+extension Request(Eq):
+    def __eq__(self, other):
+        return self.method == other.method and self.path == other.path and self.version == other.version and self.headers == other.headers and self.body == other.body
+
+
+class Response(object):
+    @property
+    version: bytes
+    @property
+    status: int
+    @property
+    headers: dict[str, str]
+    @property
+    body: bytes
+
+    def __init__(self, version: bytes, status: int, headers: dict[str, str], body: bytes) -> None:
+        self.version = version
+        self.status = status
+        self.headers = headers
+        self.body = body
+
+    def __str__(self) -> str:
+        return f"<http.Response {self.status}>"
+
+    def decode_json(self):
+        return json.decode(self.body.decode())
+
+extension Response(Eq):
+    def __eq__(self, other):
+        return self.version == other.version and self.status == other.status and self.headers == other.headers and self.body == other.body
+
+
+def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
+    rs = i.split(b"\r\n\r\n", 1)
+    if len(rs) == 1:
+        return None, i
+    else:
+        header_lines = rs[0].split(b"\r\n", None)
+        start_line = header_lines[0].rstrip(b"\r\n")
+
+        headers : dict[str, str] = {}
+        for hline in header_lines[1:]:
+            hv = hline.split(b":", 1)
+            if len(hv) == 1:
+                # TODO: silently ignore or explicitly throw error or something?
+                pass
+            else:
+                try:
+                    hname = hv[0].decode().strip(" ").lower()
+                    headers[hname] = hv[1].decode().strip(" ")
+                except ValueError:
+                    log.debug("Invalid header")
+                    return None, i
+
+        # TODO: why do we have to init body & rest here? seems we segfault otherwise...
+        body = b""
+        rest = b""
+        if "content-length" in headers:
+            clen = int(headers["content-length"].strip(" "))
+            log.trace(f"Got content-length in headers, expecting {clen} bytes", None)
+            if len(rs[1]) >= clen:
+                body = rs[1][:clen]
+                rest = rs[1][clen:]
+                log.trace("Enough data to reach content-length!", None)
+                msg = Message(start_line, headers, body)
+                return msg, rest
+            else:
+                log.trace("Not enough data to reach content-length", None)
+                return None, i
+        elif "transfer-encoding" in headers:
+            tenc = set(headers["transfer-encoding"].strip(" ").split(",", None))
+            if "chunked" in tenc:
+                log.trace("Got chunked transfer-encoding", None)
+                reached_end = False
+                rest = rs[1]
+                log.trace(f"Rest: {str(rest)}", None)
+                body = b""
+                while not reached_end:
+                    maybe_chunk = rest.split(b"\r\n", 1)
+                    if len(maybe_chunk) == 1:
+                        log.trace("No chunk header found", None)
+                        return None, i
+                    elif len(maybe_chunk) == 2:
+                        chunk_header = maybe_chunk[0].strip(b"\r\n")
+                        if chunk_header == b"":
+                            log.trace("Empty chunk header", None)
+                            return None, i
+                        try:
+                            chunk_header_str = chunk_header.decode()
+                        except ValueError:
+                            log.debug("Invalid chunk header")
+                            return None, i
+                        else:
+                            rest = maybe_chunk[1]
+                            log.trace(f"Chunk header: {chunk_header[:20]}", None)
+                            try:
+                                clen = int(chunk_header_str, 16)
+                                log.trace(f"Chunk length: {clen}", None)
+                            except ValueError:
+                                log.trace("Chunk header not a length", None)
+                            else:
+                                if len(rest) >= clen:
+                                    gap = rest[clen-10:clen+10]
+                                    chunk = rest[:clen]
+                                    log.trace(f"Read chunk: {str(chunk)}", None)
+                                    rest = rest[clen:]
+                                    if len(rest) < 2 and rest[0:2] != b"\r\n":
+                                        log.trace("Could not find chunk end marker", None)
+                                        return None, i
+                                    rest = rest[2:]
+                                    #log.trace("Enough data to reach end of chunk", None)
+                                    chunk_preview = str(chunk[-5:])
+                                    rest_preview = str(rest[:5])
+                                    log.trace(f"Enough data to reach end of chunk, chunk gap: {chunk_preview}|{rest_preview}", None)
+                                    body += chunk
+                                    if clen == 0:
+                                        reached_end = True
+                                        msg = Message(start_line, headers, body)
+                                        log.trace("Reached end of chunked message", None)
+                                        return msg, rest
+                                else:
+                                    log.trace("Not enough data to reach end of chunk", None)
+                                    return None, i
+
+                    else:
+                        # TODO: InternalError?
+                        raise ValueError("Unreachable")
+        else:
+            body = b""
+            rest = rs[1]
+            msg = Message(start_line, headers, body)
+            return msg, rest
+        return None, i
+
+
+def parse_request(i: bytes, log: logging.Logger) -> (?Request, bytes):
+    msg, rest = parse_message(i, log)
+    if msg is not None:
+        slparts = msg.start_line.split(b" ", None)
+        if len(slparts) != 3:
+            # HTTP request must have exactly 3 parts: METHOD PATH HTTP/VERSION
+            return None, b""
+        try:
+            method = slparts[0].decode()
+            path = slparts[1].decode()
+        except ValueError:
+            log.debug("Invalid method/path")
+            return None, b""
+        else:
+            verparts = slparts[2].split(b"/", 1)
+            if len(verparts) != 2:
+                # invalid request
+                # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+                return None, b""
+            version = verparts[1]
+            if version != b"1.1" and version != b"1.0":
+                return None, b""
+            req = Request(method, path, version, msg.headers, msg.body)
+            return req, rest
+    return None, i
+
+def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
+    msg, rest = parse_message(i, log)
+    if msg is not None:
+        slparts = msg.start_line.split(b" ", None)
+        if len(slparts) < 2:
+            # HTTP response must have at least 2 parts: HTTP/VERSION STATUS_CODE [REASON_PHRASE]
+            return None, b""
+        verparts = slparts[0].split(b"/", 1)
+        if len(verparts) != 2:
+            # invalid request
+            # TODO: actually HTTP 0.9 might only have 2 parts, but we don't support that
+            return None, b""
+        version = verparts[1]
+        if version != b"1.1" and version != b"1.0":
+            log.trace("Invalid HTTP version", None)
+            return None, b""
+
+        try:
+            status = int(slparts[1].decode())
+        except ValueError:
+            log.debug("Invalid status")
+            return None, b""
+        else:
+            resp = Response(version, status, msg.headers, msg.body)
+            return resp, b""
+    return None, i
+
+
+actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
+    """Server serves a single client connection"""
+    _log = logging.Logger(log_handler)
+    var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
+    var on_error_cb: ?action(Server, str) -> None = None
+    var version: ?bytes = None
+    var buf = b""
+    var close_connection: bool = True
+    var query_count: u64 = 0
+    var response_count: u64 = 0
+    var outstanding_requests: dict[u64, Response] = {}
+
+    def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
+        on_request_cb = new_on_request
+        on_error_cb = new_on_error
+        if buf != b"":
+            req, buf = parse_request(buf, _log)
+
+    def on_conn_receive(conn_obj, data: bytes) -> None:
+        # TODO: do we really need a buf?
+        if on_request_cb is None:
+            buf += data
+            return None
+        else:
+            if buf != b"":
+                data = buf + data
+
+        req, buf = parse_request(data, _log)
+        if req is not None:
+            if version is None:
+                version = req.version
+            elif version is not None and version != req.version:
+                _log.debug("Version mismatch", None)
+                conn.close()
+
+            if version is not None and version == b"1.0":
+                if "connection" in req.headers:
+                    if req.headers["connection"] == "close":
+                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
+                        close_connection = True
+                    else:
+                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
+                        _log.trace("connection header", {"connection": req.headers["connection"]})
+                else:
+                    close_connection = True
+            elif version is not None and version == b"1.1":
+                if "connection" in req.headers and req.headers["connection"] == "close":
+                    _log.debug("HTTP 1.1, closing connection...", None)
+                    close_connection = True
+                else:
+                    close_connection = False
+
+            query_count += 1
+            def respond(status_code: int, headers: dict[str, str], body: str):
+                _log.trace("Going to respond with query id", {"query_count": query_count})
+                if query_count == response_count + 1:
+                    # In order, send response immediately
+                    _log.trace("Sending response immediately", None)
+                    send_response(status_code, headers, body)
+                    response_count += 1
+                else:
+                    # Buffer up response
+                    _log.trace("Buffering response", None)
+                    # TODO: actually implement buffering?
+                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
+
+            if on_request_cb is not None:
+                response = on_request_cb(self, req, respond)
+                if response is not None:
+                    _log.trace("Sending response immediately", None)
+                else:
+                    _log.trace("Async response", None)
+            else:
+                _log.notice("No on_request callback set", None)
+
+    def on_conn_error(conn, error):
+        # TODO: the conn should really be in here, but type error!?
+        _log.trace(f"There was an error: {str(error)} from: {str("")}", None)
+
+    def close():
+        conn.close()
+
+    def send_response(status_code: int, headers: dict[str, str], data: str):
+        if version is not None:
+            res = build_response(version, status_code, headers, data)
+            conn.write(res)
+
+        if close_connection:
+            conn.close()
+
+
+actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler):
+    """Server serves a single TLS client connection"""
+    _log = logging.Logger(log_handler)
+    var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
+    var on_error_cb: ?action(TLSServer, str) -> None = None
+    var version: ?bytes = None
+    var buf = b""
+    var close_connection: bool = True
+    var query_count: u64 = 0
+    var response_count: u64 = 0
+    var outstanding_requests: dict[u64, Response] = {}
+
+    def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
+        on_request_cb = new_on_request
+        on_error_cb = new_on_error
+        if buf != b"":
+            req, buf = parse_request(buf, _log)
+
+    def on_conn_receive(conn_obj, data: bytes) -> None:
+        # TODO: do we really need a buf?
+        if on_request_cb is None:
+            buf += data
+            return None
+        else:
+            if buf != b"":
+                data = buf + data
+
+        req, buf = parse_request(data, _log)
+        if req is not None:
+            if version is None:
+                version = req.version
+            elif version is not None and version != req.version:
+                _log.debug("Version mismatch", None)
+                conn.close()
+
+            if version is not None and version == b"1.0":
+                if "connection" in req.headers:
+                    if req.headers["connection"] == "close":
+                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
+                        close_connection = True
+                    else:
+                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
+                        _log.trace("connection header", {"connection": req.headers["connection"]})
+                else:
+                    close_connection = True
+            elif version is not None and version == b"1.1":
+                if "connection" in req.headers and req.headers["connection"] == "close":
+                    _log.debug("HTTP 1.1, closing connection...", None)
+                    close_connection = True
+                else:
+                    close_connection = False
+
+            query_count += 1
+            def respond(status_code: int, headers: dict[str, str], body: str):
+                _log.trace("Going to respond with query id", {"query_count": query_count})
+                if query_count == response_count + 1:
+                    # In order, send response immediately
+                    _log.trace("Sending response immediately", None)
+                    send_response(status_code, headers, body)
+                    response_count += 1
+                else:
+                    # Buffer up response
+                    _log.trace("Buffering response", None)
+                    # TODO: actually implement buffering?
+                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
+
+            if on_request_cb is not None:
+                response = on_request_cb(self, req, respond)
+                if response is not None:
+                    _log.trace("Sending response immediately", None)
+                else:
+                    _log.trace("Async response", None)
+            else:
+                _log.notice("No on_request callback set", None)
+
+    def on_conn_error(conn, error):
+        # TODO: the conn should really be in here, but type error!?
+        _log.trace(f"There was an error: {str(error)} from: {str("")}", None)
+
+    def close():
+        conn.close()
+
+    def send_response(status_code: int, headers: dict[str, str], data: str):
+        if version is not None:
+            res = build_response(version, status_code, headers, data)
+            conn.write(res)
+
+        if close_connection:
+            conn.close()
+
+
+# TODO: change port to u16, when u16 has a sub-type relationship to int
+# TODO: the on_listen_error default should be some action that just automatically retries with a backoff
+# TODO: add restart method to restart the listener
+actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action(Server) -> None, on_listen_error: ?action(net.TCPListener, str) -> None = None, log_handler: ?logging.Handler = None):
+    """HTTP Server Listener"""
+    _log = logging.Logger(log_handler)
+    var bufs = []
+
+    def on_conn_listen(listener, error):
+        if error is not None:
+            _log.notice("There was an error with the listener socket", {"error": error})
+            if on_listen_error is not None:
+                on_listen_error(listener, error)
+
+    def on_listener_accept(conn):
+        s = Server(conn, on_accept, log_handler)
+        await async on_accept(s)
+        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+
+    var _listener = net.TCPListener(cap, address, port, on_conn_listen, on_listener_accept)
+
+
+# TODO: change port to u16, when u16 has a sub-type relationship to int
+# TODO: the on_listen_error default should be some action that just automatically retries with a backoff
+# TODO: add restart method to restart the listener
+actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_accept: action(TLSServer) -> None, on_listen_error: ?action(net.TLSListener, str) -> None = None, log_handler: ?logging.Handler = None):
+    """HTTPS Server Listener"""
+    _log = logging.Logger(log_handler)
+    var bufs = []
+
+    def on_conn_listen(listener, error):
+        if error is not None:
+            _log.notice("There was an error with the listener socket", {"error": error})
+            if on_listen_error is not None:
+                on_listen_error(listener, error)
+
+    def on_listener_accept(conn):
+        s = TLSServer(conn, on_accept, log_handler)
+        await async on_accept(s)
+        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+
+    var _listener = net.TLSListener(cap, address, port, cert_pem, key_pem, on_conn_listen, on_listener_accept)
+
+
+# TODO: change port to u16, when u16 has a sub-type relationship to int
+actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler):
+    """HTTP(S) Client
+
+    scheme is either 'http' or 'https', the default is 'https'
+    port is optional, if not provided, it will be inferred from the scheme where http=80 and https=443
+    """
+    _log = logging.Logger(log_handler)
+    var _on_response: list[(bytes, action(Client, Response) -> None)] = []
+    var version: ?bytes = None
+    var buf = b""
+    var close_connection: bool = True
+    var tcp_conn: ?net.TCPConnection = None
+    var tls_conn: ?net.TLSConnection = None
+
+    def _connect():
+        if scheme == "http":
+            _log.verbose("Using http scheme and port 80", None)
+            tcp_port = port if port is not None else 80
+            tcp_conn = net.TCPConnection(cap, address, tcp_port, _on_tcp_connect, _on_tcp_receive, _on_tcp_error, None, connect_timeout=10.0)
+        elif scheme == "https":
+            _log.verbose("Using https scheme and port 443", None)
+            tls_port = port if port is not None else 443
+            tls_conn = net.TLSConnection(cap, address, tls_port, _on_tls_connect, _on_tls_receive, _on_tls_error, None, tls_verify)
+        else:
+            raise ValueError(f"Only http and https schemes are supported. Unsupported scheme: {scheme}")
+
+    def _on_conn_connect():
+        # If there are outstanding requests, it probably means we were
+        for r in _on_response:
+            _conn_write(r.0)
+        await async on_connect(self)
+
+    def _on_tcp_connect(conn: net.TCPConnection) -> None:
+        _on_conn_connect()
+
+    def _on_tls_connect(conn: net.TLSConnection) -> None:
+        _on_conn_connect()
+
+    def _on_tcp_receive(conn: net.TCPConnection, data: bytes) -> None:
+        _on_con_receive(data)
+
+    def _on_tls_receive(conn: net.TLSConnection, data: bytes) -> None:
+        _on_con_receive(data)
+
+    def _on_con_receive(data: bytes) -> None:
+        buf += data
+        _log.debug("Received data", {"bytes": len(data)})
+        #_log.trace("Received data", {"data": data})
+
+        while True:
+            r, buf = parse_response(buf, _log)
+            if r is not None:
+                if "connection" in r.headers and r.headers["connection"] == "close":
+                    close_connection = True
+                    _conn_close()
+                    _log.debug("Closing TCP connection due to header: Connection: close", None)
+                    _connect()
+                if len(_on_response) == 0:
+                    _log.notice("Data received with no on_response callback set", None)
+                    break
+                outreq = _on_response[0]
+                del _on_response[0]
+                cb = outreq.1
+
+                await async cb(self, r)
+            else:
+                break
+
+    def _on_tcp_error(conn: net.TCPConnection, error: str) -> None:
+        _on_con_error(error)
+
+    def _on_tls_error(conn: net.TLSConnection, error: str) -> None:
+        _on_con_error(error)
+
+    def _on_con_error(error: str) -> None:
+        on_error(self, error)
+
+    def _conn_close() -> None:
+        if tcp_conn is not None:
+            def _noop(c):
+                pass
+            tcp_conn.close(_noop)
+        elif tls_conn is not None:
+            def _noop(c):
+                pass
+            tls_conn.close(_noop)
+
+    def _conn_write(data: bytes) -> None:
+        _log.trace("Sending data", {"data": data})
+        if tcp_conn is not None:
+            tcp_conn.write(data)
+        elif tls_conn is not None:
+            tls_conn.write(data)
+
+    def close():
+        _conn_close()
+
+    # HTTP methods
+    def get(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        req = build_request(address, b"GET", path.encode(), b"1.1", headers, b"")
+        _log.debug("Sending request", {"method": "GET", "path": path})
+        _on_response.append((req, on_response))
+        _conn_write(req)
+
+    def head(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        req = build_request(address, b"HEAD", path.encode(), b"1.1", headers, b"")
+        _log.debug("Sending request", {"method": "HEAD", "path": path})
+        _on_response.append((req, on_response))
+        _conn_write(req)
+
+    def post(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        if "Content-Type" not in headers:
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+        req = build_request(address, b"POST", path.encode(), b"1.1", headers, body)
+        _log.debug("Sending request", {"method": "POST", "path": path})
+        _on_response.append((req, on_response))
+        _conn_write(req)
+
+    def put(path: str, body: bytes, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        req = build_request(address, b"PUT", path.encode(), b"1.1", headers, body)
+        _log.debug("Sending request", {"method": "PUT", "path": path})
+        _on_response.append((req, on_response))
+        _conn_write(req)
+
+    def delete(path: str, on_response: action(Client, Response) -> None, headers: dict[str, str] = {}):
+        req = build_request(address, b"DELETE", path.encode(), b"1.1", headers, b"")
+        _log.debug("Sending request", {"method": "DELETE", "path": path})
+        _on_response.append((req, on_response))
+        _conn_write(req)
+
+    _connect()

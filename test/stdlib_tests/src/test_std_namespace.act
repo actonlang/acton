@@ -1,0 +1,60 @@
+import testing
+
+import std.argparse as argparse
+import std.base64 as base64
+import std.crypto.hash.md5 as md5
+import std.diff as diff
+import std.hash.wyhash as wyhash
+import std.http as http
+import std.json as json
+import std.math as math
+import std.qcheck as qcheck
+import std.random as random
+import std.re as re
+import std.snappy as snappy
+import std.term as term
+import std.xml as xml
+
+from std.uri import URI, quote, unquote
+
+
+def _test_std_namespace_data_modules():
+    testing.assertEqual(base64.decode(base64.encode(b"hello")), b"hello")
+    testing.assertEqual(json.encode({"answer": 42}), r"""{"answer":42}""")
+    testing.assertEqual(xml.encode(xml.Node("a", text="hello")), "<a>hello</a>")
+    testing.assertEqual(snappy.decompress(snappy.compress(b"hello hello hello")), b"hello hello hello")
+    testing.assertEqual(md5.hash(b"abc"), b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")
+    testing.assertEqual(wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
+
+
+def _test_std_namespace_pure_helpers():
+    testing.assertEqual(diff.diff("same", "same"), "")
+    testing.assertEqual(math.sqrt(9.0), 3.0)
+    testing.assertEqual(quote("hello world"), "hello%20world")
+    testing.assertEqual(unquote("hello%20world"), "hello world")
+    testing.assertEqual(URI("https://example.com/path").host, "example.com")
+    testing.assertEqual(term.red + "x" + term.normal, "\x1b[31mx\x1b[0m")
+
+
+def _test_std_namespace_parsers_and_random():
+    parser = argparse.Parser()
+    parser.add_option("count", "int", default=1, short="c")
+    args = parser.parse(["./app", "-c", "4"])
+    testing.assertEqual(args.get_int("count"), 4)
+
+    m = re.match("foo([0-9]+)", "foo123")
+    testing.assertNotNone(m, "std.re.match returned None")
+
+    n = random.randint(1, 4)
+    testing.assertTrue(1 <= n and n < 4, "std.random.randint outside expected range")
+
+    def prop_true():
+        return True
+
+    prop_ok = qcheck.qcheck_0("std qcheck smoke", prop_true)
+    testing.assertEqual(prop_ok, 0)
+
+
+def _test_std_namespace_protocol_module():
+    response = http.build_response(b"1.1", 200, {}, "ok")
+    testing.assertEqual(response[:15], b"HTTP/1.1 200 OK")

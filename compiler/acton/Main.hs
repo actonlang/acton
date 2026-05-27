@@ -2387,11 +2387,21 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
                      ]
         applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
         mergedSpec0 = normalizedSpec { BuildSpec.dependencies = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs }
-        mergedSpec = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
+        mergedSpec1 = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
+        mergedSpec = addImplicitStdDependency absSys mergedSpec1
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
     writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec resolvedZigs depModuleOpts)
     writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
+
+addImplicitStdDependency :: FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
+addImplicitStdDependency sys spec
+  | BuildSpec.specName spec == "std" = spec
+  | M.member "std" deps = spec
+  | otherwise = spec { BuildSpec.dependencies = M.insert "std" stdDep deps }
+  where
+    deps = BuildSpec.dependencies spec
+    stdDep = BuildSpec.PkgDep Nothing Nothing (Just (joinPath [sys, "std"])) Nothing Nothing
 
 applyPkgDepPathOverrides :: FilePath -> M.Map String FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 applyPkgDepPathOverrides projRoot depPathOverrides spec =
@@ -2518,6 +2528,8 @@ genBuildZig template spec zigDeps depModuleOpts =
       in unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
                  , "        .target = target,"
                  , "        .optimize = optimize,"
+                 , "        .no_threads = no_threads,"
+                 , "        .db = db,"
                  , "        .acton_modules = " ++ show selectedCsv ++ ","
                  , "        .acton_root_stubs = \"\","
                  , "    });"

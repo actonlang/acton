@@ -1,0 +1,17 @@
+name = "std"
+fingerprint = 0xa87a16a800000001
+
+zig_dependencies = {
+    "libpcre2": (
+        path="../deps/pcre2/"
+    ),
+    "libsnappy": (
+        path="../deps/libsnappy_c/"
+    ),
+    "libxml2": (
+        path="../deps/libxml2/"
+    ),
+    "libyyjson": (
+        path="../deps/libyyjson/"
+    )
+}

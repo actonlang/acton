@@ -458,7 +458,7 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib: dist/bin/acton
+test-stdlib: dist/bin/acton dist/std
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
@@ -467,14 +467,17 @@ online-tests: dist/bin/actonc
 	cd compiler && stack test acton:test_acton_online
 
 
-.PHONY: clean clean-all clean-base
-clean: clean-distribution clean-base
+.PHONY: clean clean-all clean-base clean-std
+clean: clean-distribution clean-base clean-std
 
 clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
 
 clean-base:
 	rm -rf base/out
+
+clean-std:
+	rm -rf std/out
 
 # == DIST ==
 #
@@ -488,8 +491,16 @@ dist/backend%: backend/%
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS) dist/backend/Build.act
 	mkdir -p "$@" "$@/.build" "$@/out"
+	rm -rf "$@/src" "$@/out/types/std"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
 	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
+
+.PHONY: dist/std
+dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/actonc $(DEPS)
+	mkdir -p "$@" "$@/.build" "$@/out"
+	rm -rf "$@/src" "$@/out/types"
+	cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
+	cd dist/std && ../bin/actonc build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -551,7 +562,7 @@ deps-download/$(ZIG_TARBALL):
 	$(CURL) -o $@ "$(ZIG_DOWNLOAD_URL)"
 
 .PHONY: distribution1 distribution clean-distribution
-distribution1: dist/base $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
+distribution1: dist/base dist/std $(DIST_BACKEND_FILES) dist/builder $(DIST_BINS) $(DIST_ZIG)
 	$(MAKE) $(DEPS)
 
 distribution: distribution1 dist/lldb/acton.py
