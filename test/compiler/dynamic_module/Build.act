@@ -1,0 +1,6 @@
+name = "dynamic_module"
+fingerprint = 0xcb54f8c500000001
+
+libraries = {
+    "a": (modules=["a"], linkage="dynamic")
+}

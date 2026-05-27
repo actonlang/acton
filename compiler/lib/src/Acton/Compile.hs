@@ -670,12 +670,14 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   if incremental
     then maybe (return ()) (pruneMissingChangedModuleOutputs (M.elems projMap)) mChangedPaths
     else mapM_ pruneMissingModuleOutputs (M.elems projMap)
+  let hasBuildLibraries = any (not . M.null . BuildSpec.libraries . projBuildSpec) (M.elems projMap)
   (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
-    (if incremental || allowPrune then Nothing else Just srcFiles)
-  neededTasks <- case mChangedPaths of
+    (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
+  neededTasks0 <- case mChangedPaths of
     Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
     Just changed -> selectAffectedTasks globalTasks changed
-  let rootTasks = [ gtTask t | t <- neededTasks, tkProj (gtKey t) == rootProj ]
+  let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
+      rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
       rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
   return CompilePlan
     { cpContext = ctx
@@ -1292,6 +1294,58 @@ selectAffectedTasks globalTasks changedFiles = do
               new = filter (`Data.Set.notMember` seen) ds
               seen' = foldl' (flip Data.Set.insert) seen new
           in go seen' (ks ++ new)
+
+-- | Declared build libraries are artifact units: selecting any member selects
+-- every module in that library, plus their dependencies.
+expandBuildLibraryTasks :: M.Map FilePath ProjCtx -> [GlobalTask] -> [GlobalTask] -> [GlobalTask]
+expandBuildLibraryTasks projMap globalTasks selectedTasks =
+    [ t | t <- globalTasks, Data.Set.member (gtKey t) selectedKeys ]
+  where
+    taskKeys = Data.Set.fromList (map gtKey globalTasks)
+    depMap = M.fromList
+      [ (gtKey t, Data.Set.fromList (filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t))))
+      | t <- globalTasks
+      ]
+    libraryGroups =
+      [ Data.Set.fromList keys
+      | ctx <- M.elems projMap
+      , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
+      , let keys = [ k
+                   | modName <- BuildSpec.libModules lib
+                   , let k = TaskKey (projRoot ctx) (moduleStringToName modName)
+                   , Data.Set.member k taskKeys
+                   ]
+      , not (null keys)
+      ]
+    selectedKeys = close (Data.Set.fromList (map gtKey selectedTasks))
+
+    close keys =
+      let keys' = addLibraries (reachable depMap (addLibraries keys))
+      in if keys' == keys then keys else close keys'
+
+    addLibraries keys =
+      foldl' add keys libraryGroups
+      where
+        add acc group
+          | Data.Set.null (Data.Set.intersection acc group) = acc
+          | otherwise = Data.Set.union acc group
+
+    reachable deps startKeys = go (Data.Set.toList startKeys) Data.Set.empty
+      where
+        go [] seen = seen
+        go (k:ks) seen =
+          if Data.Set.member k seen
+            then go ks seen
+            else
+              let ds = Data.Set.toList (M.findWithDefault Data.Set.empty k deps)
+              in go (ds ++ ks) (Data.Set.insert k seen)
+
+    moduleStringToName = A.modName . splitMod
+
+    splitMod s =
+      case break (== '.') s of
+        (p, []) -> [p]
+        (p, _:rest) -> p : splitMod rest
 
 
 data ModuleHead
@@ -3070,6 +3124,7 @@ scratchBuildSpec projRoot =
          , BuildSpec.fingerprint = fp
          , BuildSpec.dependencies = M.empty
          , BuildSpec.zig_dependencies = M.empty
+         , BuildSpec.libraries = M.empty
          }
 
 

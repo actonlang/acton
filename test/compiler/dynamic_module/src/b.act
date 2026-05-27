@@ -1,0 +1,5 @@
+import a
+
+actor main(env: Env):
+    print(a.foo())
+    env.exit(0)
