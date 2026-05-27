@@ -1,13 +1,15 @@
 def sumto(n):
     res = 0
     for i in range(n):
+        print(i)
         res += i
     return res
     
 actor main(env):
-    if len(env.argv) >= 2:
-        target = int(env.argv[1])
-    else:
-        target = int(123)
-    print(sumto(int(target)))
+#    if len(env.argv) >= 2:
+#        target = int(env.argv[1])
+#    else:
+#        target = int(123)
+#    print(sumto(int(target)))
+    print(sumto(10))
     env.exit(0)
