@@ -1813,27 +1813,31 @@ instance Check Branch where
 
 
 
+defaultParamName n                  = Internal NormPass ("default_" ++ nstr n) 0
+
 defaultsP (PosPar n (Just t) (Just e) p)
   | e /= eNone                          = set : defaultsP p
-  where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
-        set                             = sAssign (pVar n t) (eCond e test (eVar n))
+  where n'                              = defaultParamName n
+        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n']
+        set                             = sAssign (pVar n t) (eCond e test (eVar n'))
 defaultsP (PosPar n _ _ p)              = defaultsP p
 defaultsP _                             = []
 
 noDefaultsP (PosPar n (Just t) (Just e) p)
-                                        = PosPar n (Just $ tOpt t) Nothing (noDefaultsP p)
+                                        = PosPar (defaultParamName n) (Just $ tOpt t) Nothing (noDefaultsP p)
 noDefaultsP (PosPar n t e p)            = PosPar n t e (noDefaultsP p)
 noDefaultsP k                           = k
 
 defaultsK (KwdPar n (Just t) (Just e) k)
   | e /= eNone                          = set : defaultsK k
-  where test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n]
-        set                             = sAssign (pVar n t) (eCond e test (eVar n))
+  where n'                              = defaultParamName n
+        test                            = eCall (tApp (eQVar primISNONE) [t]) [eVar n']
+        set                             = sAssign (pVar n t) (eCond e test (eVar n'))
 defaultsK (KwdPar n _ _ k)              = defaultsK k
 defaultsK _                             = []
 
 noDefaultsK (KwdPar n (Just t) (Just e) k)
-                                        = KwdPar n (Just $ tOpt t) Nothing (noDefaultsK k)
+                                        = KwdPar (defaultParamName n) (Just $ tOpt t) Nothing (noDefaultsK k)
 noDefaultsK (KwdPar n t e k)            = KwdPar n t e (noDefaultsK k)
 noDefaultsK k                           = k
 

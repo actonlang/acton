@@ -1047,8 +1047,10 @@ lub env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
 lub env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> lub env r1 r2
-
+lub env (TUnboxed _ t1) t2              = lub env t1 t2
+lub env t1 (TUnboxed _ t2)              = lub env t1 t2
 lub env t1 t2                           = Nothing
+
 
 
 lub2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2

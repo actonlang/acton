@@ -310,6 +310,9 @@ eIsInstance x n = IsInstance NoLoc (eVar x) n
 pospar nts      = foldr (\(n,t) p -> PosPar n (Just t) Nothing p) PosNIL nts
 pospar' ns      = foldr (\n p -> PosPar n Nothing Nothing p) PosNIL ns
 
+pospars (PosPar n (Just t) _ p)
+                = (n,t) : pospars p
+pospars PosNIL  = []
 pospars' (PosPar n _ _ p)
                 = n : pospars' p
 pospars' PosNIL = []
