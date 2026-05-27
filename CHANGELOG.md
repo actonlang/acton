@@ -22,6 +22,9 @@
     quadratic validation time in large projects.
 - Report parser progress percentages during builds, giving useful feedback for
   very large files before type checking starts. [#2784]
+- Report active back-pass progress for normalize, deactorize, CPS, lambda
+  lifting, boxing, code generation, render, and write steps, so CLI and LSP
+  builds show which generated-code phase is currently running. [#2808]
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
@@ -30,6 +33,11 @@
   type witnesses; separating closed imports and finalized top-level names from
   live local bindings; and deduplicating reserved names with a hash index while
   preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800]
+- Speed up back-end work on large modules by indexing code-generation name
+  membership and boxed variable lookups, reducing repeated scans during boxing
+  and generated C/H rendering. [#2806, #2810]
+- Hash implementation fragments directly as bytes, making cached implementation
+  change detection cheaper while preserving per-name build hashes. [#2811]
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
@@ -55,6 +63,9 @@
   and overlay them during dependency extraction, making Zig build glue easier to
   update while allowing dependencies without source changes to use upstream
   source archives. [#2805]
+- Port Acton and bundled dependency build files to Zig 0.16, including remote
+  dependency fetching and cache archive extraction for `acton pkg add`,
+  `acton fetch`, and project builds with remote dependencies. [#2807]
 
 ### Documentation
 - Document when and how to use the Acton container image, including
@@ -3988,6 +3999,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2801]: https://github.com/actonlang/acton/pull/2801
 [#2802]: https://github.com/actonlang/acton/pull/2802
 [#2805]: https://github.com/actonlang/acton/pull/2805
+[#2806]: https://github.com/actonlang/acton/pull/2806
+[#2807]: https://github.com/actonlang/acton/pull/2807
+[#2808]: https://github.com/actonlang/acton/pull/2808
+[#2810]: https://github.com/actonlang/acton/pull/2810
+[#2811]: https://github.com/actonlang/acton/pull/2811
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
