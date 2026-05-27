@@ -1,6 +1,7 @@
 #include "rts/common.h"
 
 #include <uv.h>
+#include <stdint.h>
 #include "../rts/io.h"
 #include "../rts/log.h"
 
@@ -29,7 +30,7 @@ void exit_handler(uv_process_t *req, int64_t exit_status, int term_signal) {
     // Close the process handle
     uv_close((uv_handle_t *)req, NULL);
 
-    process_data->process->_p = toB_int(0);
+    process_data->process->_p = 0;
 
     // Trigger the on_exit callback
     $action3 f = ($action3)process_data->on_exit;
@@ -91,7 +92,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
     uv_process_options_t *options = acton_calloc(1, sizeof(uv_process_options_t));
 
     uv_process_t *req = acton_calloc(1, sizeof(uv_process_t));
-    self->_p = toB_int((long)req);
+    self->_p = (int64_t)(intptr_t)req;
 
     req->data = process_data;
 
@@ -103,7 +104,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
     args[self->cmd->length] = NULL;
 
     if (self->workdir != B_None) {
-        options->cwd = fromB_str(self->workdir);
+        options->cwd = (const char *)fromB_str(self->workdir);
     }
 
     if (self->new_env == B_None) {
@@ -115,8 +116,8 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
 
         for (int i = 0; i < self->new_env->numelements; i++) {
             item = (B_tuple)iter->$class->__next__(iter);
-            char *key = fromB_str((B_str)item->components[0]);
-            char *value = fromB_str((B_str)item->components[1]);
+            char *key = (char *)fromB_str((B_str)item->components[0]);
+            char *value = (char *)fromB_str((B_str)item->components[1]);
             size_t env_size = strlen(key) + strlen(value) + 2;
             char *env_var = acton_malloc(env_size);
             snprintf(env_var, env_size, "%s=%s", key, value);
@@ -173,7 +174,7 @@ void close_cb(uv_handle_t *handle) {
 }
 
 $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+    uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     struct process_data *process_data = (struct process_data *)p->data;
     uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
     // Ensure stdin is closed properly. stdin might be closed already from
@@ -184,7 +185,7 @@ $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
 }
 
 $R processQ_ProcessD_pidG_local(processQ_Process self, $Cont c$cont) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+    uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
         log_warn("Process has exited, ignoring PID request");
         return $R_CONT(c$cont, B_None);
@@ -192,25 +193,25 @@ $R processQ_ProcessD_pidG_local(processQ_Process self, $Cont c$cont) {
     return $R_CONT(c$cont, (B_atom)toB_int(p->pid));
 }
 
-$R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, B_int signal) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+$R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, int64_t signal) {
+    uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
         log_warn("Process has exited, ignoring signal request");
         return $R_CONT(c$cont, B_None);
     }
-    uv_process_kill(p, fromB_int(signal));
+    uv_process_kill(p, (int)signal);
     return $R_CONT(c$cont, B_None);
 }
 
 $R processQ_ProcessD_writeG_local(processQ_Process self, $Cont c$cont, B_bytes data) {
-    uv_process_t *p = (uv_process_t *)fromB_int(self->_p);
+    uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
         log_warn("Process has exited, ignoring write request");
         return $R_CONT(c$cont, B_None);
     }
 
     uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init(data->str, data->nbytes);
+    uv_buf_t buf = uv_buf_init((char *)data->str, (unsigned int)data->nbytes);
 
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin_handle = (uv_stream_t *)&process_data->stdin_pipe;

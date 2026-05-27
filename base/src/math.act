@@ -11,36 +11,36 @@
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-pi = 3.141592653589793
+pi: float = 3.141592653589793
 
 
-def sqrt(x: float):
+def sqrt(x: float)->float:
    NotImplemented
-def exp(x: float):
+def exp(x: float)->float:
    NotImplemented
-def log(x: float):
+def log(x: float)->float:
    NotImplemented
-def sin(x: float):
+def sin(x: float)->float:
    NotImplemented
-def cos(x: float):
+def cos(x: float)->float:
    NotImplemented
-def tan(x: float):
+def tan(x: float)->float:
    NotImplemented
-def asin(x: float):
+def asin(x: float)->float:
    NotImplemented
-def acos(x: float):
+def acos(x: float)->float:
    NotImplemented
-def atan(x: float):
+def atan(x: float)->float:
    NotImplemented
-def sinh(x: float):
+def sinh(x: float)->float:
    NotImplemented
-def cosh(x: float):
+def cosh(x: float)->float:
    NotImplemented
-def tanh(x: float):
+def tanh(x: float)->float:
    NotImplemented
-def asinh(x: float):
+def asinh(x: float)->float:
    NotImplemented
-def acosh(x: float):
+def acosh(x: float)->float:
    NotImplemented
-def atanh(x: float):
+def atanh(x: float)->float:
    NotImplemented
