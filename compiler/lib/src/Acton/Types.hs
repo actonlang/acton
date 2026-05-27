@@ -95,7 +95,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
         modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
 
 
--- | Print a .ty file header and interface; include name hashes when verbose.
+-- | Print a .tydb header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
                                      (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")

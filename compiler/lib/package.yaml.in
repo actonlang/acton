@@ -37,6 +37,7 @@ dependencies:
   - http-client
   - http-client-tls
   - http-types
+  - lmdb
   - megaparsec
   - mtl
   - optparse-applicative

@@ -51,6 +51,11 @@ extra-deps:
 # Extra package databases containing global packages
 # extra-package-dbs: []
 
+extra-include-dirs:
+  - ../bdeps/out/include
+extra-lib-dirs:
+  - ../bdeps/out/lib
+
 # Control whether we use the GHC we find on the path
 # NOTE: this is disabled so we can use a stack GHC in local dev environments but
 # we rewrite this in our Homebrew recipe to use the system GHC. Do NOT remove

@@ -165,6 +165,8 @@ jobs:
         id: build_acton
         run: |
           make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+      - name: "Show Acton linkage"
+        run: make -C ${{ github.workspace }} ldd
       - name: "Build a release"
         id: build_release
         run: make -C ${{ github.workspace }} release BUILD_TIME=${BUILD_TIME}

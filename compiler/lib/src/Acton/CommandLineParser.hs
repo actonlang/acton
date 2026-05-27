@@ -300,7 +300,7 @@ sigOptions = SigOptions
 sigCompileOptions :: Parser CompileOptions
 sigCompileOptions = mkSigCompileOptions
         <$> switch (long "always-build" <> help "Recompute signatures instead of reusing fresh cached interfaces")
-        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .ty freshness")
+        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
         <*> strOption (long "syspath"   <> metavar "TARGETDIR" <> value "" <> help "Set syspath")
         <*> many (strOption (long "searchpath" <> metavar "DIR" <> help "Add search path"))
         <*> many (option depOverrideReader
@@ -347,7 +347,7 @@ sigCompileOptions = mkSigCompileOptions
 
 compileOptions = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
-        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .ty freshness")
+        <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
         <*> switch (long "parse"        <> help "Show the result of parsing")
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")
@@ -362,7 +362,7 @@ compileOptions = CompileOptions
         <*> switch (long "hgen"         <> help "Show the generated .h header")
         <*> switch (long "cgen"         <> help "Show the generated .c code")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
-        <*> switch (long "ty"           <> help "Write .ty file to src file directory")
+        <*> switch (long "ty"           <> help "Write .tydb directory to src file directory")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
         <*> optimizeOption
@@ -447,7 +447,7 @@ cloudOptions = CloudOptions
         <*> switch (long "stop"         <> help "Help stop!")
 
 docOptions = DocOptions
-    <$> (argument str (metavar "FILE" <> help "Input file (.act or .ty) - optional in projects" <> completer (bashCompleter "file -X '!*.act' -X '!*.ty' -o plusdirs")) <|> pure "")
+    <$> (argument str (metavar "FILE" <> help "Input file (.act or .tydb) - optional in projects" <> completer (bashCompleter "file -X '!*.act' -X '!*.tydb' -o plusdirs")) <|> pure "")
     <*> formatFlags
     <*> optional (strOption (long "output" <> short 'o' <> metavar "FILE" <> help "Output file (default: stdout)"))
   where

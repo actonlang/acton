@@ -19,6 +19,7 @@
 **/.build/
 **/*.swp
 **/*.ty
+**/*.tydb/
 
 backend/actondb
 backend/failure_detector/db_messages_test
@@ -95,5 +96,7 @@ test/**/snapshots/output/**
 snapshots/output/**
 
 # tests organized as acton projects; ignore all but source
-test/*/*/out/**
+test/**/out/**
+test/**/.acton.lock
 compiler/acton/test/project/*/out
+compiler/acton/test/root/test

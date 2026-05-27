@@ -92,7 +92,7 @@ moduleHeaderLine modName
   | null modName = "Tests"
   | otherwise = "Tests - module " ++ modName ++ ":"
 
--- | List test modules by reading discovered tests from .ty headers.
+-- | List test modules by reading discovered tests from .tydb headers.
 listTestModules :: C.CompileOptions -> Paths -> IO [String]
 listTestModules _opts paths = do
     srcFiles <- listActFilesRecursive (srcDir paths)
@@ -544,16 +544,16 @@ compileTestNameRegexes patterns =
 regexMatches :: TDFA.Regex -> String -> Bool
 regexMatches re text = isJust (TDFA.matchOnceText re text)
 
--- | Read the discovered tests for a module from its .ty header.
+-- | Read the discovered tests for a module from its .tydb header.
 listModuleTests :: C.CompileOptions -> Paths -> String -> IO [String]
 listModuleTests _opts paths modName =
     readModuleTests paths (modNameFromString modName)
 
--- | Read tests from a module's .ty header, returning [] on any error.
+-- | Read tests from a module's .tydb header, returning [] on any error.
 readModuleTests :: Paths -> A.ModName -> IO [String]
 readModuleTests paths mn = do
-    let tyFile = outBase paths mn ++ ".ty"
-    exists <- doesFileExist tyFile
+    let tyFile = tyDbPath paths mn
+    exists <- InterfaceFiles.interfaceExists tyFile
     if not exists
       then return []
       else do
