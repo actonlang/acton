@@ -29,9 +29,9 @@ uint32_t B_u32G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     int sz = b->val.size;
-    if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
+    if (sz  > 1 || sz < 0 || (sz==1 && n >= 0xffffffff)) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
+        snprintf(errmsg, sizeof(errmsg), "u32(): value %s out of range for type u32",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
     return n*sz;
