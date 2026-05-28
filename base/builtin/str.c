@@ -443,11 +443,11 @@ static int byte_length(unsigned int cp) {
 
 // #bytes in UTF-8 for char starting with byte c
 static int byte_length2(unsigned char c) {
-    if (c < 0x7f)
+    if (c < 0x80)
         return 1;
-    else if (c < 0xdf)
+    else if (c < 0xe0)
         return 2;
-    else if (c < 0xef)
+    else if (c < 0xf0)
         return 3;
     else
         return 4;
