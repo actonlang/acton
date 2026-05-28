@@ -42,6 +42,16 @@
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
 
+### CLI & Project Workflow
+- It is now possible to customize project library output in `Build.act` by
+  declaring selected modules as named static or dynamic libraries that
+  executables can link against. [#2809]
+  - Dynamic libraries are installed in the normal output layout with executable
+    rpaths, so a project can rebuild a library module and keep running an
+    existing executable against the updated shared library.
+  - Incremental builds keep every module in a declared library together, so
+    library artifacts stay complete even when only one member module changed.
+
 ### Runtime & Standard Library
 - Fix `list.index` on empty lists so it raises `KeyError` for a missing element
   instead of rejecting the default stop position. [#2801]
@@ -73,9 +83,12 @@
   the current project. [#2767]
 
 ### Testing & CI
-- Add a dedicated type-checking benchmark driver that reports parse,
-  environment, kind-checking, and type-checking timings, with optional RTS
-  allocation and GC statistics for compiler performance work. [#2794]
+- Add dedicated compiler benchmark drivers for performance work. [#2794, #2813]
+  - The type-checking benchmark reports parse, environment, kind-checking, and
+    type-checking timings, with optional RTS allocation and GC statistics.
+  - The compiler pipeline benchmark can stop after parsing, kind checking, type
+    checking, front passes, documentation-aware front passes, or the full
+    front/back pipeline.
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -4002,8 +4015,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2806]: https://github.com/actonlang/acton/pull/2806
 [#2807]: https://github.com/actonlang/acton/pull/2807
 [#2808]: https://github.com/actonlang/acton/pull/2808
+[#2809]: https://github.com/actonlang/acton/pull/2809
 [#2810]: https://github.com/actonlang/acton/pull/2810
 [#2811]: https://github.com/actonlang/acton/pull/2811
+[#2813]: https://github.com/actonlang/acton/pull/2813
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
