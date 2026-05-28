@@ -2490,14 +2490,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
 
           checkMissingImports imps = do
             userSearchAbs <- mapM normalizePathSafe (C.searchpath optsT)
-            sysTypesAbs <- normalizePathSafe (sysTypes paths)
+            systemTypesAbs <- mapM normalizePathSafe (systemTypePaths (sysPath paths) (sysTypes paths))
             searchAbs <- mapM normalizePathSafe (searchPath paths)
             let userSearchSet = Data.Set.fromList (map normalise userSearchAbs)
+                systemTypeSet = Data.Set.fromList (map normalise systemTypesAbs)
                 managedTypeDirs =
                   [ p
                   | p <- searchAbs
                   , let pNorm = normalise p
-                  , pNorm /= normalise sysTypesAbs
+                  , Data.Set.notMember pNorm systemTypeSet
                   , Data.Set.notMember pNorm userSearchSet
                   ]
                 isUnder dir path =
@@ -3110,6 +3111,10 @@ data ProjCtx = ProjCtx {
                      projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
                    } deriving (Show)
 
+systemTypePaths :: FilePath -> FilePath -> [FilePath]
+systemTypePaths sys types =
+    [joinPath [sys, "std", "out", "types"], types]
+
 type FingerprintMap = M.Map String FilePath
 
 scratchBuildSpec :: FilePath -> BuildSpec.BuildSpec
@@ -3345,7 +3350,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath depOverrides
-                             let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ [sysTypes]
+                             let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
@@ -3457,7 +3462,7 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
 searchPathForProject :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [FilePath]
 searchPathForProject opts projMap ctx =
     let deps = depTypePathsFromMap projMap (projRoot ctx)
-    in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ [projSysTypes ctx]
+    in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ systemTypePaths (projSysPath ctx) (projSysTypes ctx)
 
 -- | Construct a Paths record for a module within a project context.
 -- Creates output directories and ensures the types directory exists.

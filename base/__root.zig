@@ -45,6 +45,14 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
     return res;
 }
 
+export fn stdQ_base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
+    return base64Q_encode(data);
+}
+
+export fn stdQ_base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
+    return base64Q_decode(data);
+}
+
 export fn zig_crypto_hash_md5_init() callconv(.c) *std.crypto.hash.Md5 {
     const alloc = gc.allocator();
     const hasher_ptr = alloc.create(std.crypto.hash.Md5) catch {

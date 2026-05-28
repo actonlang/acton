@@ -1,0 +1,96 @@
+
+
+normal = "\x1b[0m"
+
+bold = "\x1b[1m"
+underline = "\x1b[4m"
+blink = "\x1b[5m"
+reverse = "\x1b[7m"
+
+# colors
+red = "\x1b[31m"
+green = "\x1b[32m"
+yellow = "\x1b[33m"
+blue = "\x1b[34m"
+magenta = "\x1b[35m"
+cyan = "\x1b[36m"
+white = "\x1b[37m"
+
+grey1 = "\x1b[38;5;232m"
+grey2 = "\x1b[38;5;233m"
+grey3 = "\x1b[38;5;234m"
+grey4 = "\x1b[38;5;235m"
+grey5 = "\x1b[38;5;236m"
+grey6 = "\x1b[38;5;237m"
+grey7 = "\x1b[38;5;238m"
+grey8 = "\x1b[38;5;239m"
+grey9 = "\x1b[38;5;240m"
+grey10 = "\x1b[38;5;241m"
+grey11 = "\x1b[38;5;242m"
+grey12 = "\x1b[38;5;243m"
+grey13 = "\x1b[38;5;244m"
+grey14 = "\x1b[38;5;245m"
+grey15 = "\x1b[38;5;246m"
+grey16 = "\x1b[38;5;247m"
+grey17 = "\x1b[38;5;248m"
+grey18 = "\x1b[38;5;249m"
+grey19 = "\x1b[38;5;250m"
+grey20 = "\x1b[38;5;251m"
+grey21 = "\x1b[38;5;252m"
+grey22 = "\x1b[38;5;253m"
+grey23 = "\x1b[38;5;254m"
+grey24 = "\x1b[38;5;255m"
+
+# background colors
+bg_red = "\x1b[41m"
+bg_green = "\x1b[42m"
+bg_yellow = "\x1b[43m"
+bg_blue = "\x1b[44m"
+bg_magenta = "\x1b[45m"
+bg_cyan = "\x1b[46m"
+bg_white = "\x1b[47m"
+
+clear = "\x1b[0J"
+top = "\x1b[H"
+
+def up(n=1):
+    """Move cursor up n lines.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[A"
+    return res
+
+def down(n=1):
+    """Move cursor down n lines.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[B"
+    return res
+
+def right(n=1):
+    """Move cursor right n columns.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[C"
+    return res
+
+def left(n=1):
+    """Move cursor left n columns.
+    """
+    if n < 0:
+        raise ValueError("n must be >= 0")
+    res = ""
+    for i in range(n):
+        res += "\x1b[D"
+    return res
+
+clearline = "\x1b[0G\x1b[2K"
