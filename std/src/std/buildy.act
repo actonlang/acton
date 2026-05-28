@@ -5,8 +5,8 @@ called just 'build', so it's buildy for buildy stuff.
 """
 
 import file
-import json
-import re
+import std.json as json
+import std.re as re
 
 class BuildSpecError(ValueError):
     pass

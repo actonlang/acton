@@ -491,7 +491,7 @@ dist/backend%: backend/%
 .PHONY: dist/base
 dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS) dist/backend/Build.act
 	mkdir -p "$@" "$@/.build" "$@/out"
-	rm -rf "$@/src" "$@/out/types/std"
+	rm -rf "$@/src" "$@/out/types"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
 	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
 

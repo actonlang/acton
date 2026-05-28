@@ -1,10 +1,10 @@
 import acton.rts
-import argparse
-import diff
+import std.argparse as argparse
+import std.diff as diff
 import file
-import json
+import std.json as json
 import logging
-import term
+import std.term as term
 import time
 
 # -- assert ---------------------------------------------------------------------
