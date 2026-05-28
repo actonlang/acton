@@ -4032,7 +4032,7 @@ B_str B_hex(B_Integral wit, $WORD n) {
     return res;
 }
 
-int64_t B_U_6ord(B_str c) {
+int64_t B_ord(B_str c) {
     if(c->nchars != 1)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
     int cp;
