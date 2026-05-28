@@ -1135,6 +1135,8 @@ genExp env t' e                     = gen env (adjust t t' e')
 genExp' env e                       = gen env e'
   where (t, fx, e')                 = qType env adjust e
 
+genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(tcon (boxedRepType t)))))) <> parens e
+
 instance Gen Expr where
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
@@ -1192,9 +1194,15 @@ instance Gen Expr where
     gen env (UnOp _ op e)           = parens (pretty op <+> gen env e)
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
+    gen env (Box t i@Int{})
+      | B.isUnboxable t'            = genBoxed env t' (gen env (UnBox t' i))
+      where t'                      = boxedRepType t
+    gen env (Box t f@Float{})
+      | B.isUnboxable t'            = genBoxed env t' (gen env (UnBox t' f))
+      where t'                      = boxedRepType t
     gen env (Box t e)
       | boxedExpr env e             = gen env e
-      | otherwise                   = text ("toB_"++render(pretty (noq (tcname(tcon (boxedRepType t)))))) <> parens (gen env e)
+      | otherwise                   = genBoxed env t (gen env e)
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
@@ -1221,6 +1229,8 @@ instance Gen Expr where
              
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
+    gen env (UnBox t (Cond _ e1 e e2))
+                                    = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> genRawExpr env e1 <+> text ":" <+> genRawExpr env e2)
     gen env (UnBox _ v@(Var _ n))
       | unboxedVar env n             = gen env v
     gen env (UnBox _ d@(Dot _ e n))
@@ -1253,6 +1263,7 @@ augPretty op                        = pretty op
 
 genStr env s                        = text $ head $ sval s
 
+genBool env (Paren _ e)             = genBool env e
 genBool env e                       = genExp env tBool e
   where t                           = typeOf env e
 
