@@ -18,11 +18,15 @@ name: Build, Test & Release
 
 on:
   pull_request:
+    paths-ignore:
+      - 'CHANGELOG.md'
   push:
     branches:
       - main
     tags:
       - v*
+    paths-ignore:
+      - 'CHANGELOG.md'
   schedule:
     # Schedule to run daily
     - cron: '4 0 * * *'
