@@ -630,12 +630,30 @@ parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
 parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c, (n,i) <- reverse te ]                                  -- in override order
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findAttr env tc n           = listToMaybe $ attributes f env tc
-  where f wp i x | x /= n   = Nothing
-        f wp (NSig sc d _) x  = Just (wexpr wp, sc, Just d)
-        f wp (NDef sc d _) x  = Just (wexpr wp, sc, Just d)
-        f wp (NVar t)    x  = Just (wexpr wp, monotype t, Nothing)
-        f wp (NSVar t)   x  = Just (wexpr wp, monotype t, Nothing)
+findAttr env tc n           = go (findAncestry env tc)
+  where go []               = Nothing
+        go ((wp,c):cs)      = maybe (go cs) (attr wp) (findAttrInfoIn n te)
+          where (_,te)      = findCon env c
+        attr wp (NSig sc d _) = Just (wexpr wp, sc, Just d)
+        attr wp (NDef sc d _) = Just (wexpr wp, sc, Just d)
+        attr wp (NVar t)      = Just (wexpr wp, monotype t, Nothing)
+        attr wp (NSVar t)     = Just (wexpr wp, monotype t, Nothing)
+        attr _ i              = error ("#### findAttr: Attribute expected, got " ++ show i)
+
+findAttrInfo'               :: EnvF x -> QName -> Name -> Maybe NameInfo
+findAttrInfo' env qn n      = go (([],tc) : us)
+  where go []               = Nothing
+        go ((_,c):cs)       = maybe (go cs) Just (findAttrInfoIn n te)
+          where (_,_,te)    = findConName (tcname c) env
+        (q,us,_)            = findConName qn env
+        tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
+findAttrInfoIn              :: Name -> TEnv -> Maybe NameInfo
+findAttrInfoIn n            = scan Nothing
+  where scan r []           = r
+        scan r ((x,i):xs)
+          | x == n          = scan (Just i) xs
+          | otherwise       = scan r xs
 
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
@@ -666,7 +684,7 @@ abstractAttrs env n         = attributes' f env n
         f _ _ _             = Nothing
 
 closedAttr                  :: EnvF x -> TCon -> Name -> Bool
-closedAttr env tc n         = n `elem` closedAttrs env (tcname tc)
+closedAttr env tc n         = maybe False isClosed (findAttrInfo' env (tcname tc) n)
 
 closedAttrs                 :: EnvF x -> QName -> [Name]
 closedAttrs                 = attributes' f
@@ -688,7 +706,9 @@ abstractClass env n         = not $ null (abstractAttrs env n)
 abstractActor env n         = not $ null (abstractAttrs env n)
 
 abstractAttr                :: EnvF x -> TCon -> Name -> Bool
-abstractAttr env tc n       = n `elem` abstractAttrs env (tcname tc)
+abstractAttr env tc n       = maybe False isAbstract (findAttrInfo' env (tcname tc) n)
+  where isAbstract (NSig _ dec _) = dec /= Property
+        isAbstract _              = False
 
 transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env))
   where trav seen m
@@ -723,13 +743,16 @@ allProtos env               = allTypes isProto env
         isProto _           = False
 
 allConAttr                  :: EnvF x -> Name -> [TCon]
-allConAttr env n            = [ tc | tc <- allCons env, n `elem` allAttrs' env tc ]
+allConAttr env n            = [ tc | tc <- allCons env, hasAttr env tc n ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
-allConAttrUFree env n       = concat [ ufree $ fst $ findAttr' env tc n | tc <- activeConAttr env n ]
+allConAttrUFree env n       = concat [ ufree sc | tc <- activeCons env, Just (_,sc,_) <- [findAttr env tc n] ]
 
 activeConAttr               :: EnvF x -> Name -> [TCon]
-activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc = TC (localQName x) (wildargs i), n `elem` allAttrs' env tc ]
+activeConAttr env n         = [ tc | tc <- activeCons env, hasAttr env tc n ]
+
+activeCons                  :: EnvF x -> [TCon]
+activeCons env              = [ TC (localQName x) (wildargs i) | (x,i) <- activeNames env, isCon i ]
   where isCon NClass{}      = True
         isCon NAct{}        = True
         isCon _             = False
@@ -738,7 +761,10 @@ activeConAttr env n         = [ tc | (x,i) <- activeNames env, isCon i, let tc =
           | otherwise       = NoQ x
 
 allPConAttr                 :: EnvF x -> Name -> [PCon]
-allPConAttr env n           = [ p | p <- allProtos env, n `elem` allAttrs' env p ]
+allPConAttr env n           = [ p | p <- allProtos env, hasAttr env p n ]
+
+hasAttr                     :: EnvF x -> TCon -> Name -> Bool
+hasAttr env tc n            = maybe False (const True) (findAttrInfo' env (tcname tc) n)
 
 
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
