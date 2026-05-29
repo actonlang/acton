@@ -76,10 +76,14 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     return res;
 }
 */
-B_int B_rangeD___next__(B_range self) {
+int64_t $rangeD_U__next__(B_range self) {
     if (self->remaining-- <= 0)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("range iterator terminated")));
-    return toB_int(self->nxt += self->step);
+    return self->nxt += self->step;
+}
+
+B_int B_rangeD___next__(B_range self) {
+    return toB_int($rangeD_U__next__(self));
 }
 
 /*

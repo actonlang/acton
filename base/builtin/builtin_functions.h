@@ -187,7 +187,7 @@ B_bool B_any (B_Iterable, $WORD);
 B_tuple B_divmod (B_Integral, $WORD, $WORD);
 B_u64 B_hash (B_Hashable, $WORD);
 B_Iterator B_iter (B_Iterable, $WORD);
-B_int B_len (B_Collection, $WORD);
+int64_t B_len (B_Collection, $WORD);
 $WORD $next (B_Iterator);
 $WORD B_pow (B_Number, $WORD, $WORD);
 B_str B_repr(B_value);

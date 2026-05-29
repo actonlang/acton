@@ -389,14 +389,18 @@ int64_t B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, 
 
 //  B_SequenceD_list //////////////////////////////////////////////////////////////////
  
-$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
+$WORD $listD_U__getitem__(B_list lst, int64_t n) {
     int len = lst->length;
-    int ix = n->val;
+    int ix = n;
     int ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len) {
         $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside list")));
     }
     return lst->data[ix0];
+}
+
+$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
+    return $listD_U__getitem__(lst, n->val);
 }
 
 B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int n, $WORD val) {
