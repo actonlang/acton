@@ -735,7 +735,8 @@ genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" e
 
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
-  | not (isDefined env n)           = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
+  | not (n `HashSet.member` localDefined env)
+                                    = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
   where rhs                         = if isWitness n
                                       then case staticWitnessName e of
                                            (Just nm,as) ->
@@ -1074,7 +1075,7 @@ unboxedVar env n                    = case findQName n env of
                                         _       -> False
   where isRawVar TUnboxed{}         = True
         isRawVar t                  = isGlobalVar n && B.isUnboxable t
-        isGlobalVar (NoQ n)         = n `elem` global env
+        isGlobalVar (NoQ n)         = isGlobal env n
         isGlobalVar GName{}         = True
         isGlobalVar QName{}         = True
 
