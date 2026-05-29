@@ -25,11 +25,24 @@ gcc_lib_path() {
   return 1
 }
 
-add_static_gcc_lib() {
+# Prefer static archives we build ourselves under bdeps/out over the host's
+# apt-installed .a files, so the link targets our chosen libc version.
+bdeps_lib_path() {
+  local archive="$1"
+  if [[ -n "${ACTON_BDEPS_DIR:-}" && -f "${ACTON_BDEPS_DIR}/lib/${archive}" ]]; then
+    echo "${ACTON_BDEPS_DIR}/lib/${archive}"
+    return 0
+  fi
+  return 1
+}
+
+add_static_lib() {
   local archive="$1"
   local fallback="$2"
   local archive_path
-  if archive_path="$(gcc_lib_path "$archive")"; then
+  if archive_path="$(bdeps_lib_path "$archive")"; then
+    args+=("$archive_path")
+  elif archive_path="$(gcc_lib_path "$archive")"; then
     args+=("$archive_path")
   else
     args+=("-l:$fallback")
@@ -61,7 +74,7 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_gcc_lib libz.a libz.a
+    add_static_lib libz.a libz.a
     return
   fi
   if [[ "$lib_key" == "gmp" ]]; then
@@ -69,7 +82,7 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_gcc_lib libgmp.a libgmp.a
+    add_static_lib libgmp.a libgmp.a
     return
   fi
   if [[ "$lib_key" == "stdc++" ]]; then
@@ -77,8 +90,11 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_gcc_lib libstdc++.a libstdc++.a
-    add_static_gcc_lib libgcc_eh.a libgcc_eh.a
+    # Use zig's bundled static libc++ instead of the host's libstdc++.a so the
+    # C++ runtime targets our chosen libc version. libc++ pulls in zig's
+    # libunwind for the _Unwind_* symbols; -lunwind is listed explicitly so it
+    # is available regardless of archive ordering.
+    args+=("-lc++" "-lunwind")
     return
   fi
   if [[ "$lib_key" == "tinfo" ]]; then
@@ -86,7 +102,7 @@ handle_lib() {
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_gcc_lib libtinfo.a libtinfo.a
+    add_static_lib libtinfo.a libtinfo.a
     return
   fi
   if [[ "$allow_dynamic_glibc" == true ]]; then
@@ -101,12 +117,12 @@ handle_lib() {
         ;;
     esac
   fi
-  if [[ "$lib_key" == "gcc_s" ]]; then
+  if [[ "$lib_key" == "gcc_s" || "$lib_key" == "gcc_eh" ]]; then
     if [[ "$state" != "static" ]]; then
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_gcc_lib libgcc_eh.a libgcc_eh.a
+    args+=("-lunwind")
     return
   fi
   if [[ "$state" != "static" ]]; then

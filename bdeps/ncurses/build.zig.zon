@@ -1,0 +1,13 @@
+.{
+    .name = .ncurses,
+    .version = "6.5.0",
+    .fingerprint = 0xbfb0fbf7716da869,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ncurses_src = .{
+            .url = "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz",
+            .hash = "N-V-__8AAMZOFwGYoq9VA4jW9LOy4Ud9bufE7x2ep88NNqFr",
+        },
+    },
+    .paths = .{""},
+}
