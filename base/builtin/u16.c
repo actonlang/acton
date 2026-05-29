@@ -29,7 +29,7 @@ uint16_t B_u16G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     int sz = b->val.size;
-    if (sz  > 1 || sz < 0 || (sz==1 && n >= 0xffff)) {
+    if (sz  > 1 || sz < 0 || (sz==1 && n > 0xffff)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u16(): value %s out of range for type u16",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
