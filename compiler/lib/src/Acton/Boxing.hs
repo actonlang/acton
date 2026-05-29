@@ -115,7 +115,9 @@ matchTypes t _                      = t    -- ignore possibilities for unboxing
 -- returns the representation type of method f selected from tc.
 -- If generalTypeC cannot find an uninstantiated type to match against, the instantiated type is matched against itself (so, unboxable types will be annotated with TUnboxed).
 rtypeOf                             :: EnvF x -> TCon -> Name -> Type
-rtypeOf env tc f                     = case generalTypeC env (tcname tc) f of
+rtypeOf env tc f
+  | f == initKW                      = matchTypes (sctype sc) (sctype sc)
+  | otherwise                        = case generalTypeC env (tcname tc) f of
                                            Just t -> matchTypes (sctype sc) t
                                            Nothing -> matchTypes (sctype sc) (sctype sc)
     where (sc,_)                     = findAttr' env tc f
@@ -157,6 +159,7 @@ forceUnbox env t (Box _ e)
 forceUnbox env t e                   = UnBox t e
 
 boxedResultExpr env (Paren _ e)      = boxedResultExpr env e
+boxedResultExpr env DotI{}           = True
 boxedResultExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f       = False
   | callReturnsMsg env f              = False
@@ -280,6 +283,7 @@ literalUnboxedRep _              = Nothing
 
 exprUnboxedRep env e@Int{}       = literalUnboxedRep e
 exprUnboxedRep env e@Float{}     = literalUnboxedRep e
+exprUnboxedRep env e@DotI{}      = Nothing
 exprUnboxedRep env c@(Call _ f _ KwdNil)
   | callReturnsMsg env f          = Nothing
   | rawClassConstructor env c f    = unboxedRepType (typeOf env c)
@@ -497,13 +501,12 @@ instance Boxing Expr where
                                          return (ws1, Async l e1)
     boxing env (Await l e)          = do (ws1,e1) <- boxing env e
                                          return (ws1, Await l e1)
-    boxing env (Cond l e1 e2 e3)    = do (ws1,e1') <- boxing env e1
+    boxing env e@(Cond l e1 e2 e3)  = do (ws1,e1') <- boxing env e1
                                          (ws2,e2') <- boxing env e2
                                          (ws3,e3') <- boxing env e3
-                                         case isUnboxable t of
-                                             True -> return (ws1++ws2++ws3, Box t $ Cond l (unbox t e1') e2' (unbox t e3'))
-                                             False -> return (ws1++ws2++ws3, Cond l e1' e2' e3')
-        where t = typeOf env e1
+                                         case unboxedRepType (typeOf env e) of
+                                             Just t -> return (ws1++ws2++ws3, Box t $ Cond l (forceUnbox env t e1') e2' (forceUnbox env t e3'))
+                                             Nothing -> return (ws1++ws2++ws3, Cond l e1' e2' e3')
     boxing env (IsInstance l e qn)  = do (ws1,e1) <- boxing env e
                                          return (ws1, IsInstance l e1 qn)
     boxing env e@(BinOp l e1 op e2)
@@ -562,6 +565,7 @@ boxingTupleArgs _ PosNil            = return ([], PosNil)
 
 boxValueExpr env e e1
   | Box{} <- e1                      = e1
+  | boxedResultExpr env e            = e1
 boxValueExpr env (Call _ f _ KwdNil) e1
   | callReturnsMsg env f              = e1
 boxValueExpr env (Paren _ e) e1       = boxValueExpr env e e1
