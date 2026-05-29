@@ -14,12 +14,27 @@
 
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
+#define U1_NORM(a)        ((uint8_t)((a) & 1))
+#define U1_ADD(a,b)       U1_NORM((a) + (b))
+#define U1_SUB(a,b)       U1_NORM((a) - (b))
+#define U1_MUL(a,b)       U1_NORM((a) * (b))
+#define U1_NEG(a)         U1_NORM(-(a))
+#define U1_INVERT(a)      U1_NORM(~(a))
+#define U1_AND(a,b)       U1_NORM((a) & (b))
+#define U1_OR(a,b)        U1_NORM((a) | (b))
+#define U1_XOR(a,b)       U1_NORM((a) ^ (b))
+#define U1_LSHIFT(a,b)    U1_NORM((a) << (b))
+#define U1_RSHIFT(a,b)    U1_NORM((a) >> (b))
+#define U1_DIV(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); (double)(a)/(double)_u1_b; })
+#define U1_FLOORDIV(a,b)  ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); U1_NORM((a) / _u1_b); })
+#define U1_MOD(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); U1_NORM((a) % _u1_b); })
+
 // only called with e>=0.
 uint8_t u1_pow(uint8_t a, uint8_t e) {
     if (e == 0) return 1;
     if (e == 1) return a;
-    if (e%2 == 0) return int_pow(a*a,e/2);
-    return a * int_pow(a*a,e/2);
+    if (e%2 == 0) return U1_NORM(int_pow(a*a,e/2));
+    return U1_NORM(a * int_pow(a*a,e/2));
 }
 
 // General methods
@@ -29,12 +44,12 @@ uint8_t B_u1G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
     unsigned long n = b->val.n[0];
     int sz = b->val.size;
-    if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
+    if (sz  > 1 || sz < 0 || (sz==1 && n > 1)) {
         char errmsg[1024];
-        snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
+        snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return n*sz;
+    return (uint8_t)(n*sz);
 }
  
 B_NoneType B_u1D___init__(B_u1 self, B_atom a, B_int base){
@@ -65,7 +80,7 @@ B_str B_u1D___repr__(B_u1 n) {
 B_u1 toB_u1(uint8_t i) {
     B_u1 res = acton_malloc(sizeof(struct B_u1));
     res->$class = &B_u1G_methods;
-    res->val = i;
+    res->val = U1_NORM(i);
     return res;
 }
 
@@ -79,7 +94,7 @@ uint8_t fromB_u1(B_u1 w) {
 
 
 B_u1 B_IntegralD_u1D___add__(B_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val + b->val); 
+    return toB_u1(U1_ADD(a->val, b->val)); 
 }
 
 B_u1 B_IntegralD_u1D___zero__(B_IntegralD_u1 wit) {
@@ -95,7 +110,7 @@ B_u1 B_IntegralD_u1D___fromatom__(B_IntegralD_u1 wit, B_atom a) {
 }
 
 B_u1 B_IntegralD_u1D___mul__(B_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val * b->val);
+    return toB_u1(U1_MUL(a->val, b->val));
 }  
   
 B_u1 B_IntegralD_u1D___pow__(B_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
@@ -105,7 +120,7 @@ B_u1 B_IntegralD_u1D___pow__(B_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
 }
 
 B_u1 B_IntegralD_u1D___neg__(B_IntegralD_u1 wit,  B_u1 a) {
-    return toB_u1(-a->val);
+    return toB_u1(U1_NEG(a->val));
 }
 
 B_u1 B_IntegralD_u1D___pos__(B_IntegralD_u1 wit,  B_u1 a) {
@@ -175,60 +190,56 @@ int64_t B_IntegralD_u1D___index__(B_IntegralD_u1 wit, B_u1 n) {
 B_tuple B_IntegralD_u1D___divmod__(B_IntegralD_u1 wit, B_u1 a, B_u1 b) {
     uint8_t n = a->val;
     uint8_t d = b->val;
-    return $NEWTUPLE(2, toB_u1(n/d), toB_u1(n%d));
+    return $NEWTUPLE(2, toB_u1(U1_FLOORDIV(n, d)), toB_u1(U1_MOD(n, d)));
 }
 
 B_u1 B_IntegralD_u1D___floordiv__(B_IntegralD_u1 wit, B_u1 a, B_u1 b) {
-    if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return toB_u1(a->val / b->val);
+    return toB_u1(U1_FLOORDIV(a->val, b->val));
 }
 
 B_u1 B_IntegralD_u1D___mod__(B_IntegralD_u1 wit, B_u1 a, B_u1 b) {
-    return toB_u1(a->val % b->val);
+    return toB_u1(U1_MOD(a->val, b->val));
 }
 
 B_u1 B_IntegralD_u1D___lshift__(B_IntegralD_u1 wit,  B_u1 a, int64_t b) {
-    return toB_u1(a->val << b);
+    return toB_u1(U1_LSHIFT(a->val, b));
 }
 
 B_u1 B_IntegralD_u1D___rshift__(B_IntegralD_u1 wit,  B_u1 a, int64_t b) {
-    return toB_u1(a->val >> b);
+    return toB_u1(U1_RSHIFT(a->val, b));
 }
  
 B_u1 B_IntegralD_u1D___invert__(B_IntegralD_u1 wit,  B_u1 a) {
-    return toB_u1(~a->val);
+    return toB_u1(U1_INVERT(a->val));
 }
 
 
 // B_LogicalD_IntegralD_u1  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_u1 B_LogicalD_IntegralD_u1D___and__(B_LogicalD_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val & b->val);
+    return toB_u1(U1_AND(a->val, b->val));
 }
                                                  
 B_u1 B_LogicalD_IntegralD_u1D___or__(B_LogicalD_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val | b->val);
+    return toB_u1(U1_OR(a->val, b->val));
 }
                                                  
 B_u1 B_LogicalD_IntegralD_u1D___xor__(B_LogicalD_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val ^ b->val);
+    return toB_u1(U1_XOR(a->val, b->val));
 }  
  
 // B_MinusD_IntegralD_u1  ////////////////////////////////////////////////////////////////////////////////////////
 
  
 B_u1 B_MinusD_IntegralD_u1D___sub__(B_MinusD_IntegralD_u1 wit,  B_u1 a, B_u1 b) {
-    return toB_u1(a->val - b->val);
+    return toB_u1(U1_SUB(a->val, b->val));
 }  
 
 // B_DivD_u1  ////////////////////////////////////////////////////////////////////////////////////////
 
  
 B_float B_DivD_u1D___truediv__ (B_DivD_u1 wit, B_u1 a, B_u1 b) {
-    if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
-    return toB_float((double)a->val/(double)b->val);
+    return toB_float(U1_DIV(a->val, b->val));
 }
 
 // B_OrdD_u1  ////////////////////////////////////////////////////////////////////////////////////////
