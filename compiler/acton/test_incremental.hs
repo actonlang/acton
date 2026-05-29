@@ -17,6 +17,7 @@ import           Data.List (elemIndex, find, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (fromMaybe, isJust)
 import           System.Directory
+import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
@@ -405,10 +406,17 @@ actonPath = canonicalizePath (".." </> ".." </> "dist" </> "bin" </> "acton")
 
 -- | Run acton in a directory with fixed job count.
 runActonIn :: FilePath -> [String] -> IO (ExitCode, T.Text)
-runActonIn cwd args = do
+runActonIn = runActonInWithEnv []
+
+-- | Run acton with extra environment variables in a directory with fixed job count.
+runActonInWithEnv :: [(String, String)] -> FilePath -> [String] -> IO (ExitCode, T.Text)
+runActonInWithEnv extraEnv cwd args = do
   actonExe <- actonPath
+  env0 <- getEnvironment
   let args' = args ++ ["--jobs", "1"]
-  (ec,out,err) <- readCreateProcessWithExitCode (proc actonExe args'){ cwd = Just cwd } ""
+      extraKeys = map fst extraEnv
+      env1 = extraEnv ++ filter ((`notElem` extraKeys) . fst) env0
+  (ec,out,err) <- readCreateProcessWithExitCode (proc actonExe args'){ cwd = Just cwd, env = Just env1 } ""
   pure (ec, T.pack out <> T.pack err)
 
 -- | Assert an exit success and include output on failure.
@@ -2110,6 +2118,155 @@ p44_provider_import_rename_reruns_dependent_front =
     assertBool ("expected stale-cache log for missing transitive dep hash\n" ++ T.unpack out2)
       (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "oldpkg.ttt.TransformFunction" out2)
 
+p45_lazy_tydb_qualified_lookup_stays_selective :: TestTree
+p45_lazy_tydb_qualified_lookup_stays_selective =
+  testCase "45-lazy tydb qualified lookup stays selective" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actMain = src </> "main.act"
+    ensureCasesProject
+    writeFileUtf8 (src </> "big.act") $ T.unlines
+      [ "public_value = 41"
+      , "_secret_value = 99"
+      , "unused_value = 123"
+      ]
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(big.public_value + 1)"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial lazy tydb qualified lookup build" res1
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(big.public_value + 2)"
+      , "    env.exit(0)"
+      ]
+    res2@(_ec2, out2) <- runActonInWithEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "lazy tydb qualified lookup rebuild" res2
+    assertBool ("expected a selective .tydb read of big.public_value\n" ++ T.unpack out2)
+      (T.isInfixOf "tydb-read hit" out2 && T.isInfixOf "public_value" out2)
+    assertBool ("did not expect qualified big.public_value recognition to materialize big\n" ++ T.unpack out2)
+      (not (T.isInfixOf "tydb-read-all" out2))
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(big._secret_value)"
+      , "    env.exit(0)"
+      ]
+    res3@(ec3, out3) <- runActonInWithEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertBool ("private lazy .tydb lookup unexpectedly succeeded\n" ++ T.unpack out3)
+      (ec3 /= ExitSuccess)
+    assertBool ("expected private imported name to be rejected as non-exported\n" ++ T.unpack out3)
+      (T.isInfixOf "does not export _secret_value" out3)
+    assertBool ("did not expect private lookup failure to materialize big\n" ++ T.unpack out3)
+      (not (T.isInfixOf "tydb-read-all" out3))
+
+p46_lazy_tydb_generated_witness_lookup_stays_selective :: TestTree
+p46_lazy_tydb_generated_witness_lookup_stays_selective =
+  testCase "46-lazy tydb generated witness lookup stays selective" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actMain = src </> "main.act"
+    ensureCasesProject
+    writeFileUtf8 (src </> "big.act") $ T.unlines
+      [ "class Box [X] ():"
+      , "    def __init__(self, value: X):"
+      , "        self.value = value"
+      , ""
+      , "extension Box [X(Eq)] (Eq):"
+      , "    def __eq__(x, y):"
+      , "        return x.value == y.value"
+      , ""
+      , "unused_value = 99"
+      ]
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big"
+      , ""
+      , "def same(a: big.Box[int], b: big.Box[int]) -> bool:"
+      , "    return a == b"
+      , ""
+      , "actor main(env: Env):"
+      , "    if same(big.Box(1), big.Box(1)):"
+      , "        env.exit(0)"
+      , "    else:"
+      , "        env.exit(1)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial lazy tydb generated witness build" res1
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big"
+      , ""
+      , "def same(a: big.Box[int], b: big.Box[int]) -> bool:"
+      , "    return a == b"
+      , ""
+      , "actor main(env: Env):"
+      , "    if same(big.Box(2), big.Box(2)):"
+      , "        env.exit(0)"
+      , "    else:"
+      , "        env.exit(1)"
+      ]
+    res2@(_ec2, out2) <- runActonInWithEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "lazy tydb generated witness rebuild" res2
+    assertBool ("expected a selective .tydb read of big.Box\n" ++ T.unpack out2)
+      (T.isInfixOf "tydb-read hit" out2 && T.isInfixOf "Box" out2)
+    assertBool ("expected a selective .tydb read of generated Eq witness\n" ++ T.unpack out2)
+      (T.isInfixOf "EqD_Box" out2)
+    assertBool ("did not expect generated witness lookup to materialize big\n" ++ T.unpack out2)
+      (not (T.isInfixOf "tydb-read-all" out2))
+
+p47_lazy_tydb_alias_and_selected_imports_stay_selective :: TestTree
+p47_lazy_tydb_alias_and_selected_imports_stay_selective =
+  testCase "47-lazy tydb alias and selected imports stay selective" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actMain = src </> "main.act"
+    ensureCasesProject
+    writeFileUtf8 (src </> "big.act") $ T.unlines
+      [ "public_value = 11"
+      , "unused_value = 22"
+      ]
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big as b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(b.public_value + 1)"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial lazy tydb alias import build" res1
+    writeFileUtf8 actMain $ T.unlines
+      [ "import big as b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(b.public_value + 2)"
+      , "    env.exit(0)"
+      ]
+    res2@(_ec2, out2) <- runActonInWithEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "lazy tydb alias import rebuild" res2
+    assertBool ("expected alias import to read only big.public_value\n" ++ T.unpack out2)
+      (T.isInfixOf "tydb-read hit" out2 && T.isInfixOf "public_value" out2)
+    assertBool ("did not expect alias import to materialize big\n" ++ T.unpack out2)
+      (not (T.isInfixOf "tydb-read-all" out2))
+    writeFileUtf8 actMain $ T.unlines
+      [ "from big import public_value"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(public_value + 3)"
+      , "    env.exit(0)"
+      ]
+    res3@(_ec3, out3) <- runActonInWithEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "lazy tydb selected import rebuild" res3
+    assertBool ("expected selected import to read only big.public_value\n" ++ T.unpack out3)
+      (T.isInfixOf "tydb-read hit" out3 && T.isInfixOf "public_value" out3)
+    assertBool ("did not expect selected import to materialize big\n" ++ T.unpack out3)
+      (not (T.isInfixOf "tydb-read-all" out3))
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2177,5 +2334,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p42_metadata_drift_refreshes_header
       , p43_equal_act_ty_mtime_hashes_source
       , p44_provider_import_rename_reruns_dependent_front
+      , p45_lazy_tydb_qualified_lookup_stays_selective
+      , p46_lazy_tydb_generated_witness_lookup_stays_selective
+      , p47_lazy_tydb_alias_and_selected_imports_stay_selective
       ]
   ]

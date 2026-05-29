@@ -36,9 +36,12 @@
 
 module InterfaceFiles
   ( NameHashInfo(..)
+  , TypeIndexKind(..)
+  , TypeIndexInfo(..)
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
+  , InterfaceDB
   , interfaceExt
   , interfacePath
   , interfaceExists
@@ -52,6 +55,12 @@ module InterfaceFiles
   , readHeader
   , readFileMaybe
   , readHeaderMaybe
+  , openInterfaceDB
+  , closeInterfaceDB
+  , readInterfaceDBImportInfo
+  , readInterfaceDBNameInfoMaybe
+  , readInterfaceDBNameInfoEntries
+  , readInterfaceDBTypeIndexEntries
   , writeFile
   , writeFileWithVersion
   ) where
@@ -60,13 +69,14 @@ import Prelude hiding (readFile, writeFile)
 import Data.Binary
 import qualified Control.Exception as E
 import Control.Concurrent (runInBoundThread)
-import Control.Concurrent.MVar (MVar, newMVar, withMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar_, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
+import Data.Maybe (mapMaybe)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -74,12 +84,16 @@ import Data.Time.Clock (UTCTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
+import qualified Acton.Names as Names
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension)
+import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Mem.Weak (addFinalizer)
 import System.Posix.Files (getFileStatus, modificationTimeHiRes)
 
 data NameHashInfo = NameHashInfo
@@ -92,6 +106,20 @@ data NameHashInfo = NameHashInfo
   } deriving (Show, Eq, Generic)
 
 instance Binary NameHashInfo
+
+data TypeIndexKind = TypeIndexActor | TypeIndexClass | TypeIndexProto
+  deriving (Show, Eq, Generic)
+
+instance Binary TypeIndexKind
+
+data TypeIndexInfo = TypeIndexInfo
+  { tiiName  :: A.Name
+  , tiiKind  :: TypeIndexKind
+  , tiiBinds :: A.QBinds
+  , tiiAttrs :: [A.Name]
+  } deriving (Show, Eq, Generic)
+
+instance Binary TypeIndexInfo
 
 data SourceFileMeta = SourceFileMeta
   { sfmMTimeNs :: Integer
@@ -137,6 +165,11 @@ type TyMeta =
   , BS.ByteString
   )
 
+data InterfaceDB = InterfaceDB FilePath LMDB.MDB_env (MVar Bool)
+
+instance Show InterfaceDB where
+    show (InterfaceDB path _ _) = "InterfaceDB " ++ path
+
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
 
@@ -154,6 +187,10 @@ dataFilePath path = path </> "data.mdb"
 lmdbOpenLock :: MVar ()
 {-# NOINLINE lmdbOpenLock #-}
 lmdbOpenLock = unsafePerformIO (newMVar ())
+
+traceNameReads :: Bool
+{-# NOINLINE traceNameReads #-}
+traceNameReads = unsafePerformIO $ maybe False (not . null) <$> lookupEnv "ACTON_TYDB_TRACE_READS"
 
 interfaceExists :: FilePath -> IO Bool
 interfaceExists = doesDirectoryExist
@@ -206,7 +243,7 @@ encodeStrict = BL.toStrict . encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyRoots, keyTests, keyDoc, keyNameCount, keyTypeIndexCount, keyStmtCount, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -214,6 +251,7 @@ keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
 keyNameCount    = key "name-count"
+keyTypeIndexCount = key "type-index-count"
 keyStmtCount    = key "stmt-count"
 keyModuleHeader = key "module-header"
 
@@ -252,6 +290,12 @@ keyNameHashPrefix = key "name-hash/"
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
 
+keyTypeIndexPrefix :: BS.ByteString
+keyTypeIndexPrefix = key "type-index/"
+
+keyTypeIndex :: A.Name -> BS.ByteString
+keyTypeIndex n = B.concat [keyTypeIndexPrefix, nameKeySuffix n]
+
 keyStmt :: Int -> BS.ByteString
 keyStmt i = B.pack ("stmt/" ++ padIndex i)
 
@@ -264,16 +308,18 @@ copyVal :: LMDB.MDB_val -> IO BS.ByteString
 copyVal (LMDB.MDB_val len ptr) =
     BS.packCStringLen (castPtr ptr, fromIntegral len)
 
-withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
-withEnv path readOnly mapSize action =
-    E.bracket open LMDB.mdb_env_close action
-  where
-    open = withMVar lmdbOpenLock $ \_ -> do
+openEnv :: FilePath -> Bool -> Int -> IO LMDB.MDB_env
+openEnv path readOnly mapSize =
+    withMVar lmdbOpenLock $ \_ -> do
       env <- LMDB.mdb_env_create
       (do LMDB.mdb_env_set_mapsize env mapSize
           LMDB.mdb_env_open env path (if readOnly then [LMDB.MDB_RDONLY] else [])
           return env)
         `E.onException` LMDB.mdb_env_close env
+
+withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
+withEnv path readOnly mapSize action =
+    E.bracket (openEnv path readOnly mapSize) LMDB.mdb_env_close action
 
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi' -> IO a) -> IO a
 withReadTxn path action = do
@@ -292,6 +338,34 @@ withWriteTxn path mapSize action =
         r <- (LMDB.mdb_dbi_open' txn Nothing [] >>= action txn) `E.onException` LMDB.mdb_txn_abort txn
         LMDB.mdb_txn_commit txn
         return r
+
+openInterfaceDB :: FilePath -> IO InterfaceDB
+openInterfaceDB path = do
+    mapSize <- readMapSize path
+    env <- runInLmdbThread $ openEnv path True mapSize
+    closed <- newMVar False
+    let db = InterfaceDB path env closed
+        close = closeInterfaceDBEnv env closed
+    addFinalizer env close
+    (withInterfaceDBReadTxn db $ \txn dbi -> do
+      validateVersion txn dbi) `E.onException` close
+    return db
+
+closeInterfaceDB :: InterfaceDB -> IO ()
+closeInterfaceDB (InterfaceDB _ env closed) = closeInterfaceDBEnv env closed
+
+closeInterfaceDBEnv :: LMDB.MDB_env -> MVar Bool -> IO ()
+closeInterfaceDBEnv env closed =
+    modifyMVar_ closed $ \done -> do
+      unless done (LMDB.mdb_env_close env)
+      return True
+
+withInterfaceDBReadTxn :: InterfaceDB -> (LMDB.MDB_txn -> LMDB.MDB_dbi' -> IO a) -> IO a
+withInterfaceDBReadTxn (InterfaceDB _ env _) action =
+    runInLmdbThread $
+      E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
+        dbi <- LMDB.mdb_dbi_open' txn Nothing []
+        action txn dbi
 
 -- The raw LMDB binding requires transaction setup from a bound thread; this
 -- applies to reads too because of its Haskell-side lock guard.
@@ -326,6 +400,13 @@ getValue label txn dbi k = do
     case mv of
       Nothing -> ioError (userError ("Missing .tydb key: " ++ label))
       Just v -> copyVal v >>= decodeStrict label
+
+getValueMaybe :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi' -> BS.ByteString -> IO (Maybe a)
+getValueMaybe label txn dbi k = do
+    mv <- withVal k (LMDB.mdb_get' txn dbi)
+    case mv of
+      Nothing -> return Nothing
+      Just v -> Just <$> (copyVal v >>= decodeStrict label)
 
 getValuesWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi' -> BS.ByteString -> IO [BS.ByteString]
 getValuesWithPrefix txn dbi prefix =
@@ -416,12 +497,55 @@ readNameInfoEntries txn dbi = do
       suffix <- getValue ("name-order " ++ show i) txn dbi (keyNameOrder i)
       getValue ("name-info " ++ show i) txn dbi (keyNameInfoSuffix suffix)
 
+readInterfaceDBImportInfo :: InterfaceDB -> IO ([(A.ModName, BS.ByteString)], Maybe String)
+readInterfaceDBImportInfo db =
+    withInterfaceDBReadTxn db $ \txn dbi -> do
+      _ <- readMeta txn dbi
+      imps <- getValue "imports" txn dbi keyImports
+      doc <- getValue "doc" txn dbi keyDoc
+      return (imps, doc)
+
+readInterfaceDBNameInfoMaybe :: InterfaceDB -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
+readInterfaceDBNameInfoMaybe db@(InterfaceDB path _ _) n = do
+    mi <- withInterfaceDBReadTxn db $ \txn dbi -> do
+      getValueMaybe ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+    when traceNameReads $
+      hPutStrLn stderr ("tydb-read " ++ hit mi ++ " " ++ path ++ " " ++ A.nstr n)
+    return mi
+  where hit Nothing = "miss"
+        hit Just{}  = "hit"
+
+readInterfaceDBNameInfoEntries :: InterfaceDB -> IO [(A.Name, I.NameInfo)]
+readInterfaceDBNameInfoEntries db@(InterfaceDB path _ _) = do
+    entries <- withInterfaceDBReadTxn db readNameInfoEntries
+    when traceNameReads $
+      hPutStrLn stderr ("tydb-read-all " ++ path ++ " " ++ show (length entries))
+    return entries
+
+readInterfaceDBTypeIndexEntries :: InterfaceDB -> IO [TypeIndexInfo]
+readInterfaceDBTypeIndexEntries db@(InterfaceDB path _ _) = do
+    entries <- withInterfaceDBReadTxn db $ \txn dbi -> do
+      present <- getValueMaybe "type-index-count" txn dbi keyTypeIndexCount
+      case (present :: Maybe Int) of
+        Just _  -> readTypeIndexEntries txn dbi
+        Nothing -> typeIndex <$> readNameInfoEntries txn dbi
+    when traceNameReads $
+      hPutStrLn stderr ("tydb-read-type-index " ++ path ++ " " ++ show (length entries))
+    return entries
+
 readNameHashEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi' -> IO [NameHashInfo]
 readNameHashEntries txn dbi = do
     vals <- getValuesWithPrefix txn dbi keyNameHashPrefix
     infos <- forM (zip [0..] vals) $ \(i, v) ->
       decodeStrict ("name-hash " ++ show (i :: Int)) v
     return (Data.List.sortOn (A.nstr . nhName) infos)
+
+readTypeIndexEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi' -> IO [TypeIndexInfo]
+readTypeIndexEntries txn dbi = do
+    vals <- getValuesWithPrefix txn dbi keyTypeIndexPrefix
+    infos <- forM (zip [0..] vals) $ \(i, v) ->
+      decodeStrict ("type-index " ++ show (i :: Int)) v
+    return (Data.List.sortOn (A.nstr . tiiName) infos)
 
 readStmtEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi' -> IO [A.Stmt]
 readStmtEntries txn dbi = do
@@ -438,6 +562,7 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
     , (keyTests, encodeStrict tests)
     , (keyDoc, encodeStrict mdoc)
     , (keyNameCount, encodeStrict (length te))
+    , (keyTypeIndexCount, encodeStrict (length typeEntries))
     , (keyStmtCount, encodeStrict (length body))
     , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
     ]
@@ -448,10 +573,24 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
               , let suffix = nameKeySuffix n
               ]
     ++ [ (keyNameHash (nhName nh), encodeStrict nh) | nh <- nameHashes ]
+    ++ [ (keyTypeIndex (tiiName ti), encodeStrict ti) | ti <- typeEntries ]
     ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
+    typeEntries = typeIndex te
+
+typeIndex :: I.TEnv -> [TypeIndexInfo]
+typeIndex te = mapMaybe entry te
+  where
+    entry (n, i)
+      | not (Names.isPublicName n) = Nothing
+      | otherwise                  = case i of
+          I.NAct q _ _ ate _       -> Just (TypeIndexInfo n TypeIndexActor q (attrs ate))
+          I.NClass q _ ate _       -> Just (TypeIndexInfo n TypeIndexClass q (attrs ate))
+          I.NProto q _ ate _       -> Just (TypeIndexInfo n TypeIndexProto q (attrs ate))
+          _                        -> Nothing
+    attrs = Data.List.nub . map fst
 
 writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version

@@ -87,7 +87,14 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
         importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
           where f               = GName m
         imps | inBuiltin env0   = []
-             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
+             | otherwise        = [ (m, impEnv m) | m <- mBuiltin : transitiveImports env0 ]
+        -- setupCons requires a full ordered TEnv so parents precede children.
+        -- Lazy imported modules expose demanded names through Env queries and
+        -- lazyImportedWits instead of seeding this ordered graph from a partial
+        -- memo cache.
+        impEnv m                = case Map.lookup m (lmodules env0) of
+                                    Just _ -> []
+                                    Nothing -> fromJust $ lookupMod m env0
 
 
 tyinfos0                        = IntMap.fromDistinctAscList pairs
@@ -224,7 +231,25 @@ witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
                                   Map.findWithDefault [] pn (closedWitMap x)
 
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = witsByPNameX (envX env) pn
+witsByPName env pn              = witsByPNameX (envX env) pn ++ lazyImportedWits env pn
+
+lazyImportedWits                :: Env -> QName -> [Witness]
+lazyImportedWits env pn         = concat
+                                  [ extWits m extName hni
+                                  | m <- transitiveImports env
+                                  , Just lm <- [Map.lookup m (lmodules env)]
+                                  , (n, i) <- cachedLazyModule lm
+                                  , Just c <- [conInfo n i]
+                                  , let extName = extensionName [TC pn []] c
+                                  , Just hni <- [lookupModuleName m extName env]
+                                  ]
+  where conInfo n (NClass q _ _ _) = Just (TC (NoQ n) (map tVar $ qbound q))
+        conInfo n (NAct q _ _ _ _) = Just (TC (NoQ n) (map tVar $ qbound q))
+        conInfo _ _             = Nothing
+        extWits m extName (HNExt q c ps _ opts _)
+                                = [ WClass q (tCon c) p (GName m extName) ws (length opts)
+                                  | (ws,p) <- ps, tcname p == pn ]
+        extWits _ _ _           = []
 
 witsByTName                     :: Env -> QName -> [Witness]
 witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++

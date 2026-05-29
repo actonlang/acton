@@ -1073,6 +1073,7 @@ data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, I.NameInfo)]
   , frImps     :: [A.ModName]
   , frDoc      :: Maybe String
+  , frLazyModule :: Maybe Acton.Env.LazyModule
   , frPubHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
   , frFrontTime :: Maybe TimeSpec
@@ -1569,28 +1570,31 @@ readImports sp gopts opts paths tasks = do
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
--- | Read an interface from a .tydb file and return its NameInfo and public hash.
+-- | Open an interface from a .tydb file and return a lazy module shell plus its
+-- public hash.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString))
+readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, Maybe Acton.Env.LazyModule, B.ByteString))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
       Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
       Just tyF -> do
-        fileRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyF
-        case fileRes of
+        ifaceRes <- (try :: IO a -> IO (Either SomeException a)) $ do
+          db <- InterfaceFiles.openInterfaceDB tyF
+          (imps, mdoc) <- InterfaceFiles.readInterfaceDBImportInfo db
+          let ms = map fst imps
+          lm <- Acton.Env.mkLazyModule mn db ms mdoc
+          ih <- case mHash of
+                  Just h -> return h
+                  Nothing -> do
+                    hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
+                    case hdrE of
+                      Right (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
+                      _ -> return B.empty
+          return (ms, [], mdoc, Just lm, ih)
+        case ifaceRes of
           Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
-          Right (_ms, nmod, _tmod, _sourceMeta, _srcH, _pubH, _implH, _imps, _nameHashes, _roots, _tests, _tm) -> do
-            let I.NModule ms teFull mdoc = nmod
-                te = publicIfaceTE teFull
-            ih <- case mHash of
-                    Just h -> return h
-                    Nothing -> do
-                      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
-                      case hdrE of
-                        Right (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
-                        _ -> return B.empty
-            return $ Right (ms, te, mdoc, ih)
+          Right iface -> return $ Right iface
 
 
 -- | Snapshot of expected/recorded impl hashes for generated code.
@@ -1960,6 +1964,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                   return $ Right FrontResult { frIfaceTE = publicIface
                                              , frImps = imps
                                              , frDoc = mdoc
+                                             , frLazyModule = Nothing
                                              , frPubHash = modulePubHash
                                              , frNameHashes = publicNameHashes nameHashes
                                              , frFrontTime = frontTimeMaybe
@@ -2359,11 +2364,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
           actFile = srcFile paths mn
           tyFile = tyDbPath paths mn
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
-          mkFrontResult imps ifaceTE mdoc pubHash nameHashes backJob =
+          mkFrontResult imps ifaceTE mdoc mlm pubHash nameHashes backJob =
             FrontResult
               { frIfaceTE = ifaceTE
               , frImps = imps
               , frDoc = mdoc
+              , frLazyModule = mlm
               , frPubHash = pubHash
               , frNameHashes = nameHashes
               , frFrontTime = Nothing
@@ -2376,6 +2382,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
               { frIfaceTE = []
               , frImps = []
               , frDoc = Nothing
+              , frLazyModule = Nothing
               , frPubHash = B.empty
               , frNameHashes = []
               , frFrontTime = Nothing
@@ -2609,11 +2616,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                             ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
               case ifaceRes of
-                Right (imps, ifaceTE, mdoc, ih) -> do
+                Right (imps, ifaceTE, mdoc, mlm, ih) -> do
                   let cachedNameHashes = case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> publicNameHashes nhs
                         _ -> []
-                      fr = mkFrontResult imps ifaceTE mdoc ih cachedNameHashes Nothing
+                      fr = mkFrontResult imps ifaceTE mdoc mlm ih cachedNameHashes Nothing
                   cacheFrontResult fr
                 Left _ ->
                   return (key, Right emptyFrontResult)
@@ -2780,7 +2787,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                       let I.NModule imps ifaceFull _mdoc = nmod
                                           ifaceTE = publicIfaceTE ifaceFull
                                           backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                          fr = mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes updatedNameHashes) backJob
+                                          fr = mkFrontResult imps ifaceTE mdoc Nothing modulePubHash (publicNameHashes updatedNameHashes) backJob
                                       cacheFrontResult fr
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
@@ -2796,7 +2803,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                         let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
                             backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes nameHashes) backJob
+                            fr = mkFrontResult imps ifaceTE mdoc Nothing modulePubHash (publicNameHashes nameHashes) backJob
                         cacheFrontResult fr
                   runReuse = do
                     when (C.verbose gopts) $
@@ -2806,11 +2813,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                                   _ -> readIfaceFromTy paths mn "" Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
-                      Right (imps, ifaceTE, mdoc, ih) -> do
+                      Right (imps, ifaceTE, mdoc, mlm, ih) -> do
                         let cachedNameHashes = case taskCurrent of
                               TyTask{ tyNameHashes = nhs } -> publicNameHashes nhs
                               _ -> []
-                            fr = mkFrontResult imps ifaceTE mdoc ih cachedNameHashes Nothing
+                            fr = mkFrontResult imps ifaceTE mdoc mlm ih cachedNameHashes Nothing
                         cacheFrontResult fr
               case () of
                 _ | needFront -> runFront
@@ -2969,7 +2976,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
                   let res2  = M.insert keyDone (frPubHash fr) res
                       nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
                       parsedTasks2 = M.delete keyDone parsedTasks
-                      envAcc' = Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
+                      envAcc' = case frLazyModule fr of
+                        Just lm -> Acton.Env.addLazyMod (tkMod keyDone) (frImps fr) (frDoc fr) lm envAcc
+                        Nothing -> Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
                   loop runningRef rdy2 running2 res2 nameRes2 parsedTasks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
