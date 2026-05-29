@@ -567,9 +567,10 @@ scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)
         a           = TV KType (name "A")
         
--- $rangeD_U__next__ : [A] => (Iterator[A]) -> A   will only be used to replace B_IteratorD_range.__next__
+-- $rangeD_U__next__ : range -> int
+-- Raw range iteration primitive used when normalizing for-loops over range.
 scUNext             = tSchema [] tUNext
-  where tUNext      = tFun fxMut (posRow (tIterator (tInt)) posNil) kwdNil tInt
+  where tUNext      = tFun fxMut (posRow tRange posNil) kwdNil tInt
         
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
@@ -636,5 +637,4 @@ isPUSHF _                       = False
 
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False
-
 
