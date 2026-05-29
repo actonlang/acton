@@ -311,18 +311,34 @@ instance Norm Stmt where
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
       where t                       = typeOf env e
-    norm' env s@(For l p e b els)   = do i <- newName "iter"
+    norm' env s@(For l p e b els)
+      | Just r <- rangeIteratorArg e = do i <- newName "range_iter"
+                                          v <- newName "val"
+                                          normSuite env [sAssign (pVar i tRange) r,
+                                                         handleStop (While l (eBool True) (rangeBody v i) []) els]
+      | otherwise                   = do i <- newName "iter"
                                          v <- newName "val"
                                          normSuite env [sAssign (pVar i $ conv t) e,
                                                         handleStop (While l (eBool True) (body v i) []) els]
       where t@(TCon _ (TC c [t']))  = typeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
+            rangeNext i             = eCall (eQVar primUNext) [eVar i]
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
             body v i
                | isPVar p           = sAssign p (next i) : b
                | otherwise          = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
+            rangeBody v i
+               | isPVar p           = sAssign p (rangeNext i) : b
+               | otherwise          = sAssign (pVar v t') (rangeNext i) : sAssign p (eVar v) : b
             isPVar PVar{}           = True
             isPVar _                = False
+            rangeIteratorArg (Call _ f (PosArg r PosNil) KwdNil)
+               | isIterCall f && typeOf env r == tRange = Just r
+            rangeIteratorArg (Paren _ e) = rangeIteratorArg e
+            rangeIteratorArg _       = Nothing
+            isIterCall (Dot _ _ n)   = n == iterKW
+            isIterCall (TApp _ f _)  = isIterCall f
+            isIterCall _             = False
     {-
     with EXPRESSION as PATTERN:
         SUITE
@@ -518,7 +534,10 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
-    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
+    norm env (Call l e p k)
+      | Just (t, e1, e2) <- listGetItemCall env e (joinArg p k)
+                                    = eCall (tApp (eQVar primUGetItem) [conv t]) <$> mapM (norm env) [e1, e2]
+      | otherwise                   = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
     norm env (Dot l (Var l' x) n)
@@ -553,6 +572,18 @@ instance Norm Expr where
     norm env e@SetComp{}            = deferComp env e
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
+
+listGetItemCall env (Dot _ _ n) (PosArg e (PosArg ix PosNil))
+  | n == getitemKW,
+    typeOf env ix == tInt,
+    Just t <- listElementType (typeOf env e)
+                                    = Just (t, e, ix)
+listGetItemCall env (TApp _ e _) p  = listGetItemCall env e p
+listGetItemCall env _ _             = Nothing
+
+listElementType (TCon _ (TC q [t]))
+  | q == qnList                     = Just t
+listElementType _                   = Nothing
 
 deferComp env e                     = do f <- newName "compfun"
                                          let p = getLambdavars env

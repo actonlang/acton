@@ -159,8 +159,39 @@ tnm _  _                            = word
         
 
 settype env True t
-    | B.isUnboxable t        = text (unboxed_c_type t)
-settype env b t              = gen env t   
+                                    = rawType env t
+settype env _ t                      = repType env t
+
+-- C ABI type renderers.
+--
+-- repType/repParams render the representation already recorded in the Type:
+-- only explicit TUnboxed markers become raw C types.  rawType/rawParams are
+-- for ABI boundaries that deliberately force builtin value classes to their raw
+-- constructors/storage representation.
+repType env t                       = gen env t
+
+repParams env (TNil _ _)            = empty
+repParams env (TRow _ _ _ t r@TRow{})
+                                    = repType env t <> comma <+> repParams env r
+repParams env (TRow _ _ _ t TNil{}) = repType env t
+repParams env (TRow _ _ _ t TVar{}) = repType env t
+repParams env t@TVar{}              = gen env t
+repParams env t                     = error ("codegen unexpected row: " ++ prstr t)
+
+rawType env t
+  | B.isUnboxable t'                = text (unboxed_c_type t')
+  | otherwise                       = repType env t
+  where t'                          = boxedRepType t
+
+rawParams env (TNil _ _)            = empty
+rawParams env (TRow _ _ _ t r@TRow{})
+                                    = rawType env t <> comma <+> rawParams env r
+rawParams env (TRow _ _ _ t TNil{}) = rawType env t
+rawParams env (TRow _ _ _ t TVar{}) = rawType env t
+rawParams env t@TVar{}              = gen env t
+rawParams env t                     = error ("codegen unexpected row: " ++ prstr t)
+
+storageType env t                   = rawType env t
 
 -- Header -------------------------------------------------------------------------------------------
 
@@ -207,41 +238,40 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
                                       char '}' <> semi
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
-                                    = genTypeDecl env n (exposeMsg fx t) <+> genTopName env n <+> parens (uparams env $ prowOf p) <> semi
+                                    = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env Def{}                  = empty
 
 constub env t n r b
-  | null ns || hasNotImpl b         = utype env t <+> newcon env n <> parens (uparams env r) <> semi
+  | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
   | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
 
 fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
-        field (n, NDef sc Static _) = funsig env n (sctype sc) <> semi
+        field (n, NDef sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NDef sc NoDec _)  
-          | n == initKW             = methsig env c n (sctype sc) <> semi
-          | otherwise               = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
+                                    = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
         field (n, NVar t)           = varsig env n t <> semi
-        field (n, NSig sc Static _) = funsig env n (sctype sc) <> semi
+        field (n, NSig sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc NoDec _)  = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc Property _)
                                     = empty
 
-funsig env n (TFun _ _ r _ t)       = utype env t <+> parens (char '*' <> gen env n) <+> parens (uparams env r)
+funsig env n (TFun _ _ r _ t)       = repType env t <+> parens (char '*' <> gen env n) <+> parens (repParams env r)
 funsig env n t                      = varsig env n t
 
 funsig2 :: GenEnv -> Maybe Name -> Type -> Doc
-funsig2 env mbn (TFun _ fx p _ t)   = utype env (exposeMsg fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (uparams env p)
+funsig2 env mbn (TFun _ fx p _ t)   = repType env (exposeMsg fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env p)
 
-methsig env c n (TFun _ fx r _ t)   = utype env (exposeMsg fx t) <+> parens (char '*' <> gen env n) <+> parens (uparams env $ posRow (tCon c) r)
+methsig env c n (TFun _ fx r _ t)   = repType env (exposeMsg fx t) <+> parens (char '*' <> gen env n) <+> parens (repParams env $ posRow (tCon c) r)
 methsig env c n t                   = varsig env n t
 
 methsig2 :: GenEnv -> TCon -> Maybe Name -> Type -> Doc
 methsig2 env c mbn (TFun _ fx p _ t)
-                                    = (if fx==fxAction then text "B_Msg" else gen env t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (gen env (posRow (tCon c) p))         
+                                    = repType env (exposeMsg fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env (posRow (tCon c) p))         
 
 {-
 params env (TNil _ _)               = empty
@@ -251,23 +281,12 @@ params env (TRow _ _ _ t TVar{})    = gen env t                                 
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
 -}
 
-uparams env (TNil _ _)               = empty
-uparams env (TRow _ _ _ t r@TRow{})  = utype env t <> comma <+> uparams env r
-uparams env (TRow _ _ _ t TNil{})    = utype env t
-uparams env (TRow _ _ _ t TVar{})    = utype env t                                         -- Ignore param tails for now...
-uparams env t@TVar{}                 = gen env t
-uparams env t                        = error ("codegen unexpected row: " ++ prstr t)
-
-utype env t
- | B.isUnboxable t                  = text (unboxed_c_type t)
- | otherwise                        = gen env t
-
 exposeMsg fx t                      = if fx == fxAction then tMsg t else t
 
 exposeMsg' t@TFun{}                 = t{ restype = exposeMsg (effect t) (restype t) }
 exposeMsg' t                        = t
 
-varsig env n t                      = utype env t <+> gen env n
+varsig env n t                      = storageType env t <+> gen env n
 
 stdprefix env                       = [gcinfo env, classid env, superlink env]
 
@@ -712,7 +731,7 @@ genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filt
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
 
-genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+> utype env t
+genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+> storageType env t
 
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
@@ -915,6 +934,8 @@ rawExpr env (Paren _ e)             = rawExpr env e
 rawExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = True
   | callableReturnsRaw env f        = True
+rawExpr env (Call _ (Var _ n) _ KwdNil)
+  | n == primUNext                  = True
 rawExpr env (BinOp _ e1 op e2)
   | op `notElem` [And, Or]          = rawExpr env e1 && rawExpr env e2
 rawExpr env (UnOp _ op e)
@@ -931,6 +952,10 @@ boxedExpr env (Paren _ e)           = boxedExpr env e
 boxedExpr env Box{}                 = True
 boxedExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
   | n == primCAST                   = True
+  | n == primUGetItem               = True
+boxedExpr env (Call _ (Var _ n) _ KwdNil)
+  | n == primUNext                  = False
+  | n == primUGetItem               = True
 boxedExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = False
 boxedExpr env (Call _ f _ KwdNil)   = callReturnsBoxed env f
@@ -1000,6 +1025,8 @@ genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
         flatten e                   = foldr PosArg PosNil $ map (DotI l0 e) [0..]
 genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
+genCall env ts (Var _ n) (PosArg e (PosArg ix PosNil))
+  | n == primUGetItem               = gen env n <> parens (gen env e <> comma <+> genRawExprAs env tInt ix)
 -- Only install GCfinalizer if one is defined, i.e. we don't have the default
 -- $ActorD___cleanup__
 -- TODO: would be even better to determine this in the compiler and not emit
@@ -1147,10 +1174,13 @@ genDotCall env ts dec e n p
 
 genDot env ts e@(Var _ x) n
   | NClass q _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
-genDot env ts e n                   = dotCast env False ts e n $ gen env e <> text "->" <> gen env n
+genDot env ts e n                   = dotCast env False ts e n $ genReceiver env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 
-genTarget env (Dot _ e n)           = gen env e <> text "->" <> gen env n
+genReceiver env e                   = parens (parens (gen env t) <> parens (gen env e))
+  where t                           = boxedRepType (typeOf env e)
+
+genTarget env (Dot _ e n)           = genReceiver env e <> text "->" <> gen env n
 genTarget env e                     = gen env e
 
 
@@ -1220,8 +1250,8 @@ instance Gen Expr where
     gen env (Let _ ss e)            = text "({" <+> fst(genSuite env ss) $+$ gen (ldefine (envOf ss) env) e <> text ";})"
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env (Dot _ e n)             = genDot env [] e n
-    gen env e0@(DotI _ e i)         = parens $ parens (gen env t) <> gen env e <> text "->" <> gen env componentsKW <> brackets (pretty i)
-      where t                       = boxedRepType (typeOf env e0)
+    gen env e0@(DotI _ e i)         = parens $ parens (parens (gen env t) <> parens (gen env e)) <> text "->" <> gen env componentsKW <> brackets (pretty i)
+      where t                       = boxedRepType (typeOf env e)
     gen env (RestI _ e i)           = gen env eNone <> semi <+> text "// CodeGen for tuple tail not implemented"
     gen env (Tuple _ p KwdNil)
        | n == 0                     = gen env primNEWTUPLE0
@@ -1271,6 +1301,7 @@ instance Gen Expr where
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
+        | f == primUNext            = genCall env [] e p
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
   --      | f `elem` B.mathfuns       = genCall env [] e p
