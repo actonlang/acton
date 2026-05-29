@@ -30,6 +30,10 @@ on:
   schedule:
     # Schedule to run daily
     - cron: '4 0 * * *'
+  # Manual trigger that behaves exactly like the nightly run: rebuilds the Acton
+  # compile cache cold and saves a fresh snapshot. Use it to populate caches
+  # immediately (e.g. right after merging) instead of waiting for the next nightly.
+  workflow_dispatch:
 
 env:
   ZIG_DOWNLOAD_BASE_URL: https://github.com/actonlang/zigballs/raw/main
@@ -43,10 +47,13 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build_time: ${{ steps.setver.outputs.build_time }}
+      date: ${{ steps.setver.outputs.date }}
     steps:
       - name: "Set consistent build time"
         id: setver
-        run: echo "build_time=$(date -u '+%Y%m%d.%-H.%-M')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "build_time=$(date -u '+%Y%m%d.%-H.%-M')" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u '+%Y%m%d')" >> "$GITHUB_OUTPUT"
 
   matrix_maker_macos:
     runs-on: ubuntu-latest
@@ -55,14 +62,14 @@ jobs:
     steps:
       - name: "Set Matrix for PR or push"
         # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
-        if: github.event_name != 'schedule'
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         id: setmatrix_pr
         run: |
           MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: setmatrix_cron
         run: |
           MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
@@ -71,7 +78,7 @@ jobs:
       - name: "Set final matrix output"
         id: setmatrix
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
+          if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
           else
             echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
@@ -104,20 +111,29 @@ jobs:
           ulimit -c unlimited
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache stuff"
+      - name: "Cache Haskell deps (~/.stack)"
         if: matrix.cache == true
         uses: actions/cache@v5
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
-      - name: "Cache Acton"
-        if: matrix.cache == true
-        uses: actions/cache@v5
+          key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
+          restore-keys: |
+            stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
+      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
+      # The nightly (schedule) run intentionally skips this so it builds cold and
+      # produces a clean, complete snapshot (saved after tests below) that PRs and
+      # pushes restore the following day. Freshness comes from the date-stamped key
+      # plus the nightly producer, not from cache eviction.
+      - name: "Restore Acton compile cache (~/.cache/acton)"
+        if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.cache/acton/
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-acton
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
+          restore-keys: |
+            acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
@@ -139,6 +155,16 @@ jobs:
           ulimit -c unlimited
           make -C ${{ github.workspace }} test
           make -C ${{ github.workspace }} online-tests
+      # Nightly only: save the freshly-built, complete compile cache as the day's
+      # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
+      # PRs a warm cache.
+      - name: "Save Acton compile cache (~/.cache/acton)"
+        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.cache/acton/
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -155,14 +181,14 @@ jobs:
     steps:
       - name: "Set Matrix for PR or push"
         # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
-        if: github.event_name != 'schedule'
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         id: setmatrix_pr
         run: |
           MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
-        if: github.event_name == 'schedule'
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: setmatrix_cron
         run: |
           MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
@@ -171,7 +197,7 @@ jobs:
       - name: "Set final matrix output"
         id: setmatrix
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ]; then
+          if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
           else
             echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
@@ -207,13 +233,28 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache stuff"
+      - name: "Cache Haskell deps (~/.stack)"
         if: matrix.cache == true
         uses: actions/cache@v5
         with:
           path: |
             ~/.stack
-          key: test-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh') }}
+          key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
+          restore-keys: |
+            stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
+      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
+      # The nightly (schedule) run skips this so it builds cold and saves a clean,
+      # complete snapshot (after tests below) that PRs and pushes restore the next
+      # day. See test-macos for the full rationale.
+      - name: "Restore Acton compile cache (~/.cache/acton)"
+        if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cache/acton/
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
+          restore-keys: |
+            acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -268,6 +309,15 @@ jobs:
           ulimit -c unlimited
           make -C ${GITHUB_WORKSPACE} test
           make -C ${GITHUB_WORKSPACE} online-tests
+      # Nightly only: save the freshly-built, complete compile cache as the day's
+      # canonical snapshot (runs even if tests flake).
+      - name: "Save Acton compile cache (~/.cache/acton)"
+        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.cache/acton/
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -313,12 +363,14 @@ jobs:
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache stuff"
+      - name: "Cache Haskell deps (~/.stack)"
         uses: actions/cache@v5
         with:
           path: |
             ${{ env.STACK_ROOT }}
-          key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'Makefile', 'compiler/tools/*.sh', 'debian/control') }}
+          key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'debian/control') }}
+          restore-keys: |
+            build-debs-${{ matrix.arch }}-
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
