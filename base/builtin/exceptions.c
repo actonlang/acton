@@ -149,3 +149,9 @@ struct $RETG_class $RETG_methods = {
     .__serialize__      = $RETD___serialize__,
     .__deserialize__    = $RETD___deserialize__
 };
+
+
+$WORD $raiseValueError(B_str msg) {
+    $RAISE((B_BaseException)$NEW(B_ValueError,msg));
+    return ($WORD)0;
+}
