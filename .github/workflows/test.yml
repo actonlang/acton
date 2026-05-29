@@ -137,9 +137,11 @@ jobs:
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
+        id: build_acton
         run: |
           make -j2 -C ${{ github.workspace }} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
       - name: "Build a release"
+        id: build_release
         run: make -C ${{ github.workspace }} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
         uses: actions/upload-artifact@v7
@@ -157,9 +159,10 @@ jobs:
           make -C ${{ github.workspace }} online-tests
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
-      # PRs a warm cache.
+      # PRs a warm cache, but requires the build/release steps to have succeeded so
+      # a build failure can't poison the date-stamped key with a partial cache.
       - name: "Save Acton compile cache (~/.cache/acton)"
-        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
@@ -294,9 +297,11 @@ jobs:
           echo "ACTON_ZIG_GLIBC_VERSION=${GLIBC_VERSION}" >> "$GITHUB_ENV"
           echo "Using Zig glibc target ${GLIBC_VERSION}"
       - name: "Build Acton"
+        id: build_acton
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
       - name: "Build a release"
+        id: build_release
         run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
       - name: "Upload artifact"
         uses: actions/upload-artifact@v7
@@ -310,9 +315,10 @@ jobs:
           make -C ${GITHUB_WORKSPACE} test
           make -C ${GITHUB_WORKSPACE} online-tests
       # Nightly only: save the freshly-built, complete compile cache as the day's
-      # canonical snapshot (runs even if tests flake).
+      # canonical snapshot (runs even if tests flake, but requires the build/release
+      # steps to have succeeded so a build failure can't poison the day's key).
       - name: "Save Acton compile cache (~/.cache/acton)"
-        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+        if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
