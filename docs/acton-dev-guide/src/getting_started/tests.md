@@ -30,6 +30,10 @@ make test-backend
 Some compiler suites have explicit accept targets that update expected output:
 
 ```sh
+make test-goldens-accept
+make test-compiler-accept
+make test-lib-accept
+make test-acton-goldens-accept
 make test-incremental
 make test-incremental-accept
 make test-syntaxerrors
@@ -38,6 +42,9 @@ make test-typeerrors
 make test-typeerrors-accept
 ```
 
+`test-goldens-accept` runs the compiler golden and snapshot accept targets.
+`test-lib-accept` updates Sydtest goldens. `test-acton-goldens-accept` and
+the other `acton` package accept targets update Tasty goldens with `--accept`.
 `test-incremental*` requires `dist/bin/acton` (it is built automatically by the target).
 `test-rebuild*` remains as an alias for the incremental suite.
 
