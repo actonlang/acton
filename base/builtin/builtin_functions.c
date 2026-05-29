@@ -540,7 +540,7 @@ B_tuple B_divmod (B_Integral W_225, $WORD a, $WORD b) {
 B_Iterator B_iter (B_Iterable W_278, $WORD x) {
     return W_278->$class->__iter__(W_278, x);
 }
-B_int B_len (B_Collection W_301, $WORD x) {
+int64_t B_len (B_Collection W_301, $WORD x) {
     return W_301->$class->__len__(W_301, x);
 }
 

@@ -5,3 +5,5 @@ struct B_range {
     int64_t step;
     int64_t remaining;
 };
+
+int64_t $rangeD_U__next__(B_range self);
