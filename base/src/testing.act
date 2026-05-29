@@ -478,7 +478,7 @@ class UnitTest(Test):
         success = None
         exception = None
         try:
-            self.fn()
+            output = self.fn()
             success = True
             exception = None
         except SkipTest as e:
