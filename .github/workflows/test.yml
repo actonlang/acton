@@ -111,12 +111,14 @@ jobs:
           ulimit -c unlimited
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache Haskell deps (~/.stack)"
+      - name: "Cache Haskell deps & compiler build"
         if: matrix.cache == true
         uses: actions/cache@v5
         with:
           path: |
             ~/.stack
+            compiler/.stack-work
+            dist
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
           restore-keys: |
             stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
@@ -236,12 +238,14 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache Haskell deps (~/.stack)"
+      - name: "Cache Haskell deps & compiler build"
         if: matrix.cache == true
         uses: actions/cache@v5
         with:
           path: |
             ~/.stack
+            compiler/.stack-work
+            dist
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
           restore-keys: |
             stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
@@ -369,7 +373,7 @@ jobs:
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
       - name: "Check out repository code"
         uses: actions/checkout@v6
-      - name: "Cache Haskell deps (~/.stack)"
+      - name: "Cache Haskell deps & compiler build"
         uses: actions/cache@v5
         with:
           path: |
