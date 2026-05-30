@@ -222,7 +222,7 @@ deactQ_L_9proc deactQ_L_9procD___deserialize__ (deactQ_L_9proc self, $Serial$sta
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa G_1, int64_t G_2) {
@@ -261,7 +261,7 @@ deactQ_L_10proc deactQ_L_10procD___deserialize__ (deactQ_L_10proc self, $Serial$
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 deactQ_L_10proc deactQ_L_10procG_new(deactQ_Bepa G_1, int64_t G_2) {
@@ -543,7 +543,7 @@ deactQ_L_23proc deactQ_L_23procD___deserialize__ (deactQ_L_23proc self, $Serial$
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 deactQ_L_23proc deactQ_L_23procG_new(deactQ_main G_1, int64_t G_2) {
@@ -915,7 +915,7 @@ deactQ_main deactQ_mainD___deserialize__ (deactQ_main self, $Serial$state state)
     self->b = $step_deserialize(state);
     self->x = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->r, sizeof($WORD));
+    memcpy(&self->r, &$tmp, sizeof(self->r));
     return self;
 }
 void deactQ_mainD_GCfinalizer (void *obj, void *cdata) {
