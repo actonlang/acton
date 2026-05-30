@@ -536,7 +536,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 
 initTables env []                   = empty
-initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
+initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n q b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
                                       initTables env1 ss
   where env1                        = gdefine (envOf ds) env
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
@@ -583,19 +583,34 @@ initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfo
         te                          = fullAttrEnv env tc
         te'                         = findAttrSchemas env (NoQ c)
 
-initClass env c [] hasCDef          = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
+initClass env c q [] hasCDef        = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
                                       if hasCDef then empty else gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
-initClass env c (Decl _ ds : ss) b  = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | Def{dname=n} <- ds ] $+$
-                                      initClass env1 c ss b
+initClass env c q (Decl _ ds : ss) b
+                                    = vcat [ methodAssign env c q n | Def{dname=n} <- ds ] $+$
+                                      initClass env1 c q ss b
   where env1                        = gdefine (envOf ds) env
-initClass env c (Signature{} : ss) b = initClass env c ss b
-initClass env c (s : ss) b
-  | isNotImpl s                     = initClass env c ss b
+initClass env c q (Signature{} : ss) b = initClass env c q ss b
+initClass env c q (s : ss) b
+  | isNotImpl s                     = initClass env c q ss b
   | otherwise                       = genStmt1 env s $+$
                                       vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
-                                      initClass env1 c ss b
+                                      initClass env1 c q ss b
   where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env
+
+-- A direct method implementation can have a more specific C signature than the
+-- class-table slot, for example when a method returns Self.  The table slot is
+-- the public ABI, so cast the generated function pointer to that shape.
+methodAssign env c q n              = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (methodname c n) <> semi
+
+methodCast env c q n                = case lookup n (fullAttrEnv env tc) of
+                                        Just (NDef _ Static _) -> parens (funsig2 env Nothing rt)
+                                        Just (NSig _ Static _) -> parens (funsig2 env Nothing rt)
+                                        Just (NDef _ _ _)      -> parens (methsig2 env tc Nothing rt)
+                                        Just (NSig _ _ _)      -> parens (methsig2 env tc Nothing rt)
+                                        _                     -> empty
+  where tc                          = TC (NoQ c) (map tVar $ qbound q)
+        rt                          = B.rtypeOf env tc n
 
 
 initFlag                            = name "done$"
@@ -1318,11 +1333,7 @@ instance Gen Expr where
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
-    gen env (UnBox t (Int _ n s))   = text (s++ suffix t)
-       where suffix t
-               | t == tInt          = "LL"
-               | t == tU64          = "UL"
-               | otherwise          = ""
+    gen env (UnBox t (Int _ n s))   = genUnboxedIntLiteral t n s
              
     gen env (UnBox _ (Float _ x s)) = text s
     gen env (UnBox _ (Bool _ b))    = if b then text "true" else text "false"
@@ -1335,6 +1346,13 @@ instance Gen Expr where
     gen env (UnBox t e)             = parens (parens (gen env t) <> gen env e) <> text "->val"
 --    gen env (UnBox t e)             = parens (gen env e) <> text "->val"
     gen env e                       = error ("CodeGen.gen for Expr: e = " ++ show e)
+
+genUnboxedIntLiteral t n s
+  | t == tInt && n == -9223372036854775808
+                                    = text "(-9223372036854775807LL - 1LL)"
+  | t == tInt                       = text (s++"LL")
+  | t == tU64                       = text (s++"UL")
+  | otherwise                       = text s
 
 gencFunCall env nm []               = text nm <> parens empty
 gencFunCall env nm (x : xs)         = text nm <> parens (genRawExpr env x <> hsep [ comma <+> genRawExpr env x | x <- xs ])
