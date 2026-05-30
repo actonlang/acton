@@ -1,0 +1,142 @@
+name: "repro arm64 segfault"
+
+# THROWAWAY workflow to reproduce + measure the flaky actonc segfault on arm64.
+# Drop this file (and its commit) once the investigation is done.
+#
+# Mirrors test.yml's test-linux (ubuntu 24.04 arm64v8) build environment exactly,
+# then loops the one command that crashed in CI:
+#     cd dist/std && ../bin/actonc build --skip-build
+# counting segfaults and capturing a gdb backtrace from the first few.
+
+on:
+  push:
+    branches:
+      - tydb-repro
+  workflow_dispatch:
+    inputs:
+      iters:
+        description: "Max iterations of the build loop"
+        default: "1000"
+      min_seconds:
+        description: "Run at least this long before an early stop is allowed"
+        default: "1200"
+      stop_after_fails:
+        description: "Once this many segfaults are seen (and min_seconds passed), stop"
+        default: "25"
+
+jobs:
+  repro:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: ubuntu:24.04
+      options: --privileged          # needed to set /proc/sys/kernel/core_pattern
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      ITERS: ${{ github.event.inputs.iters || '1000' }}
+      MIN_SECONDS: ${{ github.event.inputs.min_seconds || '1200' }}
+      STOP_AFTER_FAILS: ${{ github.event.inputs.stop_after_fails || '25' }}
+    steps:
+      - name: "Show platform"
+        run: |
+          uname -a
+          echo "pagesize=$(getconf PAGE_SIZE)"
+          nproc
+          grep -m1 -E 'model name|CPU implementer|Features' /proc/cpuinfo || true
+
+      - name: "Check out repository code"
+        uses: actions/checkout@v6
+
+      - name: "Install build prerequisites"
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev gdb xz-utils
+
+      - name: "Install newer stack"
+        run: |
+          STACK_VERSION=3.9.3
+          STACK_TAR="stack-${STACK_VERSION}-linux-aarch64.tar.gz"
+          curl -fsSL "https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}" -o /tmp/stack.tgz
+          tar -xzf /tmp/stack.tgz -C /tmp
+          install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-aarch64/stack" "/usr/local/bin/stack"
+          stack --version
+
+      - name: "Use container glibc target for source build"
+        run: |
+          GLIBC_VERSION="$(getconf GNU_LIBC_VERSION | awk '{print $2}')"
+          echo "ACTON_ZIG_GLIBC_VERSION=${GLIBC_VERSION}" >> "$GITHUB_ENV"
+
+      - name: "Build Acton"
+        run: make -j2 -C "${GITHUB_WORKSPACE}"
+
+      - name: "Build dist/base (input for dist/std)"
+        run: make -C "${GITHUB_WORKSPACE}" dist/base
+
+      - name: "Show actonc linkage"
+        run: |
+          ldd "${GITHUB_WORKSPACE}/dist/bin/acton" || true
+          echo "lmdb/c++/unwind should NOT appear above (statically linked)."
+
+      - name: "Loop: reproduce + count segfaults"
+        run: |
+          set -u
+          cd "${GITHUB_WORKSPACE}"
+          ulimit -c unlimited
+          echo '/tmp/core.%e.%p' > /proc/sys/kernel/core_pattern 2>/dev/null \
+            && echo "core_pattern set" || echo "could not set core_pattern (will re-run under gdb)"
+          ACTONC="${GITHUB_WORKSPACE}/dist/bin/actonc"
+          mkdir -p "${GITHUB_WORKSPACE}/bts"
+          start=$(date +%s); fails=0; runs=0
+          echo "base .tydb count: $(find dist/base/out/types -name '*.tydb' -type d | wc -l)"
+          for i in $(seq 1 "${ITERS}"); do
+            runs=$i
+            rm -rf dist/std
+            mkdir -p dist/std dist/std/.build dist/std/out
+            cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
+            ( cd dist/std && "$ACTONC" build --skip-build ) >/tmp/iter.log 2>&1
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              fails=$((fails+1))
+              echo "::warning::iter $i RC=$rc (fails=$fails/$runs)"
+              echo "[$(date -u +%H:%M:%S)] iter $i: RC=$rc (fails=$fails/$runs)"
+              tail -5 /tmp/iter.log || true
+              if [ "$fails" -le 3 ]; then
+                core=$(ls -t /tmp/core.* 2>/dev/null | head -1)
+                if [ -n "$core" ] && [ -f "$core" ]; then
+                  echo "--- gdb backtrace (core) ---"
+                  gdb -q -batch -ex 'set pagination off' -ex 'bt 30' -ex 'frame 0' \
+                      -ex 'info registers pc sp lr' -ex 'info sharedlibrary' \
+                      "$ACTONC" "$core" 2>&1 | tee "bts/bt-$i.txt"
+                  rm -f "$core"
+                else
+                  echo "--- no core; re-running under gdb ---"
+                  rm -rf dist/std; mkdir -p dist/std dist/std/.build dist/std/out
+                  cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
+                  ( cd dist/std && gdb -q -batch -ex 'set pagination off' -ex run \
+                      -ex 'bt 30' -ex 'frame 0' -ex 'info registers pc sp lr' \
+                      -ex 'info sharedlibrary' --args "$ACTONC" build --skip-build ) 2>&1 \
+                      | tee "bts/bt-$i.txt"
+                fi
+              fi
+            fi
+            now=$(date +%s); elapsed=$((now-start))
+            if [ $((i % 25)) -eq 0 ]; then echo "[$(date -u +%H:%M:%S)] progress: $fails/$runs (${elapsed}s)"; fi
+            if [ "$fails" -ge "${STOP_AFTER_FAILS}" ] && [ "$elapsed" -ge "${MIN_SECONDS}" ]; then
+              echo "early stop: $fails fails after ${elapsed}s"; break
+            fi
+          done
+          elapsed=$(( $(date +%s) - start ))
+          rate=$(awk "BEGIN{printf \"%.1f\", ($fails/$runs)*100}")
+          echo "=================================================="
+          echo "RESULT: ${fails} segfaults / ${runs} runs (${rate}%) in ${elapsed}s"
+          echo "=================================================="
+          echo "## arm64 segfault repro: ${fails}/${runs} (${rate}%) in ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "Upload backtraces"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: repro-backtraces
+          path: ${{ github.workspace }}/bts
+          if-no-files-found: ignore
