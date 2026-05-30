@@ -43,11 +43,11 @@ B_NoneType B_u8D___init__(B_u8 self, B_atom a, B_int base){
 }
 
 void B_u8D___serialize__(B_u8 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(U8_ID,&n->val,state);
 }
 
 B_u8 B_u8D___deserialize__(B_u8 n, $Serial$state state) {
-    return toB_u8((long)$val_deserialize(state));
+    return toB_u8((uint8_t)$val_deserialize(state));
 }
 
 B_bool B_u8D___bool__(B_u8 n) {
@@ -55,11 +55,11 @@ B_bool B_u8D___bool__(B_u8 n) {
 }
 
 B_str B_u8D___str__(B_u8 n) {
-    return $FORMAT("%lld", n->val);
+    return $FORMAT("%c",(unsigned char) n->val);
 }
 
 B_str B_u8D___repr__(B_u8 n) {
-    return $FORMAT("%lld", n->val);
+    return $FORMAT("%c", (unsigned char)n->val);
 }
 
 B_u8 toB_u8(uint8_t i) {

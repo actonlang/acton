@@ -43,11 +43,11 @@ B_NoneType B_u64D___init__(B_u64 self, B_atom a, B_int base){
 }
 
 void B_u64D___serialize__(B_u64 n, $Serial$state state) {
-    $val_serialize(INT_ID,&n->val,state);
+    $val_serialize(U64_ID,&n->val,state);
 }
 
 B_u64 B_u64D___deserialize__(B_u64 n, $Serial$state state) {
-    return toB_u64((long)$val_deserialize(state));
+    return toB_u64((uint64_t)(uintptr_t)$val_deserialize(state));
 }
 
 B_bool B_u64D___bool__(B_u64 n) {
@@ -55,11 +55,11 @@ B_bool B_u64D___bool__(B_u64 n) {
 }
 
 B_str B_u64D___str__(B_u64 n) {
-    return $FORMAT("%lld", n->val);
+    return $FORMAT("%llu", (unsigned long long)n->val);
 }
 
 B_str B_u64D___repr__(B_u64 n) {
-    return $FORMAT("%lld", n->val);
+    return $FORMAT("%llu", (unsigned long long)n->val);
 }
 
 B_u64 toB_u64(uint64_t i) {
