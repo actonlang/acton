@@ -233,7 +233,7 @@ linesQ_L_9proc linesQ_L_9procD___deserialize__ (linesQ_L_9proc self, $Serial$sta
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 linesQ_L_9proc linesQ_L_9procG_new(linesQ_Apa G_1, int64_t G_2) {
@@ -272,7 +272,7 @@ linesQ_L_10proc linesQ_L_10procD___deserialize__ (linesQ_L_10proc self, $Serial$
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 linesQ_L_10proc linesQ_L_10procG_new(linesQ_Bepa G_1, int64_t G_2) {
@@ -712,7 +712,7 @@ linesQ_L_24proc linesQ_L_24procD___deserialize__ (linesQ_L_24proc self, $Serial$
     }
     self->self = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 linesQ_L_24proc linesQ_L_24procG_new(linesQ_main G_1, int64_t G_2) {
@@ -1034,13 +1034,13 @@ linesQ_Apa linesQ_ApaD___deserialize__ (linesQ_Apa self, $Serial$state state) {
     }
     $ActorG_methods.__deserialize__(($Actor)self, state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->apa, sizeof($WORD));
+    memcpy(&self->apa, &$tmp, sizeof(self->apa));
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->apb, sizeof($WORD));
+    memcpy(&self->apb, &$tmp, sizeof(self->apb));
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->y, sizeof($WORD));
+    memcpy(&self->y, &$tmp, sizeof(self->y));
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->z, sizeof($WORD));
+    memcpy(&self->z, &$tmp, sizeof(self->z));
     return self;
 }
 void linesQ_ApaD_GCfinalizer (void *obj, void *cdata) {
@@ -1146,11 +1146,11 @@ linesQ_main linesQ_mainD___deserialize__ (linesQ_main self, $Serial$state state)
     self->b = $step_deserialize(state);
     self->x = $step_deserialize(state);
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->r, sizeof($WORD));
+    memcpy(&self->r, &$tmp, sizeof(self->r));
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->v, sizeof($WORD));
+    memcpy(&self->v, &$tmp, sizeof(self->v));
     $tmp = $val_deserialize(state);
-    memcpy(&$tmp, &self->i, sizeof($WORD));
+    memcpy(&self->i, &$tmp, sizeof(self->i));
     return self;
 }
 void linesQ_mainD_GCfinalizer (void *obj, void *cdata) {

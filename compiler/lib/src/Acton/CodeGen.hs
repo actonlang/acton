@@ -530,7 +530,7 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
         super_attrs                 = [ i | c <- sup_c, i <- conAttrs env (tcname c) ]
         step (i,t)
            | B.isUnboxable t        = gen env tmpV <+> text "=" <+> gen env primValDeserialize <> parens (gen env st) <> semi $+$
-                                      text "memcpy" <> parens (text "&"<>gen env tmpV <> comma <+> text "&" <> gen env self <> text "->" <> gen env i <> comma <+> text "sizeof" <> parens(word)) <> semi
+                                      text "memcpy" <> parens (text "&" <> gen env self <> text "->" <> gen env i <> comma <+> text "&" <> gen env tmpV <> comma <+> text "sizeof" <> parens (gen env self <> text "->" <> gen env i)) <> semi
            | otherwise              = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
         ret                         = text "return" <+> gen env self <> semi
 
