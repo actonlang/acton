@@ -55,6 +55,37 @@ jobs:
           echo "build_time=$(date -u '+%Y%m%d.%-H.%-M')" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u '+%Y%m%d')" >> "$GITHUB_OUTPUT"
 
+  # The Acton/zig compile cache uses a stable per-platform key
+  # (acton-zig-<os>-<version>-<arch>) that the nightly/manual producer refreshes
+  # each run. GitHub Actions caches are immutable, so actions/cache/save silently
+  # skips a key that already exists; to actually refresh it we delete the old
+  # entries here, before the producer's test jobs save new ones. This keeps just
+  # one snapshot per platform (no daily pile-up) instead of a 7-day backlog.
+  #
+  # The job always runs (so test-macos/test-linux can depend on it without being
+  # skipped on PRs), but the delete step is a no-op except on the producer events.
+  evict-stale-caches:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: "Evict Acton compile caches so the producer can refresh them"
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Deliberately tolerant: a transient API hiccup here must not block CI.
+          ids="$(gh cache list --key acton-zig- --limit 100 --json id --jq '.[].id' || true)"
+          if [ -z "${ids}" ]; then
+            echo "No acton-zig caches to evict."
+            exit 0
+          fi
+          for id in ${ids}; do
+            echo "Deleting cache id ${id}"
+            gh cache delete "${id}" || echo "  (failed to delete ${id}; continuing)"
+          done
+
   matrix_maker_macos:
     runs-on: ubuntu-latest
     outputs:
@@ -91,7 +122,7 @@ jobs:
           echo "Event name: ${{ github.event_name }}"
 
   test-macos:
-    needs: [build-version, matrix_maker_macos]
+    needs: [build-version, matrix_maker_macos, evict-stale-caches]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
@@ -131,9 +162,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
-          restore-keys: |
-            acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Install build prerequisites"
         run: brew install haskell-stack
       - name: "Build Acton"
@@ -167,7 +196,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -213,7 +242,7 @@ jobs:
           echo "Event name: ${{ github.event_name }}"
 
   test-linux:
-    needs: [build-version, matrix_maker_linux]
+    needs: [build-version, matrix_maker_linux, evict-stale-caches]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_linux.outputs.matrix) }}
@@ -255,9 +284,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
-          restore-keys: |
-            acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -323,7 +350,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ needs.build-version.outputs.date }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
