@@ -397,6 +397,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
+.PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
 test: dist/bin/acton
 	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
@@ -410,8 +411,15 @@ test-compiler:
 	cd compiler && stack test libacton
 	cd compiler && stack test acton --ta '-p "compiler"'
 
-test-compiler-accept:
-	cd compiler && stack test acton --test-arguments "--golden-start --golden-reset"
+test-compiler-accept: test-lib-accept test-acton-goldens-accept
+
+test-lib-accept:
+	cd compiler && stack test libacton:test_lib --test-arguments "--golden-start --golden-reset"
+
+test-acton-goldens-accept:
+	cd compiler && stack test acton:test_acton --test-arguments "--accept"
+
+test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerrors-accept test-typeerrors-accept
 
 test-cross-compile:
 	cd compiler && stack test acton --ta '-p "cross-compilation"'
