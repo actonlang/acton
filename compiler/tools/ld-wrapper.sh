@@ -2,6 +2,65 @@
 set -euo pipefail
 
 real_linker="${ACTON_REAL_LD:-gcc}"
+
+# -- macOS (ld64) -------------------------------------------------------------
+# ld64 has no -Bstatic/-Bdynamic and prefers libfoo.dylib over libfoo.a for a
+# given -lfoo, so the GNU-ld toggling strategy below does not apply. Instead we
+# rewrite each -lfoo whose libfoo.a we built under bdeps/out/lib to that
+# archive's full path -- a positional arg ld64 links statically -- while every
+# other argument passes through untouched: system -l flags keep resolving to
+# dylibs, and GHC's ld64-specific flags (-no_fixup_chains, -U <sym>, ...) reach
+# the real linker intact. That real linker is the system clang/ld64 GHC is
+# configured for (ACTON_REAL_LD is left unset on macOS); zig's bundled linker
+# rejects those ld64 flags, so it builds our archives but cannot do this link.
+# Any future bdeps lib links statically just by having its .a present here -- no
+# per-library list to maintain.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  macos_args=()
+  macos_process_arg() {
+    local arg="$1"
+    case "$arg" in
+      @*)
+        local rsp="${arg#@}"
+        if [[ -f "$rsp" ]]; then
+          local line
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -z "$line" ]] && continue
+            if [[ "$line" == \"*\" && "$line" == *\" ]]; then
+              line="${line:1:${#line}-2}"
+              line="${line//\\\\/\\}"
+              line="${line//\\\"/\"}"
+            fi
+            macos_process_arg "$line"
+          done < "$rsp"
+        else
+          macos_args+=("$arg")
+        fi
+        ;;
+      -l*)
+        local name="${arg#-l}"
+        # Normalise -l:libfoo.a / -l:libfoo.dylib to the bare library name.
+        if [[ "$name" == :* ]]; then
+          name="${name#:}"; name="${name#lib}"
+          name="${name%.a}"; name="${name%.dylib}"
+        fi
+        if [[ -n "${ACTON_BDEPS_DIR:-}" && -f "${ACTON_BDEPS_DIR}/lib/lib${name}.a" ]]; then
+          macos_args+=("${ACTON_BDEPS_DIR}/lib/lib${name}.a")
+        else
+          macos_args+=("$arg")
+        fi
+        ;;
+      *)
+        macos_args+=("$arg")
+        ;;
+    esac
+  }
+  for arg in "$@"; do
+    macos_process_arg "$arg"
+  done
+  exec "$real_linker" "${macos_args[@]}"
+fi
+
 state="static"
 arch="$(uname -m 2>/dev/null || true)"
 allow_dynamic_glibc=false

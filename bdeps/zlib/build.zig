@@ -2,7 +2,19 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
-    const target = b.standardTargetOptions(.{});
+    var target = b.standardTargetOptions(.{});
+
+    // On a native macOS build zig defaults the deployment target to the build
+    // host's SDK version. That tags the archive with whatever the build machine
+    // happens to run and makes ld64 warn "object built for newer macOS version"
+    // when GHC later links acton against an older minos. Pin a conservative floor
+    // so the archive is reproducible across hosts and links cleanly. An explicit
+    // -Dtarget=...-macos.<ver> still wins.
+    if (target.result.os.tag == .macos and target.query.os_version_min == null) {
+        var query = target.query;
+        query.os_version_min = .{ .semver = .{ .major = 11, .minor = 0, .patch = 0 } };
+        target = b.resolveTargetQuery(query);
+    }
 
     // Upstream zlib source, fetched via build.zig.zon.
     const src = b.dependency("zlib_src", .{});

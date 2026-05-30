@@ -137,12 +137,19 @@ endif
 # make expands a rule's prerequisite list when the rule is read -- defining
 # BDEPS later would leave $(BDEPS) empty there and the archives would never be
 # built. The build rules and the full rationale live in the /bdeps section below.
-# Linux only (macOS links acton with GHC's native toolchain; see /bdeps).
-# ACTON_BDEPS_DIR must be absolute since the GHC link wrappers run from varying
-# working directories.
-ifeq ($(OS),linux)
-export ACTON_BDEPS_DIR := $(TD)/bdeps/out
+# ACTON_BDEPS_DIR must be absolute since compiler/tools/ld-wrapper.sh (the GHC
+# -pgml link wrapper, used on both Linux and macOS) reads it from the environment
+# and needs a fixed location independent of the directory the link runs from.
+ACTON_BDEPS_DIR := $(TD)/bdeps/out
+export ACTON_BDEPS_DIR
+# libz is the one bdeps lib that GHC actually links into acton on every platform,
+# so we build and statically link it everywhere. The ld-wrapper rewrites -lz to
+# this archive's full path; dropping any future lib's .a into bdeps/out/lib (e.g.
+# liblmdb.a) makes it link statically the same way, with no per-lib wiring.
 BDEPS += bdeps/out/lib/libz.a
+ifeq ($(OS),linux)
+# gmp and tinfo are only pulled in by GHC on Linux (macOS GHC uses the native
+# bignum backend and the SDK's libncurses), so they are Linux-only bdeps.
 BDEPS += bdeps/out/lib/libgmp.a
 BDEPS += bdeps/out/lib/libtinfo.a
 endif
@@ -248,32 +255,62 @@ clean-downloads:
 # statically linked into `acton`, so nothing here is ever shipped in dist/. The
 # GHC link wrappers find the archives/headers under bdeps/out (ACTON_BDEPS_DIR).
 #
-# This takes effect on Linux only. The -pgml=ld-wrapper.sh linker override (see
-# compiler/acton/package.yaml.in) and ACTON_REAL_LD are both gated to os(linux),
-# so on macOS the acton binary is linked by GHC's native toolchain and these
-# archives are neither built nor linked. The problem this solves -- pinning the
-# glibc version of the statically-linked host libs so we can target an older
-# glibc with zig -- is Linux-specific; macOS has no glibc.
+# Both platforms link acton through the -pgml=ld-wrapper.sh override (see
+# compiler/acton/package.yaml.in). On Linux the wrapper additionally uses GNU ld
+# -Bstatic/-Bdynamic toggling and ACTON_REAL_LD (zig cc) to target an older
+# chosen glibc -- a Linux-specific problem. On macOS ld64 has no -Bstatic, so the
+# wrapper instead rewrites each -lfoo to the full path of bdeps/out/lib/libfoo.a
+# (a positional arg ld64 links statically) and execs the system clang/ld64 GHC is
+# configured for; zig only builds the archive, since its bundled linker rejects
+# the ld64 flags GHC emits. gmp and tinfo are not linked into a macOS acton
+# (native bignum backend; libncurses comes from the SDK), so only the zlib rule
+# below runs there. The mechanism generalises: any .a placed in bdeps/out/lib
+# links statically on either platform, which is how future compiler libs (e.g.
+# LMDB) will be linked.
 #
 # The BDEPS list and ACTON_BDEPS_DIR are defined earlier (near
 # ACTON_STACK_PREREQS) so they're in scope when the dist/bin/acton rule is read;
 # only the build rules live here.
+#
+# bdeps_align_macho repacks a zig-built archive ($(1), absolute path) so the
+# final acton link succeeds on macOS. Apple's newer ld64 (Xcode 16 / macOS 26+)
+# requires every 64-bit Mach-O archive member to start at an 8-byte-aligned
+# offset; zig's archiver does not guarantee that, so the link otherwise fails with
+#   ld: 64-bit mach-o member '...' not 8-byte aligned in 'lib....a'
+# zig ar's darwin format pads members to 8 bytes. Extracted members come out with
+# 0 permissions, hence the chmod before re-archiving. No-op off macOS (GNU ld does
+# not care), and generic so any future bdeps lib gets the same treatment.
+ifeq ($(OS),macos)
+define bdeps_align_macho
+	rm -rf "$(1).repack" && mkdir -p "$(1).repack" && cd "$(1).repack" && \
+		"$(ZIG)" ar x --output=. "$(1)" && chmod u+rw *.o && \
+		"$(ZIG)" ar --format=darwin rcs "$(1).aligned" *.o && cd "$(TD)" && \
+		mv "$(1).aligned" "$(1)" && rm -rf "$(1).repack"
+endef
+else
+define bdeps_align_macho
+	@:
+endef
+endif
 
 # /bdeps/zlib --------------------------------------------
 bdeps/out/lib/libz.a: bdeps/zlib/build.zig bdeps/zlib/build.zig.zon $(DIST_ZIG)
 	cd bdeps/zlib && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+	$(call bdeps_align_macho,$(abspath $@))
 
 # /bdeps/gmp ---------------------------------------------
 bdeps/out/lib/libgmp.a: bdeps/gmp/build.zig bdeps/gmp/build.zig.zon $(DIST_ZIG)
 	cd bdeps/gmp && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+	$(call bdeps_align_macho,$(abspath $@))
 
 # /bdeps/ncurses (libtinfo) ------------------------------
 bdeps/out/lib/libtinfo.a: bdeps/ncurses/build.zig bdeps/ncurses/build.zig.zon \
 		bdeps/ncurses/gencaps.c bdeps/ncurses/tinfo.c $(DIST_ZIG)
 	cd bdeps/ncurses && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+	$(call bdeps_align_macho,$(abspath $@))
 
 
 # /deps/libargp --------------------------------------------
