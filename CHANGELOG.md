@@ -28,11 +28,13 @@
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
-- Speed up compiler environment lookups, scans, substitutions, and witness
-  resolution in large modules by indexing active names, term substitutions, and
-  type witnesses; separating closed imports and finalized top-level names from
-  live local bindings; and deduplicating reserved names with a hash index while
-  preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800]
+- Speed up compiler environment lookups, scans, attribute queries,
+  substitutions, and witness resolution in large modules by indexing active
+  names, term substitutions, and type witnesses; separating closed imports and
+  finalized top-level names from live local bindings; avoiding temporary
+  inherited-attribute lists for single-attribute queries; and deduplicating
+  reserved names with a hash index while preserving source-order semantics.
+  [#2789, #2796, #2797, #2799, #2800, #2816]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, reducing repeated scans during boxing
   and generated C/H rendering. [#2806, #2810]
@@ -53,6 +55,13 @@
     library artifacts stay complete even when only one member module changed.
 
 ### Runtime & Standard Library
+- Expose standard library modules through a bundled `std` project and namespace,
+  so applications can import modules such as `std.json`, `std.argparse`, and
+  `std.xml` without declaring an external dependency. [#2817]
+  - Project builds add an implicit `std` dependency unless one is declared, and
+    compiler lookups include bundled `std` interfaces alongside base.
+  - The distribution builds and ships `dist/std` separately from `dist/base`,
+    keeping base focused on builtins and runtime support.
 - Fix `list.index` on empty lists so it raises `KeyError` for a missing element
   instead of rejecting the default stop position. [#2801]
 
@@ -89,6 +98,12 @@
   - The compiler pipeline benchmark can stop after parsing, kind checking, type
     checking, front passes, documentation-aware front passes, or the full
     front/back pipeline.
+- Refresh Acton compile-cache snapshots from nightly and manual workflow runs,
+  while pull request and push builds restore those snapshots without saving new
+  cache entries. [#2823]
+  - Haskell dependency caches are keyed separately from the Acton/Zig compile
+    cache, and cache saves require successful build and release steps so failed
+    builds cannot publish partial snapshots.
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -4019,6 +4034,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2810]: https://github.com/actonlang/acton/pull/2810
 [#2811]: https://github.com/actonlang/acton/pull/2811
 [#2813]: https://github.com/actonlang/acton/pull/2813
+[#2816]: https://github.com/actonlang/acton/pull/2816
+[#2817]: https://github.com/actonlang/acton/pull/2817
+[#2823]: https://github.com/actonlang/acton/pull/2823
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
