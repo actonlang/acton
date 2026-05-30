@@ -1101,7 +1101,7 @@ dotCast env ent ts e n
         (sc, dec)                   = findAttr' env c0 n
         t                           = vsubst fullsubst $ if ent then addSelf t1 dec else t1
         t1                          = exposeMsg' (sctype sc)
-        t' sc'                      = vsubst fullsubst $ if ent then addSelf (t1' sc') dec else t1' sc'
+        t' sc'                      = if ent then addSelf (t1' sc') dec else t1' sc'
         t1' sc'                     = exposeMsg' (sctype sc')
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
         te                          = findAttrSchemas env (tcname c0)
