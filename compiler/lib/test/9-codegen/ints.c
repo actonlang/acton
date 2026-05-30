@@ -34,7 +34,7 @@ int intsQ_done$ = 0;
 void intsQ___init__ () {
     if (intsQ_done$) return;
     intsQ_done$ = 1;
-    int64_t int64_min = -9223372036854775808LL;
+    int64_t int64_min = (-9223372036854775807LL - 1LL);
     intsQ_int64_min = int64_min;
     int64_t int64_max = 9223372036854775807LL;
     intsQ_int64_max = int64_max;
