@@ -1,0 +1,13 @@
+.{
+    .name = .gmp,
+    .version = "6.3.0",
+    .fingerprint = 0x328f606142c2788c,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .gmp_src = .{
+            .url = "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz",
+            .hash = "N-V-__8AAE5fAwHUYgLBeqNatYSKf3qBK3l8nwdpjyY8igK0",
+        },
+    },
+    .paths = .{""},
+}

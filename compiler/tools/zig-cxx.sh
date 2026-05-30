@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# NOTE: this script is intentionally near-identical to its sibling zig-cc.sh
+# (the only meaningful difference is `zig c++` vs `zig cc`). Keep the lib/header
+# rewriting helpers below in sync between the two when editing either.
+
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 ZIG="${ROOT}/dist/zig/zig"
 
@@ -26,6 +30,24 @@ gcc_lib_path() {
   return 1
 }
 
+# Static archives we build ourselves under bdeps/out take precedence over the
+# host's apt-installed .a files, so the acton binary links against libs targeting
+# our chosen libc version rather than the build machine's.
+bdeps_lib_path() {
+  local archive="$1"
+  if [[ -n "${ACTON_BDEPS_DIR:-}" && -f "${ACTON_BDEPS_DIR}/lib/${archive}" ]]; then
+    echo "${ACTON_BDEPS_DIR}/lib/${archive}"
+    return 0
+  fi
+  return 1
+}
+
+add_bdeps_include_dirs() {
+  if [[ -n "${ACTON_BDEPS_DIR:-}" && -d "${ACTON_BDEPS_DIR}/include" ]]; then
+    args+=("-I" "${ACTON_BDEPS_DIR}/include")
+  fi
+}
+
 add_system_include_dirs() {
   local multiarch
   args+=("-idirafter" "/usr/include")
@@ -48,28 +70,35 @@ rewrite_lib_arg() {
   local lib_path
   case "$arg" in
     -lgmp|-l:libgmp.a)
-      if lib_path="$(gcc_lib_path libgmp.a)"; then
+      if lib_path="$(bdeps_lib_path libgmp.a)"; then
+        echo "$lib_path"
+      elif lib_path="$(gcc_lib_path libgmp.a)"; then
         echo "$lib_path"
       else
         echo "$arg"
       fi
       ;;
     -lz|-l:libz.a)
-      if lib_path="$(gcc_lib_path libz.a)"; then
+      if lib_path="$(bdeps_lib_path libz.a)"; then
+        echo "$lib_path"
+      elif lib_path="$(gcc_lib_path libz.a)"; then
         echo "$lib_path"
       else
         echo "$arg"
       fi
       ;;
     -lstdc++|-l:libstdc++.a)
-      if lib_path="$(gcc_lib_path libstdc++.a)"; then
-        echo "$lib_path"
-      else
-        echo "$arg"
-      fi
+      # zig's bundled static libc++ replaces the host libstdc++.a.
+      echo "-lc++"
+      ;;
+    -lgcc_s|-l:libgcc_s.so*|-lgcc_eh|-l:libgcc_eh.a)
+      # zig's bundled libunwind provides the _Unwind_* symbols.
+      echo "-lunwind"
       ;;
     -ltinfo|-l:libtinfo.a)
-      if lib_path="$(gcc_lib_path libtinfo.a)"; then
+      if lib_path="$(bdeps_lib_path libtinfo.a)"; then
+        echo "$lib_path"
+      elif lib_path="$(gcc_lib_path libtinfo.a)"; then
         echo "$lib_path"
       else
         echo "$arg"
@@ -117,6 +146,7 @@ case "$(uname -s)" in
     esac
     GLIBC_VERSION="${ACTON_ZIG_GLIBC_VERSION:-2.31}"
     args=()
+    add_bdeps_include_dirs
     add_system_include_dirs
     add_arch_feature_args
     for arg in "$@"; do

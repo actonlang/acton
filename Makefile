@@ -132,6 +132,21 @@ else
 ACTON_STACK_PREREQS=
 endif
 
+# bdeps: static libs we build ourselves and link into the acton compiler. These
+# variables must be defined here, before the dist/bin/acton rule, because GNU
+# make expands a rule's prerequisite list when the rule is read -- defining
+# BDEPS later would leave $(BDEPS) empty there and the archives would never be
+# built. The build rules and the full rationale live in the /bdeps section below.
+# Linux only (macOS links acton with GHC's native toolchain; see /bdeps).
+# ACTON_BDEPS_DIR must be absolute since the GHC link wrappers run from varying
+# working directories.
+ifeq ($(OS),linux)
+export ACTON_BDEPS_DIR := $(TD)/bdeps/out
+BDEPS += bdeps/out/lib/libz.a
+BDEPS += bdeps/out/lib/libgmp.a
+BDEPS += bdeps/out/lib/libtinfo.a
+endif
+
 .PHONY: test-backend
 test-backend: $(BACKEND_TESTS)
 	@echo DISABLED TEST: backend/failure_detector/db_messages_test
@@ -144,7 +159,7 @@ test-backend: $(BACKEND_TESTS)
 # /compiler ----------------------------------------------
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS)
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
@@ -221,6 +236,44 @@ DEPS += dist/deps/libsnappy_c
 .PHONE: clean-downloads
 clean-downloads:
 	rm -rf deps-download
+
+# /bdeps -------------------------------------------------
+# Build-time dependencies of the acton compiler executable itself. These are
+# libraries that GHC statically links into `acton` and which we otherwise would
+# pull as host .a files via `gcc -print-file-name` (see compiler/tools/*.sh).
+# Building them ourselves with zig lets us target an older/chosen libc instead of
+# inheriting whatever the build machine has installed. Each bdeps/<name> is a
+# standalone zig project that fetches its upstream source via build.zig.zon and
+# installs (via zig --prefix) into the shared bdeps/out prefix. They are
+# statically linked into `acton`, so nothing here is ever shipped in dist/. The
+# GHC link wrappers find the archives/headers under bdeps/out (ACTON_BDEPS_DIR).
+#
+# This takes effect on Linux only. The -pgml=ld-wrapper.sh linker override (see
+# compiler/acton/package.yaml.in) and ACTON_REAL_LD are both gated to os(linux),
+# so on macOS the acton binary is linked by GHC's native toolchain and these
+# archives are neither built nor linked. The problem this solves -- pinning the
+# glibc version of the statically-linked host libs so we can target an older
+# glibc with zig -- is Linux-specific; macOS has no glibc.
+#
+# The BDEPS list and ACTON_BDEPS_DIR are defined earlier (near
+# ACTON_STACK_PREREQS) so they're in scope when the dist/bin/acton rule is read;
+# only the build rules live here.
+
+# /bdeps/zlib --------------------------------------------
+bdeps/out/lib/libz.a: bdeps/zlib/build.zig bdeps/zlib/build.zig.zon $(DIST_ZIG)
+	cd bdeps/zlib && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+
+# /bdeps/gmp ---------------------------------------------
+bdeps/out/lib/libgmp.a: bdeps/gmp/build.zig bdeps/gmp/build.zig.zon $(DIST_ZIG)
+	cd bdeps/gmp && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+
+# /bdeps/ncurses (libtinfo) ------------------------------
+bdeps/out/lib/libtinfo.a: bdeps/ncurses/build.zig bdeps/ncurses/build.zig.zon \
+		bdeps/ncurses/gencaps.c bdeps/ncurses/tinfo.c $(DIST_ZIG)
+	cd bdeps/ncurses && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 
 
 # /deps/libargp --------------------------------------------
@@ -475,8 +528,8 @@ online-tests: dist/bin/actonc
 	cd compiler && stack test acton:test_acton_online
 
 
-.PHONY: clean clean-all clean-base clean-std
-clean: clean-distribution clean-base clean-std
+.PHONY: clean clean-all clean-base clean-std clean-bdeps
+clean: clean-distribution clean-base clean-std clean-bdeps
 
 clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
@@ -486,6 +539,9 @@ clean-base:
 
 clean-std:
 	rm -rf std/out
+
+clean-bdeps:
+	rm -rf bdeps/out bdeps/*/zig-out bdeps/*/zig-pkg bdeps/*/.zig-cache
 
 # == DIST ==
 #

@@ -58,6 +58,15 @@ deps/*
 !deps/*/build.zig.zon
 deps-download
 
+bdeps/*
+!bdeps/*/
+!bdeps/*/build.zig
+!bdeps/*/build.zig.zon
+!bdeps/*/*.c
+bdeps/out
+bdeps/**/zig-out
+bdeps/**/zig-pkg
+
 dist/*
 
 builder/deps/*
