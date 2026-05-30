@@ -570,7 +570,7 @@ boxValueExpr env (Call _ f _ KwdNil) e1
   | callReturnsMsg env f              = e1
 boxValueExpr env (Paren _ e) e1       = boxValueExpr env e e1
 boxValueExpr env e e1
-  | Just rt <- unboxedRepType (typeOf env e)
+  | Just rt <- exprUnboxedRep env e
                                       = Box rt e1
   | otherwise                        = e1
 
