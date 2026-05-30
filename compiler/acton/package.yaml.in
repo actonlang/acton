@@ -76,11 +76,21 @@ executables:
       - -threaded
       - -rtsopts
       - '"-with-rtsopts=-N -A64M"'
+    # Route the link through our wrapper so host libs are replaced with our
+    # self-built static archives under bdeps/out/lib (libz.a, future LMDB, ...).
+    # Gated per-OS rather than applied unconditionally so an unvalidated platform
+    # (e.g. Windows, where this bash wrapper would not run) falls back to the
+    # default linker instead of breaking. The script branches internally: GNU ld
+    # -Bstatic toggling on Linux, an -lfoo -> libfoo.a rewrite for ld64 on macOS.
     when:
     - condition: os(linux)
+      # -no-pie is required on Linux but invalid on macOS (executables are PIE).
       ghc-options:
         - -no-pie
         - -optl-no-pie
+        - -pgml=../tools/ld-wrapper.sh
+    - condition: os(darwin)
+      ghc-options:
         - -pgml=../tools/ld-wrapper.sh
 
 tests:

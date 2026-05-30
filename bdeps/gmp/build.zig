@@ -88,6 +88,10 @@ pub fn build(b: *std.Build) !void {
     mod.addCSourceFiles(.{ .root = src.path("mpq"), .files = &mpq_files });
     mod.addCSourceFiles(.{ .root = src.path("mpf"), .files = &mpf_files });
     mod.addCSourceFiles(.{ .root = src.path("printf"), .files = &printf_files });
+    // obstack-based printf variants need glibc's <obstack.h>; skip on macOS/musl.
+    if (target.result.isGnuLibC()) {
+        mod.addCSourceFiles(.{ .root = src.path("printf"), .files = &printf_obstack_files });
+    }
     mod.addCSourceFiles(.{ .root = src.path("scanf"), .files = &scanf_files });
     mod.addCSourceFiles(.{ .root = src.path("rand"), .files = &rand_files });
 
@@ -576,11 +580,17 @@ const mpf_files = [_][]const u8{
 
 const printf_files = [_][]const u8{
     "asprintf.c",    "asprntffuns.c", "doprnt.c",      "doprntf.c",
-    "doprnti.c",     "fprintf.c",     "obprintf.c",    "obprntffuns.c",
-    "obvprintf.c",   "printf.c",      "printffuns.c",  "repl-vsnprintf.c",
-    "snprintf.c",    "snprntffuns.c", "sprintf.c",     "sprintffuns.c",
-    "vasprintf.c",   "vfprintf.c",    "vprintf.c",     "vsnprintf.c",
-    "vsprintf.c",
+    "doprnti.c",     "fprintf.c",     "printf.c",      "printffuns.c",
+    "repl-vsnprintf.c", "snprintf.c", "snprntffuns.c", "sprintf.c",
+    "sprintffuns.c", "vasprintf.c",   "vfprintf.c",    "vprintf.c",
+    "vsnprintf.c",   "vsprintf.c",
+};
+
+// The obstack-based printf variants (gmp_obstack_*printf) include <obstack.h>,
+// a glibc extension that is absent on macOS (and musl). GHC never calls them,
+// so they are only compiled when targeting glibc (see have_obstack in build()).
+const printf_obstack_files = [_][]const u8{
+    "obprintf.c", "obprntffuns.c", "obvprintf.c",
 };
 
 const scanf_files = [_][]const u8{
