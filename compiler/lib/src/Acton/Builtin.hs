@@ -44,6 +44,7 @@ cleanupKW                           = name "__cleanup__"
 resumeKW                            = name "__resume__"
 
 valueKWs                            = [boolKW, strKW, reprKW]
+indexedKWs                          = [getitemKW, setitemKW, delitemKW]
 
 iaddKW                              = name "__iadd__"
 isubKW                              = name "__isub__"

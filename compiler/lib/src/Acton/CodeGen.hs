@@ -557,31 +557,14 @@ initGlobals env (s : ss)            = genStmt1 env s $+$
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
                                       vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
-  where tc                          =  TC (NoQ c) [ tVar v | QBind v _ <- q ]
+  where tc                          = TC (NoQ c) [ tVar v | QBind v _ <- q ]
         super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
-        selfsubst                   = selfSubst (NoQ c) q
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
-          | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> cast tc n (fromJust $ lookup n te) (fromJust $ lookup n te') <> methodtable' env c' <> dot <> gen env n <> semi
-        cast tc n (NSig sc dec _) (NDef sc' _ _)
-          | dec == Static           = parens (funsig2 env Nothing mt)
-          | otherwise               = parens (methsig2 env tc Nothing mt)
-          where mt                  = B.matchTypes (selfsubst $ sctype sc) (selfsubst $ sctype sc')
-        cast tc n (NDef sc dec _) (NDef sc' _ _)
-          | dec == Static           = parens (funsig2 env Nothing mt)
-          | otherwise               = parens (methsig2 env tc Nothing mt)
-          where mt                  = B.matchTypes (selfsubst $ sctype sc) (selfsubst $ sctype sc')
-        cast tc n (NSig sc dec _) (NSig sc' _ _)
-          | dec == Static           = parens (funsig2 env Nothing mt)
-          | otherwise               = parens (methsig2 env tc Nothing mt)
-          where mt                  = B.matchTypes (selfsubst $ sctype sc) (selfsubst $ sctype sc')
-        cast tc n (NDef sc dec _) (NSig sc' _ _)
-          | dec == Static           = parens (funsig2 env Nothing mt)
-          | otherwise               = parens (methsig2 env tc Nothing mt)
-          where mt                  = B.matchTypes (selfsubst $ sctype sc) (selfsubst $ sctype sc')
-        cast _ _ (NVar t) _         = parens (gen env $ selfsubst t)
-        te                          = fullAttrEnv env tc
-        te'                         = findAttrSchemas env (NoQ c)
+          | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> inheritedCast n <> methodtable' env c' <> dot <> gen env n <> semi
+        inheritedCast n             = case lookup n (fullAttrEnv env tc) of
+                                        Just (NVar t) -> parens (gen env (vsubst [(tvSelf,tCon tc)] t))
+                                        _             -> methodCast env c q n
 
 initClass env c q [] hasCDef        = vcat [ methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi | n <- [serializeKW,deserializeKW] ] $+$
                                       if hasCDef then empty else gen env primRegister <> parens (char '&' <> methodtable env c) <> semi
@@ -1185,7 +1168,7 @@ genDotCall env ts dec e@(Var _ x) n p
   where info                        = findQName x env
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
-  | Just Static <- dec              = dotCast env False ts e n (gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env p)
+  | Just Static <- dec              = dotCast env False ts e n (genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env p)
 
 
 genDot env ts e@(Var _ x) n
@@ -1209,7 +1192,7 @@ genEnter env ts e n p
         costly e                    = True
         t                           = typeOf env e
         env1                        = ldefine [(tmpV,NVar t)] env
-genEnter env ts e n p               = dotCast env True ts e n (gen env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env e <> comma' (genCallPosArgs env r p))
+genEnter env ts e n p               = dotCast env True ts e n (genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env e <> comma' (genCallPosArgs env r p))
   where TFun _ _ r _ _              = dotCallRType env ts e n
 
 dotCallRType env [] e n             = B.rtypeOfFun env (Dot NoLoc e n)
