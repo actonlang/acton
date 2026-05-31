@@ -7,6 +7,7 @@ module PkgCommands
   , pkgUpgradeCommand
   , pkgUpdateCommand
   , pkgSearchCommand
+  , artifactCommand
   , zigPkgAddCommand
   , zigPkgRemoveCommand
   , PackageEntry(..)
@@ -21,6 +22,7 @@ module PkgCommands
 
 import Prelude hiding (readFile, writeFile)
 
+import qualified Acton.Artifact as Artifact
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.Compile (loadBuildSpec, throwProjectError)
@@ -30,7 +32,7 @@ import Control.Concurrent (threadDelay)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isHexDigit, isSpace)
 import Data.Foldable (toList)
-import Data.List (dropWhileEnd, isPrefixOf, isSuffixOf, sortOn)
+import Data.List (dropWhileEnd, isPrefixOf, isSuffixOf, sort, sortOn)
 import Data.List.Split (splitOn)
 import Data.Maybe (isJust)
 import qualified Data.Map as M
@@ -44,7 +46,7 @@ import Network.HTTP.Client (Manager, Response, httpLbs, parseRequest, requestHea
 import Network.HTTP.Client.TLS (newTlsManager)
 import Network.HTTP.Types.Header (Header)
 import Network.HTTP.Types.Status (statusCode)
-import System.Directory (Permissions, canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, doesPathExist, getCurrentDirectory, getHomeDirectory, getPermissions, listDirectory, removeFile, setPermissions)
+import System.Directory (Permissions, canonicalizePath, copyFile, copyFileWithMetadata, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, doesPathExist, getCurrentDirectory, getHomeDirectory, getPermissions, listDirectory, makeAbsolute, pathIsSymbolicLink, removeFile, setPermissions)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
@@ -303,6 +305,159 @@ pkgSearchCommand _ opts = do
     if null matched
       then putStrLn "No packages matched your search."
       else forM_ (sortOn pkgName matched) printPkg
+
+artifactCommand :: C.GlobalOptions -> C.ArtifactCommand -> IO ()
+artifactCommand gopts cmd =
+    case cmd of
+      C.ArtifactPack opts ->
+        packActonArtifact gopts (C.artifactPackOutput opts)
+      C.ArtifactPush opts ->
+        pushActonArtifact gopts opts
+      C.ArtifactHash opts ->
+        printActonArtifactHash (C.artifactHashSourcePath opts)
+
+packActonArtifact :: C.GlobalOptions -> String -> IO ()
+packActonArtifact gopts outputArg = do
+    sourceHash <- computeArtifactSourceHash "."
+    output <- packActonArtifactTo sourceHash outputArg
+    unless (C.quiet gopts) $
+      putStrLn ("Wrote Acton artifact " ++ output)
+
+pushActonArtifact :: C.GlobalOptions -> C.ArtifactPushOptions -> IO ()
+pushActonArtifact gopts opts = do
+    sourceHash <- computeArtifactSourceHash "."
+    ref0 <- resolveArtifactRef sourceHash
+                               (C.artifactPushRepoUrl opts)
+                               (C.artifactPushArtifactRepo opts)
+    ref <- absolutizeLocalArtifactRef ref0
+    withSystemTempDirectory "acton-artifact-push" $ \tmp -> do
+      let archive = tmp </> Artifact.artifactArchiveFile
+      _ <- packActonArtifactTo sourceHash archive
+      runProcessChecked (Just tmp) "oras"
+        (["push"]
+         ++ Artifact.ociRefOrasOptions ref
+         ++ [ "--artifact-type", Artifact.artifactType
+            , Artifact.ociRefOrasTarget ref
+            , Artifact.artifactArchiveFile ++ ":" ++ Artifact.artifactMediaType
+            ])
+      unless (C.quiet gopts) $
+        putStrLn ("Pushed Acton artifact " ++ ref)
+
+packActonArtifactTo :: String -> String -> IO FilePath
+packActonArtifactTo sourceHash outputArg = do
+    cwd <- getCurrentDirectory
+    let output0 = if null outputArg then "out" </> Artifact.artifactArchiveFile else outputArg
+    createDirectoryIfMissing True (takeDirectory output0)
+    withSystemTempDirectory "acton-artifact-pack" $ \tmp -> do
+      Artifact.writeManifest tmp (Artifact.expectedManifest sourceHash)
+      runProcessChecked Nothing "tar"
+        [ "-czf", output0
+        , "-C", tmp, Artifact.artifactManifestFile
+        , "-C", cwd, "Build.act", "out/types"
+        ]
+    return output0
+
+printActonArtifactHash :: String -> IO ()
+printActonArtifactHash source = do
+    h <- computeArtifactSourceHash source
+    putStrLn h
+
+computeArtifactSourceHash :: FilePath -> IO String
+computeArtifactSourceHash source = do
+    isDir <- doesDirectoryExist source
+    unless isDir $
+      throwProjectError ("ERROR: Artifact source hash expects a package directory: " ++ source)
+    zigExe <- getZigExe
+    withSystemTempDirectory "acton-artifact-source" $ \tmp -> do
+      let staged = tmp </> "source"
+      -- TODO(source-hash): Avoid staging a copied package tree here.
+      --
+      -- This copy is intentionally simple and conservative, but source hashing is
+      -- foundational identity machinery and should eventually be computed directly
+      -- from the package directory. The desired implementation is an Acton-owned
+      -- package hash walker that follows Zig's package hashing semantics exactly
+      -- rather than invoking `zig fetch` on a temporary copy.
+      --
+      -- Requirements for that replacement:
+      --
+      -- * Keep the source boundary independent of git or any other VCS.
+      -- * Preserve the current Acton package selection rules: include only the
+      --   canonical package inputs Acton knows about, currently Build.act and
+      --   src/.
+      -- * Match Zig's path normalization, directory ordering, file metadata/mode
+      --   treatment, digest algorithm, and final package-hash text encoding.
+      -- * Keep symlink behavior explicit. Today symlinks are rejected rather than
+      --   guessed; any future support must match Zig and have test coverage.
+      -- * Add stable fixture tests that compare Acton's in-place implementation
+      --   with `zig fetch` for representative package trees before switching over.
+      --
+      -- Until then, copying to a clean temp directory keeps generated build output
+      -- out of the hash while delegating the actual hash algorithm to Zig.
+      copyCanonicalSource source staged
+      requireRightWith "ERROR: Failed to compute source hash: " =<< zigFetchHash zigExe staged
+
+copyCanonicalSource :: FilePath -> FilePath -> IO ()
+copyCanonicalSource src dst = do
+    copyRequiredSourceInput src dst "Build.act"
+    copyRequiredSourceInput src dst "src"
+
+copyRequiredSourceInput :: FilePath -> FilePath -> FilePath -> IO ()
+copyRequiredSourceInput src dst name = do
+    let srcEntry = src </> name
+        dstEntry = dst </> name
+    exists <- doesPathExist srcEntry
+    unless exists $
+      throwProjectError ("ERROR: Artifact source hash missing package input: " ++ srcEntry)
+    copyCanonicalSourceInput srcEntry dstEntry
+
+copyCanonicalSourceInput :: FilePath -> FilePath -> IO ()
+copyCanonicalSourceInput src dst = do
+    isSymlink <- pathIsSymbolicLink src
+    when isSymlink $
+      throwProjectError ("ERROR: Artifact source hash does not support symbolic links: " ++ src)
+    isDir <- doesDirectoryExist src
+    if isDir
+      then do
+        createDirectoryIfMissing True dst
+        entries <- sort <$> listDirectory src
+        forM_ entries $ \entry ->
+          copyCanonicalSourceInput (src </> entry) (dst </> entry)
+      else do
+        createDirectoryIfMissing True (takeDirectory dst)
+        copyFileWithMetadata src dst
+
+absolutizeLocalArtifactRef :: String -> IO String
+absolutizeLocalArtifactRef ref
+  | Artifact.ociRefIsLocal ref =
+      case splitLocalOciTarget (Artifact.ociRefOrasTarget ref) of
+        Just (path, tag) -> do
+          path' <- makeAbsolute path
+          return ("oci-layout://" ++ path' ++ ":" ++ tag)
+        Nothing -> return ref
+  | otherwise = return ref
+
+splitLocalOciTarget :: String -> Maybe (FilePath, String)
+splitLocalOciTarget target =
+    case break (== ':') (reverse target) of
+      (revTag, ':' : revPath)
+        | not (null revTag) && not (null revPath) ->
+            Just (reverse revPath, reverse revTag)
+      _ -> Nothing
+
+resolveArtifactRef :: String -> String -> String -> IO String
+resolveArtifactRef sourceHash repoUrl artifactRepo
+  | not (null artifactRepo) =
+      case Artifact.ociRefForRepository artifactRepo sourceHash of
+        Just ref -> return ref
+        Nothing ->
+          throwProjectError ("ERROR: Invalid OCI artifact repository " ++ artifactRepo)
+  | not (null repoUrl) =
+      case Artifact.deriveOciRef repoUrl sourceHash of
+        Just ref -> return ref
+        Nothing ->
+          throwProjectError ("ERROR: Could not derive OCI artifact ref from " ++ repoUrl)
+  | otherwise =
+      throwProjectError "ERROR: Specify --artifact-repo or --repo-url for artifact push"
 
 zigPkgAddCommand :: C.GlobalOptions -> C.ZigPkgAddOptions -> IO ()
 zigPkgAddCommand _ opts = do
