@@ -1204,7 +1204,7 @@ actonProjTests =
             barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
             barC    = proj </> "out/types/bar.c"
             barH    = proj </> "out/types/bar.h"
-            barTy   = proj </> "out/types/bar.ty"
+            barTy   = proj </> "out/types/bar.tydb"
         createDirectoryIfMissing True srcDir
         writeFile fooAct fooContent
         writeFile barAct barContent
@@ -1216,7 +1216,24 @@ actonProjTests =
         -- since we don't have full visibility, so bar should remain
         (returnCode, _, _) <- readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
         assertEqual "acton single-file build should succeed" ExitSuccess returnCode
-        mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH, barTy]
+        mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH]
+        doesDirectoryExist barTy >>= assertBool (barTy ++ " should exist")
+
+  , testCase "--ty copies nested module interface next to source" $ do
+        withSystemTempDirectory "acton-ty-nested" $ \proj -> do
+          let srcDir = proj </> "src" </> "pkg"
+              nestedAct = srcDir </> "nested.act"
+              nestedTy = srcDir </> "nested.tydb"
+              flatTy = proj </> "src" </> "pkg.nested.tydb"
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") "name = \"ty_nested\"\nfingerprint = 0x36cff6d86d8575b6\n"
+          writeFile nestedAct "actor main(env):\n    env.exit(0)\n"
+          acton <- canonicalizePath "../../dist/bin/acton"
+          (returnCode, cmdOut, cmdErr) <-
+            readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "--ty", "src/pkg/nested.act"]){ cwd = Just proj } ""
+          assertEqual ("acton --ty should succeed\nSTDOUT:\n" ++ cmdOut ++ "\nSTDERR:\n" ++ cmdErr) ExitSuccess returnCode
+          doesDirectoryExist nestedTy >>= assertBool (nestedTy ++ " should exist")
+          doesDirectoryExist flatTy >>= assertBool (flatTy ++ " should not exist") . not
 
   -- Full rebuild should prune roots / bins when the source module is removed.
   , testCase "full build prunes stale roots and bins" $ do

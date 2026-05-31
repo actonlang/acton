@@ -73,19 +73,9 @@ esac
 args=()
 args+=("-Wl,-Bstatic")
 
-gcc_lib_path() {
-  local lib="$1"
-  local lib_path
-  lib_path="$(gcc -print-file-name="$lib" 2>/dev/null || true)"
-  if [[ -n "$lib_path" && "$lib_path" != "$lib" ]]; then
-    echo "$lib_path"
-    return 0
-  fi
-  return 1
-}
-
-# Prefer static archives we build ourselves under bdeps/out over the host's
-# apt-installed .a files, so the link targets our chosen libc version.
+# Static archives we build ourselves under bdeps/out (libz, libgmp, libtinfo,
+# liblmdb, ...). Linked by full path so the binary targets our chosen libc
+# version rather than the host's apt-installed .a files.
 bdeps_lib_path() {
   local archive="$1"
   if [[ -n "${ACTON_BDEPS_DIR:-}" && -f "${ACTON_BDEPS_DIR}/lib/${archive}" ]]; then
@@ -93,19 +83,6 @@ bdeps_lib_path() {
     return 0
   fi
   return 1
-}
-
-add_static_lib() {
-  local archive="$1"
-  local fallback="$2"
-  local archive_path
-  if archive_path="$(bdeps_lib_path "$archive")"; then
-    args+=("$archive_path")
-  elif archive_path="$(gcc_lib_path "$archive")"; then
-    args+=("$archive_path")
-  else
-    args+=("-l:$fallback")
-  fi
 }
 
 normalize_lib() {
@@ -128,42 +105,28 @@ handle_lib() {
   local lib="$1"
   local lib_key
   lib_key="$(normalize_lib "$lib")"
-  if [[ "$lib_key" == "z" ]]; then
-    if [[ "$state" != "static" ]]; then
-      args+=("-Wl,-Bstatic")
-      state="static"
-    fi
-    add_static_lib libz.a libz.a
-    return
-  fi
-  if [[ "$lib_key" == "gmp" ]]; then
-    if [[ "$state" != "static" ]]; then
-      args+=("-Wl,-Bstatic")
-      state="static"
-    fi
-    add_static_lib libgmp.a libgmp.a
-    return
-  fi
+  # The C++ runtime and gcc's unwinder are replaced with zig's bundled libc++ and
+  # libunwind (not taken from bdeps/out or the host) so they target our chosen
+  # libc version. libc++ needs libunwind for the _Unwind_* symbols; -lunwind is
+  # listed explicitly so it is available regardless of archive ordering.
   if [[ "$lib_key" == "stdc++" ]]; then
     if [[ "$state" != "static" ]]; then
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    # Use zig's bundled static libc++ instead of the host's libstdc++.a so the
-    # C++ runtime targets our chosen libc version. libc++ pulls in zig's
-    # libunwind for the _Unwind_* symbols; -lunwind is listed explicitly so it
-    # is available regardless of archive ordering.
     args+=("-lc++" "-lunwind")
     return
   fi
-  if [[ "$lib_key" == "tinfo" ]]; then
+  if [[ "$lib_key" == "gcc_s" || "$lib_key" == "gcc_eh" ]]; then
     if [[ "$state" != "static" ]]; then
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    add_static_lib libtinfo.a libtinfo.a
+    args+=("-lunwind")
     return
   fi
+  # glibc libraries stay dynamic -- we target a chosen glibc version, not a fully
+  # static libc.
   if [[ "$allow_dynamic_glibc" == true ]]; then
     case "$lib_key" in
       c|m|dl|pthread|rt|util)
@@ -176,12 +139,16 @@ handle_lib() {
         ;;
     esac
   fi
-  if [[ "$lib_key" == "gcc_s" || "$lib_key" == "gcc_eh" ]]; then
+  # Everything we build under bdeps/out (libz, libgmp, libtinfo, liblmdb, ...) is
+  # linked statically by its full path. A new compiler lib needs no case here --
+  # just its .a present in bdeps/out/lib -- mirroring the macOS block above.
+  local bdeps_archive
+  if bdeps_archive="$(bdeps_lib_path "lib${lib_key}.a")"; then
     if [[ "$state" != "static" ]]; then
       args+=("-Wl,-Bstatic")
       state="static"
     fi
-    args+=("-lunwind")
+    args+=("$bdeps_archive")
     return
   fi
   if [[ "$state" != "static" ]]; then

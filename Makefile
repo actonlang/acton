@@ -147,6 +147,9 @@ export ACTON_BDEPS_DIR
 # this archive's full path; dropping any future lib's .a into bdeps/out/lib (e.g.
 # liblmdb.a) makes it link statically the same way, with no per-lib wiring.
 BDEPS += bdeps/out/lib/libz.a
+# liblmdb backs the compiler's .tydb interface cache; GHC links it into acton on
+# every platform, so -- unlike gmp/tinfo below -- it is an unconditional bdep.
+BDEPS += bdeps/out/lib/liblmdb.a
 ifeq ($(OS),linux)
 # gmp and tinfo are only pulled in by GHC on Linux (macOS GHC uses the native
 # bignum backend and the SDK's libncurses), so they are Linux-only bdeps.
@@ -218,8 +221,19 @@ ifeq ($(OS),linux)
 			fi; \
 		fi; \
 	done
+else ifeq ($(OS),macos)
+	@for bin in $(ACTON_LINKAGE_BINS); do \
+		echo "== $$bin =="; \
+		otool -L "$$bin"; \
+		dynamic_lmdb=$$(otool -L "$$bin" | awk 'NR > 1 {print $$1}' | grep -E '(^|/|@rpath/|@loader_path/|@executable_path/)liblmdb' || true); \
+		if [ -n "$$dynamic_lmdb" ]; then \
+			echo "unexpected dynamic LMDB dependency (liblmdb must be linked statically):" >&2; \
+			echo "$$dynamic_lmdb" >&2; \
+			exit 1; \
+		fi; \
+	done
 else
-	@echo "ldd target is only meaningful on Linux"
+	@echo "ldd target is only meaningful on Linux and macOS"
 endif
 
 # /deps --------------------------------------------------
@@ -309,6 +323,12 @@ bdeps/out/lib/libgmp.a: bdeps/gmp/build.zig bdeps/gmp/build.zig.zon $(DIST_ZIG)
 bdeps/out/lib/libtinfo.a: bdeps/ncurses/build.zig bdeps/ncurses/build.zig.zon \
 		bdeps/ncurses/gencaps.c bdeps/ncurses/tinfo.c $(DIST_ZIG)
 	cd bdeps/ncurses && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
+	$(call bdeps_align_macho,$(abspath $@))
+
+# /bdeps/lmdb (compiler .tydb interface cache) -----------
+bdeps/out/lib/liblmdb.a: bdeps/lmdb/build.zig bdeps/lmdb/build.zig.zon $(DIST_ZIG)
+	cd bdeps/lmdb && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 	$(call bdeps_align_macho,$(abspath $@))
 
@@ -488,6 +508,10 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
+# These run stack against libacton/acton, which link liblmdb, so the bdeps
+# archives must exist first. (test, test-stdlib, test-incremental, online-tests
+# already pull it in transitively via dist/bin/acton[c].)
+test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
 test: dist/bin/acton
 	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib

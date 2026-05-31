@@ -3,7 +3,6 @@
 module Main (main) where
 
 import           Control.Monad (unless, when)
-import qualified Data.Binary as Binary
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString as B
 import qualified Data.Text as T
@@ -334,6 +333,11 @@ removeDirIfExists p = do
   exists <- doesDirectoryExist p
   when exists $ removeDirectoryRecursive p
 
+artifactExists :: FilePath -> IO Bool
+artifactExists p
+  | takeExtension p == ".tydb" = doesDirectoryExist p
+  | otherwise = doesFileExist p
+
 -- | Reset a project directory including deps and build outputs.
 ensureCleanProjectAt :: FilePath -> IO ()
 ensureCleanProjectAt proj = do
@@ -452,13 +456,13 @@ buildProject = do
     ExitSuccess -> pure ()
     ExitFailure c -> assertFailure ("acton build failed: " ++ show c ++ "\n" ++ T.unpack out)
 
--- | Read name hashes from a .ty file.
+-- | Read name hashes from a .tydb file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
 readTyNameHashes tyPath = do
   (_, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
   pure nameHashes
 
--- | Read pub/impl dependency names for a binding in a .ty file.
+-- | Read pub/impl dependency names for a binding in a .tydb file.
 readTyDeps :: FilePath -> String -> IO ([String], [String])
 readTyDeps tyPath nameLabel = do
   nameHashes <- readTyNameHashes tyPath
@@ -472,7 +476,7 @@ readTyDeps tyPath nameLabel = do
           implDeps = sort (map (prstr . fst) (InterfaceFiles.nhImplDeps nh))
       pure (pubDeps, implDeps)
 
--- | Rewrite source hash and name-hash section of a .ty file.
+-- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
   (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
@@ -486,8 +490,7 @@ rewriteTySourceMeta tyPath sourceMeta' = do
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = do
   (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  LBS.writeFile tyPath $
-    Binary.encode ((version', sourceMeta, srcHash, pubHash, implHash), imps, nameHashes, roots, tests, mdoc, nmod, tmod)
+  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps nameHashes roots tests mdoc nmod tmod
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
@@ -1164,11 +1167,11 @@ p25_whitespace_change = testCase "25-whitespace-only change does not propagate" 
   assertBool "did not expect c.act to type check" (not (typechecked out modC))
 
 p26_corrupt_ty_header :: TestTree
-p26_corrupt_ty_header = testCase "26-corrupt .ty header forces re-parse" $ do
+p26_corrupt_ty_header = testCase "26-corrupt .tydb header forces re-parse" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modA = modLabel proj "a"
-      tyA = proj </> "out" </> "types" </> "a.ty"
+      tyA = proj </> "out" </> "types" </> "a.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") "aaa = 1\n"
   writeFileUtf8 (src </> "c.act") $ T.unlines
@@ -1179,16 +1182,18 @@ p26_corrupt_ty_header = testCase "26-corrupt .ty header forces re-parse" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  writeFileUtf8 tyA "garbage\n"
+  removePathForcibly tyA
+  createDirectoryIfMissing True tyA
+  writeFileUtf8 (tyA </> "data.mdb") "garbage\n"
   out <- buildOutIn proj
-  assertBool "expected a.act to type check after corrupt .ty" (typechecked out modA)
+  assertBool "expected a.act to type check after corrupt .tydb" (typechecked out modA)
 
 p26_ty_version_mismatch :: TestTree
-p26_ty_version_mismatch = testCase "26b-.ty version mismatch forces re-parse" $ do
+p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modA = modLabel proj "a"
-      tyA = proj </> "out" </> "types" </> "a.ty"
+      tyA = proj </> "out" </> "types" </> "a.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") "aaa = 1\n"
   writeFileUtf8 (src </> "c.act") $ T.unlines
@@ -1201,9 +1206,9 @@ p26_ty_version_mismatch = testCase "26b-.ty version mismatch forces re-parse" $ 
   _ <- buildOutIn proj
   rewriteTyVersion tyA (map (+ 1) A.version)
   out <- buildOutIn proj
-  assertBool "expected a.act to type check after .ty version mismatch" (typechecked out modA)
-  assertBool "did not expect raw .ty version mismatch" $
-    not (".ty version mismatch" `T.isInfixOf` out)
+  assertBool "expected a.act to type check after .tydb version mismatch" (typechecked out modA)
+  assertBool "did not expect raw .tydb version mismatch" $
+    not (".tydb version mismatch" `T.isInfixOf` out)
 
 p27_overlay_source_provider :: TestTree
 p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTask" $ do
@@ -1270,8 +1275,8 @@ p28_protocol_extension_deps :: TestTree
 p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded by name" $ do
   let proj = casesProjDir
       src = casesSrcDir
-      tyA = proj </> "out" </> "types" </> "a.ty"
-      tyB = proj </> "out" </> "types" </> "b.ty"
+      tyA = proj </> "out" </> "types" </> "a.tydb"
+      tyB = proj </> "out" </> "types" </> "b.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "protocol FooProto:"
@@ -1515,8 +1520,8 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
       modA = modLabel proj "a"
       modB = modLabel proj "b"
       modC = modLabel proj "c"
-      tyA = proj </> "out" </> "types" </> "a.ty"
-      tyB = proj </> "out" </> "types" </> "b.ty"
+      tyA = proj </> "out" </> "types" </> "a.tydb"
+      tyB = proj </> "out" </> "types" </> "b.tydb"
   ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
   depDir <- ensureDepProject proj "libfoo"
   let depSrc = depDir </> "src" </> "libfoo.act"
@@ -1612,7 +1617,7 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  let tyDep = depDir </> "out" </> "types" </> "libfoo.ty"
+  let tyDep = depDir </> "out" </> "types" </> "libfoo.tydb"
   depNameHashes <- readTyNameHashes tyDep
   let depNames = sort (map (prstr . InterfaceFiles.nhName) depNameHashes)
   assertBool "expected derived proto name" ("ExtraProtoD_MegaProto" `elem` depNames)
@@ -1676,9 +1681,9 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
   res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
   assertExitFailure "build after deleting imported module" 1 res
   mapM_ (\ext -> do
-    exists <- doesFileExist (outA ++ ext)
+    exists <- artifactExists (outA ++ ext)
     assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-    [".ty", ".c", ".h"]
+    [".tydb", ".c", ".h"]
   assertBool "expected missing import diagnostic"
     (T.isInfixOf "Type interface file not found or unreadable for a" out)
   assertBool "did not expect Zig build to run" (not (T.isInfixOf "zigCmd:" out))
@@ -1781,7 +1786,7 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
     ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
     depDir <- ensureDepProject proj "libfoo"
     let depSrc = depDir </> "src" </> "libfoo.act"
-        tyMain = proj </> "out" </> "types" </> "main.ty"
+        tyMain = proj </> "out" </> "types" </> "main.tydb"
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 1"
@@ -1923,7 +1928,7 @@ p41_stale_header_missing_import_reparses_source =
         src = casesSrcDir
         actA = src </> "a.act"
         actB = src </> "b.act"
-        tyB = proj </> "out" </> "types" </> "b.ty"
+        tyB = proj </> "out" </> "types" </> "b.tydb"
         outA = proj </> "out" </> "types" </> "a"
         modB = modLabel proj "b"
     ensureCasesProject
@@ -1946,15 +1951,15 @@ p41_stale_header_missing_import_reparses_source =
       [ "def bar() -> int:"
       , "    return 7"
       ]
-    tyTime <- getModificationTime tyB
+    tyTime <- InterfaceFiles.interfaceModifiedTime tyB
     setModificationTime actB (addUTCTime (-10) tyTime)
     removeFile actA
     res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
     assertExitSuccess "build after stale header import removal" res
     mapM_ (\ext -> do
-      exists <- doesFileExist (outA ++ ext)
+      exists <- artifactExists (outA ++ ext)
       assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-      [".ty", ".c", ".h"]
+      [".tydb", ".c", ".h"]
     assertBool "expected b.act to type check after stale header reparse"
       (typechecked out modB)
     assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
@@ -1966,7 +1971,7 @@ p42_metadata_drift_refreshes_header =
     let proj = casesProjDir
         src = casesSrcDir
         actA = src </> "a.act"
-        tyA = proj </> "out" </> "types" </> "a.ty"
+        tyA = proj </> "out" </> "types" </> "a.tydb"
         modA = modLabel proj "a"
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
@@ -1986,7 +1991,7 @@ p42_metadata_drift_refreshes_header =
     currentMeta <- sourceFileMetaForPath actA
     assertBool "did not expect a.act to type check after metadata-only drift"
       (not (typechecked out modA))
-    assertBool "expected .ty header to carry source metadata"
+    assertBool "expected .tydb header to carry source metadata"
       (isJust metaAfter)
     assertBool "expected metadata drift to update cached source metadata"
       (metaBefore /= metaAfter)
@@ -1999,7 +2004,8 @@ p43_equal_act_ty_mtime_hashes_source =
         src = casesSrcDir
         actA = src </> "a.act"
         actB = src </> "b.act"
-        tyB = proj </> "out" </> "types" </> "b.ty"
+        tyB = proj </> "out" </> "types" </> "b.tydb"
+        tyBData = tyB </> "data.mdb"
         outA = proj </> "out" </> "types" </> "a"
         modB = modLabel proj "b"
     ensureCasesProject
@@ -2023,21 +2029,21 @@ p43_equal_act_ty_mtime_hashes_source =
       , "    return 7"
       ]
     rewriteTySourceMeta tyB Nothing
-    tyStatus <- getFileStatus tyB
+    tyStatus <- getFileStatus tyBData
     let tyMTimeNs = floor (toRational (modificationTimeHiRes tyStatus) * 1000000000)
     setFileMTimeNs actB tyMTimeNs
     currentMeta <- sourceFileMetaForPath actB
     rewriteTySourceMeta tyB (Just currentMeta)
-    setFileMTimeNs tyB tyMTimeNs
+    setFileMTimeNs tyBData tyMTimeNs
     metaAfter <- readTySourceMeta tyB
     metaAfter @?= Just currentMeta
     removeFile actA
     res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
     assertExitSuccess "build after equal act/ty mtime stale header" res
     mapM_ (\ext -> do
-      exists <- doesFileExist (outA ++ ext)
+      exists <- artifactExists (outA ++ ext)
       assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-      [".ty", ".c", ".h"]
+      [".tydb", ".c", ".h"]
     assertBool "expected b.act to type check after equal-mtime hash check"
       (typechecked out modB)
     assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)

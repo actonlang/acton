@@ -40,7 +40,7 @@ Front passes (1–3) are:
 - Type check
 
 These passes produce all user-facing diagnostics, write the module interface
-header (`.ty`), and compute public hashes used for incremental rebuilds. They
+cache (`.tydb`), and compute public hashes used for incremental rebuilds. They
 also define the cross-module dependency edges: a module can only start once its
 imports have completed the front passes.
 
