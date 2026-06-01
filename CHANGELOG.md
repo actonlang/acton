@@ -28,13 +28,26 @@
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
+- Store cached module interfaces in LMDB-backed `.tydb` directories instead of
+  monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
+  cache misses while adding keyed records for headers, imports, names, hashes,
+  and typed statements. [#2819]
+  - Full reads reconstruct source-order environments from explicit order keys,
+    and cache copy and cleanup paths now handle directory artifacts.
+  - Build and statically link LMDB from a pinned bundled dependency so compiler
+    builds do not depend on the host LMDB installation.
 - Speed up compiler environment lookups, scans, attribute queries,
   substitutions, and witness resolution in large modules by indexing active
   names, term substitutions, and type witnesses; separating closed imports and
   finalized top-level names from live local bindings; avoiding temporary
-  inherited-attribute lists for single-attribute queries; and deduplicating
-  reserved names with a hash index while preserving source-order semantics.
-  [#2789, #2796, #2797, #2799, #2800, #2816]
+  inherited-attribute lists for single-attribute queries; reading substitution
+  state once per traversal; narrowing used-substitution tracking to active
+  entries; and deduplicating reserved names with a hash index while preserving
+  source-order semantics. [#2789, #2796, #2797, #2799, #2800, #2816, #2833,
+  #2837]
+- Speed up documentation rendering and generated-name hashing by indexing
+  documentation type lookups and hashing internal/generated names without
+  rendering prefix strings. [#2830, #2831]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, reducing repeated scans during boxing
   and generated C/H rendering. [#2806, #2810]
@@ -50,7 +63,7 @@
   enough to expose it, producing intermittent SIGSEGVs on arm64 (Linux and
   macOS) during `pkg` operations and when compiling some programs. 9.6.7
   reduced the crash rate and 9.8.4 eliminates it (0 crashes across thousands of
-  builds that reproduced it on 9.6.x).
+  builds that reproduced it on 9.6.x). [#2832, #2834]
 
 ### CLI & Project Workflow
 - It is now possible to customize project library output in `Build.act` by
@@ -82,6 +95,14 @@
   - Nightly CI still covers Debian 11, 12, and 13 on x86_64.
   - CI now validates the dynamic library set and maximum required GLIBC version
     for `acton`, `lsp-server-acton`, and `actondb`.
+- Build the compiler's host-linked C libraries with bundled Zig projects
+  instead of host static archives, so release builds can link `zlib`, `gmp`, and
+  `tinfo`, and LMDB against the selected platform target. [#2819, #2822,
+  #2827]
+  - Linux compiler links prefer the bundled static archives and Zig's libc++ /
+    libunwind over host libraries, preserving the chosen glibc target.
+  - macOS compiler links can use the same bundled static archive path for zlib,
+    with Mach-O archive alignment and a stable macOS deployment target.
 - Vendor the `diagnose` compiler diagnostic library from upstream after
   `diagnose` removed its stale `text <=2.0` dependency, so compiler builds can
   use the resolver's `text` package instead of pinning `text-2.0` just for
@@ -100,6 +121,9 @@
   the current project. [#2767]
 
 ### Testing & CI
+- Add make targets for accepting compiler golden outputs, including separate
+  targets for Sydtest goldens, Acton Tasty goldens, and the combined compiler
+  golden workflow documented in the developer guide. [#2821]
 - Add dedicated compiler benchmark drivers for performance work. [#2794, #2813]
   - The type-checking benchmark reports parse, environment, kind-checking, and
     type-checking timings, with optional RTS allocation and GC statistics.
@@ -108,10 +132,16 @@
     front/back pipeline.
 - Refresh Acton compile-cache snapshots from nightly and manual workflow runs,
   while pull request and push builds restore those snapshots without saving new
-  cache entries. [#2823]
+  cache entries. [#2823, #2826]
   - Haskell dependency caches are keyed separately from the Acton/Zig compile
     cache, and cache saves require successful build and release steps so failed
     builds cannot publish partial snapshots.
+  - The Acton/Zig compile cache uses one stable per-platform key refreshed by
+    producer runs, with stale entries evicted before saving so CI does not keep
+    a week of duplicate snapshots.
+- Keep CI cache restores clean after Stack/GHC changes by removing broad Stack
+  restore-key fallbacks, and make the standard-library time test tolerate slow
+  CI startup while still catching gross clock errors. [#2836, #2838]
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -4044,7 +4074,20 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2813]: https://github.com/actonlang/acton/pull/2813
 [#2816]: https://github.com/actonlang/acton/pull/2816
 [#2817]: https://github.com/actonlang/acton/pull/2817
+[#2819]: https://github.com/actonlang/acton/pull/2819
+[#2821]: https://github.com/actonlang/acton/pull/2821
+[#2822]: https://github.com/actonlang/acton/pull/2822
 [#2823]: https://github.com/actonlang/acton/pull/2823
+[#2826]: https://github.com/actonlang/acton/pull/2826
+[#2827]: https://github.com/actonlang/acton/pull/2827
+[#2830]: https://github.com/actonlang/acton/pull/2830
+[#2831]: https://github.com/actonlang/acton/pull/2831
+[#2832]: https://github.com/actonlang/acton/pull/2832
+[#2833]: https://github.com/actonlang/acton/pull/2833
+[#2834]: https://github.com/actonlang/acton/pull/2834
+[#2836]: https://github.com/actonlang/acton/pull/2836
+[#2837]: https://github.com/actonlang/acton/pull/2837
+[#2838]: https://github.com/actonlang/acton/pull/2838
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
