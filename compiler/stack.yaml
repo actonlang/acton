@@ -4,10 +4,12 @@
 
 # NOTE: do not forget to update homebrew/Formula/acton.rb with the version of
 # GHC that corresponds to the stack LTS release, like lts-18.28 -> ghc@8.10
-# lts-22.44 uses GHC 9.6.7, which fixes an aarch64 RTS GC crash (GHC #24791,
-# compacting GC over black holes in large objects) that surfaced as a rare
-# segfault in the compiler on glibc>=2.34 source builds.
-snapshot: lts-22.44
+# lts-23.28 uses GHC 9.8.4. GHC 9.6.6 had an aarch64 RTS crash where the GC
+# could follow a NULL closure pointer (GHC #24791, black holes in large
+# objects); 9.6.7 reduced it and 9.8.4 eliminates it. It surfaced as rare
+# compiler segfaults on arm64 (Linux and macOS), e.g. building optional-chaining
+# code, and was exposed/amplified by binary layout (the static LMDB link).
+snapshot: lts-23.28
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
