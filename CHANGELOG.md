@@ -43,6 +43,12 @@
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
+- Bump the GHC toolchain to 9.6.7 (Stackage lts-22.44), fixing a rare arm64
+  segfault in the compiler. GHC 9.6.6's runtime could crash in the garbage
+  collector when collecting black holes in large objects (GHC #24791); the
+  static LMDB interface cache shifted the binary layout enough to expose it on
+  glibc>=2.34 source builds, producing intermittent SIGSEGVs during `pkg`
+  operations and other commands.
 
 ### CLI & Project Workflow
 - It is now possible to customize project library output in `Build.act` by
