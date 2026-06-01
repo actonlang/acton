@@ -656,8 +656,34 @@ instance USubst TVar where
                                             TVar _ v' -> return v'
                                             _         -> return v
 
+usubstTConWith                      :: IntMap Type -> TCon -> TCon
+usubstTConWith s (TC n ts)          = TC n (map (usubstTypeWith s) ts)
+
+usubstTypeWith                      :: IntMap Type -> Type -> Type
+usubstTypeWith s (TUni l u)         = case IntMap.lookup (uvid u) s of
+                                           Just t  -> usubstTypeWith s t
+                                           Nothing -> TUni l u
+usubstTypeWith s (TVar l v)         = TVar l v
+usubstTypeWith s (TCon l c)         = TCon l (usubstTConWith s c)
+usubstTypeWith s (TFun l fx p k t)  = TFun l (usubstTypeWith s fx)
+                                             (usubstTypeWith s p)
+                                             (usubstTypeWith s k)
+                                             (usubstTypeWith s t)
+usubstTypeWith s (TTuple l p k)     = TTuple l (usubstTypeWith s p) (usubstTypeWith s k)
+usubstTypeWith s (TOpt l t)         = case usubstTypeWith s t of
+                                           t'@TOpt{} -> t'
+                                           t'         -> TOpt l t'
+usubstTypeWith s (TNone l)          = TNone l
+usubstTypeWith s (TWild l)          = TWild l
+usubstTypeWith s (TNil l k)         = TNil l k
+usubstTypeWith s (TRow l k n t r)   = TRow l k n (usubstTypeWith s t)
+                                                 (usubstTypeWith s r)
+usubstTypeWith s (TStar l k r)      = TStar l k (usubstTypeWith s r)
+usubstTypeWith s (TFX l fx)         = TFX l fx
+
 instance USubst TCon where
-    usubst (TC n ts)                = TC n <$> usubst ts
+    usubst c                        = do s <- usubstitution
+                                         return $ if IntMap.null s then c else usubstTConWith s c
 
 instance USubst QBind where
     usubst (QBind v cs)             = QBind <$> usubst v <*> usubst cs
@@ -666,24 +692,8 @@ instance USubst WTCon where
     usubst (wpath, p)               = do p <- usubst p; return (wpath, p)
 
 instance USubst Type where
-    usubst (TUni l u)               = do s <- usubstitution
-                                         case IntMap.lookup (uvid u) s of
-                                            Just t  -> usubst t
-                                            Nothing -> return (TUni l u)
-    usubst (TVar l v)               = return $ TVar l v
-    usubst (TCon l c)               = TCon l <$> usubst c
-    usubst (TFun l fx p k t)        = TFun l <$> usubst fx <*> usubst p <*> usubst k <*> usubst t
-    usubst (TTuple l p k)           = TTuple l <$> usubst p <*> usubst k
-    usubst (TOpt l t)               = do t' <- usubst t
-                                         case t' of
-                                            TOpt{} -> return t'
-                                            _ -> return $ TOpt l t'
-    usubst (TNone l)                = return $ TNone l
-    usubst (TWild l)                = return $ TWild l
-    usubst (TNil l s)               = return $ TNil l s
-    usubst (TRow l k n t r)         = TRow l k n <$> usubst t <*> usubst r
-    usubst (TStar l k r)            = TStar l k <$> usubst r
-    usubst (TFX l fx)               = return $ TFX l fx
+    usubst t                        = do s <- usubstitution
+                                         return $ if IntMap.null s then t else usubstTypeWith s t
 
 instance USubst PosPar where
     usubst (PosPar n t e p)         = PosPar n <$> usubst t <*> usubst e <*> usubst p
