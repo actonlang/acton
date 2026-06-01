@@ -121,7 +121,7 @@ data Pattern    = PWild         { ploc::SrcLoc, pann::Maybe Type }
 type Target     = Expr
 
 data Prefix     = Globvar | Xistvar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
-                deriving (Eq,Ord,Show,Read,Generic,NFData)
+                deriving (Eq,Ord,Show,Read,Enum,Generic,NFData)
 
 data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
 
@@ -433,8 +433,8 @@ type Substitution       = [(TVar,Type)]
 
 instance Data.Hashable.Hashable Name where
     hashWithSalt s (Name _ nstr)    = Data.Hashable.hashWithSalt s nstr
-    hashWithSalt s (Derived  n1 n2) = Data.Hashable.hashWithSalt s (n1,n2)
-    hashWithSalt s (Internal pre str n) = Data.Hashable.hashWithSalt s (show pre,str,n)
+    hashWithSalt s (Derived  n1 n2) = s `Data.Hashable.hashWithSalt` n1 `Data.Hashable.hashWithSalt` n2
+    hashWithSalt s (Internal pre str n) = s `Data.Hashable.hashWithSalt` (fromEnum pre) `Data.Hashable.hashWithSalt` str `Data.Hashable.hashWithSalt` n
 
 
 -- Finding type leaves -----
