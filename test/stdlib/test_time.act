@@ -6,7 +6,12 @@ actor main(env):
     d = n.since(et)
     print("duration:", d)
 
-    if abs(d.second) > 15:
+    # Generous tolerance on purpose: this guards against time.time() being grossly
+    # wrong (a real bug would be off by hours/days, not seconds). The gap between
+    # the timestamp passed in at launch and time.time() here is dominated by
+    # compile/startup latency on slow, oversubscribed CI runners, which has been
+    # seen to exceed 15s. Keep it wide enough not to flake on those.
+    if abs(d.second) > 300:
         print("ERROR: diff seems too large, time.time*() should be roughly same as provided UNIX timestamp input")
         await async env.exit(1)
 
