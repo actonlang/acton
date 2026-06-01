@@ -25,7 +25,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,20]
+version = [0,21]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 

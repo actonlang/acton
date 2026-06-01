@@ -1926,7 +1926,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
               hashEnv = setMod mn env
               -- Split deps into local (same module) vs external (qualified) names.
               (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
-              (_, pubExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubDepsRaw
+              (pubLocalDeps, pubExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubDepsRaw
               (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv nameKeys implDepsRaw
               -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
@@ -1952,6 +1952,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
                           nameInfoMap
                           pubSigLocalDeps
                           pubSigExtHashes
+                          pubLocalDeps
                           implLocalDeps
                           implExtHashes
                           pubExtHashes

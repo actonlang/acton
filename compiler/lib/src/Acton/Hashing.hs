@@ -102,6 +102,8 @@ splitDeps :: A.ModName
           -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 splitDeps mn env localNames depMap =
   let toLocalExt qns = foldl' step (Data.Set.empty, Data.Set.empty) qns
+      step (locals, externals) (A.NoQ n)
+        | Data.Set.member n localNames = (Data.Set.insert n locals, externals)
       step (locals, externals) qn =
         case Env.unalias env qn of
           A.GName m _ | m == mPrim -> (locals, externals)
@@ -179,22 +181,26 @@ buildNameHashes :: Data.Set.Set A.Name
                 -> M.Map A.Name [A.Name]
                 -> M.Map A.Name [(A.QName, B.ByteString)]
                 -> M.Map A.Name [A.Name]
+                -> M.Map A.Name [A.Name]
                 -> M.Map A.Name [(A.QName, B.ByteString)]
                 -> M.Map A.Name [(A.QName, B.ByteString)]
                 -> [InterfaceFiles.NameHashInfo]
-buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDeps pubSigExtHashes implLocalDeps implExtHashes pubExtHashes =
+buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDeps pubSigExtHashes pubLocalDeps implLocalDeps implExtHashes pubExtHashes =
   let hashNameInfo info = SHA256.hash (BL.toStrict $ encode (I.stripLocsNI (I.stripDocsNI info)))
       selfPubHashes = M.map hashNameInfo nameInfoMap
       selfImplHashes = nameImplHashes
       pubHashes = computeHashes selfPubHashes pubSigLocalDeps pubSigExtHashes
       implHashes = computeHashes selfImplHashes implLocalDeps implExtHashes
       namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
+      localDeps m n = Data.List.sortOn nameKey (Data.List.nub (M.findWithDefault [] n m))
   in
     [ InterfaceFiles.NameHashInfo
         { InterfaceFiles.nhName = n
         , InterfaceFiles.nhSrcHash = M.findWithDefault B.empty n nameSrcHashes
         , InterfaceFiles.nhPubHash = M.findWithDefault B.empty n pubHashes
         , InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
+        , InterfaceFiles.nhPubLocalDeps = localDeps pubLocalDeps n
+        , InterfaceFiles.nhImplLocalDeps = localDeps implLocalDeps n
         , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
         , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
         }
@@ -214,6 +220,7 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
   in
     [ let nh = infoMap M.! n
       in nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
+            , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (Data.List.nub (M.findWithDefault [] n implLocalDeps))
             , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
             }
     | n <- namesSorted

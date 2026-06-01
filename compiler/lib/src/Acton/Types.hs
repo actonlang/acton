@@ -133,6 +133,10 @@ showTyFile env0 m fname verbose = do
                                          putStrLn ("  src  : " ++ srcHex)
                                          putStrLn ("  pub  : " ++ pubHex)
                                          putStrLn ("  impl : " ++ implHex)
+                                         when (not (null (InterfaceFiles.nhPubLocalDeps nh))) $
+                                           putStrLn ("  pubLocalDeps : " ++ show (map prstr (InterfaceFiles.nhPubLocalDeps nh)))
+                                         when (not (null (InterfaceFiles.nhImplLocalDeps nh))) $
+                                           putStrLn ("  implLocalDeps: " ++ show (map prstr (InterfaceFiles.nhImplLocalDeps nh)))
                                          when (not (null (InterfaceFiles.nhPubDeps nh))) $
                                            putStrLn ("  pubDeps : " ++ show (map showDep (InterfaceFiles.nhPubDeps nh)))
                                          when (not (null (InterfaceFiles.nhImplDeps nh))) $

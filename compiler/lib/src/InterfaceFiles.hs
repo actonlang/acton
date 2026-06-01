@@ -45,7 +45,7 @@
 --   Per-name keys (NameInfo / TEnv, one set per name):
 --     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
---     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + deps
+--     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local/external deps
 --
 --   Per-statement keys (typed Module body):
 --     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
@@ -119,6 +119,8 @@ data NameHashInfo = NameHashInfo
   , nhSrcHash  :: BS.ByteString
   , nhPubHash  :: BS.ByteString
   , nhImplHash :: BS.ByteString
+  , nhPubLocalDeps  :: [A.Name]
+  , nhImplLocalDeps :: [A.Name]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   } deriving (Show, Eq, Generic)

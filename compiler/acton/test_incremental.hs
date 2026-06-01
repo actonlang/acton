@@ -476,6 +476,20 @@ readTyDeps tyPath nameLabel = do
           implDeps = sort (map (prstr . fst) (InterfaceFiles.nhImplDeps nh))
       pure (pubDeps, implDeps)
 
+-- | Read pub/impl local dependency names for a binding in a .tydb file.
+readTyLocalDeps :: FilePath -> String -> IO ([String], [String])
+readTyLocalDeps tyPath nameLabel = do
+  nameHashes <- readTyNameHashes tyPath
+  let matchName nh = prstr (InterfaceFiles.nhName nh) == nameLabel
+  case find matchName nameHashes of
+    Nothing -> do
+      assertFailure ("missing name " ++ nameLabel ++ " in " ++ tyPath)
+      pure ([], [])
+    Just nh -> do
+      let pubDeps = sort (map prstr (InterfaceFiles.nhPubLocalDeps nh))
+          implDeps = sort (map prstr (InterfaceFiles.nhImplLocalDeps nh))
+      pure (pubDeps, implDeps)
+
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
@@ -2110,6 +2124,60 @@ p44_provider_import_rename_reruns_dependent_front =
     assertBool ("expected stale-cache log for missing transitive dep hash\n" ++ T.unpack out2)
       (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "oldpkg.ttt.TransformFunction" out2)
 
+p45_tydb_records_local_name_dependencies :: TestTree
+p45_tydb_records_local_name_dependencies =
+  testCase "45-tydb records local name dependencies" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        tyA = proj </> "out" </> "types" </> "a.tydb"
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") $ T.unlines
+      [ "def base() -> int:"
+      , "    return 1"
+      , ""
+      , "def mid() -> int:"
+      , "    return base()"
+      , ""
+      , "def top() -> int:"
+      , "    return mid()"
+      , ""
+      , "class Box:"
+      , "    def __init__(self, v: int):"
+      , "        self.v = v"
+      , "    def get(self) -> int:"
+      , "        return self.v"
+      , ""
+      , "def make_box() -> Box:"
+      , "    return Box(top())"
+      , ""
+      , "class Container:"
+      , "    def __init__(self):"
+      , "        pass"
+      , ""
+      , "def local_container_name(x: object) -> bool:"
+      , "    return isinstance(x, Container)"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import a"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(a.make_box().get())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    (topPub, topImpl) <- readTyLocalDeps tyA "top"
+    assertDepsContain "top pub local deps" ["mid"] topPub
+    assertDepsContain "top impl local deps" ["mid"] topImpl
+    (midPub, midImpl) <- readTyLocalDeps tyA "mid"
+    assertDepsContain "mid pub local deps" ["base"] midPub
+    assertDepsContain "mid impl local deps" ["base"] midImpl
+    (boxPub, boxImpl) <- readTyLocalDeps tyA "make_box"
+    assertDepsContain "make_box pub local deps" ["Box", "top"] boxPub
+    assertDepsContain "make_box impl local deps" ["Box", "top"] boxImpl
+    (containerPub, containerImpl) <- readTyLocalDeps tyA "local_container_name"
+    assertDepsContain "local_container_name pub local deps" ["Container"] containerPub
+    assertDepsContain "local_container_name impl local deps" ["Container"] containerImpl
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2177,5 +2245,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p42_metadata_drift_refreshes_header
       , p43_equal_act_ty_mtime_hashes_source
       , p44_provider_import_rename_reruns_dependent_front
+      , p45_tydb_records_local_name_dependencies
       ]
   ]
