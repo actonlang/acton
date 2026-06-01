@@ -4,7 +4,10 @@
 
 # NOTE: do not forget to update homebrew/Formula/acton.rb with the version of
 # GHC that corresponds to the stack LTS release, like lts-18.28 -> ghc@8.10
-snapshot: lts-22.34
+# lts-22.44 uses GHC 9.6.7, which fixes an aarch64 RTS GC crash (GHC #24791,
+# compacting GC over black holes in large objects) that surfaced as a rare
+# segfault in the compiler on glibc>=2.34 source builds.
+snapshot: lts-22.44
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
