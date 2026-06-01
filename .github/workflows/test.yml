@@ -144,9 +144,12 @@ jobs:
         with:
           path: |
             ~/.stack
+          # Content-keyed on stack.yaml, with NO restore-keys fallback on purpose:
+          # a deps/GHC change misses cleanly and starts from an empty ~/.stack, so
+          # we never end up with two GHC toolchains stacked in one cache (which was
+          # blowing the per-job VM disk). The cold Haskell rebuild only happens on
+          # the run that actually changes stack.yaml.
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
-          restore-keys: |
-            stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
       # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
       # The nightly (schedule) run intentionally skips this so it builds cold and
       # produces a clean, complete snapshot (saved after tests below) that PRs and
@@ -269,9 +272,12 @@ jobs:
         with:
           path: |
             ~/.stack
+          # Content-keyed on stack.yaml, with NO restore-keys fallback on purpose:
+          # a deps/GHC change misses cleanly and starts from an empty ~/.stack, so
+          # we never end up with two GHC toolchains stacked in one cache (which was
+          # blowing the per-job VM disk). The cold Haskell rebuild only happens on
+          # the run that actually changes stack.yaml.
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
-          restore-keys: |
-            stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-
       # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
       # The nightly (schedule) run skips this so it builds cold and saves a clean,
       # complete snapshot (after tests below) that PRs and pushes restore the next
@@ -399,9 +405,9 @@ jobs:
         with:
           path: |
             ${{ env.STACK_ROOT }}
+          # No restore-keys fallback (see test-macos): a miss starts from an empty
+          # stack root rather than inheriting an old cache with a stale GHC.
           key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'debian/control') }}
-          restore-keys: |
-            build-debs-${{ matrix.arch }}-
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
