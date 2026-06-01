@@ -32,9 +32,16 @@ import Prelude hiding ((<>))
 import Data.List (intercalate, intersperse, sortBy)
 import Data.Ord (comparing)
 import Data.Char (isDigit)
+import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import System.FilePath ((</>), (<.>), joinPath)
+
+type DocTEnv = Map.Map Name NameInfo
+
+-- Preserve TEnv's left-to-right lookup semantics when signatures and defs share a name.
+docTEnv :: TEnv -> DocTEnv
+docTEnv = foldr (uncurry Map.insert) Map.empty
 
 
 -- | Generate documentation from a module in Markdown format with types
@@ -1562,7 +1569,8 @@ htmlScript = unlines
 docModuleHtmlWithTypes :: NameInfo -> Module -> Doc
 docModuleHtmlWithTypes (NModule _ tenv mdocstring) (Module modName _ _ stmts) =
     -- Use module docstring from NModule
-    let moduleDocstring = mdocstring
+    let tenvMap = docTEnv tenv
+        moduleDocstring = mdocstring
         (title, restDoc) = case moduleDocstring of
             Just ds -> splitDocstring ds
             Nothing -> ("", Nothing)
@@ -1572,20 +1580,20 @@ docModuleHtmlWithTypes (NModule _ tenv mdocstring) (Module modName _ _ stmts) =
             Just body -> text "<div class=\"module-doc\">" <> text (nl2br $ htmlEscape body) <> text "</div>"
             Nothing -> empty
         -- Collect class info from both local module and type environment
-        classInfos = collectClassInfos modName tenv stmts
-    in header $+$ bodyDoc $+$ docTopLevelHtmlWithTypesAndClassInfo tenv modName classInfos stmts
+        classInfos = collectClassInfos modName tenvMap stmts
+    in header $+$ bodyDoc $+$ docTopLevelHtmlWithTypesAndClassInfo tenvMap modName classInfos stmts
   where
     nl2br = intercalate "<br>" . lines
 
 -- | Collect class information from local module and imported modules
-collectClassInfos :: ModName -> TEnv -> Suite -> Set ClassInfo
+collectClassInfos :: ModName -> DocTEnv -> Suite -> Set ClassInfo
 collectClassInfos currentModule tenv stmts =
     let localClasses = Set.map (\n -> ClassInfo n currentModule True) (collectClassNames stmts)
-        importedClasses = Set.fromList $ concatMap extractClassFromTEnv tenv
+        importedClasses = Map.foldrWithKey addClassInfo Set.empty tenv
     in Set.union localClasses importedClasses
   where
-    extractClassFromTEnv (n, NClass _ _ _ _) = [ClassInfo n currentModule False]  -- Mark as imported
-    extractClassFromTEnv _ = []
+    addClassInfo n NClass{} = Set.insert (ClassInfo n currentModule False)  -- Mark as imported
+    addClassInfo _ _        = id
 
 -- | Collect all class names defined in the module
 collectClassNames :: Suite -> Set Name
@@ -1659,7 +1667,7 @@ docTopLevelHtmlWithTypesAndClasses tenv classNames stmts =
     in vcat separated
 
 -- | Extract and document top-level definitions in HTML with types and class info
-docTopLevelHtmlWithTypesAndClassInfo :: TEnv -> ModName -> Set ClassInfo -> Suite -> Doc
+docTopLevelHtmlWithTypesAndClassInfo :: DocTEnv -> ModName -> Set ClassInfo -> Suite -> Doc
 docTopLevelHtmlWithTypesAndClassInfo tenv currentModule classInfos stmts =
     let docs = concatMap (extractTopLevelHtmlWithTypesAndClassInfo tenv currentModule classInfos) stmts
         separated = case docs of
@@ -1685,7 +1693,7 @@ extractTopLevelHtmlWithTypesAndClasses tenv classNames (With _ _ body) = concatM
 extractTopLevelHtmlWithTypesAndClasses _ _ _ = []
 
 -- | Extract documentation-worthy top-level statements for HTML with types and class info
-extractTopLevelHtmlWithTypesAndClassInfo :: TEnv -> ModName -> Set ClassInfo -> Stmt -> [Doc]
+extractTopLevelHtmlWithTypesAndClassInfo :: DocTEnv -> ModName -> Set ClassInfo -> Stmt -> [Doc]
 extractTopLevelHtmlWithTypesAndClassInfo tenv currentModule classInfos (Decl _ decls) =
     map (docDeclHtmlWithTypesAndClassInfo tenv currentModule classInfos) decls
 extractTopLevelHtmlWithTypesAndClassInfo tenv currentModule classInfos (With _ _ body) =
@@ -2430,13 +2438,13 @@ docDeclHtmlWithTypes tenv = docDeclHtmlWithTypesAndClasses tenv Set.empty
 
 -- | Document a declaration in HTML format with type information and class links
 -- | Document a declaration in HTML with types and class info for cross-module linking
-docDeclHtmlWithTypesAndClassInfo :: TEnv -> ModName -> Set ClassInfo -> Decl -> Doc
+docDeclHtmlWithTypesAndClassInfo :: DocTEnv -> ModName -> Set ClassInfo -> Decl -> Doc
 docDeclHtmlWithTypesAndClassInfo tenv currentModule classInfos decl =
     let classNames = Set.map ciName $ Set.filter ciIsLocal classInfos
     in docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl
 
 -- | Document a declaration in HTML with module context for proper cross-module links
-docDeclHtmlWithTypesAndClassesAndModule :: TEnv -> ModName -> Set Name -> Decl -> Doc
+docDeclHtmlWithTypesAndClassesAndModule :: DocTEnv -> ModName -> Set Name -> Decl -> Doc
 docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
     -- Update all type rendering to use the module-aware version
     case decl of
@@ -2456,7 +2464,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
         let explicitGenerics = extractGenerics q
             funcScope = "def-" ++ nstr n
             -- Look up inferred type information
-            (inferredType, qConstraints) = case lookup n tenv of
+            (inferredType, qConstraints) = case Map.lookup n tenv of
                 Just (NDef schema _ _) -> (Just schema, getQBindsFromSchema schema)
                 Just (NSig schema _ _) -> (Just schema, getQBindsFromSchema schema)
                 _ -> (Nothing, [])
@@ -2504,7 +2512,7 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
     docActorHtmlWithModule tenv curMod classNames n q p k b ddoc =
         let explicitGenerics = extractGenerics q
             -- Look up inferred type information for actors
-            (paramsWithTypes, allGenerics, constraints) = case lookup n tenv of
+            (paramsWithTypes, allGenerics, constraints) = case Map.lookup n tenv of
                 Just (NAct qConstraints posRow kwdRow _ _) ->
                     let inferredGenerics = extractGenerics qConstraints
                         combinedGenerics = Set.union explicitGenerics inferredGenerics
@@ -2970,7 +2978,7 @@ extractProtocolMethods stmts = foldr extractMethod [] stmts
     rowsToParams :: PosRow -> KwdRow -> (PosPar, KwdPar)
     rowsToParams posRow kwdRow = (PosNIL, KwdNIL)  -- Simplified for now
 
-docClassBodyHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
+docClassBodyHtmlWithGenericsTypesAndClassesModule :: DocTEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
 docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames body =
     let (attrs, methods) = extractClassMembers body
         attrDocs = if null attrs then empty else
@@ -2985,7 +2993,7 @@ docClassBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics className
                      text "</div>"
     in attrDocs $+$ (if isEmpty attrDocs || isEmpty methodDocs then empty else blank) $+$ methodDocs
 
-docProtocolBodyHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
+docProtocolBodyHtmlWithGenericsTypesAndClassesModule :: DocTEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
 docProtocolBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames body =
     let methods = extractProtocolMethods body
         methodDocs = if null methods then empty else
@@ -3000,14 +3008,14 @@ docAttributeHtmlWithGenericsAndClassesModule curMod generics classNames (n, t) =
     text "<div class=\"attribute-item\"><code>" <> pretty n <> text "</code>" <>
     formatTypeHtmlModule curMod generics [] classNames t <> text "</div>"
 
-docActorBodyHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
+docActorBodyHtmlWithGenericsTypesAndClassesModule :: DocTEnv -> ModName -> Set Name -> Set Name -> Suite -> Doc
 docActorBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames body =
     let (publics, internals, methods) = extractActorMembers body
         -- Enrich public constants with type information from TEnv
         enrichedPublics = map enrichAttribute publics
           where
             enrichAttribute (n, Nothing) =
-                case lookup n tenv of
+                case Map.lookup n tenv of
                     Just (NSig (TSchema _ _ t) _ _) -> (n, Just t)
                     Just (NDef (TSchema _ _ t) _ _) -> (n, Just t)
                     _ -> (n, Nothing)
@@ -3029,10 +3037,10 @@ docActorBodyHtmlWithGenericsTypesAndClassesModule tenv curMod generics className
                      text "</div>"
     in publicDocs $+$ internalDocs $+$ methodDocs
 
-docMethodHtmlWithGenericsTypesAndClassesModule :: TEnv -> ModName -> Set Name -> Set Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
+docMethodHtmlWithGenericsTypesAndClassesModule :: DocTEnv -> ModName -> Set Name -> Set Name -> (Name, QBinds, PosPar, KwdPar, Maybe Type, Maybe String) -> Doc
 docMethodHtmlWithGenericsTypesAndClassesModule tenv curMod generics classNames (n, q, p, k, ret, docstr) =
     let nl2br = intercalate "<br>" . lines
-        inferredParams = case lookup n tenv of
+        inferredParams = case Map.lookup n tenv of
             Just (NDef (TSchema _ _ (TFun _ _ posRow kwdRow retType)) _ _) ->
                 (enrichParamsWithTypesHtmlAndClassesModule curMod generics [] classNames posRow kwdRow p k, Just retType)
             Just (NSig (TSchema _ _ (TFun _ _ posRow kwdRow retType)) _ _) ->
