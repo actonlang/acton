@@ -80,6 +80,7 @@ typedef struct $Catcher *$Catcher;
 
 ///////////////////////////////////////////////////////////
 
+#include "closures.h"
 #include "../out/types/__builtin__.h"
 #include "class_hierarchy.h"
 #include "serialize.h"
@@ -115,4 +116,3 @@ typedef struct $Catcher *$Catcher;
 #include "staticWitnesses.h"
 #include "utils.h"
 #include "hasher.h"
-
