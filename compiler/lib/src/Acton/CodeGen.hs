@@ -193,6 +193,107 @@ rawParams env t                     = error ("codegen unexpected row: " ++ prstr
 
 storageType env t                   = rawType env t
 
+-- Generic closure emission -------------------------------------------------------------------------
+
+-- Lambda lifting represents each closure as a fresh class.  For common closure
+-- shapes we can keep the typed IR class, but emit it as a thin constructor
+-- wrapper around a shared builtin C closure object plus the original lambda
+-- body as a trampoline.
+data GenericClosureKind             = GCCont | GCProc | GCMut0 deriving (Eq,Show)
+
+data GenericClosure                 = GenericClosure { gcKind :: GenericClosureKind
+                                                     , gcSlots :: [(Name,Type)]
+                                                     } deriving (Eq,Show)
+
+genericClosureInfoByName :: GenEnv -> Name -> Maybe GenericClosure
+genericClosureInfoByName env n      = case findQName (NoQ n) env of
+                                        NClass q as te _ -> genericClosureInfo env (NoQ n) q (map snd as) te
+                                        _                -> Nothing
+
+genericClosureInfoByQName :: GenEnv -> QName -> Maybe GenericClosure
+genericClosureInfoByQName env qn    = case findQName qn env of
+                                        NClass q as te _ -> genericClosureInfo env qn q (map snd as) te
+                                        _                -> Nothing
+
+genericClosureInfo :: GenEnv -> QName -> QBinds -> [TCon] -> TEnv -> Maybe GenericClosure
+genericClosureInfo env qn q as te
+  | hasBase primCont,
+    smallSlots,
+    Just [arg] <- callArgs,
+    not (rawCallArg arg)            = Just $ GenericClosure GCCont slots
+  | hasBase primMut,
+    null slots,
+    Just [] <- evalArgs,
+    Just et <- evalRes,
+    not (rawCallResult et)          = Just $ GenericClosure GCMut0 []
+  | hasBase primProc,
+    not (any hasBase [primAction, primMut, primPure]),
+    smallSlots,
+    Just [arg] <- callArgs,
+    not (rawCallArg arg)            = Just $ GenericClosure GCProc slots
+  | otherwise                       = Nothing
+  where tc                          = TC qn (map tVar $ qbound q)
+        hasBase p                   = any ((== p) . tcname) as
+        slots                       = [ (n,sctype sc) | (n, NSig sc Property _) <- te ]
+        smallSlots                  = length slots <= 4 && all pointerStored slots
+        pointerStored (_,t)         = not (B.isUnboxable (boxedRepType t))
+        callType                    = methodType attr_call_
+        evalType                    = methodType attr_eval_
+        callArgs                    = funArgs =<< callType
+        evalArgs                    = funArgs =<< evalType
+        evalRes                     = funRes  =<< evalType
+        methodType n                = case findAttr env tc n of
+                                        Just _ -> Just $ B.rtypeOf env tc n
+                                        _      -> Nothing
+        funArgs (TFun _ _ p _ _)    = rowTypes p
+        funArgs _                   = Nothing
+        funRes (TFun _ _ _ _ t)     = Just t
+        funRes _                    = Nothing
+        rowTypes (TNil _ _)         = Just []
+        rowTypes (TRow _ _ _ t r)   = (t :) <$> rowTypes r
+        rowTypes _                  = Nothing
+        rawCallArg TUnboxed{}       = True
+        rawCallArg _                = False
+        rawCallResult TUnboxed{}    = True
+        rawCallResult _             = False
+
+genericClosureCType :: GenericClosure -> Doc
+genericClosureCType (GenericClosure GCCont slots)
+                                    = text "B_ClosureCont" <> pretty (length slots)
+genericClosureCType (GenericClosure GCProc slots)
+                                    = text "B_ClosureProc" <> pretty (length slots)
+genericClosureCType (GenericClosure GCMut0 _)
+                                    = text "B_ClosureMut0"
+
+genericClosureFnType :: GenericClosure -> Doc
+genericClosureFnType gc             = genericClosureCType gc <> text "Fn"
+
+genericClosureNew :: GenericClosure -> Doc
+genericClosureNew gc                = genericClosureCType gc <> text "G_new"
+
+genericClosureBodyMethod :: GenericClosure -> Name
+genericClosureBodyMethod (GenericClosure GCMut0 _) = attr_eval_
+genericClosureBodyMethod _          = attr_call_
+
+genericClosureMethods :: GenericClosure -> [Name]
+genericClosureMethods gc            = [genericClosureBodyMethod gc]
+
+genericClosureSlotAccess :: GenEnv -> Expr -> Name -> Maybe Doc
+genericClosureSlotAccess env e n    = do
+    TCon _ (TC qn _) <- Just $ boxedRepType (typeOf env e)
+    gc <- genericClosureInfoByQName env qn
+    (ix,t) <- lookupSlot 0 n (gcSlots gc)
+    return $ parens (parens (storageType env t) <> slot gc ix)
+  where lookupSlot _ _ []           = Nothing
+        lookupSlot i x ((n,t):nts)
+          | x == n                  = Just (i,t)
+          | otherwise               = lookupSlot (i+1) x nts
+        slot gc i                   = parens (parens (genericClosureCType gc) <> gen env e) <> text "->" <> text ("p" ++ show i)
+
+posParNames :: PosPar -> [Name]
+posParNames (PosPar n _ _ p)        = n : posParNames p
+posParNames _                       = []
+
 -- Header -------------------------------------------------------------------------------------------
 
 hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
@@ -221,9 +322,15 @@ hStmt _ env s                       = empty
 declstub env (Class _ n q a b ddoc) = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
 
+typedef env (Class _ n q a b ddoc)
+  | Just gc <- genericClosureInfoByName env n
+                                    = text "typedef" <+> genericClosureCType gc <+> genTopName env n <> semi
 typedef env (Class _ n q a b ddoc)  = text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 typedef env Def{}                   = empty
 
+decl env (Class _ n q a b ddoc)
+  | Just _ <- genericClosureInfoByName env n
+                                    = empty
 decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> char '{') $+$
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
                                       char '}' <> semi $+$
@@ -239,6 +346,10 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
+methstub env (Class _ n q a b ddoc)
+  | Just _ <- genericClosureInfoByName env n
+                                    = constub env t n r b
+  where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
@@ -467,6 +578,8 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
         emit                        = getLineEmit env
 
 declDecl env (Class _ n q as b ddoc)
+    | Just gc <- genericClosureInfoByName env n
+                                    = declGenericClosure env n q b gc
     | cDefinedClass                 = vcat [ declDecl env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
     | otherwise                     = vcat [ declDecl env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
@@ -483,6 +596,23 @@ declDecl env (Class _ n q as b ddoc)
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+
+declGenericClosure env n q b gc     = vcat [ declDecl env2 d{ dname = methodname n (dname d) }
+                                            | Decl _ ds <- b', d@Def{} <- ds
+                                            , dname d `elem` genericClosureMethods gc ] $+$
+                                      declGenericClosureCon env1 n gc
+  where b'                          = vsubst [(tvSelf, tCon c)] b
+        c                           = TC (NoQ n) (map tVar $ qbound q)
+        env1                        = setInClass (defineTVars q env)
+        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
+
+declGenericClosureCon env n gc      = rawType env t <+> newcon env n <> parens (gen env pars) <+> char '{' $+$
+                                      nest 4 (text "return" <+> parens (genTopName env n) <> genericClosureNew gc <> parens (hsep $ punctuate comma (fnArg : slotArgs)) <> semi) $+$
+                                      char '}'
+  where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
+        pars                        = pPar paramNames r
+        fnArg                       = parens (genericClosureFnType gc) <> genTopName env (methodname n (genericClosureBodyMethod gc))
+        slotArgs                    = [ parens word <> gen env p | p <- posParNames pars ]
 
 declCleanup env n sup_c
   -- TODO: only match if this is an actor, or even better if this actor has a __cleanup__ method defined (not empty!?)
@@ -536,7 +666,10 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
 
 
 initTables env []                   = empty
-initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n q b hC) $+$ char '}' | Class _ n q as b ddoc <- ds, let hC = hasCDef b ] $+$
+initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase env1 n q as hC $+$ initClass env1 n q b hC) $+$ char '}'
+                                            | Class _ n q as b ddoc <- ds
+                                            , Nothing <- [genericClosureInfoByName env1 n]
+                                            , let hC = hasCDef b ] $+$
                                       initTables env1 ss
   where env1                        = gdefine (envOf ds) env
         hasCDef b                   = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
@@ -1173,12 +1306,18 @@ genDotCall env ts dec e n p
 
 genDot env ts e@(Var _ x) n
   | NClass q _ _ _ <- findQName x env = classCast env ts x q n $ methodtable' env x <> text "." <> gen env n
+genDot env ts e n
+  | Just d <- genericClosureSlotAccess env e n
+                                    = d
 genDot env ts e n                   = dotCast env False ts e n $ genReceiver env e <> text "->" <> gen env n
 -- NOTE: all method references are eta-expanded by the lambda-lifter at this point, so n cannot be a method (i.e., require methodtable lookup) here
 
 genReceiver env e                   = parens (parens (gen env t) <> parens (gen env e))
   where t                           = boxedRepType (typeOf env e)
 
+genTarget env (Dot _ e n)
+  | Just d <- genericClosureSlotAccess env e n
+                                    = d
 genTarget env (Dot _ e n)           = genReceiver env e <> text "->" <> gen env n
 genTarget env e                     = gen env e
 
