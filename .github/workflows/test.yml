@@ -289,6 +289,12 @@ jobs:
           path: |
             ~/.cache/acton/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+      # Disk visibility: these containers have hit ENOSPC during cache restore.
+      # Print usage after restore so a future disk problem shows up as data
+      # rather than a silent mid-tar runner death. Never fails the job.
+      - name: "Show disk usage (after cache restore)"
+        if: always()
+        run: df -h || true
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
@@ -345,6 +351,12 @@ jobs:
           ulimit -c unlimited
           make -C ${GITHUB_WORKSPACE} test
           make -C ${GITHUB_WORKSPACE} online-tests
+      # Disk visibility: print usage after the build+test phase (the peak) so we
+      # can see how much headroom these containers actually have. Runs even on
+      # failure to help diagnose a suspected out-of-space death. Never fails.
+      - name: "Show disk usage (after tests)"
+        if: always()
+        run: df -h || true
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot (runs even if tests flake, but requires the build/release
       # steps to have succeeded so a build failure can't poison the day's key).
