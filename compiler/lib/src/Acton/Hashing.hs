@@ -1,7 +1,12 @@
 module Acton.Hashing
   ( TopLevelItem(..)
   , topLevelItems
+  , topLevelStmtItems
+  , nameBytesFromItems
+  , mergeNameBytes
+  , nameHashesFromBytes
   , nameHashesFromItems
+  , nameLocsFromItems
   , implDepsFromItems
   , splitDeps
   , externalModules
@@ -21,6 +26,7 @@ import Acton.Prim (mPrim)
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import qualified Pretty
+import Utils (SrcLoc)
 
 import Data.Binary (encode)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -53,18 +59,27 @@ modNameToString m = intercalate "." (A.modPath m)
 
 -- | Extract hashable top-level items from a module.
 topLevelItems :: A.Module -> [TopLevelItem]
-topLevelItems (A.Module _ _ _ suite) = concatMap items suite
-  where
-    items stmt = case stmt of
-      A.Decl _ ds ->
-        [ TLDecl (Names.dname' d) d | d <- ds ]
-      A.Signature _ ns _ _ ->
-        [ TLStmt n stmt | n <- ns ]
-      A.Assign _ ps _ ->
-        [ TLStmt n stmt | n <- nub (Names.bound ps) ]
-      A.VarAssign _ ps _ ->
-        [ TLStmt n stmt | n <- nub (Names.bound ps) ]
-      _ -> []
+topLevelItems (A.Module _ _ _ suite) = concatMap topLevelStmtItems suite
+
+topLevelStmtItems :: A.Stmt -> [TopLevelItem]
+topLevelStmtItems stmt = case stmt of
+  A.Decl _ ds ->
+    [ TLDecl (Names.dname' d) d | d <- ds ]
+  A.Signature _ ns _ _ ->
+    [ TLStmt n stmt | n <- ns ]
+  A.Assign _ ps _ ->
+    [ TLStmt n stmt | n <- nub (Names.bound ps) ]
+  A.VarAssign _ ps _ ->
+    [ TLStmt n stmt | n <- nub (Names.bound ps) ]
+  _ -> []
+
+mergeNameBytes :: M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString
+mergeNameBytes =
+  M.unionWith appendNameBytes
+
+appendNameBytes :: B.ByteString -> B.ByteString -> B.ByteString
+appendNameBytes old new =
+  old `B.append` B.cons '\n' new
 
 -- | Collect pretty-printed fragments per top-level name.
 nameBytesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
@@ -76,12 +91,16 @@ nameBytesFromItems items =
             TLDecl name decl -> (name, Pretty.print decl)
             TLStmt name stmt -> (name, Pretty.print stmt)
       in M.insertWith appendFrag n (B.pack frag) acc
-    appendFrag new old = old `B.append` B.cons '\n' new
+    appendFrag new old = appendNameBytes old new
+
+nameHashesFromBytes :: M.Map A.Name B.ByteString -> M.Map A.Name B.ByteString
+nameHashesFromBytes =
+  M.map SHA256.hash
 
 -- | Hash each name's pretty-printed fragments.
 nameHashesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
 nameHashesFromItems items =
-  M.map SHA256.hash (nameBytesFromItems items)
+  nameHashesFromBytes (nameBytesFromItems items)
 
 -- | Collect qualified-name dependencies for each item body.
 implDepsFromItems :: [TopLevelItem] -> M.Map A.Name [A.QName]
@@ -93,6 +112,17 @@ implDepsFromItems items =
             TLDecl name decl -> (name, Names.freeQ decl)
             TLStmt name stmt -> (name, Names.freeQ stmt)
       in M.insertWith (++) n deps acc
+
+nameLocsFromItems :: [TopLevelItem] -> M.Map A.Name SrcLoc
+nameLocsFromItems items =
+  declLocs `M.union` stmtLocs
+  where
+    declLocs =
+      M.fromListWith (\a _ -> a)
+        [ (n, A.dloc d) | TLDecl n d <- items ]
+    stmtLocs =
+      M.fromListWith (\a _ -> a)
+        [ (n, A.sloc s) | TLStmt n s <- items ]
 
 -- | Split deps into locals and external qualified names for hashing.
 splitDeps :: A.ModName

@@ -1637,6 +1637,19 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ " (after progress " ++ fmtTimePrecise (ftTypeAfterProgress ft) ++ ")"
           ++ ", force " ++ fmtTimePrecise (ftTypeForce ft)
           ++ ", hash " ++ fmtTimePrecise (ftTypeHash ft)
+        frontHashFactsLine ht =
+          "Front hash facts: source " ++ fmtTimePrecise (fhtSourceFacts ht)
+          ++ ", impl " ++ fmtTimePrecise (fhtImplFacts ht)
+          ++ ", public " ++ fmtTimePrecise (fhtPublicFacts ht)
+          ++ ", stmt entries " ++ fmtTimePrecise (fhtStmtEntries ht)
+        frontHashDepsLine ht =
+          "Front hash deps: split " ++ fmtTimePrecise (fhtDepSplit ht)
+          ++ ", imports " ++ fmtTimePrecise (fhtImportHashes ht)
+          ++ ", external " ++ fmtTimePrecise (fhtExternalHashes ht)
+          ++ ", dep hashes " ++ fmtTimePrecise (fhtDepHashes ht)
+        frontHashBuildLine ht =
+          "Front hash build: names " ++ fmtTimePrecise (fhtNameHashes ht)
+          ++ ", module " ++ fmtTimePrecise (fhtModuleHashes ht)
         typeStmtTimingLine st =
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
         typeStmtBindsLine st =
@@ -1895,6 +1908,10 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                   forM_ (frFrontTiming fr) $ \ft -> do
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTimingLine ft))
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTypeTimingLine ft))
+                    let hashTiming = ftTypeHashDetail ft
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontHashFactsLine hashTiming))
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontHashDepsLine hashTiming))
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontHashBuildLine hashTiming))
                     when (C.verbose gopts) $
                       forM_ (ftTypeStmtTimings ft) $ \st -> do
                         logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
@@ -2213,16 +2230,15 @@ modulePubHash, moduleImplHash, imports, per-name hashes (src/pub/impl + deps),
 roots, tests, and docstrings. This lets us quickly decide which passes to rerun and
 reuse work from previous compilations.
 
-Public hashing: each top-level name gets a pubHash computed from its doc-free
-signature plus the pub hashes of its public dependencies. The modulePubHash is
-then the hash of pubHash values for exported names. Doc-only edits do not affect
-pubHash, and a downstream module only needs front passes when a pubHash changes.
+Public hashing: statement workers hash doc-free public NameInfo entries while
+type checking. Each exported name records a conservative module public hash, so
+any public change in an imported module can invalidate downstream front passes.
 
-Implementation hashing: each top-level name gets an implHash computed from its
-source hash plus the impl hashes of its dependencies. The moduleImplHash is the
-hash of all per-name impl hashes. We embed moduleImplHash into generated .c/.h
-files so we can skip back passes when codegen is already up to date, and we use
-it (with impl deps) to drive the test cache.
+Implementation hashing: statement workers hash typed implementation fragments
+and collect external implementation deps while type checking. Each implemented
+name records a conservative module implementation hash. We embed moduleImplHash
+into generated .c/.h files so we can skip back passes when codegen is already up
+to date, and we use it with impl deps to drive the test cache.
 
 Terminology
 - ParseTask: a source-backed module whose imports are known but whose full AST

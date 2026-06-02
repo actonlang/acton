@@ -98,12 +98,14 @@ module InterfaceFiles
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
+  , encodeStmtEntry
   , writeFile
+  , writeFileWithStmtEntries
   , writeFileWithVersion
   ) where
 
 import Prelude hiding (readFile, writeFile)
-import Control.DeepSeq (NFData)
+import Control.DeepSeq (NFData(..))
 import Data.Binary
 import qualified Control.Exception as E
 import Control.Concurrent (runInBoundThread, threadDelay)
@@ -144,7 +146,16 @@ data NameHashInfo = NameHashInfo
   } deriving (Show, Eq, Generic)
 
 instance Binary NameHashInfo
-instance NFData NameHashInfo
+instance NFData NameHashInfo where
+    rnf nhNameHash =
+        rnf (nhName nhNameHash) `seq`
+        rnf (nhSrcHash nhNameHash) `seq`
+        rnf (nhPubHash nhNameHash) `seq`
+        rnf (nhImplHash nhNameHash) `seq`
+        rnf (nhPubLocalDeps nhNameHash) `seq`
+        rnf (nhImplLocalDeps nhNameHash) `seq`
+        rnf (nhPubDeps nhNameHash) `seq`
+        rnf (nhImplDeps nhNameHash)
 
 data DepModuleInfo = DepModuleInfo
   { dmiModule   :: A.ModName
@@ -310,6 +321,9 @@ decodeStrict label bs =
 
 encodeStrict :: Binary a => a -> BS.ByteString
 encodeStrict = BL.toStrict . encode
+
+encodeStmtEntry :: A.Stmt -> BS.ByteString
+encodeStmtEntry = encodeStrict
 
 key :: String -> BS.ByteString
 key = B.pack
@@ -731,7 +745,7 @@ depIndexEntries depModules nameHashes =
   where
     moduleNameKey = A.modPath
     nameKey = A.nstr
-    sortModRows = Data.List.sortOn (moduleNameKey . fst)
+    sortModNames = Data.List.sortOn moduleNameKey
     sortNameInfos = Data.List.sortOn (nameKey . dniName)
     sortUserRows = Data.List.sortOn (\((mn, n), _) -> (moduleNameKey mn, nameKey n))
 
@@ -766,16 +780,19 @@ depIndexEntries depModules nameHashes =
     depNameInfo ((mn, n), (pubH, implH, _pubUsers, _implUsers)) =
       (mn, DepNameInfo n (maybe BS.empty id pubH) (maybe BS.empty id implH))
 
+    depModuleNames =
+      [ mn | DepModuleInfo mn _ _ <- depModules ]
+
+    depRows =
+      Map.fromListWith (++)
+        [ (mn, [info])
+        | entry <- Map.toList depMap
+        , let (mn, info) = depNameInfo entry
+        ]
+
     moduleRows =
-      [ (mn, sortNameInfos infos)
-      | (mn, infos) <-
-          sortModRows $
-          Map.toList $
-          Map.fromListWith (++)
-            [ (mn, [info])
-            | entry <- Map.toList depMap
-            , let (mn, info) = depNameInfo entry
-            ]
+      [ (mn, sortNameInfos (Map.findWithDefault [] mn depRows))
+      | mn <- sortModNames (Data.List.nub (depModuleNames ++ Map.keys depRows))
       ]
 
     cleanNames = Data.List.sortOn nameKey . Data.List.nub
@@ -788,6 +805,12 @@ depIndexEntries depModules nameHashes =
 
 interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
 interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
+    interfaceEntriesWithStmts version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked (map encodeStmtEntry body)
+  where
+    A.Module _ _ _ body = tchecked
+
+interfaceEntriesWithStmts :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [BS.ByteString] -> [(BS.ByteString, BS.ByteString)]
+interfaceEntriesWithStmts version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked stmtEntries =
     [ (keyVersion, encodeStrict version)
     , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
     , (keyImports, encodeStrict imps)
@@ -807,7 +830,7 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
     ++ [ (keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh)) | nh <- nameHashes ]
     ++ depIndexEntries depModules nameHashes
     ++ extensionIndexEntries (extensionIndexFromNameInfo tmn nmod)
-    ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
+    ++ [ (keyStmt i, stmtEntry) | (i, stmtEntry) <- zip [0..] stmtEntries ]
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
@@ -815,9 +838,18 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
 writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
+writeFileWithStmtEntries :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [BS.ByteString] -> IO ()
+writeFileWithStmtEntries = writeFileWithVersionAndStmtEntries A.version
+
 writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
-    writeEntries f (interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked)
+    writeFileWithVersionAndStmtEntries version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked (map encodeStmtEntry body)
+  where
+    A.Module _ _ _ body = tchecked
+
+writeFileWithVersionAndStmtEntries :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [BS.ByteString] -> IO ()
+writeFileWithVersionAndStmtEntries version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked stmtEntries =
+    writeEntries f (interfaceEntriesWithStmts version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked stmtEntries)
 
 readFile :: FilePath -> IO TyFile
 readFile f =

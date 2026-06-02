@@ -64,18 +64,22 @@ data TypeErrors = TypeErrors [TypeError]
 
 instance Control.Exception.Exception TypeErrors
 
--- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
+-- | Type-check a module and return its NameInfo, typed module, env, and tests.
 reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [String])
 reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
                                              let env2 = defineClosed te (setMod m env0)
-                                                 (teT,ssT,tests) =
-                                                   if hasTesting i
-                                                     then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
-                                                          in (te ++ testEnv, ss1 ++ testSs, discovered)
-                                                     else (te, ss1, [])
-                                                 iface = unalias env2 teT
+                                             (teT,ssT,tests) <-
+                                               if hasTesting i
+                                                 then do let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
+                                                         testSs <- Control.Exception.evaluate (force testSs)
+                                                         discovered <- Control.Exception.evaluate (force discovered)
+                                                         let ssT = ss1 ++ testSs
+                                                         Control.Exception.evaluate (length ssT)
+                                                         return (te ++ testEnv, ssT, discovered)
+                                                 else return (te, ss1, [])
+                                             let iface = unalias env2 teT
                                                  nmod = NModule (getImports env2) iface mdoc
                                              --traceM ("#################### converted env0:")
                                              --traceM (render (pretty env0'))
@@ -182,7 +186,8 @@ data TopProgressEvent                   = TopProgressStarted TopProgressItem
 -- Concurrent type checker
 infTop                                  :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env -> Suite -> IO (TEnv,Suite)
 infTop _ _ _ []                         = return ([], [])
-infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential, but total statements, i.e.
+infTop progressCb inferredCb env ss
+                                        = do -- The scanner itself is sequential, but total statements, i.e.
                                              -- with a complete type signature can be independently type checked
                                              -- by a fixed worker queue in the background.
                                              ncap <- getNumCapabilities
@@ -207,7 +212,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                              let stopProgress = writeChan progressQ TopProgressStop >> wait progressA
                                                  -- Workers exit on Nothing, written only after collect has consumed
                                                  -- all real jobs.
-                                                 stopWorkers = replicateM_ nworkers (writeChan workQ Nothing) >> mapM_ wait workers
+                                                 stopWorkers = replicateM_ nworkers (writeChan workQ Nothing) >> mapM wait workers
                                                  -- run is the real top-level flow: scan left-to-right, collect
                                                  -- all completed worker results, then validate signatures once
                                                  -- the whole top-level environment is known.
@@ -228,7 +233,8 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
         -- Each worker runs total statements from workQ. Nothing is the stop
         -- marker; Just jobs must always publish their result MVar and release
         -- their scanner slot before the worker moves on.
-        worker slots workQ progressQ    = do job <- readChan workQ
+        worker slots workQ progressQ
+                                        = do job <- readChan workQ
                                              case job of
                                                Nothing -> return ()
                                                Just (env,te,s,item,result) -> do
@@ -271,13 +277,15 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                -- A non-total statement was already fully checked by scanOrCheck,
                                                -- so becomes complete / total before we get here and the scanner may
                                                -- continue.
-                                               Right (_,te2,_,ss1) ->
-                                                 go slots workQ q (tydefineClosed te2 env) (te2:tes) (return (Right ss1):rs) ss
+                                               Right (_,te2,_,result) ->
+                                                 go slots workQ q (tydefineClosed te2 env) (te2:tes) (return (Right result):rs) ss
         -- Wait for all statement results in source order, concatenate the
         -- accumulated environments, keep typed statements whose checks
         -- succeeded, and keep every error for aggregate reporting.
         collect tes rs                  = do xs <- sequence (reverse rs)
-                                             return (concat (reverse tes), [ s | Right ss1 <- xs, s <- ss1 ], [ e | Left e <- xs ])
+                                             let typedSuite = [ s | Right ss1 <- xs, s <- ss1 ]
+                                             Control.Exception.evaluate (length typedSuite)
+                                             return (concat (reverse tes), typedSuite, [ e | Left e <- xs ])
         -- Scanner/checker front door for one statement. Ordinary exceptions
         -- become Left values so infTop can collect multiple errors; async
         -- exceptions still escape through tryTop.
@@ -309,7 +317,8 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                              (te1,ss1) <- runType (nstr $ uniqPrefix s) $ do
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
-                                             forceSuite te1 ss1
+                                             (te1,ss1) <- forceChecked te1 ss1
+                                             return ss1
         -- Once a worker has taken a job, collect may wait on result. Mask the
         -- publish step so every claimed job fills the MVar; async exceptions are
         -- rethrown afterwards so cancellation still propagates normally.
@@ -318,7 +327,13 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                              case r of
                                                Left err -> do putMVar result (Left err)
                                                               when (isAsyncException err) (Control.Exception.throwIO err)
-                                               Right x -> putMVar result x
+                                                              return ()
+                                               Right (Left err) -> do
+                                                              putMVar result (Left err)
+                                                              return ()
+                                               Right (Right ss1) -> do
+                                                              putMVar result (Right ss1)
+                                                              return ()
         -- Run a TypeM action and convert TypeM's Either error into the IO
         -- exception path used by tryTop.
         runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
@@ -329,9 +344,6 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                              case r of
                                                (Left err, _) -> Control.Exception.throwIO err
                                                (Right x, st') -> return (x, st')
-        -- checkTotal returns only the typed statements, but still forces the
-        -- worker's type environment so any delayed failures surface in worker.
-        forceSuite te ss                = snd <$> forceChecked te ss
         forceChecked te ss              = do te <- Control.Exception.evaluate (force te)
                                              ss <- Control.Exception.evaluate (force ss)
                                              return (te,ss)

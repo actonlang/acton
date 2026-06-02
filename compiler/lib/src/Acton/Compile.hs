@@ -95,6 +95,7 @@ module Acton.Compile
   , FrontOutputJob
   , waitFrontOutputJobs
   , FrontTiming(..)
+  , FrontHashTiming(..)
   , TypeStmtTiming(..)
   , InferredSignature(..)
   , BackTiming(..)
@@ -400,7 +401,21 @@ data FrontTiming = FrontTiming
   , ftTypeAfterProgress :: TimeSpec
   , ftTypeForce :: TimeSpec
   , ftTypeHash :: TimeSpec
+  , ftTypeHashDetail :: FrontHashTiming
   , ftTypeStmtTimings :: [TypeStmtTiming]
+  } deriving (Eq, Show)
+
+data FrontHashTiming = FrontHashTiming
+  { fhtSourceFacts :: TimeSpec
+  , fhtImplFacts :: TimeSpec
+  , fhtPublicFacts :: TimeSpec
+  , fhtDepSplit :: TimeSpec
+  , fhtImportHashes :: TimeSpec
+  , fhtExternalHashes :: TimeSpec
+  , fhtDepHashes :: TimeSpec
+  , fhtNameHashes :: TimeSpec
+  , fhtModuleHashes :: TimeSpec
+  , fhtStmtEntries :: TimeSpec
   } deriving (Eq, Show)
 
 data BackTiming = BackTiming
@@ -1465,13 +1480,137 @@ forceHTEnv hte                  = HM.foldl' forceHNameInfo () hte
   where forceHNameInfo () (I.HNModule _ te _) = forceHTEnv te
         forceHNameInfo () hni  = hni `seq` ()
 
-forceTypeResult :: I.NameInfo -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
-forceTypeResult nmod tchecked typeEnv tests = do
-  evaluate (rnf nmod)
-  evaluate (rnf tchecked)
+forceModuleHeader :: A.Module -> ()
+forceModuleHeader (A.Module m i mdoc _) =
+  rnf m `seq` rnf i `seq` rnf mdoc
+
+forceTypeEnv :: Acton.Env.EnvF x -> IO ()
+forceTypeEnv typeEnv = do
   evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
   evaluate (forceHTEnv (Acton.Env.hmodules typeEnv))
-  evaluate (rnf tests)
+
+forceTypeResult :: I.NameInfo -> A.Module -> IO ()
+forceTypeResult nmod tchecked = do
+  evaluate (rnf nmod)
+  evaluate (forceModuleHeader tchecked)
+
+data FrontTypeFacts = FrontTypeFacts
+  { ftfImplBytes :: M.Map A.Name B.ByteString
+  , ftfImplDeps :: M.Map A.Name [A.QName]
+  , ftfImplLocs :: M.Map A.Name SrcLoc
+  , ftfStmtEntries :: [B.ByteString]
+  }
+
+data FrontTypeFactsResult = FrontTypeFactsResult
+  { ftfrFacts :: FrontTypeFacts
+  , ftfrImplFactsTime :: TimeSpec
+  , ftfrStmtEntriesTime :: TimeSpec
+  }
+
+sourceNameFactsFromModule :: A.Module -> IO (M.Map A.Name B.ByteString, M.Map A.Name SrcLoc)
+sourceNameFactsFromModule (A.Module _ _ _ ss) = do
+  chunks <- frontFactChunks ss
+  parts <- mapConcurrently sourceFactsFromChunk chunks
+  let (nameBytes, nameLocs) = foldl' mergeSourceFacts (M.empty, M.empty) parts
+  nameHashes <- nameHashesFromBytesParallel nameBytes
+  evaluate (rnf (nameHashes, nameLocs))
+  return (nameHashes, nameLocs)
+  where
+    sourceFactsFromChunk chunk =
+      let items = concatMap Hashing.topLevelStmtItems chunk
+          facts =
+            ( Hashing.nameBytesFromItems items
+            , Hashing.nameLocsFromItems items
+            )
+      in evaluate (rnf facts) >> return facts
+    mergeSourceFacts (bytesA, locsA) (bytesB, locsB) =
+      ( Hashing.mergeNameBytes bytesA bytesB
+      , M.union locsA locsB
+      )
+
+frontTypeFactsFromModule :: A.Module -> IO FrontTypeFactsResult
+frontTypeFactsFromModule (A.Module _ _ _ ss) = do
+  chunks <- frontFactChunks ss
+  withAsync (implFacts chunks) $ \implAsync ->
+    withAsync (stmtEntries chunks) $ \stmtAsync -> do
+      (implBytes, implDeps, implLocs, implTime) <- wait implAsync
+      (entries, stmtTime) <- wait stmtAsync
+      let facts = FrontTypeFacts
+            { ftfImplBytes = implBytes
+            , ftfImplDeps = implDeps
+            , ftfImplLocs = implLocs
+            , ftfStmtEntries = entries
+            }
+      evaluate (rnfFrontTypeFacts facts)
+      return FrontTypeFactsResult
+        { ftfrFacts = facts
+        , ftfrImplFactsTime = implTime
+        , ftfrStmtEntriesTime = stmtTime
+        }
+  where implFacts chunks = do
+          timeStart <- getTime Monotonic
+          parts <- mapConcurrently implFactsFromChunk chunks
+          let facts = foldl' mergeImplFacts (M.empty, M.empty, M.empty) parts
+          evaluate (rnf facts)
+          timeDone <- getTime Monotonic
+          let (implBytes, implDeps, implLocs) = facts
+          return (implBytes, implDeps, implLocs, timeDone - timeStart)
+        stmtEntries chunks = do
+          timeStart <- getTime Monotonic
+          entries <- concat <$> mapConcurrently encodeStmtChunk chunks
+          evaluate (rnf entries)
+          timeDone <- getTime Monotonic
+          return (entries, timeDone - timeStart)
+        implFactsFromChunk chunk =
+          let items = concatMap Hashing.topLevelStmtItems chunk
+              facts =
+                ( Hashing.nameBytesFromItems items
+                , Hashing.implDepsFromItems items
+                , Hashing.nameLocsFromItems items
+                )
+          in evaluate (rnf facts) >> return facts
+        mergeImplFacts (bytesA, depsA, locsA) (bytesB, depsB, locsB) =
+          ( Hashing.mergeNameBytes bytesA bytesB
+          , M.unionWith (flip (++)) depsA depsB
+          , M.union locsA locsB
+          )
+        encodeStmtChunk chunk = do
+          let entries = map InterfaceFiles.encodeStmtEntry chunk
+          evaluate (rnf entries)
+          return entries
+
+frontFactChunks :: [a] -> IO [[a]]
+frontFactChunks xs = do
+  ncap <- getNumCapabilities
+  let len = length xs
+      workers = max 1 (min ncap len)
+      chunkSize = max 1 ((len + workers - 1) `div` workers)
+  return (chunksOf chunkSize xs)
+
+nameHashesFromBytesParallel :: M.Map A.Name B.ByteString -> IO (M.Map A.Name B.ByteString)
+nameHashesFromBytesParallel bytes = do
+  chunks <- frontFactChunks (M.toList bytes)
+  parts <- mapConcurrently hashChunk chunks
+  let hashes = M.fromList (concat parts)
+  evaluate (rnf hashes)
+  return hashes
+  where hashChunk chunk = do
+          let hashes = [ (n, SHA256.hash bs) | (n, bs) <- chunk ]
+          evaluate (rnf hashes)
+          return hashes
+
+rnfFrontTypeFacts :: FrontTypeFacts -> ()
+rnfFrontTypeFacts facts =
+  rnf (ftfImplBytes facts) `seq`
+  rnf (ftfImplDeps facts) `seq`
+  rnf (ftfImplLocs facts) `seq`
+  rnf (ftfStmtEntries facts)
+
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf _ [] = []
+chunksOf n xs =
+  let (chunk, rest) = splitAt n xs
+  in chunk : chunksOf n rest
 
 data GlobalTask = GlobalTask
   { gtKey             :: TaskKey
@@ -2290,6 +2429,17 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
         , fppCurrent = current
         }
 
+    sourceHashFacts = do
+      timeStart <- getTime Monotonic
+      (moduleSrcBytesHash, (nameSrcHashes, nameLocsParsed)) <-
+        withAsync (evaluate (SHA256.hash srcBytes)) $ \moduleHashAsync ->
+          withAsync (sourceNameFactsFromModule parsed) $ \nameFactsAsync -> do
+            moduleSrcBytesHash <- wait moduleHashAsync
+            nameFacts <- wait nameFactsAsync
+            return (moduleSrcBytesHash, nameFacts)
+      timeDone <- getTime Monotonic
+      return ((moduleSrcBytesHash, nameSrcHashes, nameLocsParsed), timeDone - timeStart)
+
     core = do
       timeStart <- getTime Monotonic
       let isRoot = mn == modName paths
@@ -2297,7 +2447,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
         dump mn "parse" (Pretty.print parsed)
       when (C.parse_ast opts && isRoot) $
         dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
+      withAsync sourceHashFacts (coreWithSourceFacts timeStart isRoot)
 
+    coreWithSourceFacts timeStart isRoot sourceHashFactsAsync = do
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
       inferredSigsRef <- newIORef ([] :: [InferredSignature])
       typeActiveRef <- newIORef Nothing
@@ -2341,13 +2493,20 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       iff (C.kinds opts && isRoot) $ dump mn "kinds" (Pretty.print kchecked)
       timeKindsCheck <- getTime Monotonic
 
-      -- Type-check and return both the typed AST and the interface NameInfo.
+      -- Type-check first; compile-side finalization derives output facts from
+      -- the typed module without making Types.reconstruct a hashing API.
       (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
       timeTypeReconstruct <- getTime Monotonic
-      forceTypeResult nmod tchecked typeEnv tests
-      timeTypeForce <- getTime Monotonic
-      -- Module-level src hash uses raw bytes so any source edit forces re-parse.
-      let moduleSrcBytesHash = SHA256.hash srcBytes
+      (timeTypeForce, typeFactsResult) <-
+        withAsync (frontTypeFactsFromModule tchecked) $ \typeFactsAsync -> do
+          withAsync (forceTypeEnv typeEnv) $ \typeEnvForce -> do
+            forceTypeResult nmod tchecked
+            wait typeEnvForce
+            timeTypeForce <- getTime Monotonic
+            typeFactsResult <- wait typeFactsAsync
+            return (timeTypeForce, typeFactsResult)
+      let typeFacts = ftfrFacts typeFactsResult
+      ((moduleSrcBytesHash, nameSrcHashes, nameLocsParsed), sourceFactsTime) <- wait sourceHashFactsAsync
       -- Store roots so later builds can discover entry points without reparse.
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
@@ -2357,34 +2516,21 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             if mn == mBuiltin
               then imps
               else nub (mBuiltin : imps)
+      timeImportHashesStart <- getTime Monotonic
       impsRes <- resolveImportHashes hashImps
+      timeImportHashesDone <- getTime Monotonic
       case impsRes of
         Left diags -> return (Left diags)
         Right impsWithHash -> do
-          -- Extract top-level items from parsed and typed ASTs for per-name hashes.
-          let srcItems = Hashing.topLevelItems parsed
-              implItems = Hashing.topLevelItems tchecked
-              -- src hashes come only from parsed AST fragments.
-              nameSrcHashes = Hashing.nameHashesFromItems srcItems
-              -- impl hashes are derived from the typed AST bodies. this is the
-              -- local function hash, implDeps are added later
-              nameImplHashes = Hashing.nameHashesFromItems implItems
-              -- NameInfo defines the full local environment for this module.
-              nameInfoMap = M.fromList fullIface
+          -- Source hashes use parsed AST fragments; implementation facts
+          -- are derived from the typed module by compile-side finalization.
+          timePublicFactsStart <- getTime Monotonic
+          let nameInfoMap = M.fromList fullIface
               nameSrcKeys = M.keysSet nameSrcHashes
-              nameImplKeys = M.keysSet nameImplHashes
+              nameImplKeys = M.keysSet (ftfImplBytes typeFacts)
               nameKeys = Data.Set.union nameSrcKeys nameImplKeys
-              nameLocsParsed = M.fromListWith (\a _ -> a)
-                [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
-                M.fromListWith (\a _ -> a)
-                [ (n, A.sloc s) | Hashing.TLStmt n s <- srcItems ]
-              nameLocsTyped = M.fromListWith (\a _ -> a)
-                [ (n, A.dloc d) | Hashing.TLDecl n d <- implItems ] `M.union`
-                M.fromListWith (\a _ -> a)
-                [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
-              nameLocs = M.union nameLocsParsed nameLocsTyped
-          -- pubSigDeps: signature-level deps from NameInfo (types only).
-          let isDerivedName n = case n of
+              nameLocs = M.union nameLocsParsed (ftfImplLocs typeFacts)
+              isDerivedName n = case n of
                 A.Derived{} -> True
                 _ -> False
               isDerivedQName qn = case qn of
@@ -2392,27 +2538,37 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 A.QName _ n -> isDerivedName n
                 A.NoQ n -> isDerivedName n
               dropDerived = filter (not . isDerivedQName)
+              -- pubSigDeps: signature-level deps from NameInfo (types only).
               pubSigDepsRaw = M.fromList
                 [ (n, dropDerived (Names.freeQ info)) | (n, info) <- M.toList nameInfoMap ]
               -- implDeps: term-level deps from typed bodies.
-              implDepsRaw = Hashing.implDepsFromItems implItems
+              implDepsRaw = ftfImplDeps typeFacts
               -- pubDeps include signature deps plus any term-level deps for reuse in pubHash.
               -- Derived names are internal and should never require a pub hash.
               pubDepsRaw = M.map dropDerived (M.unionWith (++) pubSigDepsRaw implDepsRaw)
               hashEnv = setMod mn env
-              -- Split deps into local (same module) vs external (qualified) names.
-              (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
+          evaluate (rnf (nameKeys, nameLocs, pubSigDepsRaw, implDepsRaw, pubDepsRaw))
+          timePublicFactsDone <- getTime Monotonic
+
+          timeDepSplitStart <- getTime Monotonic
+          let (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
               (pubLocalDeps, pubExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubDepsRaw
               (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv nameKeys implDepsRaw
               -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
+          evaluate (rnf (pubSigLocalDeps, pubSigExtDeps, pubLocalDeps, pubExtDeps, implLocalDeps, implExtDeps, extMods))
+          timeDepSplitDone <- getTime Monotonic
+
+          timeExternalHashesStart <- getTime Monotonic
           extMapsRes <- resolveNameHashMaps extMods
           depModulesRes <- resolveDepModuleHashes extMods
+          timeExternalHashesDone <- getTime Monotonic
           case (extMapsRes, depModulesRes) of
             (Left diags, _) -> return (Left diags)
             (_, Left diags) -> return (Left diags)
             (Right extMaps, Right depModules) -> do
               -- Resolve external deps to their recorded hashes.
+              timeDepHashesStart <- getTime Monotonic
               let pubSigExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps extMaps nameLocs
                   pubExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps extMaps nameLocs
                   implExtRes = resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps extMaps nameLocs
@@ -2421,7 +2577,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 (_, Left diags, _) -> return (Left diags)
                 (_, _, Left diags) -> return (Left diags)
                 (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
+                  evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes))
+                  timeDepHashesDone <- getTime Monotonic
+
                   -- Build per-name hash records (src/pub/impl + deps) for .tydb.
+                  timeNameHashesStart <- getTime Monotonic
+                  nameImplHashes <- nameHashesFromBytesParallel (ftfImplBytes typeFacts)
                   let nameHashes =
                         Hashing.buildNameHashes
                           nameKeys
@@ -2434,12 +2595,14 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           implLocalDeps
                           implExtHashes
                           pubExtHashes
+                  evaluate (rnf (nameImplHashes, nameHashes))
+                  timeNameHashesDone <- getTime Monotonic
 
-                  -- Module-level hashes summarize the per-name hashes.
+                  timeModuleHashesStart <- getTime Monotonic
                   let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
-                  when (C.timing gopts) $
-                    evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, nameHashes))
+                  evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash))
+                  timeModuleHashesDone <- getTime Monotonic
                   timeTypeHash <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
@@ -2447,7 +2610,21 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   timeTypeCheck <- getTime Monotonic
 
                   let writeTyDb = do
-                        InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes roots tests mdoc nmod tchecked
+                        InterfaceFiles.writeFileWithStmtEntries
+                          (tyDbPath paths mn)
+                          moduleSrcBytesHash
+                          modulePubHash
+                          moduleImplHash
+                          sourceMeta
+                          impsWithHash
+                          depModules
+                          nameHashes
+                          roots
+                          tests
+                          mdoc
+                          nmod
+                          tchecked
+                          (ftfStmtEntries typeFacts)
                       writeDoc = do
                         let docDir = joinPath [projPath paths, "out", "doc"]
                             modPathList = A.modPath mn
@@ -2479,7 +2656,19 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                         case typeProgressDone of
                           Just t -> timeTypeReconstruct - t
                           Nothing -> timeTypeReconstruct - timeTypeReconstruct
-                  let frontTime = timeFrontEnd - timeStart
+                      frontTime = timeFrontEnd - timeStart
+                      hashTiming = FrontHashTiming
+                        { fhtSourceFacts = sourceFactsTime
+                        , fhtImplFacts = ftfrImplFactsTime typeFactsResult
+                        , fhtPublicFacts = timePublicFactsDone - timePublicFactsStart
+                        , fhtDepSplit = timeDepSplitDone - timeDepSplitStart
+                        , fhtImportHashes = timeImportHashesDone - timeImportHashesStart
+                        , fhtExternalHashes = timeExternalHashesDone - timeExternalHashesStart
+                        , fhtDepHashes = timeDepHashesDone - timeDepHashesStart
+                        , fhtNameHashes = timeNameHashesDone - timeNameHashesStart
+                        , fhtModuleHashes = timeModuleHashesDone - timeModuleHashesStart
+                        , fhtStmtEntries = ftfrStmtEntriesTime typeFactsResult
+                        }
                       frontTimeMaybe = if not (quiet gopts opts)
                                          then Just frontTime
                                          else Nothing
@@ -2493,6 +2682,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeAfterProgress = typeAfterProgress
                                  , ftTypeForce = timeTypeForce - timeTypeReconstruct
                                  , ftTypeHash = timeTypeHash - timeTypeForce
+                                 , ftTypeHashDetail = hashTiming
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
@@ -3549,7 +3739,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           , pubH /= InterfaceFiles.dmiPubHash depInfo
                           , implH /= InterfaceFiles.dmiImplHash depInfo
                           )
-                  _ -> Left (missingIfaceDiagnostics mn "" depMn)
+                  _ -> Right (depMn, True, True)
 
               foldRows rows =
                 ( Data.Set.fromList [ depMn | (depMn, pubChanged, _implChanged) <- rows, pubChanged ]
@@ -3560,12 +3750,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             let changedMods =
                   Data.List.sortOn modNameToString $
                   Data.Set.toList (Data.Set.union changedPubMods changedImplMods)
-            foldM checkModule ([], [], [], [], M.empty, M.empty) changedMods
+            foldM checkModule ([], [], [], [], M.empty, M.empty, False) changedMods
             where
               checkModule acc depMn = do
                 depNames <- InterfaceFiles.readDepNames tyFile depMn
-                mhm <- resolveNameHashMap' depMn
-                foldM (checkName depMn mhm) acc depNames
+                if null depNames && Data.Set.member depMn changedImplMods
+                  then return (markImplRefresh acc)
+                  else do
+                    mhm <- resolveNameHashMap' depMn
+                    foldM (checkName depMn mhm) acc depNames
 
               checkName depMn mhm acc depInfo = do
                 let depName = InterfaceFiles.dniName depInfo
@@ -3585,25 +3778,28 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   then addImpl depMn depName qn (InterfaceFiles.dniImplHash depInfo) (current InterfaceFiles.nhImplHash) acc1
                   else return acc1
 
-              addPub depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) =
-                case mNew of
-                  Just new | new == old -> return acc
-                  Just new -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return ((qn, old, new) : pubDeltas, implDeltas, pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers)
-                  Nothing -> do
-                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, qn : pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers)
+              markImplRefresh (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, _) =
+                (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, True)
 
-              addImpl depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) =
+              addPub depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, needImplRefresh) =
                 case mNew of
                   Just new | new == old -> return acc
                   Just new -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, (qn, old, new) : implDeltas, pubMissing, implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers)
+                    return ((qn, old, new) : pubDeltas, implDeltas, pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, needImplRefresh)
                   Nothing -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers)
+                    return (pubDeltas, implDeltas, qn : pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, needImplRefresh)
+
+              addImpl depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, needImplRefresh) =
+                case mNew of
+                  Just new | new == old -> return acc
+                  Just new -> do
+                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
+                    return (pubDeltas, (qn, old, new) : implDeltas, pubMissing, implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, needImplRefresh)
+                  Nothing -> do
+                    users <- InterfaceFiles.readDepUsers tyFile depMn depName
+                    return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, needImplRefresh)
 
       case taskCurrent of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
@@ -3642,19 +3838,19 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     Left diags -> return (Left diags)
                     Right (changedPubMods, changedImplMods) ->
                       if Data.Set.null changedPubMods && Data.Set.null changedImplMods
-                        then return (Right ([], [], [], [], M.empty, M.empty))
+                        then return (Right ([], [], [], [], M.empty, M.empty, False))
                         else Right <$> checkDepNameRows changedPubMods changedImplMods
             -- Source tasks always run front passes, so deps are irrelevant.
-            _ -> return (Right ([], [], [], [], M.empty, M.empty))
+            _ -> return (Right ([], [], [], [], M.empty, M.empty, False))
 
           case needByDepsRes of
             Left diags -> return (key, Left diags)
-            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) -> do
+            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, needImplRefresh) -> do
               let needBySource = case taskCurrent of { ParseTask{} -> True; ActonTask{} -> True; _ -> False }
                   -- Public deltas require front passes; impl deltas only need back jobs.
                   needByPub = not (null pubDeltas)
                   needByMissing = not (null pubMissing) || not (null implMissing)
-                  needByImpl = not (null implDeltas)
+                  needByImpl = needImplRefresh || not (null implDeltas)
                   forceAlt    = altOutput optsT && mn == rootAlt
                   forceAlways = C.alwaysbuild optsT
                   -- Front passes run on source or API changes, or when forced.
@@ -3745,7 +3941,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         handleImplRefreshException :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
                         handleImplRefreshException = handleSyncFailure
                     (do
-                      when (C.verbose gopts) $ do
+                      when (C.verbose gopts && not (null implDeltas)) $ do
                         let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
                         ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
                       tyRes <- readTyFile
