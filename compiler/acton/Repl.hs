@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- Copyright (C) 2026 Centor AB
 --
 -- Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
@@ -25,20 +26,28 @@ import qualified PkgCommands
 import FileUtil (readFile, writeFile, writeFileChanged, writeFileIfChanged)
 
 import Control.Concurrent (forkIO)
+import Control.Concurrent.Chan
 import Control.Concurrent.MVar
 import Control.Exception (IOException, SomeException, finally, fromException, try)
 import Control.Monad
 import Control.Monad.IO.Class (liftIO)
 import Data.Char (isSpace)
 import qualified Data.List
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf)
 import Data.List.Split (splitOn)
 import qualified Data.Map as M
+import Data.Time.Clock (UTCTime)
 import System.Directory
+import qualified System.Environment
 import System.Exit
 import System.FilePath ((</>), (<.>), joinPath, takeDirectory)
-import System.IO (hPutStr, hPutStrLn, stderr)
+import System.IO (BufferMode(..), Handle, hClose, hGetLine, hIsTerminalDevice, hPutStr, hPutStrLn, hSetBuffering, stderr, stdin)
+import qualified System.Info
 import System.Process
+import System.Timeout (timeout)
+#ifndef mingw32_HOST_OS
+import System.Posix.Signals (Signal, signalProcessGroup, sigKILL, sigTERM)
+#endif
 import qualified System.Console.Haskeline as HL
 
 data Hooks = Hooks
@@ -76,16 +85,27 @@ data ReplContext = ReplContext
   , replGopts          :: C.GlobalOptions
   , replOpts           :: C.CompileOptions
   , replWarmup         :: MVar Bool
+  , replUseZigWatch    :: Bool
+  , replZigWatch       :: MVar (Maybe ReplZigWatch)
   , replHooks          :: Hooks
   }
+
+data ReplZigWatch = ReplZigWatch
+  { zwProcess      :: ProcessHandle
+  , zwResults      :: Chan Bool
+  }
+
+data FileStamp = FileStamp UTCTime Integer deriving (Eq, Show)
 
 runRepl :: Hooks -> C.GlobalOptions -> C.CompileOptions -> IO ()
 runRepl hooks gopts opts = do
     curDir <- getCurrentDirectory
     mproj0 <- findProjectDir curDir
     mproj <- mapM canonicalizePath mproj0
+    useZigWatch <- replZigWatchEnabled
     withReplRoot hooks opts mproj $ \scratchDir -> do
       warmup <- newEmptyMVar
+      zigWatch <- newMVar Nothing
       let srcRoot = scratchDir </> "src"
           mainSrcFile = srcRoot </> replMainModuleName <.> "act"
           sessionSrcFile = srcRoot </> replSessionModuleName <.> "act"
@@ -105,6 +125,8 @@ runRepl hooks gopts opts = do
                 , replGopts = gopts'
                 , replOpts = opts'
                 , replWarmup = warmup
+                , replUseZigWatch = useZigWatch
+                , replZigWatch = zigWatch
                 , replHooks = hooks
                 }
       createDirectoryIfMissing True srcRoot
@@ -116,6 +138,12 @@ runRepl hooks gopts opts = do
       cacheDir <- hooksCacheDir hooks
       HL.runInputT (replSettings cacheDir) (HL.withInterrupt (replLoop ctx emptyReplState))
         `finally` finishReplWarmup ctx
+
+replZigWatchEnabled :: IO Bool
+replZigWatchEnabled = do
+    tty <- hIsTerminalDevice stdin
+    enabled <- System.Environment.lookupEnv "ACTON_REPL_ZIG_WATCH"
+    return (tty && enabled `elem` [Just "1", Just "true", Just "yes"])
 
 normalizeReplCompileOptions :: C.CompileOptions -> C.CompileOptions
 normalizeReplCompileOptions opts =
@@ -154,7 +182,240 @@ waitReplWarmup :: ReplContext -> IO Bool
 waitReplWarmup ctx = readMVar (replWarmup ctx)
 
 finishReplWarmup :: ReplContext -> IO ()
-finishReplWarmup ctx = void (readMVar (replWarmup ctx))
+finishReplWarmup ctx = do
+    void (readMVar (replWarmup ctx))
+    stopReplZigWatch ctx
+
+startReplZigWatch :: ReplContext -> IO Bool
+startReplZigWatch ctx =
+    if not (replUseZigWatch ctx)
+      then return False
+      else modifyMVar (replZigWatch ctx) $ \old -> do
+        stopZigWatch old
+        mnew <- startZigWatchProcess ctx
+        case mnew of
+          Just zw -> return (Just zw, True)
+          Nothing -> return (Nothing, False)
+
+stopReplZigWatch :: ReplContext -> IO ()
+stopReplZigWatch ctx =
+    modifyMVar_ (replZigWatch ctx) $ \old -> do
+      stopZigWatch old
+      return Nothing
+
+stopZigWatch :: Maybe ReplZigWatch -> IO ()
+stopZigWatch Nothing = return ()
+stopZigWatch (Just zw) = do
+    terminateZigWatch zw
+    done <- timeout (5 * 1000 * 1000) (void (waitForProcess (zwProcess zw)))
+    case done of
+      Just _ -> return ()
+      Nothing -> do
+        forceZigWatch zw
+        void (waitForProcess (zwProcess zw)) `catchIO` \_ -> return ()
+
+#ifndef mingw32_HOST_OS
+terminateZigWatch :: ReplZigWatch -> IO ()
+terminateZigWatch zw = terminateZigWatchWith sigTERM zw
+
+forceZigWatch :: ReplZigWatch -> IO ()
+forceZigWatch zw = terminateZigWatchWith sigKILL zw
+
+terminateZigWatchWith :: Signal -> ReplZigWatch -> IO ()
+terminateZigWatchWith sig zw = do
+    mpid <- getPid (zwProcess zw)
+    case mpid of
+      Just pid -> signalProcessGroup sig pid `catchIO` \_ -> terminateProcess (zwProcess zw)
+      Nothing -> terminateProcess (zwProcess zw)
+#else
+terminateZigWatch :: ReplZigWatch -> IO ()
+terminateZigWatch zw = terminateProcess (zwProcess zw)
+
+forceZigWatch :: ReplZigWatch -> IO ()
+forceZigWatch zw = terminateProcess (zwProcess zw)
+#endif
+
+startZigWatchProcess :: ReplContext -> IO (Maybe ReplZigWatch)
+startZigWatchProcess ctx = do
+    zigExe <- replZigExe ctx
+    zigArgs <- replZigWatchArgs ctx
+    zigEnv <- replZigEnv
+    let cp = (proc zigExe zigArgs)
+              { cwd = Just (replRoot ctx)
+              , env = Just zigEnv
+              , std_in = NoStream
+              , std_out = CreatePipe
+              , std_err = CreatePipe
+              , create_group = True
+              }
+    res <- try (createProcess cp) :: IO (Either IOException (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle))
+    case res of
+      Left err -> do
+        hPutStrLn stderr ("Failed to start Zig watch: " ++ show err)
+        return Nothing
+      Right (_, mout, merr, ph) -> do
+        results <- newChan
+        let zw = ReplZigWatch ph results
+        forM_ mout $ \h -> do
+          hSetBuffering h LineBuffering
+          void (forkIO (readZigWatchOutput ctx zw h))
+        forM_ merr $ \h -> do
+          hSetBuffering h LineBuffering
+          void (forkIO (readZigWatchOutput ctx zw h))
+        void (forkIO $ do
+          ec <- waitForProcess ph
+          case ec of
+            ExitSuccess -> return ()
+            ExitFailure _ -> writeChan results False)
+        return (Just zw)
+
+readZigWatchOutput :: ReplContext -> ReplZigWatch -> Handle -> IO ()
+readZigWatchOutput ctx zw h = go `finally` hClose h
+  where
+    go = do
+      lineRes <- try (hGetLine h) :: IO (Either IOException String)
+      case lineRes of
+        Left _ -> return ()
+        Right line -> do
+          when (C.verboseZig (replGopts ctx)) $
+            hPutStrLn stderr line
+          case zigWatchSummary line of
+            Nothing -> return ()
+            Just ok -> writeChan (zwResults zw) ok
+          go
+
+zigWatchSummary :: String -> Maybe Bool
+zigWatchSummary line
+  | "Build Summary:" `isInfixOf` line =
+      Just ("steps succeeded" `isInfixOf` line &&
+            not ("failed" `isInfixOf` line) &&
+            not ("error" `isInfixOf` line))
+  | otherwise = Nothing
+
+waitZigWatchSince :: ReplContext -> ReplZigWatch -> [(FilePath, Maybe FileStamp)] -> IO Bool
+waitZigWatchSince ctx zw old = do
+    res <- timeout zigWatchTimeoutMicros waitLoop
+    case res of
+      Just ok -> return ok
+      Nothing -> do
+        when (replWatchDebug ctx) $
+          hPutStrLn stderr "Timed out waiting for Zig watch build; falling back to a normal build."
+        return False
+  where
+    waitLoop = do
+      changed <- outputStampsChanged old
+      if changed
+        then return True
+        else do
+          mres <- timeout (100 * 1000) (readChan (zwResults zw))
+          case mres of
+            Just False -> do
+              when (not (C.quiet (replGopts ctx))) $
+                hPutStrLn stderr "Zig watch build failed; falling back to a normal build."
+              return False
+            _ -> waitLoop
+
+    outputStampsChanged stamps = do
+      current <- mapM (\(path, _) -> do
+                         stamp <- readFileStamp path
+                         return (path, stamp)
+                      ) stamps
+      return (all stampChanged (zip stamps current))
+
+    stampChanged ((_, oldStamp), (_, newStamp)) =
+      case newStamp of
+        Nothing -> False
+        Just _  -> newStamp /= oldStamp
+
+currentZigWatch :: ReplContext -> IO (Maybe ReplZigWatch)
+currentZigWatch ctx = readMVar (replZigWatch ctx)
+
+waitReplZigWatchChanged :: ReplContext -> Maybe ReplZigWatch -> [(FilePath, Maybe FileStamp)] -> IO Bool
+waitReplZigWatchChanged _ Nothing _ = return False
+waitReplZigWatchChanged ctx (Just zw) old = waitZigWatchSince ctx zw old
+
+zigWatchTimeoutMicros :: Int
+zigWatchTimeoutMicros = 250 * 1000
+
+replWatchDebug :: ReplContext -> Bool
+replWatchDebug ctx = C.verbose (replGopts ctx) || C.verboseZig (replGopts ctx)
+
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO action handler = do
+    res <- try action
+    case res of
+      Left err -> handler err
+      Right ok -> return ok
+
+replZigExe :: ReplContext -> IO FilePath
+replZigExe ctx = do
+    actonExe <- System.Environment.getExecutablePath
+    sys <- canonicalizePath (if null (C.syspath (replOpts ctx))
+                               then takeDirectory actonExe </> ".."
+                               else C.syspath (replOpts ctx))
+    return (sys </> "zig" </> "zig")
+
+replZigEnv :: IO [(String, String)]
+replZigEnv = do
+    env0 <- System.Environment.getEnvironment
+    homeDir <- getHomeDirectory
+    let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
+               then ("DEVELOPER_DIR", "/dev/null") : env0
+               else env0
+        zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])
+                 , ("ZIG_GLOBAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-global-cache"])
+                 ]
+    return (foldr (\(k, v) acc -> (k, v) : filter ((/= k) . fst) acc) env1 zigEnv)
+
+replZigWatchArgs :: ReplContext -> IO [String]
+replZigWatchArgs ctx = do
+    homeDir <- getHomeDirectory
+    let opts = replOpts ctx
+        localCache = joinPath [homeDir, ".cache", "acton", "zig-local-cache"]
+        globalCache = joinPath [homeDir, ".cache", "acton", "zig-global-cache"]
+        noThreads = isWindowsOS (C.target opts) || C.no_threads opts
+        baseArgs = [ "build"
+                   , replEvalModuleName
+                   , replSessionModuleName
+                   , "--watch"
+                   , "--debounce", "0"
+                   , "-fincremental"
+                   , "--summary", "all"
+                   , "--color", "off"
+                   , "--cache-dir", localCache
+                   , "--global-cache-dir", globalCache
+                   , "--prefix", replRoot ctx </> "out"
+                   , "--prefix-exe-dir", "bin"
+                   ]
+        targetArgs = [ "-Dtarget=" ++ C.target opts ]
+        cpuArgs =
+          if C.cpu opts /= "" then ["-Dcpu=" ++ C.cpu opts]
+          else case splitOn "-" (C.target opts) of
+                 ("native":_)          -> []
+                 ("aarch64":"macos":_) -> ["-Dcpu=apple_m1"]
+                 ("aarch64":_)         -> ["-Dcpu=generic+crypto"]
+                 ("x86_64":_)          -> ["-Dcpu=x86_64_v2+aes"]
+                 _                     -> []
+        optArgs = [ "-Doptimize=" ++ replOptimizeModeToZig (C.optimize opts) ]
+        moduleArgs =
+          [ "-Dacton_modules=out/types/" ++ replMainModuleName ++ ".c"
+          , "-Dacton_root_stubs=out/types/" ++ replMainModuleName ++ ".root.c"
+          , "-Dacton_libraries=" ++ Data.List.intercalate "|"
+              [ replEvalModuleName ++ ":dynamic:out/types/" ++ replEvalModuleName ++ ".c:"
+              , replSessionModuleName ++ ":dynamic:out/types/" ++ replSessionModuleName ++ ".c:"
+              ]
+          ]
+        featureArgs = concat [ if C.db opts then ["-Ddb"] else []
+                             , if noThreads then ["-Dno_threads"] else []
+                             , if C.cpedantic opts then ["-Dcpedantic"] else []
+                             ]
+    return (baseArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs)
+
+replOptimizeModeToZig :: C.OptimizeMode -> String
+replOptimizeModeToZig C.Debug        = "Debug"
+replOptimizeModeToZig C.ReleaseSafe  = "ReleaseSafe"
+replOptimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
+replOptimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 
 withReplRoot :: Hooks -> C.CompileOptions -> Maybe FilePath -> (FilePath -> IO ()) -> IO ()
 withReplRoot hooks opts mproj action
@@ -425,11 +686,16 @@ compileReplSession ctx st = do
     warmed <- waitReplWarmup ctx
     ensureReplBuildAct ctx st
     createDirectoryIfMissing True (takeDirectory (replSessionSrcFile ctx))
-    writeFileIfChanged (replSessionSrcFile ctx) (renderReplSessionSource st)
+    sessionChanged <- writeFileChanged (replSessionSrcFile ctx) (renderReplSessionSource st)
     if warmed
       then do
-        let opts = (replOpts ctx) { C.root = "" }
-        compileReplFiles ctx opts [replSessionSrcFile ctx]
+        let opts = (replOpts ctx) { C.root = "", C.skip_build = replUseZigWatch ctx }
+        if replUseZigWatch ctx
+          then compileReplFilesWithZigWatch ctx opts
+                 (if sessionChanged then [replSessionSrcFile ctx] else [])
+                 (if sessionChanged then [replSessionModuleName] else [])
+                 (compileReplFiles ctx (opts { C.skip_build = False }) [replSessionSrcFile ctx])
+          else compileReplFiles ctx opts [replSessionSrcFile ctx]
       else compileReplRunnerNow ctx st ReplNoop
 
 compileReplEval :: ReplContext -> ReplState -> ReplEval -> IO Bool
@@ -438,17 +704,30 @@ compileReplEval ctx st eval = do
     ensureReplBuildAct ctx st
     createDirectoryIfMissing True (takeDirectory (replEvalSrcFile ctx))
     sessionChanged <- writeFileChanged (replSessionSrcFile ctx) (renderReplSessionSource st)
-    writeFile (replEvalSrcFile ctx) (renderReplEvalSource st eval)
+    evalChanged <- writeFileChanged (replEvalSrcFile ctx) (renderReplEvalSource st eval)
     if warmed
       then do
-        let opts = (replOpts ctx) { C.root = "" }
-        sessionOk <- if sessionChanged
-                       then compileReplFiles ctx opts [replSessionSrcFile ctx]
-                       else return True
-        if sessionOk
-          then compileReplFiles ctx opts [replEvalSrcFile ctx]
-          else return False
+        let opts = (replOpts ctx) { C.root = "", C.skip_build = replUseZigWatch ctx }
+            srcFiles = (if sessionChanged then [replSessionSrcFile ctx] else []) ++
+                       (if evalChanged then [replEvalSrcFile ctx] else [])
+            mods = (if sessionChanged then [replSessionModuleName] else []) ++
+                   (if evalChanged then [replEvalModuleName] else [])
+        if replUseZigWatch ctx
+          then compileReplFilesWithZigWatch ctx opts srcFiles mods
+                 (compileReplEvalNoWatch ctx opts sessionChanged evalChanged)
+          else do
+            compileReplEvalNoWatch ctx opts sessionChanged evalChanged
       else compileReplRunnerNow ctx st eval
+
+compileReplEvalNoWatch :: ReplContext -> C.CompileOptions -> Bool -> Bool -> IO Bool
+compileReplEvalNoWatch ctx opts sessionChanged evalChanged = do
+    let opts' = opts { C.skip_build = False }
+    sessionOk <- if sessionChanged
+                   then compileReplFiles ctx opts' [replSessionSrcFile ctx]
+                   else return True
+    if sessionOk && (sessionChanged || evalChanged)
+      then compileReplFiles ctx opts' [replEvalSrcFile ctx]
+      else return sessionOk
 
 compileReplRunner :: ReplContext -> ReplState -> IO Bool
 compileReplRunner ctx st = do
@@ -457,12 +736,15 @@ compileReplRunner ctx st = do
 
 compileReplRunnerNow :: ReplContext -> ReplState -> ReplEval -> IO Bool
 compileReplRunnerNow ctx st eval = do
+    stopReplZigWatch ctx
     ensureReplBuildAct ctx st
     createDirectoryIfMissing True (takeDirectory (replMainSrcFile ctx))
     writeFileIfChanged (replMainSrcFile ctx) (renderReplMainSource st)
     writeFileIfChanged (replSessionSrcFile ctx) (renderReplSessionSource st)
     writeFileIfChanged (replEvalSrcFile ctx) (renderReplEvalSource st eval)
-    compileReplFiles ctx (replOpts ctx) [replMainSrcFile ctx]
+    ok <- compileReplFiles ctx (replOpts ctx) [replMainSrcFile ctx]
+    when (ok && replUseZigWatch ctx) (void (startReplZigWatch ctx))
+    return ok
 
 ensureReplBuildAct :: ReplContext -> ReplState -> IO ()
 ensureReplBuildAct ctx st =
@@ -482,6 +764,70 @@ compileReplFiles ctx opts srcFiles = do
           Just (ExitFailure _) -> return False
           Nothing -> hPutStrLn stderr (show err) >> return False
       Right hadErrors -> return (not hadErrors)
+
+compileReplFilesWithZigWatch :: ReplContext -> C.CompileOptions -> [FilePath] -> [String] -> IO Bool -> IO Bool
+compileReplFilesWithZigWatch ctx opts srcFiles modNames fallback = do
+    if null srcFiles
+      then return True
+      else do
+        mwatch <- currentZigWatch ctx
+        before <- readDynamicLibraryOutputStamps ctx modNames
+        ok <- compileReplFiles ctx opts srcFiles
+        if not ok
+          then return False
+          else do
+            watched <- waitReplZigWatchChanged ctx mwatch before
+            if watched
+              then return True
+              else do
+                stopReplZigWatch ctx
+                fallbackOk <- fallback
+                when fallbackOk (void (startReplZigWatch ctx))
+                return fallbackOk
+
+readDynamicLibraryOutputStamps :: ReplContext -> [String] -> IO [(FilePath, Maybe FileStamp)]
+readDynamicLibraryOutputStamps ctx modNames =
+    mapM stampPath (map (dynamicLibraryOutputPath ctx) modNames)
+  where
+    stampPath path = do
+      stamp <- readFileStamp path
+      return (path, stamp)
+
+dynamicLibraryOutputPath :: ReplContext -> String -> FilePath
+dynamicLibraryOutputPath ctx modName =
+    replRoot ctx </> "out" </> "lib" </> dynamicLibraryFileName (C.target (replOpts ctx)) modName
+
+dynamicLibraryFileName :: String -> String -> FilePath
+dynamicLibraryFileName target modName
+  | isWindowsOS target = modName <.> "dll"
+  | otherwise          = "lib" ++ modName <.> dynamicLibraryExtension target
+
+dynamicLibraryExtension :: String -> String
+dynamicLibraryExtension target
+  | isMacOS target = "dylib"
+  | otherwise      = "so"
+
+isMacOS :: String -> Bool
+isMacOS targetTriple
+  | targetTriple == "native" = System.Info.os == "darwin"
+  | otherwise = "macos" `elem` parts || "darwin" `elem` parts
+  where
+    parts = splitOn "-" targetTriple
+
+readFileStamp :: FilePath -> IO (Maybe FileStamp)
+readFileStamp path = do
+    res <- (try $ do
+      exists <- doesFileExist path
+      if not exists
+        then return Nothing
+        else do
+          t <- getModificationTime path
+          sz <- getFileSize path
+          return (Just (FileStamp t sz))
+      ) :: IO (Either IOException (Maybe FileStamp))
+    case res of
+      Left _ -> return Nothing
+      Right stamp -> return stamp
 
 runReplBinary :: ReplContext -> IO Bool
 runReplBinary ctx = do

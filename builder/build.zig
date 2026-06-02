@@ -259,6 +259,10 @@ pub fn build(b: *std.Build) void {
             std.log.err("Error appending base include path for explicit library: {}", .{err});
             std.process.exit(1);
         };
+        const installExplicit = b.addInstallArtifact(libActonExplicit, .{});
+        b.getInstallStep().dependOn(&installExplicit.step);
+        const explicitStep = b.step(lib_name, "Build and install explicit library");
+        explicitStep.dependOn(&installExplicit.step);
         explicit_libraries.append(b.allocator, libActonExplicit) catch |err| {
             std.log.err("Error appending explicit library: {}", .{err});
             std.process.exit(1);
@@ -285,7 +289,6 @@ pub fn build(b: *std.Build) void {
     for (explicit_libraries.items) |libActonExplicit| {
         libActonExplicit.root_module.link_libc = true;
         libActonExplicit.root_module.link_libcpp = true;
-        b.installArtifact(libActonExplicit);
     }
 
     // Register the produced header files in out/types using

@@ -104,6 +104,20 @@ Runner creation and evaluation use three paths:
 `compileReplFiles` calls the compiler-driver hook supplied by `Main`. That hook
 wraps `compileFilesChanged` with the scratch project root.
 
+By default, the REPL uses the normal compiler/Zig path for each changed module.
+This keeps behavior simple and avoids managing a long-lived Zig process.
+
+If `ACTON_REPL_ZIG_WATCH` is set to `1`, `true`, or `yes` in an interactive
+terminal, `compileReplRunnerNow` starts a long-lived `zig build --watch`
+process after the runner build succeeds. Later session and evaluation compiles
+run the Acton compiler with `--skip-build`: they update the generated `.c` and
+`.h` files, then wait briefly for the Zig watcher to rebuild the affected
+dynamic library. The watcher is started in its own process group so shutdown
+can terminate Zig's build runner and any child compiler processes together.
+
+For non-interactive REPL runs, including tests and piped input, the watcher is
+not started even if the environment variable is set.
+
 Accepted imports rebuild the runner. The runner needs the retained imports so
 symbols referenced from the dynamic evaluation library are resolvable by the
 process that loads it.
@@ -112,7 +126,9 @@ process that loads it.
 REPL starts. The first user input waits for that warmup through
 `waitReplWarmup` before it edits or compiles the generated sources. If the
 warmup succeeds, later expression evaluations can use the single-module fast
-path.
+path. If the watcher is enabled and does not rebuild the expected dynamic
+library in time, the REPL stops it, falls back to the normal targeted module
+build, and restarts the watcher.
 
 The REPL does not inspect platform-specific dynamic-library artifacts to decide
 whether a cached runner is valid. It relies on the normal compiler and Zig build
@@ -147,8 +163,8 @@ dependency.
 
 `normalizeReplCompileOptions` clears compiler inspection and build-shape flags
 that do not make sense for the generated runner, such as parse dumps, signature
-dumps, `--skip-build`, `--only-build`, continuous rebuild mode, and test mode.
-It also fixes the root actor to `repl_main.main`.
+dumps, `--skip-build`, `--only-build`, watch mode, and test mode. It also fixes
+the root actor to `repl_main.main`.
 
 This normalization is part of the REPL runtime contract: user-supplied compile
 options may still affect target and optimization choices, but they must not
