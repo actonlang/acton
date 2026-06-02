@@ -358,6 +358,98 @@ jobs:
             ${{ github.workspace }}/test
 
 
+  test-windows-dist-cross-linux:
+    needs: build-version
+    runs-on: windows-latest
+    env:
+      BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
+    steps:
+      - name: "Show platform and environment"
+        shell: pwsh
+        run: |
+          systeminfo
+          Get-ChildItem Env: | Sort-Object Name
+      - name: "Set BUILD_RELEASE when we are building for a version tag"
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          "BUILD_RELEASE=1" >> $env:GITHUB_ENV
+      - name: "Check out repository code"
+        uses: actions/checkout@v6
+      - name: "Cache Haskell deps"
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Roaming\stack
+            ~\AppData\Local\Programs\stack
+          key: stack-windows-x86_64-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
+          restore-keys: |
+            stack-windows-x86_64-
+      - name: "Install Stack"
+        shell: pwsh
+        run: |
+          choco install haskell-stack -y --no-progress
+          stack --version
+      - name: "Install MSYS2 build prerequisites"
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          path-type: inherit
+          install: >-
+            coreutils
+            curl
+            findutils
+            grep
+            make
+            sed
+            tar
+            unzip
+      - name: "Build Acton distribution on Windows"
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          workspace="$(cygpath -u "${GITHUB_WORKSPACE}")"
+          make -C "${workspace}" clean
+          make -C "${workspace}" BUILD_RELEASE="${BUILD_RELEASE:-}" BUILD_TIME="${BUILD_TIME}"
+          ls -l "${workspace}/dist/bin"
+          "${workspace}/dist/bin/acton.exe" --help >/dev/null
+      - name: "Compile helloworld to the default Linux target"
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          cd "$(cygpath -u "${GITHUB_WORKSPACE}")"
+          rm -rf tmp-ci-helloworld examples/helloworld
+          ./dist/bin/acton.exe --tempdir tmp-ci-helloworld examples/helloworld.act
+          test -s examples/helloworld
+          ls -l examples/helloworld
+      - name: "Upload Windows-built Linux ELF"
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-built-linux-helloworld
+          path: ${{ github.workspace }}/examples/helloworld
+          if-no-files-found: error
+
+
+  run-windows-built-linux-elf:
+    needs: test-windows-dist-cross-linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Download Windows-built Linux ELF"
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-built-linux-helloworld
+          path: windows-built-linux-helloworld
+      - name: "Run Windows-built Linux ELF"
+        run: |
+          set -euo pipefail
+          ls -l windows-built-linux-helloworld
+          file windows-built-linux-helloworld/helloworld
+          readelf -W -l windows-built-linux-helloworld/helloworld | sed -n '1,40p'
+          chmod +x windows-built-linux-helloworld/helloworld
+          windows-built-linux-helloworld/helloworld | tee helloworld.out
+          grep -Fx "Hello, world!" helloworld.out
+
+
   build-debs:
     needs: build-version
     strategy:
