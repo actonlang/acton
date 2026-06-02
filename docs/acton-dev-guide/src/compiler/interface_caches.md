@@ -16,6 +16,9 @@ The compiler code should not construct these paths directly. Use the
 - `writeFile` writes the cache for one module.
 - `readHeader` reads only metadata, imports, roots, tests, docstring, and
   per-name hash records.
+- `readExtensionsByClass` and `readExtensionsByProtocol` read exact extension
+  index entries without decoding `NameInfo` entries or typed
+  statements.
 - `readFile` reconstructs the full cached payload: imports, `NameInfo`, typed
   module, metadata, module hashes, per-name hashes, roots, tests, and docstring.
 - `readHeaderMaybe` and `readFileMaybe` turn missing, corrupt, unreadable, or
@@ -49,6 +52,24 @@ The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each
 import is that imported module's public hash.
 
+Extension indexes use the same suffix scheme as per-name entries, so readers
+can look up one class or protocol without decoding the full index:
+
+| Key | Value type |
+| --- | --- |
+| `ext-by-class/p/<name>` | `(Name, [Name])` |
+| `ext-by-class/h/<hash>` | `(Name, [Name])` |
+| `ext-by-protocol/p/<name>` | `(Name, [Name])` |
+| `ext-by-protocol/h/<hash>` | `(Name, [Name])` |
+
+The value repeats the keyed class or protocol name and stores the synthetic
+top-level extension names produced by `extensionName`, which are also the names
+used by per-name hashes and DBP pruning. This lets selective readers keep
+extension declarations when a selected class, protocol, or local dependency
+requires extension support. A returned extension must also be present in that
+module's per-name hash records; otherwise the index is inconsistent with the
+typed module.
+
 Per-name keys:
 
 | Key | Value type |
@@ -58,6 +79,14 @@ Per-name keys:
 | `name-info/h/<hash>` | `(Name, NameInfo)` |
 | `name-hash/p/<name>` | `NameHashInfo` |
 | `name-hash/h/<hash>` | `NameHashInfo` |
+
+Each `NameHashInfo` value contains the local name, `srcHash`, `pubHash`,
+`implHash`, local public/implementation dependency names
+(`pubLocalDeps` / `implLocalDeps`), and external public/implementation
+dependency snapshots (`pubDeps` / `implDeps`) as `(QName, hash)` pairs. Header
+readers use these records for cache freshness, interest registration, and DBP
+local dependency closure without decoding the `NameInfo` entries or typed
+statements.
 
 Short safe source names are stored directly in key suffixes. Names longer than
 400 bytes and names containing unsafe path-like bytes use SHA-256 based key
@@ -97,11 +126,20 @@ stmt/000000000001                 -> typed Stmt for decode
 
 `readHeader` opens a read-only LMDB transaction and reads the header keys plus
 the `name-hash` entries. It does not decode `NameInfo` entries or typed
-statements.
+statements. DBP uses this path to get per-name hashes, local dependency edges,
+and root actor names before deciding whether the full typed module must be
+decoded.
+
+`readExtensionsByClass` and `readExtensionsByProtocol` read one class or
+protocol key directly. DBP uses these exact lookups while expanding the selected
+local dependency closure, mapping visited class/protocol names to the top-level
+extension names that the typed module can actually retain.
 
 `readFile` opens a read-only transaction and reconstructs the full payload by
 following the explicit order keys for ordered sections. It does not depend on
-LMDB cursor order for `TEnv` or typed statement reconstruction.
+LMDB cursor order for `TEnv` or typed statement reconstruction. DBP calls this
+only when its selection-sensitive codegen hash says the existing `.c`/`.h`
+output is missing or stale.
 
 `writeFile` writes the full environment in one write transaction. The compiler
 has one writer for a module cache, while multiple readers may run in parallel.

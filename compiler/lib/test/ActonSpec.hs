@@ -58,6 +58,19 @@ import qualified Data.Aeson as Ae
 import qualified System.IO.Unsafe
 
 
+nameHash :: S.Name -> B8.ByteString -> B8.ByteString -> B8.ByteString -> InterfaceFiles.NameHashInfo
+nameHash n src pub impl =
+  InterfaceFiles.NameHashInfo
+    { InterfaceFiles.nhName = n
+    , InterfaceFiles.nhSrcHash = src
+    , InterfaceFiles.nhPubHash = pub
+    , InterfaceFiles.nhImplHash = impl
+    , InterfaceFiles.nhPubLocalDeps = []
+    , InterfaceFiles.nhImplLocalDeps = []
+    , InterfaceFiles.nhPubDeps = []
+    , InterfaceFiles.nhImplDeps = []
+    }
+
 
 
 main :: IO ()
@@ -85,11 +98,11 @@ main = do
                 , (longName, I.NVar S.tWild)
                 ]
               nameHashes =
-                [ InterfaceFiles.NameHashInfo derivedName "src4" "pub4" "impl4" [] []
-                , InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []
-                , InterfaceFiles.NameHashInfo sourcePlainName "src3" "pub3" "impl3" [] []
-                , InterfaceFiles.NameHashInfo secondName "src2" "pub2" "impl2" [] []
-                , InterfaceFiles.NameHashInfo longName "src5" "pub5" "impl5" [] []
+                [ nameHash derivedName "src4" "pub4" "impl4"
+                , nameHash firstName "src1" "pub1" "impl1"
+                , nameHash sourcePlainName "src3" "pub3" "impl3"
+                , nameHash secondName "src2" "pub2" "impl2"
+                , nameHash longName "src5" "pub5" "impl5"
                 ]
               roots = [secondName, firstName]
               tests = ["test_second", "test_first"]
@@ -131,7 +144,7 @@ main = do
               tyPath = dir </> "iface.tydb"
               firstName = S.name "first"
               iface = [(firstName, I.NVar S.tWild)]
-              nameHashes = [InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []]
+              nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
@@ -150,7 +163,7 @@ main = do
               dstPath = dir </> "iface-copy.tydb"
               firstName = S.name "first"
               iface = [(firstName, I.NVar S.tWild)]
-              nameHashes = [InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []]
+              nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
@@ -170,7 +183,7 @@ main = do
               lockPath = tyPath </> "lock.mdb"
               firstName = S.name "first"
               iface = [(firstName, I.NVar S.tWild)]
-              nameHashes = [InterfaceFiles.NameHashInfo firstName "src1" "pub1" "impl1" [] []]
+              nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod

@@ -171,6 +171,213 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
+  , testCase "dbp force selects provider subset and cached header interest" $ do
+        withSystemTempDirectory "acton-dbp" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dbp_fixture"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types"
+              runBuild args = readCreateProcessWithExitCode (proc actonExe args){ cwd = Just proj } ""
+              assertOk label (code, out, err) = do
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                return (out ++ err)
+              assertFails label (code, out, err) = do
+                when (code == ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ " unexpectedly succeeded\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertBool label (code /= ExitSuccess)
+                return (out ++ err)
+              removeIfExists path = removeFile path `catch` \(_ :: IOException) -> return ()
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            , ""
+            ]
+          writeFile (srcDir </> "provider.act") $ unlines
+            [ "protocol Renderable:"
+            , "    val : () -> int"
+            , ""
+            , "class Box(value):"
+            , "    def __init__(self, x: int):"
+            , "        self.x = x"
+            , ""
+            , "    def get(self) -> int:"
+            , "        return self.x"
+            , ""
+            , "extension Box(Renderable):"
+            , "    def val(self) -> int:"
+            , "        return self.get()"
+            , ""
+            , "def make_box() -> Box:"
+            , "    return Box(42)"
+            , ""
+            , "def render_box() -> int:"
+            , "    return Box(7).val()"
+            , ""
+            , "def unused_0() -> int:"
+            , "    return 0"
+            , ""
+            , "def unused_1() -> int:"
+            , "    return 1"
+            , ""
+            , "class Container:"
+            , "    def __init__(self):"
+            , "        pass"
+            , ""
+            , "def local_container_name(x: object) -> bool:"
+            , "    return isinstance(x, Container)"
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.make_box().get())"
+            , "    env.exit(0)"
+            ]
+          firstLog <- assertOk "initial dbp build" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:make_box", "--color", "never"]
+          assertBool "initial build should report DBP selection" ("DBP provider: forced by --dbp" `isInfixOf` firstLog)
+          assertBool "initial build should select a subset" ("selected closure" `isInfixOf` firstLog)
+          providerC <- readFile (typesDir </> "provider.c")
+          assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
+          assertBool "selected provider C should omit unused definitions" (not ("unused_1" `isInfixOf` providerC))
+          badSeedLog <- assertFails "bad dbp seed reports selection failure" =<<
+            runBuild ["build", "--skip-build", "--dbp", "provider:not_a_name", "--color", "never"]
+          assertBool "bad dbp seed should report selection failure"
+            ("DBP selection failed for provider" `isInfixOf` badSeedLog)
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.unused_0())"
+            , "    env.exit(0)"
+            ]
+          changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+          assertBool "changed consumer should rerun provider DBP" ("DBP provider: forced by --dbp" `isInfixOf` changedConsumerLog)
+          assertBool "changed consumer should make DBP codegen stale" ("generated code out of date" `isInfixOf` changedConsumerLog)
+          providerC1b <- readFile (typesDir </> "provider.c")
+          assertBool "changed consumer C should include newly interested root" ("unused_0" `isInfixOf` providerC1b)
+          assertBool "changed consumer C should omit previously selected root" (not ("make_box" `isInfixOf` providerC1b))
+          sameSelectionLog <- assertOk "cached dbp selection is up to date" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+          assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .ty" `isInfixOf` sameSelectionLog)
+          assertBool "same selection should skip provider back passes" ("generated code up to date" `isInfixOf` sameSelectionLog)
+          removeFile (typesDir </> "provider.c")
+          removeFile (typesDir </> "provider.h")
+          secondLog <- assertOk "cached dbp build" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+          assertBool "cached consumer should be reused" ("Fresh main: using cached .ty" `isInfixOf` secondLog)
+          assertBool "cached build should collect provider interest from headers" ("interested names 1" `isInfixOf` secondLog)
+          assertBool "cached build should still select the dependency closure" ("selected closure" `isInfixOf` secondLog)
+          removeFile (typesDir </> "provider.c")
+          removeFile (typesDir </> "provider.h")
+          _thirdLog <- assertOk "dbp local name shadows builtin" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:make_box,local_container_name", "--color", "never"]
+          providerC2 <- readFile (typesDir </> "provider.c")
+          assertBool "selected provider C should keep local Container dependency" ("providerQ_Container" `isInfixOf` providerC2)
+          removeFile (typesDir </> "provider.c")
+          removeFile (typesDir </> "provider.h")
+          fourthLog <- assertOk "dbp keeps extension" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:render_box", "--color", "never"]
+          assertBool "extension selection should not fall back" (not ("fallback:" `isInfixOf` fourthLog))
+          providerC3 <- readFile (typesDir </> "provider.c")
+          assertBool "selected provider C should keep extension" ("providerQ_RenderableD_Box" `isInfixOf` providerC3)
+          removeFile (typesDir </> "provider.c")
+          removeFile (typesDir </> "provider.h")
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    env.exit(0)"
+            ]
+          fifthLog <- assertOk "dbp empty interest" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+          assertBool "empty interest should not fall back" (not ("fallback:" `isInfixOf` fifthLog))
+          assertBool "empty interest should be reported" ("interested names 0" `isInfixOf` fifthLog)
+          assertBool "empty interest should select empty closure" ("selected closure 0" `isInfixOf` fifthLog)
+          providerC4 <- readFile (typesDir </> "provider.c")
+          assertBool "empty provider C should omit provider definitions" (not ("make_box" `isInfixOf` providerC4))
+          removeIfExists (typesDir </> "main.c")
+          removeIfExists (typesDir </> "main.h")
+          removeIfExists (typesDir </> "main.root.c")
+          sixthLog <- assertOk "dbp keeps executable root actor" =<<
+            runBuild ["build", "--verbose", "--dbp", "main", "--dbp", "provider", "--color", "never"]
+          assertBool "root module should report root seed" ("DBP main: forced by --dbp" `isInfixOf` sixthLog)
+          assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
+          mainC <- readFile (typesDir </> "main.c")
+          assertBool "selected main C should keep root actor" ("mainQ_main" `isInfixOf` mainC)
+          seventhLog <- assertOk "no-dbp disables forced dbp" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--no-dbp", "--color", "never"]
+          assertBool "no-dbp should suppress provider DBP" (not ("DBP provider" `isInfixOf` seventhLog))
+          providerC5 <- readFile (typesDir </> "provider.c")
+          assertBool "no-dbp provider C should include full module definitions" ("unused_1" `isInfixOf` providerC5)
+  , testCase "dbp excludes explicit library boundary modules" $ do
+        withSystemTempDirectory "acton-dbp-library-boundary" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dbp_library_boundary"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types"
+              runBuild args = readCreateProcessWithExitCode (proc actonExe args){ cwd = Just proj } ""
+              assertOk label (code, out, err) = do
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                return (out ++ err)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            , "libraries = {"
+            , "    \"foo\": (modules=[\"a\", \"b\"], linkage=\"static\")"
+            , "}"
+            ]
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "def used() -> int:"
+            , "    return 1"
+            , ""
+            , "def unused_a() -> int:"
+            , "    return 11"
+            ]
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "def exposed() -> int:"
+            , "    return a.used()"
+            , ""
+            , "def unused_b() -> int:"
+            , "    return 22"
+            ]
+          writeFile (srcDir </> "c.act") $ unlines
+            [ "import b"
+            , ""
+            , "actor main(env):"
+            , "    print(b.exposed())"
+            , "    env.exit(0)"
+            ]
+          logTxt <- assertOk "dbp skips library boundary" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "a", "--dbp", "b", "--color", "never", "src/c.act"]
+          let hasBoundaryInfo = "DBP disabled for " `isInfixOf` logTxt && ":b: explicit library boundary" `isInfixOf` logTxt
+          unless hasBoundaryInfo $
+            putStrLn ("\nDBP library boundary log:\n" ++ logTxt)
+          assertBool "library boundary should explain forced DBP exclusion" hasBoundaryInfo
+          assertBool "internal library module should still run DBP"
+            ("DBP a: forced by --dbp" `isInfixOf` logTxt)
+          assertBool "boundary library module should not run DBP"
+            (not ("DBP b:" `isInfixOf` logTxt))
+          aC <- readFile (typesDir </> "a.c")
+          bC <- readFile (typesDir </> "b.c")
+          assertBool "internal DBP module should keep used name" ("used" `isInfixOf` aC)
+          assertBool "internal DBP module should omit unused name" (not ("unused_a" `isInfixOf` aC))
+          assertBool "boundary module should be compiled whole" ("unused_b" `isInfixOf` bC)
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
@@ -568,6 +775,17 @@ parseFlagTests =
       case parsed of
         C.CmdOpt _ (C.Build buildOpts) ->
           assertBool "serial parser flag should be set" (C.parse_serial (C.buildCompile buildOpts))
+        _ ->
+          assertFailure "expected build command"
+  , testCase "build parser accepts repeatable --dbp module selection" $ do
+      parsed <- parseArgs ["build", "--dbp", "huge.provider:used,Helper", "--dbp", "other.provider", "--no-dbp"]
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          do
+            assertEqual "dbp option should keep module and seed specs"
+              ["huge.provider:used,Helper", "other.provider"]
+              (C.dbp (C.buildCompile buildOpts))
+            assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
   , testCase "build parser help includes --release alias" $ do

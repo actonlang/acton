@@ -41,7 +41,7 @@ import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
-import           Utils (prstr)
+import           Utils (SrcLoc(NoLoc), prstr)
 
 -- Paths ----------------------------------------------------------------------
 
@@ -474,6 +474,20 @@ readTyDeps tyPath nameLabel = do
     Just nh -> do
       let pubDeps = sort (map (prstr . fst) (InterfaceFiles.nhPubDeps nh))
           implDeps = sort (map (prstr . fst) (InterfaceFiles.nhImplDeps nh))
+      pure (pubDeps, implDeps)
+
+-- | Read pub/impl local dependency names for a binding in a .tydb file.
+readTyLocalDeps :: FilePath -> String -> IO ([String], [String])
+readTyLocalDeps tyPath nameLabel = do
+  nameHashes <- readTyNameHashes tyPath
+  let matchName nh = prstr (InterfaceFiles.nhName nh) == nameLabel
+  case find matchName nameHashes of
+    Nothing -> do
+      assertFailure ("missing name " ++ nameLabel ++ " in " ++ tyPath)
+      pure ([], [])
+    Just nh -> do
+      let pubDeps = sort (map prstr (InterfaceFiles.nhPubLocalDeps nh))
+          implDeps = sort (map prstr (InterfaceFiles.nhImplLocalDeps nh))
       pure (pubDeps, implDeps)
 
 -- | Rewrite source hash and name-hash section of a .tydb file.
@@ -1325,6 +1339,13 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   let namesA = sort (map (prstr . InterfaceFiles.nhName) nameHashesA)
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
+  let idxName n = A.Name NoLoc n
+  extensionsForWidget <- InterfaceFiles.readExtensionsByClass tyA (idxName "Widget")
+  extensionsForBarProto <- InterfaceFiles.readExtensionsByProtocol tyA (idxName "BarProto")
+  extensionsForFooProto <- InterfaceFiles.readExtensionsByProtocol tyA (idxName "FooProto")
+  assertEqual "exact extensions by class" ["BarProtoD_Widget"] (sort (map prstr extensionsForWidget))
+  assertEqual "exact extensions by protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForBarProto))
+  assertEqual "exact extensions by inherited protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForFooProto))
   (_, nmod, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
   let I.NModule _ iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
@@ -1745,6 +1766,81 @@ p35_changed_path_keeps_unaffected_provider =
     assertBool "expected provider for changed import a" (M.member (A.modName ["a"]) bProviders)
     assertBool "expected provider for unchanged import c" (M.member (A.modName ["c"]) bProviders)
 
+p35_dbp_changed_path_includes_provider :: TestTree
+p35_dbp_changed_path_includes_provider =
+  testCase "35-dbp changed-path incremental includes dbp consumers" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actProvider = src </> "provider.act"
+        actA = src </> "a.act"
+        actB = src </> "b.act"
+        actMain = src </> "main.act"
+        gopts = C.GlobalOptions
+          { C.color = C.Never
+          , C.quiet = True
+          , C.noProgress = False
+          , C.timing = False
+          , C.tty = False
+          , C.verbose = False
+          , C.verboseZig = False
+          , C.jobs = 1
+          }
+        opts = Compile.defaultCompileOptions
+          { C.dbp = ["provider"]
+          , C.skip_build = True
+          }
+    ensureCasesProject
+    writeFileUtf8 actProvider $ T.unlines
+      [ "def used() -> int:"
+      , "    return 1"
+      , ""
+      , "def other() -> int:"
+      , "    return 2"
+      ]
+    writeFileUtf8 actA $ T.unlines
+      [ "import provider"
+      , ""
+      , "def fa() -> int:"
+      , "    return provider.used()"
+      ]
+    writeFileUtf8 actB $ T.unlines
+      [ "import provider"
+      , ""
+      , "def fb() -> int:"
+      , "    return provider.used()"
+      ]
+    writeFileUtf8 actMain $ T.unlines
+      [ "import a"
+      , "import b"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(a.fa() + b.fb())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutInArgs proj ["--skip-build", "--dbp", "provider"]
+    writeFileUtf8 actA $ T.unlines
+      [ "import provider"
+      , ""
+      , "def fa() -> int:"
+      , "    return provider.other()"
+      ]
+    actAAbs <- canonicalizePath actA
+    actMainAbs <- canonicalizePath actMain
+    sched <- Compile.newCompileScheduler gopts 1
+    plan <- Compile.prepareCompilePlan
+      Source.diskSourceProvider
+      gopts
+      sched
+      opts
+      [actMainAbs]
+      False
+      (Just [actAAbs])
+    let selectedMods = [ Compile.name (Compile.gtTask t) | t <- Compile.cpNeededTasks plan ]
+    assertBool "expected changed-path plan to include DBP provider"
+      (A.modName ["provider"] `elem` selectedMods)
+    assertBool "expected unchanged sibling consumer to register DBP interest"
+      (A.modName ["b"] `elem` selectedMods)
+
 p36_removed_dep_name_triggers_front_refresh :: TestTree
 p36_removed_dep_name_triggers_front_refresh =
   testCase "36-removed dep name forces front refresh" $ do
@@ -2110,6 +2206,60 @@ p44_provider_import_rename_reruns_dependent_front =
     assertBool ("expected stale-cache log for missing transitive dep hash\n" ++ T.unpack out2)
       (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "oldpkg.ttt.TransformFunction" out2)
 
+p45_tydb_records_local_name_dependencies :: TestTree
+p45_tydb_records_local_name_dependencies =
+  testCase "45-tydb records local name dependencies" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        tyA = proj </> "out" </> "types" </> "a.tydb"
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") $ T.unlines
+      [ "def base() -> int:"
+      , "    return 1"
+      , ""
+      , "def mid() -> int:"
+      , "    return base()"
+      , ""
+      , "def top() -> int:"
+      , "    return mid()"
+      , ""
+      , "class Box:"
+      , "    def __init__(self, v: int):"
+      , "        self.v = v"
+      , "    def get(self) -> int:"
+      , "        return self.v"
+      , ""
+      , "def make_box() -> Box:"
+      , "    return Box(top())"
+      , ""
+      , "class Container:"
+      , "    def __init__(self):"
+      , "        pass"
+      , ""
+      , "def local_container_name(x: object) -> bool:"
+      , "    return isinstance(x, Container)"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import a"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(a.make_box().get())"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutIn proj
+    (topPub, topImpl) <- readTyLocalDeps tyA "top"
+    assertDepsContain "top pub local deps" ["mid"] topPub
+    assertDepsContain "top impl local deps" ["mid"] topImpl
+    (midPub, midImpl) <- readTyLocalDeps tyA "mid"
+    assertDepsContain "mid pub local deps" ["base"] midPub
+    assertDepsContain "mid impl local deps" ["base"] midImpl
+    (boxPub, boxImpl) <- readTyLocalDeps tyA "make_box"
+    assertDepsContain "make_box pub local deps" ["Box", "top"] boxPub
+    assertDepsContain "make_box impl local deps" ["Box", "top"] boxImpl
+    (containerPub, containerImpl) <- readTyLocalDeps tyA "local_container_name"
+    assertDepsContain "local_container_name pub local deps" ["Container"] containerPub
+    assertDepsContain "local_container_name impl local deps" ["Container"] containerImpl
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2166,6 +2316,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p33_comprehensive_hashes
       , p34_removed_import_module
       , p35_changed_path_keeps_unaffected_provider
+      , p35_dbp_changed_path_includes_provider
       , p36_removed_dep_name_triggers_front_refresh
       , p37_impl_refresh_missing_dep_hashes_reruns_front
       , p38_project_lock_blocks_build
@@ -2177,5 +2328,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p42_metadata_drift_refreshes_header
       , p43_equal_act_ty_mtime_hashes_source
       , p44_provider_import_rename_reruns_dependent_front
+      , p45_tydb_records_local_name_dependencies
       ]
   ]
