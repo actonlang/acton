@@ -2472,12 +2472,13 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       typeProgressDoneRef <- newIORef Nothing
       let collectTypeStmtTimings = C.timing gopts && C.verbose gopts
       let onTypeProgress total completed current names _weight = do
-            now <- getTime Monotonic
             when (total > 0 && completed >= total && isNothing current) $ do
               mDone <- readIORef typeProgressDoneRef
-              when (isNothing mDone) $
+              when (isNothing mDone) $ do
+                now <- getTime Monotonic
                 writeIORef typeProgressDoneRef (Just now)
             when collectTypeStmtTimings $ do
+              now <- getTime Monotonic
               mActive <- readIORef typeActiveRef
               forM_ mActive $ \(label, bindNames, activeTotal, t0) ->
                 modifyIORef' typeStmtTimingsRef
