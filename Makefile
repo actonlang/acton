@@ -98,6 +98,17 @@ else
 ARCH:=$(UNAME_M)
 endif
 
+# -- Windows ------------------------------------------------------------------
+ifeq ($(OS),windows)
+ifeq ($(ARCH),x86_64)
+ACTON_ZIG_TARGET := x86_64-windows-gnu
+else ifeq ($(ARCH),aarch64)
+ACTON_ZIG_TARGET := aarch64-windows-gnu
+else
+$(error "Unsupported architecture for Windows?" $(ARCH))
+endif
+endif # -- END: Windows --------------------------------------------------------
+
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(UNAME_S),Darwin)
 OS:=macos
@@ -154,9 +165,6 @@ DIST_BINS=$(ACTONC) dist/bin/runacton $(LSP_SERVER)
 ifneq ($(OS),windows)
 DIST_BINS += $(ACTONDB)
 endif
-ifeq ($(OS),windows)
-DIST_BINS += dist/bin/liblmdb.dll
-endif
 DIST_ZIG=dist/zig
 ifeq ($(ACTON_STACK_NEEDS_ZIG),1)
 ACTON_STACK_PREREQS=$(DIST_ZIG)
@@ -175,12 +183,13 @@ endif
 ACTON_BDEPS_DIR := $(TD)/bdeps/out
 export ACTON_BDEPS_DIR
 ifneq ($(OS),windows)
-# libz and liblmdb are linked statically into acton on Unix-like platforms. On
-# Windows GHC links against the Stack/MSYS2 LMDB DLL, which we ship app-locally
-# beside acton.exe instead.
+# libz is linked statically into acton on Unix-like platforms.
 BDEPS += bdeps/out/lib/libz.a
-BDEPS += bdeps/out/lib/liblmdb.a
 endif
+# liblmdb backs the compiler's .tydb interface cache. Cabal also needs the LMDB
+# headers and library while configuring the Haskell lmdb package, including on
+# Windows where Stack's private MSYS2 installation does not reliably provide it.
+BDEPS += bdeps/out/lib/liblmdb.a
 ifeq ($(OS),linux)
 # gmp and tinfo are only pulled in by GHC on Linux (macOS GHC uses the native
 # bignum backend and the SDK's libncurses), so they are Linux-only bdeps.
@@ -230,12 +239,6 @@ $(LSP_SERVER): $(ACTON_BIN)
 		$(MAKE) --always-make $(ACTON_BIN); \
 	fi
 	test -f "$@"
-
-ifeq ($(OS),windows)
-dist/bin/liblmdb.dll: $(ACTON_BIN)
-	mkdir -p dist/bin
-	powershell -NoProfile -ExecutionPolicy Bypass -Command '$$here = Get-Location; Set-Location compiler; $$programs = (stack path --programs).Trim(); Set-Location $$here; $$dll = Get-ChildItem -Path $$programs -Recurse -Filter liblmdb.dll | Select-Object -First 1; if ($$null -eq $$dll) { throw "liblmdb.dll not found below Stack programs dir" }; Copy-Item $$dll.FullName "$@" -Force'
-endif
 
 .PHONY: clean-compiler
 clean-compiler:
