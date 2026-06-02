@@ -89,7 +89,7 @@ module InterfaceFiles
 import Prelude hiding (readFile, writeFile)
 import Data.Binary
 import qualified Control.Exception as E
-import Control.Concurrent (runInBoundThread)
+import Control.Concurrent (runInBoundThread, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -231,14 +231,24 @@ listInterfaceDirsRecursive root = do
                then return [path]
                else listInterfaceDirsRecursive path
 
+-- | A .tydb cache entry that is absent, stale, or structurally unusable -- a
+-- genuine cache miss that should trigger recompilation. Deliberately distinct
+-- from a transient or environmental failure to read the cache (e.g. a
+-- concurrent LMDB error): those must propagate rather than be silently mistaken
+-- for "interface missing", which is what produced misleading
+-- "not found or unreadable" diagnostics.
+newtype TyCacheInvalid = TyCacheInvalid String deriving Show
+
+instance E.Exception TyCacheInvalid
+
 versionMismatch :: [Int] -> IO a
 versionMismatch vs =
-    ioError (userError (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
+    E.throwIO (TyCacheInvalid (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
 
 decodeStrict :: Binary a => String -> BS.ByteString -> IO a
 decodeStrict label bs =
     case decodeOrFail (BL.fromStrict bs) of
-      Left (_, _, err) -> ioError (userError ("Failed to decode .tydb " ++ label ++ ": " ++ err))
+      Left (_, _, err) -> E.throwIO (TyCacheInvalid ("Failed to decode .tydb " ++ label ++ ": " ++ err))
       Right (_, _, v) -> return v
 
 encodeStrict :: Binary a => a -> BS.ByteString
@@ -310,17 +320,76 @@ withEnv path readOnly mapSize action =
     withInterfaceLock path $
       E.bracket open LMDB.mdb_env_close action
   where
-    open = withMVar lmdbOpenLock $ \_ -> do
+    open = withMVar lmdbOpenLock $ \_ -> openWithRetry envOpenMaxAttempts
+    -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
+    -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
+    -- retry. LMDB-semantic failures (corruption, version mismatch) are not
+    -- transient and propagate immediately to the cache-miss / recompile path.
+    openWithRetry attempt = do
       env <- LMDB.mdb_env_create
-      (do LMDB.mdb_env_set_mapsize env mapSize
-          openEnv env
-          return env)
-        `E.onException` LMDB.mdb_env_close env
+      let configure = do LMDB.mdb_env_set_mapsize env mapSize
+                         openEnv env
+      r <- E.try (configure `E.onException` LMDB.mdb_env_close env)
+      case r of
+        Right () -> return env
+        Left (err :: LMDB.LMDB_Error)
+          | attempt > 1 && isTransientOpenError err ->
+              threadDelay envOpenRetryDelayUs >> openWithRetry (attempt - 1)
+          | otherwise -> E.throwIO err
     openEnv env
       | readOnly  = do
           flags <- readOnlyOpenFlags path
           LMDB.mdb_env_open env path flags
       | otherwise = LMDB.mdb_env_open env path []
+
+-- A transient env-open failure is an OS-level error (Either Left, a raw errno)
+-- from a concurrent lock.mdb setup race -- retrying succeeds once the winning
+-- opener has created it. LMDB-semantic errors (Either Right MDB_*) are not
+-- transient and must not be retried.
+isTransientOpenError :: LMDB.LMDB_Error -> Bool
+isTransientOpenError err =
+    case LMDB.e_code err of
+      Left _  -> True
+      Right _ -> False
+
+-- Choose read-only open flags. A writable cache may be rewritten by a
+-- concurrent acton process, so it MUST keep LMDB's lock table for reader/writer
+-- safety (the lock.mdb open race there is handled by retrying the open). Only an
+-- installed cache the user cannot write -- where no writer can exist -- uses
+-- MDB_NOLOCK, so it stays readable even when lock.mdb cannot be created in a
+-- read-only directory.
+readOnlyOpenFlags :: FilePath -> IO [LMDB.MDB_EnvFlag]
+readOnlyOpenFlags path = do
+    useLock <- canUseLockFile path
+    noLock <- canReadWithoutLock path
+    return $ if useLock || not noLock
+               then [LMDB.MDB_RDONLY]
+               else [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
+
+canUseLockFile :: FilePath -> IO Bool
+canUseLockFile path = do
+    let lockPath = lockFilePath path
+    exists <- doesFileExist lockPath
+    if exists
+      then fileAccess lockPath False True False
+      else fileAccess path False True True
+
+canReadWithoutLock :: FilePath -> IO Bool
+canReadWithoutLock path = do
+    let dataPath = dataFilePath path
+    exists <- doesFileExist dataPath
+    if not exists
+      then return False
+      else do
+        dataWritable <- fileAccess dataPath False True False
+        dirWritable <- fileAccess path False True True
+        return (not dataWritable && not dirWritable)
+
+envOpenMaxAttempts :: Int
+envOpenMaxAttempts = 5
+
+envOpenRetryDelayUs :: Int
+envOpenRetryDelayUs = 2000
 
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
@@ -382,7 +451,7 @@ getValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString 
 getValue label txn dbi k = do
     mv <- withVal k (LMDB.mdb_get txn dbi)
     case mv of
-      Nothing -> ioError (userError ("Missing .tydb key: " ++ label))
+      Nothing -> E.throwIO (TyCacheInvalid ("Missing .tydb key: " ++ label))
       Just v -> copyVal v >>= decodeStrict label
 
 getValuesWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [BS.ByteString]
@@ -416,37 +485,6 @@ isMapFull err =
     case E.fromException err of
       Just LMDB.LMDB_Error{ LMDB.e_code = Right LMDB.MDB_MAP_FULL } -> True
       _ -> False
-
-readOnlyOpenFlags :: FilePath -> IO [LMDB.MDB_EnvFlag]
-readOnlyOpenFlags path = do
-    useLock <- canUseLockFile path
-    noLock <- canReadWithoutLock path
-    -- Installed interface caches may be root-owned/read-only. Only use
-    -- MDB_NOLOCK when this user also cannot update the data file or directory,
-    -- so project-local writable caches still fail instead of bypassing LMDB's
-    -- cross-process locking.
-    return $ if useLock || not noLock
-               then [LMDB.MDB_RDONLY]
-               else [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
-
-canUseLockFile :: FilePath -> IO Bool
-canUseLockFile path = do
-    let lockPath = lockFilePath path
-    exists <- doesFileExist lockPath
-    if exists
-      then fileAccess lockPath False True False
-      else fileAccess path False True True
-
-canReadWithoutLock :: FilePath -> IO Bool
-canReadWithoutLock path = do
-    let dataPath = dataFilePath path
-    exists <- doesFileExist dataPath
-    if not exists
-      then return False
-      else do
-        dataWritable <- fileAccess dataPath False True False
-        dirWritable <- fileAccess path False True True
-        return (not dataWritable && not dirWritable)
 
 isCorruptEnv :: E.SomeException -> Bool
 isCorruptEnv err =
@@ -609,8 +647,14 @@ tyCacheMiss err
   | isTyCacheMiss err = return Nothing
   | otherwise = E.throwIO err
 
+-- A read failure counts as a cache miss only when the entry is genuinely absent
+-- or structurally unusable, in which case the caller recompiles from source
+-- (which overwrites a corrupt entry, see writeEntries). Transient or
+-- environmental errors are NOT misses: they propagate so the real cause is
+-- surfaced instead of being silently reported as "interface missing".
 isTyCacheMiss :: E.SomeException -> Bool
 isTyCacheMiss err
-  | Just (_ :: E.IOException) <- E.fromException err = True
-  | Just (_ :: LMDB.LMDB_Error) <- E.fromException err = True
+  | Just (_ :: TyCacheInvalid) <- E.fromException err = True
+  | Just (ioe :: E.IOException) <- E.fromException err = isDoesNotExistError ioe
+  | isCorruptEnv err = True
   | otherwise = False
