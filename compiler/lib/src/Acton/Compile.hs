@@ -237,7 +237,7 @@ import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub, partition)
 import qualified Data.List
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, listToMaybe, mapMaybe)
+import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
 import Data.Ord (Down(..))
@@ -379,6 +379,12 @@ data FrontTiming = FrontTiming
   { ftEnv :: TimeSpec
   , ftKinds :: TimeSpec
   , ftTypes :: TimeSpec
+  , ftTypeReconstruct :: TimeSpec
+  , ftTypeAfterProgress :: TimeSpec
+  , ftTypeForce :: TimeSpec
+  , ftTypeHash :: TimeSpec
+  , ftTypeWrite :: TimeSpec
+  , ftTypeDocs :: TimeSpec
   , ftTypeStmtTimings :: [TypeStmtTiming]
   } deriving (Eq, Show)
 
@@ -2068,22 +2074,29 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
       inferredSigsRef <- newIORef ([] :: [InferredSignature])
       typeActiveRef <- newIORef Nothing
+      typeProgressDoneRef <- newIORef Nothing
+      let collectTypeStmtTimings = C.timing gopts && C.verbose gopts
       let onTypeProgress total completed current names _weight = do
             now <- getTime Monotonic
-            mActive <- readIORef typeActiveRef
-            forM_ mActive $ \(label, bindNames, activeTotal, t0) ->
-              modifyIORef' typeStmtTimingsRef
-                ( TypeStmtTiming
-                    { tstCompleted = completed
-                    , tstTotal = activeTotal
-                    , tstLabel = label
-                    , tstNames = bindNames
-                    , tstTime = now - t0
-                    }
-                : )
-            case current of
-              Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
-              Nothing -> writeIORef typeActiveRef Nothing
+            when (total > 0 && completed >= total && isNothing current) $ do
+              mDone <- readIORef typeProgressDoneRef
+              when (isNothing mDone) $
+                writeIORef typeProgressDoneRef (Just now)
+            when collectTypeStmtTimings $ do
+              mActive <- readIORef typeActiveRef
+              forM_ mActive $ \(label, bindNames, activeTotal, t0) ->
+                modifyIORef' typeStmtTimingsRef
+                  ( TypeStmtTiming
+                      { tstCompleted = completed
+                      , tstTotal = activeTotal
+                      , tstLabel = label
+                      , tstNames = bindNames
+                      , tstTime = now - t0
+                      }
+                  : )
+              case current of
+                Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
+                Nothing -> writeIORef typeActiveRef Nothing
             emitFrontProgress FrontPassTypes completed total current
           onInferredSignature names sig =
             modifyIORef' inferredSigsRef (InferredSignature names sig :)
@@ -2103,7 +2116,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
 
       -- Type-check and return both the typed AST and the interface NameInfo.
       (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
+      timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
+      timeTypeForce <- getTime Monotonic
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
@@ -2190,8 +2205,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   -- Module-level hashes summarize the per-name hashes.
                   let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
+                  when (C.timing gopts) $
+                    evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, nameHashes))
+                  timeTypeHash <- getTime Monotonic
                   -- Write .tydb now so later builds can reuse this front-pass work.
                   InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
+                  timeTypeWrite <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
                   iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn imps fullIface)
@@ -2215,12 +2234,18 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                     -- Use parsed (original AST) to preserve docstrings
                     let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
                     writeFile docFile htmlDoc
+                  timeTypeDocs <- getTime Monotonic
 
                   timeTypeCheck <- getTime Monotonic
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
+                  typeProgressDone <- readIORef typeProgressDoneRef
 
                   timeFrontEnd <- getTime Monotonic
                   inferredSigs <- reverse <$> readIORef inferredSigsRef
+                  let typeAfterProgress =
+                        case typeProgressDone of
+                          Just t -> timeTypeReconstruct - t
+                          Nothing -> timeTypeReconstruct - timeTypeReconstruct
                   let frontTime = timeFrontEnd - timeStart
                       frontTimeMaybe = if not (quiet gopts opts)
                                          then Just frontTime
@@ -2231,6 +2256,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  { ftEnv = timeEnv - timeStart
                                  , ftKinds = timeKindsCheck - timeEnv
                                  , ftTypes = timeTypeCheck - timeKindsCheck
+                                 , ftTypeReconstruct = timeTypeReconstruct - timeKindsCheck
+                                 , ftTypeAfterProgress = typeAfterProgress
+                                 , ftTypeForce = timeTypeForce - timeTypeReconstruct
+                                 , ftTypeHash = timeTypeHash - timeTypeForce
+                                 , ftTypeWrite = timeTypeWrite - timeTypeHash
+                                 , ftTypeDocs = timeTypeDocs - timeTypeWrite
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing

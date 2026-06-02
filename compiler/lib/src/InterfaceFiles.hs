@@ -93,6 +93,7 @@ module InterfaceFiles
   ) where
 
 import Prelude hiding (readFile, writeFile)
+import Control.DeepSeq (NFData)
 import Data.Binary
 import qualified Control.Exception as E
 import Control.Concurrent (runInBoundThread, threadDelay)
@@ -132,6 +133,7 @@ data NameHashInfo = NameHashInfo
   } deriving (Show, Eq, Generic)
 
 instance Binary NameHashInfo
+instance NFData NameHashInfo
 
 data ExtensionIndex = ExtensionIndex
   { extByClass      :: Map.Map A.Name [A.Name]
