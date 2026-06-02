@@ -879,10 +879,10 @@ getPubHashCached paths mn = modifyMVar pubHashCache $ \m -> do
       mty <- getTyFileCached (searchPath paths) mn
       case mty of
         Just ty -> do
-          hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
-          case hdrE of
-            Right (_sourceMetaH, _srcH, ih, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
-            _ -> return (m, Nothing)
+          hdr <- InterfaceFiles.readHeaderMaybe ty
+          case hdr of
+            Just (_sourceMetaH, _srcH, ih, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
+            Nothing -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
 -- | Update the public-hash cache after a successful compile.
@@ -909,12 +909,12 @@ getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
       mty <- getTyFileCached (searchPath paths) mn
       case mty of
         Just ty -> do
-          hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
-          case hdrE of
-            Right (_sourceMetaH, _srcH, _ih, _implH, _impsH, nameHashes, _rootsH, _testsH, _docH) -> do
+          hdr <- InterfaceFiles.readHeaderMaybe ty
+          case hdr of
+            Just (_sourceMetaH, _srcH, _ih, _implH, _impsH, nameHashes, _rootsH, _testsH, _docH) -> do
               let hm = nameHashMapFromList (publicNameHashes nameHashes)
               return (M.insert mn hm m, Just hm)
-            _ -> return (m, Nothing)
+            Nothing -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
 -- | Update the name-hash cache after a successful compile.
@@ -1631,19 +1631,19 @@ readIfaceFromTy paths mn src mHash = do
     case mty of
       Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
       Just tyF -> do
-        fileRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyF
+        fileRes <- InterfaceFiles.readFileMaybe tyF
         case fileRes of
-          Left _ -> return $ Left (missingIfaceDiagnostics mn src mn)
-          Right (_ms, nmod, _tmod, _sourceMeta, _srcH, _pubH, _implH, _imps, _nameHashes, _roots, _tests, _tm) -> do
+          Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
+          Just (_ms, nmod, _tmod, _sourceMeta, _srcH, _pubH, _implH, _imps, _nameHashes, _roots, _tests, _tm) -> do
             let I.NModule ms teFull mdoc = nmod
                 te = publicIfaceTE teFull
             ih <- case mHash of
                     Just h -> return h
                     Nothing -> do
-                      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyF
-                      case hdrE of
-                        Right (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
-                        _ -> return B.empty
+                      hdr <- InterfaceFiles.readHeaderMaybe tyF
+                      case hdr of
+                        Just (_sourceMetaH, _srcH, ihash, _implH, _impsH, _nameHashesH, _rootsH, _testsH, _docH) -> return ihash
+                        Nothing -> return B.empty
             return $ Right (ms, te, mdoc, ih)
 
 
@@ -2442,10 +2442,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks callbacks = do
             updateNameHashCache mn (frNameHashes fr)
             return (key, Right fr)
           readTyFile = do
-            tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+            tyRes <- InterfaceFiles.readFileMaybe tyFile
             case tyRes of
-              Left _ -> return (Left (missingIfaceDiagnostics mn "" mn))
-              Right ty -> return (Right ty)
+              Nothing -> return (Left (missingIfaceDiagnostics mn "" mn))
+              Just ty -> return (Right ty)
           mkBackJob env1 tmod srcText moduleImplHash =
             BackJob
               { bjPaths = paths
