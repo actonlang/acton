@@ -589,37 +589,37 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # already pull it in transitively via dist/bin/acton[c].)
 test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
 test: $(ACTON_BIN)
-	cd compiler && stack test libacton acton:test_acton acton:incremental
+	cd compiler && $(STACK) test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
 test-builtins:
-	cd compiler && stack test acton --ta '-p "Builtins"'
+	cd compiler && $(STACK) test acton --ta '-p "Builtins"'
 
 test-compiler:
-	cd compiler && stack test libacton
-	cd compiler && stack test acton --ta '-p "compiler"'
+	cd compiler && $(STACK) test libacton
+	cd compiler && $(STACK) test acton --ta '-p "compiler"'
 
 test-compiler-accept: test-lib-accept test-acton-goldens-accept
 
 test-lib-accept:
-	cd compiler && stack test libacton:test_lib --test-arguments "--golden-start --golden-reset"
+	cd compiler && $(STACK) test libacton:test_lib --test-arguments "--golden-start --golden-reset"
 
 test-acton-goldens-accept:
-	cd compiler && stack test acton:test_acton --test-arguments "--accept"
+	cd compiler && $(STACK) test acton:test_acton --test-arguments "--accept"
 
 test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerrors-accept test-typeerrors-accept
 
 test-cross-compile:
-	cd compiler && stack test acton --ta '-p "cross-compilation"'
+	cd compiler && $(STACK) test acton --ta '-p "cross-compilation"'
 
 test-incremental: $(ACTONC)
-	cd compiler && stack test acton:incremental
+	cd compiler && $(STACK) test acton:incremental
 
 .PHONY: test-incremental-accept
 test-incremental-accept: $(ACTONC)
-	cd compiler && stack test acton:incremental --ta "--accept"
+	cd compiler && $(STACK) test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
 test-rebuild: test-incremental
@@ -627,42 +627,42 @@ test-rebuild: test-incremental
 test-rebuild-accept: test-incremental-accept
 
 test-syntaxerrors:
-	cd compiler && stack test acton --ta '-p "syntax errors"'
+	cd compiler && $(STACK) test acton --ta '-p "syntax errors"'
 
 test-syntaxerrors-accept:
 	cd compiler/acton && stack runghc -- test.hs -p "syntax errors" --accept
 
 test-typeerrors:
-	cd compiler && stack test acton --ta '-p "type errors"'
+	cd compiler && $(STACK) test acton --ta '-p "type errors"'
 
 test-typeerrors-accept:
-	cd compiler && stack test acton:test_acton --ta '-p "type errors" --accept'
+	cd compiler && $(STACK) test acton:test_acton --ta '-p "type errors" --accept'
 
 test-db:
-	cd compiler && stack test acton --ta '-p "DB"'
+	cd compiler && $(STACK) test acton --ta '-p "DB"'
 
 test-examples:
-	cd compiler && stack test acton --ta '-p "Examples"'
+	cd compiler && $(STACK) test acton --ta '-p "Examples"'
 
 test-lang:
-	cd compiler && stack test acton --ta '-p "Core language"'
+	cd compiler && $(STACK) test acton --ta '-p "Core language"'
 
 test-regressions:
-	cd compiler && stack test acton --ta '-p "Regression"'
+	cd compiler && $(STACK) test acton --ta '-p "Regression"'
 
 test-rts:
-	cd compiler && stack test acton --ta '-p "RTS"'
+	cd compiler && $(STACK) test acton --ta '-p "RTS"'
 
 test-rts-db:
 	$(MAKE) -C test
 
 test-stdlib: $(ACTON_BIN) dist/std
-	cd compiler && stack test acton --ta '-p "stdlib"'
+	cd compiler && $(STACK) test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
 online-tests: $(ACTONC)
-	cd compiler && stack test acton:test_acton_online
+	cd compiler && $(STACK) test acton:test_acton_online
 
 
 .PHONY: clean clean-all clean-base clean-std clean-bdeps

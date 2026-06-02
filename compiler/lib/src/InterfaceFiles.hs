@@ -111,7 +111,7 @@ import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, getPermissions, listDirectory, removeFile, removePathForcibly, writable)
 import System.FilePath ((</>), normalise, takeExtension)
-import System.IO.Error (isDoesNotExistError)
+import System.IO.Error (ioeGetErrorString, isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 #if !defined(mingw32_HOST_OS)
 import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
@@ -477,13 +477,19 @@ isCorruptEnv :: E.SomeException -> Bool
 isCorruptEnv err =
     case E.fromException err of
       Just LMDB.LMDB_Error{ LMDB.e_code = Right code } ->
-        code `elem` [ LMDB.MDB_PAGE_NOTFOUND
-                    , LMDB.MDB_CORRUPTED
-                    , LMDB.MDB_PANIC
-                    , LMDB.MDB_VERSION_MISMATCH
-                    , LMDB.MDB_INVALID
-                    ]
-      _ -> False
+        code `elem` corruptEnvCodes
+      _ | Just ioErr <- E.fromException err ->
+            any (`Data.List.isInfixOf` ioeGetErrorString ioErr) corruptEnvCodeNames
+        | otherwise -> False
+  where
+    corruptEnvCodes =
+      [ LMDB.MDB_PAGE_NOTFOUND
+      , LMDB.MDB_CORRUPTED
+      , LMDB.MDB_PANIC
+      , LMDB.MDB_VERSION_MISMATCH
+      , LMDB.MDB_INVALID
+      ]
+    corruptEnvCodeNames = map show corruptEnvCodes
 
 writeEntries :: FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
 writeEntries path entries = do
