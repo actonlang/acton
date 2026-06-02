@@ -363,6 +363,7 @@ jobs:
     runs-on: windows-latest
     env:
       BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
+      ZIG_DOWNLOAD_BASE_URL: ""
     steps:
       - name: "Show platform and environment"
         shell: pwsh

@@ -49,9 +49,11 @@ ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
 ACTON_STACK_NEEDS_ZIG=
 ACTON_ZIG_TARGET=
 STACK=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
+STACK_SETUP=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup
 
 ifeq ($(OS),windows)
 STACK=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
+STACK_SETUP=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup
 endif
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
@@ -212,7 +214,7 @@ $(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compil
 	cd compiler && $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& $(STACK) setup \
+		&& $(STACK_SETUP) \
 		&& $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
 	cd compiler && $(STACK) --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
 	# Keep actonc as a symlink for compatibility
