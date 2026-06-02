@@ -18,6 +18,7 @@ import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Sequence (Seq, ViewL(..), (|>))
 import qualified Data.Sequence as Seq
+import qualified Data.Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import GHC.Conc (getNumCapabilities)
@@ -71,6 +72,7 @@ data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
   , cachedProjectMap :: M.Map FilePath Compile.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
+  , cachedDbpBlocked :: Data.Set.Set Compile.TaskKey
   , cachedRootPins :: M.Map String BuildSpec.PkgDep
   , cachedImportKeys :: HM.HashMap FilePath String
   }
@@ -278,6 +280,7 @@ cacheCompilePlan plan = do
         { cachedCompileContext = ctx
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
+        , cachedDbpBlocked = Compile.cpDbpBlocked plan
         , cachedRootPins = Compile.cpRootPins plan
         , cachedImportKeys = importKeys
         }
@@ -368,7 +371,13 @@ compilePlanFromCache ctx changedPath cache = do
   case refreshed of
     Nothing -> return Nothing
     Just (globalTasks, importKeys) -> do
-      neededTasks <- Compile.selectAffectedTasks globalTasks [changedPath]
+      let dbpBlocked = Compile.libraryBoundaryTasks (cachedProjectMap cache) globalTasks
+      neededTasks <- Compile.selectAffectedTasks
+        (Compile.ccRootProj ctx)
+        (Compile.ccOpts ctx)
+        globalTasks
+        dbpBlocked
+        [changedPath]
       let rootProj = Compile.ccRootProj ctx
           rootTasks =
             [ Compile.gtTask t
@@ -378,6 +387,7 @@ compilePlanFromCache ctx changedPath cache = do
           cache' = cache
             { cachedCompileContext = ctx
             , cachedGlobalTasks = globalTasks
+            , cachedDbpBlocked = dbpBlocked
             , cachedImportKeys = importKeys
             }
       atomicModifyIORef' projectBuildCachesRef $ \m ->
@@ -387,6 +397,7 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpProjMap = cachedProjectMap cache
         , Compile.cpGlobalTasks = globalTasks
         , Compile.cpNeededTasks = neededTasks
+        , Compile.cpDbpBlocked = dbpBlocked
         , Compile.cpRootTasks = rootTasks
         , Compile.cpRootPins = cachedRootPins cache
         , Compile.cpIncremental = True

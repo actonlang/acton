@@ -12,6 +12,21 @@ The entry point is `parseModule`, which takes a module name, filename, and file
 contents, then returns the parsed `Module`. It also appends a trailing newline
 if the file is missing one to keep the parser consistent.
 
+## Module Top Level
+
+`parseModule` parses the module body as top-level chunks and then validates the
+result with `validateModuleSuite`. The validated source-level module suite only
+allows:
+
+- declarations (`Decl`)
+- signatures (`Signature`)
+- assignments that bind at least one top-level name (`Assign`)
+
+Any other top-level statement raises `InvalidModuleStatement`, and duplicate
+top-level assignment names raise `DuplicateTopLevelAssignment`. Later compiler
+passes can therefore assume there are no source-level top-level control-flow or
+expression statements.
+
 ## Debugging
 
 Use compiler flags to inspect the parser output:

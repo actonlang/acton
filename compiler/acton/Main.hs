@@ -998,7 +998,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
           , ccOnBackJob = \_ -> return ()
           }
-    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) callbacks
+    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
@@ -1871,9 +1871,9 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (inferredSignatureLine sig))
                     forM_ (lines (isigSignature sig)) $ \line ->
                       logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow line)
-              case frBackJob fr of
-                Nothing -> creditBack (gtKey t)
-                Just _ -> return ()
+              case (frBackJob fr, frDeferredBackJob fr) of
+                (Nothing, Nothing) -> creditBack (gtKey t)
+                _ -> return ()
           , chOnFrontStart = \t ->
               let key = gtKey t
                   proj = tkProj key
@@ -1890,6 +1890,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               gate (progressDoneTask progressUI progressState (gtKey t))
               creditFront (gtKey t)
           , chOnBackQueued = \_ _ -> return ()
+          , chOnBackSkipped = creditBack
           , chOnBackStart = onBackStart
           , chOnBackProgress = onBackProgress
           , chOnBackDone = onBackDone

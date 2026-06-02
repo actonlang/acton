@@ -191,6 +191,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     res <- Compile.runFrontPasses
       benchGopts
       opts
+      False
       paths
       env0
       parsed

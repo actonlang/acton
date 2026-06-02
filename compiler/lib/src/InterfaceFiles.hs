@@ -47,6 +47,10 @@
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
 --     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local/external deps
 --
+--   Per-extension keys:
+--     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
+--     "ext-by-protocol/<suffix>"    :: (A.Name, [A.Name]) -- protocol name to extension names
+--
 --   Per-statement keys (typed Module body):
 --     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
 --
@@ -80,6 +84,8 @@ module InterfaceFiles
   , keyNameHash
   , readFile
   , readHeader
+  , readExtensionsByClass
+  , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
   , writeFile
@@ -126,6 +132,11 @@ data NameHashInfo = NameHashInfo
   } deriving (Show, Eq, Generic)
 
 instance Binary NameHashInfo
+
+data ExtensionIndex = ExtensionIndex
+  { extByClass      :: Map.Map A.Name [A.Name]
+  , extByProtocol   :: Map.Map A.Name [A.Name]
+  } deriving (Show, Eq)
 
 data SourceFileMeta = SourceFileMeta
   { sfmMTimeNs :: Integer
@@ -295,6 +306,16 @@ keyNameHashPrefix = key "name-hash/"
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
 
+keyExtByClassPrefix, keyExtByProtocolPrefix :: BS.ByteString
+keyExtByClassPrefix      = key "ext-by-class/"
+keyExtByProtocolPrefix   = key "ext-by-protocol/"
+
+keyExtByClass :: A.Name -> BS.ByteString
+keyExtByClass n = B.concat [keyExtByClassPrefix, nameKeySuffix n]
+
+keyExtByProtocol :: A.Name -> BS.ByteString
+keyExtByProtocol n = B.concat [keyExtByProtocolPrefix, nameKeySuffix n]
+
 keyStmt :: Int -> BS.ByteString
 keyStmt i = B.pack ("stmt/" ++ padIndex i)
 
@@ -386,6 +407,13 @@ getValue label txn dbi k = do
     case mv of
       Nothing -> ioError (userError ("Missing .tydb key: " ++ label))
       Just v -> copyVal v >>= decodeStrict label
+
+getMaybeValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO (Maybe a)
+getMaybeValue label txn dbi k = do
+    mv <- withVal k (LMDB.mdb_get txn dbi)
+    case mv of
+      Nothing -> return Nothing
+      Just v -> Just <$> (copyVal v >>= decodeStrict label)
 
 getValuesWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [BS.ByteString]
 getValuesWithPrefix txn dbi prefix =
@@ -533,6 +561,57 @@ readStmtEntries txn dbi = do
     forM [0 .. count - 1] $ \i ->
       getValue ("stmt " ++ show i) txn dbi (keyStmt i)
 
+emptyExtensionIndex :: ExtensionIndex
+emptyExtensionIndex =
+    ExtensionIndex
+      { extByClass = Map.empty
+      , extByProtocol = Map.empty
+      }
+
+extensionIndexFromNameInfo :: A.ModName -> I.NameInfo -> ExtensionIndex
+extensionIndexFromNameInfo mn nmod =
+    case nmod of
+      I.NModule _ te _ -> foldl addExt emptyExtensionIndex te
+      _ -> emptyExtensionIndex
+  where
+    addExt acc (ext, I.NExt _ c ps _ _ _) =
+      let cls = localQName (A.tcname c)
+          protos = [ p | (_, pcon) <- ps, Just p <- [localQName (A.tcname pcon)] ]
+          withClass =
+            case cls of
+              Nothing -> acc
+              Just n -> acc { extByClass = insertMany n [ext] (extByClass acc) }
+          withProtos =
+            foldl
+              (\idx p -> idx { extByProtocol = insertMany p [ext] (extByProtocol idx) })
+              withClass
+              protos
+      in withProtos
+    addExt acc _ = acc
+
+    localQName qn =
+      case qn of
+        A.NoQ n -> Just n
+        A.QName m n | m == mn -> Just n
+        A.GName m n | m == mn -> Just n
+        _ -> Nothing
+
+    insertMany n exts =
+      Map.insertWith unionNames n (sortNames exts)
+
+    unionNames xs ys = sortNames (xs ++ ys)
+    sortNames = Data.List.sortOn A.nstr . Data.List.nub
+
+extensionIndexEntries :: ExtensionIndex -> [(BS.ByteString, BS.ByteString)]
+extensionIndexEntries index =
+    [ (keyExtByClass n, encodeStrict (n, exts))
+    | (n, exts) <- Map.toList (extByClass index)
+    ]
+    ++
+    [ (keyExtByProtocol n, encodeStrict (n, exts))
+    | (n, exts) <- Map.toList (extByProtocol index)
+    ]
+
 interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
 interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
     [ (keyVersion, encodeStrict version)
@@ -552,6 +631,7 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
               , let suffix = nameKeySuffix n
               ]
     ++ [ (keyNameHash (nhName nh), encodeStrict nh) | nh <- nameHashes ]
+    ++ extensionIndexEntries (extensionIndexFromNameInfo tmn nmod)
     ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
   where
     I.NModule _ te _ = nmod
@@ -592,6 +672,24 @@ readHeader f =
       doc <- getValue "doc" txn dbi keyDoc
       nameHashes <- readNameHashEntries txn dbi
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
+
+readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
+readExtensionsByClass f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      entry <- getMaybeValue "ext-by-class" txn dbi (keyExtByClass n) :: IO (Maybe (A.Name, [A.Name]))
+      return $ case entry of
+        Nothing -> []
+        Just (_, exts) -> exts
+
+readExtensionsByProtocol :: FilePath -> A.Name -> IO [A.Name]
+readExtensionsByProtocol f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      entry <- getMaybeValue "ext-by-protocol" txn dbi (keyExtByProtocol n) :: IO (Maybe (A.Name, [A.Name]))
+      return $ case entry of
+        Nothing -> []
+        Just (_, exts) -> exts
 
 -- Interface files are caches for most callers. If a file is missing,
 -- unreadable, corrupt, or from a different compiler interface version, the

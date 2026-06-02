@@ -1,9 +1,9 @@
 # Compiler
 
 The compiler runs a fixed sequence of AST-to-AST transforms before finally
-generating C.  The main entry point is `compiler/acton/Main.hs`, which wires
+generating C. The main entry point is `compiler/acton/Main.hs`, which wires
 the stages together via the `compiler/lib` modules listed below. All the real
-logic are contained in these modules and are thus accessible and usable as a
+logic is contained in these modules and is thus accessible and usable as a
 library.
 
 The same AST data type is used throughout all compiler passes, making it easy to
@@ -14,6 +14,9 @@ See [Imports and environments](imports_and_envs.md) for how the scheduler,
 
 See [Interface caches](interface_caches.md) for the LMDB-backed on-disk cache
 format used to store typed module interfaces.
+
+See [Incremental compilation](incremental_compilation.md) for the hash model,
+back-pass freshness checks, and deferred back pass scheduling.
 
 See [Project dependencies](project_dependencies.md) for how Acton package
 dependencies and zig dependencies are discovered, fetched, and emitted into the
