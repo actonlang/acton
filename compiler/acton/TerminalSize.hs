@@ -1,4 +1,5 @@
 {-# LANGUAGE CApiFFI #-}
+{-# LANGUAGE CPP #-}
 
 module TerminalSize
   ( TermSize
@@ -18,11 +19,13 @@ import Control.Exception (SomeException, try)
 import Control.Monad (when)
 import Data.IORef
 import Data.List (isInfixOf)
+#if !defined(mingw32_HOST_OS)
 import Foreign
 import Foreign.C.Types
-import System.Environment (lookupEnv)
 import System.Posix.IO (stdOutput)
 import System.Posix.Signals (Handler(..), installHandler)
+#endif
+import System.Environment (lookupEnv)
 
 data TermSize = TermSize
   { tsEnabled :: Bool
@@ -31,6 +34,7 @@ data TermSize = TermSize
   , tsDirtyRef :: IORef Bool
   }
 
+#if !defined(mingw32_HOST_OS)
 data WinSize = WinSize
   { wsRows :: CUShort
   , wsCols :: CUShort
@@ -61,6 +65,7 @@ foreign import capi unsafe "signal.h value SIGWINCH"
 
 foreign import capi unsafe "sys/ioctl.h ioctl"
   c_ioctlWinsize :: CInt -> CULong -> Ptr WinSize -> IO CInt
+#endif
 
 defaultRows :: Int
 defaultRows = 24
@@ -82,8 +87,10 @@ initTermSize enabled = do
           , tsDirtyRef = dirtyRef
           }
     when enabled $ do
+#if !defined(mingw32_HOST_OS)
       _ <- try (installHandler (fromIntegral c_SIGWINCH) (Catch (writeIORef dirtyRef True)) Nothing)
              :: IO (Either SomeException Handler)
+#endif
       _ <- termSizeSync ts
       return ()
     return ts
@@ -168,6 +175,9 @@ termRenderedRowsTotal :: Int -> [String] -> Int
 termRenderedRowsTotal width = sum . map (termRenderedRows width)
 
 queryTermSize :: IO (Maybe (Int, Int))
+#if defined(mingw32_HOST_OS)
+queryTermSize = return Nothing
+#else
 queryTermSize =
     alloca $ \ptr -> do
       rc <- c_ioctlWinsize (fromIntegral stdOutput) c_TIOCGWINSZ ptr
@@ -180,6 +190,7 @@ queryTermSize =
           if rows' > 0 && cols' > 0
             then return (Just (rows', cols'))
             else return Nothing
+#endif
 
 envOrDefault :: String -> Int -> IO Int
 envOrDefault name fallback = do

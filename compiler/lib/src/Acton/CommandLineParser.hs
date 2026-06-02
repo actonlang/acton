@@ -13,6 +13,10 @@ defTarget = "x86_64-macos-none"
 defTarget = "aarch64-linux-gnu.2.27"
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
 defTarget = "x86_64-linux-gnu.2.27"
+#elif defined(mingw32_HOST_OS) && defined(aarch64_HOST_ARCH)
+defTarget = "aarch64-linux-gnu.2.27"
+#elif defined(mingw32_HOST_OS) && defined(x86_64_HOST_ARCH)
+defTarget = "x86_64-linux-gnu.2.27"
 #else
 #error "Unsupported platform"
 #endif

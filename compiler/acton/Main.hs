@@ -83,15 +83,15 @@ import System.Environment (lookupEnv)
 import System.Exit
 import System.FileLock
 import System.FilePath ((</>), addTrailingPathSeparator)
-import System.FilePath.Posix
+import System.FilePath.Posix hiding ((</>), addTrailingPathSeparator)
 import System.IO hiding (readFile, writeFile)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
-import Text.Show.Pretty (ppDoc)
 import System.IO.Temp
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
-import System.Posix.Files
-import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
+#if !defined(mingw32_HOST_OS)
+import System.Posix.IO (createPipe, fdToHandle, setFdOption, closeFd, FdOption(..))
+#endif
 import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
@@ -836,24 +836,14 @@ dispatchWatchTrigger notify trigger =
 -- | Classify project FS events into full or incremental rebuild triggers.
 actWatchTrigger :: FS.Event -> Maybe WatchTrigger
 actWatchTrigger ev =
-    case FS.eventIsDirectory ev of
-      FS.IsDirectory ->
-        case ev of
-          FS.Added{} -> Just WatchFull
-          FS.Removed{} -> Just WatchFull
-          FS.WatchedDirectoryRemoved{} -> Just WatchFull
-          FS.Unknown{} -> Just WatchFull
-          _ -> Nothing
-      FS.IsFile ->
-        if takeExtension (FS.eventPath ev) /= ".act"
-          then Nothing
-          else case ev of
-                 FS.ModifiedAttributes{} -> Nothing
-                 FS.Added{} -> Just WatchFull
-                 FS.Removed{} -> Just WatchFull
-                 FS.WatchedDirectoryRemoved{} -> Just WatchFull
-                 FS.Unknown{} -> Just WatchFull
-                 _ -> Just (WatchIncremental (FS.eventPath ev))
+    let path = FS.eventPath ev
+    in if takeExtension path /= ".act"
+         then Nothing
+         else case ev of
+                FS.Added{} -> Just WatchFull
+                FS.Removed{} -> Just WatchFull
+                FS.Unknown{} -> Just WatchFull
+                _ -> Just (WatchIncremental path)
 
 -- | Classify FS events for a specific file path.
 fileWatchTrigger :: FilePath -> FS.Event -> Maybe WatchTrigger
@@ -862,7 +852,8 @@ fileWatchTrigger target ev =
     in if evPath /= target
          then Nothing
          else case ev of
-                FS.ModifiedAttributes{} -> Nothing
+                FS.Removed{} -> Just WatchFull
+                FS.Unknown{} -> Just WatchFull
                 _ -> Just (WatchIncremental (FS.eventPath ev))
 
 -- | Run the project watch loop and schedule compiles on events.
@@ -2340,32 +2331,38 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           ui <- mProgressUI
           let tp = puTermProgress ui
           if termProgressEnabled tp then Just tp else Nothing
-    (envOverride, onStart, onStop, closeFds) <- case mTermProgress of
-      Nothing -> return (Nothing, \_ -> return (), return (), True)
-      Just tp -> do
-        (readFd, writeFd) <- createPipe
-        setFdOption writeFd CloseOnExec False
-        setFdOption readFd CloseOnExec True
-        doneVar <- newEmptyMVar
-        pctRef <- newIORef (85 :: Int)
-        let updatePercent ratio = do
-              let clamped = max 0 (min 0.999 ratio)
-                  pctRaw = 85 + floor (clamped * 15)
-              pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
-              withLock (termProgressPercent tp pct)
-            reader = do
-              readZigProgressStream readFd $ \msg ->
-                case zigProgressRatio msg of
-                  Nothing -> return ()
-                  Just ratio -> updatePercent ratio
-        _ <- forkIO (reader `finally` putMVar doneVar ())
-        let envVal = show (fromIntegral writeFd :: Int)
-            onStart' _ = closeFd writeFd `catch` ignoreIO
-            onStop' = do
-              closeFd writeFd `catch` ignoreIO
-              closeFd readFd `catch` ignoreIO
-              takeMVar doneVar
-        return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+    (envOverride, onStart, onStop, closeFds) <-
+#if defined(mingw32_HOST_OS)
+      return (Nothing, \_ -> return (), return (), True)
+#else
+      case mTermProgress of
+        Nothing -> return (Nothing, \_ -> return (), return (), True)
+        Just tp -> do
+          (readFd, writeFd) <- createPipe
+          setFdOption writeFd CloseOnExec False
+          setFdOption readFd CloseOnExec True
+          readHandle <- fdToHandle readFd
+          doneVar <- newEmptyMVar
+          pctRef <- newIORef (85 :: Int)
+          let updatePercent ratio = do
+                let clamped = max 0 (min 0.999 ratio)
+                    pctRaw = 85 + floor (clamped * 15)
+                pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
+                withLock (termProgressPercent tp pct)
+              reader = do
+                readZigProgressStream readHandle $ \msg ->
+                  case zigProgressRatio msg of
+                    Nothing -> return ()
+                    Just ratio -> updatePercent ratio
+          _ <- forkIO (reader `finally` putMVar doneVar ())
+          let envVal = show (fromIntegral writeFd :: Int)
+              onStart' _ = closeFd writeFd `catch` ignoreIO
+              onStop' = do
+                closeFd writeFd `catch` ignoreIO
+                hClose readHandle `catch` ignoreIO
+                takeMVar doneVar
+          return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+#endif
     let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
                then ("DEVELOPER_DIR", "/dev/null") : env0
                else env0

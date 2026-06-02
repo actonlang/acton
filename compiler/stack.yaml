@@ -43,12 +43,15 @@ extra-deps:
   - dir-traverse-0.2.3.0
   - directory-1.3.8.5
   - filepath-1.4.300.1
+  - fsnotify-0.3.0.1@sha256:58bb530d7acf93eb4ed69473e32a1485581815f04f69dfc8a278523781ba49dd,2988
   - lsp-2.7.0.0
   - lsp-types-2.3.0.0
   - parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56
   - process-1.6.19.0
   - tasty-1.5.3
+  - time-1.12.2
   - unix-2.8.2.1
+  - Win32-2.14.2.2
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
@@ -69,3 +72,4 @@ extra-lib-dirs:
 
 ghc-options:
   "$everything": -fPIC
+  lsp-types: -O0 -fexternal-interpreter

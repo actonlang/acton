@@ -240,6 +240,7 @@ import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
 import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Word (Word8, Word32, Word64)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
@@ -253,16 +254,17 @@ import System.Directory.Recursive (getFilesRecursive)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
-import System.FilePath.Posix
+import System.FilePath.Posix hiding ((</>))
 import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp (createTempDirectory, withSystemTempDirectory)
 import System.IO.Unsafe (unsafePerformIO)
+#if !defined(mingw32_HOST_OS)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
+#endif
 import System.Process (CreateProcess(cwd), readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
-import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
-import Text.Show.Pretty (ppDoc)
+import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode), text)
 import Text.Printf
 
 import qualified Data.ByteString as BS
@@ -1041,6 +1043,17 @@ parseActFile opts sp mn actFile mOnProgress = do
 -- restores falls back to content hashing instead of blindly trusting mtimes.
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
 readSourceFileMeta path = do
+#if defined(mingw32_HOST_OS)
+  mtimeNs <- fileModificationTimeNs path
+  size <- getFileSize path
+  return InterfaceFiles.SourceFileMeta
+    { InterfaceFiles.sfmMTimeNs = mtimeNs
+    , InterfaceFiles.sfmCTimeNs = mtimeNs
+    , InterfaceFiles.sfmSize = fromIntegral size
+    , InterfaceFiles.sfmDevice = Nothing
+    , InterfaceFiles.sfmInode = Nothing
+    }
+#else
   st <- getFileStatus path
   let mtimeNs = fileStatusMTimeNs st
       ctimeNs = fileStatusCTimeNs st
@@ -1054,6 +1067,19 @@ readSourceFileMeta path = do
   where
     fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
     fileStatusCTimeNs st = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
+#endif
+
+fileModificationTimeNs :: FilePath -> IO Integer
+#if defined(mingw32_HOST_OS)
+fileModificationTimeNs path =
+  utcTimeToNs <$> getModificationTime path
+  where
+    utcTimeToNs = floor . (* (1000000000 :: Rational)) . toRational . utcTimeToPOSIXSeconds
+#else
+fileModificationTimeNs path = do
+  st <- getFileStatus path
+  return (floor (toRational (modificationTimeHiRes st) * 1000000000))
+#endif
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
@@ -1415,8 +1441,6 @@ readModuleHeader sp gopts opts paths actFile = do
                         snap <- Source.spReadFile sp actFile
                         verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps nameHashes roots tests mdoc
   where
-    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
-
     mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
       TyHead
         { mhName       = mn
@@ -1462,10 +1486,10 @@ readModuleHeader sp gopts opts paths actFile = do
           case exePathE of
             Left _ -> return False
             Right exePath -> do
-              exeStatusE <- (try (getFileStatus exePath) :: IO (Either SomeException FileStatus))
+              exeStatusE <- (try (fileModificationTimeNs exePath) :: IO (Either SomeException Integer))
               case exeStatusE of
                 Left _ -> return False
-                Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
+                Right exeMTimeNs -> return (exeMTimeNs > tyMTimeNs)
 
     refreshCachedSourceMeta currentSourceMeta = do
       let tyFilePath = tyDbPath paths (modName paths)
@@ -1833,7 +1857,7 @@ runFrontPasses gopts opts paths env0 parsed srcContent srcBytes sourceMeta resol
       when (C.parse opts && isRoot) $
         dump mn "parse" (Pretty.print parsed)
       when (C.parse_ast opts && isRoot) $
-        dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
+        dump mn "parse-ast" (renderStyle prettyAstStyle (text (show parsed)))
 
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
       inferredSigsRef <- newIORef ([] :: [InferredSignature])

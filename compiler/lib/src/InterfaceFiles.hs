@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE DeriveGeneric, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, DeriveGeneric, ScopedTypeVariables #-}
 -- Acton Interface (.tydb) Files
 --
 -- Purpose
@@ -102,17 +102,20 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, getPermissions, listDirectory, removeFile, removePathForcibly, writable)
 import System.FilePath ((</>), takeExtension)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
+#if !defined(mingw32_HOST_OS)
 import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
+#endif
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -203,8 +206,13 @@ interfaceModifiedTime path = getModificationTime (dataFilePath path)
 
 interfaceModifiedTimeNs :: FilePath -> IO Integer
 interfaceModifiedTimeNs path = do
+#if defined(mingw32_HOST_OS)
+    time <- getModificationTime (dataFilePath path)
+    return (utcTimeToNs time)
+#else
     st <- getFileStatus (dataFilePath path)
     return (floor (toRational (modificationTimeHiRes st) * 1000000000))
+#endif
 
 copyInterface :: FilePath -> FilePath -> IO ()
 copyInterface src dst = do
@@ -434,8 +442,8 @@ canUseLockFile path = do
     let lockPath = lockFilePath path
     exists <- doesFileExist lockPath
     if exists
-      then fileAccess lockPath False True False
-      else fileAccess path False True True
+      then canWritePath lockPath False
+      else canWritePath path True
 
 canReadWithoutLock :: FilePath -> IO Bool
 canReadWithoutLock path = do
@@ -444,9 +452,17 @@ canReadWithoutLock path = do
     if not exists
       then return False
       else do
-        dataWritable <- fileAccess dataPath False True False
-        dirWritable <- fileAccess path False True True
+        dataWritable <- canWritePath dataPath False
+        dirWritable <- canWritePath path True
         return (not dataWritable && not dirWritable)
+
+canWritePath :: FilePath -> Bool -> IO Bool
+#if defined(mingw32_HOST_OS)
+canWritePath path _ =
+    (writable <$> getPermissions path) `E.catch` \(_ :: E.IOException) -> return False
+#else
+canWritePath path searchable = fileAccess path False True searchable
+#endif
 
 isCorruptEnv :: E.SomeException -> Bool
 isCorruptEnv err =
@@ -483,6 +499,9 @@ writeEntries path entries = do
         Left (err :: E.SomeException) -> E.throwIO err
 
 setReadableInterfacePermissions :: FilePath -> IO ()
+#if defined(mingw32_HOST_OS)
+setReadableInterfacePermissions _ = return ()
+#else
 setReadableInterfacePermissions path = do
     setFileMode path 0o755
     setFileMode (dataFilePath path) 0o644
@@ -494,6 +513,10 @@ setReadableInterfacePermissions path = do
           if isDoesNotExistError err
             then return ()
             else E.throwIO (err :: E.IOException)
+#endif
+
+utcTimeToNs :: UTCTime -> Integer
+utcTimeToNs = floor . (* (1000000000 :: Rational)) . toRational . utcTimeToPOSIXSeconds
 
 validateVersion :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ()
 validateVersion txn dbi = do
