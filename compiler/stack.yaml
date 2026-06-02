@@ -71,5 +71,7 @@ extra-lib-dirs:
 # system-ghc: true
 
 ghc-options:
-  "$everything": -fPIC
+  # Keep the Linux static-link workaround scoped to the unix package. Applying
+  # -fPIC broadly makes GHC 9.8.4 Windows builds crash in generated code.
+  unix: -fPIC
   lsp-types: -O0 -fexternal-interpreter

@@ -1,0 +1,8 @@
+.{
+    .name = .libutf8proc,
+    .version = "0.0.0",
+    .fingerprint = 0xd7d11c6f6da16d6b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

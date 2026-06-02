@@ -1,0 +1,8 @@
+.{
+    .name = .libyyjson,
+    .version = "0.0.0",
+    .fingerprint = 0x1d7fa4acd6e9645e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

@@ -1,0 +1,8 @@
+.{
+    .name = .libgc,
+    .version = "0.0.0",
+    .fingerprint = 0x699a07146c24bd98,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

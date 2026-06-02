@@ -1,7 +1,24 @@
 include version.mk
 TD := $(CURDIR)
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
 CHANGELOG_VERSION=$(shell grep '^\#\# \[[0-9]' CHANGELOG.md | sed 's/\#\# \[\([^]]\{1,\}\)].*/\1/' | head -n1)
 GIT_VERSION_TAG=$(shell git tag --points-at HEAD 2>/dev/null | grep "v[0-9]" | sed -e 's/^v//')
+
+ifeq ($(OS),Windows_NT)
+OS:=windows
+else ifneq ($(findstring MINGW,$(UNAME_S)),)
+OS:=windows
+else ifneq ($(findstring MSYS_NT,$(UNAME_S)),)
+OS:=windows
+endif
+
+EXE_SUFFIX=
+ifeq ($(OS),windows)
+EXE_SUFFIX=.exe
+export GHC_CHARENC=UTF-8
+export LANG=C.UTF-8
+endif
 
 ifdef HOME
 ZIG_LOCAL_CACHE_DIR ?= $(HOME)/.cache/acton/zig-local-cache
@@ -14,10 +31,13 @@ endif
 export ZIG_LOCAL_CACHE_DIR
 export ZIG_GLOBAL_CACHE_DIR
 
-ACTON=$(TD)/dist/bin/acton
-ACTONC=dist/bin/actonc
+ACTON_BIN=dist/bin/acton$(EXE_SUFFIX)
+ACTONC=dist/bin/actonc$(EXE_SUFFIX)
+LSP_SERVER=dist/bin/lsp-server-acton$(EXE_SUFFIX)
+ACTONDB=dist/bin/actondb$(EXE_SUFFIX)
+ACTON=$(TD)/$(ACTON_BIN)
 ZIG_VERSION:=0.16.0
-ZIG=$(TD)/dist/zig/zig
+ZIG=$(TD)/dist/zig/zig$(EXE_SUFFIX)
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-all-errors --retry-connrefused
 AR=$(ZIG) ar
 CC=$(ZIG) cc
@@ -29,6 +49,10 @@ ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
 ACTON_STACK_NEEDS_ZIG=
 ACTON_ZIG_TARGET=
 STACK=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
+
+ifeq ($(OS),windows)
+STACK=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
+endif
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
 # rather, it is the default behavior so the argument is superfluous. We check if
@@ -66,30 +90,30 @@ ACTC_GHC_OPTS += -fprof-auto -fprof-cafs
 endif
 
 # rewrite arm64 to aarch64
-ifeq ($(shell uname -m),arm64)
+ifeq ($(UNAME_M),arm64)
 ARCH:=aarch64
 else
-ARCH:=$(shell uname -m)
+ARCH:=$(UNAME_M)
 endif
 
 # -- Apple Mac OS X ------------------------------------------------------------
-ifeq ($(shell uname -s),Darwin)
+ifeq ($(UNAME_S),Darwin)
 OS:=macos
 endif
 
 # -- Linux ---------------------------------------------------------------------
-ifeq ($(shell uname -s),Linux)
+ifeq ($(UNAME_S),Linux)
 OS:=linux
 ACTON_ZIG_GLIBC_VERSION ?= 2.31
 export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
 STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= CPPFLAGS= LDFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
-ifeq ($(shell uname -m),x86_64)
+ifeq ($(UNAME_M),x86_64)
 ACTON_ZIG_TARGET := x86_64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
-else ifeq ($(shell uname -m),aarch64)
+else ifeq ($(UNAME_M),aarch64)
 ACTON_ZIG_TARGET := aarch64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else
-$(error "Unsupported architecture for Linux?" $(shell uname -m))
+$(error "Unsupported architecture for Linux?" $(UNAME_M))
 endif
 ACTONC_TARGET := --target $(ACTON_ZIG_TARGET)
 endif # -- END: Linux ----------------------------------------------------------
@@ -104,7 +128,7 @@ help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
-	@echo "  make PROFILE=1 dist/bin/acton - build profiled acton binary"
+	@echo "  make PROFILE=1 $(ACTON_BIN) - build profiled acton binary"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
 	@echo "  clean-all - thorough cleaning"
@@ -124,7 +148,13 @@ endif
 
 BUILTIN_HFILES=$(wildcard base/builtin/*.h)
 
-DIST_BINS=$(ACTONC) dist/bin/actondb dist/bin/runacton dist/bin/lsp-server-acton
+DIST_BINS=$(ACTONC) dist/bin/runacton $(LSP_SERVER)
+ifneq ($(OS),windows)
+DIST_BINS += $(ACTONDB)
+endif
+ifeq ($(OS),windows)
+DIST_BINS += dist/bin/liblmdb.dll
+endif
 DIST_ZIG=dist/zig
 ifeq ($(ACTON_STACK_NEEDS_ZIG),1)
 ACTON_STACK_PREREQS=$(DIST_ZIG)
@@ -142,14 +172,13 @@ endif
 # and needs a fixed location independent of the directory the link runs from.
 ACTON_BDEPS_DIR := $(TD)/bdeps/out
 export ACTON_BDEPS_DIR
-# libz is the one bdeps lib that GHC actually links into acton on every platform,
-# so we build and statically link it everywhere. The ld-wrapper rewrites -lz to
-# this archive's full path; dropping any future lib's .a into bdeps/out/lib (e.g.
-# liblmdb.a) makes it link statically the same way, with no per-lib wiring.
+ifneq ($(OS),windows)
+# libz and liblmdb are linked statically into acton on Unix-like platforms. On
+# Windows GHC links against the Stack/MSYS2 LMDB DLL, which we ship app-locally
+# beside acton.exe instead.
 BDEPS += bdeps/out/lib/libz.a
-# liblmdb backs the compiler's .tydb interface cache; GHC links it into acton on
-# every platform, so -- unlike gmp/tinfo below -- it is an unconditional bdep.
 BDEPS += bdeps/out/lib/liblmdb.a
+endif
 ifeq ($(OS),linux)
 # gmp and tinfo are only pulled in by GHC on Linux (macOS GHC uses the native
 # bignum backend and the SDK's libncurses), so they are Linux-only bdeps.
@@ -169,34 +198,53 @@ test-backend: $(BACKEND_TESTS)
 # /compiler ----------------------------------------------
 ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
+
+ifeq ($(OS),windows)
+ACTONC_LINK_CMD=cp -f dist/bin/acton.exe dist/bin/actonc.exe
+else
+ACTONC_LINK_CMD=ln -sf acton dist/bin/actonc
+endif
+
+$(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
 	mkdir -p dist/bin
-	rm -f dist/bin/actonc
+	rm -f $(ACTONC)
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
 	cd compiler && $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)' --dry-run 2>&1 | grep "Nothing to build" || \
 		(sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < acton/package.yaml.in > acton/package.yaml \
 		&& sed 's,^version: BUILD_VERSION,version: "$(VERSION_INFO)",' < lsp-server/package.yaml.in > lsp-server/package.yaml \
-		&& unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup \
+		&& $(STACK) setup \
 		&& $(STACK) build acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)')
 	cd compiler && $(STACK) --local-bin-path=../dist/bin install acton lsp-server-acton $(ACTON_STACK_BUILD_OPTS) --ghc-options='-j4 $(ACTC_GHC_OPTS)'
 	# Keep actonc as a symlink for compatibility
-	ln -sf acton dist/bin/actonc
+	$(ACTONC_LINK_CMD)
 
-dist/bin/actonc: dist/bin/acton
+$(ACTONC): $(ACTON_BIN)
 	@mkdir -p $(dir $@)
-	ln -sf acton $@
+	$(ACTONC_LINK_CMD)
 
-dist/bin/lsp-server-acton: dist/bin/acton
-	@true
+$(LSP_SERVER): $(ACTON_BIN)
+	@if [ ! -f "$@" ]; then \
+		echo "$@ missing; rebuilding $(ACTON_BIN)"; \
+		$(MAKE) --always-make $(ACTON_BIN); \
+	fi
+	test -f "$@"
+
+ifeq ($(OS),windows)
+dist/bin/liblmdb.dll: $(ACTON_BIN)
+	mkdir -p dist/bin
+	powershell -NoProfile -ExecutionPolicy Bypass -Command '$$here = Get-Location; Set-Location compiler; $$programs = (stack path --programs).Trim(); Set-Location $$here; $$dll = Get-ChildItem -Path $$programs -Recurse -Filter liblmdb.dll | Select-Object -First 1; if ($$null -eq $$dll) { throw "liblmdb.dll not found below Stack programs dir" }; Copy-Item $$dll.FullName "$@" -Force'
+endif
 
 .PHONY: clean-compiler
 clean-compiler:
 	cd compiler && stack clean >/dev/null 2>&1 || true
-	rm -f dist/bin/acton dist/bin/actonc compiler/package.yaml compiler/acton.cabal \
+	rm -f dist/bin/acton dist/bin/acton.exe dist/bin/actonc dist/bin/actonc.exe \
+		dist/bin/lsp-server-acton dist/bin/lsp-server-acton.exe dist/bin/liblmdb.dll \
+		compiler/package.yaml compiler/acton.cabal \
 		compiler/acton/package.yaml compiler/acton/acton.cabal \
 		compiler/lib/*.cabal compiler/acton/*.cabal compiler/lsp-server/*.cabal
 
-ACTON_LINKAGE_BINS ?= dist/bin/acton dist/bin/lsp-server-acton dist/bin/actondb
+ACTON_LINKAGE_BINS ?= $(ACTON_BIN) $(LSP_SERVER) $(ACTONDB)
 ACTON_ALLOWED_NEEDED_RE ?= ^(libc\.so\.6|libm\.so\.6|libdl\.so\.2|libpthread\.so\.0|librt\.so\.1|libutil\.so\.1|ld-linux-x86-64\.so\.2|ld-linux-aarch64\.so\.1)$$
 .PHONY: ldd
 ldd: $(ACTON_LINKAGE_BINS)
@@ -336,73 +384,83 @@ bdeps/out/lib/liblmdb.a: bdeps/lmdb/build.zig bdeps/lmdb/build.zig.zon $(DIST_ZI
 # /deps/libargp --------------------------------------------
 LIBARGP_REF=137154fb257055beb11f3283021d8eccc3c4f470
 LIBARGP_BUILD_ZIG=deps/libargp/build.zig
+LIBARGP_BUILD_ZON=deps/libargp/build.zig.zon
 deps-download/$(LIBARGP_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/argp-standalone/archive/$(LIBARGP_REF).tar.gz
 
-dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG)
+dist/deps/libargp: deps-download/$(LIBARGP_REF).tar.gz $(LIBARGP_BUILD_ZIG) $(LIBARGP_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBARGP_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBARGP_BUILD_ZON)" "$@/build.zig.zon"
 	rm -rf "$@/testsuite"
 	touch "$(TD)/$@"
 
 # /deps/libbsdnt --------------------------------------------
 LIBBSDNT_REF=cf7db3414867b8b4a5561bc9aa94a8050d0225c4
 LIBBSDNT_BUILD_ZIG=deps/libbsdnt/build.zig
+LIBBSDNT_BUILD_ZON=deps/libbsdnt/build.zig.zon
 deps-download/$(LIBBSDNT_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bsdnt/archive/$(LIBBSDNT_REF).tar.gz
 
-dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
+dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG) $(LIBBSDNT_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBBSDNT_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBBSDNT_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
 LIBGC_REF=0a23b211b558137de7ee654c5527a54113142517
 LIBGC_BUILD_ZIG=deps/libgc/build.zig
+LIBGC_BUILD_ZON=deps/libgc/build.zig.zon
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/bdwgc/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG) $(LIBGC_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBGC_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBGC_BUILD_ZON)" "$@/build.zig.zon"
 	rm -rf "$@/tests" "$@/tools"
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
 LIBMBEDTLS_REF=c7d83538d3d359b05a9331bb2c9217977b5856ac
 LIBMBEDTLS_BUILD_ZIG=deps/mbedtls/build.zig
+LIBMBEDTLS_BUILD_ZON=deps/mbedtls/build.zig.zon
 deps-download/$(LIBMBEDTLS_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
 
-dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG)
+dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG) $(LIBMBEDTLS_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBMBEDTLS_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBMBEDTLS_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
 LIBPROTOBUF_C_REF=abc67a11c6db271bedbb9f58be85d6f4e2ea8389
 LIBPROTOBUF_C_BUILD_ZIG=deps/libprotobuf_c/build.zig
+LIBPROTOBUF_C_BUILD_ZON=deps/libprotobuf_c/build.zig.zon
 deps-download/$(LIBPROTOBUF_C_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/protobuf-c/protobuf-c/archive/$(LIBPROTOBUF_C_REF).tar.gz
 
-dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF_C_BUILD_ZIG)
+dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF_C_BUILD_ZIG) $(LIBPROTOBUF_C_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBPROTOBUF_C_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBPROTOBUF_C_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
@@ -424,15 +482,17 @@ dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbe
 # /deps/libutf8proc --------------------------------------
 LIBUTF8PROC_REF=1cb28a66ca79a0845e99433fd1056257456cef8b
 LIBUTF8PROC_BUILD_ZIG=deps/libutf8proc/build.zig
+LIBUTF8PROC_BUILD_ZON=deps/libutf8proc/build.zig.zon
 deps-download/$(LIBUTF8PROC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/JuliaStrings/utf8proc/archive/$(LIBUTF8PROC_REF).tar.gz
 
-dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz $(LIBUTF8PROC_BUILD_ZIG)
+dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz $(LIBUTF8PROC_BUILD_ZIG) $(LIBUTF8PROC_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBUTF8PROC_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBUTF8PROC_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libuuid ------------------------------------------
@@ -443,58 +503,69 @@ dist/deps/libuuid: deps/libuuid
 # /deps/libuv --------------------------------------------
 LIBUV_REF=d760a3f23511ebe7b1935fe1429147d4fca27bb4
 LIBUV_BUILD_ZIG=deps/libuv/build.zig
+LIBUV_BUILD_ZON=deps/libuv/build.zig.zon
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libuv/archive/$(LIBUV_REF).tar.gz
 
-dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz $(LIBUV_BUILD_ZIG)
+dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz $(LIBUV_BUILD_ZIG) $(LIBUV_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<" "libuv-$(LIBUV_REF)/include" "libuv-$(LIBUV_REF)/src"
 	cp "$(TD)/$(LIBUV_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBUV_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libxml2 ------------------------------------------
 LIBXML2_REF=358ca4e6e34dd2b386aab1fdeb74a641c54940a0
 LIBXML2_BUILD_ZIG=deps/libxml2/build.zig
+LIBXML2_BUILD_ZON=deps/libxml2/build.zig.zon
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/libxml2/archive/$(LIBXML2_REF).tar.gz
 
-dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG)
+dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG) $(LIBXML2_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && tar zx --strip-components=1 \
+		--exclude='*/doc' --exclude='*/example' --exclude='*/fuzz' \
+		--exclude='*/os400' --exclude='*/python' --exclude='*/test*' \
+		-f "$(TD)/$<"
 	cp "$(TD)/$(LIBXML2_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBXML2_BUILD_ZON)" "$@/build.zig.zon"
 	rm -rf "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" $@/test*
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
 LIBPCRE2_REF=e4ccef3034c870342f2d37c928e98bc8c69cd340
 LIBPCRE2_BUILD_ZIG=deps/pcre2/build.zig
+LIBPCRE2_BUILD_ZON=deps/pcre2/build.zig.zon
 deps-download/$(LIBPCRE2_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/PCRE2Project/pcre2/archive/$(LIBPCRE2_REF).tar.gz
 
-dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
+dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG) $(LIBPCRE2_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBPCRE2_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBPCRE2_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
 LIBSNAPPY_C_REF=dc05e026488865bc69313a68bcc03ef2e4ea8e83
 LIBSNAPPY_C_BUILD_ZIG=deps/libsnappy_c/build.zig
+LIBSNAPPY_C_BUILD_ZON=deps/libsnappy_c/build.zig.zon
 deps-download/$(LIBSNAPPY_C_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/google/snappy/archive/$(LIBSNAPPY_C_REF).tar.gz
 
-dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG)
+dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUILD_ZIG) $(LIBSNAPPY_C_BUILD_ZON)
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZIG)" "$@/build.zig"
+	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZON)" "$@/build.zig.zon"
 	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
@@ -512,7 +583,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # archives must exist first. (test, test-stdlib, test-incremental, online-tests
 # already pull it in transitively via dist/bin/acton[c].)
 test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
-test: dist/bin/acton
+test: $(ACTON_BIN)
 	cd compiler && stack test libacton acton:test_acton acton:incremental
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
@@ -538,11 +609,11 @@ test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerr
 test-cross-compile:
 	cd compiler && stack test acton --ta '-p "cross-compilation"'
 
-test-incremental: dist/bin/actonc
+test-incremental: $(ACTONC)
 	cd compiler && stack test acton:incremental
 
 .PHONY: test-incremental-accept
-test-incremental-accept: dist/bin/actonc
+test-incremental-accept: $(ACTONC)
 	cd compiler && stack test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
@@ -580,12 +651,12 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib: dist/bin/acton dist/std
+test-stdlib: $(ACTON_BIN) dist/std
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
-online-tests: dist/bin/actonc
+online-tests: $(ACTONC)
 	cd compiler && stack test acton:test_acton_online
 
 
@@ -608,24 +679,27 @@ clean-bdeps:
 #
 
 BACKEND_FILES = backend/Build.act backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps
+ifneq ($(OS),windows)
+DIST_BACKEND_FILES += $(ACTONDB)
+endif
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
 
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS) dist/backend/Build.act
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig $(ACTONC) $(DEPS) dist/backend/Build.act
 	mkdir -p "$@" "$@/.build" "$@/out"
 	rm -rf "$@/src" "$@/out/types/std"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
-	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
+	cd dist/base && ../bin/actonc$(EXE_SUFFIX) build --skip-build && rm -rf .build
 
 .PHONY: dist/std
-dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/actonc $(DEPS)
+dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base $(ACTONC) $(DEPS)
 	mkdir -p "$@" "$@/.build" "$@/out"
 	rm -rf "$@/src" "$@/out/types"
 	cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
-	cd dist/std && ../bin/actonc build --skip-build && rm -rf .build
+	cd dist/std && ../bin/actonc$(EXE_SUFFIX) build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -637,9 +711,9 @@ ifeq ($(OS),macos)
 # /dev/null to prevent Zig from trying to use them and instead falling back to
 # its own implementation.
 # See https://codeberg.org/ziglang/zig/issues/31658.
-dist/bin/actondb: export DEVELOPER_DIR := $(or $(DEVELOPER_DIR),/dev/null)
+$(ACTONDB): export DEVELOPER_DIR := $(or $(DEVELOPER_DIR),/dev/null)
 endif
-dist/bin/actondb: $(DIST_ZIG) $(DEPS)
+$(ACTONDB): $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb $(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET)) --prefix "$(TD)/dist"
 
@@ -660,7 +734,11 @@ dist/completion/acton.bash-completion: completion/acton.bash-completion
 	mkdir -p "$(dir $@)"
 	cp "$<" "$@"
 
+ifeq ($(OS),windows)
+ZIG_TARBALL=zig-$(ARCH)-windows-$(ZIG_VERSION).zip
+else
 ZIG_TARBALL=zig-$(ARCH)-$(OS)-$(ZIG_VERSION).tar.xz
+endif
 ZIG_DOWNLOAD_BASE_URL ?=
 ifeq ($(strip $(ZIG_DOWNLOAD_BASE_URL)),)
 ifeq ($(findstring -dev,$(ZIG_VERSION)),-dev)
@@ -674,7 +752,16 @@ endif
 
 dist/zig: deps-download/$(ZIG_TARBALL)
 	mkdir -p "$@"
+ifeq ($(OS),windows)
+	rm -rf "$@.tmp"
+	mkdir -p "$@.tmp"
+	unzip -q "$(TD)/$<" -d "$@.tmp"
+	rm -rf "$@"
+	mv "$@.tmp"/zig-* "$@"
+	rm -rf "$@.tmp"
+else
 	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
+endif
 	rm -rf "$@/doc"
 	cp -a deps/zig-extras/* "$@"
 

@@ -1,0 +1,8 @@
+.{
+    .name = .libpcre2,
+    .version = "0.0.0",
+    .fingerprint = 0xee1d0784457618a7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

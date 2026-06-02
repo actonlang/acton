@@ -110,7 +110,7 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, getPermissions, listDirectory, removeFile, removePathForcibly, writable)
-import System.FilePath ((</>), takeExtension)
+import System.FilePath ((</>), normalise, takeExtension)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 #if !defined(mingw32_HOST_OS)
@@ -315,9 +315,10 @@ copyVal (LMDB.MDB_val len ptr) =
 
 withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
 withEnv path readOnly mapSize action =
-    withInterfaceLock path $
+    withInterfaceLock lmdbPath $
       E.bracket open LMDB.mdb_env_close action
   where
+    lmdbPath = normalise path
     open = withMVar lmdbOpenLock $ \_ -> do
       env <- LMDB.mdb_env_create
       (do LMDB.mdb_env_set_mapsize env mapSize
@@ -326,9 +327,17 @@ withEnv path readOnly mapSize action =
         `E.onException` LMDB.mdb_env_close env
     openEnv env
       | readOnly  = do
-          flags <- readOnlyOpenFlags path
-          LMDB.mdb_env_open env path flags
-      | otherwise = LMDB.mdb_env_open env path []
+          exists <- doesDirectoryExist lmdbPath
+          unless exists $
+            ioError (userError ("Missing .tydb directory: " ++ lmdbPath))
+          flags <- readOnlyOpenFlags lmdbPath
+          openWithContext env "read" flags
+      | otherwise = do
+          createDirectoryIfMissing True lmdbPath
+          openWithContext env "write" []
+    openWithContext env mode flags =
+      LMDB.mdb_env_open env lmdbPath flags `E.catch` \(err :: LMDB.LMDB_Error) ->
+        ioError (userError ("mdb_env_open " ++ mode ++ " " ++ lmdbPath ++ ": " ++ show err))
 
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do

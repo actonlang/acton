@@ -63,7 +63,7 @@ import Data.Word (Word32)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (toLower)
+import Data.Char (isAlpha, toLower)
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
@@ -173,8 +173,14 @@ optimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
 optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 
 zig :: Paths -> FilePath
-zig paths = sysPath paths ++ "/zig/zig"
+zig paths = sysPath paths ++ "/zig/" ++ zigExeName
 
+zigExeName :: FilePath
+#if defined(mingw32_HOST_OS)
+zigExeName = "zig.exe"
+#else
+zigExeName = "zig"
+#endif
 
 -- Try to acquire a lock, return Nothing if failed, Just (FileLock, FilePath) if succeeded
 tryLock :: FilePath -> IO (Maybe (FileLock, FilePath))
@@ -1936,7 +1942,7 @@ runCliPostCompile cliHooks gopts plan env = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True) rootTasks
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
-        depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
+        depModuleOptsByProj = depModuleOptionsByProj sysAbs selectedTasksByProj projMap
         rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
         rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
@@ -2046,15 +2052,18 @@ selectedRootStubEntriesForBins paths bins =
       | b <- bins
       ]
 
--- | For each consuming project, map dep name to selected C-source CSV.
-depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
-depModuleOptionsByProj tasksByProj projMap =
+-- | For each consuming project, map generated Acton dep name to selected C-source CSV.
+depModuleOptionsByProj :: FilePath -> M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
+depModuleOptionsByProj sysAbs tasksByProj projMap =
     M.map mkForProj projMap
   where
+    sysRoot = addTrailingPathSeparator sysAbs
+    isSysProj p = p == sysAbs || sysRoot `isPrefixOf` p
     mkForProj ctx =
       M.fromList
         [ (depName, mkCsv depProj)
         | (depName, depProj) <- projDeps ctx
+        , not (isSysProj depProj)
         ]
     mkCsv depProj =
       intercalate "," (selectedCSourceEntriesForProj depProj (M.findWithDefault [] depProj tasksByProj))
@@ -2399,7 +2408,7 @@ generateFingerprint name = do
 genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
 genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides = do
     let proj = projPath paths
-    projAbs <- canonicalizePath proj
+    projAbs <- normalizePathSafe proj
     let sys              = sysPath paths
         buildZigPath     = joinPath [proj, "build.zig"]
         buildZonPath     = joinPath [proj, "build.zig.zon"]
@@ -2410,8 +2419,8 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
     let zonName = BuildSpec.specName spec
         fp = BuildSpec.fingerprint spec
     (transPkgs, transZigs) <- collectDepsRecursive spec proj rootPins depOverrides
-    absSys <- canonicalizePath sys
-    let relSys = relativeViaRoot projAbs absSys
+    absSys <- normalizePathSafe sys
+    let relSys = zonPath (relativeViaRoot projAbs absSys)
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- normalizeSpecPaths proj spec
@@ -2557,16 +2566,22 @@ genBuildZig template spec zigDeps depModuleOpts =
     in unlines $ header ++ concatMap inject (lines template)
   where
     pkgDepDef (name, _) =
-      let selectedCsv = M.findWithDefault "" name depModuleOpts
-      in unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
-                 , "        .target = target,"
-                 , "        .optimize = optimize,"
-                 , "        .no_threads = no_threads,"
-                 , "        .db = db,"
-                 , "        .acton_modules = " ++ show selectedCsv ++ ","
-                 , "        .acton_root_stubs = \"\","
-                 , "    });"
-                 ]
+      let actonProjectArgs =
+            case M.lookup name depModuleOpts of
+              Nothing -> []
+              Just selectedCsv ->
+                [ "        .acton_modules = " ++ show selectedCsv ++ ","
+                , "        .acton_root_stubs = \"\","
+                ]
+      in unlines $
+           [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+           , "        .target = target,"
+           , "        .optimize = optimize,"
+           , "        .no_threads = no_threads,"
+           , "        .db = db,"
+           ]
+           ++ actonProjectArgs
+           ++ [ "    });" ]
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
       ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
@@ -2591,6 +2606,15 @@ genBuildZig template spec zigDeps depModuleOpts =
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
     zigExeLink resolved = concat [ "            executable.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
+
+zonPath :: FilePath -> String
+zonPath = concatMap escapeChar . map slash
+  where
+    slash '\\' = '/'
+    slash c    = c
+
+    escapeChar '"' = "\\\""
+    escapeChar c   = [c]
 
 genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
 genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigDepsResolved =
@@ -2620,7 +2644,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                       if isAbsolutePath rawPath
                         then normalise rawPath
                         else normalise (rebasePath projRoot rawPath)
-          path = relativeViaRoot projRoot pathAbs
+          path = zonPath (relativeViaRoot projRoot pathAbs)
       in unlines [ "        ." ++ name ++ " = .{"
                  , "            .path = \"" ++ path ++ "\","
                  , "        },"
@@ -2632,7 +2656,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                           if isAbsolutePath p
                             then normalise p
                             else normalise (rebasePath projAbs p)
-              relPath = relativeViaRoot projAbs absPath
+              relPath = zonPath (relativeViaRoot projAbs absPath)
           in unlines [ "        ." ++ zigDepResolvedPkgName resolved ++ " = .{"
                      , "            .path = \"" ++ relPath ++ "\","
                      , "        },"
@@ -2784,18 +2808,24 @@ relativeViaRoot :: FilePath -> FilePath -> FilePath
 relativeViaRoot baseAbs targetAbs
   | not (isAbsolutePath targetAbs) = targetAbs
   | otherwise =
-      let (bDriveRaw, bPath) = splitDrive (normalise baseAbs)
-          (tDriveRaw, tPath) = splitDrive (normalise targetAbs)
-          bDrive = map toLower bDriveRaw
-          tDrive = map toLower tDriveRaw
-      in if bDrive /= tDrive && (not (null bDrive) || not (null tDrive))
-           then makeRelativeOrAbsolute baseAbs targetAbs
+      let bParts = cleanParts (normalise baseAbs)
+          tParts = cleanParts (normalise targetAbs)
+          bDrive = pathDrive bParts
+          tDrive = pathDrive tParts
+      in if bDrive /= tDrive
+           then normalise targetAbs
            else
-             let ups = replicate (length (cleanParts bPath)) ".."
-                 tParts = cleanParts tPath
-             in joinPath (ups ++ tParts)
+             let common = length (takeWhile (uncurry (==)) (zip bParts tParts))
+                 ups = replicate (length bParts - common) ".."
+                 relParts = ups ++ drop common tParts
+             in if null relParts then "." else joinPath relParts
   where
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
+    pathDrive (p:_)
+      | isDriveComponent p = Just (map toLower p)
+    pathDrive _ = Nothing
+    isDriveComponent [c, ':'] = isAlpha c
+    isDriveComponent _ = False
 
 -- | Walk BuildSpec dependencies to collect transitive packages and zig deps.
 collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, [ZigDepRef])

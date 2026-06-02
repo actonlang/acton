@@ -1205,7 +1205,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
                   Just files -> do
-                    absFiles <- mapM canonicalizePath files
+                    absFiles <- mapM normalizePathSafe files
                     let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
@@ -1253,7 +1253,7 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
     return [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
   where
     lookupTaskKey ts f = do
-      absF <- canonicalizePath f
+      absF <- normalizePathSafe f
       let byPath = listToMaybe [ gtKey t
                                | t <- ts
                                , let k = gtKey t
@@ -3138,6 +3138,13 @@ systemTypePaths :: FilePath -> FilePath -> [FilePath]
 systemTypePaths sys types =
     [joinPath [sys, "std", "out", "types"], types]
 
+zigExeName :: FilePath
+#if defined(mingw32_HOST_OS)
+zigExeName = "zig.exe"
+#else
+zigExeName = "zig"
+#endif
+
 type FingerprintMap = M.Map String FilePath
 
 scratchBuildSpec :: FilePath -> BuildSpec.BuildSpec
@@ -3363,9 +3370,10 @@ withProjectLock projDir action =
 -- Resolves the project root (or temp root), output dirs, and search path,
 -- creating required directories along the way.
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
-findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
-                             sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             absSrcFile <- canonicalizePath actFile
+findPaths actFile opts  = do execPath <- normalisePathSyntax <$> getExecutablePath
+                             let execDir = takeDirectory execPath
+                             sysPath <- canonicalizePathPosix (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
+                             absSrcFile <- canonicalizePathPosix actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
@@ -3384,16 +3392,19 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
-        analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
-                             return (True, tmp, [])
-        analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
-                             if isProjectRoot
-                                then case ds of
-                                    [] -> return $ (False, pre, [])
-                                    "src":dirs -> return $ (False, pre, dirs)
-                                    "out":"types":dirs -> return $ (False, pre, dirs)
-                                    _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
-                                else analyze (takeDirectory pre) (takeFileName pre : ds)
+        analyze pre ds
+          | pre == takeDirectory pre = do
+              tmp <- canonicalizePathPosix (C.tempdir opts)
+              return (True, tmp, [])
+          | otherwise = do
+              isProjectRoot <- isActonProjectRoot pre
+              if isProjectRoot
+                 then case ds of
+                     [] -> return $ (False, pre, [])
+                     "src":dirs -> return $ (False, pre, dirs)
+                     "out":"types":dirs -> return $ (False, pre, dirs)
+                     _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
+                 else analyze (takeDirectory pre) (takeFileName pre : ds)
 
 -- Module helpers for multi-project builds ---------------------------------------------------------
 
@@ -3630,12 +3641,24 @@ isAbsolutePath p =
       (c:':':_) -> isAlpha c
       _         -> False
 
+-- This module intentionally uses POSIX FilePath operations for Acton module
+-- paths. Canonical paths from Windows use backslashes, so normalize them at the
+-- boundary before takeDirectory, makeRelative, splitDirectories, etc. see them.
+normalisePathSyntax :: FilePath -> FilePath
+normalisePathSyntax = normalise . map slash
+  where
+    slash '\\' = '/'
+    slash c    = c
+
+canonicalizePathPosix :: FilePath -> IO FilePath
+canonicalizePathPosix p = normalisePathSyntax <$> canonicalizePath p
+
 -- | Normalize a path without failing if it does not exist.
 -- Falls back to normalise for non-existent paths (useful for temporary builds).
 normalizePathSafe :: FilePath -> IO FilePath
 normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
-    return $ either (const (normalise p)) id res
+    return $ normalisePathSyntax (either (const p) id res)
 
 -- | Trim leading and trailing whitespace from a string.
 -- Used when parsing or normalizing BuildSpec inputs.
@@ -3723,7 +3746,7 @@ fetchDependencies gopts paths depOverrides = do
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
         home <- getHomeDirectory
-        let zigExe      = joinPath [sysPath paths, "zig", "zig"]
+        let zigExe      = joinPath [sysPath paths, "zig", zigExeName]
             globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
             depsCache   = joinPath [home, ".cache", "acton", "deps"]
             cacheDir h  = joinPath [globalCache, "p", h]

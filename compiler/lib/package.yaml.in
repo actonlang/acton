@@ -66,6 +66,8 @@ library:
     - condition: os(windows)
       c-sources:
         - cbits/wcwidth.c
+      ghc-options:
+        - -fno-PIC
   exposed-modules:
     - Acton.Boxing
     - Acton.BuildSpec

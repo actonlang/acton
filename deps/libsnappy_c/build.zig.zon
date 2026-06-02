@@ -1,0 +1,8 @@
+.{
+    .name = .libsnappy,
+    .version = "0.0.0",
+    .fingerprint = 0xf5ea7e597512b0cd,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

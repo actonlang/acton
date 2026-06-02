@@ -1,0 +1,8 @@
+.{
+    .name = .libargp,
+    .version = "0.0.0",
+    .fingerprint = 0xb32523545ff94c96,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

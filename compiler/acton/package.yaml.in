@@ -81,6 +81,9 @@ executables:
     # default linker instead of breaking. The script branches internally: GNU ld
     # -Bstatic toggling on Linux, an -lfoo -> libfoo.a rewrite for ld64 on macOS.
     when:
+    - condition: os(windows)
+      ghc-options:
+        - -fno-PIC
     - condition: os(linux)
       # -no-pie is required on Linux but invalid on macOS (executables are PIE).
       ghc-options:
