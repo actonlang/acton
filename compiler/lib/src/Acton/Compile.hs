@@ -1490,6 +1490,11 @@ forceTypeEnv typeEnv = do
   evaluate (forceHTEnv (Acton.Env.hmodules typeEnv))
 
 forceTypeResult :: I.NameInfo -> A.Module -> IO ()
+forceTypeResult (I.NModule imps iface mdoc) tchecked = do
+  evaluate (rnf imps)
+  evaluate (rnf mdoc)
+  forceTEnvParallel iface
+  evaluate (forceModuleHeader tchecked)
 forceTypeResult nmod tchecked = do
   evaluate (rnf nmod)
   evaluate (forceModuleHeader tchecked)
@@ -1605,6 +1610,17 @@ rnfFrontTypeFacts facts =
   rnf (ftfImplDeps facts) `seq`
   rnf (ftfImplLocs facts) `seq`
   rnf (ftfStmtEntries facts)
+
+forceTEnvParallel :: [(A.Name, I.NameInfo)] -> IO ()
+forceTEnvParallel [] = return ()
+forceTEnvParallel te = do
+  ncap <- getNumCapabilities
+  let len = length te
+      workers = max 1 (min ncap len)
+      chunkSize = max 1 ((len + workers - 1) `div` workers)
+  if workers == 1 || len < 2 * workers
+    then evaluate (rnf te)
+    else mapConcurrently_ (evaluate . rnf) (chunksOf chunkSize te)
 
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
