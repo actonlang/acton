@@ -240,15 +240,15 @@ fixupSelf s                             = s
 
 convEnvProtos env                       = mapModules conv env
   where
-    conv env1 m (n, NDef sc d doc)      = [(n, NDef (convS sc) d doc)]
-    conv env1 m (n, NSig sc d doc)      = [(n, NSig (convS sc) d doc)]
-    conv env1 m (n, NAct q p k te doc)  = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv env m) te) doc)]
-    conv env1 m ni@(n, NProto q us te doc)
+    conv m (n, NDef sc d doc)           = [(n, NDef (convS sc) d doc)]
+    conv m (n, NSig sc d doc)           = [(n, NSig (convS sc) d doc)]
+    conv m (n, NAct q p k te doc)       = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv m) te) doc)]
+    conv m ni@(n, NProto q us te doc)
                                         = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
-    conv env1 m ni@(n, NExt q c us te opts doc)
+    conv m ni@(n, NExt q c us te opts doc)
                                         = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te) opts
-    conv env1 m (n, NClass q us te doc) = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
-    conv env1 m ni                      = [ni]
+    conv m (n, NClass q us te doc)      = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
+    conv m ni                           = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
     convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
     convT q t                           = t

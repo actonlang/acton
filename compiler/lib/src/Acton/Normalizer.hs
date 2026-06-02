@@ -656,7 +656,7 @@ instance Norm Assoc where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv env m (n, i)                = [(n, conv i)]
+convEnv m (n, i)                    = [(n, conv i)]
 
 
 class Conv a where
