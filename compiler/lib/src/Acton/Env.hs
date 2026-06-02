@@ -106,9 +106,9 @@ inLoop env                  = contextIs env CtxLoop
 
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
-mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
+mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
 
-mapModules                  :: (Env0 -> ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
+mapModules                  :: (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
 mapModules f env            = env' { hmodules = convTEnv2HTEnv mods' }
  where env'                 = env { modules = mods' }
        prim : mods          = modules env
@@ -118,7 +118,7 @@ mapModules f env            = env' { hmodules = convTEnv2HTEnv mods' }
 
        go ns (n, NModule ms te doc)
                             = [(n, NModule ms (walk (ns ++ [n]) te) doc)]
-       go ns ni             = f env (ModName ns) ni
+       go ns ni             = f (ModName ns) ni
 
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$
