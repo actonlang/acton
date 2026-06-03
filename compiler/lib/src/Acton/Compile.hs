@@ -4003,7 +4003,8 @@ data Paths      = Paths {
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
                     fileExt     :: String,
-                    modName     :: A.ModName
+                    modName     :: A.ModName,
+                    projName    :: String
                   }
 
 -- Per-project context used for multi-project orchestration.
@@ -4260,13 +4261,13 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
-                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath depOverrides
+                             (projName,depTypePaths) <- if isTmp then return (fileBody,[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName projName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
@@ -4391,7 +4392,8 @@ pathsForModule opts projMap ctx mn = do
     let sPaths = searchPathForProject opts projMap ctx
         bin = joinPath [projOutDir ctx, "bin"]
         src = projSrcDir ctx
-        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn
+        proj = BuildSpec.specName $ projBuildSpec ctx
+        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn proj
     createDirectoryIfMissing True bin
     createDirectoryIfMissing True (projOutDir ctx)
     createDirectoryIfMissing True (projTypesDir ctx)
@@ -5008,16 +5010,14 @@ resolveDepBase base name dep =
 
 -- | Recursively collect out/types paths for all declared dependencies.
 -- Reads Build.act and follows dependency edges.
-collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
+collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO (String,[FilePath])
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
-  (_, _, paths) <- go Data.Set.empty M.empty root Nothing
-  return paths
+  spec <- loadBuildSpec root
+  (_, _, paths) <- go Data.Set.empty M.empty root spec
+  return (BuildSpec.specName spec, paths)
   where
-    go seen fpMap dir mSpec = do
-      spec0 <- case mSpec of
-                 Just s -> return s
-                 Nothing -> loadBuildSpec dir
+    go seen fpMap dir spec0 = do
       spec <- applyDepOverrides dir overrides spec0
       let (_, fpMap1, _) = applyFingerprint dir spec fpMap
       foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
@@ -5040,7 +5040,8 @@ collectDepTypePaths projDir overrides = do
             then return (seen, fpMap', acc)
             else do
               let seen' = Data.Set.insert depPath seen
-              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath Nothing
+              spec <- loadBuildSpec depPath
+              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath spec
               return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
 
     canonicalizeDep depAbs fpMap = do
