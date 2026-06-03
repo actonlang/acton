@@ -141,6 +141,11 @@ jobs:
           ulimit -c unlimited
       - name: "Check out repository code"
         uses: actions/checkout@v6
+      - name: "Cache downloaded source archives"
+        uses: actions/cache@v5
+        with:
+          path: deps-download
+          key: deps-download-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
       - name: "Cache Haskell deps (~/.stack)"
         if: matrix.cache == true
         uses: actions/cache@v5
@@ -295,6 +300,11 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
         uses: actions/checkout@v6
+      - name: "Cache downloaded source archives"
+        uses: actions/cache@v5
+        with:
+          path: deps-download
+          key: deps-download-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
       - name: "Cache Haskell deps (~/.stack)"
         if: matrix.cache == true
         uses: actions/cache@v5
@@ -450,6 +460,11 @@ jobs:
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
       - name: "Check out repository code"
         uses: actions/checkout@v6
+      - name: "Cache downloaded source archives"
+        uses: actions/cache@v5
+        with:
+          path: deps-download
+          key: deps-download-build-debs-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
       - name: "Cache Haskell deps (~/.stack)"
         uses: actions/cache@v5
         with:
