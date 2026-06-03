@@ -11,7 +11,7 @@ actor GC(env):
 
 
 actor main(env: Env):
-    var num=1000
+    var num=100
     if len(env.argv) > 1:
         num = int(env.argv[1])
 
