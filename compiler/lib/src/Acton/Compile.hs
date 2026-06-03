@@ -49,8 +49,9 @@ Call flow:
   - Triggering:
     - acton build runs the pipeline once for the requested files/project.
     - acton watch and LSP call startCompile on each event; callers can gate
-      output with generation checks (e.g. whenCurrentGen), and BackQueue ignores
-      back jobs for stale generations.
+      output with generation checks (e.g. whenCurrentGen). BackQueue ignores
+      back jobs for stale generations, and front-output jobs are skipped for
+      stale generations before writing.
     - Callers may supply a delay (debounce) before startCompile runs (LSP uses
       debounceMicros on change events; acton watch uses 0).
   - Finalization:
@@ -70,9 +71,9 @@ State and orchestration:
     overlay-aware SourceProvider on top of disk reads. acton watch reads
     directly from disk.
   - Each event bumps the generation via startCompile; callers may pass a delay
-    (LSP uses debounceMicros, acton watch uses 0). Back jobs are filtered by
-    generation inside BackQueue; front-pass diagnostics should be gated by the
-    caller if needed.
+    (LSP uses debounceMicros, acton watch uses 0). Back jobs and front-output
+    writes are filtered by generation; front-pass diagnostics should be gated
+    by the caller if needed.
   - CLI builds share the same pipeline and enqueue back jobs as soon as front
     passes finish, overlapping work without needing a watch event source.
 
@@ -90,6 +91,9 @@ module Acton.Compile
   , BackJob(..)
   , DeferredBackJob(..)
   , FrontResult(..)
+  , FrontOutputKind(..)
+  , FrontOutputJob
+  , waitFrontOutputJobs
   , FrontTiming(..)
   , TypeStmtTiming(..)
   , InferredSignature(..)
@@ -284,6 +288,11 @@ newtype DbpSelectionError = DbpSelectionError String deriving (Show)
 instance Exception DbpSelectionError where
   displayException (DbpSelectionError msg) = msg
 
+newtype FrontOutputError = FrontOutputError String deriving (Show)
+
+instance Exception FrontOutputError where
+  displayException (FrontOutputError msg) = msg
+
 -- | Raise a ProjectError for library callers.
 -- Used by project discovery and path helpers to stop on unrecoverable errors.
 throwProjectError :: String -> IO a
@@ -375,6 +384,12 @@ data InferredSignature = InferredSignature
   , isigSignature :: String
   } deriving (Eq, Show)
 
+data FrontOutputKind
+  = FrontOutputTydb
+  | FrontOutputTydbCopy
+  | FrontOutputDoc
+  deriving (Eq, Ord, Show)
+
 data FrontTiming = FrontTiming
   { ftEnv :: TimeSpec
   , ftKinds :: TimeSpec
@@ -383,8 +398,6 @@ data FrontTiming = FrontTiming
   , ftTypeAfterProgress :: TimeSpec
   , ftTypeForce :: TimeSpec
   , ftTypeHash :: TimeSpec
-  , ftTypeWrite :: TimeSpec
-  , ftTypeDocs :: TimeSpec
   , ftTypeStmtTimings :: [TypeStmtTiming]
   } deriving (Eq, Show)
 
@@ -409,6 +422,9 @@ data CompileCallbacks = CompileCallbacks
   , ccOnFrontStart :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnFrontProgress :: GlobalTask -> C.CompileOptions -> FrontPassProgress -> IO ()
+  , ccOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
+  , ccOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
+  , ccShouldWriteFrontOutput :: IO Bool
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnBackSkipped :: TaskKey -> IO ()
   , ccOnInfo :: String -> IO ()
@@ -426,6 +442,9 @@ defaultCompileCallbacks = CompileCallbacks
   , ccOnFrontStart = \_ _ -> return ()
   , ccOnFrontDone = \_ _ -> return ()
   , ccOnFrontProgress = \_ _ _ -> return ()
+  , ccOnFrontOutputStart = \_ _ -> return ()
+  , ccOnFrontOutputDone = \_ _ _ -> return ()
+  , ccShouldWriteFrontOutput = return True
   , ccOnBackJob = \_ -> return ()
   , ccOnBackSkipped = \_ -> return ()
   , ccOnInfo = \_ -> return ()
@@ -572,13 +591,17 @@ newCompileScheduler gopts maxPar = do
     , csBuildStampRef = buildStampRef
     }
 
--- | Start a new compile action, canceling any in-flight run.
+-- | Start a new compile action, canceling and joining any in-flight run.
 -- Returns the generation id associated with this run.
 startCompile :: CompileScheduler -> Int -> (Int -> IO ()) -> IO Int
 startCompile sched delay run = do
   gen <- atomicModifyIORef' (csGenRef sched) $ \g -> let g' = g + 1 in (g', g')
   modifyMVar_ (csAsyncRef sched) $ \m -> do
-    forM_ m cancel
+    forM_ m $ \old -> do
+      -- The canceled action drains front-output jobs in its finalizer; wait so
+      -- stale writes cannot overlap the next generation.
+      cancel old
+      waitCatch old >> return ()
     a <- async $ do
       when (delay > 0) $ threadDelay delay
       current <- readIORef (csGenRef sched)
@@ -722,6 +745,8 @@ data CompileHooks = CompileHooks
   , chOnFrontDone :: GlobalTask -> IO ()
   , chOnFrontProgress :: GlobalTask -> FrontPassProgress -> IO ()
   , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
+  , chOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
+  , chOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
   , chOnBackQueued :: TaskKey -> Bool -> IO ()
   , chOnBackSkipped :: TaskKey -> IO ()
   , chOnBackStart :: BackJob -> IO ()
@@ -741,6 +766,8 @@ defaultCompileHooks =
     , chOnFrontDone = \_ -> return ()
     , chOnFrontProgress = \_ _ -> return ()
     , chOnFrontResult = \_ _ -> return ()
+    , chOnFrontOutputStart = \_ _ -> return ()
+    , chOnFrontOutputDone = \_ _ _ -> return ()
     , chOnBackQueued = \_ _ -> return ()
     , chOnBackSkipped = \_ -> return ()
     , chOnBackStart = \_ -> return ()
@@ -776,6 +803,11 @@ runCompilePlan sp gopts plan sched gen hooks = do
         , ccOnFrontStart = \t _ -> chOnFrontStart hooks t
         , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
         , ccOnFrontProgress = \t _ p -> chOnFrontProgress hooks t p
+        , ccOnFrontOutputStart = chOnFrontOutputStart hooks
+        , ccOnFrontOutputDone = chOnFrontOutputDone hooks
+        , ccShouldWriteFrontOutput = do
+            current <- readIORef (csGenRef sched)
+            return (current == gen)
         , ccOnBackJob = \job -> do
             let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
             enqueued <- backQueueEnqueue backQueue gen job backCallbacks
@@ -806,7 +838,7 @@ defaultCompileOptions =
     , C.hgen = False
     , C.cgen = False
     , C.ccmd = False
-    , C.ty = False
+    , C.tydb = False
     , C.cpedantic = False
     , C.dbg_no_lines = False
     , C.dbp = []
@@ -1106,6 +1138,13 @@ data DeferredBackJob = DeferredBackJob
   , dbjNameCount :: Int
   , dbjSeeds :: Data.Set.Set A.Name
   , dbjReason :: String
+  , dbjOutputJobs :: [FrontOutputJob]
+  }
+
+data FrontOutputJob = FrontOutputJob
+  { fojKey   :: TaskKey
+  , fojKind  :: FrontOutputKind
+  , fojAsync :: Async ()
   }
 
 data FrontResult = FrontResult
@@ -1120,6 +1159,7 @@ data FrontResult = FrontResult
   , frInferredSigs :: [InferredSignature]
   , frBackJob  :: Maybe BackJob
   , frDeferredBackJob :: Maybe DeferredBackJob
+  , frOutputJobs :: [FrontOutputJob]
   }
 
 data DbpRequest = DbpRequest
@@ -1189,6 +1229,7 @@ dbpDeferredBackJob blocked opts paths mn moduleImplHash nameHashes
         , dbjNameCount = nameCount
         , dbjSeeds = seeds
         , dbjReason = reason
+        , dbjOutputJobs = []
         }
   | otherwise = Nothing
   where
@@ -1221,6 +1262,139 @@ addInterestDeps deps im =
     (\acc (mn, n) -> M.insertWith Data.Set.union mn (Data.Set.singleton n) acc)
     im
     (Data.Set.toList deps)
+
+startFrontOutputJob :: (TaskKey -> FrontOutputKind -> IO ())
+                    -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                    -> IO Bool
+                    -> TaskKey
+                    -> FrontOutputKind
+                    -> IO ()
+                    -> IO FrontOutputJob
+startFrontOutputJob onStart onDone shouldWrite key kind action = do
+  current <- shouldWrite
+  a <-
+    if current
+      then do
+        onStart key kind
+        asyncWithUnmask $ \unmask ->
+          runFrontOutputAction onDone shouldWrite key kind (unmask action)
+      else async (return ())
+  return FrontOutputJob
+    { fojKey = key
+    , fojKind = kind
+    , fojAsync = a
+    }
+
+startDependentFrontOutputJob :: (TaskKey -> FrontOutputKind -> IO ())
+                             -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                             -> IO Bool
+                             -> FrontOutputJob
+                             -> TaskKey
+                             -> FrontOutputKind
+                             -> IO ()
+                             -> IO FrontOutputJob
+startDependentFrontOutputJob onStart onDone shouldWrite dep key kind action = do
+  a <- asyncWithUnmask $ \unmask -> do
+         depRes <- unmask (waitCatch (fojAsync dep))
+         case depRes of
+           Right () -> do
+             current <- unmask shouldWrite
+             when current $ do
+               onStart key kind
+               runFrontOutputAction onDone shouldWrite key kind (unmask action)
+           Left err
+             | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+             | otherwise -> return ()
+  return FrontOutputJob
+    { fojKey = key
+    , fojKind = kind
+    , fojAsync = a
+    }
+
+runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                     -> IO Bool
+                     -> TaskKey
+                     -> FrontOutputKind
+                     -> IO ()
+                     -> IO ()
+runFrontOutputAction onDone shouldWrite key kind action = do
+  current <- shouldWrite
+  when current $ do
+    t0 <- getTime Monotonic
+    res <- (try action :: IO (Either SomeException ()))
+    t1 <- getTime Monotonic
+    let elapsed = t1 - t0
+    onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
+    either throwIO return res
+  where
+    ignoreProgressException :: SomeException -> IO ()
+    ignoreProgressException err
+      | isJust (fromException err :: Maybe SomeAsyncException) = throwIO err
+      | otherwise = return ()
+
+frontOutputKindName :: FrontOutputKind -> String
+frontOutputKindName FrontOutputTydb     = "tydb"
+frontOutputKindName FrontOutputTydbCopy = "tydb-copy"
+frontOutputKindName FrontOutputDoc      = "doc"
+
+copyTydbInterface :: C.CompileOptions -> Paths -> A.ModName -> IO ()
+copyTydbInterface opts paths mn =
+  when (C.tydb opts) $
+    InterfaceFiles.copyInterface tySrc tyDst
+  where
+    tySrc = tyDbPath paths mn
+    tyDst = srcBase paths mn ++ InterfaceFiles.interfaceExt
+
+waitFrontOutputJobs :: FrontResult -> IO ()
+waitFrontOutputJobs fr =
+  waitFrontOutputJobList (frOutputJobs fr)
+
+waitFrontOutputJobList :: [FrontOutputJob] -> IO ()
+waitFrontOutputJobList jobs = do
+  failure <- waitFrontOutputJobFailures jobs
+  maybe (return ()) throwFrontOutputFailure failure
+
+throwFrontOutputFailure :: CompileFailure -> IO a
+throwFrontOutputFailure failure =
+  throwIO (FrontOutputError (compileFailureMessage failure))
+
+frontOutputException :: FrontOutputJob -> IO (Maybe SomeException)
+frontOutputException job = do
+  res <- waitCatch (fojAsync job)
+  case res of
+    Right () -> return Nothing
+    Left err -> return (Just err)
+
+frontOutputFailureMessage :: FrontOutputJob -> SomeException -> String
+frontOutputFailureMessage job err =
+  "Front output job failed for "
+  ++ tkProj key ++ "/" ++ modNameToString (tkMod key)
+  ++ " (" ++ frontOutputKindName (fojKind job) ++ "): " ++ displayException err
+  where
+    key = fojKey job
+
+frontOutputFailure :: FrontOutputJob -> IO (Maybe CompileFailure)
+frontOutputFailure job = do
+  mErr <- frontOutputException job
+  case mErr of
+    Nothing -> return Nothing
+    Just err
+      | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+      | otherwise -> return (Just (CompileInternalFailure (frontOutputFailureMessage job err)))
+
+rememberFrontOutputJobList :: IORef [FrontOutputJob] -> [FrontOutputJob] -> IO ()
+rememberFrontOutputJobList ref jobs =
+  atomicModifyIORef' ref $ \old -> (jobs ++ old, ())
+
+waitFrontOutputJobsRef :: IORef [FrontOutputJob] -> IO (Maybe CompileFailure)
+waitFrontOutputJobsRef ref = do
+  jobs <- reverse <$> readIORef ref
+  waitFrontOutputJobFailures jobs
+
+waitFrontOutputJobFailures :: [FrontOutputJob] -> IO (Maybe CompileFailure)
+waitFrontOutputJobFailures jobs = do
+  failures <- mapM frontOutputFailure jobs
+  return (listToMaybe (catMaybes failures))
 
 data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, parseImports :: [A.ModName] }
                         | ActonTask { name :: A.ModName, src :: String, srcBytes :: B.ByteString, sourceMeta :: Maybe InterfaceFiles.SourceFileMeta, atree:: A.Module }
@@ -1942,8 +2116,10 @@ formatCodegenDelta status =
 
 -- | Run the front passes for a single module.
 -- Builds the environment, runs kinds/types, computes per-name src/pub/impl
--- hashes plus module pub/impl hashes, and writes the .tydb header. Returns the
--- front result plus a BackJob for later passes when compilation is needed.
+-- hashes plus module pub/impl hashes, and starts the post-front output jobs.
+-- Returns the front result plus a BackJob for later passes when compilation is
+-- needed. Callers must wait for frOutputJobs before treating the compile as
+-- finished.
 runFrontPasses :: C.GlobalOptions
                -> C.CompileOptions
                -> Bool
@@ -1956,8 +2132,12 @@ runFrontPasses :: C.GlobalOptions
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)))
                -> (FrontPassProgress -> IO ())
+               -> (TaskKey -> FrontOutputKind -> IO ())
+               -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+               -> IO Bool
+               -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveNameHashMap onFrontProgress = do
+runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveNameHashMap onFrontProgress onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -2208,35 +2388,35 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   when (C.timing gopts) $
                     evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, nameHashes))
                   timeTypeHash <- getTime Monotonic
-                  -- Write .tydb now so later builds can reuse this front-pass work.
-                  InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
-                  timeTypeWrite <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
                   iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn imps fullIface)
-
-                  -- Generate documentation, if building for a project
-                  when (not (C.skip_build opts) && not (isTmp paths)) $ do
-                    let docDir = joinPath [projPath paths, "out", "doc"]
-                        modPathList = A.modPath mn
-                        docFile = if null modPathList
-                                  then docDir </> "unnamed" <.> "html"
-                                  else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
-                        docFileDir = takeDirectory docFile
-                        -- Get the type environment for this module
-                        modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
-                          Just te -> te
-                          Nothing -> publicIface
-                        -- Apply the same simplification as --sigs uses
-                        env1 = define publicIface $ setMod mn env
-                        simplifiedTypeEnv = simp env1 modTypeEnv
-                    createDirectoryIfMissing True docFileDir
-                    -- Use parsed (original AST) to preserve docstrings
-                    let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
-                    writeFile docFile htmlDoc
-                  timeTypeDocs <- getTime Monotonic
-
                   timeTypeCheck <- getTime Monotonic
+
+                  let writeTyDb = do
+                        InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
+                      writeDoc = do
+                        let docDir = joinPath [projPath paths, "out", "doc"]
+                            modPathList = A.modPath mn
+                            docFile = if null modPathList
+                                      then docDir </> "unnamed" <.> "html"
+                                      else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
+                            docFileDir = takeDirectory docFile
+                            -- Get the type environment for this module
+                            modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
+                              Just te -> te
+                              Nothing -> publicIface
+                            -- Apply the same simplification as --sigs uses
+                            env1 = define publicIface $ setMod mn env
+                            simplifiedTypeEnv = simp env1 modTypeEnv
+                        createDirectoryIfMissing True docFileDir
+                        -- Use parsed (original AST) to preserve docstrings
+                        let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
+                        writeFile docFile htmlDoc
+                      docOutputActions =
+                        if not (C.skip_build opts) && not (isTmp paths)
+                          then [(FrontOutputDoc, writeDoc)]
+                          else []
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
                   typeProgressDone <- readIORef typeProgressDoneRef
 
@@ -2260,8 +2440,6 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeAfterProgress = typeAfterProgress
                                  , ftTypeForce = timeTypeForce - timeTypeReconstruct
                                  , ftTypeHash = timeTypeHash - timeTypeForce
-                                 , ftTypeWrite = timeTypeWrite - timeTypeHash
-                                 , ftTypeDocs = timeTypeDocs - timeTypeWrite
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
@@ -2278,18 +2456,38 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                                               , biImplHash = moduleImplHash
                                                               }
                                          }
-                  return $ Right FrontResult { frIfaceTE = publicIface
-                                             , frImps = imps
-                                             , frDoc = mdoc
-                                             , frPubHash = modulePubHash
-                                             , frNameHashes = publicNameHashes nameHashes
-                                             , frInterestDeps = interestDepsFromNameHashes nameHashes
-                                             , frFrontTime = frontTimeMaybe
-                                             , frFrontTiming = frontTimingMaybe
-                                             , frInferredSigs = inferredSigs
-                                             , frBackJob = backJob
-                                             , frDeferredBackJob = deferredBackJob
-                                             }
+                  mask_ $ do
+                    let outputKey = TaskKey (projPath paths) mn
+                        startOutput =
+                          startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey
+                        startDependentOutput =
+                          startDependentFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput
+                    tyDbJob <- startOutput FrontOutputTydb writeTyDb
+                    docJobs <-
+                      forM docOutputActions $ uncurry startOutput
+                    tyJobs <-
+                      if C.tydb opts
+                        then
+                          (:[]) <$>
+                            startDependentOutput tyDbJob outputKey FrontOutputTydbCopy (copyTydbInterface opts paths mn)
+                        else return []
+                    let outputJobs = tyDbJob : docJobs ++ tyJobs
+                    recordFrontOutputJobs outputJobs
+                    let deferredBackJob' =
+                          fmap (\dbj -> dbj{ dbjOutputJobs = filter ((== FrontOutputTydb) . fojKind) outputJobs }) deferredBackJob
+                    return $ Right FrontResult { frIfaceTE = publicIface
+                                               , frImps = imps
+                                               , frDoc = mdoc
+                                               , frPubHash = modulePubHash
+                                               , frNameHashes = publicNameHashes nameHashes
+                                               , frInterestDeps = interestDepsFromNameHashes nameHashes
+                                               , frFrontTime = frontTimeMaybe
+                                               , frFrontTiming = frontTimingMaybe
+                                               , frInferredSigs = inferredSigs
+                                               , frBackJob = backJob
+                                               , frDeferredBackJob = deferredBackJob'
+                                               , frOutputJobs = outputJobs
+                                               }
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
@@ -2310,6 +2508,7 @@ prepareDeferredBackJob :: Source.SourceProvider
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
 prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
+  waitFrontOutputJobList (dbjOutputJobs dbj)
   let paths = dbjPaths dbj
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
@@ -2643,10 +2842,6 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
                             hFile = outbase ++ ".h"
                         writeFile hFile h
                         writeFile cFile c
-                        let tySrc = tyDbPath paths (modName paths)
-                            tyDst = srcBase paths (modName paths) ++ InterfaceFiles.interfaceExt
-                        iff (C.ty opts) $ do
-                             InterfaceFiles.copyInterface tySrc tyDst
                       return (Just tWrite)
             finishBack tRender mWriteTime
 
@@ -2711,7 +2906,28 @@ compileTasks :: Source.SourceProvider
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     runningRef <- newIORef []
-    let cancelRunning = readIORef runningRef >>= mapM_ cancel
+    frontOutputRef <- newIORef []
+    let cancelRunning = do
+          running <- readIORef runningRef
+          mapM_ cancel running
+          mapM_ (\a -> waitCatch a >> return ()) running
+        waitFrontOutputs = do
+          _ <- waitFrontOutputJobsRef frontOutputRef
+          return ()
+        waitFrontOutputsOnExit =
+          waitFrontOutputs `catch` ignoreFrontOutputExitFailure
+        ignoreFrontOutputExitFailure :: SomeException -> IO ()
+        ignoreFrontOutputExitFailure err
+          | isJust (fromException err :: Maybe SomeAsyncException) = throwIO err
+          | otherwise = return ()
+        finishWithFrontOutputs res = do
+          outputFailure <- waitFrontOutputJobsRef frontOutputRef
+          case res of
+            Left err -> return (Left err)
+            Right ok ->
+              case outputFailure of
+                Just err -> return (Left err)
+                Nothing -> return (Right ok)
     let compileMain = do
           -- Reject cycles
           if not (null cycles)
@@ -2720,14 +2936,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               -- Compile __builtin__ first if present anywhere in the graph
               case builtinOrder of
                 [t] -> do
-                  res <- compileBuiltin t
+                  res <- compileBuiltin frontOutputRef t
                   case res of
                     Left err -> return (Left err)
-                    Right () -> continue runningRef
-                _ -> continue runningRef
-    compileMain `finally` cancelRunning
+                    Right () -> continue frontOutputRef runningRef
+                _ -> continue frontOutputRef runningRef
+    ((compileMain >>= finishWithFrontOutputs) `finally` cancelRunning) `finally` waitFrontOutputsOnExit
   where
-    continue runningRef = do
+    continue frontOutputRef runningRef = do
       baseEnv <- Acton.Env.initEnv builtinPath False
 
       costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
@@ -2743,7 +2959,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
       logForcedDbpBoundaryExclusions
-      loop runningRef stageInitialReady [] M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
@@ -2885,8 +3101,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     -- many other changes so at the time it was easier to separate builtin
     -- compilation but perhaps we can find a way to merge it back in to one
     -- general loop.
-    compileBuiltin :: GlobalTask -> IO (Either CompileFailure ())
-    compileBuiltin t = do
+    compileBuiltin :: IORef [FrontOutputJob] -> GlobalTask -> IO (Either CompileFailure ())
+    compileBuiltin frontOutputRef t = do
       let bPaths = gtPaths t
           mn = name (gtTask t)
           optsBuiltin = optsFor (gtKey t)
@@ -2921,27 +3137,36 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 (getPubHashCached bPaths)
                 (getNameHashMapCached bPaths)
                 (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
+                (ccOnFrontOutputStart callbacks)
+                (ccOnFrontOutputDone callbacks)
+                (ccShouldWriteFrontOutput callbacks)
+                (rememberFrontOutputJobList frontOutputRef)
               case res of
                 Left diags -> do
                   ccOnFrontDone callbacks t optsBuiltin
                   ccOnDiagnostics callbacks t optsBuiltin diags
                   return (Left CompileBuiltinFailure)
                 Right fr -> do
-                  ccOnFrontDone callbacks t optsBuiltin
-                  ccOnFrontResult callbacks t optsBuiltin fr
-                  updatePubHashCache mn (frPubHash fr)
-                  updateNameHashCache mn (frNameHashes fr)
-                  forM_ (frBackJob fr) $ ccOnBackJob callbacks
-                  return (Right ())
+                  outputFailure <- waitFrontOutputJobsRef frontOutputRef
+                  case outputFailure of
+                    Just err -> return (Left err)
+                    Nothing -> do
+                      ccOnFrontDone callbacks t optsBuiltin
+                      ccOnFrontResult callbacks t optsBuiltin fr
+                      updatePubHashCache mn (frPubHash fr)
+                      updateNameHashCache mn (frNameHashes fr)
+                      forM_ (frBackJob fr) $ ccOnBackJob callbacks
+                      return (Right ())
 
     -- One module ---------------------------------------------------------
     doOne :: Acton.Env.Env0
+          -> IORef [FrontOutputJob]
           -> M.Map TaskKey B.ByteString
           -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
           -> M.Map TaskKey CompileTask
           -> TaskKey
           -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-    doOne envSnap pubMap nameMap parsedTasks key = do
+    doOne envSnap frontOutputRef pubMap nameMap parsedTasks key = do
       t <- case M.lookup key taskMap of
              Just x -> return x
              Nothing -> error ("Internal error: missing task for key " ++ show key)
@@ -2966,6 +3191,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frInferredSigs = []
               , frBackJob = backJob
               , frDeferredBackJob = deferredBackJob
+              , frOutputJobs = []
               }
           emptyFrontResult =
             FrontResult
@@ -2980,8 +3206,23 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frInferredSigs = []
               , frBackJob = Nothing
               , frDeferredBackJob = Nothing
+              , frOutputJobs = []
               }
-          cacheFrontResult fr = do
+          addCachedTyOutputJob fr
+            | not (C.tydb optsT) = return fr
+            | not (null (frOutputJobs fr)) = return fr
+            | B.null (frPubHash fr) = return fr
+            | otherwise = mask_ $ do
+                job <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                           (ccOnFrontOutputDone callbacks)
+                                           (ccShouldWriteFrontOutput callbacks)
+                                           (TaskKey (projPath paths) mn)
+                                           FrontOutputTydbCopy $
+                  copyTydbInterface optsT paths mn
+                rememberFrontOutputJobList frontOutputRef [job]
+                return fr{ frOutputJobs = [job] }
+          cacheFrontResult fr0 = do
+            fr <- addCachedTyOutputJob fr0
             updatePubHashCache mn (frPubHash fr)
             updateNameHashCache mn (frNameHashes fr)
             return (key, Right fr)
@@ -3315,6 +3556,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           resolveImportHash
                           resolveNameHashMap'
                           (\p -> ccOnFrontProgress callbacks t optsT p)
+                          (ccOnFrontOutputStart callbacks)
+                          (ccOnFrontOutputDone callbacks)
+                          (ccShouldWriteFrontOutput callbacks)
+                          (rememberFrontOutputJobList frontOutputRef)
                         case res of
                           Left diags -> return (key, Left diags)
                           Right fr -> do
@@ -3384,16 +3629,36 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                       let updatedNameHashes =
                                             Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
                                           moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                      InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
-                                      let I.NModule imps ifaceFull _mdoc = nmod
-                                          ifaceTE = publicIfaceTE ifaceFull
-                                          deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHash updatedNameHashes
-                                          backJob =
-                                            case deferredBackJob of
-                                              Just _ -> Nothing
-                                              Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                          fr = mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob deferredBackJob
-                                      cacheFrontResult fr
+                                      mask_ $ do
+                                        outputJob <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                                                         (ccOnFrontOutputDone callbacks)
+                                                                         (ccShouldWriteFrontOutput callbacks)
+                                                                         (TaskKey (projPath paths) mn)
+                                                                         FrontOutputTydb $ do
+                                          InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
+                                        tyJobs <-
+                                          if C.tydb optsT
+                                            then (:[]) <$> startDependentFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                                                                       (ccOnFrontOutputDone callbacks)
+                                                                                       (ccShouldWriteFrontOutput callbacks)
+                                                                                       outputJob
+                                                                                       (TaskKey (projPath paths) mn)
+                                                                                       FrontOutputTydbCopy
+                                                                                       (copyTydbInterface optsT paths mn)
+                                            else return []
+                                        let outputJobs = outputJob : tyJobs
+                                        rememberFrontOutputJobList frontOutputRef outputJobs
+                                        let I.NModule imps ifaceFull _mdoc = nmod
+                                            ifaceTE = publicIfaceTE ifaceFull
+                                            deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHash updatedNameHashes
+                                            deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
+                                            backJob =
+                                              case deferredBackJob of
+                                                Just _ -> Nothing
+                                                Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                            fr = (mkFrontResult imps ifaceTE mdoc modulePubHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob deferredBackJob)
+                                              { frOutputJobs = outputJobs }
+                                        cacheFrontResult fr
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
                     when (C.verbose gopts) $ do
@@ -3474,17 +3739,19 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
         _ -> error ("Internal error: parse stage did not materialize " ++ modNameToString mn)
 
     runFrontStage :: Acton.Env.Env0
+                  -> IORef [FrontOutputJob]
                   -> M.Map TaskKey B.ByteString
                   -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
                   -> M.Map TaskKey CompileTask
                   -> TaskKey
                   -> IO (StageKey, Either [Diagnostic String] StageSuccess)
-    runFrontStage envSnap res nameRes parsedTasks key = do
-      (doneKey, outcome) <- doOne envSnap res nameRes parsedTasks key
+    runFrontStage envSnap frontOutputRef res nameRes parsedTasks key = do
+      (doneKey, outcome) <- doOne envSnap frontOutputRef res nameRes parsedTasks key
       return (FrontStage doneKey, fmap StageFronted outcome)
 
     scheduleMore :: Int -> [StageKey]
                  -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
+                 -> IORef [FrontOutputJob]
                  -> M.Map TaskKey B.ByteString
                  -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
                  -> M.Map TaskKey CompileTask
@@ -3492,7 +3759,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                  -> M.Map TaskKey Integer
                  -> IO ([StageKey]
                        , [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)])
-    scheduleMore k rdy running res nameRes parsedTasks envSnap cw = do
+    scheduleMore k rdy running frontOutputRef res nameRes parsedTasks envSnap cw = do
       let rdySorted = Data.List.sortOn (Down . stagePriority cw) rdy
           (toStart, rdy') = splitAt k rdySorted
       new <- forM toStart $ \sk -> do
@@ -3508,11 +3775,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 a <- async $
                   case sk of
                     ParseStage key -> runParseStage key
-                    FrontStage key -> runFrontStage envSnap res nameRes parsedTasks key
+                    FrontStage key -> runFrontStage envSnap frontOutputRef res nameRes parsedTasks key
                 return (a, sk)
       return (rdy', new ++ running)
 
-    loop :: IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
+    loop :: IORef [FrontOutputJob]
+         -> IORef [Async (StageKey, Either [Diagnostic String] StageSuccess)]
          -> [StageKey]
          -> [(Async (StageKey, Either [Diagnostic String] StageSuccess), StageKey)]
          -> M.Map TaskKey B.ByteString
@@ -3528,9 +3796,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop runningRef rdy running res nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop frontOutputRef runningRef rdy running res nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
-        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running res nameRes parsedTasks envAcc cw
+        res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running frontOutputRef res nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
         return res
       if null running1 && null rdy1
@@ -3568,7 +3836,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop runningRef rdy2 running3 res nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop frontOutputRef runningRef rdy2 running3 res nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = case M.lookup stageDone stageRevMap of
@@ -3585,7 +3853,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 StageParsed parsed mParseTime -> do
                   ccOnParseDone callbacks tDone optsDone mParseTime
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop runningRef rdy2 running2 res nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop frontOutputRef runningRef rdy2 running2 res nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
                   ccOnFrontDone callbacks tDone optsDone
                   ccOnFrontResult callbacks tDone optsDone fr
@@ -3604,7 +3872,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   case flushRes of
                     Left err -> return (Left err)
                     Right deferredBacks2 ->
-                      loop runningRef rdy2 running2 res2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                      loop frontOutputRef runningRef rdy2 running2 res2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Execute back-pass jobs in parallel while keeping output order stable.

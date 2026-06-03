@@ -439,11 +439,12 @@ withReadTxn path action = do
 withWriteTxn :: FilePath -> Int -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withWriteTxn path mapSize action =
     runInLmdbThread $
-      withEnv path False mapSize $ \env -> do
-        txn <- LMDB.mdb_txn_begin env Nothing False
-        r <- (LMDB.mdb_dbi_open txn Nothing [] >>= action txn) `E.onException` LMDB.mdb_txn_abort txn
-        LMDB.mdb_txn_commit txn
-        return r
+      withEnv path False mapSize $ \env ->
+        E.mask $ \restore -> do
+          txn <- LMDB.mdb_txn_begin env Nothing False
+          r <- restore (LMDB.mdb_dbi_open txn Nothing [] >>= action txn) `E.onException` LMDB.mdb_txn_abort txn
+          LMDB.mdb_txn_commit txn
+          return r
 
 -- The raw LMDB binding requires transaction setup from a bound thread; this
 -- applies to reads too because of its Haskell-side lock guard.

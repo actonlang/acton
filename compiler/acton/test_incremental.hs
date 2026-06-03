@@ -79,7 +79,7 @@ sanitize :: T.Text -> LBS.ByteString
 sanitize = LBS.fromStrict
         . TE.encodeUtf8
         . T.unlines
-        . reorderBackLines
+        . reorderConcurrentProgressLines
         . map censorHashes
         . map normalizeProgressTimingLine
         . dropPaths
@@ -180,12 +180,19 @@ sanitize = LBS.fromStrict
                           , "modName"
                           ]
 
-    reorderBackLines :: [T.Text] -> [T.Text]
-    reorderBackLines ls =
-      let (backLines, otherLines) = partition isBackLine ls
+    reorderConcurrentProgressLines :: [T.Text] -> [T.Text]
+    reorderConcurrentProgressLines ls =
+      let (progressLines, otherLines) = partition isConcurrentProgressLine ls
           (pre, post) = break isFinalLine otherLines
-      in pre ++ sortOn backLineKey backLines ++ post
+      in pre ++ sortOn progressLineKey progressLines ++ post
       where
+        isConcurrentProgressLine t = isFrontOutputLine t || isBackLine t
+        isFrontOutputLine t =
+          any (`T.isInfixOf` t)
+            [ "Wrote .tydb"
+            , "Copied .tydb"
+            , "Generated docs"
+            ]
         isBackLine t =
           T.isPrefixOf "   Finished compilation of" t ||
           (T.isInfixOf "Compilation done" t && not (isFinalLine t)) ||
@@ -199,9 +206,12 @@ sanitize = LBS.fromStrict
           case T.words t of
             ("Back":_:"done:":_:_) -> True
             _ -> False
-        backLineKey t =
+        progressLineKey t =
           case T.words t of
-            ("Back":pass:"done:":mn:_) -> (mn, passIndex pass, t)
+            (mn:"Wrote":".tydb":_) -> (mn, 0 :: Int, t)
+            (mn:"Generated":"docs":_) -> (mn, 1 :: Int, t)
+            (mn:"Copied":".tydb":_) -> (mn, 2 :: Int, t)
+            ("Back":pass:"done:":mn:_) -> (mn, 10 + passIndex pass, t)
             (mn:"Compilation":"done":_) -> (mn, 100 :: Int, t)
             _ -> (t, 101, t)
         passIndex pass = fromMaybe 99 (pass `elemIndex` backPassOrder)

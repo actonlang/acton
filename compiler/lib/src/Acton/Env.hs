@@ -1128,8 +1128,8 @@ doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
                                   return (addImport m env', te)
   where
     -- A cached module still needs its recorded import closure available in the
-    -- environment. Otherwise later imports of that cached module can miss
-    -- transitive dependencies that were never added to the shared module cache.
+    -- environment. If the module is already loaded, NModule carries that
+    -- closure; otherwise we read it from the .tydb.
     doImpSeen seen env m
       | S.member m seen      =
           case lookupMod m env of
@@ -1137,14 +1137,10 @@ doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
             Nothing -> fileNotFound m
       | otherwise            =
           let seen' = S.insert m seen in
-          case lookupMod m env of
-            Just te -> do
-              hdr <- readFoundTy InterfaceFiles.readHeaderMaybe m
-              case hdr of
-                Nothing -> return (env, te, seen')
-                Just (_sourceMeta, _, _, _, imps, _, _, _, _) -> do
-                  (env', seen'') <- subImpSeen seen' env (map fst imps)
-                  return (env', te, seen'')
+          case lookupModule m env of
+            Just (imps, te, _) -> do
+              (env', seen'') <- subImpSeen seen' env imps
+              return (env', te, seen'')
             Nothing -> do
               ty <- readFoundTy InterfaceFiles.readFileMaybe m
               case ty of

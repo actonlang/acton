@@ -12,6 +12,8 @@ Resolving dependencies (fetching if missing)...
            G_init : () -> None
            get : () -> int
   Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
+   b  Wrote .tydb                                                           0.000 s
+   b  Generated docs                                                        0.000 s
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s
@@ -21,6 +23,7 @@ Resolving dependencies (fetching if missing)...
      Back render done: b                                                    0.000 s
      Back write done: b                                                     0.000 s
    b  Compilation done                                                      0.000 s
+   c  Wrote .tydb                                                           0.000 s
      Back normalize done: c                                                 0.000 s
      Back deactorize done: c                                                0.000 s
      Back cps done: c                                                       0.000 s

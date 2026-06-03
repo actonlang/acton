@@ -11,6 +11,8 @@ Resolving dependencies (fetching if missing)...
            G_init : () -> None
            get : () -> int
   Fresh c: using cached .tydb
+   b  Wrote .tydb                                                           0.000 s
+   b  Generated docs                                                        0.000 s
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s
