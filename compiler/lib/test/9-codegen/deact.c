@@ -42,14 +42,14 @@ B_NoneType deactQ_L_4actionD___init__ (deactQ_L_4action L_self, deactQ_Apa L_3ob
     return B_None;
 }
 $R deactQ_L_4actionD___call__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_4actionD___exec__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_4actionD___asyn__ (deactQ_L_4action L_self, B_int G_1) {
     deactQ_Apa L_3obj = ((deactQ_L_4action)(L_self))->L_3obj;
-    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))L_3obj->$class->notice)(L_3obj, ((B_int)G_1)->val));
+    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Apa)(L_3obj))->$class->notice)(L_3obj, ((B_int)G_1)->val));
 }
 void deactQ_L_4actionD___serialize__ (deactQ_L_4action self, $Serial$state state) {
     $step_serialize(self->L_3obj, state);
@@ -78,7 +78,7 @@ $R deactQ_L_5C_3cont ($action cb, $Cont C_cont, int64_t C_4res) {
     #line 7 "test/src/deact.act"
     int64_t v = C_4res;
     #line 8 "test/src/deact.act"
-    B_Msg m = ((B_Msg)((B_Msg (*) ($WORD, B_int))cb->$class->__asyn__)(cb, toB_int(2LL)));
+    B_Msg m = ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(2LL)));
     int64_t N_tmp = (((int64_t)(v * 10LL)));
     return $R_CONT(C_cont, toB_int(N_tmp));
 }
@@ -125,10 +125,10 @@ B_NoneType deactQ_L_7procD___init__ (deactQ_L_7proc L_self, deactQ_Apa self, $ac
 $R deactQ_L_7procD___call__ (deactQ_L_7proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_7proc)(L_self))->self;
     $action cb = ((deactQ_L_7proc)(L_self))->cb;
-    return (($R (*) ($WORD, $Cont, $action))self->$class->setupG_local)(self, C_cont, cb);
+    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, C_cont, cb);
 }
 $R deactQ_L_7procD___exec__ (deactQ_L_7proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_7proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_7procD___serialize__ (deactQ_L_7proc self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -163,10 +163,10 @@ B_NoneType deactQ_L_8procD___init__ (deactQ_L_8proc L_self, deactQ_Apa self, $ac
 $R deactQ_L_8procD___call__ (deactQ_L_8proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_8proc)(L_self))->self;
     $action cb = ((deactQ_L_8proc)(L_self))->cb;
-    return (($R (*) ($WORD, $Cont, $action))self->$class->computeG_local)(self, C_cont, cb);
+    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->computeG_local)(self, C_cont, cb);
 }
 $R deactQ_L_8procD___exec__ (deactQ_L_8proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_8proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_8procD___serialize__ (deactQ_L_8proc self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -201,10 +201,10 @@ B_NoneType deactQ_L_9procD___init__ (deactQ_L_9proc L_self, deactQ_Apa self, int
 $R deactQ_L_9procD___call__ (deactQ_L_9proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_9proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_9proc)(L_self))->i);
-    return (($R (*) ($WORD, $Cont, int64_t))self->$class->noticeG_local)(self, C_cont, i);
+    return (($R (*) ($WORD, $Cont, int64_t))((deactQ_Apa)(self))->$class->noticeG_local)(self, C_cont, i);
 }
 $R deactQ_L_9procD___exec__ (deactQ_L_9proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_9proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_9procD___serialize__ (deactQ_L_9proc self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -240,10 +240,10 @@ B_NoneType deactQ_L_10procD___init__ (deactQ_L_10proc L_self, deactQ_Bepa self, 
 $R deactQ_L_10procD___call__ (deactQ_L_10proc L_self, $Cont C_cont) {
     deactQ_Bepa self = ((deactQ_L_10proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_10proc)(L_self))->i);
-    return (($R (*) ($WORD, $Cont, int64_t))self->$class->callbackG_local)(self, C_cont, i);
+    return (($R (*) ($WORD, $Cont, int64_t))((deactQ_Bepa)(self))->$class->callbackG_local)(self, C_cont, i);
 }
 $R deactQ_L_10procD___exec__ (deactQ_L_10proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_10proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_10procD___serialize__ (deactQ_L_10proc self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -276,14 +276,14 @@ B_NoneType deactQ_L_14actionD___init__ (deactQ_L_14action L_self, deactQ_Apa L_1
     return B_None;
 }
 $R deactQ_L_14actionD___call__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_14actionD___exec__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_14actionD___asyn__ (deactQ_L_14action L_self, B_int G_1) {
     deactQ_Apa L_13obj = ((deactQ_L_14action)(L_self))->L_13obj;
-    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))L_13obj->$class->notice)(L_13obj, ((B_int)G_1)->val));
+    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Apa)(L_13obj))->$class->notice)(L_13obj, ((B_int)G_1)->val));
 }
 void deactQ_L_14actionD___serialize__ (deactQ_L_14action self, $Serial$state state) {
     $step_serialize(self->L_13obj, state);
@@ -313,14 +313,14 @@ B_NoneType deactQ_L_16actionD___init__ (deactQ_L_16action L_self, deactQ_Bepa L_
     return B_None;
 }
 $R deactQ_L_16actionD___call__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_16actionD___exec__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_16actionD___asyn__ (deactQ_L_16action L_self, B_int G_1) {
     deactQ_Bepa L_15obj = ((deactQ_L_16action)(L_self))->L_15obj;
-    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))L_15obj->$class->callback)(L_15obj, ((B_int)G_1)->val));
+    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Bepa)(L_15obj))->$class->callback)(L_15obj, ((B_int)G_1)->val));
 }
 void deactQ_L_16actionD___serialize__ (deactQ_L_16action self, $Serial$state state) {
     $step_serialize(self->L_15obj, state);
@@ -350,14 +350,14 @@ B_NoneType deactQ_L_19actionD___init__ (deactQ_L_19action L_self, deactQ_main L_
     return B_None;
 }
 $R deactQ_L_19actionD___call__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_19actionD___exec__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))L_self->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_19actionD___asyn__ (deactQ_L_19action L_self, B_int G_1) {
     deactQ_main L_18obj = ((deactQ_L_19action)(L_self))->L_18obj;
-    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))L_18obj->$class->myproc)(L_18obj, ((B_int)G_1)->val));
+    return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_main)(L_18obj))->$class->myproc)(L_18obj, ((B_int)G_1)->val));
 }
 void deactQ_L_19actionD___serialize__ (deactQ_L_19action self, $Serial$state state) {
     $step_serialize(self->L_18obj, state);
@@ -388,7 +388,7 @@ $R deactQ_L_17C_9cont (deactQ_main self, $Cont C_cont, int64_t C_10res) {
     #line 35 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), toB_int(((int64_t)((deactQ_main)(self))->r))), B_None, B_None, B_None, B_None);
     #line 36 "test/src/deact.act"
-    ((B_Msg (*) ($WORD, $action))((deactQ_main)(self))->a->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_19actionG_new(self)));
+    ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_19actionG_new(self)));
     #line 37 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("main")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
@@ -434,9 +434,9 @@ $R deactQ_L_12C_7cont (deactQ_main self, $Cont C_cont, deactQ_Bepa C_8res) {
     #line 31 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
     #line 32 "test/src/deact.act"
-    ((B_Msg (*) ($WORD, $action))((deactQ_main)(self))->a->$class->setup)(((deactQ_main)(self))->a, (($action)deactQ_L_14actionG_new(((deactQ_main)(self))->a)));
+    ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->setup)(((deactQ_main)(self))->a, (($action)deactQ_L_14actionG_new(((deactQ_main)(self))->a)));
     #line 33 "test/src/deact.act"
-    ((deactQ_main)(self))->x = ((B_Msg (*) ($WORD, $action))((deactQ_main)(self))->a->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_16actionG_new(((deactQ_main)(self))->b)));
+    ((deactQ_main)(self))->x = ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_16actionG_new(((deactQ_main)(self))->b)));
     return $AWAIT((($Cont)deactQ_L_20ContG_new(self, C_cont)), ((deactQ_main)(self))->x);
 }
 B_NoneType deactQ_L_21ContD___init__ (deactQ_L_21Cont L_self, deactQ_main self, $Cont C_cont) {
@@ -522,10 +522,10 @@ B_NoneType deactQ_L_23procD___init__ (deactQ_L_23proc L_self, deactQ_main self, 
 $R deactQ_L_23procD___call__ (deactQ_L_23proc L_self, $Cont C_cont) {
     deactQ_main self = ((deactQ_L_23proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_23proc)(L_self))->i);
-    return (($R (*) ($WORD, $Cont, int64_t))self->$class->myprocG_local)(self, C_cont, i);
+    return (($R (*) ($WORD, $Cont, int64_t))((deactQ_main)(self))->$class->myprocG_local)(self, C_cont, i);
 }
 $R deactQ_L_23procD___exec__ (deactQ_L_23proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_23proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_23procD___serialize__ (deactQ_L_23proc self, $Serial$state state) {
     $step_serialize(self->self, state);
@@ -597,10 +597,10 @@ B_NoneType deactQ_L_26procD___init__ (deactQ_L_26proc L_self, deactQ_Apa G_act) 
 }
 $R deactQ_L_26procD___call__ (deactQ_L_26proc L_self, $Cont C_cont) {
     deactQ_Apa G_act = ((deactQ_L_26proc)(L_self))->G_act;
-    return (($R (*) ($WORD, $Cont))G_act->$class->__init__)(G_act, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_Apa)(G_act))->$class->__init__)(G_act, C_cont);
 }
 $R deactQ_L_26procD___exec__ (deactQ_L_26proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_26proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_26procD___serialize__ (deactQ_L_26proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
@@ -669,10 +669,10 @@ B_NoneType deactQ_L_29procD___init__ (deactQ_L_29proc L_self, deactQ_Bepa G_act)
 }
 $R deactQ_L_29procD___call__ (deactQ_L_29proc L_self, $Cont C_cont) {
     deactQ_Bepa G_act = ((deactQ_L_29proc)(L_self))->G_act;
-    return (($R (*) ($WORD, $Cont))G_act->$class->__init__)(G_act, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_Bepa)(G_act))->$class->__init__)(G_act, C_cont);
 }
 $R deactQ_L_29procD___exec__ (deactQ_L_29proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_29proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_29procD___serialize__ (deactQ_L_29proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
@@ -743,10 +743,10 @@ B_NoneType deactQ_L_32procD___init__ (deactQ_L_32proc L_self, deactQ_main G_act,
 $R deactQ_L_32procD___call__ (deactQ_L_32proc L_self, $Cont C_cont) {
     deactQ_main G_act = ((deactQ_L_32proc)(L_self))->G_act;
     B_Env env = ((deactQ_L_32proc)(L_self))->env;
-    return (($R (*) ($WORD, $Cont, B_Env))G_act->$class->__init__)(G_act, C_cont, env);
+    return (($R (*) ($WORD, $Cont, B_Env))((deactQ_main)(G_act))->$class->__init__)(G_act, C_cont, env);
 }
 $R deactQ_L_32procD___exec__ (deactQ_L_32proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))L_self->$class->__call__)(L_self, C_cont);
+    return (($R (*) ($WORD, $Cont))((deactQ_L_32proc)(L_self))->$class->__call__)(L_self, C_cont);
 }
 void deactQ_L_32procD___serialize__ (deactQ_L_32proc self, $Serial$state state) {
     $step_serialize(self->G_act, state);
@@ -774,21 +774,21 @@ deactQ_L_32proc deactQ_L_32procG_new(deactQ_main G_1, B_Env G_2) {
 }
 struct deactQ_L_32procG_class deactQ_L_32procG_methods;
 $R deactQ_ApaD___init__ (deactQ_Apa self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont, $action))self->$class->setupG_local)(self, (($Cont)deactQ_L_2ContG_new(C_cont)), (($action)deactQ_L_4actionG_new(self)));
+    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, (($Cont)deactQ_L_2ContG_new(C_cont)), (($action)deactQ_L_4actionG_new(self)));
 }
 #line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
     #line 3 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("setup")), B_None, B_None, B_None, B_None);
     #line 4 "test/src/deact.act"
-    ((B_Msg (*) ($WORD, B_int))cb->$class->__asyn__)(cb, toB_int(0LL));
+    ((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(0LL));
     return $R_CONT(C_cont, B_None);
 }
 #line 5 "test/src/deact.act"
 $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
     #line 6 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("compute")), B_None, B_None, B_None, B_None);
-    return $AWAIT((($Cont)deactQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($WORD, B_int))cb->$class->__asyn__)(cb, toB_int(1LL))));
+    return $AWAIT((($Cont)deactQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
 }
 #line 10 "test/src/deact.act"
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, int64_t i) {
@@ -884,7 +884,7 @@ $R deactQ_mainD_myprocG_local (deactQ_main self, $Cont C_cont, int64_t i) {
     #line 26 "test/src/deact.act"
     if (i == 2LL) {
         #line 27 "test/src/deact.act"
-        ((B_Msg (*) ($WORD, int64_t))((deactQ_main)(self))->env->$class->exit)(((deactQ_main)(self))->env, 0LL);
+        ((B_Msg (*) ($WORD, int64_t))((B_Env)(((deactQ_main)(self))->env))->$class->exit)(((deactQ_main)(self))->env, 0LL);
     }
     return $R_CONT(C_cont, toB_int(i));
 }
