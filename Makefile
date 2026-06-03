@@ -580,7 +580,7 @@ test-regressions:
 test-rts:
 	cd compiler && stack test acton --ta '-p "RTS"'
 
-test-rts-db:
+test-rts-db: dist/bin/acton dist/bin/actondb
 	$(MAKE) -C test
 
 test-stdlib: dist/bin/acton dist/std
@@ -611,7 +611,8 @@ clean-bdeps:
 #
 
 BACKEND_FILES = backend/Build.act backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
+DIST_BACKEND_PACKAGE_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps
+DIST_BACKEND_FILES = $(DIST_BACKEND_PACKAGE_FILES) dist/bin/actondb
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
@@ -642,7 +643,7 @@ ifeq ($(OS),macos)
 # See https://codeberg.org/ziglang/zig/issues/31658.
 dist/bin/actondb: export DEVELOPER_DIR := $(or $(DEVELOPER_DIR),/dev/null)
 endif
-dist/bin/actondb: $(DIST_ZIG) $(DEPS)
+dist/bin/actondb: $(DIST_ZIG) $(DEPS) $(DIST_BACKEND_PACKAGE_FILES)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb $(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET)) --prefix "$(TD)/dist"
 
