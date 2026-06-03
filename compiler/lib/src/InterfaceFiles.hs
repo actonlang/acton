@@ -33,7 +33,7 @@
 --                         , ByteString                -- modulePubHash: SHA-256 of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: SHA-256 of per-name impl hashes
---     "imports"        :: [(A.ModName, ByteString)]   -- imported module and pub hash used
+--     "imports"        :: [(A.ModName, ByteString)]   -- dependency module and pub hash used
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
 --     "tests"          :: [String]                    -- discovered test names
 --     "doc"            :: Maybe String                -- module docstring
@@ -58,7 +58,7 @@
 -- the key verbatim) or "h/<sha256hex>" for long or unsafe names. See nameKeySuffix.
 --
 -- Rationale for the keyed layout
--- - Keep the small validity/header fields (version, meta, imports, roots, tests,
+-- - Keep the small validity/header fields (version, meta, dependency hashes, roots, tests,
 --   doc, name-hashes) as their own keys so callers can validate and reuse a cache
 --   entry, or do freshness/dependency checks, without decoding the large NameInfo
 --   and typed Module sections (readHeader vs readFile).
@@ -696,9 +696,10 @@ readFile f =
       (te, nameHashes) <- readNameEntries txn dbi
       (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
       stmts <- readStmtEntries txn dbi
-      let nmod = I.NModule (map fst imps) te mdoc
-          tmod = A.Module tmn timps tdoc stmts
-      return (map fst imps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc)
+      let tmod = A.Module tmn timps tdoc stmts
+          sourceImps = A.importsOf tmod
+          nmod = I.NModule sourceImps te mdoc
+      return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile

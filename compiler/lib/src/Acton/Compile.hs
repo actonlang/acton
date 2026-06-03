@@ -215,6 +215,7 @@ import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
+import Acton.Builtin (mBuiltin)
 import Acton.Prim (mPrim)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
@@ -2306,7 +2307,11 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           publicIface = publicIfaceTE fullIface
       let roots = [ n | (n,i) <- fullIface, rootEligible i ]
       -- Import hashes are recorded in the .tydb header so dep changes can be detected.
-      impsRes <- resolveImportHashes imps
+      let hashImps =
+            if mn == mBuiltin
+              then imps
+              else nub (mBuiltin : imps)
+      impsRes <- resolveImportHashes hashImps
       case impsRes of
         Left diags -> return (Left diags)
         Right impsWithHash -> do
@@ -3272,7 +3277,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
               [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
 
-          checkMissingImports imps = do
+          checkImportHashes imps = do
             userSearchAbs <- mapM normalizePathSafe (C.searchpath optsT)
             systemTypesAbs <- mapM normalizePathSafe (systemTypePaths (sysPath paths) (sysTypes paths))
             searchAbs <- mapM normalizePathSafe (searchPath paths)
@@ -3290,24 +3295,30 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       path' = normalise path
                   in Data.List.isPrefixOf dir' path'
                 isManagedTyPath path = any (\dir -> isUnder dir path) managedTypeDirs
-            missing <- foldM
-              (\acc (depMn, _depHash) ->
-                 if M.member depMn providers
-                   then return acc
-                   else do
-                     mTy <- getTyFileCached (searchPath paths) depMn
-                     case mTy of
-                       Nothing -> return (Data.Set.insert depMn acc)
-                       Just tyPath -> do
-                         tyAbs <- normalizePathSafe tyPath
-                         if isManagedTyPath tyAbs
-                           then return (Data.Set.insert depMn acc)
-                           else return acc
+            (missing, changed) <- foldM
+              (\(missingAcc, changedAcc) (depMn, depHash) -> do
+                 mh <- resolveImportHash depMn
+                 case mh of
+                   Just currentHash
+                     | currentHash == depHash -> return (missingAcc, changedAcc)
+                     | otherwise -> return (missingAcc, Data.Set.insert depMn changedAcc)
+                   Nothing ->
+                     if M.member depMn providers
+                       then return (missingAcc, Data.Set.insert depMn changedAcc)
+                       else do
+                         mTy <- getTyFileCached (searchPath paths) depMn
+                         case mTy of
+                           Nothing -> return (Data.Set.insert depMn missingAcc, changedAcc)
+                           Just tyPath -> do
+                             tyAbs <- normalizePathSafe tyPath
+                             if isManagedTyPath tyAbs
+                               then return (Data.Set.insert depMn missingAcc, changedAcc)
+                               else return (missingAcc, Data.Set.insert depMn changedAcc)
               )
-              Data.Set.empty
+              (Data.Set.empty, Data.Set.empty)
               imps
             if Data.Set.null missing
-              then return (Right ())
+              then return (Right changed)
               else do
                 let missingSorted = Data.List.sortOn modNameToString (Data.Set.toList missing)
                     diags = concatMap (\depMn -> missingIfaceDiagnostics mn "" depMn) missingSorted
@@ -3320,8 +3331,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                  else Left (concat errs)
           traverseDiags f items = collectDiags <$> mapM f items
 
+          qnameModule qn = case qn of
+            A.GName m _ -> Just m
+            A.QName m _ -> Just m
+            A.NoQ _ -> Nothing
+
+          depMapIf getDeps keep infos =
+            M.fromListWith (\a _ -> a)
+              [ dep
+              | info <- infos
+              , dep@(qn, _) <- getDeps info
+              , keep qn
+              ]
+
           depMap getDeps infos =
-            M.fromListWith (\a _ -> a) (concatMap getDeps infos)
+            depMapIf getDeps (const True) infos
 
           depUsers getDeps infos =
             foldl' add M.empty infos
@@ -3461,17 +3485,25 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
         _ -> do
           -- For cached .tydb tasks, compare recorded dep hashes against current deps.
           -- This is the up-to-date check that decides if we can skip work. If
-          -- any implDeps have changed we need to rerun out back passes and if
+          -- any implDeps have changed we need to rerun our back passes and if
           -- any pubDeps have changed we need to rerun front passes (and back
-          -- passes)
+          -- passes). Unchanged import pub hashes let us skip checking public
+          -- name deps from those modules.
           needByDepsRes <- case taskCurrent of
             TyTask{ tyImports = imps, tyNameHashes = nameHashes } -> do
-              missingImportsRes <- checkMissingImports imps
-              case missingImportsRes of
+              importHashRes <- checkImportHashes imps
+              case importHashRes of
                 Left diags -> return (Left diags)
-                Right () -> do
-              -- Build dep maps and reverse "used by" index for logging.
-                  let pubDeps = depMap InterfaceFiles.nhPubDeps nameHashes
+                Right changedPubImports -> do
+                  let importModules = Data.Set.fromList (map fst imps)
+                      checkPubDep qn =
+                        case qnameModule qn of
+                          Just depMn ->
+                            Data.Set.notMember depMn importModules ||
+                            Data.Set.member depMn changedPubImports
+                          Nothing -> True
+                  -- Build dep maps and reverse "used by" index for logging.
+                  let pubDeps = depMapIf InterfaceFiles.nhPubDeps checkPubDep nameHashes
                       implDeps = depMap InterfaceFiles.nhImplDeps nameHashes
                       pubUsers = depUsers InterfaceFiles.nhPubDeps nameHashes
                       implUsers = depUsers InterfaceFiles.nhImplDeps nameHashes
