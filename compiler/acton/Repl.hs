@@ -91,7 +91,9 @@ runRepl hooks gopts opts = do
     mproj <- mapM canonicalizePath mproj0
     withReplRoot hooks opts mproj $ \scratchDir -> do
       interactive <- hIsTerminalDevice stdin
-      warmup <- newEmptyMVar
+      warmup <- if interactive
+                  then newEmptyMVar
+                  else newMVar False
       let srcRoot = scratchDir </> "src"
           mainSrcFile = srcRoot </> replMainModuleName <.> "act"
           sessionSrcFile = srcRoot </> replSessionModuleName <.> "act"
@@ -114,7 +116,7 @@ runRepl hooks gopts opts = do
                 , replHooks = hooks
                 }
       createDirectoryIfMissing True srcRoot
-      startReplWarmup ctx
+      when interactive (startReplWarmup ctx)
       when (interactive && not (C.quiet gopts)) $ do
         putStrLn "Acton REPL. Type :help for commands, :quit to exit."
         when (C.verbose gopts) $
@@ -172,7 +174,7 @@ normalizeReplCompileOptions opts =
 startReplWarmup :: ReplContext -> IO ()
 startReplWarmup ctx = do
     _ <- forkIO $ do
-      res <- try (compileReplRunnerNow ctx emptyReplState ReplNoop) :: IO (Either SomeException Bool)
+      res <- try (compileReplRunnerRaw ctx emptyReplState ReplNoop) :: IO (Either SomeException Bool)
       ok <- case res of
               Left err -> hPutStrLn stderr (show err) >> return False
               Right ok -> return ok
@@ -184,6 +186,10 @@ waitReplWarmup ctx = readMVar (replWarmup ctx)
 
 finishReplWarmup :: ReplContext -> IO ()
 finishReplWarmup ctx = void (readMVar (replWarmup ctx))
+
+markReplWarmup :: ReplContext -> IO ()
+markReplWarmup ctx =
+    modifyMVar_ (replWarmup ctx) (\_ -> return True)
 
 withReplRoot :: Hooks -> C.CompileOptions -> Maybe FilePath -> (FilePath -> IO ()) -> IO ()
 withReplRoot hooks opts mproj action
@@ -486,6 +492,12 @@ compileReplRunner ctx st = do
 
 compileReplRunnerNow :: ReplContext -> ReplState -> ReplEval -> IO Bool
 compileReplRunnerNow ctx st eval = do
+    ok <- compileReplRunnerRaw ctx st eval
+    when ok (markReplWarmup ctx)
+    return ok
+
+compileReplRunnerRaw :: ReplContext -> ReplState -> ReplEval -> IO Bool
+compileReplRunnerRaw ctx st eval = do
     ensureReplBuildAct ctx st
     createDirectoryIfMissing True (takeDirectory (replMainSrcFile ctx))
     writeFileIfChanged (replMainSrcFile ctx) (renderReplMainSource st)

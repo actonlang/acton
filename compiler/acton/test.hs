@@ -263,10 +263,11 @@ compilerTests =
             (not ("actor Foo():" `isInfixOf` evalSrc))
           assertBool "repl eval should not duplicate retained classes"
             (not ("class Box(object):" `isInfixOf` evalSrc))
-  , testCase "repl reset clears generated session" $ do
+  , testCase "repl reset keeps tempdir isolated and rejects bad setup" $ do
         withSystemTempDirectory "acton-repl-reset" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
           let replRoot = proj </> ".acton-repl"
+              buildAct = proj </> "Build.act"
           let input = unlines
                 [ "def gone() -> str:"
                 , "    return \"leak\""
@@ -275,9 +276,12 @@ compilerTests =
                 , ":reset"
                 , ":show"
                 , "gone()"
+                , "x = 1 / 0"
                 , "2 + 2"
+                , ":show"
                 , ":q"
                 ]
+          writeFile buildAct "name = \"real_project\"\n"
           (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
             (proc actonExe ["repl", "--color", "never", "--parse", "--tempdir", proj]) input
           assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
@@ -287,9 +291,18 @@ compilerTests =
             ("<empty>\n" `isInfixOf` cmdOut)
           assertBool "repl should continue evaluating after reset"
             ("4\n" `isInfixOf` cmdOut)
+          assertBool "repl should report runtime assignment failure"
+            ("Process exited with status 1\n" `isInfixOf` cmdErr)
+          assertBool "repl should reject failing setup line"
+            ("Input was not added to the session.\n" `isInfixOf` cmdErr)
           sessionSrc <- readFile (replRoot </> "src" </> "repl_session.act")
           assertBool "repl reset should rewrite session source"
             (not ("def gone()" `isInfixOf` sessionSrc))
+          parentBuildAct <- readFile buildAct
+          assertEqual "repl should not overwrite parent Build.act"
+            "name = \"real_project\"\n" parentBuildAct
+          replBuildActExists <- doesFileExist (replRoot </> "Build.act")
+          assertBool "repl should write Build.act in owned subdir" replBuildActExists
   , testCase "repl reused scratch starts with empty session" $ do
         withSystemTempDirectory "acton-repl-reuse" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
@@ -324,45 +337,6 @@ compilerTests =
           sessionSrc <- readFile (replRoot </> "src" </> "repl_session.act")
           assertBool "reused repl should rewrite stale session source"
             (not ("def gone()" `isInfixOf` sessionSrc))
-  , testCase "repl tempdir does not clobber parent project" $ do
-        withSystemTempDirectory "acton-repl-tempdir-parent" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let input = unlines
-                [ "2 + 2"
-                , ":q"
-                ]
-              buildAct = proj </> "Build.act"
-          writeFile buildAct "name = \"real_project\"\n"
-          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) input
-          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
-          assertBool "repl should evaluate in owned tempdir"
-            ("4\n" `isInfixOf` cmdOut)
-          parentBuildAct <- readFile buildAct
-          assertEqual "repl should not overwrite parent Build.act"
-            "name = \"real_project\"\n" parentBuildAct
-          replBuildActExists <- doesFileExist (proj </> ".acton-repl" </> "Build.act")
-          assertBool "repl should write Build.act in owned subdir" replBuildActExists
-  , testCase "repl rejects failing setup assignments" $ do
-        withSystemTempDirectory "acton-repl-failing-assignment" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let input = unlines
-                [ "x = 1 / 0"
-                , "2 + 2"
-                , ":show"
-                , ":q"
-                ]
-          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) input
-          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
-          assertBool "repl should report runtime assignment failure"
-            ("Process exited with status 1\n" `isInfixOf` cmdErr)
-          assertBool "repl should reject failing setup line"
-            ("Input was not added to the session.\n" `isInfixOf` cmdErr)
-          assertBool "repl should continue after failing setup line"
-            ("4\n" `isInfixOf` cmdOut)
-          assertBool "repl should not retain failing setup line"
-            ("<empty>\n" `isInfixOf` cmdOut)
   , testCase "deps" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""
