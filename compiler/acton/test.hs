@@ -712,7 +712,7 @@ compilerTests =
                   , "zig_dependencies = {}"
                   ]
               runBuild dir = readCreateProcessWithExitCode
-                (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                (proc actonExe ["build", "--always-build", "--skip-build"]) { cwd = Just dir, env = Just envWithHome } ""
 
           createDirectoryIfMissing True homeDir
 
@@ -857,7 +857,7 @@ compilerTests =
               , "    print(\"Hello, world\")"
               , "    env.exit(0)"
               ]
-            runActon "build" ExitSuccess False proj
+            runActon "build --skip-build" ExitSuccess False proj
             zon <- readFile (proj </> "build.zig.zon")
             let nameVal =
                   let isNameLine l = ".name = ." `isPrefixOf` dropWhile isSpace l

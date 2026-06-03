@@ -1993,7 +1993,8 @@ runCliPostCompile cliHooks gopts plan env = do
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
-    -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
+    -- Generate build.zig(.zon) before the final Zig build so --skip-build keeps
+    -- build metadata up to date while still skipping stubs, pruning, and Zig.
     let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
     forM_ (Data.Set.toList projKeys) $ \p -> do
       let isRootProj = p == rootProj
@@ -2008,6 +2009,11 @@ runCliPostCompile cliHooks gopts plan env = do
                 depPathOverrides = projectDepPathOverrides projMap p
             genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
           Nothing -> return ()
+    let isRootSysProj = rootProj == sysAbs || sysRoot `isPrefixOf` rootProj
+    unless isRootSysProj $ do
+      when (C.verbose gopts) $
+        logLine ("Generating build.zig for project " ++ rootProj)
+      genBuildZigFiles rootSpec rootPins (ccDepOverrides cctx) pathsRoot rootDepModuleOpts rootDepPathOverrides
     let runFinal action = do
           cchFinalStart cliHooks
           mtime <- action `onException` cchFinalDone cliHooks Nothing
@@ -2020,10 +2026,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries (Just (cchProgressUI cliHooks)))
           else do
             unless (altOutput opts') $
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
@@ -2288,9 +2294,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> Maybe ProgressUI -> IO TimeSpec
+compileBins gopts opts paths env tasks binTasks allowPrune rootModules buildLibraries mProgressUI =
+    zigBuild env gopts opts paths tasks binTasks allowPrune rootModules buildLibraries mProgressUI
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -2703,8 +2709,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> Maybe ProgressUI -> IO TimeSpec
+zigBuild env gopts opts paths tasks binTasks allowPrune rootModules buildLibraries mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -2727,16 +2733,6 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
         global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
-    projAbs <- normalizePathSafe (projPath paths)
-    sysAbs  <- normalizePathSafe (sysPath paths)
-    depOverrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
-    let sysRoot   = addTrailingPathSeparator sysAbs
-        isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
-
-    -- Generate build.zig and build.zig.zon directly from Build.act.
-    iff (not isSysProj) $ do
-      let pins = BuildSpec.dependencies rootSpec
-      genBuildZigFiles rootSpec pins depOverrides paths depModuleOpts depPathOverrides
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
