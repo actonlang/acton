@@ -163,7 +163,11 @@ jobs:
             ~/.cache/acton/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Install build prerequisites"
-        run: brew install haskell-stack
+        run: |
+          # Retry network-bound installs so a transient mirror/CDN blip doesn't
+          # fail the whole job.
+          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry brew install haskell-stack
       - name: "Build Acton"
         id: build_acton
         run: |
@@ -289,14 +293,25 @@ jobs:
           path: |
             ~/.cache/acton/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+      # Disk visibility: these containers have hit ENOSPC during cache restore.
+      # Print usage after restore so a future disk problem shows up as data
+      # rather than a silent mid-tar runner death. Never fails the job.
+      - name: "Show disk usage (after cache restore)"
+        if: always()
+        run: df -h || true
       - name: "chown our home dir to avoid stack complaining"
         run: chown -R root:root /github/home
       - name: "Install build prerequisites"
         run: |
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
-          apt-get install -qy gdb
+          # Retry network-bound installs so a transient mirror/CDN blip doesn't
+          # fail the whole job.
+          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry apt-get update
+          retry apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
+          retry apt-get install -qy gdb
+          # Reclaim the apt download cache; these containers have limited disk.
+          apt-get clean || true
       - name: "locale en_US.UTF-8"
         run: |
           apt-get install -qy locales
@@ -317,7 +332,7 @@ jobs:
           STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
           STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
           mkdir -p "${HOME}/.local/bin"
-          curl -fsSL "${STACK_URL}" -o /tmp/stack.tgz
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${STACK_URL}" -o /tmp/stack.tgz
           tar -xzf /tmp/stack.tgz -C /tmp
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
@@ -345,6 +360,12 @@ jobs:
           ulimit -c unlimited
           make -C ${GITHUB_WORKSPACE} test
           make -C ${GITHUB_WORKSPACE} online-tests
+      # Disk visibility: print usage after the build+test phase (the peak) so we
+      # can see how much headroom these containers actually have. Runs even on
+      # failure to help diagnose a suspected out-of-space death. Never fails.
+      - name: "Show disk usage (after tests)"
+        if: always()
+        run: df -h || true
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot (runs even if tests flake, but requires the build/release
       # steps to have succeeded so a build failure can't poison the day's key).
@@ -392,9 +413,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
       - name: "Install build prerequisites"
         run: |
-          apt-get update
-          apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
-          apt-get install -qy bash-completion build-essential debhelper devscripts
+          # Retry network-bound installs so a transient mirror/CDN blip doesn't
+          # fail the whole job.
+          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry apt-get update
+          retry apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
+          retry apt-get install -qy bash-completion build-essential debhelper devscripts
+          apt-get clean || true
       - name: "Prepare stack directories"
         run: |
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
@@ -427,7 +452,7 @@ jobs:
           esac
           STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
           STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
-          curl -fsSL "${STACK_URL}" -o /tmp/stack.tgz
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${STACK_URL}" -o /tmp/stack.tgz
           tar -xzf /tmp/stack.tgz -C /tmp
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"

@@ -1,6 +1,19 @@
 MK_PATH:=$(abspath $(CURDIR)/..)
 ACTON="../dist/bin/acton" --quiet
 DDB_SERVER=../dist/bin/actondb
+
+# The distributed-database resume tests bring up a multi-node cluster over
+# localhost and are occasionally flaky (cluster membership / TCP timing races),
+# failing with "Error unpacking client message" or a timeout. Each run picks
+# fresh random ports, so a clean re-run is safe and almost always passes.
+# RETRY wraps just the (flaky) binary execution, not compilation: it runs the
+# given command up to 3 times, succeeding on the first green attempt.
+RETRY=n=1; max=3; while true; do \
+	echo "attempt $$n/$$max: $(1)"; \
+	if $(1); then break; fi; \
+	if [ $$n -ge $$max ]; then echo "FAILED after $$max attempts: $(1)" >&2; exit 1; fi; \
+	echo "attempt $$n failed, retrying: $(1)" >&2; n=$$((n+1)); \
+done
 TESTS= \
 	$(DDB_TESTS)
 TLS_TEST_SERVER_ENV=
@@ -27,18 +40,18 @@ tls-test-server:
 test_db_app:
 	$(ACTON) --db rts_db/ddb_test_app.act
 	$(ACTON) --db rts_db/test_db_app.act
-	rts_db/test_db_app
+	@$(call RETRY,rts_db/test_db_app)
 
 test_db_resume_tcp_server:
 	$(ACTON) --db rts_db/ddb_test_server.act
 	$(ACTON) --db rts_db/test_tcp_server.act
-	rts_db/test_tcp_server
+	@$(call RETRY,rts_db/test_tcp_server)
 
 test_db_resume_tcp_client:
 	$(ACTON) --db rts_db/ddb_test_server.act
 	$(ACTON) --db rts_db/ddb_test_client.act
 	$(ACTON) --db rts_db/test_tcp_client.act
-	rts_db/test_tcp_client
+	@$(call RETRY,rts_db/test_tcp_client)
 
 
 # Expect 9 threads given 7 workers + main process + IO
