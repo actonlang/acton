@@ -43,6 +43,7 @@ import Acton.WitKnots
 import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.Set as Set
 import Data.List (foldl', intersperse, isPrefixOf, partition)
 import Data.Maybe (mapMaybe)
 import GHC.Conc (getNumCapabilities)
@@ -133,6 +134,10 @@ showTyFile env0 m fname verbose = do
                                          putStrLn ("  src  : " ++ srcHex)
                                          putStrLn ("  pub  : " ++ pubHex)
                                          putStrLn ("  impl : " ++ implHex)
+                                         when (not (null (InterfaceFiles.nhPubLocalDeps nh))) $
+                                           putStrLn ("  pubLocalDeps : " ++ show (map prstr (InterfaceFiles.nhPubLocalDeps nh)))
+                                         when (not (null (InterfaceFiles.nhImplLocalDeps nh))) $
+                                           putStrLn ("  implLocalDeps: " ++ show (map prstr (InterfaceFiles.nhImplLocalDeps nh)))
                                          when (not (null (InterfaceFiles.nhPubDeps nh))) $
                                            putStrLn ("  pubDeps : " ++ show (map showDep (InterfaceFiles.nhPubDeps nh)))
                                          when (not (null (InterfaceFiles.nhImplDeps nh))) $
@@ -675,7 +680,8 @@ checkSigs env te
   | null ns                            = return ()
   | otherwise                           = err2 ns "Signature lacks subsequent binding"
   where (sigs,terms)                    = sigTerms te
-        ns                              = dom sigs \\ dom terms
+        termNames                       = Set.fromList (dom terms)
+        ns                              = [ n | n <- dom sigs, Set.notMember n termNames ]
 
 infLiveEnv env x
   | fallsthru x                         = do (cs,te,x') <- infSuiteEnv env x

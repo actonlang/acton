@@ -45,7 +45,11 @@
 --   Per-name keys (NameInfo / TEnv, one set per name):
 --     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
---     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + deps
+--     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local/external deps
+--
+--   Per-extension keys:
+--     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
+--     "ext-by-protocol/<suffix>"    :: (A.Name, [A.Name]) -- protocol name to extension names
 --
 --   Per-statement keys (typed Module body):
 --     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
@@ -80,6 +84,8 @@ module InterfaceFiles
   , keyNameHash
   , readFile
   , readHeader
+  , readExtensionsByClass
+  , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
   , writeFile
@@ -87,9 +93,10 @@ module InterfaceFiles
   ) where
 
 import Prelude hiding (readFile, writeFile)
+import Control.DeepSeq (NFData)
 import Data.Binary
 import qualified Control.Exception as E
-import Control.Concurrent (runInBoundThread)
+import Control.Concurrent (runInBoundThread, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -122,11 +129,19 @@ data NameHashInfo = NameHashInfo
   , nhSrcHash  :: BS.ByteString
   , nhPubHash  :: BS.ByteString
   , nhImplHash :: BS.ByteString
+  , nhPubLocalDeps  :: [A.Name]
+  , nhImplLocalDeps :: [A.Name]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   } deriving (Show, Eq, Generic)
 
 instance Binary NameHashInfo
+instance NFData NameHashInfo
+
+data ExtensionIndex = ExtensionIndex
+  { extByClass      :: Map.Map A.Name [A.Name]
+  , extByProtocol   :: Map.Map A.Name [A.Name]
+  } deriving (Show, Eq)
 
 data SourceFileMeta = SourceFileMeta
   { sfmMTimeNs :: Integer
@@ -239,14 +254,24 @@ listInterfaceDirsRecursive root = do
                then return [path]
                else listInterfaceDirsRecursive path
 
+-- | A .tydb cache entry that is absent, stale, or structurally unusable -- a
+-- genuine cache miss that should trigger recompilation. Deliberately distinct
+-- from a transient or environmental failure to read the cache (e.g. a
+-- concurrent LMDB error): those must propagate rather than be silently mistaken
+-- for "interface missing", which is what produced misleading
+-- "not found or unreadable" diagnostics.
+newtype TyCacheInvalid = TyCacheInvalid String deriving Show
+
+instance E.Exception TyCacheInvalid
+
 versionMismatch :: [Int] -> IO a
 versionMismatch vs =
-    ioError (userError (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
+    E.throwIO (TyCacheInvalid (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
 
 decodeStrict :: Binary a => String -> BS.ByteString -> IO a
 decodeStrict label bs =
     case decodeOrFail (BL.fromStrict bs) of
-      Left (_, _, err) -> ioError (userError ("Failed to decode .tydb " ++ label ++ ": " ++ err))
+      Left (_, _, err) -> E.throwIO (TyCacheInvalid ("Failed to decode .tydb " ++ label ++ ": " ++ err))
       Right (_, _, v) -> return v
 
 encodeStrict :: Binary a => a -> BS.ByteString
@@ -301,6 +326,16 @@ keyNameHashPrefix = key "name-hash/"
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
 
+keyExtByClassPrefix, keyExtByProtocolPrefix :: BS.ByteString
+keyExtByClassPrefix      = key "ext-by-class/"
+keyExtByProtocolPrefix   = key "ext-by-protocol/"
+
+keyExtByClass :: A.Name -> BS.ByteString
+keyExtByClass n = B.concat [keyExtByClassPrefix, nameKeySuffix n]
+
+keyExtByProtocol :: A.Name -> BS.ByteString
+keyExtByProtocol n = B.concat [keyExtByProtocolPrefix, nameKeySuffix n]
+
 keyStmt :: Int -> BS.ByteString
 keyStmt i = B.pack ("stmt/" ++ padIndex i)
 
@@ -319,12 +354,22 @@ withEnv path readOnly mapSize action =
       E.bracket open LMDB.mdb_env_close action
   where
     lmdbPath = normalise path
-    open = withMVar lmdbOpenLock $ \_ -> do
+    open = withMVar lmdbOpenLock $ \_ -> openWithRetry envOpenMaxAttempts
+    -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
+    -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
+    -- retry. LMDB-semantic failures (corruption, version mismatch) are not
+    -- transient and propagate immediately to the cache-miss / recompile path.
+    openWithRetry attempt = do
       env <- LMDB.mdb_env_create
-      (do LMDB.mdb_env_set_mapsize env mapSize
-          openEnv env
-          return env)
-        `E.onException` LMDB.mdb_env_close env
+      let configure = do LMDB.mdb_env_set_mapsize env mapSize
+                         openEnv env
+      r <- E.try (configure `E.onException` LMDB.mdb_env_close env)
+      case r of
+        Right () -> return env
+        Left (err :: LMDB.LMDB_Error)
+          | attempt > 1 && isTransientOpenError err ->
+              threadDelay envOpenRetryDelayUs >> openWithRetry (attempt - 1)
+          | otherwise -> E.throwIO err
     openEnv env
       | readOnly  = do
           exists <- doesDirectoryExist lmdbPath
@@ -338,6 +383,63 @@ withEnv path readOnly mapSize action =
     openWithContext env mode flags =
       LMDB.mdb_env_open env lmdbPath flags `E.catch` \(err :: LMDB.LMDB_Error) ->
         ioError (userError ("mdb_env_open " ++ mode ++ " " ++ lmdbPath ++ ": " ++ show err))
+
+-- A transient env-open failure is an OS-level error (Either Left, a raw errno)
+-- from a concurrent lock.mdb setup race -- retrying succeeds once the winning
+-- opener has created it. LMDB-semantic errors (Either Right MDB_*) are not
+-- transient and must not be retried.
+isTransientOpenError :: LMDB.LMDB_Error -> Bool
+isTransientOpenError err =
+    case LMDB.e_code err of
+      Left _  -> True
+      Right _ -> False
+
+-- Choose read-only open flags. A writable cache may be rewritten by a
+-- concurrent acton process, so it MUST keep LMDB's lock table for reader/writer
+-- safety (the lock.mdb open race there is handled by retrying the open). Only an
+-- installed cache the user cannot write -- where no writer can exist -- uses
+-- MDB_NOLOCK, so it stays readable even when lock.mdb cannot be created in a
+-- read-only directory.
+readOnlyOpenFlags :: FilePath -> IO [LMDB.MDB_EnvFlag]
+readOnlyOpenFlags path = do
+    useLock <- canUseLockFile path
+    noLock <- canReadWithoutLock path
+    return $ if useLock || not noLock
+               then [LMDB.MDB_RDONLY]
+               else [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
+
+canUseLockFile :: FilePath -> IO Bool
+canUseLockFile path = do
+    let lockPath = lockFilePath path
+    exists <- doesFileExist lockPath
+    if exists
+      then canWritePath lockPath False
+      else canWritePath path True
+
+canReadWithoutLock :: FilePath -> IO Bool
+canReadWithoutLock path = do
+    let dataPath = dataFilePath path
+    exists <- doesFileExist dataPath
+    if not exists
+      then return False
+      else do
+        dataWritable <- canWritePath dataPath False
+        dirWritable <- canWritePath path True
+        return (not dataWritable && not dirWritable)
+
+canWritePath :: FilePath -> Bool -> IO Bool
+#if defined(mingw32_HOST_OS)
+canWritePath path _ =
+    (writable <$> getPermissions path) `E.catch` \(_ :: E.IOException) -> return False
+#else
+canWritePath path searchable = fileAccess path False True searchable
+#endif
+
+envOpenMaxAttempts :: Int
+envOpenMaxAttempts = 5
+
+envOpenRetryDelayUs :: Int
+envOpenRetryDelayUs = 2000
 
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
@@ -399,8 +501,15 @@ getValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString 
 getValue label txn dbi k = do
     mv <- withVal k (LMDB.mdb_get txn dbi)
     case mv of
-      Nothing -> ioError (userError ("Missing .tydb key: " ++ label))
+      Nothing -> E.throwIO (TyCacheInvalid ("Missing .tydb key: " ++ label))
       Just v -> copyVal v >>= decodeStrict label
+
+getMaybeValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO (Maybe a)
+getMaybeValue label txn dbi k = do
+    mv <- withVal k (LMDB.mdb_get txn dbi)
+    case mv of
+      Nothing -> return Nothing
+      Just v -> Just <$> (copyVal v >>= decodeStrict label)
 
 getValuesWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [BS.ByteString]
 getValuesWithPrefix txn dbi prefix =
@@ -434,54 +543,17 @@ isMapFull err =
       Just LMDB.LMDB_Error{ LMDB.e_code = Right LMDB.MDB_MAP_FULL } -> True
       _ -> False
 
-readOnlyOpenFlags :: FilePath -> IO [LMDB.MDB_EnvFlag]
-readOnlyOpenFlags path = do
-    useLock <- canUseLockFile path
-    noLock <- canReadWithoutLock path
-    -- Installed interface caches may be root-owned/read-only. Only use
-    -- MDB_NOLOCK when this user also cannot update the data file or directory,
-    -- so project-local writable caches still fail instead of bypassing LMDB's
-    -- cross-process locking.
-    return $ if useLock || not noLock
-               then [LMDB.MDB_RDONLY]
-               else [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
-
-canUseLockFile :: FilePath -> IO Bool
-canUseLockFile path = do
-    let lockPath = lockFilePath path
-    exists <- doesFileExist lockPath
-    if exists
-      then canWritePath lockPath False
-      else canWritePath path True
-
-canReadWithoutLock :: FilePath -> IO Bool
-canReadWithoutLock path = do
-    let dataPath = dataFilePath path
-    exists <- doesFileExist dataPath
-    if not exists
-      then return False
-      else do
-        dataWritable <- canWritePath dataPath False
-        dirWritable <- canWritePath path True
-        return (not dataWritable && not dirWritable)
-
-canWritePath :: FilePath -> Bool -> IO Bool
-#if defined(mingw32_HOST_OS)
-canWritePath path _ =
-    (writable <$> getPermissions path) `E.catch` \(_ :: E.IOException) -> return False
-#else
-canWritePath path searchable = fileAccess path False True searchable
-#endif
-
 isCorruptEnv :: E.SomeException -> Bool
 isCorruptEnv err =
     case E.fromException err of
       Just LMDB.LMDB_Error{ LMDB.e_code = Right code } ->
         code `elem` corruptEnvCodes
       _ | Just ioErr <- E.fromException err ->
-            any (`Data.List.isInfixOf` ioeGetErrorString ioErr) corruptEnvCodeNames
-        | otherwise -> False
+            hasCorruptEnvMarker (ioeGetErrorString ioErr) || hasCorruptEnvMarker (show err)
+        | otherwise -> hasCorruptEnvMarker (show err)
   where
+    hasCorruptEnvMarker s =
+      any (`Data.List.isInfixOf` s) corruptEnvMarkers
     corruptEnvCodes =
       [ LMDB.MDB_PAGE_NOTFOUND
       , LMDB.MDB_CORRUPTED
@@ -489,7 +561,14 @@ isCorruptEnv err =
       , LMDB.MDB_VERSION_MISMATCH
       , LMDB.MDB_INVALID
       ]
-    corruptEnvCodeNames = map show corruptEnvCodes
+    corruptEnvMarkers =
+      map show corruptEnvCodes ++
+      [ "MDB_PAGE_NOTFOUND"
+      , "MDB_CORRUPTED"
+      , "MDB_PANIC"
+      , "MDB_VERSION_MISMATCH"
+      , "MDB_INVALID"
+      ]
 
 writeEntries :: FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
 writeEntries path entries = do
@@ -569,6 +648,57 @@ readStmtEntries txn dbi = do
     forM [0 .. count - 1] $ \i ->
       getValue ("stmt " ++ show i) txn dbi (keyStmt i)
 
+emptyExtensionIndex :: ExtensionIndex
+emptyExtensionIndex =
+    ExtensionIndex
+      { extByClass = Map.empty
+      , extByProtocol = Map.empty
+      }
+
+extensionIndexFromNameInfo :: A.ModName -> I.NameInfo -> ExtensionIndex
+extensionIndexFromNameInfo mn nmod =
+    case nmod of
+      I.NModule _ te _ -> foldl addExt emptyExtensionIndex te
+      _ -> emptyExtensionIndex
+  where
+    addExt acc (ext, I.NExt _ c ps _ _ _) =
+      let cls = localQName (A.tcname c)
+          protos = [ p | (_, pcon) <- ps, Just p <- [localQName (A.tcname pcon)] ]
+          withClass =
+            case cls of
+              Nothing -> acc
+              Just n -> acc { extByClass = insertMany n [ext] (extByClass acc) }
+          withProtos =
+            foldl
+              (\idx p -> idx { extByProtocol = insertMany p [ext] (extByProtocol idx) })
+              withClass
+              protos
+      in withProtos
+    addExt acc _ = acc
+
+    localQName qn =
+      case qn of
+        A.NoQ n -> Just n
+        A.QName m n | m == mn -> Just n
+        A.GName m n | m == mn -> Just n
+        _ -> Nothing
+
+    insertMany n exts =
+      Map.insertWith unionNames n (sortNames exts)
+
+    unionNames xs ys = sortNames (xs ++ ys)
+    sortNames = Data.List.sortOn A.nstr . Data.List.nub
+
+extensionIndexEntries :: ExtensionIndex -> [(BS.ByteString, BS.ByteString)]
+extensionIndexEntries index =
+    [ (keyExtByClass n, encodeStrict (n, exts))
+    | (n, exts) <- Map.toList (extByClass index)
+    ]
+    ++
+    [ (keyExtByProtocol n, encodeStrict (n, exts))
+    | (n, exts) <- Map.toList (extByProtocol index)
+    ]
+
 interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
 interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
     [ (keyVersion, encodeStrict version)
@@ -588,6 +718,7 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
               , let suffix = nameKeySuffix n
               ]
     ++ [ (keyNameHash (nhName nh), encodeStrict nh) | nh <- nameHashes ]
+    ++ extensionIndexEntries (extensionIndexFromNameInfo tmn nmod)
     ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
   where
     I.NModule _ te _ = nmod
@@ -629,6 +760,24 @@ readHeader f =
       nameHashes <- readNameHashEntries txn dbi
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
 
+readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
+readExtensionsByClass f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      entry <- getMaybeValue "ext-by-class" txn dbi (keyExtByClass n) :: IO (Maybe (A.Name, [A.Name]))
+      return $ case entry of
+        Nothing -> []
+        Just (_, exts) -> exts
+
+readExtensionsByProtocol :: FilePath -> A.Name -> IO [A.Name]
+readExtensionsByProtocol f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      entry <- getMaybeValue "ext-by-protocol" txn dbi (keyExtByProtocol n) :: IO (Maybe (A.Name, [A.Name]))
+      return $ case entry of
+        Nothing -> []
+        Just (_, exts) -> exts
+
 -- Interface files are caches for most callers. If a file is missing,
 -- unreadable, corrupt, or from a different compiler interface version, the
 -- cache entry is not usable.
@@ -647,8 +796,15 @@ tyCacheMiss err
   | isTyCacheMiss err = return Nothing
   | otherwise = E.throwIO err
 
+-- A read failure counts as a cache miss only when the entry is genuinely absent
+-- or structurally unusable, in which case the caller recompiles from source
+-- (which overwrites a corrupt entry, see writeEntries). Transient or
+-- environmental errors are NOT misses: they propagate so the real cause is
+-- surfaced instead of being silently reported as "interface missing".
 isTyCacheMiss :: E.SomeException -> Bool
 isTyCacheMiss err
-  | Just (_ :: E.IOException) <- E.fromException err = True
-  | Just (_ :: LMDB.LMDB_Error) <- E.fromException err = True
+  | Just (_ :: TyCacheInvalid) <- E.fromException err = True
+  | Just (ioe :: E.IOException) <- E.fromException err =
+      isDoesNotExistError ioe || isCorruptEnv err
+  | isCorruptEnv err = True
   | otherwise = False

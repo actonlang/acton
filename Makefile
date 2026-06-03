@@ -591,7 +591,10 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # already pull it in transitively via dist/bin/acton[c].)
 test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
 test: $(ACTON_BIN)
-	cd compiler && $(STACK) test libacton acton:test_acton acton:incremental
+	cd compiler && $(STACK) test libacton acton:incremental
+	# Exclude the cross-compilation group from the default run: it builds for
+	# many targets and bloats ~/.cache/acton. Run it via `make test-cross-compile`.
+	cd compiler && $(STACK) test acton:test_acton --ta '-p "! /cross-compilation/"'
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
@@ -614,7 +617,7 @@ test-acton-goldens-accept:
 test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerrors-accept test-typeerrors-accept
 
 test-cross-compile:
-	cd compiler && $(STACK) test acton --ta '-p "cross-compilation"'
+	cd compiler && $(STACK) test acton --ta '-p "/cross-compilation/"'
 
 test-incremental: $(ACTONC)
 	cd compiler && $(STACK) test acton:incremental

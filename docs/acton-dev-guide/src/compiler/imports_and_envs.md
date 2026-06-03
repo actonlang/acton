@@ -92,7 +92,9 @@ Header reads are used for cheap decisions:
 - roots, tests, and docstrings
 
 This is the path used by `readModuleTask` and the various cache lookups in
-`Acton.Compile`.
+`Acton.Compile`. It is also the first DBP path: deferred jobs read the header
+to collect per-name dependency edges, root actor seeds, and enough metadata to
+decide whether the selected generated code is already up to date.
 
 ### Full `.tydb` reads
 
@@ -102,10 +104,18 @@ typed module:
 - reusing an interface from a fresh cached module
 - implementation-hash refresh
 - codegen refresh
+- DBP back-pass execution after the selected codegen hash is stale
 
 Reading a full `.tydb` does not by itself reconstruct the import closure in the
 active environment. It only gives the caller the stored interface and typed
 module payload.
+
+DBP interest is also scheduler metadata, not an import overlay. Each completed
+front result contributes external `nhPubDeps` and `nhImplDeps` into an
+`InterestMap`, and DBP later uses that map to prune a provider's typed module.
+That does not make the selected provider names available to the active
+type-checker environment; imports still become type-checker bindings only
+through `mkEnv`/`doImp`.
 
 ## How transitive imports become available
 

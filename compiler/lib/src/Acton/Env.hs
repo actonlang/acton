@@ -106,27 +106,19 @@ inLoop env                  = contextIs env CtxLoop
 
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
-mapModules1 f env           = mapModules (\_ _ ni -> [f ni]) env
+mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
 
-mapModules                  :: (Env0 -> ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-mapModules f env            = env1 { hmodules = convTEnv2HTEnv (modules env1) }
-  where env1                =  walk env0 [] mods
-        env0                = env{ modules = [prim] }
-        prim : mods         = modules env
+mapModules                  :: (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
+mapModules f env            = env' { hmodules = convTEnv2HTEnv mods' }
+ where env'                 = env { modules = mods' }
+       prim : mods          = modules env
+       mods'                = prim : walk [] mods
 
-        walk env ns []      = env
-        walk env ns ((n,NModule ms te1 _):te)
-                            = walk env2 ns te
-          where env1        = env{ modules = app ns (modules env) [(n, NModule ms [] Nothing)] }
-                env2        = walk env1 (ns++[n]) te1
-        walk env ns (ni:te) = walk env1 ns te
-          where env1        = env{ modules = app ns (modules env) (f env (ModName ns) ni) }
+       walk ns              = concatMap (go ns)
 
-        app (n:ns) ((m,NModule ms te1 doc):te) te'
-          | n == m          = (m, NModule ms (app ns te1 te') doc) : te
-        app ns (ni:te) te'  = ni : app ns te te'
-        app ns [] te'       = te'
-
+       go ns (n, NModule ms te doc)
+                            = [(n, NModule ms (walk (ns ++ [n]) te) doc)]
+       go ns ni             = f (ModName ns) ni
 
 instance (Pretty x) => Pretty (EnvF x) where
     pretty env                  = text "--- modules:"  $+$

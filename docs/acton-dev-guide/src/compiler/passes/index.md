@@ -30,9 +30,11 @@ For how imports are loaded before these passes run, see
 
 ## Front vs back passes
 
-The pipeline is split into a front end and a back end. The scheduler runs all
-front passes across the dependency graph first, then queues back-pass work once
-type checking succeeds for a module.
+The pipeline is split into a front end and a back end. The scheduler runs front
+passes across the dependency graph, then queues back-pass work once type
+checking succeeds for a module. Normal modules queue their back job immediately.
+DBP candidates hold a deferred back job until all reverse-dependent front passes
+that can add interest have completed.
 
 Front passes (1–3) are:
 - Parse
@@ -57,6 +59,11 @@ files (`.c`, `.h`). It does not introduce new user errors, so it can run after
 front completion and even in the background. The CLI waits for all back jobs to
 finish before invoking Zig; the LSP enqueues back jobs in the background and
 does not wait for them or run Zig.
+
+DBP still runs the same back-pass sequence once it is ready. The difference is
+that it may prune the typed module to the selected top-level declarations before
+normalization, and it can skip the back job entirely when the selected DBP
+codegen hash already matches the generated `.c`/`.h` files.
 
 The shared orchestration lives in `compiler/lib/src/Acton/Compile.hs` and is
 used by both `acton` and the LSP server.

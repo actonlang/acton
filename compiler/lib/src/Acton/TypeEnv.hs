@@ -127,8 +127,8 @@ prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> 
   where info                    = tyinfos x IntMap.! tid
 
 instance USubst TypeX where
-    usubst x                    = do we <- usubst (activeWits x)
-                                     return x{ activeWits = we, activeWitMap = witMap we }
+    usubstWith s x              = let we = usubstWith s (activeWits x)
+                                  in x{ activeWits = we, activeWitMap = witMap we }
 
 instance UFree TypeX where
     ufree x                     = ufree (activeWits x)
@@ -620,230 +620,214 @@ matches vs (t:ts) (t':ts')                  = do s1 <- match vs t t'
 
 class USubst t where
     usubst                          :: t -> TypeM t
+    usubstWith                      :: IntMap Type -> t -> t
+
+    usubst x                        = do s <- usubstitution
+                                         return $ if IntMap.null s then x else usubstWith s x
 
 instance USubst a => USubst (Name,a) where
-    usubst (n, t)                   = (,) <$> return n <*> usubst t
+    usubstWith s (n, t)             = (n, usubstWith s t)
 
 instance (USubst a, USubst b) => USubst (QName,a,b) where
-    usubst (n, t, u)                = (,,) <$> return n <*> usubst t <*> usubst u
+    usubstWith s (n, t, u)          = (n, usubstWith s t, usubstWith s u)
 
 instance USubst a => USubst [a] where
-    usubst                          = mapM usubst
+    usubstWith s                    = map (usubstWith s)
 
 instance USubst a => USubst (Maybe a) where
-    usubst                          = maybe (return Nothing) (\x -> Just <$> usubst x)
+    usubstWith s                    = maybe Nothing (\x -> Just $ usubstWith s x)
 
 instance USubst Constraint where
-    usubst (Cast info env t1 t2)    = Cast <$> usubst info <*> return env <*> usubst t1 <*> usubst t2
-    usubst (Sub info env w t1 t2)   = Sub <$> usubst info <*> return env <*> return w <*> usubst t1 <*> usubst t2
-    usubst (Proto info env w t p)   = Proto <$> usubst info <*> return env <*> return w <*> usubst t <*> usubst p
-    usubst (Sel info env w t1 n t2) = Sel <$> usubst info <*> return env <*> return w <*> usubst t1 <*> return n <*> usubst t2
-    usubst (Mut info env t1 n t2)   = Mut <$> usubst info <*> return env <*> usubst t1 <*> return n <*> usubst t2
-    usubst (Seal info env t)        = Seal <$> usubst info <*> return env <*> usubst t
+    usubstWith s (Cast info env t1 t2)    = Cast (usubstWith s info) env (usubstWith s t1) (usubstWith s t2)
+    usubstWith s (Sub info env w t1 t2)   = Sub (usubstWith s info) env w (usubstWith s t1) (usubstWith s t2)
+    usubstWith s (Proto info env w t p)   = Proto (usubstWith s info) env w (usubstWith s t) (usubstWith s p)
+    usubstWith s (Sel info env w t1 n t2) = Sel (usubstWith s info) env w (usubstWith s t1) n (usubstWith s t2)
+    usubstWith s (Mut info env t1 n t2)   = Mut (usubstWith s info) env (usubstWith s t1) n (usubstWith s t2)
+    usubstWith s (Seal info env t)        = Seal (usubstWith s info) env (usubstWith s t)
 
 instance USubst ErrInfo where
-    usubst (DfltInfo l n mbe ts)    = DfltInfo l n <$> usubst mbe <*> usubst ts
-    usubst (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n <$> usubst t <*> return msg
-    usubst info                     = return info
+    usubstWith s (DfltInfo l n mbe ts)    = DfltInfo l n (usubstWith s mbe) (usubstWith s ts)
+    usubstWith s (DeclInfo l1 l2 n t msg) = DeclInfo l1 l2 n (usubstWith s t) msg
+    usubstWith s info                     = info
 
 instance USubst TSchema where
-    usubst (TSchema l [] t)         = TSchema l [] <$> usubst t
-    usubst (TSchema l q t)          = TSchema l <$> usubst q <*> usubst t
-
-instance USubst TVar where
-    usubst v                        = do t <- usubst (TVar NoLoc v)
-                                         case t of
-                                            TVar _ v' -> return v'
-                                            _         -> return v
-
-usubstTConWith                      :: IntMap Type -> TCon -> TCon
-usubstTConWith s (TC n ts)          = TC n (map (usubstTypeWith s) ts)
-
-usubstTypeWith                      :: IntMap Type -> Type -> Type
-usubstTypeWith s (TUni l u)         = case IntMap.lookup (uvid u) s of
-                                           Just t  -> usubstTypeWith s t
-                                           Nothing -> TUni l u
-usubstTypeWith s (TVar l v)         = TVar l v
-usubstTypeWith s (TCon l c)         = TCon l (usubstTConWith s c)
-usubstTypeWith s (TFun l fx p k t)  = TFun l (usubstTypeWith s fx)
-                                             (usubstTypeWith s p)
-                                             (usubstTypeWith s k)
-                                             (usubstTypeWith s t)
-usubstTypeWith s (TTuple l p k)     = TTuple l (usubstTypeWith s p) (usubstTypeWith s k)
-usubstTypeWith s (TOpt l t)         = case usubstTypeWith s t of
-                                           t'@TOpt{} -> t'
-                                           t'         -> TOpt l t'
-usubstTypeWith s (TNone l)          = TNone l
-usubstTypeWith s (TWild l)          = TWild l
-usubstTypeWith s (TNil l k)         = TNil l k
-usubstTypeWith s (TRow l k n t r)   = TRow l k n (usubstTypeWith s t)
-                                                 (usubstTypeWith s r)
-usubstTypeWith s (TStar l k r)      = TStar l k (usubstTypeWith s r)
-usubstTypeWith s (TFX l fx)         = TFX l fx
+    usubstWith s (TSchema l [] t)         = TSchema l [] (usubstWith s t)
+    usubstWith s (TSchema l q t)          = TSchema l (usubstWith s q) (usubstWith s t)
 
 instance USubst TCon where
-    usubst c                        = do s <- usubstitution
-                                         return $ if IntMap.null s then c else usubstTConWith s c
-
-instance USubst QBind where
-    usubst (QBind v cs)             = QBind <$> usubst v <*> usubst cs
-
-instance USubst WTCon where
-    usubst (wpath, p)               = do p <- usubst p; return (wpath, p)
+    usubstWith s (TC n ts)          = TC n (map (usubstWith s) ts)
 
 instance USubst Type where
-    usubst t                        = do s <- usubstitution
-                                         return $ if IntMap.null s then t else usubstTypeWith s t
+    usubstWith s (TUni l u)         = case IntMap.lookup (uvid u) s of
+                                           Just t  -> usubstWith s t
+                                           Nothing -> TUni l u
+    usubstWith s (TVar l v)         = TVar l v
+    usubstWith s (TCon l c)         = TCon l (usubstWith s c)
+    usubstWith s (TFun l fx p k t)  = TFun l (usubstWith s fx) (usubstWith s p) (usubstWith s k) (usubstWith s t)
+    usubstWith s (TTuple l p k)     = TTuple l (usubstWith s p) (usubstWith s k)
+    usubstWith s (TOpt l t)         = case usubstWith s t of
+                                           t'@TOpt{} -> t'
+                                           t'        -> TOpt l t'
+    usubstWith s (TNone l)          = TNone l
+    usubstWith s (TWild l)          = TWild l
+    usubstWith s (TNil l k)         = TNil l k
+    usubstWith s (TRow l k n t r)   = TRow l k n (usubstWith s t) (usubstWith s r)
+    usubstWith s (TStar l k r)      = TStar l k (usubstWith s r)
+    usubstWith s (TFX l fx)         = TFX l fx
+
+instance USubst QBind where
+    usubstWith s (QBind v cs)       = QBind v (usubstWith s cs)
+
+instance USubst WTCon where
+    usubstWith s (wpath, p)         = (wpath, usubstWith s p)
 
 instance USubst PosPar where
-    usubst (PosPar n t e p)         = PosPar n <$> usubst t <*> usubst e <*> usubst p
-    usubst (PosSTAR n t)            = PosSTAR n <$> usubst t
-    usubst PosNIL                   = return PosNIL
+    usubstWith s (PosPar n t e p)   = PosPar n (usubstWith s t) (usubstWith s e) (usubstWith s p)
+    usubstWith s (PosSTAR n t)      = PosSTAR n (usubstWith s t)
+    usubstWith s PosNIL             = PosNIL
 
 instance USubst KwdPar where
-    usubst (KwdPar n t e p)         = KwdPar n <$> usubst t <*> usubst e <*> usubst p
-    usubst (KwdSTAR n t)            = KwdSTAR n <$> usubst t
-    usubst KwdNIL                   = return KwdNIL
+    usubstWith s (KwdPar n t e p)   = KwdPar n (usubstWith s t) (usubstWith s e) (usubstWith s p)
+    usubstWith s (KwdSTAR n t)      = KwdSTAR n (usubstWith s t)
+    usubstWith s KwdNIL             = KwdNIL
 
 instance USubst Decl where
-    usubst (Def l n q p k a ss de fx doc)   = Def l n <$> usubst q <*> usubst p <*> usubst k <*> usubst a <*> usubst ss <*> return de <*> usubst fx <*> return doc
-    usubst (Actor l n q p k ss doc)         = Actor l n <$> usubst q <*> usubst p <*> usubst k <*> usubst ss <*> return doc
-    usubst (Class l n q bs ss doc)          = Class l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
-    usubst (Protocol l n q bs ss doc)       = Protocol l n <$> usubst q <*> usubst bs <*> usubst ss <*> return doc
-    usubst (Extension l q c bs ss doc)      = Extension l <$> usubst q <*> usubst c <*> usubst bs <*> usubst ss <*> return doc
+    usubstWith s (Def l n q p k a ss de fx doc)   = Def l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s a) (usubstWith s ss) de (usubstWith s fx) doc
+    usubstWith s (Actor l n q p k ss doc)         = Actor l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s ss) doc
+    usubstWith s (Class l n q bs ss doc)          = Class l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
+    usubstWith s (Protocol l n q bs ss doc)       = Protocol l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
+    usubstWith s (Extension l q c bs ss doc)      = Extension l (usubstWith s q) (usubstWith s c) (usubstWith s bs) (usubstWith s ss) doc
 
 instance USubst Stmt where
-    usubst (Expr l e)               = Expr l <$> usubst e
-    usubst (Assign l ps e)          = Assign l <$> usubst ps <*> usubst e
-    usubst (MutAssign l t e)        = MutAssign l <$> usubst t <*> usubst e
-    usubst (AugAssign l t op e)     = AugAssign l <$> usubst t <*> return op <*> usubst e
-    usubst (Assert l e mbe)         = Assert l <$> usubst e <*> usubst mbe
-    usubst (Delete l t)             = Delete l <$> usubst t
-    usubst (Return l mbe)           = Return l <$> usubst mbe
-    usubst (Raise l e)              = Raise l <$> usubst e
-    usubst (If l bs els)            = If l <$> usubst bs <*> usubst els
-    usubst (While l e b els)        = While l <$> usubst e <*> usubst b <*> usubst els
-    usubst (For l p e b els)        = For l <$> usubst p <*> usubst e <*> usubst b <*> usubst els
-    usubst (Try l b hs els fin)     = Try l <$> usubst b <*> usubst hs <*> usubst els <*> usubst fin
-    usubst (With l is b)            = With l <$> usubst is <*> usubst b
-    usubst (VarAssign l ps e)       = VarAssign l <$> usubst ps <*> usubst e
-    usubst (After l e e')           = After l <$> usubst e <*> usubst e'
-    usubst (Decl l ds)              = Decl l <$> usubst ds
-    usubst (Signature l ns tsc d)   = Signature l ns <$> usubst tsc <*> return d
-    usubst s                        = return s
+    usubstWith s (Expr l e)               = Expr l (usubstWith s e)
+    usubstWith s (Assign l ps e)          = Assign l (usubstWith s ps) (usubstWith s e)
+    usubstWith s (MutAssign l t e)        = MutAssign l (usubstWith s t) (usubstWith s e)
+    usubstWith s (AugAssign l t op e)     = AugAssign l (usubstWith s t) op (usubstWith s e)
+    usubstWith s (Assert l e mbe)         = Assert l (usubstWith s e) (usubstWith s mbe)
+    usubstWith s (Delete l t)             = Delete l (usubstWith s t)
+    usubstWith s (Return l mbe)           = Return l (usubstWith s mbe)
+    usubstWith s (Raise l e)              = Raise l (usubstWith s e)
+    usubstWith s (If l bs els)            = If l (usubstWith s bs) (usubstWith s els)
+    usubstWith s (While l e b els)        = While l (usubstWith s e) (usubstWith s b) (usubstWith s els)
+    usubstWith s (For l p e b els)        = For l (usubstWith s p) (usubstWith s e) (usubstWith s b) (usubstWith s els)
+    usubstWith s (Try l b hs els fin)     = Try l (usubstWith s b) (usubstWith s hs) (usubstWith s els) (usubstWith s fin)
+    usubstWith s (With l is b)            = With l (usubstWith s is) (usubstWith s b)
+    usubstWith s (VarAssign l ps e)       = VarAssign l (usubstWith s ps) (usubstWith s e)
+    usubstWith s (After l e e')           = After l (usubstWith s e) (usubstWith s e')
+    usubstWith s (Decl l ds)              = Decl l (usubstWith s ds)
+    usubstWith s (Signature l ns tsc d)   = Signature l ns (usubstWith s tsc) d
+    usubstWith s stmt                     = stmt
 
 instance USubst Expr where
-    usubst (Call l e p k)           = Call l <$> usubst e <*> usubst p <*> usubst k
-    usubst (TApp l e ts)            = TApp l <$> usubst e <*> usubst ts
-    usubst (Let l ss e)             = Let l <$> usubst ss <*> usubst e
-    usubst (Async l e)              = Async l <$> usubst e
-    usubst (Await l e)              = Await l <$> usubst e
-    usubst (Index l e ix)           = Index l <$> usubst e <*> usubst ix
-    usubst (Slice l e sl)           = Slice l <$> usubst e <*> usubst sl
-    usubst (Cond l e1 cond e2)      = Cond l <$> usubst e1 <*> usubst cond <*> usubst e2
-    usubst (IsInstance l e c)       = IsInstance l <$> usubst e <*> return c
-    usubst (BinOp l e1 op e2)       = BinOp l <$> usubst e1 <*> return op <*> usubst e2
-    usubst (CompOp l e ops)         = CompOp l <$> usubst e <*> usubst ops
-    usubst (UnOp l op e)            = UnOp l op <$> usubst e
-    usubst (Dot l e n)              = Dot l <$> usubst e <*> return n
-    usubst (Rest l e n)             = Rest l <$> usubst e <*> return n
-    usubst (DotI l e i)             = DotI l <$> usubst e <*> return i
-    usubst (RestI l e i)            = RestI l <$> usubst e <*> return i
-    usubst (Lambda l p k e fx)      = Lambda l <$> usubst p <*> usubst k <*> usubst e <*> usubst fx
-    usubst (Yield l e)              = Yield l <$> usubst e
-    usubst (YieldFrom l e)          = YieldFrom l <$> usubst e
-    usubst (Tuple l p k)            = Tuple l <$> usubst p <*> usubst k
-    usubst (List l es)              = List l <$> usubst es
-    usubst (ListComp l e c)         = ListComp l <$> usubst e <*> usubst c
-    usubst (Dict l as)              = Dict l <$> usubst as
-    usubst (DictComp l a c)         = DictComp l <$> usubst a <*> usubst c
-    usubst (Set l es)               = Set l <$> usubst es
-    usubst (SetComp l e c)          = SetComp l <$> usubst e <*> usubst c
-    usubst (Paren l e)              = Paren l <$> usubst e
-    usubst e                        = return e
+    usubstWith s (Call l e p k)       = Call l (usubstWith s e) (usubstWith s p) (usubstWith s k)
+    usubstWith s (TApp l e ts)        = TApp l (usubstWith s e) (usubstWith s ts)
+    usubstWith s (Let l ss e)         = Let l (usubstWith s ss) (usubstWith s e)
+    usubstWith s (Async l e)          = Async l (usubstWith s e)
+    usubstWith s (Await l e)          = Await l (usubstWith s e)
+    usubstWith s (Index l e ix)       = Index l (usubstWith s e) (usubstWith s ix)
+    usubstWith s (Slice l e sl)       = Slice l (usubstWith s e) (usubstWith s sl)
+    usubstWith s (Cond l e1 cond e2)  = Cond l (usubstWith s e1) (usubstWith s cond) (usubstWith s e2)
+    usubstWith s (IsInstance l e c)   = IsInstance l (usubstWith s e) c
+    usubstWith s (BinOp l e1 op e2)   = BinOp l (usubstWith s e1) op (usubstWith s e2)
+    usubstWith s (CompOp l e ops)     = CompOp l (usubstWith s e) (usubstWith s ops)
+    usubstWith s (UnOp l op e)        = UnOp l op (usubstWith s e)
+    usubstWith s (Dot l e n)          = Dot l (usubstWith s e) n
+    usubstWith s (Rest l e n)         = Rest l (usubstWith s e) n
+    usubstWith s (DotI l e i)         = DotI l (usubstWith s e) i
+    usubstWith s (RestI l e i)        = RestI l (usubstWith s e) i
+    usubstWith s (Lambda l p k e fx)  = Lambda l (usubstWith s p) (usubstWith s k) (usubstWith s e) (usubstWith s fx)
+    usubstWith s (Yield l e)          = Yield l (usubstWith s e)
+    usubstWith s (YieldFrom l e)      = YieldFrom l (usubstWith s e)
+    usubstWith s (Tuple l p k)        = Tuple l (usubstWith s p) (usubstWith s k)
+    usubstWith s (List l es)          = List l (usubstWith s es)
+    usubstWith s (ListComp l e c)     = ListComp l (usubstWith s e) (usubstWith s c)
+    usubstWith s (Dict l as)          = Dict l (usubstWith s as)
+    usubstWith s (DictComp l a c)     = DictComp l (usubstWith s a) (usubstWith s c)
+    usubstWith s (Set l es)           = Set l (usubstWith s es)
+    usubstWith s (SetComp l e c)      = SetComp l (usubstWith s e) (usubstWith s c)
+    usubstWith s (Paren l e)          = Paren l (usubstWith s e)
+    usubstWith s e                    = e
 
 instance USubst Pattern where
-    usubst (PWild l t)              = PWild l <$> usubst t
-    usubst (PVar l n t)             = PVar l n <$> usubst t
-    usubst (PParen l p)             = PParen l <$> usubst p
-    usubst (PTuple l p k)           = PTuple l <$> usubst p <*> usubst k
-    usubst (PList l ps p)           = PList l <$> usubst ps <*> usubst p
+    usubstWith s (PWild l t)          = PWild l (usubstWith s t)
+    usubstWith s (PVar l n t)         = PVar l n (usubstWith s t)
+    usubstWith s (PParen l p)         = PParen l (usubstWith s p)
+    usubstWith s (PTuple l p k)       = PTuple l (usubstWith s p) (usubstWith s k)
+    usubstWith s (PList l ps p)       = PList l (usubstWith s ps) (usubstWith s p)
 
 instance USubst PosPat where
-    usubst (PosPat p pp)            = PosPat <$> usubst p <*> usubst pp
-    usubst (PosPatStar p)           = PosPatStar <$> usubst p
-    usubst PosPatNil                = return PosPatNil
+    usubstWith s (PosPat p pp)        = PosPat (usubstWith s p) (usubstWith s pp)
+    usubstWith s (PosPatStar p)       = PosPatStar (usubstWith s p)
+    usubstWith s PosPatNil            = PosPatNil
 
 instance USubst KwdPat where
-    usubst (KwdPat n p kp)          = KwdPat n <$> usubst p <*> usubst kp
-    usubst (KwdPatStar p)           = KwdPatStar <$> usubst p
-    usubst KwdPatNil                = return KwdPatNil
+    usubstWith s (KwdPat n p kp)      = KwdPat n (usubstWith s p) (usubstWith s kp)
+    usubstWith s (KwdPatStar p)       = KwdPatStar (usubstWith s p)
+    usubstWith s KwdPatNil            = KwdPatNil
 
 instance USubst Branch where
-    usubst (Branch e b)             = Branch <$> usubst e <*> usubst b
+    usubstWith s (Branch e b)         = Branch (usubstWith s e) (usubstWith s b)
 
 instance USubst Handler where
-    usubst (Handler ex b)           = Handler ex <$> usubst b
+    usubstWith s (Handler ex b)       = Handler ex (usubstWith s b)
 
 instance USubst WithItem where
-    usubst (WithItem e p)           = WithItem <$> usubst e <*> usubst p
+    usubstWith s (WithItem e p)       = WithItem (usubstWith s e) (usubstWith s p)
 
 instance USubst PosArg where
-    usubst (PosArg e p)             = PosArg <$> usubst e <*> usubst p
-    usubst (PosStar e)              = PosStar <$> usubst e
-    usubst PosNil                   = return PosNil
+    usubstWith s (PosArg e p)         = PosArg (usubstWith s e) (usubstWith s p)
+    usubstWith s (PosStar e)          = PosStar (usubstWith s e)
+    usubstWith s PosNil               = PosNil
 
 instance USubst KwdArg where
-    usubst (KwdArg n e k)           = KwdArg n <$> usubst e <*> usubst k
-    usubst (KwdStar e)              = KwdStar <$> usubst e
-    usubst KwdNil                   = return KwdNil
+    usubstWith s (KwdArg n e k)       = KwdArg n (usubstWith s e) (usubstWith s k)
+    usubstWith s (KwdStar e)          = KwdStar (usubstWith s e)
+    usubstWith s KwdNil               = KwdNil
 
 instance USubst Assoc where
-    usubst (Assoc k v)              = Assoc <$> usubst k <*> usubst v
-    usubst (StarStar e)             = StarStar <$> usubst e
+    usubstWith s (Assoc k v)          = Assoc (usubstWith s k) (usubstWith s v)
+    usubstWith s (StarStar e)         = StarStar (usubstWith s e)
 
 instance USubst Elem where
-    usubst (Elem e)                 = Elem <$> usubst e
-    usubst (Star e)                 = Star <$> usubst e
+    usubstWith s (Elem e)             = Elem (usubstWith s e)
+    usubstWith s (Star e)             = Star (usubstWith s e)
 
 instance USubst Comp where
-    usubst (CompFor l p e c)        = CompFor l <$> usubst p <*> usubst e <*> usubst c
-    usubst (CompIf l e c)           = CompIf l <$> usubst e <*> usubst c
-    usubst NoComp                   = return NoComp
+    usubstWith s (CompFor l p e c)    = CompFor l (usubstWith s p) (usubstWith s e) (usubstWith s c)
+    usubstWith s (CompIf l e c)       = CompIf l (usubstWith s e) (usubstWith s c)
+    usubstWith s NoComp               = NoComp
 
 instance USubst Sliz where
-    usubst (Sliz l e1 e2 e3)        = Sliz l <$> usubst e1 <*> usubst e2 <*> usubst e3
+    usubstWith s (Sliz l e1 e2 e3)    = Sliz l (usubstWith s e1) (usubstWith s e2) (usubstWith s e3)
 
 instance USubst OpArg where
-    usubst (OpArg op e)             = OpArg op <$> usubst e
+    usubstWith s (OpArg op e)         = OpArg op (usubstWith s e)
 
 
 instance USubst NameInfo where
-    usubst (NVar t)             = NVar <$> usubst t
-    usubst (NSVar t)            = NSVar <$> usubst t
-    usubst (NDef t d doc)       = NDef <$> usubst t <*> return d <*> return doc
-    usubst (NSig t d doc)       = NSig <$> usubst t <*> return d <*> return doc
-    usubst (NAct q p k te doc)  = NAct <$> usubst q <*> usubst p <*> usubst k <*> usubst te <*> return doc
-    usubst (NClass q us te doc) = NClass <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NProto q us te doc) = NProto <$> usubst q <*> usubst us <*> usubst te <*> return doc
-    usubst (NExt q c ps te opts doc) = NExt <$> usubst q <*> usubst c <*> usubst ps <*> usubst te <*> return opts <*> return doc
-    usubst (NTVar k c ps)       = NTVar k <$> usubst c <*> usubst ps
-    usubst (NAlias qn)          = NAlias <$> return qn
-    usubst (NMAlias m)          = NMAlias <$> return m
-    usubst (NModule ms te doc)  = NModule ms <$> return te <*> return doc     -- actually usubst te, but te has no free variables (top-level)
-    usubst NReserved            = return NReserved
+    usubstWith s (NVar t)             = NVar (usubstWith s t)
+    usubstWith s (NSVar t)            = NSVar (usubstWith s t)
+    usubstWith s (NDef t d doc)       = NDef (usubstWith s t) d doc
+    usubstWith s (NSig t d doc)       = NSig (usubstWith s t) d doc
+    usubstWith s (NAct q p k te doc)  = NAct (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s te) doc
+    usubstWith s (NClass q us te doc) = NClass (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
+    usubstWith s (NProto q us te doc) = NProto (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
+    usubstWith s (NExt q c ps te opts doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts doc
+    usubstWith s (NTVar k c ps)       = NTVar k (usubstWith s c) (usubstWith s ps)
+    usubstWith s (NAlias qn)          = NAlias qn
+    usubstWith s (NMAlias m)          = NMAlias m
+    usubstWith s (NModule ms te doc)  = NModule ms te doc       -- actually usubstWith s te, but te has no free variables (top-level)
+    usubstWith s NReserved            = NReserved
 
 instance USubst Witness where
-    usubst w@WClass{}           = return w                      -- A WClass (i.e., an extension) can't have any free type variables
-    usubst w@WInst{}            = do t <- usubst (wtype w)
-                                     p <- usubst (proto w)
-                                     return w{ wtype  = t, proto = p }
+    usubstWith s w@WClass{}           = w                               -- A WClass (i.e., an extension) can't have any free type variables
+    usubstWith s w@WInst{}            = w{ wtype  = usubstWith s (wtype w), proto = usubstWith s (proto w) }
 
 
 instance USubst Env where
-    usubst env                  = do ne <- usubst (activeNames env)
-                                     ex <- usubst (envX env)
-                                     return $ setActiveNames ne env{ envX = ex }
+    usubstWith s env                  = let ne = usubstWith s (activeNames env)
+                                            ex = usubstWith s (envX env)
+                                        in setActiveNames ne env{ envX = ex }
 
 instance UFree Env where
     ufree env                   = ufree (activeNames env) ++ ufree (envX env)
@@ -957,7 +941,7 @@ instance Pretty Equation where
     pretty (Eqn i n t e)                = pretty n <+> colon <+> pretty t <+> equals <+> pretty e <+> text ("# level " ++ show i)
 
 instance USubst Equation where
-    usubst (Eqn i w t e)                = Eqn i w <$> usubst t <*> usubst e
+    usubstWith s (Eqn i w t e)          = Eqn i w (usubstWith s t) (usubstWith s e)
 
 instance UFree Equation where
     ufree (Eqn i w t e)                 = ufree t ++ ufree e
