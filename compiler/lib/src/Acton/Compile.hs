@@ -2072,31 +2072,37 @@ materializeTask :: C.CompileOptions
                 -> Source.SourceProvider
                 -> A.ModName
                 -> FilePath
+                -> M.Map A.ModName TaskKey
                 -> Maybe (ParseProgress -> IO ())
                 -> CompileTask
                 -> IO CompileTask
-materializeTask opts sp mn actFile mOnProgress task =
+materializeTask opts sp mn actFile providers mOnProgress task =
   case task of
     ActonTask{} -> return task
     ParseErrorTask{} -> return task
     ParseTask{ src = srcContent, srcBytes = bytes, sourceMeta = mSourceMeta } -> do
       emod <- parseStoredSource mn actFile srcContent
       case emod of
-        Left diags -> return (ParseErrorTask mn diags)
-        Right m -> return (ActonTask mn srcContent bytes mSourceMeta m)
+        Left diags -> return $ ParseErrorTask mn diags
+        Right m -> return $ ActonTask mn srcContent bytes mSourceMeta (adjustImports providers m)
     TyTask{} -> do
       parsedRes <- parseActFile opts sp mn actFile mOnProgress
       case parsedRes of
         Left diags -> return (ParseErrorTask mn diags)
         Right (snap, m) -> do
           mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
-          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta (adjustImports providers m)
   where
     parseStoredSource mn' file srcContent = do
       cwd <- getCurrentDirectory
       let displayFile = makeRelative cwd file
       parseActSource opts mn' displayFile srcContent mOnProgress
 
+adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
+adjustImports providers m = m{ A.imps = map adjust (A.imps m) }
+  where adjust (A.Import l ms)       = A.Import l ms
+        adjust (A.FromImport l m i)  = A.FromImport l m i
+        adjust (A.FromImportAll l m) = A.FromImportAll l m
 
 -- | Recursively read imports for a set of tasks within the same project.
 -- Any missing module is added by parsing or reading its .tydb header via
@@ -3300,8 +3306,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
         then return (Right ())
         else do
           t' <- case gtTask t of
-            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
-            ParseTask{} -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
+            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
+            ParseTask{} -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
@@ -3855,7 +3861,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
-                            _ -> materializeTask optsT sp mn actFile Nothing taskCurrent
+                            _ -> materializeTask optsT sp mn actFile providers Nothing taskCurrent
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -4063,11 +4069,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           mn = name (gtTask t)
           actFile = srcFile (gtPaths t) mn
           onProgress p = ccOnParseProgress callbacks t optsT p
+          providers = gtImportProviders t
       timeStart <- getTime Monotonic
       parsed <- if C.only_build optsT
                   then return (gtTask t)
                   else case gtTask t of
-                         ParseTask{} -> materializeTask optsT sp mn actFile (Just onProgress) (gtTask t)
+                         ParseTask{} -> materializeTask optsT sp mn actFile providers (Just onProgress) (gtTask t)
                          _ -> return (gtTask t)
       case parsed of
         ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
