@@ -505,7 +505,7 @@ compilerTests =
           removeIfExists (typesDir </> "main.h")
           removeIfExists (typesDir </> "main.root.c")
           sixthLog <- assertOk "dbp keeps executable root actor" =<<
-            runBuild ["build", "--verbose", "--dbp", "main", "--dbp", "provider", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--dbp", "main", "--dbp", "provider", "--color", "never"]
           assertBool "root module should report root seed" ("DBP main: forced by --dbp" `isInfixOf` sixthLog)
           assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
           mainC <- readFile (typesDir </> "main.c")
