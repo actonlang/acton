@@ -1,4 +1,4 @@
-from std.random import *
+from random import *
 
 def qcheck_int_1(name: str, prop: (int) -> bool, verbose = False)->int:
     print("Testing",name)

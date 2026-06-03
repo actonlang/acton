@@ -1,4 +1,4 @@
-import std.term as term
+import term
 
 # Implementation of Myers-inspired diff algorithm, which is efficient and produces
 # good results for typical text file differences.
