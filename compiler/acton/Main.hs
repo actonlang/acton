@@ -681,7 +681,7 @@ exitWithTestCode code
 changedModulesFromPaths :: Paths -> [FilePath] -> IO [String]
 changedModulesFromPaths paths files = do
     mods <- forM files $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       return (modNameToString mn)
     return (Data.List.sort (nub mods))
 
@@ -700,7 +700,7 @@ readModuleImports paths mn = do
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
     depsByMod <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       imps <- readModuleImports paths mn
       return (modNameToString mn, map modNameToString imps)
     let revMap = foldl'

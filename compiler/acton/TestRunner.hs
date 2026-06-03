@@ -97,7 +97,7 @@ listTestModules :: C.CompileOptions -> Paths -> IO [String]
 listTestModules _opts paths = do
     srcFiles <- listActFilesRecursive (srcDir paths)
     mods <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       tests <- readModuleTests paths mn
       return $ if null tests then Nothing else Just (modNameToString mn)
     return (Data.List.sort (catMaybes mods))
