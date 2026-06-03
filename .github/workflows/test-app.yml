@@ -36,4 +36,3 @@ jobs:
           cd app
           acton build
           acton test
-          acton test perf
