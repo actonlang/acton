@@ -36,15 +36,30 @@
     and cache copy and cleanup paths now handle directory artifacts.
   - Build and statically link LMDB from a pinned bundled dependency so compiler
     builds do not depend on the host LMDB installation.
-- Speed up compiler environment lookups, scans, attribute queries,
-  substitutions, and witness resolution in large modules by indexing active
-  names, term substitutions, and type witnesses; separating closed imports and
-  finalized top-level names from live local bindings; avoiding temporary
-  inherited-attribute lists for single-attribute queries; reading substitution
-  state once per traversal; narrowing used-substitution tracking to active
-  entries; and deduplicating reserved names with a hash index while preserving
-  source-order semantics. [#2789, #2796, #2797, #2799, #2800, #2816, #2833,
-  #2837]
+- Add deferred back passes for very large modules, letting the compiler run the
+  normal front passes first and then generate code only for declarations that
+  are reachable from the program, similar to tree shaking, dead-code
+  elimination, or link-time optimization for generated Acton modules. [#2843]
+  - Automatic selection starts at modules with at least 10,000 top-level names;
+    `--dbp MOD[:NAME,...]` can force focused experiments, and `--no-dbp`
+    disables both heuristic and forced selection.
+  - Deferred back passes prune typed modules to interested names, root actors,
+    local dependency closures, and class/protocol extension dependencies before
+    running the existing back-pass chain.
+  - Modules at explicit `Build.act` library boundaries compile normally so
+    declared library outputs keep their full generated surface.
+- Fix concurrent `.tydb` reads so shared interface caches retry transient LMDB
+  lock-file setup races and propagate environmental errors with their real
+  cause instead of reporting a missing interface. [#2841]
+- Speed up compiler environment lookups, scans, module-environment rewrites,
+  attribute queries, substitutions, and witness resolution in large modules by
+  indexing active names, term substitutions, and type witnesses; separating
+  closed imports and finalized top-level names from live local bindings;
+  avoiding temporary inherited-attribute lists for single-attribute queries;
+  reading substitution state once per traversal; narrowing used-substitution
+  tracking to active entries; and deduplicating reserved names with a hash index
+  while preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800,
+  #2816, #2833, #2837, #2839, #2840]
 - Speed up documentation rendering and generated-name hashing by indexing
   documentation type lookups and hashing internal/generated names without
   rendering prefix strings. [#2830, #2831]
@@ -4088,6 +4103,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2836]: https://github.com/actonlang/acton/pull/2836
 [#2837]: https://github.com/actonlang/acton/pull/2837
 [#2838]: https://github.com/actonlang/acton/pull/2838
+[#2839]: https://github.com/actonlang/acton/pull/2839
+[#2840]: https://github.com/actonlang/acton/pull/2840
+[#2841]: https://github.com/actonlang/acton/pull/2841
+[#2843]: https://github.com/actonlang/acton/pull/2843
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
