@@ -98,9 +98,10 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#
 
 -- | Print a .tydb header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
+                                     (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,depModules,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
                                      putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
+                                     putStrLn ("Deps   : " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode pubH'), take 16 (B.unpack $ Base16.encode implH')) | InterfaceFiles.DepModuleInfo mn pubH' implH' <- depModules ]))
                                      putStrLn ("Roots  : " ++ (show (map prstr roots)))
                                      putStrLn ("Tests  : " ++ (show tests))
                                      case mdocH of

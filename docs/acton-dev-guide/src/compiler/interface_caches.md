@@ -41,6 +41,7 @@ Metadata and module-level keys:
 | `version` | `[Int]` |
 | `meta` | `(Maybe SourceFileMeta, ByteString, ByteString, ByteString)` |
 | `imports` | `[(ModName, ByteString)]` |
+| `deps` | `[DepModuleInfo]` |
 | `roots` | `[Name]` |
 | `tests` | `[String]` |
 | `doc` | `Maybe String` |
@@ -51,6 +52,12 @@ Metadata and module-level keys:
 The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each
 import is that imported module's public hash.
+
+The `deps` row stores every module whose names this module depends on, together
+with the recorded public and implementation hash for that dependency module.
+This row is the cheap stale-check gate: if both recorded module hashes still
+match the current dependency module hashes, the compiler does not need to read
+any per-name dependency rows for that module.
 
 Extension indexes use the same suffix scheme as per-name entries, so readers
 can look up one class or protocol without decoding the full index:
@@ -82,11 +89,23 @@ Per-name keys:
 
 Each `NameHashInfo` value contains the local name, `srcHash`, `pubHash`,
 `implHash`, local public/implementation dependency names
-(`pubLocalDeps` / `implLocalDeps`), and external public/implementation
-dependency snapshots (`pubDeps` / `implDeps`) as `(QName, hash)` pairs. Header
-readers use these records for cache freshness, interest registration, and DBP
-local dependency closure without decoding the `NameInfo` entries or typed
-statements.
+(`pubLocalDeps` / `implLocalDeps`). External dependency snapshots are stored in
+dependency rows instead of being repeated inside every `NameHashInfo`.
+
+Dependency rows:
+
+| Key | Value type |
+| --- | --- |
+| `deps/<module>` | `[DepNameInfo]` |
+| `deps/<module>/p/<name>` | `DepUsers` |
+| `deps/<module>/h/<hash>` | `DepUsers` |
+
+`deps/<module>` stores the dependency names used from that module and the
+recorded public and implementation hash for each name. `DepUsers` stores the
+local names that use one dependency name in their public and implementation
+hashes. A stale check reads `deps/<module>` only when the module-level hash gate
+changed, then reads `deps/<module>/<name>` only for names whose hashes actually
+changed or went missing.
 
 Short safe source names are stored directly in key suffixes. Names longer than
 400 bytes and names containing unsafe path-like bytes use SHA-256 based key
@@ -118,6 +137,10 @@ name-info/p/decode                -> (Name "decode", NameInfo for decode)
 name-hash/p/decode                -> NameHashInfo for decode
 name-hash/p/encode                -> NameHashInfo for encode
 
+deps                              -> dependency modules and module hashes
+deps/__builtin__                  -> dependency names and name hashes
+deps/__builtin__/p/bytes          -> local names using __builtin__.bytes
+
 stmt/000000000000                 -> typed Stmt for encode
 stmt/000000000001                 -> typed Stmt for decode
 ```
@@ -125,10 +148,11 @@ stmt/000000000001                 -> typed Stmt for decode
 ## Read And Write Behavior
 
 `readHeader` opens a read-only LMDB transaction and reads the header keys plus
-the `name-hash` entries. It does not decode `NameInfo` entries or typed
-statements. DBP uses this path to get per-name hashes, local dependency edges,
-and root actor names before deciding whether the full typed module must be
-decoded.
+the `deps` row and `name-hash` entries. It does not decode `NameInfo` entries
+or typed statements. Stale checks first compare the dependency module hashes in
+`deps`; DBP uses the header path to get per-name hashes, local dependency
+edges, and root actor names before deciding whether the full typed module must
+be decoded.
 
 `readExtensionsByClass` and `readExtensionsByProtocol` read one class or
 protocol key directly. DBP uses these exact lookups while expanding the selected

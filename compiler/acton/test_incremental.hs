@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import           Control.Monad (unless, when)
+import           Control.Monad (foldM, forM, unless, when)
 import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString as B
 import qualified Data.Text as T
@@ -469,21 +469,30 @@ buildProject = do
 -- | Read name hashes from a .tydb file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
 readTyNameHashes tyPath = do
-  (_, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
+  (_, _, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
   pure nameHashes
 
 -- | Read pub/impl dependency names for a binding in a .tydb file.
 readTyDeps :: FilePath -> String -> IO ([String], [String])
 readTyDeps tyPath nameLabel = do
-  nameHashes <- readTyNameHashes tyPath
+  (_, _, _, _, _, _, _, _, depModules, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
   let matchName nh = prstr (InterfaceFiles.nhName nh) == nameLabel
   case find matchName nameHashes of
     Nothing -> do
       assertFailure ("missing name " ++ nameLabel ++ " in " ++ tyPath)
       pure ([], [])
     Just nh -> do
-      let pubDeps = sort (map (prstr . fst) (InterfaceFiles.nhPubDeps nh))
-          implDeps = sort (map (prstr . fst) (InterfaceFiles.nhImplDeps nh))
+      deps <- forM depModules $ \depInfo -> do
+        let depMn = InterfaceFiles.dmiModule depInfo
+        depNames <- InterfaceFiles.readDepNames tyPath depMn
+        forM depNames $ \depNameInfo -> do
+          users <- InterfaceFiles.readDepUsers tyPath depMn (InterfaceFiles.dniName depNameInfo)
+          let qn = prstr (A.GName depMn (InterfaceFiles.dniName depNameInfo))
+              isPub = InterfaceFiles.nhName nh `elem` InterfaceFiles.duPubUsers users
+              isImpl = InterfaceFiles.nhName nh `elem` InterfaceFiles.duImplUsers users
+          pure (if isPub then [qn] else [], if isImpl then [qn] else [])
+      let pubDeps = sort (concatMap fst (concat deps))
+          implDeps = sort (concatMap snd (concat deps))
       pure (pubDeps, implDeps)
 
 -- | Read pub/impl local dependency names for a binding in a .tydb file.
@@ -503,23 +512,54 @@ readTyLocalDeps tyPath nameLabel = do
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
-  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps (f nameHashes) roots tests mdoc nmod tmod
+  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') roots tests mdoc nmod tmod
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
 rewriteTySourceMeta tyPath sourceMeta' = do
-  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps nameHashes roots tests mdoc nmod tmod
+  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
+  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' roots tests mdoc nmod tmod
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = do
-  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps nameHashes roots tests mdoc nmod tmod
+  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
+  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' roots tests mdoc nmod tmod
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
-  (sourceMeta, _srcHash, _pubHash, _implHash, _imps, _nameHashes, _roots, _tests, _doc) <- InterfaceFiles.readHeader tyPath
+  (sourceMeta, _srcHash, _pubHash, _implHash, _imps, _depModules, _nameHashes, _roots, _tests, _doc) <- InterfaceFiles.readHeader tyPath
   pure sourceMeta
+
+restoreExternalDeps :: FilePath -> [InterfaceFiles.DepModuleInfo] -> [InterfaceFiles.NameHashInfo] -> IO [InterfaceFiles.NameHashInfo]
+restoreExternalDeps tyPath depModules nameHashes = do
+  depMap <- foldM addModule M.empty depModules
+  pure
+    [ nh { InterfaceFiles.nhPubDeps = fst deps
+         , InterfaceFiles.nhImplDeps = snd deps
+         }
+    | nh <- nameHashes
+    , let deps = M.findWithDefault ([], []) (InterfaceFiles.nhName nh) depMap
+    ]
+  where
+    addModule acc depInfo = do
+      let depMn = InterfaceFiles.dmiModule depInfo
+      depNames <- InterfaceFiles.readDepNames tyPath depMn
+      foldM (addName depMn) acc depNames
+
+    addName depMn acc depInfo = do
+      users <- InterfaceFiles.readDepUsers tyPath depMn (InterfaceFiles.dniName depInfo)
+      let qn = A.GName depMn (InterfaceFiles.dniName depInfo)
+          pubDep = (qn, InterfaceFiles.dniPubHash depInfo)
+          implDep = (qn, InterfaceFiles.dniImplHash depInfo)
+          addPub m user =
+            M.insertWith merge user ([pubDep | not (B.null (InterfaceFiles.dniPubHash depInfo))], []) m
+          addImpl m user =
+            M.insertWith merge user ([], [implDep | not (B.null (InterfaceFiles.dniImplHash depInfo))]) m
+          merge (p1, i1) (p2, i2) = (p1 ++ p2, i1 ++ i2)
+      pure (foldl addImpl (foldl addPub acc (InterfaceFiles.duPubUsers users)) (InterfaceFiles.duImplUsers users))
 
 sourceFileMetaForPath :: FilePath -> IO InterfaceFiles.SourceFileMeta
 sourceFileMetaForPath path = do
@@ -1356,7 +1396,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   assertEqual "exact extensions by class" ["BarProtoD_Widget"] (sort (map prstr extensionsForWidget))
   assertEqual "exact extensions by protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForBarProto))
   assertEqual "exact extensions by inherited protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForFooProto))
-  (_, nmod, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
+  (_, nmod, _, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
   let I.NModule _ iface _ = nmod
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of

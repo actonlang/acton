@@ -112,11 +112,11 @@ active environment. It only gives the caller the stored interface and typed
 module payload.
 
 DBP interest is also scheduler metadata, not an import overlay. Each completed
-front result contributes external `nhPubDeps` and `nhImplDeps` into an
-`InterestMap`, and DBP later uses that map to prune a provider's typed module.
-That does not make the selected provider names available to the active
-type-checker environment; imports still become type-checker bindings only
-through `mkEnv`/`doImp`.
+front result contributes external dependency names into an `InterestMap`; for
+cached modules those names are reconstructed from the `.tydb` dependency rows.
+DBP later uses that map to prune a provider's typed module. That does not make
+the selected provider names available to the active type-checker environment;
+imports still become type-checker bindings only through `mkEnv`/`doImp`.
 
 ## How transitive imports become available
 

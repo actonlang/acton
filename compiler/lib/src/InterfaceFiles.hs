@@ -34,6 +34,7 @@
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: SHA-256 of per-name impl hashes
 --     "imports"        :: [(A.ModName, ByteString)]   -- dependency module and pub hash used
+--     "deps"           :: [DepModuleInfo]              -- dependency modules with pub/impl hashes
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
 --     "tests"          :: [String]                    -- discovered test names
 --     "doc"            :: Maybe String                -- module docstring
@@ -45,7 +46,11 @@
 --   Per-name keys (NameInfo / TEnv, one set per name):
 --     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
---     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local/external deps
+--     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local deps
+--
+--   Per-dependency keys:
+--     "deps/<module>"          :: [DepNameInfo]        -- dependency names with pub/impl hashes
+--     "deps/<module>/<suffix>" :: DepUsers             -- local names that use one dependency name
 --
 --   Per-extension keys:
 --     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
@@ -70,6 +75,9 @@
 
 module InterfaceFiles
   ( NameHashInfo(..)
+  , DepModuleInfo(..)
+  , DepNameInfo(..)
+  , DepUsers(..)
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
@@ -82,6 +90,8 @@ module InterfaceFiles
   , listInterfaceDirsRecursive
   , keyNameInfo
   , keyNameHash
+  , readDepNames
+  , readDepUsers
   , readFile
   , readHeader
   , readExtensionsByClass
@@ -104,6 +114,7 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
+import Data.List (foldl')
 import qualified Data.Map.Strict as Map
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
@@ -135,6 +146,35 @@ data NameHashInfo = NameHashInfo
 instance Binary NameHashInfo
 instance NFData NameHashInfo
 
+data DepModuleInfo = DepModuleInfo
+  { dmiModule   :: A.ModName
+  , dmiPubHash  :: BS.ByteString
+  , dmiImplHash :: BS.ByteString
+  } deriving (Show, Eq, Generic)
+
+instance Binary DepModuleInfo
+instance NFData DepModuleInfo
+
+data DepNameInfo = DepNameInfo
+  { dniName     :: A.Name
+  , dniPubHash  :: BS.ByteString
+  , dniImplHash :: BS.ByteString
+  } deriving (Show, Eq, Generic)
+
+instance Binary DepNameInfo
+instance NFData DepNameInfo
+
+data DepUsers = DepUsers
+  { duPubUsers  :: [A.Name]
+  , duImplUsers :: [A.Name]
+  } deriving (Show, Eq, Generic)
+
+instance Binary DepUsers
+instance NFData DepUsers
+
+emptyDepUsers :: DepUsers
+emptyDepUsers = DepUsers [] []
+
 data ExtensionIndex = ExtensionIndex
   { extByClass      :: Map.Map A.Name [A.Name]
   , extByProtocol   :: Map.Map A.Name [A.Name]
@@ -159,6 +199,7 @@ type TyFile =
   , BS.ByteString
   , BS.ByteString
   , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
   , [NameHashInfo]
   , [A.Name]
   , [String]
@@ -171,6 +212,7 @@ type TyHeader =
   , BS.ByteString
   , BS.ByteString
   , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
   , [NameHashInfo]
   , [A.Name]
   , [String]
@@ -272,10 +314,11 @@ encodeStrict = BL.toStrict . encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
+keyDeps         = key "deps"
 keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
@@ -291,17 +334,29 @@ padIndex i =
 plainNameKeyLimit :: Int
 plainNameKeyLimit = 400
 
-nameKeySuffix :: A.Name -> BS.ByteString
-nameKeySuffix n =
-    let raw = TE.encodeUtf8 (T.pack (A.rawstr n))
-    in if plainNameKey raw
-         then B.concat [key "p/", raw]
-         else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
+plainKeyRaw :: BS.ByteString -> Bool
+plainKeyRaw raw =
+    BS.length raw <= plainNameKeyLimit && BS.all safe raw
   where
-    plainNameKey raw =
-        BS.length raw <= plainNameKeyLimit && BS.all safe raw
     safe w =
         w > 32 && w < 127 && w /= 47
+
+safeKeySuffix :: BS.ByteString -> BS.ByteString
+safeKeySuffix raw =
+    if plainKeyRaw raw
+      then B.concat [key "p/", raw]
+      else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
+
+nameKeySuffix :: A.Name -> BS.ByteString
+nameKeySuffix n =
+    safeKeySuffix (TE.encodeUtf8 (T.pack (A.rawstr n)))
+
+moduleKeySuffix :: A.ModName -> BS.ByteString
+moduleKeySuffix mn =
+    let raw = TE.encodeUtf8 (T.pack (Data.List.intercalate "." (A.modPath mn)))
+    in if plainKeyRaw raw
+         then raw
+         else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
 
 keyNameInfo :: A.Name -> BS.ByteString
 keyNameInfo n = B.concat [key "name-info/", nameKeySuffix n]
@@ -317,6 +372,12 @@ keyNameHashPrefix = key "name-hash/"
 
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
+
+keyDepModule :: A.ModName -> BS.ByteString
+keyDepModule mn = B.concat [key "deps/", moduleKeySuffix mn]
+
+keyDepName :: A.ModName -> A.Name -> BS.ByteString
+keyDepName mn n = B.concat [keyDepModule mn, key "/", nameKeySuffix n]
 
 keyExtByClassPrefix, keyExtByProtocolPrefix :: BS.ByteString
 keyExtByClassPrefix      = key "ext-by-class/"
@@ -653,8 +714,80 @@ extensionIndexEntries index =
     | (n, exts) <- Map.toList (extByProtocol index)
     ]
 
-interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
-interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
+stripExternalDeps :: NameHashInfo -> NameHashInfo
+stripExternalDeps nh =
+    nh { nhPubDeps = [], nhImplDeps = [] }
+
+depIndexEntries :: [DepModuleInfo] -> [NameHashInfo] -> [(BS.ByteString, BS.ByteString)]
+depIndexEntries depModules nameHashes =
+    (keyDeps, encodeStrict depModules)
+    : [ (keyDepModule mn, encodeStrict infos)
+      | (mn, infos) <- moduleRows
+      ]
+    ++
+    [ (keyDepName mn n, encodeStrict users)
+    | ((mn, n), users) <- userRows
+    ]
+  where
+    moduleNameKey = A.modPath
+    nameKey = A.nstr
+    sortModRows = Data.List.sortOn (moduleNameKey . fst)
+    sortNameInfos = Data.List.sortOn (nameKey . dniName)
+    sortUserRows = Data.List.sortOn (\((mn, n), _) -> (moduleNameKey mn, nameKey n))
+
+    depTarget qn =
+      case qn of
+        A.GName m n -> Just (m, n)
+        A.QName m n -> Just (m, n)
+        A.NoQ{} -> Nothing
+
+    addDep isPub owner acc (qn, h) =
+      case depTarget qn of
+        Nothing -> acc
+        Just key' -> Map.alter (Just . addToEntry) key' acc
+      where
+        addToEntry Nothing =
+          if isPub
+            then (Just h, Nothing, [owner], [])
+            else (Nothing, Just h, [], [owner])
+        addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
+          if isPub
+            then (Just h, implH, owner : pubUsers, implUsers)
+            else (pubH, Just h, pubUsers, owner : implUsers)
+
+    depMap =
+      foldl' addInfo Map.empty nameHashes
+
+    addInfo acc nh =
+      let owner = nhName nh
+          withPub = foldl' (addDep True owner) acc (nhPubDeps nh)
+      in foldl' (addDep False owner) withPub (nhImplDeps nh)
+
+    depNameInfo ((mn, n), (pubH, implH, _pubUsers, _implUsers)) =
+      (mn, DepNameInfo n (maybe BS.empty id pubH) (maybe BS.empty id implH))
+
+    moduleRows =
+      [ (mn, sortNameInfos infos)
+      | (mn, infos) <-
+          sortModRows $
+          Map.toList $
+          Map.fromListWith (++)
+            [ (mn, [info])
+            | entry <- Map.toList depMap
+            , let (mn, info) = depNameInfo entry
+            ]
+      ]
+
+    cleanNames = Data.List.sortOn nameKey . Data.List.nub
+
+    userRows =
+      sortUserRows
+        [ (key', DepUsers (cleanNames pubUsers) (cleanNames implUsers))
+        | (key', (_pubH, _implH, pubUsers, implUsers)) <- Map.toList depMap
+        ]
+
+interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
+interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
     [ (keyVersion, encodeStrict version)
     , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
     , (keyImports, encodeStrict imps)
@@ -671,25 +804,27 @@ interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceM
               | (i, (n, info)) <- zip [0..] te
               , let suffix = nameKeySuffix n
               ]
-    ++ [ (keyNameHash (nhName nh), encodeStrict nh) | nh <- nameHashes ]
+    ++ [ (keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh)) | nh <- nameHashes ]
+    ++ depIndexEntries depModules nameHashes
     ++ extensionIndexEntries (extensionIndexFromNameInfo tmn nmod)
     ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
-writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
-writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
-    writeEntries f (interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked)
+writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
+    writeEntries f (interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked)
 
 readFile :: FilePath -> IO TyFile
 readFile f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
       tests <- getValue "tests" txn dbi keyTests
       mdoc <- getValue "doc" txn dbi keyDoc
@@ -699,7 +834,7 @@ readFile f =
       let tmod = A.Module tmn timps tdoc stmts
           sourceImps = A.importsOf tmod
           nmod = I.NModule sourceImps te mdoc
-      return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc)
+      return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile
@@ -709,11 +844,25 @@ readHeader f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
       tests <- getValue "tests" txn dbi keyTests
       doc <- getValue "doc" txn dbi keyDoc
       nameHashes <- readNameHashEntries txn dbi
-      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
+      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
+
+readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
+readDepNames f mn =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      getValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
+
+readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
+readDepUsers f mn n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
+      return (maybe emptyDepUsers id mUsers)
 
 readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByClass f n =

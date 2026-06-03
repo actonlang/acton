@@ -122,8 +122,9 @@ When a fresh front pass produces a DBP candidate, the scheduler stores a
 modules can also register deferred jobs on later builds. This matters because
 the provider source and implementation hash can stay unchanged while a consumer
 starts selecting a different provider name. The scheduler also records
-interested names in an `InterestMap` by folding each completed module's
-`nhPubDeps` and `nhImplDeps`.
+interested names in an `InterestMap`. Fresh front results contribute the
+external dependency facts they just computed; cached modules reconstruct the
+same interest set from the `.tydb` dependency rows.
 
 Deferred jobs do not wait for every front pass in the project. Their wait set is
 the reverse dependency closure of the deferred module in the total build graph.

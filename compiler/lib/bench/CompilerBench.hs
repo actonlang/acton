@@ -120,7 +120,7 @@ resolveNameHashMap paths mn = do
       Just ty -> do
         mh <- InterfaceFiles.readHeaderMaybe ty
         return $ case mh of
-          Just (_, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
+          Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
           Nothing -> Nothing
 
 runDirect :: DirectMode -> FilePath -> FilePath -> IO ()
@@ -203,6 +203,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       srcBytes
       Nothing
       (Compile.getPubHashCached paths)
+      (Compile.getImplHashCached paths)
       (resolveNameHashMap paths)
       (\_ -> return ())
       (\_ _ -> return ())
