@@ -345,7 +345,7 @@ withEnv path readOnly mapSize action =
     withInterfaceLock path $
       E.bracket open LMDB.mdb_env_close action
   where
-    open = withMVar lmdbOpenLock $ \_ -> openWithRetry envOpenMaxAttempts
+    open = withMVar lmdbOpenLock $ \_ -> openWithRetry lmdbTransientMaxAttempts
     -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
     -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
     -- retry. LMDB-semantic failures (corruption, version mismatch) are not
@@ -358,8 +358,8 @@ withEnv path readOnly mapSize action =
       case r of
         Right () -> return env
         Left (err :: LMDB.LMDB_Error)
-          | attempt > 1 && isTransientOpenError err ->
-              threadDelay envOpenRetryDelayUs >> openWithRetry (attempt - 1)
+          | attempt > 1 && isTransientLmdbOsError err ->
+              threadDelay lmdbTransientRetryDelayUs >> openWithRetry (attempt - 1)
           | otherwise -> E.throwIO err
     openEnv env
       | readOnly  = do
@@ -367,12 +367,11 @@ withEnv path readOnly mapSize action =
           LMDB.mdb_env_open env path flags
       | otherwise = LMDB.mdb_env_open env path []
 
--- A transient env-open failure is an OS-level error (Either Left, a raw errno)
--- from a concurrent lock.mdb setup race -- retrying succeeds once the winning
--- opener has created it. LMDB-semantic errors (Either Right MDB_*) are not
--- transient and must not be retried.
-isTransientOpenError :: LMDB.LMDB_Error -> Bool
-isTransientOpenError err =
+-- A transient LMDB failure is an OS-level error (Either Left, a raw errno) from
+-- lock-table setup/use under concurrent readers. LMDB-semantic errors (Either
+-- Right MDB_*) are not transient and must not be retried.
+isTransientLmdbOsError :: LMDB.LMDB_Error -> Bool
+isTransientLmdbOsError err =
     case LMDB.e_code err of
       Left _  -> True
       Right _ -> False
@@ -410,11 +409,11 @@ canReadWithoutLock path = do
         dirWritable <- fileAccess path False True True
         return (not dataWritable && not dirWritable)
 
-envOpenMaxAttempts :: Int
-envOpenMaxAttempts = 5
+lmdbTransientMaxAttempts :: Int
+lmdbTransientMaxAttempts = 5
 
-envOpenRetryDelayUs :: Int
-envOpenRetryDelayUs = 2000
+lmdbTransientRetryDelayUs :: Int
+lmdbTransientRetryDelayUs = 2000
 
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
@@ -430,11 +429,22 @@ withInterfaceLock path action = do
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withReadTxn path action = do
     mapSize <- readMapSize path
-    runInLmdbThread $
-      withEnv path True mapSize $ \env ->
-        E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
-          dbi <- LMDB.mdb_dbi_open txn Nothing []
-          action txn dbi
+    -- mdb_txn_begin can still hit a transient lock-table OS error after a
+    -- successful env open, so retry the read transaction with a fresh env.
+    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts mapSize
+  where
+    readTxnWithRetry attempt mapSize = do
+      res <- withEnv path True mapSize $ \env ->
+        E.try $
+          E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
+            dbi <- LMDB.mdb_dbi_open txn Nothing []
+            action txn dbi
+      case res of
+        Right x -> return x
+        Left (err :: LMDB.LMDB_Error)
+          | attempt > 1 && isTransientLmdbOsError err ->
+              threadDelay lmdbTransientRetryDelayUs >> readTxnWithRetry (attempt - 1) mapSize
+          | otherwise -> E.throwIO err
 
 withWriteTxn :: FilePath -> Int -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withWriteTxn path mapSize action =
