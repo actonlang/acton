@@ -4158,7 +4158,10 @@ tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
+srcBase paths mn        = joinPath (srcDir paths : names)
+  where names           = case A.modPath mn of
+                            n:ns | n == projName paths -> ns
+                            ns -> ns
 
 
 -- | Walk upward from a path to find a project root.
