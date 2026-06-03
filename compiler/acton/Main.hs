@@ -1689,7 +1689,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         parseProgressLine proj mn p =
           renderProjectLine proj mn (parseStatusRenderer p)
         frontInitialLine proj mn =
-          renderProjectLine proj mn (staticStatusRenderer "Kinds check" "Kinds")
+          renderProjectLine proj mn (staticStatusRenderer "Checking module" "Check")
         backActiveLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
         backProgressLine proj mn p =
