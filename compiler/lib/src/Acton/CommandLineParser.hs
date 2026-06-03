@@ -13,6 +13,10 @@ defTarget = "x86_64-macos-none"
 defTarget = "aarch64-linux-gnu.2.27"
 #elif defined(linux_HOST_OS) && defined(x86_64_HOST_ARCH)
 defTarget = "x86_64-linux-gnu.2.27"
+#elif defined(mingw32_HOST_OS) && defined(aarch64_HOST_ARCH)
+defTarget = "aarch64-linux-gnu.2.27"
+#elif defined(mingw32_HOST_OS) && defined(x86_64_HOST_ARCH)
+defTarget = "x86_64-linux-gnu.2.27"
 #else
 #error "Unsupported platform"
 #endif
@@ -208,6 +212,13 @@ data ZigPkgRemoveOptions = ZigPkgRemoveOptions
 --------------------------------------------------------------------
 -- Internal stuff
 
+fileCompleter :: String -> Mod ArgumentFields String
+#if defined(mingw32_HOST_OS)
+fileCompleter _ = mempty
+#else
+fileCompleter cmd = completer (bashCompleter cmd)
+#endif
+
 cmdLineParser       :: Parser CmdLineOptions
 cmdLineParser       = hsubparser
                         (  command "new"     (info (CmdOpt <$> globalOptions <*> (New <$> newOptions)) (progDesc "Create a new Acton project"))
@@ -225,7 +236,7 @@ cmdLineParser       = hsubparser
                         <> command "doc"     (info (CmdOpt <$> globalOptions <*> (Doc <$> docOptions)) (progDesc "Show type and docstring info"))
                         <> command "version" (info (CmdOpt <$> globalOptions <*> pure Version) (progDesc "Show version"))
                       )
-                     <|> (CompileOpt <$> (fmap (:[]) $ argument str (metavar "ACTONFILE" <> help "Compile Acton file" <> completer (bashCompleter "file -X '!*.act' -o plusdirs"))) <*> globalOptions <*> compileOptions)
+                     <|> (CompileOpt <$> (fmap (:[]) $ argument str (metavar "ACTONFILE" <> help "Compile Acton file" <> fileCompleter "file -X '!*.act' -o plusdirs")) <*> globalOptions <*> compileOptions)
 
 globalOptions :: Parser GlobalOptions
 globalOptions = GlobalOptions
@@ -455,7 +466,7 @@ cloudOptions = CloudOptions
         <*> switch (long "stop"         <> help "Help stop!")
 
 docOptions = DocOptions
-    <$> (argument str (metavar "FILE" <> help "Input file (.act or .tydb) - optional in projects" <> completer (bashCompleter "file -X '!*.act' -X '!*.tydb' -o plusdirs")) <|> pure "")
+    <$> (argument str (metavar "FILE" <> help "Input file (.act or .tydb) - optional in projects" <> fileCompleter "file -X '!*.act' -X '!*.tydb' -o plusdirs") <|> pure "")
     <*> formatFlags
     <*> optional (strOption (long "output" <> short 'o' <> metavar "FILE" <> help "Output file (default: stdout)"))
   where

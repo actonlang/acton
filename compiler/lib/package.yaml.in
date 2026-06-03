@@ -43,24 +43,31 @@ dependencies:
   - optparse-applicative
   - parser-combinators
   - pretty
-  - pretty-show
   - prettyprinter
   - process
   - random
   - scientific
   - stm
-  - sydtest
-  - sydtest-discover
   - temporary
   - text
   - time
   - transformers
-  - unix
   - unordered-containers
   - utf8-string
 
+when:
+  - condition: "!os(windows)"
+    dependencies:
+      - unix
+
 library:
   source-dirs: src
+  when:
+    - condition: os(windows)
+      c-sources:
+        - cbits/wcwidth.c
+      ghc-options:
+        - -fno-PIC
   exposed-modules:
     - Acton.Boxing
     - Acton.BuildSpec
@@ -100,6 +107,8 @@ tests:
     source-dirs: test
     dependencies:
       - libacton
+      - sydtest
+      - sydtest-discover
     ghc-options:
       - -threaded
       - -rtsopts
@@ -112,6 +121,9 @@ executables:
     other-modules: []
     dependencies:
       - libacton
+    when:
+      - condition: os(windows)
+        buildable: false
     ghc-options:
       - -threaded
       - -rtsopts
@@ -122,6 +134,9 @@ executables:
     other-modules: []
     dependencies:
       - libacton
+    when:
+      - condition: os(windows)
+        buildable: false
     ghc-options:
       - -threaded
       - -rtsopts
@@ -132,6 +147,9 @@ executables:
     other-modules: []
     dependencies:
       - libacton
+    when:
+      - condition: os(windows)
+        buildable: false
     ghc-options:
       - -threaded
       - -rtsopts

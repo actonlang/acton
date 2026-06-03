@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 module PkgCommands
   ( installCommand
@@ -1000,7 +1001,14 @@ getZigExe :: IO FilePath
 getZigExe = do
     execDir <- takeDirectory <$> getExecutablePath
     sysPath <- canonicalizePath (execDir </> "..")
-    return (sysPath </> "zig" </> "zig")
+    return (sysPath </> "zig" </> zigExeName)
+
+zigExeName :: FilePath
+#if defined(mingw32_HOST_OS)
+zigExeName = "zig.exe"
+#else
+zigExeName = "zig"
+#endif
 
 validateDepName :: String -> IO ()
 validateDepName name =

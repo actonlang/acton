@@ -1,0 +1,34 @@
+# Windows builds use the same package plan as stack.yaml, but omit the broad
+# -fPIC workaround that Unix builds need for static linking.
+snapshot: lts-23.28
+
+packages:
+- diagnose
+- lib
+- acton
+- lsp-server
+
+extra-deps:
+  - Cabal-3.10.3.0
+  - Cabal-syntax-3.10.3.0
+  - dir-traverse-0.2.3.0
+  - directory-1.3.8.5
+  - filepath-1.4.300.1
+  - fsnotify-0.3.0.1@sha256:58bb530d7acf93eb4ed69473e32a1485581815f04f69dfc8a278523781ba49dd,2988
+  - haskeline-0.8.4.1@sha256:349296dd2e58dc9d2daabaa3fcacc2de9af5828ce8491c07f3f392ae65a98f7a,6178
+  - lsp-2.7.0.0
+  - lsp-types-2.3.0.0
+  - parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56
+  - process-1.6.19.0
+  - tasty-1.5.3
+  - time-1.12.2
+  - unix-2.8.2.1
+  - Win32-2.14.2.2
+
+extra-include-dirs:
+  - ../bdeps/out/include
+extra-lib-dirs:
+  - ../bdeps/out/lib
+
+ghc-options:
+  lsp-types: -O0 -fexternal-interpreter

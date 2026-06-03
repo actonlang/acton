@@ -1364,12 +1364,12 @@ actonProjTests =
         rootZon <- readFile (proj </> "build.zig.zon")
         depAZon <- readFile (depA </> "build.zig.zon")
         expect ".dep_a = .{" rootZon "root build.zig.zon should declare dep_a"
-        expectAny ["dep_override/deps/dep_a", "dep_override\\deps\\dep_a"] rootZon "root build.zig.zon should use dep_a override path"
+        expectAny ["deps/dep_a", "deps\\dep_a", "dep_override/deps/dep_a", "dep_override\\deps\\dep_a"] rootZon "root build.zig.zon should use dep_a override path"
         expect ".dep_b = .{" rootZon "root build.zig.zon should declare dep_b"
-        expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b"] rootZon "root build.zig.zon should use dep_b override path transitively"
+        expectAny ["deps/dep_b", "deps\\dep_b", "dep_override/deps/dep_b", "dep_override\\deps\\dep_b"] rootZon "root build.zig.zon should use dep_b override path transitively"
         assertBool "root build.zig.zon should not use cached dep_b hash path" (not ("dep_b-" `isInfixOf` rootZon))
         expect ".dep_c = .{" rootZon "root build.zig.zon should declare dep_c (non-overridden) transitively"
-        expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c"] rootZon "root build.zig.zon should keep dep_c path"
+        expectAny ["deps/dep_c", "deps\\dep_c", "dep_override/deps/dep_c", "dep_override\\deps\\dep_c"] rootZon "root build.zig.zon should keep dep_c path"
         assertBool "root build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` rootZon))
         expect ".dep_b = .{" depAZon "dep_a build.zig.zon should declare dep_b"
         expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b", "../dep_b", "..\\dep_b"] depAZon "dep_a build.zig.zon should use dep_b override path"

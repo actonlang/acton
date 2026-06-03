@@ -243,6 +243,7 @@ import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
 import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import Data.Word (Word8, Word32, Word64)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
@@ -256,16 +257,17 @@ import System.Directory.Recursive (getFilesRecursive)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
-import System.FilePath.Posix
+import System.FilePath.Posix hiding ((</>))
 import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp (createTempDirectory, withSystemTempDirectory)
 import System.IO.Unsafe (unsafePerformIO)
+#if !defined(mingw32_HOST_OS)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
+#endif
 import System.Process (CreateProcess(cwd), readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
-import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
-import Text.Show.Pretty (ppDoc)
+import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode), text)
 import Text.Printf
 
 import qualified Data.ByteString as BS
@@ -1066,6 +1068,17 @@ parseActFile opts sp mn actFile mOnProgress = do
 -- restores falls back to content hashing instead of blindly trusting mtimes.
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
 readSourceFileMeta path = do
+#if defined(mingw32_HOST_OS)
+  mtimeNs <- fileModificationTimeNs path
+  size <- getFileSize path
+  return InterfaceFiles.SourceFileMeta
+    { InterfaceFiles.sfmMTimeNs = mtimeNs
+    , InterfaceFiles.sfmCTimeNs = mtimeNs
+    , InterfaceFiles.sfmSize = fromIntegral size
+    , InterfaceFiles.sfmDevice = Nothing
+    , InterfaceFiles.sfmInode = Nothing
+    }
+#else
   st <- getFileStatus path
   let mtimeNs = fileStatusMTimeNs st
       ctimeNs = fileStatusCTimeNs st
@@ -1079,6 +1092,19 @@ readSourceFileMeta path = do
   where
     fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
     fileStatusCTimeNs st = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
+#endif
+
+fileModificationTimeNs :: FilePath -> IO Integer
+#if defined(mingw32_HOST_OS)
+fileModificationTimeNs path =
+  utcTimeToNs <$> getModificationTime path
+  where
+    utcTimeToNs = floor . (* (1000000000 :: Rational)) . toRational . utcTimeToPOSIXSeconds
+#else
+fileModificationTimeNs path = do
+  st <- getFileStatus path
+  return (floor (toRational (modificationTimeHiRes st) * 1000000000))
+#endif
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
@@ -1318,7 +1344,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
                   Just files -> do
-                    absFiles <- mapM canonicalizePath files
+                    absFiles <- mapM normalizePathSafe files
                     let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
@@ -1366,7 +1392,7 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
     return [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
   where
     lookupTaskKey ts f = do
-      absF <- canonicalizePath f
+      absF <- normalizePathSafe f
       let byPath = listToMaybe [ gtKey t
                                | t <- ts
                                , let k = gtKey t
@@ -1650,8 +1676,6 @@ readModuleHeader sp gopts opts paths actFile = do
                         snap <- Source.spReadFile sp actFile
                         verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps nameHashes roots tests mdoc
   where
-    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
-
     mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps nameHashes roots tests mdoc =
       TyHead
         { mhName       = mn
@@ -1697,10 +1721,10 @@ readModuleHeader sp gopts opts paths actFile = do
           case exePathE of
             Left _ -> return False
             Right exePath -> do
-              exeStatusE <- (try (getFileStatus exePath) :: IO (Either SomeException FileStatus))
+              exeStatusE <- (try (fileModificationTimeNs exePath) :: IO (Either SomeException Integer))
               case exeStatusE of
                 Left _ -> return False
-                Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
+                Right exeMTimeNs -> return (exeMTimeNs > tyMTimeNs)
 
     refreshCachedSourceMeta currentSourceMeta = do
       let tyFilePath = tyDbPath paths (modName paths)
@@ -2069,7 +2093,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       when (C.parse opts && isRoot) $
         dump mn "parse" (Pretty.print parsed)
       when (C.parse_ast opts && isRoot) $
-        dump mn "parse-ast" (renderStyle prettyAstStyle (ppDoc parsed))
+        dump mn "parse-ast" (renderStyle prettyAstStyle (text (show parsed)))
 
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
       inferredSigsRef <- newIORef ([] :: [InferredSignature])
@@ -3693,6 +3717,13 @@ systemTypePaths :: FilePath -> FilePath -> [FilePath]
 systemTypePaths sys types =
     [joinPath [sys, "std", "out", "types"], types]
 
+zigExeName :: FilePath
+#if defined(mingw32_HOST_OS)
+zigExeName = "zig.exe"
+#else
+zigExeName = "zig"
+#endif
+
 type FingerprintMap = M.Map String FilePath
 
 scratchBuildSpec :: FilePath -> BuildSpec.BuildSpec
@@ -3918,9 +3949,10 @@ withProjectLock projDir action =
 -- Resolves the project root (or temp root), output dirs, and search path,
 -- creating required directories along the way.
 findPaths               :: FilePath -> C.CompileOptions -> IO Paths
-findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
-                             sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
-                             absSrcFile <- canonicalizePath actFile
+findPaths actFile opts  = do execPath <- normalisePathSyntax <$> getExecutablePath
+                             let execDir = takeDirectory execPath
+                             sysPath <- canonicalizePathPosix (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
+                             absSrcFile <- canonicalizePathPosix actFile
                              (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
                              let sysTypes = joinPath [sysPath, "base", "out", "types"]
                                  srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
@@ -3939,16 +3971,19 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
-        analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
-                             return (True, tmp, [])
-        analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
-                             if isProjectRoot
-                                then case ds of
-                                    [] -> return $ (False, pre, [])
-                                    "src":dirs -> return $ (False, pre, dirs)
-                                    "out":"types":dirs -> return $ (False, pre, dirs)
-                                    _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
-                                else analyze (takeDirectory pre) (takeFileName pre : ds)
+        analyze pre ds
+          | pre == takeDirectory pre = do
+              tmp <- canonicalizePathPosix (C.tempdir opts)
+              return (True, tmp, [])
+          | otherwise = do
+              isProjectRoot <- isActonProjectRoot pre
+              if isProjectRoot
+                 then case ds of
+                     [] -> return $ (False, pre, [])
+                     "src":dirs -> return $ (False, pre, dirs)
+                     "out":"types":dirs -> return $ (False, pre, dirs)
+                     _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
+                 else analyze (takeDirectory pre) (takeFileName pre : ds)
 
 -- Module helpers for multi-project builds ---------------------------------------------------------
 
@@ -4185,12 +4220,24 @@ isAbsolutePath p =
       (c:':':_) -> isAlpha c
       _         -> False
 
+-- This module intentionally uses POSIX FilePath operations for Acton module
+-- paths. Canonical paths from Windows use backslashes, so normalize them at the
+-- boundary before takeDirectory, makeRelative, splitDirectories, etc. see them.
+normalisePathSyntax :: FilePath -> FilePath
+normalisePathSyntax = normalise . map slash
+  where
+    slash '\\' = '/'
+    slash c    = c
+
+canonicalizePathPosix :: FilePath -> IO FilePath
+canonicalizePathPosix p = normalisePathSyntax <$> canonicalizePath p
+
 -- | Normalize a path without failing if it does not exist.
 -- Falls back to normalise for non-existent paths (useful for temporary builds).
 normalizePathSafe :: FilePath -> IO FilePath
 normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
-    return $ either (const (normalise p)) id res
+    return $ normalisePathSyntax (either (const p) id res)
 
 -- | Trim leading and trailing whitespace from a string.
 -- Used when parsing or normalizing BuildSpec inputs.
@@ -4278,7 +4325,7 @@ fetchDependencies gopts paths depOverrides = do
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
         home <- getHomeDirectory
-        let zigExe      = joinPath [sysPath paths, "zig", "zig"]
+        let zigExe      = joinPath [sysPath paths, "zig", zigExeName]
             globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
             depsCache   = joinPath [home, ".cache", "acton", "deps"]
             cacheDir h  = joinPath [globalCache, "p", h]

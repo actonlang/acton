@@ -1,0 +1,8 @@
+.{
+    .name = .libprotobuf_c,
+    .version = "0.0.0",
+    .fingerprint = 0xfcfd7b442ded66a4,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{""},
+}

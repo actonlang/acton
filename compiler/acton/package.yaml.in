@@ -47,18 +47,17 @@ dependencies:
   - random
   - split
   - system-filepath
-  - sydtest
-  - tasty
-  - tasty-expected-failure
-  - tasty-golden
-  - tasty-hunit
   - text
   - temporary
   - time
   - timeit
-  - unix
   - unordered-containers
   - regex-tdfa
+
+when:
+  - condition: "!os(windows)"
+    dependencies:
+      - unix
   
 executables:
   acton:
@@ -86,6 +85,9 @@ executables:
     # default linker instead of breaking. The script branches internally: GNU ld
     # -Bstatic toggling on Linux, an -lfoo -> libfoo.a rewrite for ld64 on macOS.
     when:
+    - condition: os(windows)
+      ghc-options:
+        - -fno-PIC
     - condition: os(linux)
       # -no-pie is required on Linux but invalid on macOS (executables are PIE).
       ghc-options:
@@ -100,6 +102,11 @@ tests:
   test_acton:
     main:                test.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-expected-failure
+      - tasty-golden
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts
@@ -107,6 +114,10 @@ tests:
   incremental:
     main:                test_incremental.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-golden
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts
@@ -114,6 +125,9 @@ tests:
   test_acton_online:
     main:                test_online.hs
     source-dirs:         .
+    dependencies:
+      - tasty
+      - tasty-hunit
     ghc-options:
       - -threaded
       - -rtsopts

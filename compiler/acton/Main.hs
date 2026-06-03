@@ -63,7 +63,7 @@ import Data.Word (Word32)
 import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
-import Data.Char (toLower)
+import Data.Char (isAlpha, toLower)
 import qualified Data.List
 import Data.Either (partitionEithers)
 import qualified Data.Map as M
@@ -83,15 +83,16 @@ import System.Environment (lookupEnv)
 import System.Exit
 import System.FileLock
 import System.FilePath ((</>), addTrailingPathSeparator)
-import System.FilePath.Posix
+import System.FilePath.Posix hiding ((</>), addTrailingPathSeparator)
 import System.IO hiding (readFile, writeFile)
 import System.IO.Temp (writeSystemTempFile)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Info
-import System.Posix.Files
-import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
+#if !defined(mingw32_HOST_OS)
+import System.Posix.IO (createPipe, fdToHandle, setFdOption, closeFd, FdOption(..))
+#endif
 import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
@@ -179,8 +180,14 @@ optimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
 optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
 
 zig :: Paths -> FilePath
-zig paths = sysPath paths ++ "/zig/zig"
+zig paths = sysPath paths ++ "/zig/" ++ zigExeName
 
+zigExeName :: FilePath
+#if defined(mingw32_HOST_OS)
+zigExeName = "zig.exe"
+#else
+zigExeName = "zig"
+#endif
 
 -- Try to acquire a lock, return Nothing if failed, Just (FileLock, FilePath) if succeeded
 tryLock :: FilePath -> IO (Maybe (FileLock, FilePath))
@@ -828,24 +835,14 @@ dispatchWatchTrigger notify trigger =
 -- | Classify project FS events into full or incremental rebuild triggers.
 actWatchTrigger :: FS.Event -> Maybe WatchTrigger
 actWatchTrigger ev =
-    case FS.eventIsDirectory ev of
-      FS.IsDirectory ->
-        case ev of
-          FS.Added{} -> Just WatchFull
-          FS.Removed{} -> Just WatchFull
-          FS.WatchedDirectoryRemoved{} -> Just WatchFull
-          FS.Unknown{} -> Just WatchFull
-          _ -> Nothing
-      FS.IsFile ->
-        if takeExtension (FS.eventPath ev) /= ".act"
-          then Nothing
-          else case ev of
-                 FS.ModifiedAttributes{} -> Nothing
-                 FS.Added{} -> Just WatchFull
-                 FS.Removed{} -> Just WatchFull
-                 FS.WatchedDirectoryRemoved{} -> Just WatchFull
-                 FS.Unknown{} -> Just WatchFull
-                 _ -> Just (WatchIncremental (FS.eventPath ev))
+    let path = FS.eventPath ev
+    in if takeExtension path /= ".act"
+         then Nothing
+         else case ev of
+                FS.Added{} -> Just WatchFull
+                FS.Removed{} -> Just WatchFull
+                FS.Unknown{} -> Just WatchFull
+                _ -> Just (WatchIncremental path)
 
 -- | Classify FS events for a specific file path.
 fileWatchTrigger :: FilePath -> FS.Event -> Maybe WatchTrigger
@@ -854,7 +851,8 @@ fileWatchTrigger target ev =
     in if evPath /= target
          then Nothing
          else case ev of
-                FS.ModifiedAttributes{} -> Nothing
+                FS.Removed{} -> Just WatchFull
+                FS.Unknown{} -> Just WatchFull
                 _ -> Just (WatchIncremental (FS.eventPath ev))
 
 -- | Run the project watch loop and schedule compiles on events.
@@ -1952,7 +1950,7 @@ runCliPostCompile cliHooks gopts plan env = do
           | otherwise        = [binTask]
         preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True) rootTasks
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
-        depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
+        depModuleOptsByProj = depModuleOptionsByProj sysAbs selectedTasksByProj projMap
         rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
         rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
@@ -2062,15 +2060,18 @@ selectedRootStubEntriesForBins paths bins =
       | b <- bins
       ]
 
--- | For each consuming project, map dep name to selected C-source CSV.
-depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
-depModuleOptionsByProj tasksByProj projMap =
+-- | For each consuming project, map generated Acton dep name to selected C-source CSV.
+depModuleOptionsByProj :: FilePath -> M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
+depModuleOptionsByProj sysAbs tasksByProj projMap =
     M.map mkForProj projMap
   where
+    sysRoot = addTrailingPathSeparator sysAbs
+    isSysProj p = p == sysAbs || sysRoot `isPrefixOf` p
     mkForProj ctx =
       M.fromList
         [ (depName, mkCsv depProj)
         | (depName, depProj) <- projDeps ctx
+        , not (isSysProj depProj)
         ]
     mkCsv depProj =
       intercalate "," (selectedCSourceEntriesForProj depProj (M.findWithDefault [] depProj tasksByProj))
@@ -2347,32 +2348,38 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           ui <- mProgressUI
           let tp = puTermProgress ui
           if termProgressEnabled tp then Just tp else Nothing
-    (envOverride, onStart, onStop, closeFds) <- case mTermProgress of
-      Nothing -> return (Nothing, \_ -> return (), return (), True)
-      Just tp -> do
-        (readFd, writeFd) <- createPipe
-        setFdOption writeFd CloseOnExec False
-        setFdOption readFd CloseOnExec True
-        doneVar <- newEmptyMVar
-        pctRef <- newIORef (85 :: Int)
-        let updatePercent ratio = do
-              let clamped = max 0 (min 0.999 ratio)
-                  pctRaw = 85 + floor (clamped * 15)
-              pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
-              withLock (termProgressPercent tp pct)
-            reader = do
-              readZigProgressStream readFd $ \msg ->
-                case zigProgressRatio msg of
-                  Nothing -> return ()
-                  Just ratio -> updatePercent ratio
-        _ <- forkIO (reader `finally` putMVar doneVar ())
-        let envVal = show (fromIntegral writeFd :: Int)
-            onStart' _ = closeFd writeFd `catch` ignoreIO
-            onStop' = do
-              closeFd writeFd `catch` ignoreIO
-              closeFd readFd `catch` ignoreIO
-              takeMVar doneVar
-        return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+    (envOverride, onStart, onStop, closeFds) <-
+#if defined(mingw32_HOST_OS)
+      return (Nothing, \_ -> return (), return (), True)
+#else
+      case mTermProgress of
+        Nothing -> return (Nothing, \_ -> return (), return (), True)
+        Just tp -> do
+          (readFd, writeFd) <- createPipe
+          setFdOption writeFd CloseOnExec False
+          setFdOption readFd CloseOnExec True
+          readHandle <- fdToHandle readFd
+          doneVar <- newEmptyMVar
+          pctRef <- newIORef (85 :: Int)
+          let updatePercent ratio = do
+                let clamped = max 0 (min 0.999 ratio)
+                    pctRaw = 85 + floor (clamped * 15)
+                pct <- atomicModifyIORef' pctRef (\prev -> let next = max prev pctRaw in (next, next))
+                withLock (termProgressPercent tp pct)
+              reader = do
+                readZigProgressStream readHandle $ \msg ->
+                  case zigProgressRatio msg of
+                    Nothing -> return ()
+                    Just ratio -> updatePercent ratio
+          _ <- forkIO (reader `finally` putMVar doneVar ())
+          let envVal = show (fromIntegral writeFd :: Int)
+              onStart' _ = closeFd writeFd `catch` ignoreIO
+              onStop' = do
+                closeFd writeFd `catch` ignoreIO
+                hClose readHandle `catch` ignoreIO
+                takeMVar doneVar
+          return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
+#endif
     let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
                then ("DEVELOPER_DIR", "/dev/null") : env0
                else env0
@@ -2409,7 +2416,7 @@ generateFingerprint name = do
 genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
 genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides = do
     let proj = projPath paths
-    projAbs <- canonicalizePath proj
+    projAbs <- normalizePathSafe proj
     let sys              = sysPath paths
         buildZigPath     = joinPath [proj, "build.zig"]
         buildZonPath     = joinPath [proj, "build.zig.zon"]
@@ -2420,8 +2427,8 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
     let zonName = BuildSpec.specName spec
         fp = BuildSpec.fingerprint spec
     (transPkgs, transZigs) <- collectDepsRecursive spec proj rootPins depOverrides
-    absSys <- canonicalizePath sys
-    let relSys = relativeViaRoot projAbs absSys
+    absSys <- normalizePathSafe sys
+    let relSys = zonPath (relativeViaRoot projAbs absSys)
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- normalizeSpecPaths proj spec
@@ -2567,16 +2574,25 @@ genBuildZig template spec zigDeps depModuleOpts =
     in unlines $ header ++ concatMap inject (lines template)
   where
     pkgDepDef (name, _) =
-      let selectedCsv = M.findWithDefault "" name depModuleOpts
-      in unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
-                 , "        .target = target,"
-                 , "        .optimize = optimize,"
-                 , "        .no_threads = no_threads,"
-                 , "        .db = db,"
-                 , "        .acton_modules = " ++ show selectedCsv ++ ","
-                 , "        .acton_root_stubs = \"\","
-                 , "    });"
-                 ]
+      let actonProjectArgs =
+            case M.lookup name depModuleOpts of
+              Just selectedCsv -> actonModuleArgs selectedCsv
+              Nothing
+                | name == "std" -> []
+                | otherwise -> actonModuleArgs ""
+      in unlines $
+           [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+           , "        .target = target,"
+           , "        .optimize = optimize,"
+           , "        .no_threads = no_threads,"
+           , "        .db = db,"
+           ]
+           ++ actonProjectArgs
+           ++ [ "    });" ]
+    actonModuleArgs selectedCsv =
+      [ "        .acton_modules = " ++ show selectedCsv ++ ","
+      , "        .acton_root_stubs = \"\","
+      ]
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
       ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
@@ -2601,6 +2617,15 @@ genBuildZig template spec zigDeps depModuleOpts =
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
     zigExeLink resolved = concat [ "            executable.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
+
+zonPath :: FilePath -> String
+zonPath = concatMap escapeChar . map slash
+  where
+    slash '\\' = '/'
+    slash c    = c
+
+    escapeChar '"' = "\\\""
+    escapeChar c   = [c]
 
 genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
 genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigDepsResolved =
@@ -2630,7 +2655,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                       if isAbsolutePath rawPath
                         then normalise rawPath
                         else normalise (rebasePath projRoot rawPath)
-          path = relativeViaRoot projRoot pathAbs
+          path = zonPath (relativeViaRoot projRoot pathAbs)
       in unlines [ "        ." ++ name ++ " = .{"
                  , "            .path = \"" ++ path ++ "\","
                  , "        },"
@@ -2642,7 +2667,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                           if isAbsolutePath p
                             then normalise p
                             else normalise (rebasePath projAbs p)
-              relPath = relativeViaRoot projAbs absPath
+              relPath = zonPath (relativeViaRoot projAbs absPath)
           in unlines [ "        ." ++ zigDepResolvedPkgName resolved ++ " = .{"
                      , "            .path = \"" ++ relPath ++ "\","
                      , "        },"
@@ -2794,18 +2819,24 @@ relativeViaRoot :: FilePath -> FilePath -> FilePath
 relativeViaRoot baseAbs targetAbs
   | not (isAbsolutePath targetAbs) = targetAbs
   | otherwise =
-      let (bDriveRaw, bPath) = splitDrive (normalise baseAbs)
-          (tDriveRaw, tPath) = splitDrive (normalise targetAbs)
-          bDrive = map toLower bDriveRaw
-          tDrive = map toLower tDriveRaw
-      in if bDrive /= tDrive && (not (null bDrive) || not (null tDrive))
-           then makeRelativeOrAbsolute baseAbs targetAbs
+      let bParts = cleanParts (normalise baseAbs)
+          tParts = cleanParts (normalise targetAbs)
+          bDrive = pathDrive bParts
+          tDrive = pathDrive tParts
+      in if bDrive /= tDrive
+           then normalise targetAbs
            else
-             let ups = replicate (length (cleanParts bPath)) ".."
-                 tParts = cleanParts tPath
-             in joinPath (ups ++ tParts)
+             let common = length (takeWhile (uncurry (==)) (zip bParts tParts))
+                 ups = replicate (length bParts - common) ".."
+                 relParts = ups ++ drop common tParts
+             in if null relParts then "." else joinPath relParts
   where
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
+    pathDrive (p:_)
+      | isDriveComponent p = Just (map toLower p)
+    pathDrive _ = Nothing
+    isDriveComponent [c, ':'] = isAlpha c
+    isDriveComponent _ = False
 
 -- | Walk BuildSpec dependencies to collect transitive packages and zig deps.
 collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, [ZigDepRef])

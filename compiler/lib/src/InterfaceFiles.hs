@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE DeriveGeneric, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, DeriveGeneric, ScopedTypeVariables #-}
 -- Acton Interface (.tydb) Files
 --
 -- Purpose
@@ -109,17 +109,20 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
-import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
-import System.FilePath ((</>), takeExtension)
-import System.IO.Error (isDoesNotExistError)
+import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, getPermissions, listDirectory, removeFile, removePathForcibly, writable)
+import System.FilePath ((</>), normalise, takeExtension)
+import System.IO.Error (ioeGetErrorString, isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
+#if !defined(mingw32_HOST_OS)
 import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
+#endif
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -218,8 +221,13 @@ interfaceModifiedTime path = getModificationTime (dataFilePath path)
 
 interfaceModifiedTimeNs :: FilePath -> IO Integer
 interfaceModifiedTimeNs path = do
+#if defined(mingw32_HOST_OS)
+    time <- getModificationTime (dataFilePath path)
+    return (utcTimeToNs time)
+#else
     st <- getFileStatus (dataFilePath path)
     return (floor (toRational (modificationTimeHiRes st) * 1000000000))
+#endif
 
 copyInterface :: FilePath -> FilePath -> IO ()
 copyInterface src dst = do
@@ -342,9 +350,10 @@ copyVal (LMDB.MDB_val len ptr) =
 
 withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
 withEnv path readOnly mapSize action =
-    withInterfaceLock path $
+    withInterfaceLock lmdbPath $
       E.bracket open LMDB.mdb_env_close action
   where
+    lmdbPath = normalise path
     open = withMVar lmdbOpenLock $ \_ -> openWithRetry envOpenMaxAttempts
     -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
     -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
@@ -363,9 +372,17 @@ withEnv path readOnly mapSize action =
           | otherwise -> E.throwIO err
     openEnv env
       | readOnly  = do
-          flags <- readOnlyOpenFlags path
-          LMDB.mdb_env_open env path flags
-      | otherwise = LMDB.mdb_env_open env path []
+          exists <- doesDirectoryExist lmdbPath
+          unless exists $
+            ioError (userError ("Missing .tydb directory: " ++ lmdbPath))
+          flags <- readOnlyOpenFlags lmdbPath
+          openWithContext env "read" flags
+      | otherwise = do
+          createDirectoryIfMissing True lmdbPath
+          openWithContext env "write" []
+    openWithContext env mode flags =
+      LMDB.mdb_env_open env lmdbPath flags `E.catch` \(err :: LMDB.LMDB_Error) ->
+        ioError (userError ("mdb_env_open " ++ mode ++ " " ++ lmdbPath ++ ": " ++ show err))
 
 -- A transient env-open failure is an OS-level error (Either Left, a raw errno)
 -- from a concurrent lock.mdb setup race -- retrying succeeds once the winning
@@ -396,8 +413,8 @@ canUseLockFile path = do
     let lockPath = lockFilePath path
     exists <- doesFileExist lockPath
     if exists
-      then fileAccess lockPath False True False
-      else fileAccess path False True True
+      then canWritePath lockPath False
+      else canWritePath path True
 
 canReadWithoutLock :: FilePath -> IO Bool
 canReadWithoutLock path = do
@@ -406,9 +423,17 @@ canReadWithoutLock path = do
     if not exists
       then return False
       else do
-        dataWritable <- fileAccess dataPath False True False
-        dirWritable <- fileAccess path False True True
+        dataWritable <- canWritePath dataPath False
+        dirWritable <- canWritePath path True
         return (not dataWritable && not dirWritable)
+
+canWritePath :: FilePath -> Bool -> IO Bool
+#if defined(mingw32_HOST_OS)
+canWritePath path _ =
+    (writable <$> getPermissions path) `E.catch` \(_ :: E.IOException) -> return False
+#else
+canWritePath path searchable = fileAccess path False True searchable
+#endif
 
 envOpenMaxAttempts :: Int
 envOpenMaxAttempts = 5
@@ -522,13 +547,28 @@ isCorruptEnv :: E.SomeException -> Bool
 isCorruptEnv err =
     case E.fromException err of
       Just LMDB.LMDB_Error{ LMDB.e_code = Right code } ->
-        code `elem` [ LMDB.MDB_PAGE_NOTFOUND
-                    , LMDB.MDB_CORRUPTED
-                    , LMDB.MDB_PANIC
-                    , LMDB.MDB_VERSION_MISMATCH
-                    , LMDB.MDB_INVALID
-                    ]
-      _ -> False
+        code `elem` corruptEnvCodes
+      _ | Just ioErr <- E.fromException err ->
+            hasCorruptEnvMarker (ioeGetErrorString ioErr) || hasCorruptEnvMarker (show err)
+        | otherwise -> hasCorruptEnvMarker (show err)
+  where
+    hasCorruptEnvMarker s =
+      any (`Data.List.isInfixOf` s) corruptEnvMarkers
+    corruptEnvCodes =
+      [ LMDB.MDB_PAGE_NOTFOUND
+      , LMDB.MDB_CORRUPTED
+      , LMDB.MDB_PANIC
+      , LMDB.MDB_VERSION_MISMATCH
+      , LMDB.MDB_INVALID
+      ]
+    corruptEnvMarkers =
+      map show corruptEnvCodes ++
+      [ "MDB_PAGE_NOTFOUND"
+      , "MDB_CORRUPTED"
+      , "MDB_PANIC"
+      , "MDB_VERSION_MISMATCH"
+      , "MDB_INVALID"
+      ]
 
 writeEntries :: FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
 writeEntries path entries = do
@@ -553,6 +593,9 @@ writeEntries path entries = do
         Left (err :: E.SomeException) -> E.throwIO err
 
 setReadableInterfacePermissions :: FilePath -> IO ()
+#if defined(mingw32_HOST_OS)
+setReadableInterfacePermissions _ = return ()
+#else
 setReadableInterfacePermissions path = do
     setFileMode path 0o755
     setFileMode (dataFilePath path) 0o644
@@ -564,6 +607,10 @@ setReadableInterfacePermissions path = do
           if isDoesNotExistError err
             then return ()
             else E.throwIO (err :: E.IOException)
+#endif
+
+utcTimeToNs :: UTCTime -> Integer
+utcTimeToNs = floor . (* (1000000000 :: Rational)) . toRational . utcTimeToPOSIXSeconds
 
 validateVersion :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ()
 validateVersion txn dbi = do
@@ -757,6 +804,7 @@ tyCacheMiss err
 isTyCacheMiss :: E.SomeException -> Bool
 isTyCacheMiss err
   | Just (_ :: TyCacheInvalid) <- E.fromException err = True
-  | Just (ioe :: E.IOException) <- E.fromException err = isDoesNotExistError ioe
+  | Just (ioe :: E.IOException) <- E.fromException err =
+      isDoesNotExistError ioe || isCorruptEnv err
   | isCorruptEnv err = True
   | otherwise = False

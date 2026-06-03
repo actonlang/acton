@@ -13,8 +13,7 @@ import qualified Data.ByteString.Char8 as BSC
 import Data.List (foldl')
 import qualified Data.Set as Set
 import Data.Word (Word8, Word32)
-import qualified System.Posix.IO.ByteString as PIOB
-import System.Posix.Types (Fd)
+import System.IO (Handle)
 
 data ZigNode = ZigNode
   { znCompleted :: Word32
@@ -27,11 +26,11 @@ data ZigProgress = ZigProgress
   { zpNodes :: [ZigNode]
   } deriving (Show)
 
-readZigProgressStream :: Fd -> (ZigProgress -> IO ()) -> IO ()
-readZigProgressStream fd onMsg = go BS.empty
+readZigProgressStream :: Handle -> (ZigProgress -> IO ()) -> IO ()
+readZigProgressStream handle onMsg = go BS.empty
   where
     go buf = do
-      res <- (try (PIOB.fdRead fd 4096) :: IO (Either IOException BS.ByteString))
+      res <- (try (BS.hGetSome handle 4096) :: IO (Either IOException BS.ByteString))
       case res of
         Left _ -> return ()
         Right chunk | BS.null chunk -> return ()
