@@ -1620,6 +1620,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           "Front timing: env " ++ fmtTimePrecise (ftEnv ft)
           ++ ", kinds " ++ fmtTimePrecise (ftKinds ft)
           ++ ", types " ++ fmtTimePrecise (ftTypes ft)
+        frontTypeTimingLine ft =
+          "Front type detail: reconstruct " ++ fmtTimePrecise (ftTypeReconstruct ft)
+          ++ " (after progress " ++ fmtTimePrecise (ftTypeAfterProgress ft) ++ ")"
+          ++ ", force " ++ fmtTimePrecise (ftTypeForce ft)
+          ++ ", hash " ++ fmtTimePrecise (ftTypeHash ft)
+          ++ ", write .tydb " ++ fmtTimePrecise (ftTypeWrite ft)
+          ++ ", docs " ++ fmtTimePrecise (ftTypeDocs ft)
         typeStmtTimingLine st =
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
         typeStmtBindsLine st =
@@ -1863,9 +1870,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                 when (C.timing gopts) $
                   forM_ (frFrontTiming fr) $ \ft -> do
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTimingLine ft))
-                    forM_ (ftTypeStmtTimings ft) $ \st -> do
-                      logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
-                      logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st))
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTypeTimingLine ft))
+                    when (C.verbose gopts) $
+                      forM_ (ftTypeStmtTimings ft) $ \st -> do
+                        logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
+                        logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st))
                 when (C.timing gopts || C.verbose gopts) $
                   forM_ (frInferredSigs fr) $ \sig -> do
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (inferredSignatureLine sig))

@@ -69,6 +69,12 @@ printFrontTiming ft =
     putStrLn $ "front_timing env " ++ fmtTime (Compile.ftEnv ft)
             ++ " kinds " ++ fmtTime (Compile.ftKinds ft)
             ++ " types " ++ fmtTime (Compile.ftTypes ft)
+            ++ " reconstruct " ++ fmtTime (Compile.ftTypeReconstruct ft)
+            ++ " reconstruct_after_progress " ++ fmtTime (Compile.ftTypeAfterProgress ft)
+            ++ " force " ++ fmtTime (Compile.ftTypeForce ft)
+            ++ " hash " ++ fmtTime (Compile.ftTypeHash ft)
+            ++ " write_tydb " ++ fmtTime (Compile.ftTypeWrite ft)
+            ++ " docs " ++ fmtTime (Compile.ftTypeDocs ft)
 
 printBackTiming :: Compile.BackTiming -> IO ()
 printBackTiming bt =
