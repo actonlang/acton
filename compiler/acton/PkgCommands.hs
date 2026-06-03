@@ -18,6 +18,7 @@ module PkgCommands
   , decodePackageIndex
   , decodeAppPackageIndex
   , matchesAllTerms
+  , resolveLibraryDependency
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -185,6 +186,24 @@ pkgAddCommand _ opts = do
           ensureGithubUrl "pkg add" repoUrl
           archive <- requireRight =<< resolveGithubArchiveUrl manager token repoUrl repoRefArg
           return (archive, Just repoUrl, repoRefArg)
+
+resolveLibraryDependency :: String -> IO BuildSpec.PkgDep
+resolveLibraryDependency depName = do
+    validateDepName depName
+    manager <- newTlsManager
+    token <- resolveGithubToken Nothing
+    repoUrl <- lookupRepoUrlFromIndex depName ""
+    ensureGithubUrl "repl :dep add" repoUrl
+    archive <- requireRight =<< resolveGithubArchiveUrl manager token repoUrl Nothing
+    zigExe <- getZigExe
+    depHash <- requireRight =<< zigFetchHash zigExe archive
+    return BuildSpec.PkgDep
+      { BuildSpec.url = Just archive
+      , BuildSpec.hash = Just depHash
+      , BuildSpec.path = Nothing
+      , BuildSpec.repo_url = Just repoUrl
+      , BuildSpec.repo_ref = Nothing
+      }
 
 pkgRemoveCommand :: C.GlobalOptions -> C.PkgRemoveOptions -> IO ()
 pkgRemoveCommand _ opts = do

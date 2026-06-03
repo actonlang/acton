@@ -2,6 +2,7 @@
 
 - [Getting started](index.md)
   - [Hello World](hello.md)
+  - [Acton REPL](repl.md)
   - [Installation](install.md)
     - [Tip / Nightly](install_tip.md)
   - [Acton scripts](hello/shebang.md)

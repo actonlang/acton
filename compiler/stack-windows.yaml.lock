@@ -47,6 +47,13 @@ packages:
   original:
     hackage: fsnotify-0.3.0.1@sha256:58bb530d7acf93eb4ed69473e32a1485581815f04f69dfc8a278523781ba49dd,2988
 - completed:
+    hackage: haskeline-0.8.4.1@sha256:349296dd2e58dc9d2daabaa3fcacc2de9af5828ce8491c07f3f392ae65a98f7a,6178
+    pantry-tree:
+      sha256: 43b5325128eea82943bc0f9dbaf4f19c9e6af26dcce571938459313c7fc7e6b1
+      size: 2968
+  original:
+    hackage: haskeline-0.8.4.1@sha256:349296dd2e58dc9d2daabaa3fcacc2de9af5828ce8491c07f3f392ae65a98f7a,6178
+- completed:
     hackage: lsp-2.7.0.0@sha256:cec57fe8924368ab3f431726b0ca0c9d76fad025161fc3d2fde71ed814d0bf7e,3998
     pantry-tree:
       sha256: 93f62225c8d50459fb05346630aaf3934d7a4000dcfe5109e7ff45d94d8a283f

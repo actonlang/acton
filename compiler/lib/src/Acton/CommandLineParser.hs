@@ -49,6 +49,7 @@ data Command        = New NewOptions
                     | Uninstall UninstallOptions
                     | Sig SigOptions
                     | Test TestCommand
+                    | Repl CompileOptions
                     | Fetch
                     | PkgShow
                     | PkgAdd PkgAddOptions
@@ -226,6 +227,7 @@ cmdLineParser       = hsubparser
                         <> command "uninstall" (info (CmdOpt <$> globalOptions <*> (Uninstall <$> uninstallOptions)) (progDesc "Uninstall an Acton application package"))
                         <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred type signatures"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
+                        <> command "repl"    (info (CmdOpt <$> globalOptions <*> (Repl <$> compileOptions)) (progDesc "Run an interactive Acton shell"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Library package/dependency commands"))
                         <> command "zig-pkg" (info (CmdOpt <$> globalOptions <*> zigPkgSubcommands) (progDesc "Zig package dependency commands"))
