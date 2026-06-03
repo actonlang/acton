@@ -22,5 +22,8 @@ See [Project dependencies](project_dependencies.md) for how Acton package
 dependencies and zig dependencies are discovered, fetched, and emitted into the
 generated Zig build files.
 
+See [REPL implementation](repl.md) for how `acton repl` maps interactive input
+onto generated Acton modules and dynamic-library builds.
+
 See [Passes](passes/index.md) for the stage-by-stage pipeline and how front and
 back passes split the work.

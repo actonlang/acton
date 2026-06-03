@@ -155,6 +155,13 @@ parseModuleHeader fileName fileContent =
         Left err -> Control.Exception.throw err
         Right res -> return res
 
+parseExpression :: String -> String -> IO S.Expr
+parseExpression fileName fileContent =
+    let contentWithNewline = addFinalNewline fileContent
+    in case runParser (St.evalStateT (rhs <* sc2 <* eof) initState) fileName contentWithNewline of
+        Left err -> Control.Exception.throw err
+        Right res -> return res
+
 addFinalNewline :: String -> String
 addFinalNewline s
     | null s || last s == '\n' = s
