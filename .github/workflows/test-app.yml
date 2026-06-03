@@ -19,9 +19,20 @@ jobs:
           sudo apt update
           sudo apt install -y gdb
       - name: "Download .deb files"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-debs-${{ inputs.arch }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          artifact="acton-debs-${{ inputs.arch }}"
+          for attempt in 1 2 3; do
+            rm -rf deb
+            if gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir .; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
       - name: "Install acton from .deb"
         run: |
           sudo apt install -y ./deb/acton_*.deb
