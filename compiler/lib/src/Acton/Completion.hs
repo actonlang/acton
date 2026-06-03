@@ -635,7 +635,7 @@ readModuleInterface searchPath m = do
       res <- (Just <$> IF.readFile ty) `E.catch` \(_ :: E.SomeException) ->
         return Nothing
       case res of
-        Just (_, I.NModule imps te mdoc, _, _, _, _, _, _, _, _, _, _) ->
+        Just (_, I.NModule imps te mdoc, _, _, _, _, _, _, _, _, _, _, _) ->
           return (Just (imps, te, mdoc))
         _ ->
           return Nothing

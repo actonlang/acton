@@ -692,7 +692,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
         case hdrE of
           Left _ -> return []
-          Right (_sourceMeta, _hash, _ih, _implH, imps, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
+          Right (_sourceMeta, _hash, _ih, _implH, imps, _depModules, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -1089,7 +1089,7 @@ printSigInterface paths mn mName tyFile = do
     case tyRes of
       Left err ->
         printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
-      Right (ms, nmod, _, _, _, _, _, _, _, _, _, _) -> do
+      Right (ms, nmod, _, _, _, _, _, _, _, _, _, _, _) -> do
         env0 <- Acton.Env.initEnv (sysTypes paths) False
         let I.NModule imps te _ = nmod
             envImports = foldr Acton.Env.addImport env0 ms
@@ -2203,7 +2203,7 @@ expectedRootStubs paths tasks = do
             tyPath = tyDbPath paths mn
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
+          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -2349,7 +2349,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupMod m env of
                          Nothing -> []
@@ -2963,7 +2963,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
         case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
+          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 
