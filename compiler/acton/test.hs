@@ -712,7 +712,7 @@ compilerTests =
                   , "zig_dependencies = {}"
                   ]
               runBuild dir = readCreateProcessWithExitCode
-                (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                (proc actonExe ["build", "--skip-build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
 
           createDirectoryIfMissing True homeDir
 
@@ -787,7 +787,7 @@ compilerTests =
                     , ""
                     ]
                 runBuild dir = readCreateProcessWithExitCode
-                  (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                  (proc actonExe ["build", "--skip-build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
                 assertBuildOk label (code, out, err) =
                   when (code /= ExitSuccess) $
                     assertFailure (label ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
