@@ -254,6 +254,19 @@ jobs:
     runs-on: ubuntu-24.04${{ matrix.arch == 'arm64v8' && '-arm' || '' }}
     container:
       image: ${{ matrix.os }}:${{ matrix.version }}
+      # Bind-mount the host's large preinstalled toolchains so the step below
+      # can delete them from inside the container. The container's root overlay
+      # lives on the same host disk as these, so freeing them gives the cache
+      # restore + build headroom (these jobs were dying of ENOSPC mid-restore).
+      # Bind-mounting a path that doesn't exist on a given runner just yields an
+      # empty dir, so this is safe across amd64/arm64 images.
+      volumes:
+        - /usr/share/dotnet:/host-disk/dotnet
+        - /usr/local/lib/android:/host-disk/android
+        - /opt/ghc:/host-disk/ghc
+        - /usr/local/.ghcup:/host-disk/ghcup
+        - /opt/hostedtoolcache:/host-disk/hostedtoolcache
+        - /usr/local/share/boost:/host-disk/boost
     env:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
@@ -264,6 +277,15 @@ jobs:
           uname -a
           env
           cat /proc/cpuinfo
+      # Reclaim host disk (via the volumes bind-mounted above) before we restore
+      # the compile cache, which is what was exhausting disk on these containers.
+      - name: "Free host disk space"
+        run: |
+          df -h || true
+          rm -rf /host-disk/dotnet/* /host-disk/android/* /host-disk/ghc/* \
+                 /host-disk/ghcup/* /host-disk/hostedtoolcache/* \
+                 /host-disk/boost/* 2>/dev/null || true
+          df -h || true
       - name: "Set BUILD_RELEASE when we are building for a version tag"
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
