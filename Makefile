@@ -48,12 +48,14 @@ ACTON_STACK_CC=$(TD)/compiler/tools/zig-cc.sh
 ACTON_STACK_CXX=$(TD)/compiler/tools/zig-cxx.sh
 ACTON_STACK_NEEDS_ZIG=
 ACTON_ZIG_TARGET=
+ACTON_STACK_CONFIG=compiler/stack.yaml
 STACK=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
 STACK_SETUP=unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup
 
 ifeq ($(OS),windows)
-STACK=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack
-STACK_SETUP=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack setup
+ACTON_STACK_CONFIG=compiler/stack-windows.yaml
+STACK=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack --stack-yaml stack-windows.yaml
+STACK_SETUP=chcp.com 65001 >/dev/null && unset CC && unset CXX && unset CFLAGS && unset CPPFLAGS && unset LDFLAGS && unset ACTON_REAL_LD && stack --stack-yaml stack-windows.yaml setup
 endif
 
 # Determine which xargs we have. BSD xargs does not have --no-run-if-empty,
@@ -216,7 +218,7 @@ else
 ACTONC_LINK_CMD=ln -sf acton dist/bin/actonc
 endif
 
-$(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
+$(ACTON_BIN): compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in $(ACTON_STACK_CONFIG) $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
 	mkdir -p dist/bin
 	rm -f $(ACTONC)
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml

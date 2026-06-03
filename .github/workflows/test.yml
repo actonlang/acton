@@ -358,7 +358,7 @@ jobs:
             ${{ github.workspace }}/test
 
 
-  test-windows-dist-cross-linux:
+  test-windows:
     needs: build-version
     runs-on: windows-latest
     env:
@@ -383,7 +383,7 @@ jobs:
           path: |
             ~\AppData\Roaming\stack
             ~\AppData\Local\Programs\stack
-          key: stack-windows-x86_64-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
+          key: stack-windows-x86_64-${{ hashFiles('compiler/stack-windows.yaml', 'compiler/stack-windows.yaml.lock') }}
           restore-keys: |
             stack-windows-x86_64-
       - name: "Install Stack"
@@ -432,7 +432,7 @@ jobs:
 
 
   run-windows-built-linux-elf:
-    needs: test-windows-dist-cross-linux
+    needs: test-windows
     runs-on: ubuntu-latest
     steps:
       - name: "Download Windows-built Linux ELF"
