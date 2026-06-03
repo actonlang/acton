@@ -32,13 +32,14 @@ finished modules. In `Acton.Compile.compileTasks`, each completed module extends
 that snapshot with:
 
 ```haskell
-Acton.Env.addMod (tkMod mnDone) (frIfaceTE fr) (frDoc fr) envAcc
+Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
 ```
 
-This shared cache stores loaded module interfaces in `modules`. It does not
-store the current module's local names, and it should not be thought of as "the
-current type-checker env". It is a shared cache of interfaces that later tasks
-start from.
+This shared cache stores loaded module interfaces in `modules` as
+`NModule imps te doc`: the module's recorded imports, public interface, and
+optional docstring. It does not store the current module's local names, and it
+should not be thought of as "the current type-checker env". It is a shared cache
+of interfaces that later tasks start from.
 
 ### Current-module import overlay
 
@@ -126,21 +127,34 @@ When a module imports another module:
 
 1. `mkEnv` walks the AST import list
 2. `impModule` delegates to `doImp`
-3. `doImp` finds the imported module's `.tydb`
-4. `doImp` follows the imported module's recorded imports
-5. only then does it return the imported module interface
+3. `doImp` first checks whether the imported module is already in `modules`
+4. if it is loaded, `doImp` follows the in-memory `NModule` import list
+5. otherwise, `doImp` reads the imported module's `.tydb` and follows its stored
+   imports
+6. only then does it return the imported module interface
 
 This is the mechanism that turns a direct import into a transitive environment
 closure suitable for kinds and type checking.
 
 An important invariant is that a cached direct module must still restore its own
-recorded imports. The shared scheduler env stores interfaces in `modules`, but
-that cache does not itself contain the imported module's import list. For that
-reason, `doImp` must still consult the cached module's `.tydb` header and recurse
-through its recorded imports even when the direct module is already present in
-`modules`.
+recorded imports. When the module is already present in the shared scheduler
+env, that closure is in memory: `lookupModule` returns the `NModule` import list
+alongside the public interface. `doImp` should use that in-memory list and avoid
+opening `.tydb` for modules compiled earlier in the same build process.
 
-Without that step, the compiler can end up in a state where:
+When the module is not present in `modules`, `doImp` falls back to the `.tydb`
+cache on the search path, reads the stored interface, recursively materializes
+its imports, and then adds the module to the shared cache.
+
+The boundary is important: `.tydb` is a persistent cache and cross-process
+interface artifact, not an IPC mechanism between front stages in one compiler
+run. If a module was just compiled by the current process, dependent front
+passes should use the front result already in memory. This keeps front-stage
+scheduling independent from any asynchronous `.tydb` writer still flushing that
+same interface to disk.
+
+Without restoring the transitive imports, the compiler can end up in a state
+where:
 
 - the direct module is present in the shared module cache
 - the direct module's transitive imports are not

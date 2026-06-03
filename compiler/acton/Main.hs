@@ -1524,6 +1524,21 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         backDoneStatus = "Compilation done"
         backFailStatus msg = "Compilation failed: " ++ msg
         finalDoneStatus = "Final compilation done"
+        frontOutputActiveStatus kind =
+          case kind of
+            FrontOutputTydb -> "Writing .tydb"
+            FrontOutputTydbCopy -> "Copying .tydb"
+            FrontOutputDoc -> "Generating docs"
+        frontOutputDoneStatus kind =
+          case kind of
+            FrontOutputTydb -> "Wrote .tydb"
+            FrontOutputTydbCopy -> "Copied .tydb"
+            FrontOutputDoc -> "Generated docs"
+        frontOutputShortStatus kind =
+          case kind of
+            FrontOutputTydb -> ".tydb"
+            FrontOutputTydbCopy -> "Copy .tydb"
+            FrontOutputDoc -> "Docs"
         projMap = cpProjMap plan
         depNameMap =
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
@@ -1622,8 +1637,6 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ " (after progress " ++ fmtTimePrecise (ftTypeAfterProgress ft) ++ ")"
           ++ ", force " ++ fmtTimePrecise (ftTypeForce ft)
           ++ ", hash " ++ fmtTimePrecise (ftTypeHash ft)
-          ++ ", write .tydb " ++ fmtTimePrecise (ftTypeWrite ft)
-          ++ ", docs " ++ fmtTimePrecise (ftTypeDocs ft)
         typeStmtTimingLine st =
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
         typeStmtBindsLine st =
@@ -1678,6 +1691,15 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           if puWidthAware progressUI
             then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
             else plainDoneTimedLine "" finalDoneStatus t
+        frontOutputDoneLine width key kind t =
+          let proj = tkProj key
+              mn = tkMod key
+              status = frontOutputDoneStatus kind
+              short = frontOutputShortStatus kind
+              renderer = staticStatusRenderer status short
+          in if puWidthAware progressUI
+               then doneStatusLine width (projectModuleLabel proj mn) renderer short (Just t)
+               else plainDoneTimedLine (projectModuleLabel proj mn) status t
         renderProjectLine proj mn statusRender width =
           let modLbl = projectModuleLabel proj mn
           in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
@@ -1687,6 +1709,9 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           renderProjectLine proj mn (parseStatusRenderer p)
         frontInitialLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Checking module" "Check")
+        frontOutputActiveLine key kind =
+          renderProjectLine (tkProj key) (tkMod key)
+            (staticStatusRenderer (frontOutputActiveStatus kind) (frontOutputShortStatus kind))
         backActiveLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
         backProgressLine proj mn p =
@@ -1765,7 +1790,9 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                else clamp01 (fromIntegral (backProgressCompleted p) / fromIntegral total)
         backPassDoneLine proj mn pass =
           "Back " ++ backPassName pass ++ " done: " ++ projectModuleLabel proj mn
-        finalKey = TaskKey rootProj (A.modName ["__final__"])
+        finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
+        taskProgressKey = ProgressTaskKey
+        frontOutputTaskKey = ProgressFrontOutputKey
         withTerm action = when termEnabled $ gate (withProgressLock progressUI action)
         setPercent pct = withTerm (termProgressPercent termProgress pct)
         addProgress delta =
@@ -1808,11 +1835,11 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           let proj = projPath (bjPaths job)
               mn = A.modname (biTypedMod (bjInput job))
           in do
-            gate (progressStartTask progressUI progressState (backJobKey job) (backActiveLine proj mn) (Just 0))
+            gate (progressStartTask progressUI progressState (taskProgressKey (backJobKey job)) (backActiveLine proj mn) (Just 0))
         onBackProgress job p = do
           let proj = projPath (bjPaths job)
               mn = A.modname (biTypedMod (bjInput job))
-          gate (progressUpdateTask progressUI progressState (backJobKey job)
+          gate (progressUpdateTask progressUI progressState (taskProgressKey (backJobKey job))
                   (backProgressLine proj mn p) (Just (backProgressRatio p)))
           when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
             case p of
@@ -1822,7 +1849,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                     (backPassDoneLine proj mn pass) elapsed)
               _ -> return ()
         onBackDone job result = do
-          gate (progressDoneTask progressUI progressState (backJobKey job))
+          gate (progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
           creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
@@ -1837,22 +1864,22 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                                                     (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
-              gate (progressDoneTask progressUI progressState (gtKey t))
+              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               logDiagnostics optsT diags
           , chOnParseStart = \t ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState key (parseActiveLine proj mn) (Just 0))
+              in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine proj mn) (Just 0))
           , chOnParseProgress = \t p ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
               in do
-                gate (progressUpdateTask progressUI progressState key (parseProgressLine proj mn p) (Just (parseProgressRatio p)))
+                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine proj mn p) (Just (parseProgressRatio p)))
                 creditParseProgress key p
           , chOnParseDone = \t mtime -> do
-              gate (progressDoneTask progressUI progressState (gtKey t))
+              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               creditParse (gtKey t)
               when (not (quiet gopts optsPlan)) $
                 forM_ mtime $ \tParse -> do
@@ -1884,17 +1911,25 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState key (frontInitialLine proj mn) (Just 0))
+              in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine proj mn) (Just 0))
           , chOnFrontProgress = \t p ->
               let key = gtKey t
                   proj = tkProj key
                   mn = tkMod key
               in do
-                gate (progressUpdateTask progressUI progressState key (frontProgressLine proj mn p) (Just (frontPassFraction p)))
+                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine proj mn p) (Just (frontPassFraction p)))
                 creditFrontProgress key p
           , chOnFrontDone = \t -> do
-              gate (progressDoneTask progressUI progressState (gtKey t))
+              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               creditFront (gtKey t)
+          , chOnFrontOutputStart = \key kind ->
+              gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
+                      (frontOutputActiveLine key kind) Nothing)
+          , chOnFrontOutputDone = \key kind melapsed -> do
+              gate (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
+              when (not (quiet gopts optsPlan)) $
+                forM_ melapsed $ \elapsed ->
+                  logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
           , chOnBackQueued = \_ _ -> return ()
           , chOnBackSkipped = creditBack
           , chOnBackStart = onBackStart
@@ -2939,9 +2974,14 @@ data ProgressUI = ProgressUI
   , puLock :: MVar ()
   }
 
+data ProgressKey
+  = ProgressTaskKey TaskKey
+  | ProgressFrontOutputKey TaskKey FrontOutputKind
+  deriving (Eq, Ord, Show)
+
 data ProgressState = ProgressState
-  { psActive :: IORef (M.Map TaskKey ProgressTask)
-  , psOrder :: IORef [TaskKey]
+  { psActive :: IORef (M.Map ProgressKey ProgressTask)
+  , psOrder :: IORef [ProgressKey]
   }
 
 data ProgressTask = ProgressTask
@@ -3125,7 +3165,7 @@ progressReset ui st = withProgressLock ui $ do
       progressRenderUnlocked ui
 
 -- | Mark a task as active in the progress UI.
-progressStartTask :: ProgressUI -> ProgressState -> TaskKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
+progressStartTask :: ProgressUI -> ProgressState -> ProgressKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
 progressStartTask ui st key renderLine mprog = withProgressLock ui $ do
     now <- getTime Monotonic
     modifyIORef' (psActive st) (M.insert key (ProgressTask renderLine now (fmap (\x -> max 0 (min 1 x)) mprog)))
@@ -3133,7 +3173,7 @@ progressStartTask ui st key renderLine mprog = withProgressLock ui $ do
     progressRefreshUnlocked ui st
 
 -- | Update the rendered line for an active progress task.
-progressUpdateTask :: ProgressUI -> ProgressState -> TaskKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
+progressUpdateTask :: ProgressUI -> ProgressState -> ProgressKey -> (Int -> BuildLineLayout) -> Maybe Double -> IO ()
 progressUpdateTask ui st key renderLine mprog = withProgressLock ui $ do
     modifyIORef' (psActive st) (M.adjust (\task ->
       task { ptRenderLine = renderLine
@@ -3142,7 +3182,7 @@ progressUpdateTask ui st key renderLine mprog = withProgressLock ui $ do
     progressRefreshUnlocked ui st
 
 -- | Remove a task from the progress UI.
-progressDoneTask :: ProgressUI -> ProgressState -> TaskKey -> IO ()
+progressDoneTask :: ProgressUI -> ProgressState -> ProgressKey -> IO ()
 progressDoneTask ui st key = withProgressLock ui $ do
     modifyIORef' (psActive st) (M.delete key)
     modifyIORef' (psOrder st) (filter (/= key))

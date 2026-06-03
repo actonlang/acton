@@ -147,8 +147,15 @@ The raw Haskell LMDB binding can race when several threads open the same
 environment at once, so `InterfaceFiles` serializes only environment opening.
 The read transactions themselves are still independent.
 
+Within a single compiler process, completed front results are the authoritative
+interface source for downstream front passes. The import loader should prefer
+the in-memory `Env.modules` entry when a module has already been loaded, and use
+`.tydb` only for modules absent from that environment. This lets `.tydb` writes
+run asynchronously without making dependent front stages wait for the LMDB
+directory to become readable.
+
 `copyInterface` uses LMDB's environment copy API. It copies durable data without
-copying a stale `lock.mdb`, so copied `--ty` artifacts reopen with fresh LMDB
+copying a stale `lock.mdb`, so copied `--tydb` artifacts reopen with fresh LMDB
 runtime lock state.
 
 ## Performance Snapshot

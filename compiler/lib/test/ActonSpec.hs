@@ -2,7 +2,8 @@
 
 module Main (main) where
 
-import Control.Concurrent.Async (mapConcurrently_)
+import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
+import Control.Concurrent.Async (async, mapConcurrently_, wait)
 import Data.Char (toLower, isAlphaNum)
 
 import qualified Acton.Parser as P
@@ -24,6 +25,7 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified InterfaceFiles
@@ -47,6 +49,7 @@ import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirecto
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist)
 import System.Posix.Files (setFileMode)
 import System.IO.Temp (withSystemTempDirectory)
+import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
 import Control.DeepSeq (rnf)
@@ -217,6 +220,37 @@ main = do
           InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+
+    describe "CompileScheduler" $ do
+      it "waits for canceled generation cleanup before launching the replacement" $ do
+        let gopts = C.GlobalOptions
+              { C.color = C.Never
+              , C.quiet = True
+              , C.noProgress = False
+              , C.timing = False
+              , C.tty = False
+              , C.verbose = False
+              , C.verboseZig = False
+              , C.jobs = 1
+              }
+        sched <- Compile.newCompileScheduler gopts 1
+        oldStarted <- newEmptyMVar
+        oldCleanupStarted <- newEmptyMVar
+        releaseOldCleanup <- newEmptyMVar
+        newStarted <- newEmptyMVar
+        _ <- Compile.startCompile sched 0 $ \_ ->
+          E.finally
+            (putMVar oldStarted () >> threadDelay 10000000)
+            (putMVar oldCleanupStarted () >> takeMVar releaseOldCleanup)
+        takeMVar oldStarted
+        nextCompile <- async $
+          Compile.startCompile sched 0 $ \_ -> putMVar newStarted ()
+        takeMVar oldCleanupStarted
+        E.finally
+          (timeout 100000 (takeMVar newStarted) `shouldReturn` Nothing)
+          (putMVar releaseOldCleanup ())
+        _ <- wait nextCompile
+        timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
 
     describe "Environment" $ do
       it "treats mismatched .tydb headers for loaded modules as stale" $ do

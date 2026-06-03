@@ -73,8 +73,6 @@ printFrontTiming ft =
             ++ " reconstruct_after_progress " ++ fmtTime (Compile.ftTypeAfterProgress ft)
             ++ " force " ++ fmtTime (Compile.ftTypeForce ft)
             ++ " hash " ++ fmtTime (Compile.ftTypeHash ft)
-            ++ " write_tydb " ++ fmtTime (Compile.ftTypeWrite ft)
-            ++ " docs " ++ fmtTime (Compile.ftTypeDocs ft)
 
 printBackTiming :: Compile.BackTiming -> IO ()
 printBackTiming bt =
@@ -207,9 +205,14 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       (Compile.getPubHashCached paths)
       (resolveNameHashMap paths)
       (\_ -> return ())
+      (\_ _ -> return ())
+      (\_ _ _ -> return ())
+      (return True)
+      (\_ -> return ())
     fr <- case res of
             Left diags -> error ("front pass failed with " ++ show (length diags) ++ " diagnostics")
             Right fr -> return fr
+    if runBack then return () else Compile.waitFrontOutputJobs fr
     E.evaluate (length (Compile.frIfaceTE fr) + length (Compile.frImps fr) + length (Compile.frNameHashes fr))
     t2 <- getCurrentTime
     s2 <- getStats statsEnabled
@@ -219,15 +222,19 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
 
     case (runBack, Compile.frBackJob fr) of
       (True, Just job) -> do
-        s3 <- getStats statsEnabled
-        t3 <- getCurrentTime
-        (_mtime, mtiming) <- Compile.runBackPasses benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job) (return True)
-        t4 <- getCurrentTime
-        s4 <- getStats statsEnabled
-        elapsed "back" t3 t4
-        printStatsMaybe "back_stats" s3 s4
-        forM_ mtiming printBackTiming
-      (True, Nothing) -> error "front pass did not return a back job"
+        (do
+            s3 <- getStats statsEnabled
+            t3 <- getCurrentTime
+            (_mtime, mtiming) <- Compile.runBackPasses benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job) (return True)
+            t4 <- getCurrentTime
+            s4 <- getStats statsEnabled
+            elapsed "back" t3 t4
+            printStatsMaybe "back_stats" s3 s4
+            forM_ mtiming printBackTiming)
+          `E.finally` Compile.waitFrontOutputJobs fr
+      (True, Nothing) -> do
+        Compile.waitFrontOutputJobs fr
+        error "front pass did not return a back job"
       (False, _) -> return ()
 
 main = do

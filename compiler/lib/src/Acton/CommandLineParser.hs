@@ -83,7 +83,7 @@ data CompileOptions   = CompileOptions {
                          hgen        :: Bool,
                          cgen        :: Bool,
                          ccmd        :: Bool,
-                         ty          :: Bool,
+                         tydb        :: Bool,
                          cpedantic   :: Bool,
                          dbg_no_lines:: Bool,
                          dbp         :: [String],
@@ -330,7 +330,7 @@ sigCompileOptions = mkSigCompileOptions
         , hgen = False
         , cgen = False
         , ccmd = False
-        , ty = False
+        , tydb = False
         , cpedantic = False
         , dbg_no_lines = False
         , dbp = []
@@ -368,7 +368,7 @@ compileOptions = CompileOptions
         <*> switch (long "hgen"         <> help "Show the generated .h header")
         <*> switch (long "cgen"         <> help "Show the generated .c code")
         <*> switch (long "ccmd"         <> help "Show CC / LD commands")
-        <*> switch (long "ty"           <> help "Write .tydb directory to src file directory")
+        <*> switch (long "tydb"         <> help "Write .tydb directory to src file directory")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
         <*> many (strOption (long "dbp" <> metavar "MOD[:NAME,...]" <> help "Force deferred back passes for a module, optionally selecting root names"))

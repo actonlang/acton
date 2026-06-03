@@ -464,13 +464,13 @@ compilerTests =
           assertBool "changed consumer C should omit previously selected root" (not ("make_box" `isInfixOf` providerC1b))
           sameSelectionLog <- assertOk "cached dbp selection is up to date" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .ty" `isInfixOf` sameSelectionLog)
+          assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .tydb" `isInfixOf` sameSelectionLog)
           assertBool "same selection should skip provider back passes" ("generated code up to date" `isInfixOf` sameSelectionLog)
           removeFile (typesDir </> "provider.c")
           removeFile (typesDir </> "provider.h")
           secondLog <- assertOk "cached dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "cached consumer should be reused" ("Fresh main: using cached .ty" `isInfixOf` secondLog)
+          assertBool "cached consumer should be reused" ("Fresh main: using cached .tydb" `isInfixOf` secondLog)
           assertBool "cached build should collect provider interest from headers" ("interested names 1" `isInfixOf` secondLog)
           assertBool "cached build should still select the dependency closure" ("selected closure" `isInfixOf` secondLog)
           removeFile (typesDir </> "provider.c")
@@ -1620,7 +1620,7 @@ actonProjTests =
             barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
             barC    = proj </> "out/types/bar.c"
             barH    = proj </> "out/types/bar.h"
-            barTy   = proj </> "out/types/bar.tydb"
+            barTydb = proj </> "out/types/bar.tydb"
         createDirectoryIfMissing True srcDir
         writeFile fooAct fooContent
         writeFile barAct barContent
@@ -1633,23 +1633,23 @@ actonProjTests =
         (returnCode, _, _) <- readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "src/foo.act"]){ cwd = Just proj } ""
         assertEqual "acton single-file build should succeed" ExitSuccess returnCode
         mapM_ (\p -> doesFileExist p >>= assertBool (p ++ " should exist")) [barC, barH]
-        doesDirectoryExist barTy >>= assertBool (barTy ++ " should exist")
+        doesDirectoryExist barTydb >>= assertBool (barTydb ++ " should exist")
 
-  , testCase "--ty copies nested module interface next to source" $ do
-        withSystemTempDirectory "acton-ty-nested" $ \proj -> do
+  , testCase "--tydb copies nested module interface next to source" $ do
+        withSystemTempDirectory "acton-tydb-nested" $ \proj -> do
           let srcDir = proj </> "src" </> "pkg"
               nestedAct = srcDir </> "nested.act"
-              nestedTy = srcDir </> "nested.tydb"
-              flatTy = proj </> "src" </> "pkg.nested.tydb"
+              nestedTydb = srcDir </> "nested.tydb"
+              flatTydb = proj </> "src" </> "pkg.nested.tydb"
           createDirectoryIfMissing True srcDir
           writeFile (proj </> "Build.act") "name = \"ty_nested\"\nfingerprint = 0x36cff6d86d8575b6\n"
           writeFile nestedAct "actor main(env):\n    env.exit(0)\n"
           acton <- canonicalizePath "../../dist/bin/acton"
           (returnCode, cmdOut, cmdErr) <-
-            readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "--ty", "src/pkg/nested.act"]){ cwd = Just proj } ""
-          assertEqual ("acton --ty should succeed\nSTDOUT:\n" ++ cmdOut ++ "\nSTDERR:\n" ++ cmdErr) ExitSuccess returnCode
-          doesDirectoryExist nestedTy >>= assertBool (nestedTy ++ " should exist")
-          doesDirectoryExist flatTy >>= assertBool (flatTy ++ " should not exist") . not
+            readCreateProcessWithExitCode (proc acton ["--skip-build", "--always-build", "--tydb", "src/pkg/nested.act"]){ cwd = Just proj } ""
+          assertEqual ("acton --tydb should succeed\nSTDOUT:\n" ++ cmdOut ++ "\nSTDERR:\n" ++ cmdErr) ExitSuccess returnCode
+          doesDirectoryExist nestedTydb >>= assertBool (nestedTydb ++ " should exist")
+          doesDirectoryExist flatTydb >>= assertBool (flatTydb ++ " should not exist") . not
 
   -- Full rebuild should prune roots / bins when the source module is removed.
   , testCase "full build prunes stale roots and bins" $ do

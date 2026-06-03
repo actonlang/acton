@@ -16,6 +16,8 @@ Resolving dependencies (fetching if missing)...
    c  Parse done                                                            0.000 s
   Stale c: source changed
    c  Type check done                                                       0.000 s
+   a  Wrote .tydb                                                           0.000 s
+   a  Generated docs                                                        0.000 s
      Back normalize done: a                                                 0.000 s
      Back deactorize done: a                                                0.000 s
      Back cps done: a                                                       0.000 s
@@ -25,6 +27,8 @@ Resolving dependencies (fetching if missing)...
      Back render done: a                                                    0.000 s
      Back write done: a                                                     0.000 s
    a  Compilation done                                                      0.000 s
+   b  Wrote .tydb                                                           0.000 s
+   b  Generated docs                                                        0.000 s
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s
@@ -34,6 +38,8 @@ Resolving dependencies (fetching if missing)...
      Back render done: b                                                    0.000 s
      Back write done: b                                                     0.000 s
    b  Compilation done                                                      0.000 s
+   c  Wrote .tydb                                                           0.000 s
+   c  Generated docs                                                        0.000 s
      Back normalize done: c                                                 0.000 s
      Back deactorize done: c                                                0.000 s
      Back cps done: c                                                       0.000 s
