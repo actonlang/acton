@@ -506,18 +506,18 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	cp -a "$</"* "$(TD)/$@"
 
 # top level targets
-.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
+.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib test-stdlib-run online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
 # These run stack against libacton/acton, which link liblmdb, so the bdeps
 # archives must exist first. (test, test-stdlib, test-incremental, online-tests
 # already pull it in transitively via dist/bin/acton[c].)
 test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
-test: dist/bin/acton
+test: dist/bin/acton dist/std
 	cd compiler && stack test libacton acton:incremental
 	# Exclude the cross-compilation group from the default run: it builds for
 	# many targets and bloats ~/.cache/acton. Run it via `make test-cross-compile`.
 	cd compiler && stack test acton:test_acton --ta '-p "! /cross-compilation/"'
-	$(MAKE) test-stdlib
+	$(MAKE) test-stdlib-run
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
 
@@ -583,7 +583,9 @@ test-rts:
 test-rts-db:
 	$(MAKE) -C test
 
-test-stdlib: dist/bin/acton dist/std
+test-stdlib: dist/bin/acton dist/std test-stdlib-run
+
+test-stdlib-run:
 	cd compiler && stack test acton --ta '-p "stdlib"'
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
