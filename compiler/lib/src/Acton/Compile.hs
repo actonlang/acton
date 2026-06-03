@@ -1493,12 +1493,22 @@ importsOf (ParseErrorTask _ _) = []
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
-resolveProviders :: [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders order modSets imps =
-    M.fromList $ catMaybes $ map (\mn -> fmap (\p -> (mn, TaskKey p mn)) (findProvider mn)) imps
+resolveProviders :: String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders proj order modSets imps =
+    M.fromList $ catMaybes $ map findProvider imps
   where
-    findProvider mn = listToMaybe [ p | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
+    local           = head order
+    set0            = M.lookup local modSets
+    findProvider mn = case set0 of
+                        Just s | Data.Set.member mn' s ->
+                            Just (mn, TaskKey local mn')
+                        _ ->
+                            listToMaybe [ (mn, TaskKey p mn) | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets)]
+      where mn'     = A.modName (proj : A.modPath mn)
 
+
+type ProjDir = FilePath
+type ActFile = FilePath
 
 -- | Build GlobalTasks for all discovered projects.
 -- Crawls project sources, resolves provider edges, and optionally limits the
@@ -1510,12 +1520,20 @@ buildGlobalTasks :: Source.SourceProvider
                  -> Maybe [String]                  -- optional seed source files; Nothing = all modules
                  -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
 buildGlobalTasks sp gopts opts projMap mSeeds = do
+    -- perProj :: [(ProjCtx, (ActFile,A.ModName))]
     perProj <- forM (M.elems projMap) $ \ctx -> do
                   mods <- enumerateProjectModules ctx
                   return (ctx, mods)
-    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
-        modSets = M.map Data.Set.fromList (M.map M.keys modMaps)
-        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+    let -- Declared modules mapped to their source files (per project)
+        modMaps :: M.Map ProjDir (M.Map A.ModName ActFile)
+        modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
+        -- Declared modules (per project)
+        modSets :: M.Map ProjDir (Data.Set.Set A.ModName)
+        modSets = M.map (Data.Set.fromList . M.keys) modMaps
+        -- Project dependencies, in their BuildSpec order (per project)
+        orderCache :: M.Map ProjDir [ProjDir]
+        orderCache = M.fromList [ (projRoot ctx, projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+        -- Declared modules in all reachable projects (paired with their project paths)
         allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
@@ -1538,7 +1556,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
               paths <- pathsForModule opts projMap ctx (tkMod k)
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  providers = resolveProviders order modSets (importsOf task)
+                  providers = resolveProviders (projName paths) order modSets (importsOf task)
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
@@ -4264,7 +4282,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
-                             (projName,depTypePaths) <- if isTmp then return ("-",[]) else collectDepTypePaths projPath depOverrides
+                             (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -4294,7 +4312,7 @@ moduleNameFromFile srcBase proj actFile = do
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-    return $ A.modName $ if proj `elem` ["-","base"] then names else proj:names
+    return $ A.modName $ if proj `elem` ["","base"] then names else proj:names
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
