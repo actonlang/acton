@@ -1578,7 +1578,7 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
       case byPath of
         Just k -> return (Just k)
         Nothing -> do
-          mn <- moduleNameFromFile (srcDir pathsRoot) absF
+          mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absF
           return $ listToMaybe [ gtKey t
                                | t <- ts
                                , tkProj (gtKey t) == rootProj
@@ -4261,7 +4261,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
-                             (projName,depTypePaths) <- if isTmp then return (fileBody,[]) else collectDepTypePaths projPath depOverrides
+                             (projName,depTypePaths) <- if isTmp then return ("-",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
@@ -4285,12 +4285,13 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
 -- | Derive a module name from a file path under a project's src root.
 -- The result uses path segments and strips the .act extension.
-moduleNameFromFile :: FilePath -> FilePath -> IO A.ModName
-moduleNameFromFile srcBase actFile = do
+moduleNameFromFile :: FilePath -> String -> FilePath -> IO A.ModName
+moduleNameFromFile srcBase proj actFile = do
     base <- normalizePathSafe srcBase
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
-    return $ A.modName (splitDirectories rel)
+        names = splitDirectories rel
+    return $ A.modName $ if proj `elem` ["-","base"] then names else proj:names
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
@@ -4302,8 +4303,9 @@ enumerateProjectModules ctx = do
       else do
         files <- getFilesRecursive (projSrcDir ctx)
         let actFiles = filter (\f -> takeExtension f == ".act") files
+            proj = BuildSpec.specName $ projBuildSpec ctx
         forM actFiles $ \f -> do
-          mn <- moduleNameFromFile (projSrcDir ctx) f
+          mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
 
 -- | Remove stale generated module artifacts when source modules disappear.
