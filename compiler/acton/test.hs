@@ -786,8 +786,10 @@ compilerTests =
                     , "zig_dependencies = {}"
                     , ""
                     ]
-                runBuild dir = readCreateProcessWithExitCode
-                  (proc actonExe ["build", "--always-build"]) { cwd = Just dir, env = Just envWithHome } ""
+                runBuild args dir = readCreateProcessWithExitCode
+                  (proc actonExe args) { cwd = Just dir, env = Just envWithHome } ""
+                runBuildFull = runBuild ["build", "--always-build"]
+                runBuildSkipFinal = runBuild ["build", "--always-build", "--skip-build"]
                 assertBuildOk label (code, out, err) =
                   when (code /= ExitSuccess) $
                     assertFailure (label ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
@@ -833,10 +835,10 @@ compilerTests =
               , "    env.exit(0)"
               ]
 
-            assertBuildOk "initial build of mid dependency" =<< runBuild midProj
+            assertBuildOk "initial build of mid dependency" =<< runBuildSkipFinal midProj
             staleCExists <- doesFileExist (midProj </> "out" </> "types" </> "mid" </> "stale.c")
             assertBool "expected stale dependency C output to exist" staleCExists
-            assertBuildOk "build of app with transitive dep override" =<< runBuild appProj
+            assertBuildOk "build of app with transitive dep override" =<< runBuildFull appProj
   , testCase "build.zig.zon name matches Build.act" $ do
         let prefix = "acton-long-project-name-12345678901234567890-"
         withSystemTempDirectory prefix $ \proj -> do
