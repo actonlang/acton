@@ -51,7 +51,7 @@ jobs:
           echo "build_time=$(date -u '+%Y%m%d.%-H.%-M')" >> "$GITHUB_OUTPUT"
           echo "date=$(date -u '+%Y%m%d')" >> "$GITHUB_OUTPUT"
 
-  # The Acton/zig compile cache uses a stable per-platform key
+  # The Acton Zig compile caches use a stable per-platform key
   # (acton-zig-<os>-<version>-<arch>) that the nightly/manual producer refreshes
   # each run. GitHub Actions caches are immutable, so actions/cache/save silently
   # skips a key that already exists; to actually refresh it we delete the old
@@ -153,17 +153,18 @@ jobs:
           # blowing the per-job VM disk). The cold Haskell rebuild only happens on
           # the run that actually changes stack.yaml.
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
-      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
+      # Restore the reusable Acton Zig caches for non-nightly runs (PRs and pushes).
       # The nightly (schedule) run intentionally skips this so it builds cold and
       # produces a clean, complete snapshot (saved after tests below) that PRs and
-      # pushes restore the following day. Freshness comes from the date-stamped key
-      # plus the nightly producer, not from cache eviction.
-      - name: "Restore Acton compile cache (~/.cache/acton)"
+      # pushes restore the following day. Freshness comes from evicting the old
+      # stable key before the producer saves a replacement.
+      - name: "Restore Acton Zig caches"
         if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Install build prerequisites"
         run: |
@@ -198,12 +199,13 @@ jobs:
       # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
       # PRs a warm cache, but requires the build/release steps to have succeeded so
       # a build failure can't poison the date-stamped key with a partial cache.
-      - name: "Save Acton compile cache (~/.cache/acton)"
+      - name: "Save Acton Zig caches"
         if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
@@ -307,16 +309,17 @@ jobs:
           # blowing the per-job VM disk). The cold Haskell rebuild only happens on
           # the run that actually changes stack.yaml.
           key: stack-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock') }}
-      # Restore the Acton/zig compile cache for non-nightly runs (PRs and pushes).
+      # Restore the reusable Acton Zig caches for non-nightly runs (PRs and pushes).
       # The nightly (schedule) run skips this so it builds cold and saves a clean,
       # complete snapshot (after tests below) that PRs and pushes restore the next
       # day. See test-macos for the full rationale.
-      - name: "Restore Acton compile cache (~/.cache/acton)"
+      - name: "Restore Acton Zig caches"
         if: matrix.cache == true && github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       # Disk visibility: these containers have hit ENOSPC during cache restore.
       # Print usage after restore so a future disk problem shows up as data
@@ -394,12 +397,13 @@ jobs:
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot (runs even if tests flake, but requires the build/release
       # steps to have succeeded so a build failure can't poison the day's key).
-      - name: "Save Acton compile cache (~/.cache/acton)"
+      - name: "Save Acton Zig caches"
         if: ${{ !cancelled() && matrix.cache == true && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' && steps.build_release.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
@@ -690,16 +694,17 @@ jobs:
           sudo apt update
           sudo apt install -y ./deb/acton_*.deb
           acton version
-      # Cross-compiling all targets cold is slow, so cache the zig artifacts.
+      # Cross-compiling all targets cold is slow, so cache the Zig artifacts.
       # Same producer/consumer model as the test-X jobs: PRs and pushes restore
       # only; the nightly/manual producer builds cold (skips restore) and saves a
       # fresh snapshot, after evict-stale-caches has cleared the old one.
-      - name: "Restore cross-compile cache (~/.cache/acton)"
+      - name: "Restore cross-compile Zig caches"
         if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-cross-${{ matrix.arch }}
       # Cross-compile hello for each target. --db on targets that support it;
       # Windows has no RTS thread support, so those use --no-threads (per
@@ -717,12 +722,13 @@ jobs:
           build x86_64-linux-musl --db
           build x86_64-windows-gnu --no-threads
       # Producer only: save the freshly-built cross-compile cache.
-      - name: "Save cross-compile cache (~/.cache/acton)"
+      - name: "Save cross-compile Zig caches"
         if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.cross_compile.outcome == 'success' }}
         uses: actions/cache/save@v5
         with:
           path: |
-            ~/.cache/acton/
+            ~/.cache/acton/zig-local-cache/
+            ~/.cache/acton/zig-global-cache/
           key: acton-cross-${{ matrix.arch }}
       - name: "Show disk usage (after cross-compile)"
         if: always()
