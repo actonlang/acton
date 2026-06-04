@@ -2603,15 +2603,18 @@ genBuildZig template spec zigDeps depModuleOpts =
   where
     pkgDepDef (name, _) =
       let selectedCsv = M.findWithDefault "" name depModuleOpts
-      in unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
-                 , "        .target = target,"
-                 , "        .optimize = optimize,"
-                 , "        .no_threads = no_threads,"
-                 , "        .db = db,"
-                 , "        .acton_modules = " ++ show selectedCsv ++ ","
-                 , "        .acton_root_stubs = \"\","
-                 , "    });"
-                 ]
+          moduleOpts
+            | name == "std" = []
+            | otherwise     = [ "        .acton_modules = " ++ show selectedCsv ++ ","
+                              , "        .acton_root_stubs = \"\","
+                              ]
+      in unlines $ [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+                   , "        .target = target,"
+                   , "        .optimize = optimize,"
+                   , "        .no_threads = no_threads,"
+                   , "        .db = db,"
+                   ] ++ moduleOpts ++
+                   [ "    });" ]
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
       ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"

@@ -1403,7 +1403,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
         wit->$class->append(wit,args,to$str(argv[i]));
 
     env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
-    env_actor->nr_wthreads = toB_int(num_wthreads);
+    env_actor->nr_wthreads = num_wthreads;
 
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();

@@ -1,4 +1,4 @@
-B_NoneType B_hasherD___init__ (B_hasher self, B_u64 seed) {
+B_NoneType B_hasherD___init__ (B_hasher self, B_u64 seed) {  // seed is optional
     self->_hasher = zig_hash_wyhash_init(seed ? fromB_u64(seed) : 0);
     return B_None;
 }
@@ -8,10 +8,9 @@ B_NoneType B_hasherD_update (B_hasher self, B_bytes data) {
     return B_None;
 }
 
-B_u64 B_hasherD_finalize (B_hasher self) {
+uint64_t B_hasherD_finalize (B_hasher self) {
     uint64_t h = zig_hash_wyhash_final(self->_hasher);
-    B_u64 result = toB_u64(h);
-    return result;
+    return h;
 }
 
 B_bool B_hasherD___bool__(B_hasher h) {

@@ -57,3 +57,4 @@
 #include "staticWitnesses.c"
 #include "utils.c"
 #include "hasher.c"
+#include "closures.c"

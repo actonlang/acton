@@ -22,12 +22,12 @@ $R fileQ_FSD__pin_affinityG_local (fileQ_FS self, $Cont c$cont) {
 
 // def is_dir(self) -> bool:
 B_bool fileQ_FileStatD_is_dir (fileQ_FileStat self) {
-    return toB_bool(S_ISDIR(fromB_u64(self->mode)));
+    return toB_bool(S_ISDIR(self->mode));
 }
 
 // def is_file(self) -> bool:
 B_bool fileQ_FileStatD_is_file (fileQ_FileStat self) {
-    return toB_bool(S_ISREG(fromB_u64(self->mode)));
+    return toB_bool(S_ISREG(self->mode));
 }
 
 // def is_symlink(self) -> bool:
@@ -36,18 +36,18 @@ B_bool fileQ_FileStatD_is_symlink (fileQ_FileStat self) {
     // TODO: do better
     return B_False;
 #else
-    return toB_bool(S_ISLNK(fromB_u64(self->mode)));
+    return toB_bool(S_ISLNK(self->mode));
 #endif
 }
 
 // def is_block_device(self) -> bool:
 B_bool fileQ_FileStatD_is_block_device (fileQ_FileStat self) {
-    return toB_bool(S_ISBLK(fromB_u64(self->mode)));
+    return toB_bool(S_ISBLK(self->mode));
 }
 
 // def is_char_device(self) -> bool:
 B_bool fileQ_FileStatD_is_char_device (fileQ_FileStat self) {
-    return toB_bool(S_ISCHR(fromB_u64(self->mode)));
+    return toB_bool(S_ISCHR(self->mode));
 }
 
 // def is_fifo(self) -> bool:
@@ -56,7 +56,7 @@ B_bool fileQ_FileStatD_is_fifo (fileQ_FileStat self) {
     // TODO: do better
     return B_False;
 #else
-    return toB_bool(S_ISFIFO(fromB_u64(self->mode)));
+    return toB_bool(S_ISFIFO(self->mode));
 #endif
 }
 
@@ -66,7 +66,7 @@ B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
     // TODO: do better
     return B_False;
 #else
-    return toB_bool(S_ISSOCK(fromB_u64(self->mode)));
+    return toB_bool(S_ISSOCK(self->mode));
 #endif
 }
 
@@ -181,7 +181,7 @@ $R fileQ_FSD_mktmpdirG_local (fileQ_FS self, $Cont C_cont, B_str prefix) {
     }
 
     // libuv stores the resolved path in req->path, not in the template buffer.
-    B_str path = to$str(req->path);
+    B_str path = to$str((char *)req->path);
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, path);
 }
@@ -202,7 +202,7 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
     }
     uv_dirent_t ent;
     while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
-        wit->$class->append(wit, res, to$str(ent.name));
+        wit->$class->append(wit, res, to$str((char *)ent.name));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, res);
@@ -221,22 +221,22 @@ $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
-                                             toB_u64(stat->st_dev),
-                                             toB_u64(stat->st_mode),
-                                             toB_u64(stat->st_nlink),
-                                             toB_u64(stat->st_uid),
-                                             toB_u64(stat->st_gid),
-                                             toB_u64(stat->st_rdev),
-                                             toB_u64(stat->st_ino),
-                                             toB_u64(stat->st_size),
-                                             toB_u64(stat->st_blksize),
-                                             toB_u64(stat->st_blocks),
-                                             toB_u64(stat->st_flags),
-                                             toB_u64(stat->st_gen),
-                                             toB_float(stat->st_atim.tv_sec + stat->st_atim.tv_nsec / 1e9),
-                                             toB_float(stat->st_mtim.tv_sec + stat->st_mtim.tv_nsec / 1e9),
-                                             toB_float(stat->st_ctim.tv_sec + stat->st_ctim.tv_nsec / 1e9),
-                                             toB_float(stat->st_birthtim.tv_sec + stat->st_birthtim.tv_nsec / 1e9)
+                                             (uint64_t)stat->st_dev,
+                                             (uint64_t)stat->st_mode,
+                                             (uint64_t)stat->st_nlink,
+                                             (uint64_t)stat->st_uid,
+                                             (uint64_t)stat->st_gid,
+                                             (uint64_t)stat->st_rdev,
+                                             (uint64_t)stat->st_ino,
+                                             (uint64_t)stat->st_size,
+                                             (uint64_t)stat->st_blksize,
+                                             (uint64_t)stat->st_blocks,
+                                             (uint64_t)stat->st_flags,
+                                             (uint64_t)stat->st_gen,
+                                             stat->st_atim.tv_sec + stat->st_atim.tv_nsec / 1e9,
+                                             stat->st_mtim.tv_sec + stat->st_mtim.tv_nsec / 1e9,
+                                             stat->st_ctim.tv_sec + stat->st_ctim.tv_nsec / 1e9,
+                                             stat->st_birthtim.tv_sec + stat->st_birthtim.tv_nsec / 1e9
                                              );
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, res);
@@ -288,22 +288,22 @@ $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
-                                             toB_u64(stat->st_dev),
-                                             toB_u64(stat->st_mode),
-                                             toB_u64(stat->st_nlink),
-                                             toB_u64(stat->st_uid),
-                                             toB_u64(stat->st_gid),
-                                             toB_u64(stat->st_rdev),
-                                             toB_u64(stat->st_ino),
-                                             toB_u64(stat->st_size),
-                                             toB_u64(stat->st_blksize),
-                                             toB_u64(stat->st_blocks),
-                                             toB_u64(stat->st_flags),
-                                             toB_u64(stat->st_gen),
-                                             toB_float(stat->st_atim.tv_sec + stat->st_atim.tv_nsec / 1e9),
-                                             toB_float(stat->st_mtim.tv_sec + stat->st_mtim.tv_nsec / 1e9),
-                                             toB_float(stat->st_ctim.tv_sec + stat->st_ctim.tv_nsec / 1e9),
-                                             toB_float(stat->st_birthtim.tv_sec + stat->st_birthtim.tv_nsec / 1e9)
+                                             (uint64_t)stat->st_dev,
+                                             (uint64_t)stat->st_mode,
+                                             (uint64_t)stat->st_nlink,
+                                             (uint64_t)stat->st_uid,
+                                             (uint64_t)stat->st_gid,
+                                             (uint64_t)stat->st_rdev,
+                                             (uint64_t)stat->st_ino,
+                                             (uint64_t)stat->st_size,
+                                             (uint64_t)stat->st_blksize,
+                                             (uint64_t)stat->st_blocks,
+                                             (uint64_t)stat->st_flags,
+                                             (uint64_t)stat->st_gen,
+                                             stat->st_atim.tv_sec + stat->st_atim.tv_nsec / 1e9,
+                                             stat->st_mtim.tv_sec + stat->st_mtim.tv_nsec / 1e9,
+                                             stat->st_ctim.tv_sec + stat->st_ctim.tv_nsec / 1e9,
+                                             stat->st_birthtim.tv_sec + stat->st_birthtim.tv_nsec / 1e9
                                              );
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, res);
@@ -346,7 +346,7 @@ $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
         $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
 
     }
-    self->_fd = toB_int(r);
+    self->_fd = r;
     uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
 }
@@ -355,7 +355,7 @@ $R fileQ_ReadFileD__lock_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
 #if defined(_WIN32) || defined(_WIN64)
     assert(0 && "fileQ_ReadFileD__lock_fileG_local not implemented on Windows");
 #else
-    int r = flock(fromB_int(self->_fd), LOCK_EX + LOCK_NB);
+    int r = flock(self->_fd, LOCK_EX + LOCK_NB);
     if (r < 0) {
         char errmsg[1024] = "Error locking file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -368,7 +368,7 @@ $R fileQ_ReadFileD__lock_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
 
 $R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
+    int r = uv_fs_close(get_uv_loop(), req, (uv_file)self->_fd, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -385,14 +385,14 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     char buf[1024] = {0};
     uv_buf_t iovec = uv_buf_init(buf, sizeof(buf));
-    int r = uv_fs_read(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &iovec, 1, -1, NULL);
+    int r = uv_fs_read(get_uv_loop(), req, (uv_file)self->_fd, &iovec, 1, -1, NULL);
     B_list res = B_listD_new(0);
     res->length = 0;
     while (r > 0) {
         wit->$class->append(wit, res, to$bytesD_len(buf,r));
         uv_fs_req_cleanup(req);
         iovec = uv_buf_init(buf, sizeof(buf));
-        r = uv_fs_read(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &iovec, 1, -1, NULL);
+        r = uv_fs_read(get_uv_loop(), req, (uv_file)self->_fd, &iovec, 1, -1, NULL);
     }
     if (r < 0) {
         char errmsg[1024] = "Error reading from file: ";
@@ -420,7 +420,7 @@ $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
         $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
 
     }
-    self->_fd = toB_int(r);
+    self->_fd = r;
     uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
 }
@@ -429,7 +429,7 @@ $R fileQ_WriteFileD__lock_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
 #if defined(_WIN32) || defined(_WIN64)
     assert(0 && "fileQ_ReadFileD__lock_fileG_local not implemented on Windows");
 #else
-    int r = flock(fromB_int(self->_fd), LOCK_EX + LOCK_NB);
+    int r = flock(self->_fd, LOCK_EX + LOCK_NB);
     if (r < 0) {
         char errmsg[1024] = "Error locking file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -443,7 +443,7 @@ $R fileQ_WriteFileD__lock_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
 
 $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_close(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), NULL);
+    int r = uv_fs_close(get_uv_loop(), req, (uv_file)self->_fd, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error closing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -459,7 +459,7 @@ $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes da
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
 
-    int r = uv_fs_write(get_uv_loop(), req, (uv_file)fromB_int(self->_fd), &buf, 1, 0, NULL);
+    int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, 0, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error writing to file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));

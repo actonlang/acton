@@ -507,6 +507,7 @@ instance Pretty Type where
     pretty r@TNil{rkind=PRow}       = parens empty
     pretty r@TNil{rkind=KRow}       = parens empty
     pretty (TFX _ fx)               = pretty fx
+    pretty (TUnboxed _ t)           = text "UNBOXED" <+> pretty t
 
 prettyFXnoPure (TFX _ FXPure)       = empty
 prettyFXnoPure t                    = pretty t

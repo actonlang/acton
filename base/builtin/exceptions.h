@@ -177,4 +177,4 @@ $CNT $CNTG_new();
 $RET $RETG_new(B_value);
 
 $WORD $raiseValueError(B_str str);
-    
+ 

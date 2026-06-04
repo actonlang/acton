@@ -39,6 +39,6 @@ long stdQ_randomQ_randlong (long min, long max) {
     return min + r%range;
 }
 
-int64_t stdQ_randomQ_U_randint(int64_t min, int64_t max) {
+int64_t stdQ_randomQ_randint(int64_t min, int64_t max) {
     return stdQ_randomQ_randlong(min,max);
 }

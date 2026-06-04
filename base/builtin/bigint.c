@@ -34,7 +34,7 @@ void zz_malloc_fit(zz_ptr res, len_t m) {
     res->alloc = m;
 }
 
-B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b);
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b);
 
 B_bigint B_bigintG_new(B_atom a, B_int base) {
     if (base) {
@@ -123,7 +123,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         double m = frexp(aval,&e);
         if (e>52) {
             B_bigint c = toB_bigint((long)(m*4503599627370496.0)); // (1<< 52); 
-            B_int d = toB_int(e-52);
+            int64_t d = e-52;
             return  B_IntegralD_bigintD___lshift__(NULL,c,d);
         } else {
             long al = (long)aval;
@@ -282,7 +282,7 @@ B_bigint B_IntegralD_bigintD_conjugate(B_IntegralD_bigint wit,  B_bigint a) {
     return a;
 }
 
-B_float B_IntegralD_bigintD___float__ (B_IntegralD_bigint wit, B_bigint n) {
+double B_IntegralD_bigintD___float__ (B_IntegralD_bigint wit, B_bigint n) {
     return B_floatG_new((B_atom)n);
 }
 
@@ -327,7 +327,7 @@ $WORD B_IntegralD_bigintD_denominator (B_IntegralD_bigint wit, B_bigint n, B_Int
     return wit2->$class->__fromatom__(wit2,(B_atom)res);
 }
   
-B_int B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
+int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
     unsigned long k = n->val.n[0];
     long sz = n->val.size;
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
@@ -335,10 +335,10 @@ B_int B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
         snprintf(errmsg, sizeof(errmsg), "bigint.__int__: value %s out of range for type int",get_str(&n->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_int(k*sz);
+    return k*sz;
 }
 
-B_int B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
+int64_t B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
     unsigned long k = n->val.n[0];
     long sz = n->val.size;
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
@@ -346,7 +346,7 @@ B_int B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
         snprintf(errmsg, sizeof(errmsg), "bigint.__index__: value %s out of range for type int",get_str(&n->val));
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
-    return toB_int(k*sz);
+    return k*sz;
 }
 
 B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
@@ -377,10 +377,10 @@ B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigin
     return t->components[1];
 }
 
-B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
+B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_int(b);
+    long bval = b;
     if (ma==0 || bval==0)
         return a;
     if (bval<0) {
@@ -408,10 +408,10 @@ B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, B_i
     return res; 
 }
 
-B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, B_int b) {
+B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b) {
     zz_struct aval = a->val;
     long ma = aval.size;
-    long bval = fromB_int(b);
+    long bval = b;
     if (ma==0 || bval==0)
         return a;
     if (bval<0)  {
@@ -628,7 +628,7 @@ B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
     zz_div(&ared->val,aval,&g->val);
     zz_div(&bred->val,bval,&g->val);
     zz_divrem(&q->val,&r->val,&ared->val,&bred->val);
-    return to$float(B_floatG_new((B_atom)q)->val +  B_floatG_new((B_atom)r)->val/ B_floatG_new((B_atom)bred)->val);
+    return toB_float((B_floatG_new((B_atom)q) +  B_floatG_new((B_atom)r)/ B_floatG_new((B_atom)bred)));
 }
 
 // B_OrdD_bigint  ////////////////////////////////////////////////////////////////////////////////////////

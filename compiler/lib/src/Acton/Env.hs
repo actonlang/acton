@@ -60,6 +60,7 @@ data EnvF x                 = EnvF {
                                 thismod    :: Maybe ModName,
                                 context    :: [EnvCtx],
                                 qlevel     :: Int,
+                                gtypes     :: TEnv,      -- when traversing definition of a class c, gtypes contains result of findAttrSchemas c env 
                                 envX       :: x
                               } deriving (Show)
 
@@ -74,7 +75,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      hnames = hnames env, closedHNames = closedHNames env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
-                                     context = context env, qlevel = qlevel env, envX = x }
+                                     context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -104,6 +105,7 @@ inClass env                 = contextIs env CtxClass
 
 inLoop env                  = contextIs env CtxLoop
 
+setGtypes env te             = env{ gtypes = te }
 
 mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
 mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
@@ -247,6 +249,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             thismod = Nothing,
                                             context = [],
                                             qlevel = 0,
+                                            gtypes = [],
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
                                 let NModule _ envBuiltin builtinDocstring = nmod
@@ -263,6 +266,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
+                                                 gtypes = [],
                                                  envX = () }
                                     env = importAll mBuiltin envBuiltinPublic env0
                                 return env
@@ -647,12 +651,28 @@ findAttrInfoIn n            = scan Nothing
           | x == n          = scan (Just i) xs
           | otherwise       = scan r xs
 
+-- attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
+-- attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
+--   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
+--         aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
+--         (q,us,_)            = findConName qn env
+--         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+-- The above function is replaced by the following version, as suggested in mail from Johan 260429.
+
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
 attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
-        aenv                = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
-        (q,us,_)            = findConName qn env
+        aenv                = attrEnv env qn
+
+attrEnv                     :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
+attrEnv env qn              = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
+  where (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
+findAttrSchemas             :: EnvF x -> QName -> TEnv
+findAttrSchemas env qn      = [ (n,i) | n <- ns, let Just (_,i) = lookup n aenv ]
+  where ns                  = nub $ dom aenv
+        aenv                = reverse $ attrEnv env qn
 
 inheritedAttrs              :: EnvF x -> QName -> [(QName,Name)]
 inheritedAttrs              = attributes' f
@@ -1019,8 +1039,10 @@ lub env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
 lub env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> lub env r1 r2
-
+lub env (TUnboxed _ t1) t2              = lub env t1 t2
+lub env t1 (TUnboxed _ t2)              = lub env t1 t2
 lub env t1 t2                           = Nothing
+
 
 
 lub2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2

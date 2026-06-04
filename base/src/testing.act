@@ -474,7 +474,7 @@ class UnitTest(Test):
         self.module = module
 
     def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
-        output = None
+        output: ?str = None
         success = None
         exception = None
         try:
@@ -484,12 +484,12 @@ class UnitTest(Test):
         except SkipTest as e:
             success = True
             exception = e
-        except AssertionError as e:
+        except AssertionError as assertion_error:
             success = False
-            exception = e
-        except Exception as e:
+            exception = assertion_error
+        except Exception as exception_error:
             success = None
-            exception = e
+            exception = exception_error
         report_result(success, exception, output)
 
 class SimpleSyncTest(Test):
@@ -510,12 +510,12 @@ class SimpleSyncTest(Test):
         except SkipTest as e:
             success = True
             exception = e
-        except AssertionError as e:
+        except AssertionError as assertion_error:
             success = False
-            exception = e
-        except Exception as e:
+            exception = assertion_error
+        except Exception as exception_error:
             success = None
-            exception = e
+            exception = exception_error
         report_result(success, exception, output)
 
 class SyncTest(Test):
@@ -536,12 +536,12 @@ class SyncTest(Test):
         except SkipTest as e:
             success = True
             exception = e
-        except AssertionError as e:
+        except AssertionError as assertion_error:
             success = False
-            exception = e
-        except Exception as e:
+            exception = assertion_error
+        except Exception as exception_error:
             success = None
-            exception = e
+            exception = exception_error
         report_result(success, exception, output)
 
 class AsyncTest(Test):
@@ -1968,6 +1968,6 @@ actor test_runner(env: Env,
     except argparse.PrintUsage as exc:
         print(exc.error_message)
         env.exit(0)
-    except argparse.ArgumentError as exc:
-        print(exc.error_message)
+    except argparse.ArgumentError as arg_error:
+        print(arg_error.error_message)
         env.exit(1)

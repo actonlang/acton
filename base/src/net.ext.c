@@ -182,9 +182,9 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
             netQ_TCPConnection self = stream->data;
             if ((intptr_t)stream != -1)
                 uv_close((uv_handle_t *)stream, NULL);
-            self->_sock = toB_int(-1);
-            self->_sock4 = toB_int(-1);
-            self->_sock6 = toB_int(-1);
+            self->_sock = -1LL;
+            self->_sock4 = -1LL;
+            self->_sock6 = -1LL;
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
@@ -195,7 +195,7 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
             netQ_TCPConnection self = stream->data;
             $action2 f = ($action2)self->on_receive;
             f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
-            self->_bytes_in->val += nread;
+            self->_bytes_in += nread;
         }
     }
 }
@@ -213,7 +213,7 @@ void on_connect4(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv4: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_tcp_error(self, toB_int(4), toB_int(status), to$str(errmsg));
+        self->$class->_on_tcp_error(self, 4LL, (int64_t)status, to$str(errmsg));
         return;
     }
     self->$class->_on_connect4(self);
@@ -226,7 +226,7 @@ void on_connect6(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv6: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_tcp_error(self, toB_int(6), toB_int(status), to$str(errmsg));
+        self->$class->_on_tcp_error(self, 6LL, (int64_t)status, to$str(errmsg));
         return;
     }
     self->$class->_on_connect6(self);
@@ -236,13 +236,13 @@ $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, 
     log_debug("TCP connecting over IPv4 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_sock4 = toB_int((int64_t)(intptr_t)socket);
+    self->_sock4 = (int64_t)(intptr_t)socket;
 
     uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     struct sockaddr_in dest;
-    uv_ip4_addr((const char *)fromB_str(ip_address), fromB_int(self->port), &dest);
+    uv_ip4_addr((const char *)fromB_str(ip_address), (int)self->port, &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect4);
 
@@ -253,13 +253,13 @@ $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, 
     log_debug("TCP connecting over IPv6 to %s", fromB_str(ip_address));
     uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), socket);
-    self->_sock6 = toB_int((int64_t)(intptr_t)socket);
+    self->_sock6 = (int64_t)(intptr_t)socket;
 
     uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
     connect_req->data = (void *)self;
 
     struct sockaddr_in6 dest;
-    uv_ip6_addr((const char *)fromB_str(ip_address), fromB_int(self->port), &dest);
+    uv_ip6_addr((const char *)fromB_str(ip_address), (int)self->port, &dest);
 
     uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect6);
 
@@ -267,7 +267,7 @@ $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, 
 }
 
 $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont) {
-    uv_tcp_t* socket = (uv_tcp_t *)fromB_int(self->_sock);
+    uv_tcp_t* socket = (uv_tcp_t *)(intptr_t)self->_sock;
     socket->data = self;
     int r = uv_read_start((uv_stream_t *)socket, alloc_buffer, netQ_TCPConnection__on_receive);
     if (r < 0) {
@@ -283,7 +283,7 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
 }
 
 $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_bytes data) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_sock);
+    uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_sock;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
@@ -298,14 +298,14 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
-    self->_bytes_out->val += data->nbytes;
+    self->_bytes_out += data->nbytes;
     return $R_CONT(c$cont, B_None);
 }
 
 B_NoneType netQ_TCPConnectionD___resume__ (netQ_TCPConnection self) {
-    self->_sock = toB_int(-1);
-    self->_sock4 = toB_int(-1);
-    self->_sock6 = toB_int(-1);
+    self->_sock = -1LL;
+    self->_sock4 = -1LL;
+    self->_sock6 = -1LL;
     $action2 f = ($action2)self->on_error;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
@@ -327,7 +327,7 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
 }
 
 $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_sock);
+    uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_sock;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1) {
         on_close->$class->__asyn__(on_close, self);
@@ -341,9 +341,9 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
     uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
     req->data = (void *)cb_data;
     int r = uv_shutdown(req, stream, after_shutdown);
-    self->_sock = toB_int(-1);
-    self->_sock4 = toB_int(-1);
-    self->_sock6 = toB_int(-1);
+    self->_sock = -1LL;
+    self->_sock4 = -1LL;
+    self->_sock6 = -1LL;
     if (r < 0) {
         // TODO: we could probably ignore most or all of these errors as the
         // purpose is to shutdown our side of the connection and many of these
@@ -362,7 +362,7 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
 $R netQ_TCPConnectionD_ip_versionG_local (netQ_TCPConnection self, $Cont c$cont) {
     struct sockaddr_storage peername;
     int namelen = sizeof(peername);
-    if (uv_tcp_getpeername((const uv_tcp_t *)fromB_int(self->_sock), (struct sockaddr*)&peername, &namelen) == 0) {
+    if (uv_tcp_getpeername((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&peername, &namelen) == 0) {
         if (peername.ss_family == AF_INET) {
             return $R_CONT(c$cont, toB_int(4));
         } else if (peername.ss_family == AF_INET6) {
@@ -371,7 +371,7 @@ $R netQ_TCPConnectionD_ip_versionG_local (netQ_TCPConnection self, $Cont c$cont)
             log_error("Unhandled AFI");
         }
     } else {
-        log_error("Failed to get peer name from handle %d", fromB_int(self->_sock));
+        log_error("Failed to get peer name from handle %lld", (long long)self->_sock);
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -380,7 +380,7 @@ $R netQ_TCPConnectionD_local_addressG_local (netQ_TCPConnection self, $Cont c$co
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
     char addr[INET6_ADDRSTRLEN] = { '\0' };
-    if (uv_tcp_getsockname((const uv_tcp_t *)fromB_int(self->_sock), (struct sockaddr*)&sockname, &namelen) == 0) {
+    if (uv_tcp_getsockname((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&sockname, &namelen) == 0) {
         if (sockname.ss_family == AF_INET) {
             uv_ip4_name((struct sockaddr_in*)&sockname, addr, sizeof(addr));
         } else if (sockname.ss_family == AF_INET6) {
@@ -389,7 +389,7 @@ $R netQ_TCPConnectionD_local_addressG_local (netQ_TCPConnection self, $Cont c$co
             log_error("Unhandled AFI");
         }
     } else {
-        log_error("Failed to get sock name from handle %d", fromB_int(self->_sock));
+        log_error("Failed to get sock name from handle %lld", (long long)self->_sock);
     }
     return $R_CONT(c$cont, to$str(addr));
 }
@@ -398,7 +398,7 @@ $R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$c
     struct sockaddr_storage peername;
     int namelen = sizeof(peername);
     char addr[INET6_ADDRSTRLEN] = { '\0' };
-    if (uv_tcp_getpeername((const uv_tcp_t *)fromB_int(self->_sock), (struct sockaddr*)&peername, &namelen) == 0) {
+    if (uv_tcp_getpeername((const uv_tcp_t *)(intptr_t)self->_sock, (struct sockaddr*)&peername, &namelen) == 0) {
         if (peername.ss_family == AF_INET) {
             uv_ip4_name((struct sockaddr_in*)&peername, addr, sizeof(addr));
         } else if (peername.ss_family == AF_INET6) {
@@ -407,7 +407,7 @@ $R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$c
             log_error("Unhandled AFI");
         }
     } else {
-        log_error("Failed to get peer name from handle %d", fromB_int(self->_sock));
+        log_error("Failed to get peer name from handle %lld", (long long)self->_sock);
     }
     return $R_CONT(c$cont, to$str(addr));
 }
@@ -439,7 +439,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         return;
     }
 
-    self->$class->create_tcp_listen_connection(self, B_None, toB_int((int64_t)(intptr_t)client));
+    self->$class->create_tcp_listen_connection(self, B_None, (int64_t)(intptr_t)client);
     // NOTE: free() here if do manual memory management in I/O one day
 }
 
@@ -454,9 +454,9 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
     struct sockaddr_in addr4;
     struct sockaddr_in6 addr6;
     if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_ip4_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr4);
+        r = uv_ip4_addr((const char *)fromB_str(self->address), (int)self->port, &addr4);
     } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_ip6_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr6);
+        r = uv_ip6_addr((const char *)fromB_str(self->address), (int)self->port, &addr6);
     } else {
         B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
         log_warn((const char *)fromB_str(errmsg));
@@ -507,7 +507,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
 }
 
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
-    self->_stream = toB_int(-1);
+    self->_stream = -1LL;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
@@ -516,13 +516,13 @@ B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
 $R netQ_TCPListenConnectionD__initG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     pin_actor_affinity();
 
-    uv_stream_t *client = (uv_stream_t *)fromB_int(self->server_client);
+    uv_stream_t *client = (uv_stream_t *)(intptr_t)self->server_client;
     uv_os_fd_t fd;
     uv_fileno((uv_handle_t *)client, &fd);
     uv_tcp_t* client_handle = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), client_handle);
     uv_tcp_open(client_handle, (uv_os_sock_t)fd);
-    self->client = toB_int((int64_t)(intptr_t)client_handle);
+    self->client = (int64_t)(intptr_t)client_handle;
 
     return $R_CONT(c$cont, B_None);
 }
@@ -533,7 +533,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
             netQ_TCPListenConnection self = stream->data;
             if ((intptr_t)stream != -1)
                 uv_close((uv_handle_t *)stream, NULL);
-            self->client = toB_int(-1);
+            self->client = -1LL;
             if (self->on_remote_close) {
                 $action f = ($action)self->on_remote_close;
                 f->$class->__asyn__(f, self);
@@ -553,7 +553,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
 }
 
 $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, $Cont c$cont) {
-    uv_stream_t *client = (uv_stream_t *)fromB_int(self->client);
+    uv_stream_t *client = (uv_stream_t *)(intptr_t)self->client;
     client->data = self;
     int r = uv_read_start(client, alloc_buffer, netQ_TCPListenConnection__on_receive);
     if (r < 0) {
@@ -569,7 +569,7 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
 }
 
 $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont c$cont, B_bytes data) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->client);
+    uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->client;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
@@ -589,7 +589,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
 
 $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
     log_debug("Closing TCP connection, affinity=%d", self->$affinity);
-    uv_stream_t *client = (uv_stream_t *)fromB_int(self->client);
+    uv_stream_t *client = (uv_stream_t *)(intptr_t)self->client;
     // fd == -1 means invalid FD and can happen after __resume__ or if the socket was closed
     if ((intptr_t)client == -1)
         return $R_CONT(c$cont, B_None);
@@ -599,13 +599,13 @@ $R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont 
     if (uv_is_closing((uv_handle_t *)client) == 0) {
         uv_close((uv_handle_t *)client, NULL);
     }
-    self->client = toB_int(-1);
+    self->client = -1LL;
     return $R_CONT(c$cont, B_None);
 }
 
 B_NoneType netQ_TCPListenConnectionD___resume__ (netQ_TCPListenConnection self) {
-    self->server_client = toB_int(-1);
-    self->client = toB_int(-1);
+    self->server_client = -1LL;
+    self->client = -1LL;
     return B_None;
 }
 
@@ -637,7 +637,7 @@ static void tls_listener_on_connect(uv_connect_t *creq, int status) {
         return;
     }
 
-    listener->$class->create_tls_listen_connection(listener, B_None, toB_int((int64_t)(intptr_t)stream));
+    listener->$class->create_tls_listen_connection(listener, B_None, (int64_t)(intptr_t)stream);
 }
 
 static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
@@ -651,7 +651,7 @@ static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv
     } else if (nread == UV_EOF) {
         log_debug("TLS listen connection closed %p", stream);
         tls_listener_close_stream((tlsuv_stream_t *)stream);
-        self->_stream = toB_int(-1);
+        self->_stream = -1LL;
         if (self->on_remote_close) {
             $action f = ($action)self->on_remote_close;
             f->$class->__asyn__(f, self);
@@ -660,7 +660,7 @@ static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv
         log_debug("TLS listen read error %ld: %s", nread, uv_strerror((int)nread));
         tls_listener_close_stream((tlsuv_stream_t *)stream);
         if (stream->data) {
-            self->_stream = toB_int(-1);
+            self->_stream = -1LL;
         }
     }
 }
@@ -751,7 +751,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     uv_os_sock_t sock = (uv_os_sock_t)dup_fd;
 #endif
 
-    tls_context *tls = (tls_context *)fromB_int(self->_tls_ctx);
+    tls_context *tls = (tls_context *)(intptr_t)self->_tls_ctx;
     tlsuv_stream_t *stream = (tlsuv_stream_t *)acton_malloc(sizeof(tlsuv_stream_t));
     tlsuv_stream_init(get_uv_loop(), stream, tls);
     tlsuv_stream_set_server(stream, 1);
@@ -815,7 +815,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    self->_tls_ctx = toB_int((int64_t)(intptr_t)tls);
+    self->_tls_ctx = (int64_t)(intptr_t)tls;
 
     uv_tcp_t *server = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
     uv_tcp_init(get_uv_loop(), server);
@@ -824,9 +824,9 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     struct sockaddr_in addr4;
     struct sockaddr_in6 addr6;
     if (inet_pton(AF_INET, (const char *)fromB_str(self->address), &(addr4.sin_addr)) == 1) {
-        r = uv_ip4_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr4);
+        r = uv_ip4_addr((const char *)fromB_str(self->address), (int)self->port, &addr4);
     } else if (inet_pton(AF_INET6, (const char *)fromB_str(self->address), &(addr6.sin6_addr)) == 1) {
-        r = uv_ip6_addr((const char *)fromB_str(self->address), fromB_int(self->port), &addr6);
+        r = uv_ip6_addr((const char *)fromB_str(self->address), (int)self->port, &addr6);
     } else {
         B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
         log_warn((const char *)fromB_str(errmsg));
@@ -867,15 +867,15 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         return $R_CONT(c$cont, B_None);
     }
 
-    self->_stream = toB_int((int64_t)(intptr_t)server);
+    self->_stream = (int64_t)(intptr_t)server;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, B_None);
     return $R_CONT(c$cont, B_None);
 }
 
 B_NoneType netQ_TLSListenerD___resume__ (netQ_TLSListener self) {
-    self->_stream = toB_int(-1);
-    self->_tls_ctx = toB_int(-1);
+    self->_stream = -1LL;
+    self->_tls_ctx = -1LL;
     $action2 f = ($action2)self->on_listen;
     f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
@@ -884,15 +884,15 @@ B_NoneType netQ_TLSListenerD___resume__ (netQ_TLSListener self) {
 $R netQ_TLSListenConnectionD__initG_local (netQ_TLSListenConnection self, $Cont c$cont) {
     pin_actor_affinity();
 
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->server_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->server_stream;
     stream->data = self;
-    self->_stream = toB_int((int64_t)(intptr_t)stream);
+    self->_stream = (int64_t)(intptr_t)stream;
 
     return $R_CONT(c$cont, B_None);
 }
 
 $R netQ_TLSListenConnectionD__read_startG_local (netQ_TLSListenConnection self, $Cont c$cont) {
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
@@ -910,7 +910,7 @@ $R netQ_TLSListenConnectionD__read_startG_local (netQ_TLSListenConnection self, 
 }
 
 $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont c$cont, B_bytes data) {
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
@@ -929,18 +929,18 @@ $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont 
 }
 
 $R netQ_TLSListenConnectionD_closeG_local (netQ_TLSListenConnection self, $Cont c$cont) {
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
     tls_listener_close_stream(stream);
-    self->_stream = toB_int(-1);
+    self->_stream = -1LL;
     return $R_CONT(c$cont, B_None);
 }
 
 B_NoneType netQ_TLSListenConnectionD___resume__ (netQ_TLSListenConnection self) {
-    self->server_stream = toB_int(-1);
-    self->_stream = toB_int(-1);
+    self->server_stream = -1LL;
+    self->_stream = -1LL;
     return B_None;
 }
 
@@ -960,7 +960,7 @@ static void tls_close(tlsuv_stream_t *stream) {
     if (on_close)
         on_close->$class->__asyn__(on_close, self);
     tlsuv_stream_close(stream, tls_on_close);
-    self->_stream = toB_int(-1);
+    self->_stream = -1LL;
 }
 
 void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
@@ -970,7 +970,7 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
             $action2 f = ($action2)self->on_receive;
             B_bytes data = to$bytesD_len(buf->base, nread);
             f->$class->__asyn__(f, self, data);
-            self->_bytes_in->val += nread;
+            self->_bytes_in += nread;
         }
     } else if (nread == UV_EOF) {
         log_debug("TLS connection closed %p", stream);
@@ -1000,7 +1000,7 @@ void tls_write_cb(uv_write_t *wreq, int status) {
 }
 
 $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $action on_close) {
-    uv_stream_t *stream = (uv_stream_t *)fromB_int(self->_stream);
+    uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_stream;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
@@ -1016,7 +1016,7 @@ $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $act
 }
 
 $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)fromB_int(self->_stream);
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
@@ -1032,7 +1032,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
         $action2 f = ($action2)self->on_error;
         f->$class->__asyn__(f, self, to$str(errmsg));
     }
-    self->_bytes_out->val += data->nbytes;
+    self->_bytes_out += data->nbytes;
     return $R_CONT(c$cont, B_None);
 }
 
@@ -1044,7 +1044,7 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_debug(errmsg);
         tls_close((tlsuv_stream_t *)creq->handle);
-        self->$class->_on_tls_error(self, toB_int(-1), toB_int(status), to$str(errmsg));
+        self->$class->_on_tls_error(self, -1LL, (int64_t)status, to$str(errmsg));
         return;
     }
 
@@ -1108,8 +1108,8 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     // TODO: take SNI as input to TLSConnection actor
     stream->data = (void *)self;
 
-    tlsuv_stream_connect(connect_req, stream, (const char *)fromB_str(self->address), fromB_int(self->port), tls_on_connect);
-    self->_stream = toB_int((int64_t)(intptr_t)stream);
+    tlsuv_stream_connect(connect_req, stream, (const char *)fromB_str(self->address), (int)self->port, tls_on_connect);
+    self->_stream = (int64_t)(intptr_t)stream;
 
     return $R_CONT(c$cont, B_None);
 }

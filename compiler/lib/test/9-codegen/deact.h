@@ -83,8 +83,7 @@ struct deactQ_L_4action {
     struct deactQ_L_4actionG_class *$class;
     deactQ_Apa L_3obj;
 };
-$R deactQ_U_L_5C_3cont ($action, $Cont, int64_t);
-$R deactQ_L_5C_3cont ($action, $Cont, B_int);
+$R deactQ_L_5C_3cont ($action, $Cont, int64_t);
 struct deactQ_L_6ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -142,7 +141,7 @@ struct deactQ_L_9procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, B_int);
+    B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, int64_t);
     void (*__serialize__) (deactQ_L_9proc, $Serial$state);
     deactQ_L_9proc (*__deserialize__) (deactQ_L_9proc, $Serial$state);
     B_bool (*__bool__) (deactQ_L_9proc);
@@ -154,13 +153,13 @@ struct deactQ_L_9procG_class {
 struct deactQ_L_9proc {
     struct deactQ_L_9procG_class *$class;
     deactQ_Apa self;
-    B_int i;
+    int64_t i;
 };
 struct deactQ_L_10procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_10proc, deactQ_Bepa, B_int);
+    B_NoneType (*__init__) (deactQ_L_10proc, deactQ_Bepa, int64_t);
     void (*__serialize__) (deactQ_L_10proc, $Serial$state);
     deactQ_L_10proc (*__deserialize__) (deactQ_L_10proc, $Serial$state);
     B_bool (*__bool__) (deactQ_L_10proc);
@@ -172,7 +171,7 @@ struct deactQ_L_10procG_class {
 struct deactQ_L_10proc {
     struct deactQ_L_10procG_class *$class;
     deactQ_Bepa self;
-    B_int i;
+    int64_t i;
 };
 struct deactQ_L_14actionG_class {
     char *$GCINFO;
@@ -228,8 +227,7 @@ struct deactQ_L_19action {
     struct deactQ_L_19actionG_class *$class;
     deactQ_main L_18obj;
 };
-$R deactQ_U_1L_17C_9cont (deactQ_main, $Cont, int64_t);
-$R deactQ_L_17C_9cont (deactQ_main, $Cont, B_int);
+$R deactQ_L_17C_9cont (deactQ_main, $Cont, int64_t);
 struct deactQ_L_20ContG_class {
     char *$GCINFO;
     int $class_id;
@@ -287,7 +285,7 @@ struct deactQ_L_23procG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__) (deactQ_L_23proc, deactQ_main, B_int);
+    B_NoneType (*__init__) (deactQ_L_23proc, deactQ_main, int64_t);
     void (*__serialize__) (deactQ_L_23proc, $Serial$state);
     deactQ_L_23proc (*__deserialize__) (deactQ_L_23proc, $Serial$state);
     B_bool (*__bool__) (deactQ_L_23proc);
@@ -299,7 +297,7 @@ struct deactQ_L_23procG_class {
 struct deactQ_L_23proc {
     struct deactQ_L_23procG_class *$class;
     deactQ_main self;
-    B_int i;
+    int64_t i;
 };
 $R deactQ_L_24C_11cont ($Cont, deactQ_Apa, B_NoneType);
 struct deactQ_L_25ContG_class {
@@ -421,10 +419,10 @@ struct deactQ_ApaG_class {
     B_NoneType (*__cleanup__) (deactQ_Apa);
     $R (*setupG_local) (deactQ_Apa, $Cont, $action);
     $R (*computeG_local) (deactQ_Apa, $Cont, $action);
-    $R (*noticeG_local) (deactQ_Apa, $Cont, B_int);
+    $R (*noticeG_local) (deactQ_Apa, $Cont, int64_t);
     B_Msg (*setup) (deactQ_Apa, $action);
     B_Msg (*compute) (deactQ_Apa, $action);
-    B_Msg (*notice) (deactQ_Apa, B_int);
+    B_Msg (*notice) (deactQ_Apa, int64_t);
 };
 struct deactQ_Apa {
     struct deactQ_ApaG_class *$class;
@@ -451,8 +449,8 @@ struct deactQ_BepaG_class {
     B_str (*__repr__) (deactQ_Bepa);
     B_NoneType (*__resume__) (deactQ_Bepa);
     B_NoneType (*__cleanup__) (deactQ_Bepa);
-    $R (*callbackG_local) (deactQ_Bepa, $Cont, B_int);
-    B_Msg (*callback) (deactQ_Bepa, B_int);
+    $R (*callbackG_local) (deactQ_Bepa, $Cont, int64_t);
+    B_Msg (*callback) (deactQ_Bepa, int64_t);
 };
 struct deactQ_Bepa {
     struct deactQ_BepaG_class *$class;
@@ -479,8 +477,8 @@ struct deactQ_mainG_class {
     B_str (*__repr__) (deactQ_main);
     B_NoneType (*__resume__) (deactQ_main);
     B_NoneType (*__cleanup__) (deactQ_main);
-    $R (*myprocG_local) (deactQ_main, $Cont, B_int);
-    B_Msg (*myproc) (deactQ_main, B_int);
+    $R (*myprocG_local) (deactQ_main, $Cont, int64_t);
+    B_Msg (*myproc) (deactQ_main, int64_t);
 };
 struct deactQ_main {
     struct deactQ_mainG_class *$class;
@@ -498,7 +496,7 @@ struct deactQ_main {
     deactQ_Apa a;
     deactQ_Bepa b;
     B_Msg x;
-    B_int r;
+    int64_t r;
 };
 $R deactQ_ApaG_newact ($Cont);
 $R deactQ_BepaG_newact ($Cont);
@@ -514,9 +512,9 @@ deactQ_L_7proc deactQ_L_7procG_new(deactQ_Apa, $action);
 extern struct deactQ_L_8procG_class deactQ_L_8procG_methods;
 deactQ_L_8proc deactQ_L_8procG_new(deactQ_Apa, $action);
 extern struct deactQ_L_9procG_class deactQ_L_9procG_methods;
-deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, B_int);
+deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa, int64_t);
 extern struct deactQ_L_10procG_class deactQ_L_10procG_methods;
-deactQ_L_10proc deactQ_L_10procG_new(deactQ_Bepa, B_int);
+deactQ_L_10proc deactQ_L_10procG_new(deactQ_Bepa, int64_t);
 extern struct deactQ_L_14actionG_class deactQ_L_14actionG_methods;
 deactQ_L_14action deactQ_L_14actionG_new(deactQ_Apa);
 extern struct deactQ_L_16actionG_class deactQ_L_16actionG_methods;
@@ -530,7 +528,7 @@ deactQ_L_21Cont deactQ_L_21ContG_new(deactQ_main, $Cont);
 extern struct deactQ_L_22ContG_class deactQ_L_22ContG_methods;
 deactQ_L_22Cont deactQ_L_22ContG_new(deactQ_main, $Cont);
 extern struct deactQ_L_23procG_class deactQ_L_23procG_methods;
-deactQ_L_23proc deactQ_L_23procG_new(deactQ_main, B_int);
+deactQ_L_23proc deactQ_L_23procG_new(deactQ_main, int64_t);
 extern struct deactQ_L_25ContG_class deactQ_L_25ContG_methods;
 deactQ_L_25Cont deactQ_L_25ContG_new($Cont, deactQ_Apa);
 extern struct deactQ_L_26procG_class deactQ_L_26procG_methods;

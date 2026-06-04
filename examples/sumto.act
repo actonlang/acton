@@ -1,3 +1,5 @@
+import acton.rts
+
 def sumto(n):
     res = 0
     for i in range(n):
@@ -10,4 +12,6 @@ actor main(env):
     else:
         target = int(123)
     print(sumto(int(target)))
+    print("gc time", acton.rts.get_gc_time(env.syscap).total, "millisecs")
+    print("Total heap memory allocated",acton.rts.get_gc_total_bytes(env.syscap),"bytes")
     env.exit(0)
