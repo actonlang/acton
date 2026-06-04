@@ -1,0 +1,4 @@
+import prefixes
+
+actor main(env: Env):
+    prefixes.main(env)
