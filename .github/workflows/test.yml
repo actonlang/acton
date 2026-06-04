@@ -662,7 +662,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: ${{ github.event_name == 'pull_request' && fromJson('["amd64"]') || fromJson('["amd64","arm64"]') }}
     runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     steps:
       - name: "Show platform and environment"
