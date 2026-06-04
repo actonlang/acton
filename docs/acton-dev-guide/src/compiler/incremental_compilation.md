@@ -100,11 +100,18 @@ tests
 docstring
 ```
 
+Fresh front passes also write HTML docs for normal project builds. To avoid
+running `DocPrinter` on huge modules, build-time doc output is skipped when the
+module records more than 10000 top-level names; `.tydb` and compilation still
+proceed. The documentation index leaves those oversized modules visible without
+linking to missing module pages. The explicit `acton doc FILE.act` command still
+prints docs for the requested file.
+
 ## Deferred Back Passes
 
 DBP is selected after type checking, when the full `NameHashInfo` list is
 available. A module becomes a DBP candidate when its top-level name count is at
-least the internal threshold (`10000` today), or when it is forced with
+least the internal threshold (`1000` today), or when it is forced with
 `--dbp MOD[:name,...]`. The option can be repeated, and explicit seed names are
 unioned per module. DBP is disabled for `__builtin__`, `--only-build`,
 alternate-output modes such as `--cgen`/`--hgen`, and whenever `--no-dbp` is

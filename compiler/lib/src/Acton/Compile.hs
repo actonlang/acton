@@ -141,6 +141,7 @@ module Acton.Compile
   , parseActFile
   , readModuleTask
   , readModuleDoc
+  , readModuleDocIndexEntry
   , readImports
   , buildGlobalTasks
   , selectNeededTasks
@@ -148,6 +149,8 @@ module Acton.Compile
   , libraryBoundaryTasks
   , compileTasks
   , runFrontPasses
+  , docNameCountThreshold
+  , shouldGenerateDocOutput
   , runBackPasses
   , runBackJobs
   , findProjectDir
@@ -1170,8 +1173,15 @@ data DbpRequest = DbpRequest
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
 dbpNameCountThreshold :: Int
--- Conservative initial heuristic; --dbp can force smaller modules.
-dbpNameCountThreshold = 10000
+-- Conservative heuristic; --dbp can force smaller modules.
+dbpNameCountThreshold = 1000
+
+docNameCountThreshold :: Int
+docNameCountThreshold = 10000
+
+shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
+shouldGenerateDocOutput opts tmp nameCount =
+  not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
 parseDbpSpec :: String -> Maybe DbpRequest
 parseDbpSpec raw = do
@@ -1959,6 +1969,20 @@ readModuleDoc sp gopts opts paths actFile = do
     SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc)
     HeadError{} -> Nothing
 
+readModuleDocIndexEntry :: Source.SourceProvider
+                        -> C.GlobalOptions
+                        -> C.CompileOptions
+                        -> Paths
+                        -> String
+                        -> IO (Maybe (A.ModName, Maybe String, Bool))
+readModuleDocIndexEntry sp gopts opts paths actFile = do
+  h <- readModuleHeader sp gopts opts paths actFile
+  return $ case h of
+    TyHead{ mhName = mn, mhNameHashes = nameHashes, mhDoc = mdoc } ->
+      Just (mn, mdoc, shouldGenerateDocOutput opts (isTmp paths) (length nameHashes))
+    SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc, True)
+    HeadError{} -> Nothing
+
 -- | Materialize a source-backed task into a fully parsed ActonTask.
 -- ParseTask reuses the snapshot captured during graph discovery; TyTask reparses
 -- from the current source file because the cached header was deemed stale.
@@ -2414,7 +2438,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                         let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
                         writeFile docFile htmlDoc
                       docOutputActions =
-                        if not (C.skip_build opts) && not (isTmp paths)
+                        if shouldGenerateDocOutput opts (isTmp paths) (length nameHashes)
                           then [(FrontOutputDoc, writeDoc)]
                           else []
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef

@@ -37,6 +37,7 @@ import           Test.Tasty.HUnit
 import           TestGolden (normalizeProgressTimingLine)
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
+import qualified Acton.DocPrinter as DocP
 import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
 import qualified Acton.Syntax as A
@@ -2270,6 +2271,28 @@ p45_tydb_records_local_name_dependencies =
     assertDepsContain "local_container_name pub local deps" ["Container"] containerPub
     assertDepsContain "local_container_name impl local deps" ["Container"] containerImpl
 
+p46_huge_module_skips_doc_output :: TestTree
+p46_huge_module_skips_doc_output =
+  testCase "46-huge module skips doc output" $ do
+    let opts = Compile.defaultCompileOptions
+        docDir = casesProjDir </> "doc-index"
+    assertBool "doc output should run at the threshold"
+      (Compile.shouldGenerateDocOutput opts False Compile.docNameCountThreshold)
+    assertBool "doc output should skip above the threshold"
+      (not (Compile.shouldGenerateDocOutput opts False (Compile.docNameCountThreshold + 1)))
+    assertBool "skip-build should skip doc output"
+      (not (Compile.shouldGenerateDocOutput opts{ C.skip_build = True } False 1))
+    assertBool "temporary builds should skip doc output"
+      (not (Compile.shouldGenerateDocOutput opts True 1))
+    removeDirIfExists docDir
+    createDirectoryIfMissing True docDir
+    DocP.generateDocIndex docDir [(A.modName ["huge"], Just "Huge module", False)]
+    index <- T.readFile (docDir </> "index.html")
+    assertBool "skipped module should remain visible"
+      ("huge" `T.isInfixOf` index)
+    assertBool "skipped module should not link to missing page"
+      (not ("href=\"huge.html\"" `T.isInfixOf` index))
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2339,5 +2362,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p43_equal_act_ty_mtime_hashes_source
       , p44_provider_import_rename_reruns_dependent_front
       , p45_tydb_records_local_name_dependencies
+      , p46_huge_module_skips_doc_output
       ]
   ]
