@@ -1317,6 +1317,8 @@ printDocs gopts opts = do
 
           _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
+dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
 
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
@@ -2023,6 +2025,7 @@ runCliPostCompile cliHooks gopts plan env = do
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
+
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
     let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
     forM_ (Data.Set.toList projKeys) $ \p -> do
@@ -2126,6 +2129,9 @@ selectedRootStubEntriesForBins paths bins =
       [ collapseDots (makeRelativeOrAbsolute (projPath paths) (binTaskRoot paths b))
       | b <- bins
       ]
+  where binTaskRoots = [ binTaskRoot paths b | b <- bins ]
+        absOrRel = map (makeRelativeOrAbsolute (projPath paths)) binTaskRoots
+        collapsed = map collapseDots absOrRel
 
 -- | For each consuming project, map dep name to selected C-source CSV.
 depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
@@ -2170,7 +2176,8 @@ removeOrphanFiles :: Paths -> [CompileTask] -> [FilePath] -> IO ()
 removeOrphanFiles paths tasks roots = do
     let dir = projTypes paths
     absOutFiles <- getFilesRecursive dir
-    let allowedBases = [ outBase paths (name t) | t <- tasks ]
+    let allowedBases = [ outBase paths (name t) | t <- tasks ] ++
+                       [ outBase paths (dropProjPrefix paths (name t)) | t <- tasks ]
     forM_ absOutFiles $ \absFile -> do
         let isC  = takeExtension absFile == ".c"
             isH  = takeExtension absFile == ".h"
@@ -2200,9 +2207,10 @@ removeOrphanFiles paths tasks roots = do
 expectedRootStubs :: Paths -> [CompileTask] -> IO [FilePath]
 expectedRootStubs paths tasks = do
     roots <- forM tasks $ \t -> do
-        let mn     = name t
-            outbase = outBase paths mn
-            tyPath = tyDbPath paths mn
+        let mn      = name t
+            mn'     = dropProjPrefix paths mn
+            outbase = outBase paths mn'
+            tyPath  = tyDbPath paths mn
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
           Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
@@ -2227,7 +2235,8 @@ encodeBuildLibraries libs =
 binTaskRoot :: Paths -> BinTask -> FilePath
 binTaskRoot paths binTask =
     let A.GName m _ = rootActor binTask
-        outbase = outBase paths m
+        m' = dropProjPrefix paths m
+        outbase = outBase paths m'
     in if isTest binTask then outbase ++ ".test_root.c" else outbase ++ ".root.c"
 
 {-
@@ -2337,9 +2346,9 @@ printDiagnostics gopts opts diags =
 -- | Generate a root actor C file when a root is still declared.
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths tasks binTask = do
-    let qn@(A.GName m n) = rootActor binTask
-        mn = A.mname qn
-        outbase = outBase paths mn
+    let qn@(A.GName mn n) = rootActor binTask
+        mn' = dropProjPrefix paths mn
+        outbase = outBase paths mn'
         rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
     existing <- if C.only_build opts then doesFileExist rootFile else return False
@@ -2349,11 +2358,11 @@ writeRootC env gopts opts paths tasks binTask = do
         -- Read the up-to-date roots from the on-disk .tydb header (post-compile)
         -- Avoid using preloaded TyTask roots, which may be stale if the module
         -- was rebuilt during this run.
-        tyPath <- Acton.Env.findTyFile (searchPath paths) m
+        tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
-        let rootsEnv = case Acton.Env.lookupMod m env of
+        let rootsEnv = case Acton.Env.lookupMod mn env of
                          Nothing -> []
                          Just te -> [ n' | (n', i) <- te, rootEligible i ]
             shouldGen = n `elem` rootsHeader || n `elem` rootsEnv
