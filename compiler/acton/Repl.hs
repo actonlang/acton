@@ -11,7 +11,17 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-module Repl(Hooks(..), runRepl) where
+module Repl
+  ( Hooks(..)
+  , runRepl
+  , ReplState
+  , ReplEval(..)
+  , emptyReplState
+  , addReplInput
+  , renderReplState
+  , renderReplSessionSource
+  , renderReplEvalSource
+  ) where
 
 import Prelude hiding (readFile, writeFile)
 
@@ -598,6 +608,13 @@ addReplTop st top src =
       ReplImport -> st { replImports = replImports st ++ [src], replUseProject = True }
       ReplDeclTop ns -> st { replDecls = replaceReplDecl ns src (replDecls st) }
       ReplReplay -> st { replReplay = replReplay st ++ [src] }
+
+addReplInput :: ReplState -> String -> IO ReplState
+addReplInput st src = do
+    input <- classifyReplInput st src
+    case input of
+      ReplTop top     -> return (addReplTop st top src)
+      ReplEvalInput _ -> return st
 
 replaceReplDecl :: [String] -> String -> [ReplDecl] -> [ReplDecl]
 replaceReplDecl ns src decls
