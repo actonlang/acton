@@ -2010,9 +2010,7 @@ runCliPostCompile cliHooks gopts plan env = do
             genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
           Nothing -> return ()
     let isRootSysProj = rootProj == sysAbs || sysRoot `isPrefixOf` rootProj
-    unless isRootSysProj $ do
-      when (C.verbose gopts) $
-        logLine ("Generating build.zig for project " ++ rootProj)
+    unless isRootSysProj $
       genBuildZigFiles rootSpec rootPins (ccDepOverrides cctx) pathsRoot rootDepModuleOpts rootDepPathOverrides
     let runFinal action = do
           cchFinalStart cliHooks
