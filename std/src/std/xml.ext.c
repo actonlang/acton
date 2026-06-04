@@ -68,56 +68,70 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
     return dst;
 }
 
-// Helper function to collect text from consecutive TEXT and CDATA nodes
-// Returns the combined string and updates the node pointer to the first non-text node
-// Note: cur_ptr is passed by reference (pointer to pointer) so we can update the caller's pointer
-//       to skip past all consumed text/CDATA nodes
+// Collect character data (text and CDATA) starting at *cur_ptr, up to but not
+// including the next element node. Comments are skipped over transparently, so
+// text on either side of a comment is concatenated (including whitespace).
+// Unsupported node types are rejected.
+// On return *cur_ptr points at the next element node, or NULL if the siblings
+// are exhausted; callers can therefore resume iterating element children
+// directly.
+//
+// Returns the combined text, or NULL if there was no character data (only
+// comments or nothing at all).
+//
+// Note: cur_ptr is passed by reference (pointer to pointer) so we can advance
+//       the caller's cursor past everything we consumed.
 static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
-    xmlNodePtr cur = *cur_ptr;
-    if (!cur || (cur->type != XML_TEXT_NODE && cur->type != XML_CDATA_SECTION_NODE)) {
-        return NULL;
-    }
-
-    // Count total length of combined text and CDATA nodes
+    // First pass: sum the length of all text/CDATA content and locate the
+    // element node (or end of siblings) where collection stops.
     size_t text_len = 0;
-    xmlNodePtr text_start = cur;
-    while (cur && (cur->type == XML_TEXT_NODE || cur->type == XML_CDATA_SECTION_NODE)) {
-        if (cur->content) text_len += strlen((char *)cur->content);
+    xmlNodePtr cur = *cur_ptr;
+    while (cur && cur->type != XML_ELEMENT_NODE) {
+        switch (cur->type) {
+            case XML_TEXT_NODE:
+            case XML_CDATA_SECTION_NODE:
+                if (cur->content)
+                    text_len += strlen((char *)cur->content);
+                break;
+            case XML_COMMENT_NODE:
+                break;
+            default:
+                RAISE(stdQ_xmlQ_XmlParseError, $FORMAT("Unsupported XML node type %d", cur->type), NULL, NULL);
+        }
         cur = cur->next;
     }
+    xmlNodePtr stop = cur;
 
-    // Create combined string
-    if (text_len > 0) {
-        char *combined = acton_malloc_atomic(text_len + 1);
-        char *p = combined;
-        xmlNodePtr t = text_start;
-        while (t != cur) {
-            if (t->content) {
-                size_t len = strlen((char *)t->content);
-                memcpy(p, t->content, len);
-                p += len;
-            }
-            t = t->next;
-        }
-        *p = '\0';
-        B_str result = to_str_noc(combined);
-        *cur_ptr = cur;
-        return result;
-    }
-
-    *cur_ptr = cur;
-    return NULL;
-}
-
-stdQ_xmlQ_Node stdQ_xmlQ_NodePtr2Node(xmlNodePtr node) {
-    B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (node->type == XML_COMMENT_NODE) {
+    if (text_len == 0) {
+        *cur_ptr = stop;
         return NULL;
     }
-    if (node->type != XML_ELEMENT_NODE) {
-        char *errmsg = NULL;
-        RAISE(stdQ_xmlQ_XmlParseError, $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
+
+    // Second pass: concatenate the text/CDATA content into a single string.
+    char *combined = acton_malloc_atomic(text_len + 1);
+    char *p = combined;
+    for (cur = *cur_ptr; cur != stop; cur = cur->next) {
+        if ((cur->type == XML_TEXT_NODE || cur->type == XML_CDATA_SECTION_NODE) && cur->content) {
+            size_t len = strlen((char *)cur->content);
+            memcpy(p, cur->content, len);
+            p += len;
+        }
     }
+    *p = '\0';
+
+    *cur_ptr = stop;
+    return to_str_noc(combined);
+}
+
+// Convert a libxml2 element node into an Acton xml.Node.
+//
+// The returned Node has tail == NULL. An element's tail (the character data
+// following it, up to its next sibling element) belongs to the parent's child
+// sequence, so it is filled in by the caller while iterating siblings.
+stdQ_xmlQ_Node stdQ_xmlQ_NodePtr2Node(xmlNodePtr node) {
+    B_SequenceD_list wit = B_SequenceD_listG_witness;
+    if (node->type != XML_ELEMENT_NODE)
+        RAISE(stdQ_xmlQ_XmlParseError, $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
 
     B_list nsdefs = B_listG_new(NULL, NULL);
     xmlNsPtr nsDef = node->nsDef;
@@ -156,25 +170,21 @@ stdQ_xmlQ_Node stdQ_xmlQ_NodePtr2Node(xmlNodePtr node) {
     B_list children = B_listG_new(NULL, NULL);
     xmlNodePtr cur = node->xmlChildrenNode;
 
-    // Collect initial text/CDATA nodes
+    // Character data before the first child element becomes this node's text.
     B_str text = collect_text_cdata_nodes(&cur);
 
+    // collect_text_cdata_nodes stops only at element nodes (cur is updated), so
+    // every node seen here is an element. Recurse into it, then collect the
+    // character data that follows it (up to the next element) as that child's
+    // tail.
     while (cur != NULL) {
         stdQ_xmlQ_Node child = stdQ_xmlQ_NodePtr2Node(cur);
-        if (child)
-            wit->$class->append(wit,children, child);
         cur = cur->next;
+        child->tail = collect_text_cdata_nodes(&cur);
+        wit->$class->append(wit, children, child);
     }
 
-    // Collect tail text/CDATA nodes after we have exhausted the child nodes
-    cur = node->next;
-    B_str tail = collect_text_cdata_nodes(&cur);
-    // Update the tree structure to skip consumed tail text/CDATA nodes.
-    // This prevents the parent from seeing these text nodes again during its
-    // child iteration, since tail text of an element is part of the parent's
-    // child list in the XML tree.
-    node->next = cur;
-    return (stdQ_xmlQ_Node)$NEW(stdQ_xmlQ_Node, to$str((char *)node->name), nsdefs, prefix, attributes, children, text, tail);
+    return (stdQ_xmlQ_Node)$NEW(stdQ_xmlQ_Node, to$str((char *)node->name), nsdefs, prefix, attributes, children, text, NULL);
 }
 
 stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
@@ -217,6 +227,10 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
         RAISE(stdQ_xmlQ_XmlParseError, errmsg, line, column);
     }
     xmlNodePtr root = xmlDocGetRootElement(doc);
+    if (!root) {
+        xmlFreeDoc(doc);
+        RAISE(stdQ_xmlQ_XmlParseError, to$str("Document has no root element"), NULL, NULL);
+    }
     stdQ_xmlQ_Node t = stdQ_xmlQ_NodePtr2Node(root);
     xmlFreeDoc(doc);
     return t;

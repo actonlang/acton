@@ -213,3 +213,10 @@ def _test_xml_pretty():
     )
 
     return root.encode(True)
+
+def _test_xml_comment():
+    sn = r"""<data><!-- comment -->b</data>"""
+    d = xml.decode(sn)
+    e = xml.encode(d)
+    expected = r"""<data>b</data>"""
+    testing.assertEqual(e, expected, "comment should be removed but node text preserved")
