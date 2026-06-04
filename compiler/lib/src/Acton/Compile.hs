@@ -2099,10 +2099,24 @@ materializeTask opts sp mn actFile providers mOnProgress task =
       parseActSource opts mn' displayFile srcContent mOnProgress
 
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
-adjustImports providers m = m{ A.imps = map adjust (A.imps m) }
-  where adjust (A.Import l ms)       = A.Import l ms
-        adjust (A.FromImport l m i)  = A.FromImport l m i
-        adjust (A.FromImportAll l m) = A.FromImportAll l m
+adjustImports providers m = trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
+                            m{ A.imps = imps' }
+  where imps'                        = map adjust (A.imps m)
+        adjust (A.Import l ms)       = A.Import l (map adj ms)
+        adjust (A.FromImport l m i)  = A.FromImport l (adj' m) i
+        adjust (A.FromImportAll l m) = A.FromImportAll l (adj' m)
+        adj mi@(A.ModuleItem m mbn)
+          | Just m' <- adjusted m   = case (m, mbn) of
+                                         (A.ModName [n], Nothing) -> A.ModuleItem m' (Just n)
+                                         (_,             Just n)  -> A.ModuleItem m' (Just n)
+                                         _                        -> error ("Local multi-level import without alias not yet supported: " ++ prstr mi)
+          | otherwise               = mi
+        adj' mr@(A.ModRef (0, Just m))
+          | Just m' <- adjusted m   = (A.ModRef (0, Just m'))
+          | otherwise               = mr
+        adjusted m = case M.lookup m providers of
+                        Just tk | tkMod tk /= m -> Just (tkMod tk)
+                        _                       -> Nothing
 
 -- | Recursively read imports for a set of tasks within the same project.
 -- Any missing module is added by parsing or reading its .tydb header via

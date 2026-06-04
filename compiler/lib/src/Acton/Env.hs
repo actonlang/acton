@@ -1139,14 +1139,15 @@ findTyFile spaths mn = go spaths
     go (p:ps) = do
       let fullPath = InterfaceFiles.interfacePath p mn
       exists <- InterfaceFiles.interfaceExists fullPath
-      --traceM ("findTyFile: " ++ fullPath ++ " " ++ show exists)
+      --traceM ("findTyFile: " ++ fullPath ++ " " ++ show exists ++ "\n")
       if exists
         then return (Just fullPath)
         else go ps
 
 -- | Import a module, loading its .tydb and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
+doImp spath env m            = do traceM ("#### doImp " ++ prstr m)
+                                  (env', te, _) <- doImpSeen S.empty env m
                                   return (addImport m env', te)
   where
     -- A cached module still needs its recorded import closure available in the
