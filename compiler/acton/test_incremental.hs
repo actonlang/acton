@@ -847,7 +847,7 @@ p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
         ]
   ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
   depDir <- ensureDepProject casesProjDir "libfoo"
-  let depSrc = depDir </> "src" </> "libfoo.act"
+  let depSrc = depDir </> "src" </> "lib.act"
   writeFileUtf8 depSrc originalContent
   writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
     [ "import libfoo"
@@ -878,7 +878,7 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
       modMain = modLabel casesProjDir "main"
   ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
   depDir <- ensureDepProject casesProjDir "libfoo"
-  let depSrc = depDir </> "src" </> "libfoo.act"
+  let depSrc = depDir </> "src" </> "lib.act"
   writeFileUtf8 depSrc originalContent
   writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
     [ "import libfoo"
@@ -1556,7 +1556,7 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
       tyB = proj </> "out" </> "types" </> "b.tydb"
   ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
   depDir <- ensureDepProject proj "libfoo"
-  let depSrc = depDir </> "src" </> "libfoo.act"
+  let depSrc = depDir </> "src" </> "lib.act"
       libfooSource depConst addBonus =
         let bonusLines =
               if addBonus
@@ -1859,7 +1859,7 @@ p36_removed_dep_name_triggers_front_refresh =
         src = casesSrcDir
     ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
     depDir <- ensureDepProject proj "libfoo"
-    let depSrc = depDir </> "src" </> "libfoo.act"
+    let depSrc = depDir </> "src" </> "lib.act"
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 1"
@@ -1892,7 +1892,7 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
         modMain = modLabel proj "main"
     ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
     depDir <- ensureDepProject proj "libfoo"
-    let depSrc = depDir </> "src" </> "libfoo.act"
+    let depSrc = depDir </> "src" </> "lib.act"
         tyMain = proj </> "out" </> "types" </> "main.tydb"
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
