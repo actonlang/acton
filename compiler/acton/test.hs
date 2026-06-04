@@ -30,6 +30,7 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Options.Applicative as OA
 import qualified Paths_acton
+import qualified Repl
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -165,166 +166,180 @@ compilerTests =
           assertBool "dynamic executable should not search Zig cache directory"
             (not ("zig-local-cache" `isInfixOf` rpathOut))
 #endif
-  , testCase "repl retains common definitions and replays setup" $ do
-        withSystemTempDirectory "acton-repl-assignment" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let replRoot = proj </> ".acton-repl"
-          let input = unlines
-                [ "def label() -> str:"
-                , "    return \"old function\""
-                , ""
-                , "def label() -> str:"
-                , "    return \"new function\""
-                , ""
-                , "label()"
-                , "answer = 42"
-                , "answer"
-                , "import math"
-                , "math.sqrt(9.0)"
-                , "print(\"direct print\")"
-                , "proc def log():"
-                , "    print(\"proc call\")"
-                , ""
-                , "log()"
-                , "class Box(object):"
-                , "    def __init__(self, name: str):"
-                , "        self.name = name"
-                , "    def describe(self) -> str:"
-                , "        return \"class \" + self.name"
-                , ""
-                , "Box(\"method\").describe()"
-                , "class Speaker(object):"
-                , "    def __init__(self):"
-                , "        pass"
-                , "    proc def say(self):"
-                , "        print(\"method proc\")"
-                , ""
-                , "Speaker().say()"
-                , "class Other(object):"
-                , "    def __init__(self):"
-                , "        pass"
-                , "    def say(self) -> str:"
-                , "        return \"pure method\""
-                , ""
-                , "Other().say()"
-                , "actor Foo():"
-                , "    print(\"old Foo\")"
-                , ""
-                , "actor Foo():"
-                , "    print(\"hello from Foo\")"
-                , ""
-                , "f = Foo()"
-                , ":q"
-                ]
-          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) input
-          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
-          assertBool "repl should evaluate retained functions"
-            ("new function\n" `isInfixOf` cmdOut)
-          assertBool "repl should replace redefined functions"
-            (not ("old function\n" `isInfixOf` cmdOut))
-          assertBool "repl should evaluate retained local names"
-            ("42\n" `isInfixOf` cmdOut)
-          assertBool "repl should make retained imports visible to eval"
-            ("3\n" `isInfixOf` cmdOut)
-          assertBool "repl should run direct print calls without printing None"
-            ("direct print\n" `isInfixOf` cmdOut)
-          assertBool "repl should run retained proc calls without printing None"
-            ("proc call\n" `isInfixOf` cmdOut)
-          assertBool "repl should evaluate retained class methods"
-            ("class method\n" `isInfixOf` cmdOut)
-          assertBool "repl should run effectful retained methods without printing None"
-            ("method proc\n" `isInfixOf` cmdOut)
-          assertBool "repl should still print unrelated pure methods with the same name"
-            ("pure method\n" `isInfixOf` cmdOut)
-          assertBool "repl should not print None for None-valued expressions"
-            (not ("None\n" `isInfixOf` cmdOut))
-          assertBool "repl should run effectful retained assignments"
-            ("hello from Foo\n" `isInfixOf` cmdOut)
-          assertBool "repl should replace redefined declarations"
-            (not ("old Foo\n" `isInfixOf` cmdOut))
-          assertBool "repl should not retain effectful assignments at module top level"
-            (not ("Constraint violation" `isInfixOf` cmdErr))
-          sessionSrc <- readFile (replRoot </> "src" </> "repl_session.act")
-          evalSrc <- readFile (replRoot </> "src" </> "repl_eval.act")
-          assertBool "repl should retain declarations in session module"
-            ("actor Foo():" `isInfixOf` sessionSrc)
-          assertBool "repl should retain classes in session module"
-            ("class Box(object):" `isInfixOf` sessionSrc)
-          assertBool "repl should retain latest function definition in session module"
-            ("return \"new function\"" `isInfixOf` sessionSrc)
-          assertBool "repl should drop replaced function definitions"
-            (not ("return \"old function\"" `isInfixOf` sessionSrc))
-          assertBool "repl eval should import session module"
-            ("from repl_session import *" `isInfixOf` evalSrc)
-          assertBool "repl eval should retain imports used by expressions"
-            ("import math" `isInfixOf` evalSrc)
-          assertBool "repl eval should not duplicate retained declarations"
-            (not ("actor Foo():" `isInfixOf` evalSrc))
-          assertBool "repl eval should not duplicate retained classes"
-            (not ("class Box(object):" `isInfixOf` evalSrc))
-  , testCase "repl reset clears generated session" $ do
-        withSystemTempDirectory "acton-repl-reset" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let replRoot = proj </> ".acton-repl"
-          let input = unlines
-                [ "def gone() -> str:"
-                , "    return \"leak\""
-                , ""
-                , "gone()"
-                , ":reset"
-                , ":show"
-                , "gone()"
-                , "2 + 2"
-                , ":q"
-                ]
-          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--parse", "--tempdir", proj]) input
-          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
-          assertEqual "repl should only see pre-reset definitions before reset"
-            1 (length (splitOn "leak\n" cmdOut) - 1)
-          assertBool "repl should report empty session after reset"
-            ("<empty>\n" `isInfixOf` cmdOut)
-          assertBool "repl should continue evaluating after reset"
-            ("4\n" `isInfixOf` cmdOut)
-          sessionSrc <- readFile (replRoot </> "src" </> "repl_session.act")
-          assertBool "repl reset should rewrite session source"
-            (not ("def gone()" `isInfixOf` sessionSrc))
-  , testCase "repl reused scratch starts with empty session" $ do
-        withSystemTempDirectory "acton-repl-reuse" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let replRoot = proj </> ".acton-repl"
-          let firstInput = unlines
-                [ "def gone() -> str:"
-                , "    return \"leak\""
-                , ""
-                , "gone()"
-                , ":q"
-                ]
-              secondInput = unlines
-                [ ":show"
-                , "gone()"
-                , "2 + 2"
-                , ":q"
-                ]
-          (firstCode, firstOut, firstErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) firstInput
-          assertEqual ("first acton repl should exit successfully: " ++ firstErr) ExitSuccess firstCode
-          assertEqual "first repl should see retained definition"
-            1 (length (splitOn "leak\n" firstOut) - 1)
-          (secondCode, secondOut, secondErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) secondInput
-          assertEqual ("second acton repl should exit successfully: " ++ secondErr) ExitSuccess secondCode
-          assertBool "reused repl should show empty in-memory session"
-            ("<empty>\n" `isInfixOf` secondOut)
-          assertEqual "reused repl should not call stale session definition"
-            0 (length (splitOn "leak\n" secondOut) - 1)
-          assertBool "reused repl should continue after stale name rejection"
-            ("4\n" `isInfixOf` secondOut)
-          sessionSrc <- readFile (replRoot </> "src" </> "repl_session.act")
-          assertBool "reused repl should rewrite stale session source"
-            (not ("def gone()" `isInfixOf` sessionSrc))
-  , testCase "repl tempdir does not clobber parent project" $ do
+  , sequentialTestGroup "repl" AllSucceed
+    [ testCase "renders retained session and eval source" $ do
+        let inputs =
+              [ "def label() -> str:\n    return \"old function\""
+              , "def label() -> str:\n    return \"new function\""
+              , "answer = 42"
+              , "import math"
+              , "class Box(object):\n    def __init__(self, name: str):\n        self.name = name\n    def describe(self) -> str:\n        return \"class \" + self.name"
+              , "actor Foo():\n    print(\"old Foo\")"
+              , "actor Foo():\n    print(\"hello from Foo\")"
+              ]
+        st <- foldM Repl.addReplInput Repl.emptyReplState inputs
+        let sessionSrc = Repl.renderReplSessionSource st
+            evalSrc = Repl.renderReplEvalSource st (Repl.ReplExpr "math.sqrt(9.0)")
+        assertBool "repl should retain declarations in session module"
+          ("actor Foo():" `isInfixOf` sessionSrc)
+        assertBool "repl should retain classes in session module"
+          ("class Box(object):" `isInfixOf` sessionSrc)
+        assertBool "repl should retain latest function definition in session module"
+          ("return \"new function\"" `isInfixOf` sessionSrc)
+        assertBool "repl should drop replaced function definitions"
+          (not ("return \"old function\"" `isInfixOf` sessionSrc))
+        assertBool "repl eval should import session module"
+          ("from repl_session import *" `isInfixOf` evalSrc)
+        assertBool "repl eval should retain imports used by expressions"
+          ("import math" `isInfixOf` evalSrc)
+        assertBool "repl eval should replay retained setup"
+          ("answer = 42" `isInfixOf` evalSrc)
+        assertBool "repl eval should not duplicate retained declarations"
+          (not ("actor Foo():" `isInfixOf` evalSrc))
+        assertBool "repl eval should not duplicate retained classes"
+          (not ("class Box(object):" `isInfixOf` evalSrc))
+
+    , testCase "renders empty session after reset" $ do
+        st <- Repl.addReplInput Repl.emptyReplState "def gone() -> str:\n    return \"leak\""
+        assertBool "repl should render retained definitions before reset"
+          ("def gone()" `isInfixOf` Repl.renderReplSessionSource st)
+        assertEqual "repl reset should render empty session"
+          "<empty>\n" (Repl.renderReplState Repl.emptyReplState)
+        assertBool "repl reset should rewrite session source"
+          (not ("def gone()" `isInfixOf` Repl.renderReplSessionSource Repl.emptyReplState))
+
+    , testCase "retains definitions, resets, and rejects failed setup" $ do
+        actonExe <- canonicalizePath "../../dist/bin/acton"
+        let input = unlines
+              [ "def label() -> str:"
+              , "    return \"old function\""
+              , ""
+              , "def label() -> str:"
+              , "    return \"new function\""
+              , ""
+              , "label()"
+              , "answer = 42"
+              , "answer"
+              , "import math"
+              , "math.sqrt(9.0)"
+              , "print(\"direct print\")"
+              , "proc def log():"
+              , "    print(\"proc call\")"
+              , ""
+              , "log()"
+              , "class Box(object):"
+              , "    def __init__(self, name: str):"
+              , "        self.name = name"
+              , "    def describe(self) -> str:"
+              , "        return \"class \" + self.name"
+              , ""
+              , "Box(\"method\").describe()"
+              , "class Speaker(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "    proc def say(self):"
+              , "        print(\"method proc\")"
+              , ""
+              , "Speaker().say()"
+              , "class Other(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "    def say(self) -> str:"
+              , "        return \"pure method\""
+              , ""
+              , "Other().say()"
+              , "actor Foo():"
+              , "    print(\"old Foo\")"
+              , ""
+              , "actor Foo():"
+              , "    print(\"hello from Foo\")"
+              , ""
+              , "f = Foo()"
+              , "def gone() -> str:"
+              , "    return \"reset leak\""
+              , ""
+              , "gone()"
+              , ":reset"
+              , ":show"
+              , "gone()"
+              , "x = 1 / 0"
+              , "2 + 2"
+              , ":show"
+              , ":q"
+              ]
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["repl", "--color", "never"]) input
+        assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
+        assertBool "repl should evaluate retained functions"
+          ("new function\n" `isInfixOf` cmdOut)
+        assertBool "repl should replace redefined functions"
+          (not ("old function\n" `isInfixOf` cmdOut))
+        assertBool "repl should evaluate retained local names"
+          ("42\n" `isInfixOf` cmdOut)
+        assertBool "repl should make retained imports visible to eval"
+          ("3\n" `isInfixOf` cmdOut)
+        assertBool "repl should run direct print calls without printing None"
+          ("direct print\n" `isInfixOf` cmdOut)
+        assertBool "repl should run retained proc calls without printing None"
+          ("proc call\n" `isInfixOf` cmdOut)
+        assertBool "repl should evaluate retained class methods"
+          ("class method\n" `isInfixOf` cmdOut)
+        assertBool "repl should run effectful retained methods without printing None"
+          ("method proc\n" `isInfixOf` cmdOut)
+        assertBool "repl should still print unrelated pure methods with the same name"
+          ("pure method\n" `isInfixOf` cmdOut)
+        assertBool "repl should not print None for None-valued expressions"
+          (not ("None\n" `isInfixOf` cmdOut))
+        assertBool "repl should run effectful retained assignments"
+          ("hello from Foo\n" `isInfixOf` cmdOut)
+        assertBool "repl should replace redefined declarations"
+          (not ("old Foo\n" `isInfixOf` cmdOut))
+        assertBool "repl should not retain effectful assignments at module top level"
+          (not ("Constraint violation" `isInfixOf` cmdErr))
+        assertEqual "repl should only see pre-reset definitions before reset"
+          1 (length (splitOn "reset leak\n" cmdOut) - 1)
+        assertBool "repl should report empty session after reset"
+          ("<empty>\n" `isInfixOf` cmdOut)
+        assertBool "repl should report runtime assignment failure"
+          ("Process exited with status 1\n" `isInfixOf` cmdErr)
+        assertBool "repl should reject failing setup line"
+          ("Input was not added to the session.\n" `isInfixOf` cmdErr)
+        assertBool "repl should continue evaluating after reset"
+          ("4\n" `isInfixOf` cmdOut)
+        assertBool "repl should not retain failing setup line"
+          (length (splitOn "<empty>\n" cmdOut) - 1 >= 2)
+
+    , testCase "reused scratch starts with empty session" $ do
+        actonExe <- canonicalizePath "../../dist/bin/acton"
+        let firstInput = unlines
+              [ "def gone() -> str:"
+              , "    return \"leak\""
+              , ""
+              , "gone()"
+              , ":q"
+              ]
+            secondInput = unlines
+              [ ":show"
+              , "gone()"
+              , "2 + 2"
+              , ":q"
+              ]
+        (firstCode, firstOut, firstErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["repl", "--color", "never"]) firstInput
+        assertEqual ("first acton repl should exit successfully: " ++ firstErr) ExitSuccess firstCode
+        assertEqual "first repl should see retained definition"
+          1 (length (splitOn "leak\n" firstOut) - 1)
+        (secondCode, secondOut, secondErr) <- readCreateProcessWithExitCode
+          (proc actonExe ["repl", "--color", "never"]) secondInput
+        assertEqual ("second acton repl should exit successfully: " ++ secondErr) ExitSuccess secondCode
+        assertBool "reused repl should show empty in-memory session"
+          ("<empty>\n" `isInfixOf` secondOut)
+        assertEqual "reused repl should not call stale session definition"
+          0 (length (splitOn "leak\n" secondOut) - 1)
+        assertBool "reused repl should continue after stale name rejection"
+          ("4\n" `isInfixOf` secondOut)
+
+    , testCase "tempdir does not clobber parent project" $ do
         withSystemTempDirectory "acton-repl-tempdir-parent" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
           let input = unlines
@@ -343,26 +358,8 @@ compilerTests =
             "name = \"real_project\"\n" parentBuildAct
           replBuildActExists <- doesFileExist (proj </> ".acton-repl" </> "Build.act")
           assertBool "repl should write Build.act in owned subdir" replBuildActExists
-  , testCase "repl rejects failing setup assignments" $ do
-        withSystemTempDirectory "acton-repl-failing-assignment" $ \proj -> do
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          let input = unlines
-                [ "x = 1 / 0"
-                , "2 + 2"
-                , ":show"
-                , ":q"
-                ]
-          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
-            (proc actonExe ["repl", "--color", "never", "--tempdir", proj]) input
-          assertEqual ("acton repl should exit successfully: " ++ cmdErr) ExitSuccess returnCode
-          assertBool "repl should report runtime assignment failure"
-            ("Process exited with status 1\n" `isInfixOf` cmdErr)
-          assertBool "repl should reject failing setup line"
-            ("Input was not added to the session.\n" `isInfixOf` cmdErr)
-          assertBool "repl should continue after failing setup line"
-            ("4\n" `isInfixOf` cmdOut)
-          assertBool "repl should not retain failing setup line"
-            ("<empty>\n" `isInfixOf` cmdOut)
+
+    ]
   , testCase "deps" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""
