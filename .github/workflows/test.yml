@@ -594,55 +594,67 @@ jobs:
             arch: "arm64"
             target: "aarch64-linux-musl"
     env:
-      # This makes it possible for the GitHub Action itself to run using an
-      # older version of node, which is the only possibility to get it running
-      # on Ubuntu 18.04 (in the matrix above)
-      ACTIONS_RUNNER_FORCE_ACTIONS_NODE_VERSION: node16
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      TEST_IMAGE: ${{ format('{0}:{1}', matrix.os, matrix.version) }}
+      TEST_TARGET: ${{ matrix.target || '' }}
     runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-    container:
-      image: ${{ matrix.os }}:${{ matrix.version }}
-      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
-      - name: "Show platform and environment"
+      - name: "Show host platform and environment"
         run: |
+          uname -a
           env
-          cat /proc/cpuinfo
+          cat /proc/cpuinfo || true
+      - name: "Pull test container"
+        run: |
+          retry() { n=1; until "$@"; do [ $n -ge 6 ] && { echo "failed after 6 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 20s: $*" >&2; sleep 20; n=$((n+1)); done; }
+          retry docker pull "$TEST_IMAGE"
       - name: "Download .deb files"
         uses: actions/download-artifact@v8
         with:
           name: acton-debs-${{ matrix.arch }}
-      - name: "Install acton from .deb"
+      - name: "Compile acton program in test container"
         run: |
-          apt update
-          apt install -y ./deb/acton_*.deb
-          acton version
-      - name: "Enable dumping core files to /tmp/core..."
-        run: |
-          apt install -qy procps
-          cat /proc/sys/kernel/core_pattern
-          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
-          cat /proc/sys/kernel/core_pattern
-          ulimit -c unlimited
-      - name: "Compile acton program"
-        run: |
-          echo '#!/usr/bin/env runacton'   > acton-test.act
-          echo 'actor main(env):'          >> acton-test.act
-          echo '    print("Hello, world")' >> acton-test.act
-          echo '    env.exit(0)'           >> acton-test.act
-          chmod a+x acton-test.act
-          ./acton-test.act
-          ./acton-test.act | grep "Hello, world"
-          acton build ${{ matrix.target && format('--target {0}', matrix.target) || '' }} acton-test.act
-          ./acton-test
-          ./acton-test | grep "Hello, world"
+          docker run --rm \
+            --privileged \
+            --ulimit core=-1 \
+            --security-opt seccomp=unconfined \
+            -e TEST_TARGET \
+            -v "$PWD:/work" \
+            -w /work \
+            "$TEST_IMAGE" \
+            bash -euo pipefail -c '
+              env
+              cat /proc/cpuinfo
+              apt update
+              apt install -y procps ./deb/acton_*.deb
+              acton version
+
+              cat /proc/sys/kernel/core_pattern
+              sysctl kernel.core_pattern="/work/core.%h.%e.%t" || true
+              cat /proc/sys/kernel/core_pattern
+              ulimit -c unlimited
+
+              echo "#!/usr/bin/env runacton"   > acton-test.act
+              echo "actor main(env):"          >> acton-test.act
+              echo "    print(\"Hello, world\")" >> acton-test.act
+              echo "    env.exit(0)"           >> acton-test.act
+              chmod a+x acton-test.act
+              ./acton-test.act
+              ./acton-test.act | grep "Hello, world"
+
+              target_args=()
+              if [ -n "$TEST_TARGET" ]; then
+                target_args=(--target "$TEST_TARGET")
+              fi
+              acton build "${target_args[@]}" acton-test.act
+              ./acton-test
+              ./acton-test | grep "Hello, world"
+            '
       - name: "ls core"
         if: failure()
         run: |
           pwd
           ls
-          find /tmp
-          mv /tmp/core* .
+          find . -name 'core*' -maxdepth 1
       - name: "Upload core file & binaries as artifacts on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
