@@ -50,7 +50,7 @@ import GHC.Conc (getNumCapabilities)
 
 type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
 type TypeInferredCallback = [String] -> String -> IO ()
-type TypeCheckedCallback = Int -> [Stmt] -> IO ()
+type TypeCheckedCallback = Int -> TEnv -> [Stmt] -> IO ()
 
 emitTypeProgressIO :: Maybe TypeProgressCallback -> Int -> Int -> Maybe String -> [String] -> Int -> IO ()
 emitTypeProgressIO Nothing _ _ _ _ _ = return ()
@@ -60,9 +60,9 @@ emitTypeInferredIO :: Maybe TypeInferredCallback -> Env -> TEnv -> IO ()
 emitTypeInferredIO Nothing _ _        = return ()
 emitTypeInferredIO (Just cb) env te   = cb (map nstr (dom te)) (render $ pretty (simp env [(n, stripDocsNI i) | (n,i) <- te]))
 
-emitTypeCheckedIO :: Maybe TypeCheckedCallback -> Int -> [Stmt] -> IO ()
-emitTypeCheckedIO Nothing _ _         = return ()
-emitTypeCheckedIO (Just cb) ix ss     = cb ix ss
+emitTypeCheckedIO :: Maybe TypeCheckedCallback -> Int -> TEnv -> [Stmt] -> IO ()
+emitTypeCheckedIO Nothing _ _ _       = return ()
+emitTypeCheckedIO (Just cb) ix te ss  = cb ix te ss
 
 data TypeErrors = TypeErrors [TypeError]
                   deriving (Show)
@@ -313,7 +313,7 @@ infTop progressCb inferredCb checkedCb env ss
                                                  Control.Exception.finally
                                                    (do ((te2,ss1),_) <- runTypeFromState p st (checkTopStmt env te1 s1)
                                                        (te2,ss1) <- forceChecked te2 ss1
-                                                       emitTypeCheckedIO checkedCb ix ss1
+                                                       emitTypeCheckedIO checkedCb ix te2 ss1
                                                        emitTypeInferredIO inferredCb env te2
                                                        return (False,te2,s1,ss1))
                                                    (writeChan q (TopProgressFinished item))
@@ -324,7 +324,7 @@ infTop progressCb inferredCb checkedCb env ss
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
                                              (te1,ss1) <- forceChecked te1 ss1
-                                             emitTypeCheckedIO checkedCb ix ss1
+                                             emitTypeCheckedIO checkedCb ix te1 ss1
                                              return ss1
         -- Once a worker has taken a job, collect may wait on result. Mask the
         -- publish step so every claimed job fills the MVar; async exceptions are

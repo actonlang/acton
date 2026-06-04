@@ -1508,18 +1508,19 @@ forceTypeResult nmod tchecked = do
 
 data FrontTypeFacts = FrontTypeFacts
   { ftfImplBytes :: M.Map A.Name B.ByteString
-  , ftfImplDeps :: FrontImplDeps
+  , ftfPubSigDeps :: Maybe FrontSplitDeps
+  , ftfImplDeps :: FrontDeps
   , ftfImplLocs :: M.Map A.Name SrcLoc
   , ftfStmtEntries :: [B.ByteString]
   }
 
-data FrontImplDeps
-  = FrontImplDepsRaw (M.Map A.Name [A.QName])
-  | FrontImplDepsSplit FrontImplSplitDeps
+data FrontDeps
+  = FrontDepsRaw (M.Map A.Name [A.QName])
+  | FrontDepsSplit FrontSplitDeps
 
-data FrontImplSplitDeps = FrontImplSplitDeps
-  { fisImplLocalDeps :: M.Map A.Name [A.Name]
-  , fisImplExtDeps :: M.Map A.Name [A.QName]
+data FrontSplitDeps = FrontSplitDeps
+  { fsdLocalDeps :: M.Map A.Name [A.Name]
+  , fsdExtDeps :: M.Map A.Name [A.QName]
   }
 
 data FrontTypeFactsResult = FrontTypeFactsResult
@@ -1530,15 +1531,16 @@ data FrontTypeFactsResult = FrontTypeFactsResult
 
 data FrontTypeFactRows = FrontTypeFactRows
   { ftrImplByteRows :: [(A.Name, B.ByteString)]
-  , ftrImplDepRows :: FrontImplDepRows
+  , ftrPubSigDepRows :: FrontDepRows
+  , ftrImplDepRows :: FrontDepRows
   , ftrImplLocRows :: [(A.Name, SrcLoc)]
   , ftrStmtEntryRows :: [B.ByteString]
   }
 
-data FrontImplDepRows = FrontImplDepRows
-  { fidLocalRows :: [(A.Name, A.Name)]
-  , fidSameModuleRows :: [(A.Name, A.Name)]
-  , fidExtRows :: [(A.Name, A.QName)]
+data FrontDepRows = FrontDepRows
+  { fdrOwners :: [A.Name]
+  , fdrLocalRows :: [(A.Name, A.Name)]
+  , fdrExtRows :: [(A.Name, A.QName)]
   }
 
 frontTypeFactsFromStmts :: [A.Stmt] -> IO FrontTypeFacts
@@ -1547,7 +1549,8 @@ frontTypeFactsFromStmts ss = do
       facts =
         FrontTypeFacts
           { ftfImplBytes = Hashing.nameBytesFromItems items
-          , ftfImplDeps = FrontImplDepsRaw (Hashing.implDepsFromItems items)
+          , ftfPubSigDeps = Nothing
+          , ftfImplDeps = FrontDepsRaw (Hashing.implDepsFromItems items)
           , ftfImplLocs = Hashing.nameLocsFromItems items
           , ftfStmtEntries = map InterfaceFiles.encodeStmtEntry ss
           }
@@ -1557,14 +1560,18 @@ frontTypeFactsFromStmts ss = do
 frontTypeFactRowsFromStmts :: A.ModName
                            -> Acton.Env.Env0
                            -> Data.Set.Set A.Name
+                           -> I.TEnv
                            -> [A.Stmt]
                            -> IO FrontTypeFactRows
-frontTypeFactRowsFromStmts mn env sourceLocalNames ss = do
+frontTypeFactRowsFromStmts mn env sourceLocalNames te ss = do
   let items = concatMap Hashing.topLevelStmtItems ss
+      pubSigDeps = M.fromList
+        [ (n, dropDerivedQNames (Names.freeQ info)) | (n, info) <- te ]
       implDeps = Hashing.implDepsFromItems items
       rows = FrontTypeFactRows
         { ftrImplByteRows = M.toList (Hashing.nameBytesFromItems items)
-        , ftrImplDepRows = splitImplDepRows mn env sourceLocalNames implDeps
+        , ftrPubSigDepRows = splitDepRows mn env sourceLocalNames pubSigDeps
+        , ftrImplDepRows = splitDepRows mn env sourceLocalNames implDeps
         , ftrImplLocRows = M.toList (Hashing.nameLocsFromItems items)
         , ftrStmtEntryRows = map InterfaceFiles.encodeStmtEntry ss
         }
@@ -1592,7 +1599,8 @@ frontTypeFactsFromRows sourceLocalNames rows =
   in
     FrontTypeFacts
       { ftfImplBytes = implBytes
-      , ftfImplDeps = FrontImplDepsSplit (frontImplSplitDepsFromRows localNames (map ftrImplDepRows rows))
+      , ftfPubSigDeps = Just (frontSplitDepsFromLastRows localNames (map ftrPubSigDepRows rows))
+      , ftfImplDeps = FrontDepsSplit (frontSplitDepsFromRows localNames (map ftrImplDepRows rows))
       , ftfImplLocs = implLocs
       , ftfStmtEntries = concatMap ftrStmtEntryRows rows
       }
@@ -1602,15 +1610,15 @@ frontTypeFactsFromRows sourceLocalNames rows =
     addLoc acc (n, loc) =
       M.insertWith (\new _ -> new) n loc acc
 
-splitImplDepRows :: A.ModName
-                 -> Acton.Env.Env0
-                 -> Data.Set.Set A.Name
-                 -> M.Map A.Name [A.QName]
-                 -> FrontImplDepRows
-splitImplDepRows mn env localNames =
-  M.foldlWithKey' splitOwner emptyRows
+splitDepRows :: A.ModName
+             -> Acton.Env.Env0
+             -> Data.Set.Set A.Name
+             -> M.Map A.Name [A.QName]
+             -> FrontDepRows
+splitDepRows mn env localNames depMap =
+  M.foldlWithKey' splitOwner emptyRows depMap
   where
-    emptyRows = FrontImplDepRows [] [] []
+    emptyRows = FrontDepRows (M.keys depMap) [] []
     splitOwner rows owner qns = foldl' (splitQName owner) rows qns
     splitQName owner rows (A.NoQ n)
       | Data.Set.member n localNames = addLocal owner n rows
@@ -1622,36 +1630,57 @@ splitImplDepRows mn env localNames =
         A.QName m n -> splitQualified owner m n rows
         A.NoQ n
           | Data.Set.member n localNames -> addLocal owner n rows
-          | otherwise -> addSameModule owner n rows
+          | otherwise -> rows
     splitQualified owner m n rows
       | m == mn && Data.Set.member n localNames = addLocal owner n rows
-      | m == mn = addSameModule owner n rows
+      | m == mn = rows
       | otherwise = addExternal owner (A.GName m n) rows
     addLocal owner dep rows =
-      rows { fidLocalRows = (owner, dep) : fidLocalRows rows }
-    -- Generated top-level names may only be known after all rows are collected.
-    addSameModule owner dep rows =
-      rows { fidSameModuleRows = (owner, dep) : fidSameModuleRows rows }
+      rows { fdrLocalRows = (owner, dep) : fdrLocalRows rows }
     addExternal owner dep rows =
-      rows { fidExtRows = (owner, dep) : fidExtRows rows }
+      rows { fdrExtRows = (owner, dep) : fdrExtRows rows }
 
-frontImplSplitDepsFromRows :: Data.Set.Set A.Name -> [FrontImplDepRows] -> FrontImplSplitDeps
-frontImplSplitDepsFromRows localNames rows =
-  let localSets0 = foldl' addLocal M.empty (concatMap fidLocalRows rows)
-      localSets = foldl' addSameModule localSets0 (concatMap fidSameModuleRows rows)
-      extSets = foldl' addExternal M.empty (concatMap fidExtRows rows)
-  in FrontImplSplitDeps
-       { fisImplLocalDeps = M.map Data.Set.toList localSets
-       , fisImplExtDeps = M.map Data.Set.toList extSets
+frontSplitDepsFromRows :: Data.Set.Set A.Name -> [FrontDepRows] -> FrontSplitDeps
+frontSplitDepsFromRows _localNames rows =
+  let owners = Data.Set.fromList (concatMap fdrOwners rows)
+      emptySets = M.fromSet (const Data.Set.empty) owners
+      localSets0 = foldl' addLocal emptySets (concatMap fdrLocalRows rows)
+      extSets = foldl' addExternal emptySets (concatMap fdrExtRows rows)
+  in FrontSplitDeps
+       { fsdLocalDeps = M.map Data.Set.toList localSets0
+       , fsdExtDeps = M.map Data.Set.toList extSets
        }
   where
     addLocal acc (owner, dep) =
       M.insertWith Data.Set.union owner (Data.Set.singleton dep) acc
-    addSameModule acc (owner, dep)
-      | Data.Set.member dep localNames = addLocal acc (owner, dep)
-      | otherwise = acc
     addExternal acc (owner, dep) =
       M.insertWith Data.Set.union owner (Data.Set.singleton dep) acc
+
+frontSplitDepsFromLastRows :: Data.Set.Set A.Name -> [FrontDepRows] -> FrontSplitDeps
+frontSplitDepsFromLastRows localNames =
+  foldl' add FrontSplitDeps { fsdLocalDeps = M.empty, fsdExtDeps = M.empty }
+  where
+    add acc rows =
+      let deps = frontSplitDepsFromRows localNames [rows]
+      in FrontSplitDeps
+           { fsdLocalDeps = fsdLocalDeps deps `M.union` fsdLocalDeps acc
+           , fsdExtDeps = fsdExtDeps deps `M.union` fsdExtDeps acc
+           }
+
+isDerivedName :: A.Name -> Bool
+isDerivedName n = case n of
+  A.Derived{} -> True
+  _ -> False
+
+isDerivedQName :: A.QName -> Bool
+isDerivedQName qn = case qn of
+  A.GName _ n -> isDerivedName n
+  A.QName _ n -> isDerivedName n
+  A.NoQ n -> isDerivedName n
+
+dropDerivedQNames :: [A.QName] -> [A.QName]
+dropDerivedQNames =
+  filter (not . isDerivedQName)
 
 sourceLocalNamesFromModule :: A.Module -> Data.Set.Set A.Name
 sourceLocalNamesFromModule =
@@ -1691,7 +1720,8 @@ frontTypeFactsFromModule (A.Module _ _ _ ss) = do
       (entries, stmtTime) <- wait stmtAsync
       let facts = FrontTypeFacts
             { ftfImplBytes = implBytes
-            , ftfImplDeps = FrontImplDepsRaw implDeps
+            , ftfPubSigDeps = Nothing
+            , ftfImplDeps = FrontDepsRaw implDeps
             , ftfImplLocs = implLocs
             , ftfStmtEntries = entries
             }
@@ -1756,28 +1786,37 @@ nameHashesFromBytesParallel bytes = do
 rnfFrontTypeFacts :: FrontTypeFacts -> ()
 rnfFrontTypeFacts facts =
   rnf (ftfImplBytes facts) `seq`
-  rnfFrontImplDeps (ftfImplDeps facts) `seq`
+  rnfMaybeFrontSplitDeps (ftfPubSigDeps facts) `seq`
+  rnfFrontDeps (ftfImplDeps facts) `seq`
   rnf (ftfImplLocs facts) `seq`
   rnf (ftfStmtEntries facts)
 
 rnfFrontTypeFactRows :: FrontTypeFactRows -> ()
 rnfFrontTypeFactRows rows =
   rnf (ftrImplByteRows rows) `seq`
-  rnfFrontImplDepRows (ftrImplDepRows rows) `seq`
+  rnfFrontDepRows (ftrPubSigDepRows rows) `seq`
+  rnfFrontDepRows (ftrImplDepRows rows) `seq`
   rnf (ftrImplLocRows rows) `seq`
   rnf (ftrStmtEntryRows rows)
 
-rnfFrontImplDeps :: FrontImplDeps -> ()
-rnfFrontImplDeps (FrontImplDepsRaw deps) = rnf deps
-rnfFrontImplDeps (FrontImplDepsSplit deps) =
-  rnf (fisImplLocalDeps deps) `seq`
-  rnf (fisImplExtDeps deps)
+rnfMaybeFrontSplitDeps :: Maybe FrontSplitDeps -> ()
+rnfMaybeFrontSplitDeps Nothing = ()
+rnfMaybeFrontSplitDeps (Just deps) = rnfFrontSplitDeps deps
 
-rnfFrontImplDepRows :: FrontImplDepRows -> ()
-rnfFrontImplDepRows rows =
-  rnf (fidLocalRows rows) `seq`
-  rnf (fidSameModuleRows rows) `seq`
-  rnf (fidExtRows rows)
+rnfFrontDeps :: FrontDeps -> ()
+rnfFrontDeps (FrontDepsRaw deps) = rnf deps
+rnfFrontDeps (FrontDepsSplit deps) = rnfFrontSplitDeps deps
+
+rnfFrontSplitDeps :: FrontSplitDeps -> ()
+rnfFrontSplitDeps deps =
+  rnf (fsdLocalDeps deps) `seq`
+  rnf (fsdExtDeps deps)
+
+rnfFrontDepRows :: FrontDepRows -> ()
+rnfFrontDepRows rows =
+  rnf (fdrOwners rows) `seq`
+  rnf (fdrLocalRows rows) `seq`
+  rnf (fdrExtRows rows)
 
 forceTEnvParallel :: [(A.Name, I.NameInfo)] -> IO ()
 forceTEnvParallel [] = return ()
@@ -2674,8 +2713,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeEnv <- getTime Monotonic
       let hashEnv = setMod mn env
           sourceLocalNames = sourceLocalNamesFromModule parsed
-          onTypeChecked ix ss = do
-            rows <- frontTypeFactRowsFromStmts mn hashEnv sourceLocalNames ss
+          onTypeChecked ix te ss = do
+            rows <- frontTypeFactRowsFromStmts mn hashEnv sourceLocalNames te ss
             atomicModifyIORef' typeFactsRef $ \rowsByIx ->
               (IM.insert ix rows rowsByIx, ())
 
@@ -2727,31 +2766,30 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               nameImplKeys = M.keysSet (ftfImplBytes typeFacts)
               nameKeys = Data.Set.union nameSrcKeys nameImplKeys
               nameLocs = M.union nameLocsParsed (ftfImplLocs typeFacts)
-              isDerivedName n = case n of
-                A.Derived{} -> True
-                _ -> False
-              isDerivedQName qn = case qn of
-                A.GName _ n -> isDerivedName n
-                A.QName _ n -> isDerivedName n
-                A.NoQ n -> isDerivedName n
-              dropDerived = filter (not . isDerivedQName)
               -- pubSigDeps: signature-level deps from NameInfo (types only).
-              pubSigDepsRaw = M.fromList
-                [ (n, dropDerived (Names.freeQ info)) | (n, info) <- M.toList nameInfoMap ]
+              pubSigDeps = ftfPubSigDeps typeFacts
+              pubSigDepsRaw = case pubSigDeps of
+                Just _ -> M.empty
+                Nothing ->
+                  M.fromList
+                    [ (n, dropDerivedQNames (Names.freeQ info)) | (n, info) <- M.toList nameInfoMap ]
               -- implDeps: term-level deps from typed bodies.
               implDeps = ftfImplDeps typeFacts
               implDepsRaw = case implDeps of
-                FrontImplDepsRaw deps -> deps
-                FrontImplDepsSplit _ -> M.empty
+                FrontDepsRaw deps -> deps
+                FrontDepsSplit _ -> M.empty
           evaluate (rnf (nameKeys, nameLocs, pubSigDepsRaw, implDepsRaw))
           timePublicFactsDone <- getTime Monotonic
 
           timeDepSplitStart <- getTime Monotonic
-          let (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
+          let (pubSigLocalDeps, pubSigExtDeps) =
+                case pubSigDeps of
+                  Just deps -> (fsdLocalDeps deps, fsdExtDeps deps)
+                  Nothing -> Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
               (implLocalDeps, implExtDeps) =
                 case implDeps of
-                  FrontImplDepsRaw deps -> Hashing.splitDeps mn hashEnv nameKeys deps
-                  FrontImplDepsSplit deps -> (fisImplLocalDeps deps, fisImplExtDeps deps)
+                  FrontDepsRaw deps -> Hashing.splitDeps mn hashEnv nameKeys deps
+                  FrontDepsSplit deps -> (fsdLocalDeps deps, fsdExtDeps deps)
               -- pub deps include signature deps plus term-level deps for reuse
               -- in stale checks. Derived names are internal and should never
               -- require a public hash.
