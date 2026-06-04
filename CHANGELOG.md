@@ -25,6 +25,22 @@
 - Report active back-pass progress for normalize, deactorize, CPS, lambda
   lifting, boxing, code generation, render, and write steps, so CLI and LSP
   builds show which generated-code phase is currently running. [#2808, #2853]
+- Generate unboxed code for bounded integer and float values through the boxing
+  and code-generation passes, a major reduction in wrapper allocation and
+  box/unbox traffic for numeric Acton programs. Fewer boxes also means less
+  memory traffic and less garbage for the runtime to collect, so numeric-heavy
+  code can improve both by doing faster primitive work and by putting less
+  pressure on the memory subsystem and garbage collector. [#2824]
+  - Builtin, base, and standard-library C implementations now use raw C values
+    for unboxed integer and float operations where the Acton type is known.
+  - As one example, the existing `examples/sumto.act` benchmark at 30 million
+    integer additions dropped from about 960 MB of GC heap allocation to about
+    54 KB, with reported GC time falling from about 2.05 seconds to 0 ms and
+    wall time from about 1.47 seconds to about 0.12 seconds.
+  - In a standalone run of the DCT performance fixture at size 2,000, GC heap
+    allocation dropped from about 768 MB to about 384 MB, reported GC time from
+    about 1.58 seconds to about 0.79 seconds, and wall time from about 1.14
+    seconds to about 0.65 seconds.
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
@@ -188,11 +204,22 @@
 - Keep CI cache restores clean after Stack/GHC changes by removing broad Stack
   restore-key fallbacks, and make the standard-library time test tolerate slow
   CI startup while still catching gross clock errors. [#2836, #2838]
+- Cache downloaded source archives in source-build and Debian package-build CI
+  jobs with keys based on dependency build inputs, so transient archive download
+  failures are less likely to break unchanged release builds. [#2856]
 - Retry network-bound package-manager installs and flaky distributed-database
   test binaries in CI, and print Linux container disk usage around cache restore
   and test execution to make out-of-space failures easier to diagnose. [#2846]
+- Run REPL command tests against the normal persistent scratch path and add
+  in-process renderer checks, while keeping explicit `--tempdir` coverage for
+  scratch-directory isolation behavior. [#2881]
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
+
+### Compatibility Notes
+- C extension bindings that implement functions taking or returning Acton
+  numeric primitive types may need to follow the new unboxed C signatures for
+  bounded integers and floats instead of passing boxed wrapper pointers. [#2824]
 
 ## [0.27.0] - 2026-05-08
 
@@ -4127,6 +4154,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2821]: https://github.com/actonlang/acton/pull/2821
 [#2822]: https://github.com/actonlang/acton/pull/2822
 [#2823]: https://github.com/actonlang/acton/pull/2823
+[#2824]: https://github.com/actonlang/acton/pull/2824
 [#2826]: https://github.com/actonlang/acton/pull/2826
 [#2827]: https://github.com/actonlang/acton/pull/2827
 [#2830]: https://github.com/actonlang/acton/pull/2830
@@ -4149,6 +4177,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2852]: https://github.com/actonlang/acton/pull/2852
 [#2853]: https://github.com/actonlang/acton/pull/2853
 [#2855]: https://github.com/actonlang/acton/pull/2855
+[#2856]: https://github.com/actonlang/acton/pull/2856
+[#2881]: https://github.com/actonlang/acton/pull/2881
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
