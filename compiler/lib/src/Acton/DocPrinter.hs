@@ -3509,11 +3509,12 @@ docMethodSignatureHtmlWithGenericsAndClasses generics classNames vs (TSchema _ _
 modNameToString :: ModName -> String
 modNameToString (ModName names) = intercalate "." (map nstr names)
 
--- | Generate HTML documentation index for a list of modules
-generateDocIndex :: FilePath -> [(ModName, Maybe String)] -> IO ()
+-- | Generate HTML documentation index for a list of modules.
+-- The Bool marks whether a module page was generated.
+generateDocIndex :: FilePath -> [(ModName, Maybe String, Bool)] -> IO ()
 generateDocIndex docDir tasks = do
     let indexFile = docDir </> "index.html"
-        sortedTasks = sortBy (comparing (\(mn,_) -> modNameToString mn)) tasks
+        sortedTasks = sortBy (comparing (\(mn,_,_) -> modNameToString mn)) tasks
         moduleEntries = concatMap generateModuleEntry sortedTasks
         indexHtml = unlines $
             [ "<!DOCTYPE html>"
@@ -3539,18 +3540,29 @@ generateDocIndex docDir tasks = do
             ]
     writeFileUtf8Atomic indexFile indexHtml
   where
-    generateModuleEntry :: (ModName, Maybe String) -> [String]
-    generateModuleEntry (mn, mDoc) =
+    generateModuleEntry :: (ModName, Maybe String, Bool) -> [String]
+    generateModuleEntry (mn, mDoc, hasPage) =
         let modPaths = modPath mn  -- Use different name to avoid shadowing
             modName = modNameToString mn
             htmlFile = if null modPaths
                        then "unnamed.html"
                        else joinPath (init modPaths) </> last modPaths <.> "html"
             docString = maybe "" (takeWhile (/= '\n')) mDoc
-        in [ "      <li class=\"module-item\">"
-           , "        <a href=\"" ++ htmlFile ++ "\" class=\"module-link\">"
-           , "          <span class=\"module-path\">" ++ modName ++ "</span>"
-           , "          <div class=\"module-doc\">" ++ htmlEscape docString ++ "</div>"
-           , "        </a>"
-           , "      </li>"
-           ]
+            docLines =
+              [ "          <span class=\"module-path\">" ++ modName ++ "</span>"
+              , "          <div class=\"module-doc\">" ++ htmlEscape docString ++ "</div>"
+              ]
+        in if hasPage
+             then [ "      <li class=\"module-item\">"
+                  , "        <a href=\"" ++ htmlFile ++ "\" class=\"module-link\">"
+                  ] ++ docLines ++
+                  [ "        </a>"
+                  , "      </li>"
+                  ]
+             else [ "      <li class=\"module-item\">"
+                  , "        <div class=\"module-link\">"
+                  ] ++ docLines ++
+                  [ "          <div class=\"module-doc\">Documentation skipped for large module.</div>"
+                  , "        </div>"
+                  , "      </li>"
+                  ]

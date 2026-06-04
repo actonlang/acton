@@ -2033,7 +2033,7 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
         createDirectoryIfMissing True docDir
         entries <- catMaybes <$> forM srcFiles (\f -> do
                      p <- findPaths f opts
-                     readModuleDoc sp gopts opts p f)
+                     readModuleDocIndexEntry sp gopts opts p f)
         DocP.generateDocIndex docDir entries
 
 -- | Relative C source paths for selected tasks in one project.
