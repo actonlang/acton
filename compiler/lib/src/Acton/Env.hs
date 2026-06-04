@@ -1146,7 +1146,7 @@ findTyFile spaths mn = go spaths
 
 -- | Import a module, loading its .tydb and extending the environment.
 doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = do traceM ("#### doImp " ++ prstr m)
+doImp spath env m            = do --traceM ("#### doImp " ++ prstr m)
                                   (env', te, _) <- doImpSeen S.empty env m
                                   return (addImport m env', te)
   where
