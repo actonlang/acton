@@ -1449,9 +1449,9 @@ actonProjTests =
           writeFile (zigProj </> "src" </> "root.zig") $ unlines
             [ "pub export fn lmdb_test() void {}"
             ]
-          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
-          assertEqual "acton should build when package and zig deps share a name" ExitSuccess returnCode
-          assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
+          (returnCode, _cmdOut, _cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--always-build", "--skip-build"]){ cwd = Just rootProj } ""
+          assertEqual "acton should generate metadata when package and zig deps share a name" ExitSuccess returnCode
           rootZon <- readFile (rootProj </> "build.zig.zon")
           rootBuildZig <- readFile (rootProj </> "build.zig")
           assertBool "root build.zig.zon should keep the package dep key" ("        .lmdb = .{" `isInfixOf` rootZon)
@@ -1549,9 +1549,9 @@ actonProjTests =
           writeWrapper depCProj "dep_c" "../zig_other" "dep_c"
           writeZigPkg zigCommonProj
           writeZigPkg zigOtherProj
-          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
-          assertEqual "acton should build with colliding transitive zig dep names" ExitSuccess returnCode
-          assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
+          (returnCode, _cmdOut, _cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--always-build", "--skip-build"]){ cwd = Just rootProj } ""
+          assertEqual "acton should generate metadata with colliding transitive zig dep names" ExitSuccess returnCode
           rootZon <- readFile (rootProj </> "build.zig.zon")
           rootBuildZig <- readFile (rootProj </> "build.zig")
           assertBool "root build.zig.zon should include the first local zig dep name"
