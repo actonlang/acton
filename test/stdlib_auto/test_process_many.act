@@ -11,14 +11,16 @@ actor GC(env):
 
 
 actor main(env: Env):
-    var num=1000
+    var num=200
     if len(env.argv) > 1:
         num = int(env.argv[1])
 
     var exited = 0
     def on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
         exited += 1
-        print("Process exited with code: ", exit_code, " terminated with signal:", term_signal, "  exited:", exited)
+        if exit_code != 0 or term_signal != 0:
+            print("Process exited with code: ", exit_code, " terminated with signal:", term_signal)
+            env.exit(1)
         if stdout_buf != b"HELLO\n":
             print("stdout_buf is not correct, got:", stdout_buf)
             env.exit(1)
@@ -31,7 +33,6 @@ actor main(env: Env):
         await async env.exit(1)
 
     def test():
-        print("Starting process..")
         pc = process.ProcessCap(env.cap)
         p = process.RunProcess(pc, ["echo", "HELLO"], on_exit, on_error)
 
