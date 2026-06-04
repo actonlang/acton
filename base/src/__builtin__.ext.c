@@ -29,8 +29,8 @@ B_str B_type(B_value a) {
     return to$str("None");
 }
 
-$R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
-    // uv_os_getenv is not threadsafe but our Env actor forces serial execution
+$R B_EnvVarD_getenvbG_local (B_EnvVar self, $Cont C_cont, B_bytes name) {
+    // uv_os_getenv is not threadsafe but our EnvVar actor forces serial execution
 
     // Try to use a small fixed size buffer
     size_t len = 256;
@@ -55,7 +55,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     return $R_CONT(C_cont, to$bytes(value));
 }
 
-$R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {
+$R B_EnvVarD_setenvbG_local (B_EnvVar self, $Cont C_cont, B_bytes name, B_bytes value) {
     const char* env_var = fromB_bytes(name);
     const char* env_val = fromB_bytes(value);
     int r = uv_os_setenv(env_var, env_val);
@@ -65,7 +65,7 @@ $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value)
     return $R_CONT(C_cont, B_None);
 }
 
-$R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
+$R B_EnvVarD_unsetenvbG_local (B_EnvVar self, $Cont C_cont, B_bytes name) {
     const char* env_var = fromB_bytes(name);
     int r = uv_os_unsetenv(env_var);
     if (r < 0) {
@@ -75,7 +75,7 @@ $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
 }
 
 // action def is_tty() -> bool:
-$R B_EnvD_is_ttyG_local (B_Env self, $Cont C_cont) {
+$R B_StdioD_is_ttyG_local (B_Stdio self, $Cont C_cont) {
     return $R_CONT(C_cont, toB_bool(isatty(1)));
 }
 

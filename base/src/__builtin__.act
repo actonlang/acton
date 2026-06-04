@@ -1122,13 +1122,12 @@ class SysCap():
     """
     pass
 
-actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
-    cap = wc
-    auth = wc
-    syscap = sc
-    argv = args
-    nr_wthreads: int = 0
+class EnvCap():
+    """EnvCap authorizes construction of Env-owned service actors.
+    """
+    pass
 
+actor EnvVar(envcap: EnvCap):
     action def getenv(name: str) -> ?str:
         """Get the value of an environment variable"""
         res = getenvb(name.encode())
@@ -1156,7 +1155,11 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
         """Unset an environment variable"""
         NotImplemented
 
-    action def stdout_write(s: str) -> None:
+actor Stdio(envcap: EnvCap, vars: EnvVar):
+    action def out(s: str) -> None:
+        NotImplemented
+
+    action def err(s: str) -> None:
         NotImplemented
 
     action def stdin_install(on_stdin: ?action(str) -> None, encoding: ?str=None, on_error: ?action(str, bytes) -> None, on_stdin_bytes: ?action(bytes) -> None) -> None:
@@ -1174,7 +1177,7 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
                 # Default to utf-8 if we're unable to discover the encoding
                 encoding = "utf-8"
                 # Read encoding from the LANG environment variable
-                lang_env = getenv("LANG")
+                lang_env = vars.getenv("LANG")
                 if lang_env is not None:
                     try:
                         encoding = lang_env.split(".")[1].lower()
@@ -1194,6 +1197,55 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
 
     action def _on_stdin_bytes(cb: action(bytes) -> None) -> None:
         NotImplemented
+
+def _new_vars(envcap: EnvCap):
+    return EnvVar(envcap)
+
+actor Env (wc: WorldCap, sc: SysCap, args: list[str], wthreads: int, envcap: EnvCap):
+    cap = wc
+    auth = wc
+    syscap = sc
+    argv = args
+    nr_wthreads = wthreads
+    vars = _new_vars(envcap)
+
+    action def getenv(name: str) -> ?str:
+        """Get the value of an environment variable"""
+        return vars.getenv(name)
+
+    action def getenvb(name: bytes) -> ?bytes:
+        """Get the value of an environment variable"""
+        return vars.getenvb(name)
+
+    action def setenv(n: str, v: str) -> None:
+        """Set the value of an environment variable"""
+        vars.setenv(n, v)
+
+    action def setenvb(n: bytes, v: bytes) -> None:
+        """Set the value of an environment variable"""
+        vars.setenvb(n, v)
+
+    action def unsetenv(n: str) -> None:
+        """Unset an environment variable"""
+        vars.unsetenv(n)
+
+    action def unsetenvb(n: bytes) -> None:
+        """Unset an environment variable"""
+        vars.unsetenvb(n)
+
+    stdio = Stdio(envcap, vars)
+
+    action def stdout_write(s: str) -> None:
+        stdio.out(s)
+
+    action def stdin_install(on_stdin: ?action(str) -> None, encoding: ?str=None, on_error: ?action(str, bytes) -> None, on_stdin_bytes: ?action(bytes) -> None) -> None:
+        stdio.stdin_install(on_stdin, encoding, on_error, on_stdin_bytes)
+
+    action def set_stdin(canonical: ?bool, echo: ?bool) -> None:
+        stdio.set_stdin(canonical, echo)
+
+    action def is_tty() -> bool:
+        return stdio.is_tty()
 
     action def exit(n: int):
         NotImplemented

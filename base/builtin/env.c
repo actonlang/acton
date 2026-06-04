@@ -37,14 +37,19 @@ extern char rts_exit;
 extern int return_val;
 
 
-// Env /////////////////////////////////////////////////////////////////////////
+// Stdio ///////////////////////////////////////////////////////////////////////
 
-$R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
+$R B_StdioD_outG_local (B_Stdio self, $Cont c$cont, B_str s) {
     printf("%s", s->str);
     return $R_CONT(c$cont, B_None);
 }
 
-$R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool echo) {
+$R B_StdioD_errG_local (B_Stdio self, $Cont c$cont, B_str s) {
+    fprintf(stderr, "%s", s->str);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R B_StdioD_set_stdinG_local (B_Stdio self, $Cont c$cont, B_bool canonical, B_bool echo) {
 #if defined(_WIN32) || defined(_WIN64)
 #else
     struct termios attr;
@@ -84,7 +89,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 }
 
-$R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
+$R B_StdioD__on_stdin_bytesG_local (B_Stdio self, $Cont c$cont, $action cb) {
     // This should be the only call in env that does IO stuff, so it is safe to
     // pin affinity here (and not earlier)..
     pin_actor_affinity();
@@ -95,6 +100,9 @@ $R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
     return $R_CONT(c$cont, B_None);
 }
 
+
+// Env /////////////////////////////////////////////////////////////////////////
+
 $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
     return_val = fromB_int(n);
     rts_shutdown();
@@ -102,15 +110,9 @@ $R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
 }
 
 
-B_Env B_EnvG_newactor(B_WorldCap wc, B_SysCap sc, B_list args) {
+B_Env B_EnvG_newactor() {
     B_Env $tmp = $NEWACTOR(B_Env);
-    $tmp->cap = wc;
-    $tmp->args = args;
-    $tmp->syscap = sc;
-    $tmp->auth = $tmp->cap;
-    $tmp->argv = $tmp->args;
     $tmp->$affinity = 0; // hard-coded to special worker on the main thread
-    serialize_state_shortcut(($Actor)$tmp);
     return $tmp;
 }
 
@@ -138,3 +140,14 @@ B_NoneType B_WorldCapD___init__ (B_WorldCap self) {
     return B_None;
 }
 
+
+B_EnvCap B_EnvCapG_new() {
+    B_EnvCap $tmp = acton_malloc(sizeof(struct B_EnvCap));
+    $tmp->$class = &B_EnvCapG_methods;
+    //   B_EnvCapG_methods.__init__($tmp);
+    return $tmp;
+}
+
+B_NoneType B_EnvCapD___init__ (B_EnvCap self) {
+    return B_None;
+}

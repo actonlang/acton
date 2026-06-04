@@ -1,0 +1,4 @@
+# It should not be possible to forge EnvCap to construct Env-owned services.
+
+actor main(env):
+    stdio = Stdio(EnvCap(), env.vars)
