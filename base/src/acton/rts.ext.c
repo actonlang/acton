@@ -50,34 +50,34 @@ B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {
     return toB_u64(GC_get_heap_size());
 }
 
-uint64_t actonQ_rtsQ_U_get_mem_usage (B_SysCap cap) {
+uint64_t actonQ_rtsQ_get_mem_usage (B_SysCap cap) {
     return GC_get_heap_size() - GC_get_free_bytes();
 }
 
 // def get_gc_total_bytes(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_U_1get_gc_total_bytes (B_SysCap cap) {
+uint64_t actonQ_rtsQ_get_gc_total_bytes (B_SysCap cap) {
     return GC_get_total_bytes();
 }
 
 //def get_gc_bytes_since_gc(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_U_2get_gc_bytes_since_gc (B_SysCap cap) {
+uint64_t actonQ_rtsQ_get_gc_bytes_since_gc (B_SysCap cap) {
     return GC_get_bytes_since_gc();
 }
 
 // def get_rss(cap: SysCap) -> u64:
-uint64_t actonQ_rtsQ_U_3get_rss (B_SysCap cap) {
-    uint64_t rsm;
+uint64_t actonQ_rtsQ_get_rss (B_SysCap cap) {
+    size_t rsm;
     int r = uv_resident_set_memory(&rsm);
-    return rsm;
+    return (uint64_t)rsm;
 }
 
-int64_t actonQ_rtsQ_U_6rss (B_SysCap cap) {
-    int64_t rsm;
+int64_t actonQ_rtsQ_rss (B_SysCap cap) {
+    size_t rsm;
     int r = uv_resident_set_memory(&rsm);
-    return rsm;
+    return (int64_t)rsm;
 }
 
-B_NoneType actonQ_rtsQ_U_4sleep (B_SysCap cap, double sleep_time) {
+B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {
     double st = sleep_time;
     struct timespec ts;
     ts.tv_sec = (int)st;
@@ -143,7 +143,7 @@ B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
 B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
-    for (int i; i <= num_wthreads; i++) {
+    for (int i = 0; i <= num_wthreads; i++) {
         B_tuple stats = $NEWTUPLE(28,
                             to$str("TODO"), // state
                             toB_u64(wt_stats[i].sleeps),
@@ -180,6 +180,6 @@ B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
 }
 
 $R actonQ_rtsQ_WThreadMonitorD__initG_local (actonQ_rtsQ_WThreadMonitor self, $Cont C_cont) {
-    set_actor_affinity(fromB_int(self->wthread_id));
+    set_actor_affinity((int)self->wthread_id);
     return $R_CONT(C_cont, B_None);
 }

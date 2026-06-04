@@ -164,6 +164,8 @@ instance QType Expr where
             fx                      = upbound env [fx1,fx2]
     qType env f (UnOp l Not e)      = (tBool, fx, UnOp l Not (qMatch f t tBool e'))
       where (t, fx, e')             = qType env f e
+    qType env f (UnOp l op e)       = (t, fx, UnOp l op e')
+      where (t, fx, e')             = qType env f e
     qType env f (Cond l e1 e e2)    = (t', fx', Cond l (qMatch f t1 t' e1') (qMatch f t tBool e') (qMatch f t2 t' e2'))
       where (t1, fx1, e1')          = qType env f e1
             (t, fx, e')             = qType env f e

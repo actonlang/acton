@@ -23,7 +23,7 @@ void stdQ_reQ___ext_init__() {
 
 
 // TODO: use u64 instead of int for arg_start_pos
-stdQ_reQ_Match stdQ_reQ_U__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
+stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
     B_Hashable hwit = (B_Hashable)B_HashableD_strG_witness;
     B_SequenceD_list swit = B_SequenceD_listG_witness;
     B_list groups = B_listG_new(NULL, NULL);
@@ -152,5 +152,5 @@ stdQ_reQ_Match stdQ_reQ_U__match (B_str arg_pattern, B_str arg_text, int64_t arg
     pcre2_match_data_free(match_data);
     pcre2_code_free(re);
 
-    return stdQ_reQ_MatchG_new(arg_pattern, arg_text, toB_int(match_start), toB_int(match_end), groups, named_groups);
+    return stdQ_reQ_MatchG_new(arg_pattern, arg_text, match_start, match_end, groups, named_groups);
 }

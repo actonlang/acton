@@ -95,8 +95,8 @@ $R B_EnvD__on_stdin_bytesG_local (B_Env self, $Cont c$cont, $action cb) {
     return $R_CONT(c$cont, B_None);
 }
 
-$R B_EnvD_exitG_local (B_Env self, $Cont c$cont, B_int n) {
-    return_val = fromB_int(n);
+$R B_EnvD_exitG_local (B_Env self, $Cont c$cont, int64_t n) {
+    return_val = n;
     rts_shutdown();
     return $R_CONT(c$cont, B_None);
 }

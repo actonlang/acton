@@ -102,7 +102,7 @@ void timeQ___ext_init__() {
     time__get_clock_data_cb(NULL);
 }
 
-int64_t timeQ_U__get_incarnation () {
+int64_t timeQ__get_incarnation () {
     return time__incarnation;
 }
 
@@ -148,7 +148,7 @@ B_tuple timeQ_get_clock_data () {
 #endif
 }
 
-B_tuple timeQ_U_1localtime (int64_t seconds) {
+B_tuple timeQ_localtime (int64_t seconds) {
     time_t t = seconds;
     struct tm tm;
 #ifdef _WIN32
@@ -188,7 +188,7 @@ B_tuple timeQ_U_1localtime (int64_t seconds) {
 #endif
 }
 
-B_tuple timeQ_U_3gmtime (int64_t seconds) {
+B_tuple timeQ_gmtime (int64_t seconds) {
     time_t t = seconds;
     struct tm tm;
 #ifdef _WIN32

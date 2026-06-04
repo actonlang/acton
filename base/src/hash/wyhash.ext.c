@@ -5,23 +5,21 @@ void zig_hash_wyhash_update(void *hasher, B_bytes data);
 uint64_t zig_hash_wyhash_final(void *hasher);
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);
 
-B_NoneType hashQ_wyhashQ_HasherD__init (hashQ_wyhashQ_Hasher self, B_u64 seed) {
-    self->_hasher = zig_hash_wyhash_init(fromB_u64(seed));
+B_NoneType hashQ_wyhashQ_HasherD__init (hashQ_wyhashQ_Hasher self, uint64_t seed) {
+    self->_hasher = (uint64_t)(uintptr_t)zig_hash_wyhash_init(seed);
     return B_None;
 }
 
 B_NoneType hashQ_wyhashQ_HasherD_update (hashQ_wyhashQ_Hasher self, B_bytes data) {
-    zig_hash_wyhash_update(self->_hasher, data);
+    zig_hash_wyhash_update((void *)(uintptr_t)self->_hasher, data);
     return B_None;
 }
 
-B_u64 hashQ_wyhashQ_HasherD_finalize (hashQ_wyhashQ_Hasher self) {
-    uint64_t h = zig_hash_wyhash_final(self->_hasher);
-    B_u64 result = toB_u64(h);
-    return result;
+uint64_t hashQ_wyhashQ_HasherD_finalize (hashQ_wyhashQ_Hasher self) {
+    return zig_hash_wyhash_final((void *)(uintptr_t)self->_hasher);
 }
 
-uint64_t hashQ_wyhashQ_U_1hash (uint64_t seed, B_bytes data) {
+uint64_t hashQ_wyhashQ_hash (uint64_t seed, B_bytes data) {
     uint64_t result = zig_hash_wyhash_hash(seed, data);
     return result;
 }
