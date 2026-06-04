@@ -773,7 +773,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
+        arch: ${{ github.event_name == 'pull_request' && fromJson('["amd64"]') || fromJson('["amd64","arm64"]') }}
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
