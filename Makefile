@@ -91,7 +91,6 @@ ACTON_ZIG_TARGET := aarch64-linux-gnu.$(ACTON_ZIG_GLIBC_VERSION)
 else
 $(error "Unsupported architecture for Linux?" $(shell uname -m))
 endif
-ACTONC_TARGET := --target $(ACTON_ZIG_TARGET)
 endif # -- END: Linux ----------------------------------------------------------
 
 .PHONY: all
@@ -167,9 +166,9 @@ test-backend: $(BACKEND_TESTS)
 	./backend/test/skiplist_test
 
 # /compiler ----------------------------------------------
-ACTONC_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
+ACTON_HS=$(wildcard compiler/lib/src/*.hs compiler/lib/src/*/*.hs compiler/acton/*.hs compiler/acton/*/*.hs)
 ACTONLSP_HS=$(wildcard compiler/lsp-server/*.hs)
-dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTONC_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
+dist/bin/acton: compiler/lib/package.yaml.in compiler/acton/package.yaml.in compiler/lsp-server/package.yaml.in compiler/stack.yaml $(ACTON_HS) $(ACTONLSP_HS) version.mk dist/builder $(ACTON_STACK_PREREQS) $(BDEPS)
 	mkdir -p dist/bin
 	rm -f dist/bin/actonc
 	cd compiler && sed 's,^version: BUILD_VERSION,version: "$(VERSION)",' < lib/package.yaml.in > lib/package.yaml
@@ -541,11 +540,11 @@ test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerr
 test-cross-compile:
 	cd compiler && stack test acton --ta '-p "/cross-compilation/"'
 
-test-incremental: dist/bin/actonc
+test-incremental: dist/bin/acton
 	cd compiler && stack test acton:incremental
 
 .PHONY: test-incremental-accept
-test-incremental-accept: dist/bin/actonc
+test-incremental-accept: dist/bin/acton
 	cd compiler && stack test acton:incremental --ta "--accept"
 
 .PHONY: test-rebuild test-rebuild-accept
@@ -588,7 +587,7 @@ test-stdlib: dist/bin/acton dist/std
 	$(MAKE) -C test tls-test-server
 	cd test/stdlib_tests && "$(ACTON)" test
 
-online-tests: dist/bin/actonc
+online-tests: dist/bin/acton
 	cd compiler && stack test acton:test_acton_online
 
 
@@ -617,18 +616,18 @@ dist/backend%: backend/%
 	cp -a "$<" "$@"
 
 .PHONY: dist/base
-dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/actonc $(DEPS) dist/backend/Build.act
+dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/build.zig.zon base/acton.zig dist/bin/acton $(DEPS) dist/backend/Build.act
 	mkdir -p "$@" "$@/.build" "$@/out"
 	rm -rf "$@/src" "$@/out/types/std"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
-	cd dist/base && ../bin/actonc build --skip-build && rm -rf .build
+	cd dist/base && ../bin/acton build --skip-build && rm -rf .build
 
 .PHONY: dist/std
-dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/actonc $(DEPS)
+dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/acton $(DEPS)
 	mkdir -p "$@" "$@/.build" "$@/out"
 	rm -rf "$@/src" "$@/out/types"
 	cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
-	cd dist/std && ../bin/actonc build --skip-build && rm -rf .build
+	cd dist/std && ../bin/acton build --skip-build && rm -rf .build
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
@@ -709,14 +708,14 @@ endif
 
 # Do grep to only get a version number. If there's an error, we get an empty
 # string which is better than getting the error message itself.
-ACTONC_VERSION=$(shell $(ACTONC) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
-.PHONY: acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz
-acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz:
+ACTON_VERSION=$(shell $(ACTON) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
+.PHONY: acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz
+acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz:
 	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > "$@"
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(OS)-$(ARCH)-$(ACTONC_VERSION).tar.xz
+	$(MAKE) acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz
 
 # This target is used by the debian packaging
 .PHONY: install
