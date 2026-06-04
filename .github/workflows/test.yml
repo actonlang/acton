@@ -31,6 +31,11 @@ on:
   # immediately (e.g. right after merging) instead of waiting for the next nightly.
   workflow_dispatch:
 
+concurrency:
+  # Non-PR runs use run_id so this only collapses stale pull request runs.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   ZIG_DOWNLOAD_BASE_URL: https://github.com/actonlang/zigballs/raw/main
 
