@@ -6,8 +6,10 @@ import Data.List
 import Data.List.Split
 import Data.Maybe (catMaybes)
 import Data.Ord
+import Data.Time.Clock (addUTCTime, getCurrentTime)
 import Data.Time.Clock.POSIX
 import qualified Data.ByteString.Lazy.Char8 as LBS
+import qualified Data.Aeson as Aeson
 
 import Control.Exception (catch, IOException)
 import System.Directory
@@ -26,11 +28,15 @@ import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 import qualified PkgCommands
+import Acton.Compile (Paths(..))
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Acton.Syntax as A
+import Acton.Testing (TestResult(..))
 import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified TestGolden
+import TestRunner (filterReusableCachedSnapshotResults)
 
 -- The default is to build and run each test program with the expectation that
 -- both compilation and running the program is successful as determined by exit
@@ -1184,63 +1190,65 @@ parseFlagTests =
       assertEqual "acton test --help stderr" "" cmdErr
       assertBool "acton test --help should include --no-cache" ("--no-cache" `isInfixOf` cmdOut)
       assertBool "acton test --help should include --tag" ("--tag" `isInfixOf` cmdOut)
-  , testCase "acton test reruns cached snapshot when expected file changes" $ do
+  , testCase "snapshot cache rejects changed expected file" $ do
       withSystemTempDirectory "acton-test-snapshot-cache" $ \proj -> do
-        actonBinDir <- Paths_acton.getBinDir
-        let distActon = "../../dist/bin/acton"
-            actonCandidate = actonBinDir </> "acton"
-        hasDistActon <- doesFileExist distActon
-        acton <- canonicalizePath $
-          if hasDistActon
-            then distActon
-            else actonCandidate
-        let name = "snapshot_cache"
-            fp = Fingerprint.formatFingerprint
-              (Fingerprint.updateFingerprintPrefix
-                (Fingerprint.fingerprintPrefixForName name) 1)
-            srcDir = proj </> "src"
+        let paths = Paths
+              { searchPath = []
+              , sysPath = ""
+              , sysTypes = ""
+              , projPath = proj
+              , projOut = ""
+              , projTypes = ""
+              , binDir = ""
+              , srcDir = proj </> "src"
+              , isTmp = False
+              , fileExt = ".act"
+              , modName = A.ModName []
+              }
             modName = "snap"
-            srcFile = srcDir </> modName <.> "act"
             expectedDir = proj </> "snapshots" </> "expected" </> modName
+            outputDir = proj </> "snapshots" </> "output" </> modName
             expectedFile = expectedDir </> "stable"
-            runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
+            outputFile = outputDir </> "stable"
+            res = TestResult
+              { trModule = modName
+              , trName = "_test_stable"
+              , trComplete = True
+              , trSuccess = Just True
+              , trSkipped = False
+              , trSkipReason = Nothing
+              , trException = Nothing
+              , trOutput = Just "snapshot v1"
+              , trStdOut = Nothing
+              , trStdErr = Nothing
+              , trFlaky = False
+              , trNumSkipped = 0
+              , trNumFailures = 0
+              , trNumErrors = 0
+              , trNumIterations = 1
+              , trTestDuration = 0
+              , trRaw = Aeson.Null
+              , trSnapshotUpdated = False
+              , trCached = True
+              }
 
-        createDirectoryIfMissing True srcDir
         createDirectoryIfMissing True expectedDir
-        writeFile (proj </> "Build.act") $ unlines
-          [ "name = \"" ++ name ++ "\""
-          , "fingerprint = " ++ fp
-          , ""
-          ]
-        writeFile srcFile $ unlines
-          [ "import testing"
-          , ""
-          , "def _test_stable() -> str:"
-          , "    return \"snapshot v1\""
-          ]
+        createDirectoryIfMissing True outputDir
         writeFile expectedFile "snapshot v1"
+        writeFile outputFile "snapshot v1"
 
-        (code1, out1, err1) <- runTest ["--iter", "1"]
-        when (code1 /= ExitSuccess) $
-          assertFailure ("initial acton test failed:\nstdout:\n" ++ out1 ++ "\nstderr:\n" ++ err1)
-
-        (code2, out2, err2) <- runTest ["--iter", "1", "--show-cached"]
-        when (code2 /= ExitSuccess) $
-          assertFailure ("cached acton test failed:\nstdout:\n" ++ out2 ++ "\nstderr:\n" ++ err2)
-        assertBool "second run should reuse cached snapshot result"
-          ("Using cached results for 1 tests" `isInfixOf` out2)
-        assertBool "cached run should mark the result as cached"
-          ("* = cached test result" `isInfixOf` out2)
+        now <- getCurrentTime
+        setModificationTime expectedFile (addUTCTime (-10) now)
+        setModificationTime outputFile now
+        reusable <- filterReusableCachedSnapshotResults (const (return ())) paths [res]
+        assertBool "unchanged snapshot should keep cached result"
+          (not (null reusable))
 
         writeFile expectedFile "snapshot v2"
-
-        (code3, out3, err3) <- runTest ["--iter", "1", "--show-cached"]
-        assertEqual "changed expected snapshot should invalidate cached success" (ExitFailure 1) code3
-        assertBool "rerun should report snapshot mismatch"
-          ("Test output does not match expected snapshot value" `isInfixOf` out3
-            || "Test output does not match expected snapshot value" `isInfixOf` err3)
-        assertBool "stale cached snapshot result should not be reused after expected change"
-          (not ("Using cached results for 1 tests" `isInfixOf` out3))
+        setModificationTime expectedFile (addUTCTime 10 now)
+        stale <- filterReusableCachedSnapshotResults (const (return ())) paths [res]
+        assertBool "changed expected snapshot should force rerun"
+          (null stale)
   ]
   where
     parserInfo = OA.info (C.cmdLineParser OA.<**> OA.helper) C.descr

@@ -1,5 +1,6 @@
 module TestRunner
   ( TestMode(..)
+  , filterReusableCachedSnapshotResults
   , listTestModules
   , listProjectTests
   , runProjectTests
