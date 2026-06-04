@@ -410,10 +410,10 @@ canReadWithoutLock path = do
         return (not dataWritable && not dirWritable)
 
 lmdbTransientMaxAttempts :: Int
-lmdbTransientMaxAttempts = 5
+lmdbTransientMaxAttempts = 10
 
 lmdbTransientRetryDelayUs :: Int
-lmdbTransientRetryDelayUs = 2000
+lmdbTransientRetryDelayUs = 20000
 
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
