@@ -2049,7 +2049,7 @@ materializeTask opts sp mn actFile providers mOnProgress task =
       parseActSource opts mn' displayFile srcContent mOnProgress
 
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
-adjustImports providers m = trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
+adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
                             m{ A.imps = imps' }
   where imps'                        = map adjust (A.imps m)
         adjust (A.Import l ms)       = A.Import l (map adj ms)
@@ -4193,7 +4193,8 @@ tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath) fpath
+srcBase paths mn        = --trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath) $
+                          fpath
   where fpath           = joinPath (srcDir paths : names)
         names           = case A.modPath mn of
                             [n]  | isproj n -> ["lib"]
@@ -4337,7 +4338,7 @@ moduleNameFromFile srcBase proj actFile = do
                 ("base", _)  -> names
                 (_, ["lib"]) -> [proj]
                 _            -> proj:names
-    traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
+    --traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
     return mn
 
 -- | Enumerate all .act files in a project and pair them with module names.
@@ -4351,6 +4352,18 @@ enumerateProjectModules ctx = do
         files <- getFilesRecursive (projSrcDir ctx)
         let actFiles = filter (\f -> takeExtension f == ".act") files
             proj = BuildSpec.specName $ projBuildSpec ctx
+            rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
+            depNames = map fst $ projDeps ctx
+            projOverlaps = filter ((== proj) . rootName) actFiles
+            depOverlaps = filter ((`elem` depNames) . rootName) actFiles
+
+        when (not $ null projOverlaps) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared project name:\n" ++
+                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- projOverlaps])
+        when (not $ null depOverlaps) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
+                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
+
         forM actFiles $ \f -> do
           mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
