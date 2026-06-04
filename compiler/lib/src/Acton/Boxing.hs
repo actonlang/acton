@@ -487,6 +487,12 @@ instance Boxing Expr where
     --                                      let res = eCallP (tApp (eDot e1 n) ts) (fixargs env p1 r)
     --                                      return (ws1++ws2, tryBox t res)
     --     where TFun _ _ r _ t        = typeOf env a
+    boxing env (Call l (Dot _ e n) PosNil KwdNil)
+      | n == boolKW,
+        Just rt <- unboxedRepType (typeOf env e)
+                                    = do (ws1,e1) <- boxing env e
+                                         let z = UnBox rt (Int l 0 "0")
+                                         return (ws1, Box tBool $ CompOp l (forceUnbox env rt e1) [OpArg NEq z])
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f
                                          (ws2,p1) <- boxing env p
                                          let c = eCallP f1 (fixargs env p1 r)
