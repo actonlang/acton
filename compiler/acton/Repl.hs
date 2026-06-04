@@ -116,7 +116,9 @@ runRepl hooks gopts opts = do
       createDirectoryIfMissing True srcRoot
       startReplWarmup ctx
       when (interactive && not (C.quiet gopts)) $ do
-        putStrLn "Acton REPL. Type :help for commands, :quit to exit."
+        putStrLn $
+          "Welcome to InterActon, the interactive Acton REPL shell. "
+          ++ "Type :help for commands, :quit to exit."
         when (C.verbose gopts) $
           putStrLn ("REPL directory: " ++ scratchDir)
       cacheDir <- hooksCacheDir hooks

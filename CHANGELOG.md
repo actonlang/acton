@@ -24,18 +24,24 @@
   very large files before type checking starts. [#2784]
 - Report active back-pass progress for normalize, deactorize, CPS, lambda
   lifting, boxing, code generation, render, and write steps, so CLI and LSP
-  builds show which generated-code phase is currently running. [#2808]
+  builds show which generated-code phase is currently running. [#2808, #2853]
 - Preserve each module's import context in cached module interfaces, so builds,
   `acton sig`, documentation, and completion can reuse cached interfaces without
   losing imported class and protocol information. [#2779]
 - Store cached module interfaces in LMDB-backed `.tydb` directories instead of
   monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
   cache misses while adding keyed records for headers, imports, names, hashes,
-  and typed statements. [#2819]
+  and typed statements. [#2819, #2855]
   - Full reads reconstruct source-order environments from explicit order keys,
     and cache copy and cleanup paths now handle directory artifacts.
+  - Read transactions retry transient LMDB lock-table setup errors with a fresh
+    environment, matching the existing retry path for environment opens.
   - Build and statically link LMDB from a pinned bundled dependency so compiler
     builds do not depend on the host LMDB installation.
+- Run front-output writes asynchronously after front passes, so cached
+  interface writes, `.tydb` copies, and documentation rendering can overlap with
+  downstream work while watch and LSP builds discard stale-generation writes.
+  [#2851]
 - Add deferred back passes for very large modules, letting the compiler run the
   normal front passes first and then generate code only for declarations that
   are reachable from the program, similar to tree shaking, dead-code
@@ -63,6 +69,9 @@
 - Speed up documentation rendering and generated-name hashing by indexing
   documentation type lookups and hashing internal/generated names without
   rendering prefix strings. [#2830, #2831]
+- Report more detailed front-pass timing for type reconstruction, result
+  forcing, hash computation, cached interface writes, and documentation output,
+  and speed up signature validation by checking bindings through a set. [#2848]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, reducing repeated scans during boxing
   and generated C/H rendering. [#2806, #2810]
@@ -81,6 +90,19 @@
   builds that reproduced it on 9.6.x). [#2832, #2834]
 
 ### CLI & Project Workflow
+- Add `acton repl`, a live interactive Acton shell for trying code, inspecting
+  values, and getting immediate feedback as you explore. [#2842]
+  - It uses the normal compiler pipeline inside a scratch REPL directory, so
+    inputs are parsed, type checked, code generated, and run like ordinary
+    Acton code; session and evaluation modules are compiled as dynamic
+    libraries so most evaluations avoid the long runner relink step.
+  - Because each interaction produces and reruns a normal executable, the REPL
+    does not keep a live interpreted runtime. Retained imports, declarations,
+    and setup assignments are replayed for each evaluation, unlike REPLs that
+    keep an interpreted process alive between inputs.
+  - The REPL retains imports, declarations, and setup assignments as session
+    source, prints non-`None` expression results, supports multi-line blocks,
+    and provides `:show`, `:reset`, `:dep`, and `:quit` commands.
 - It is now possible to customize project library output in `Build.act` by
   declaring selected modules as named static or dynamic libraries that
   executables can link against. [#2809]
@@ -154,9 +176,21 @@
   - The Acton/Zig compile cache uses one stable per-platform key refreshed by
     producer runs, with stale entries evicted before saving so CI does not keep
     a week of duplicate snapshots.
+- Run cross-compilation checks in a dedicated CI job after Debian packages are
+  built, covering macOS, Windows, GNU/Linux, and musl targets without bloating
+  the default test job's compile cache. [#2850, #2852]
+  - Windows cross-compilation uses `--no-threads`, matching the supported
+    Windows target mode, and nightly/manual runs refresh a separate
+    cross-compilation cache.
+  - Linux container jobs free host disk before restoring compile caches, and
+    release, container, apt, and Homebrew publishing jobs now wait for the
+    cross-compilation job.
 - Keep CI cache restores clean after Stack/GHC changes by removing broad Stack
   restore-key fallbacks, and make the standard-library time test tolerate slow
   CI startup while still catching gross clock errors. [#2836, #2838]
+- Retry network-bound package-manager installs and flaky distributed-database
+  test binaries in CI, and print Linux container disk usage around cache restore
+  and test execution to make out-of-space failures easier to diagnose. [#2846]
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -4106,7 +4140,15 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2839]: https://github.com/actonlang/acton/pull/2839
 [#2840]: https://github.com/actonlang/acton/pull/2840
 [#2841]: https://github.com/actonlang/acton/pull/2841
+[#2842]: https://github.com/actonlang/acton/pull/2842
 [#2843]: https://github.com/actonlang/acton/pull/2843
+[#2846]: https://github.com/actonlang/acton/pull/2846
+[#2848]: https://github.com/actonlang/acton/pull/2848
+[#2850]: https://github.com/actonlang/acton/pull/2850
+[#2851]: https://github.com/actonlang/acton/pull/2851
+[#2852]: https://github.com/actonlang/acton/pull/2852
+[#2853]: https://github.com/actonlang/acton/pull/2853
+[#2855]: https://github.com/actonlang/acton/pull/2855
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
