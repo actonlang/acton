@@ -1,0 +1,4 @@
+import prefixes.a
+
+def baa():
+    return prefixes.a.aaa
