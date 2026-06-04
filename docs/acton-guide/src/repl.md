@@ -5,7 +5,7 @@ a normal project by hand.
 
 ```console
 $ acton repl
-Acton REPL. Type :help for commands, :quit to exit.
+Welcome to InterActon, the interactive Acton REPL shell. Type :help for commands, :quit to exit.
 acton> 1 + 2
 3
 acton> :quit
