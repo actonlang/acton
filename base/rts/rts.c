@@ -234,6 +234,132 @@ void pin_actor_affinity() { }
 void set_actor_affinity(int wthread_id) { }
 #endif // ACTON_THREADS
 
+#ifdef ACTON_THREADS
+static pthread_mutex_t sync_pause_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t sync_pause_cond = PTHREAD_COND_INITIALIZER;
+static int sync_pause_requested = 0;
+static int sync_pause_owner = -1;
+static int sync_pause_parked_count = 0;
+static int sync_pause_workers_are_started = 0;
+static int sync_pause_parked[MAX_WTHREADS];
+
+static void sync_pause_clear_parked(void) {
+    for (int i = 0; i <= num_wthreads; i++) {
+        sync_pause_parked[i] = 0;
+    }
+}
+
+static void wake_all_wt(void) {
+    for (int i = 0; i <= num_wthreads; i++) {
+        uv_async_send(&wake_ev[i]);
+    }
+}
+
+static void sync_pause_wait(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    // Use a bounded wait so pause owners and parked workers re-check rts_exit
+    // even if shutdown starts without a matching condition broadcast.
+    ts.tv_nsec += 10 * 1000 * 1000;
+    if (ts.tv_nsec >= 1000 * 1000 * 1000) {
+        ts.tv_sec++;
+        ts.tv_nsec -= 1000 * 1000 * 1000;
+    }
+    pthread_cond_timedwait(&sync_pause_cond, &sync_pause_lock, &ts);
+}
+
+int acton_sync_pause_begin(void) {
+    WorkerCtx wctx = GET_WCTX();
+    if (wctx == NULL || wctx->id < 0 || wctx->id > num_wthreads) {
+        return -1;
+    }
+    int owner = (int)wctx->id;
+
+    pthread_mutex_lock(&sync_pause_lock);
+    if (!sync_pause_workers_are_started || sync_pause_requested) {
+        pthread_mutex_unlock(&sync_pause_lock);
+        return -1;
+    }
+    if (rts_exit) {
+        pthread_mutex_unlock(&sync_pause_lock);
+        return -1;
+    }
+
+    sync_pause_requested = 1;
+    sync_pause_owner = owner;
+    sync_pause_parked_count = 0;
+    sync_pause_clear_parked();
+
+    wake_all_wt();
+    while (sync_pause_parked_count < num_wthreads && !rts_exit) {
+        sync_pause_wait();
+    }
+    if (rts_exit) {
+        sync_pause_requested = 0;
+        sync_pause_owner = -1;
+        sync_pause_parked_count = 0;
+        pthread_cond_broadcast(&sync_pause_cond);
+        pthread_mutex_unlock(&sync_pause_lock);
+        return -1;
+    }
+
+    pthread_mutex_unlock(&sync_pause_lock);
+    return 0;
+}
+
+void acton_sync_pause_end(void) {
+    WorkerCtx wctx = GET_WCTX();
+    if (wctx == NULL || wctx->id < 0 || wctx->id > num_wthreads) {
+        return;
+    }
+    int owner = (int)wctx->id;
+
+    pthread_mutex_lock(&sync_pause_lock);
+    if (!sync_pause_requested || sync_pause_owner != owner) {
+        pthread_mutex_unlock(&sync_pause_lock);
+        return;
+    }
+
+    sync_pause_requested = 0;
+    sync_pause_owner = -1;
+    sync_pause_parked_count = 0;
+    pthread_cond_broadcast(&sync_pause_cond);
+    pthread_mutex_unlock(&sync_pause_lock);
+}
+
+// Called from the worker loop between actor continuations. If a sync pause is
+// active, non-owner workers park here while the owner runs the synchronized op.
+static void maybe_sync_pause(void) {
+    WorkerCtx wctx = GET_WCTX();
+    if (wctx == NULL || wctx->id < 0 || wctx->id >= MAX_WTHREADS) {
+        return;
+    }
+    int id = (int)wctx->id;
+
+    pthread_mutex_lock(&sync_pause_lock);
+    while (sync_pause_requested && id != sync_pause_owner && !rts_exit) {
+        if (!sync_pause_parked[id]) {
+            sync_pause_parked[id] = 1;
+            sync_pause_parked_count++;
+            pthread_cond_broadcast(&sync_pause_cond);
+        }
+        sync_pause_wait();
+    }
+    pthread_mutex_unlock(&sync_pause_lock);
+}
+
+static void sync_pause_workers_started(void) {
+    pthread_mutex_lock(&sync_pause_lock);
+    sync_pause_workers_are_started = 1;
+    pthread_mutex_unlock(&sync_pause_lock);
+}
+#else
+int acton_sync_pause_begin(void) { return 0; }
+void acton_sync_pause_end(void) { }
+static void maybe_sync_pause(void) { }
+static void sync_pause_workers_started(void) { }
+#endif
+
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
@@ -1533,6 +1659,7 @@ void wt_work_cb(uv_check_t *ev) {
 
     uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts_start);
     while (true) {
+        maybe_sync_pause();
         if (rts_exit) {
             return;
         }
@@ -2605,9 +2732,9 @@ int main(int argc, char **argv) {
     }
 
 #ifdef ACTON_THREADS
-    if (num_wthreads > MAX_WTHREADS) {
-        fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS);
-        fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS);
+    if (num_wthreads >= MAX_WTHREADS) {
+        fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS - 1);
+        fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS - 1);
         exit(1);
     }
     // Determine number of worker threads, normally 1:1 per CPU thread / core
@@ -2858,6 +2985,7 @@ int main(int argc, char **argv) {
             //pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
         }
     }
+    sync_pause_workers_started();
 
     pthread_attr_destroy(&ss_attr);
 #endif
