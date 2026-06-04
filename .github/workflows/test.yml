@@ -521,6 +521,7 @@ jobs:
 
 
   run-macos:
+    if: github.event_name != 'pull_request'
     needs: test-macos
     strategy:
       fail-fast: false
@@ -729,6 +730,7 @@ jobs:
         run: df -h || true
 
   perf-vs-main:
+    if: github.event_name != 'pull_request'
     needs: build-debs
     # Use our own runner to get more deterministic results
     runs-on: [self-hosted, linux, X64]
