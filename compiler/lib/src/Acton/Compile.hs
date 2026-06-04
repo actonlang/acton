@@ -1494,18 +1494,14 @@ importsOf (ParseErrorTask _ _) = []
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
 resolveProviders :: String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders proj order modSets imps =
-    M.fromList $ catMaybes $ map findProvider imps
-  where
-    local           = head order
-    set0            = M.lookup local modSets
-    findProvider mn = case set0 of
-                        Just s | Data.Set.member mn' s ->
-                            Just (mn, TaskKey local mn')
-                        _ ->
-                            listToMaybe [ (mn, TaskKey p mn) | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets)]
-      where mn'     = A.modName (proj : A.modPath mn)
-
+resolveProviders proj order modSets imps = M.fromList $ catMaybes $ map findProvider imps
+  where p0              = head order
+        Just mods0      = M.lookup p0 modSets
+        findProvider mn
+          | Data.Set.member mn' mods0
+                        = Just (mn, TaskKey p0 mn')
+          | otherwise   = listToMaybe [ (mn, TaskKey p mn) | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
+          where mn'     = if proj `elem` ["","base"] then mn else A.modName (proj : A.modPath mn)
 
 type ProjDir = FilePath
 type ActFile = FilePath
@@ -4197,10 +4193,13 @@ tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : names)
-  where names           = case A.modPath mn of
-                            n:ns | n == projName paths -> ns
+srcBase paths mn        = trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath) fpath
+  where fpath           = joinPath (srcDir paths : names)
+        names           = case A.modPath mn of
+                            [n]  | isproj n -> ["lib"]
+                            n:ns | isproj n -> ns
                             ns -> ns
+        isproj n        = n == projName paths
 
 
 -- | Walk upward from a path to find a project root.
@@ -4333,7 +4332,13 @@ moduleNameFromFile srcBase proj actFile = do
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-    return $ A.modName $ if proj `elem` ["","base"] then names else proj:names
+        mn = A.modName $ case (proj, names) of
+                ("", _)      -> names
+                ("base", _)  -> names
+                (_, ["lib"]) -> [proj]
+                _            -> proj:names
+    traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
+    return mn
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
