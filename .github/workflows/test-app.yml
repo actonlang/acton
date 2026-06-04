@@ -14,10 +14,6 @@ jobs:
   test-app:
     runs-on: ubuntu-24.04${{ inputs.arch == 'arm64' && '-arm' || '' }}
     steps:
-      - name: "Install gdb"
-        run: |
-          sudo apt update
-          sudo apt install -y gdb
       - name: "Download .deb files"
         uses: actions/download-artifact@v8
         with:
