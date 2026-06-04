@@ -1,47 +1,47 @@
-B_float stdQ_mathQ_RealFunsD_floatD_sqrt(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(sqrt(x->val));
+double stdQ_mathQ_sqrt(double x) {
+  return sqrt(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_exp(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(exp(x->val));
+double stdQ_mathQ_exp(double x) {
+  return exp(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_log(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(log(x->val));
+double stdQ_mathQ_log(double x) {
+  return log(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_sin(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(sin(x->val));
+double stdQ_mathQ_sin(double x) {
+  return sin(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_cos(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(cos(x->val));
+double stdQ_mathQ_cos(double x) {
+  return cos(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_tan(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(tan(x->val));
+double stdQ_mathQ_tan(double x) {
+  return tan(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_asin(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(asin(x->val));
+double stdQ_mathQ_asin(double x) {
+  return asin(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_acos(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(acos(x->val));
+double stdQ_mathQ_acos(double x) {
+  return acos(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_atan(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(atan(x->val));
+double stdQ_mathQ_atan(double x) {
+  return atan(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_sinh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(sinh(x->val));
+double stdQ_mathQ_sinh(double x) {
+  return sinh(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_cosh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(cosh(x->val));
+double stdQ_mathQ_cosh(double x) {
+  return cosh(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_tanh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(tanh(x->val));
+double stdQ_mathQ_tanh(double x) {
+  return tanh(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_asinh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(asinh(x->val));
+double stdQ_mathQ_asinh(double x) {
+  return asinh(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_acosh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(acosh(x->val));
+double stdQ_mathQ_acosh(double x) {
+  return acosh(x);
 }
-B_float stdQ_mathQ_RealFunsD_floatD_atanh(stdQ_mathQ_RealFunsD_float wit, B_float x) {
-  return to$float(atanh(x->val));
+double stdQ_mathQ_atanh(double x) {
+  return atanh(x);
 }
 
 void stdQ_mathQ___ext_init__() {
