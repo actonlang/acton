@@ -1,6 +1,49 @@
 Building file src/c.act in project .
 Resolving dependencies (fetching if missing)...
-  Fresh a: using cached .tydb
-  Fresh b: using cached .tydb
-  Fresh c: using cached .tydb
-      Final compilation done                                                0.000 s
+   rebuild.a  Parse done                                                            0.000 s
+  Stale rebuild.a: source changed
+   rebuild.a  Type check done                                                       0.000 s
+     Non-total inferred signature: aaa
+       aaa : int
+   rebuild.b  Parse done                                                            0.000 s
+  Stale rebuild.b: source changed
+   rebuild.b  Type check done                                                       0.000 s
+     Non-total inferred signature: baa
+       baa : () -> int
+   rebuild.c  Parse done                                                            0.000 s
+  Stale rebuild.c: source changed
+   rebuild.c  Type check done                                                       0.000 s
+   rebuild.a  Wrote .tydb                                                           0.000 s
+   rebuild.a  Generated docs                                                        0.000 s
+     Back normalize done: rebuild.a                                                 0.000 s
+     Back deactorize done: rebuild.a                                                0.000 s
+     Back cps done: rebuild.a                                                       0.000 s
+     Back llift done: rebuild.a                                                     0.000 s
+     Back boxing done: rebuild.a                                                    0.000 s
+     Back codegen done: rebuild.a                                                   0.000 s
+     Back render done: rebuild.a                                                    0.000 s
+     Back write done: rebuild.a                                                     0.000 s
+   rebuild.a  Compilation done                                                      0.000 s
+   rebuild.b  Wrote .tydb                                                           0.000 s
+   rebuild.b  Generated docs                                                        0.000 s
+     Back normalize done: rebuild.b                                                 0.000 s
+     Back deactorize done: rebuild.b                                                0.000 s
+     Back cps done: rebuild.b                                                       0.000 s
+     Back llift done: rebuild.b                                                     0.000 s
+     Back boxing done: rebuild.b                                                    0.000 s
+     Back codegen done: rebuild.b                                                   0.000 s
+     Back render done: rebuild.b                                                    0.000 s
+     Back write done: rebuild.b                                                     0.000 s
+   rebuild.b  Compilation done                                                      0.000 s
+   rebuild.c  Wrote .tydb                                                           0.000 s
+   rebuild.c  Generated docs                                                        0.000 s
+     Back normalize done: rebuild.c                                                 0.000 s
+     Back deactorize done: rebuild.c                                                0.000 s
+     Back cps done: rebuild.c                                                       0.000 s
+     Back llift done: rebuild.c                                                     0.000 s
+     Back boxing done: rebuild.c                                                    0.000 s
+     Back codegen done: rebuild.c                                                   0.000 s
+     Back render done: rebuild.c                                                    0.000 s
+     Back write done: rebuild.c                                                     0.000 s
+   rebuild.c  Compilation done                                                      0.000 s
+              Final compilation done                                                0.000 s
