@@ -516,7 +516,9 @@ test: dist/bin/acton
 	cd compiler && stack test libacton acton:incremental
 	# Exclude the cross-compilation group from the default run: it builds for
 	# many targets and bloats ~/.cache/acton. Run it via `make test-cross-compile`.
-	cd compiler && stack test acton:test_acton --ta '-p "! /cross-compilation/"'
+	# Exclude stdlib here because `test-stdlib` below runs the same compiler
+	# stdlib group before the standalone stdlib_tests project.
+	cd compiler && stack test acton:test_acton --ta '-p "! /cross-compilation/ && ! /stdlib/"'
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
