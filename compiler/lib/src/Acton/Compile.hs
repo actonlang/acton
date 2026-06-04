@@ -234,7 +234,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
 import Control.DeepSeq (rnf)
-import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, onException, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
 import Data.Bits (shiftL, shiftR, (.|.))
@@ -244,6 +244,7 @@ import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub, partition)
 import qualified Data.List
 import Data.IORef
+import qualified Data.IntMap.Strict as IM
 import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Map as M
@@ -1489,6 +1490,12 @@ forceTypeEnv typeEnv = do
   evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
   evaluate (forceHTEnv (Acton.Env.hmodules typeEnv))
 
+prepareTypeEnv :: Acton.Env.Env0 -> IO Acton.Env.Env0
+prepareTypeEnv env = do
+  let typeEnv = Converter.convEnvProtos env
+  forceTypeEnv typeEnv
+  return typeEnv
+
 forceTypeResult :: I.NameInfo -> A.Module -> IO ()
 forceTypeResult (I.NModule imps iface mdoc) tchecked = do
   evaluate (rnf imps)
@@ -1511,6 +1518,67 @@ data FrontTypeFactsResult = FrontTypeFactsResult
   , ftfrImplFactsTime :: TimeSpec
   , ftfrStmtEntriesTime :: TimeSpec
   }
+
+data FrontTypeFactRows = FrontTypeFactRows
+  { ftrImplByteRows :: [(A.Name, B.ByteString)]
+  , ftrImplDepRows :: [(A.Name, [A.QName])]
+  , ftrImplLocRows :: [(A.Name, SrcLoc)]
+  , ftrStmtEntryRows :: [B.ByteString]
+  }
+
+frontTypeFactsFromStmts :: [A.Stmt] -> IO FrontTypeFacts
+frontTypeFactsFromStmts ss = do
+  let items = concatMap Hashing.topLevelStmtItems ss
+      facts =
+        FrontTypeFacts
+          { ftfImplBytes = Hashing.nameBytesFromItems items
+          , ftfImplDeps = Hashing.implDepsFromItems items
+          , ftfImplLocs = Hashing.nameLocsFromItems items
+          , ftfStmtEntries = map InterfaceFiles.encodeStmtEntry ss
+          }
+  evaluate (rnfFrontTypeFacts facts)
+  return facts
+
+frontTypeFactRowsFromStmts :: [A.Stmt] -> IO FrontTypeFactRows
+frontTypeFactRowsFromStmts ss = do
+  facts <- frontTypeFactsFromStmts ss
+  let rows = FrontTypeFactRows
+        { ftrImplByteRows = M.toList (ftfImplBytes facts)
+        , ftrImplDepRows = M.toList (ftfImplDeps facts)
+        , ftrImplLocRows = M.toList (ftfImplLocs facts)
+        , ftrStmtEntryRows = ftfStmtEntries facts
+        }
+  evaluate (rnfFrontTypeFactRows rows)
+  return rows
+
+frontTypeFactsFromChecked :: IORef (IM.IntMap FrontTypeFactRows) -> IO FrontTypeFactsResult
+frontTypeFactsFromChecked factsRef = do
+  timeStart <- getTime Monotonic
+  rowsByIx <- readIORef factsRef
+  let facts = frontTypeFactsFromRows (IM.elems rowsByIx)
+  evaluate (rnfFrontTypeFacts facts)
+  timeDone <- getTime Monotonic
+  return FrontTypeFactsResult
+    { ftfrFacts = facts
+    , ftfrImplFactsTime = timeDone - timeStart
+    , ftfrStmtEntriesTime = TimeSpec 0 0
+    }
+
+frontTypeFactsFromRows :: [FrontTypeFactRows] -> FrontTypeFacts
+frontTypeFactsFromRows rows =
+  FrontTypeFacts
+    { ftfImplBytes = foldl' addByte M.empty (concatMap ftrImplByteRows rows)
+    , ftfImplDeps = foldl' addDeps M.empty (concatMap ftrImplDepRows rows)
+    , ftfImplLocs = foldl' addLoc M.empty (concatMap ftrImplLocRows rows)
+    , ftfStmtEntries = concatMap ftrStmtEntryRows rows
+    }
+  where
+    addByte acc (n, bs) =
+      M.insertWith (\new old -> old `B.append` B.cons '\n' new) n bs acc
+    addDeps acc (n, deps) =
+      M.insertWith (++) n deps acc
+    addLoc acc (n, loc) =
+      M.insertWith (\new _ -> new) n loc acc
 
 sourceNameFactsFromModule :: A.Module -> IO (M.Map A.Name B.ByteString, M.Map A.Name SrcLoc)
 sourceNameFactsFromModule (A.Module _ _ _ ss) = do
@@ -1610,6 +1678,13 @@ rnfFrontTypeFacts facts =
   rnf (ftfImplDeps facts) `seq`
   rnf (ftfImplLocs facts) `seq`
   rnf (ftfStmtEntries facts)
+
+rnfFrontTypeFactRows :: FrontTypeFactRows -> ()
+rnfFrontTypeFactRows rows =
+  rnf (ftrImplByteRows rows) `seq`
+  rnf (ftrImplDepRows rows) `seq`
+  rnf (ftrImplLocRows rows) `seq`
+  rnf (ftrStmtEntryRows rows)
 
 forceTEnvParallel :: [(A.Name, I.NameInfo)] -> IO ()
 forceTEnvParallel [] = return ()
@@ -2467,6 +2542,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
 
     coreWithSourceFacts timeStart isRoot sourceHashFactsAsync = do
       typeStmtTimingsRef <- newIORef ([] :: [TypeStmtTiming])
+      typeFactsRef <- newIORef IM.empty
       inferredSigsRef <- newIORef ([] :: [InferredSignature])
       typeActiveRef <- newIORef Nothing
       typeProgressDoneRef <- newIORef Nothing
@@ -2500,6 +2576,10 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             if C.timing gopts || C.verbose gopts
               then Just onInferredSignature
               else Nothing
+          onTypeChecked ix ss = do
+            rows <- frontTypeFactRowsFromStmts ss
+            atomicModifyIORef' typeFactsRef $ \rowsByIx ->
+              (IM.insert ix rows rowsByIx, ())
 
       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
       timeEnv <- getTime Monotonic
@@ -2512,16 +2592,21 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
 
       -- Type-check first; compile-side finalization derives output facts from
       -- the typed module without making Types.reconstruct a hashing API.
-      (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
+      typeEnvAsync <- async (prepareTypeEnv env)
+      (nmod,tchecked,_typeEnv,tests) <-
+        Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb (Just onTypeChecked) env kchecked
+          `onException` cancel typeEnvAsync
       timeTypeReconstruct <- getTime Monotonic
-      (timeTypeForce, typeFactsResult) <-
-        withAsync (frontTypeFactsFromModule tchecked) $ \typeFactsAsync -> do
-          withAsync (forceTypeEnv typeEnv) $ \typeEnvForce -> do
-            forceTypeResult nmod tchecked
-            wait typeEnvForce
-            timeTypeForce <- getTime Monotonic
-            typeFactsResult <- wait typeFactsAsync
-            return (timeTypeForce, typeFactsResult)
+      (timeTypeForce, typeEnv) <-
+        ( do forceTypeResult nmod tchecked
+             typeEnv <- wait typeEnvAsync
+             timeTypeForce <- getTime Monotonic
+             return (timeTypeForce, typeEnv)
+        ) `onException` cancel typeEnvAsync
+      typeFactsResult <-
+        if null tests
+          then frontTypeFactsFromChecked typeFactsRef
+          else frontTypeFactsFromModule tchecked
       let typeFacts = ftfrFacts typeFactsResult
       ((moduleSrcBytesHash, nameSrcHashes, nameLocsParsed), sourceFactsTime) <- wait sourceHashFactsAsync
       -- Store roots so later builds can discover entry points without reparse.

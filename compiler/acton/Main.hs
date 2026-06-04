@@ -1253,7 +1253,7 @@ printDocs gopts opts = do
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
             kchecked <- Acton.Kinds.check env parsed
-            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing env kchecked
+            (nmod, _, env', _) <- Acton.Types.reconstruct Nothing Nothing Nothing env kchecked
             let I.NModule _ tenv mdoc = nmod
 
             -- 1. If format is explicitly set (via -t, --html, --markdown), use it

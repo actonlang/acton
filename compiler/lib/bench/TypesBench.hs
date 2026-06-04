@@ -74,7 +74,7 @@ main = do
         elapsed "kinds" t2 t3
         printStatsMaybe "kinds_stats" s2 s3
 
-        (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked
+        (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing Nothing env kchecked
         E.evaluate (rnf nmod)
         E.evaluate (rnf tchecked)
         E.evaluate (forceHTEnv (Env.hnames typeEnv))
