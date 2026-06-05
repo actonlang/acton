@@ -47,11 +47,12 @@
 - Store cached module interfaces in LMDB-backed `.tydb` directories instead of
   monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
   cache misses while adding keyed records for headers, imports, names, hashes,
-  and typed statements. [#2819, #2855]
+  and typed statements. [#2819, #2855, #2858]
   - Full reads reconstruct source-order environments from explicit order keys,
     and cache copy and cleanup paths now handle directory artifacts.
   - Read transactions retry transient LMDB lock-table setup errors with a fresh
-    environment, matching the existing retry path for environment opens.
+    environment and a longer backoff window, matching the existing retry path
+    for environment opens.
   - Build and statically link LMDB from a pinned bundled dependency so compiler
     builds do not depend on the host LMDB installation.
 - Run front-output writes asynchronously after front passes, so cached
@@ -61,8 +62,9 @@
 - Add deferred back passes for very large modules, letting the compiler run the
   normal front passes first and then generate code only for declarations that
   are reachable from the program, similar to tree shaking, dead-code
-  elimination, or link-time optimization for generated Acton modules. [#2843]
-  - Automatic selection starts at modules with at least 10,000 top-level names;
+  elimination, or link-time optimization for generated Acton modules. [#2843,
+  #2884]
+  - Automatic selection starts at modules with at least 1,000 top-level names;
     `--dbp MOD[:NAME,...]` can force focused experiments, and `--no-dbp`
     disables both heuristic and forced selection.
   - Deferred back passes prune typed modules to interested names, root actors,
@@ -70,6 +72,11 @@
     running the existing back-pass chain.
   - Modules at explicit `Build.act` library boundaries compile normally so
     declared library outputs keep their full generated surface.
+- Skip build-time HTML documentation pages for modules with more than 10,000
+  top-level names while keeping compilation and cached interfaces intact. The
+  generated project documentation index still lists those modules without
+  linking to missing pages, and explicit `acton doc FILE.act` requests still
+  render the requested source file. [#2884]
 - Fix concurrent `.tydb` reads so shared interface caches retry transient LMDB
   lock-file setup races and propagate environmental errors with their real
   cause instead of reporting a missing interface. [#2841]
@@ -127,8 +134,14 @@
     existing executable against the updated shared library.
   - Incremental builds keep every module in a declared library together, so
     library artifacts stay complete even when only one member module changed.
+- Use the canonical `acton` binary in Makefile build, test, distribution, and
+  release recipes while keeping `actonc` as a compatibility symlink and install
+  alias. [#2882]
 
 ### Runtime & Standard Library
+- Add an RTS sync-pause primitive for worker threads, allowing a worker to
+  cooperatively park the rest of the worker pool around synchronized runtime
+  operations such as dynamic library code reload. [#2815]
 - Expose standard library modules through a bundled `std` project and namespace,
   so applications can import modules such as `std.json`, `std.argparse`, and
   `std.xml` without declaring an external dependency. [#2817]
@@ -4148,6 +4161,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2810]: https://github.com/actonlang/acton/pull/2810
 [#2811]: https://github.com/actonlang/acton/pull/2811
 [#2813]: https://github.com/actonlang/acton/pull/2813
+[#2815]: https://github.com/actonlang/acton/pull/2815
 [#2816]: https://github.com/actonlang/acton/pull/2816
 [#2817]: https://github.com/actonlang/acton/pull/2817
 [#2819]: https://github.com/actonlang/acton/pull/2819
@@ -4178,7 +4192,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2853]: https://github.com/actonlang/acton/pull/2853
 [#2855]: https://github.com/actonlang/acton/pull/2855
 [#2856]: https://github.com/actonlang/acton/pull/2856
+[#2858]: https://github.com/actonlang/acton/pull/2858
 [#2881]: https://github.com/actonlang/acton/pull/2881
+[#2882]: https://github.com/actonlang/acton/pull/2882
+[#2884]: https://github.com/actonlang/acton/pull/2884
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
