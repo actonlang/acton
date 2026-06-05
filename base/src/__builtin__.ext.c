@@ -1,7 +1,7 @@
 #include "rts/rts.c"
 
 void B___ext_init__() {
-
+    /*
     B_HashableD_bigintG_methods.__eq__ = (B_bool (*)(B_HashableD_bigint, B_bigint, B_bigint))B_OrdD_bigintD___eq__;
     B_HashableD_intG_methods.__eq__ = (B_bool (*)(B_HashableD_int, B_int, B_int))B_OrdD_intD___eq__;
     B_HashableD_i32G_methods.__eq__ = (B_bool (*)(B_HashableD_i32, B_i32, B_i32))B_OrdD_i32D___eq__;
@@ -17,6 +17,7 @@ void B___ext_init__() {
     B_ContainerD_listG_methods.__len__ = (int64_t (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___len__;
     B_ContainerD_listG_methods.__fromiter__ = (B_list (*)(B_ContainerD_list, B_Iterable, $WORD))B_CollectionD_SequenceD_listD___fromiter__;
     B_ContainerD_listG_methods.__iter__ = (B_Iterator (*)(B_ContainerD_list, B_list))B_CollectionD_SequenceD_listD___iter__;
+    */
 }
 
 B_str B_BaseExceptionD__name (B_BaseException self) {
