@@ -92,6 +92,7 @@ module Acton.Compile
   , DeferredBackJob(..)
   , FrontResult(..)
   , FrontOutputKind(..)
+  , FrontOutputProgress(..)
   , FrontOutputJob
   , waitFrontOutputJobs
   , FrontTiming(..)
@@ -393,6 +394,11 @@ data FrontOutputKind
   | FrontOutputDoc
   deriving (Eq, Ord, Show)
 
+data FrontOutputProgress = FrontOutputProgress
+  { fopLabel :: String
+  , fopRatio :: Double
+  } deriving (Eq, Show)
+
 data FrontTiming = FrontTiming
   { ftEnv :: TimeSpec
   , ftKinds :: TimeSpec
@@ -426,6 +432,7 @@ data CompileCallbacks = CompileCallbacks
   , ccOnFrontDone :: GlobalTask -> C.CompileOptions -> IO ()
   , ccOnFrontProgress :: GlobalTask -> C.CompileOptions -> FrontPassProgress -> IO ()
   , ccOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
+  , ccOnFrontOutputProgress :: TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ()
   , ccOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
   , ccShouldWriteFrontOutput :: IO Bool
   , ccOnBackJob :: BackJob -> IO ()
@@ -446,6 +453,7 @@ defaultCompileCallbacks = CompileCallbacks
   , ccOnFrontDone = \_ _ -> return ()
   , ccOnFrontProgress = \_ _ _ -> return ()
   , ccOnFrontOutputStart = \_ _ -> return ()
+  , ccOnFrontOutputProgress = \_ _ _ -> return ()
   , ccOnFrontOutputDone = \_ _ _ -> return ()
   , ccShouldWriteFrontOutput = return True
   , ccOnBackJob = \_ -> return ()
@@ -749,6 +757,7 @@ data CompileHooks = CompileHooks
   , chOnFrontProgress :: GlobalTask -> FrontPassProgress -> IO ()
   , chOnFrontResult :: GlobalTask -> FrontResult -> IO ()
   , chOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
+  , chOnFrontOutputProgress :: TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ()
   , chOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
   , chOnBackQueued :: TaskKey -> Bool -> IO ()
   , chOnBackSkipped :: TaskKey -> IO ()
@@ -770,6 +779,7 @@ defaultCompileHooks =
     , chOnFrontProgress = \_ _ -> return ()
     , chOnFrontResult = \_ _ -> return ()
     , chOnFrontOutputStart = \_ _ -> return ()
+    , chOnFrontOutputProgress = \_ _ _ -> return ()
     , chOnFrontOutputDone = \_ _ _ -> return ()
     , chOnBackQueued = \_ _ -> return ()
     , chOnBackSkipped = \_ -> return ()
@@ -807,6 +817,7 @@ runCompilePlan sp gopts plan sched gen hooks = do
         , ccOnFrontDone = \t _ -> chOnFrontDone hooks t
         , ccOnFrontProgress = \t _ p -> chOnFrontProgress hooks t p
         , ccOnFrontOutputStart = chOnFrontOutputStart hooks
+        , ccOnFrontOutputProgress = chOnFrontOutputProgress hooks
         , ccOnFrontOutputDone = chOnFrontOutputDone hooks
         , ccShouldWriteFrontOutput = do
             current <- readIORef (csGenRef sched)
@@ -1346,6 +1357,13 @@ frontOutputKindName :: FrontOutputKind -> String
 frontOutputKindName FrontOutputTydb     = "tydb"
 frontOutputKindName FrontOutputTydbCopy = "tydb-copy"
 frontOutputKindName FrontOutputDoc      = "doc"
+
+frontOutputTyDbProgress :: InterfaceFiles.TyDbWriteProgress -> FrontOutputProgress
+frontOutputTyDbProgress p =
+  FrontOutputProgress
+    { fopLabel = InterfaceFiles.tyDbWriteProgressLabel p
+    , fopRatio = InterfaceFiles.tyDbWriteProgressRatio p
+    }
 
 copyTydbInterface :: C.CompileOptions -> Paths -> A.ModName -> IO ()
 copyTydbInterface opts paths mn =
@@ -2157,11 +2175,12 @@ runFrontPasses :: C.GlobalOptions
                -> (A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)))
                -> (FrontPassProgress -> IO ())
                -> (TaskKey -> FrontOutputKind -> IO ())
+               -> (TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ())
                -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                -> IO Bool
                -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveNameHashMap onFrontProgress onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
+runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveNameHashMap onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -2409,16 +2428,22 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   -- Module-level hashes summarize the per-name hashes.
                   let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
-                  when (C.timing gopts) $
-                    evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, nameHashes))
+                  evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
+                  evaluate (rnf (nameHashes, roots, tests, mdoc))
+                  evaluate (rnf nmod)
+                  evaluate (rnf tchecked)
                   timeTypeHash <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
                   iff (C.sigs opts && isRoot) $ dump mn "sigs" (Acton.Types.prettySigs env mn imps fullIface)
                   timeTypeCheck <- getTime Monotonic
 
-                  let writeTyDb = do
-                        InterfaceFiles.writeFile (tyDbPath paths mn) moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
+                  let writeTyDb outputKey = do
+                        InterfaceFiles.writeFileWithProgress
+                          (\p -> onFrontOutputProgress outputKey FrontOutputTydb (frontOutputTyDbProgress p))
+                          A.version
+                          (tyDbPath paths mn)
+                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash nameHashes roots tests mdoc nmod tchecked
                       writeDoc = do
                         let docDir = joinPath [projPath paths, "out", "doc"]
                             modPathList = A.modPath mn
@@ -2486,7 +2511,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey
                         startDependentOutput =
                           startDependentFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput
-                    tyDbJob <- startOutput FrontOutputTydb writeTyDb
+                    tyDbJob <- startOutput FrontOutputTydb (writeTyDb outputKey)
                     docJobs <-
                       forM docOutputActions $ uncurry startOutput
                     tyJobs <-
@@ -3162,6 +3187,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 (getNameHashMapCached bPaths)
                 (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
                 (ccOnFrontOutputStart callbacks)
+                (ccOnFrontOutputProgress callbacks)
                 (ccOnFrontOutputDone callbacks)
                 (ccShouldWriteFrontOutput callbacks)
                 (rememberFrontOutputJobList frontOutputRef)
@@ -3581,6 +3607,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           resolveNameHashMap'
                           (\p -> ccOnFrontProgress callbacks t optsT p)
                           (ccOnFrontOutputStart callbacks)
+                          (ccOnFrontOutputProgress callbacks)
                           (ccOnFrontOutputDone callbacks)
                           (ccShouldWriteFrontOutput callbacks)
                           (rememberFrontOutputJobList frontOutputRef)
@@ -3653,20 +3680,31 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                       let updatedNameHashes =
                                             Hashing.refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes
                                           moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
+                                      evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, imps))
+                                      evaluate (rnf (updatedNameHashes, roots, tests, mdoc))
+                                      evaluate (rnf nmod)
+                                      evaluate (rnf tmod)
                                       mask_ $ do
+                                        let outputKey = TaskKey (projPath paths) mn
+                                            tyDbProgress p =
+                                              ccOnFrontOutputProgress callbacks outputKey FrontOutputTydb (frontOutputTyDbProgress p)
                                         outputJob <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
                                                                          (ccOnFrontOutputDone callbacks)
                                                                          (ccShouldWriteFrontOutput callbacks)
-                                                                         (TaskKey (projPath paths) mn)
+                                                                         outputKey
                                                                          FrontOutputTydb $ do
-                                          InterfaceFiles.writeFile tyFile moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
+                                          InterfaceFiles.writeFileWithProgress
+                                            tyDbProgress
+                                            A.version
+                                            tyFile
+                                            moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedNameHashes roots tests mdoc nmod tmod
                                         tyJobs <-
                                           if C.tydb optsT
                                             then (:[]) <$> startDependentFrontOutputJob (ccOnFrontOutputStart callbacks)
                                                                                        (ccOnFrontOutputDone callbacks)
                                                                                        (ccShouldWriteFrontOutput callbacks)
                                                                                        outputJob
-                                                                                       (TaskKey (projPath paths) mn)
+                                                                                       outputKey
                                                                                        FrontOutputTydbCopy
                                                                                        (copyTydbInterface optsT paths mn)
                                             else return []

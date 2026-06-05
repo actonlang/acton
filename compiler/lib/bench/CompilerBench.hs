@@ -207,6 +207,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       (\_ -> return ())
       (\_ _ -> return ())
       (\_ _ _ -> return ())
+      (\_ _ _ -> return ())
       (return True)
       (\_ -> return ())
     fr <- case res of

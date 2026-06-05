@@ -1526,7 +1526,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         finalDoneStatus = "Final compilation done"
         frontOutputActiveStatus kind =
           case kind of
-            FrontOutputTydb -> "Writing .tydb"
+            FrontOutputTydb -> "Preparing .tydb"
             FrontOutputTydbCopy -> "Copying .tydb"
             FrontOutputDoc -> "Generating docs"
         frontOutputDoneStatus kind =
@@ -1539,6 +1539,12 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
             FrontOutputTydb -> ".tydb"
             FrontOutputTydbCopy -> "Copy .tydb"
             FrontOutputDoc -> "Docs"
+        frontOutputProgressShortStatus kind p =
+          case kind of
+            FrontOutputTydb
+              | "Preparing" `isPrefixOf` fopLabel p -> "Prep .tydb"
+              | "Writing" `isPrefixOf` fopLabel p -> "Write .tydb"
+            _ -> frontOutputShortStatus kind
         projMap = cpProjMap plan
         depNameMap =
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
@@ -1712,6 +1718,13 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         frontOutputActiveLine key kind =
           renderProjectLine (tkProj key) (tkMod key)
             (staticStatusRenderer (frontOutputActiveStatus kind) (frontOutputShortStatus kind))
+        frontOutputProgressLine key kind p =
+          renderProjectLine (tkProj key) (tkMod key)
+            (staticStatusRenderer (fopLabel p) (frontOutputProgressShortStatus kind p))
+        frontOutputInitialProgress kind =
+          case kind of
+            FrontOutputTydb -> Just 0
+            _ -> Nothing
         backActiveLine proj mn =
           renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
         backProgressLine proj mn p =
@@ -1924,7 +1937,10 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               creditFront (gtKey t)
           , chOnFrontOutputStart = \key kind ->
               gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
-                      (frontOutputActiveLine key kind) Nothing)
+                      (frontOutputActiveLine key kind) (frontOutputInitialProgress kind))
+          , chOnFrontOutputProgress = \key kind p ->
+              gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
+                      (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
           , chOnFrontOutputDone = \key kind melapsed -> do
               gate (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
               when (not (quiet gopts optsPlan)) $
