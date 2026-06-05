@@ -602,10 +602,10 @@ findCon env (TC n ts)
         s                   = tvs `zip` ts
 
 findConName n env           = case findQName n env of
-                                NAct q p k te _  -> (q,[],te)
-                                NClass q us te _ -> (q,us,te)
-                                NProto q us te _ -> (q,us,te)
-                                NExt q c us te _ _ -> (q,us,te)
+                                NAct q p k te _  -> (q, [], notHidden te)
+                                NClass q us te _ -> (q, us, te)
+                                NProto q us te _ -> (q, us, te)
+                                NExt q c us te _ _ -> (q, us, te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
@@ -1359,7 +1359,7 @@ instance Simp (Name, NameInfo) where
                                     = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
       where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
-    simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' te) doc)
+    simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' $ notHidden te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, i)                 = (n, i)
 

@@ -147,8 +147,6 @@ statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b 
 isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW || n == cleanupKW
 isHidden _                          = True
 
-notHidden                           = filter (not . isHidden)
-
 isPrivateName                       :: Name -> Bool
 isPrivateName n                     = case nstr n of
                                         ('_':_) -> True

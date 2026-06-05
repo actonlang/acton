@@ -1222,19 +1222,20 @@ instance (Check a) => Check [a] where
 infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
                                              return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
-  where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
+  where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns ]
         (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
-        dvars                           = notHidden $ methods ss \\ dom sigs
+        dvars                           = methods ss \\ dom sigs
         mkNDef n                        = do t <- newUnivar env
                                              return (n, NDef (monotype $ t) NoDec Nothing)
         svars                           = statevars ss
         pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
         pvarsF ss                       = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars   -- svars only excluded until we move stateful actor cmds to __init__
+          where pvs (Assign _ ps _)     = bound ps                   -- svars only excluded until we move stateful actor cmds to __init__
+                pvs (VarAssign _ ps _)  = bound ps
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newUnivar env
-                                             return (n, NVar t)
+                                             return (n, if n `elem` svars then NSVar t else NVar t)
 
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstrs te)
                                              (css,eqs) <- unzip <$> mapM check1 te0
@@ -1246,9 +1247,11 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         ns                              = dom te0
         obs                             = te0 ++ te
         te1                             = nTerms $ te `restrict` ns
+        check1 (n, _) | isHidden n      = return ([], [])
         check1 (n, NSig _ _ _)          = return ([], [])
+        check1 (n, NSVar t0)            = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             return ([Cast (locinfo n 62) env t t0, Seal (locinfo n 114) env t0],[])
+                                             return ([Cast (locinfo n 62) env t t0, Seal (locinfo n 114) env t0], [])
           where Just (NVar t)           = lookup n te1
         check1 (n, NDef sc0 _ _)        = do (cs0,_,t) <- instantiate env sc
                                              (c0,t') <- wrap env t

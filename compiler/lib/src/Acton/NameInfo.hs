@@ -350,6 +350,12 @@ wildargs i                      = [ tWild | _ <- nbinds i ]
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
+notHidden                   :: TEnv -> TEnv
+notHidden te                = [ (n,i) | (n,i) <- te, visible n i ]
+  where visible _ NSVar{}   = False
+        visible n _         = not $ isHidden n
+
+
 nSigs                       :: TEnv -> TEnv
 nSigs te                    = [ (n,i) | (n, i@(NSig sc dec _)) <- te, not $ isProp dec sc ]
 
