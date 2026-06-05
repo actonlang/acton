@@ -795,11 +795,11 @@ jobs:
       repo_url: "orchestron-orchestrator/sorespo"
       arch: ${{ matrix.arch }}
 
-  test-app-orchestron:
+  test-app-stratoweave:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
     with:
-      repo_url: "orchestron-orchestrator/orchestron"
+      repo_url: "stratoweave/stratoweave"
 
   test-app-netcli:
     needs: build-debs
