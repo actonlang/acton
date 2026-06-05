@@ -88,17 +88,21 @@ module InterfaceFiles
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
+  , TyDbWriteProgress(..)
   , writeFile
+  , writeFileWithProgress
   , writeFileWithVersion
   ) where
 
 import Prelude hiding (readFile, writeFile)
-import Control.DeepSeq (NFData)
+import Control.DeepSeq (NFData, rnf)
 import Data.Binary
 import qualified Control.Exception as E
-import Control.Concurrent (runInBoundThread, threadDelay)
+import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
+import Control.Concurrent.Async (mapConcurrently)
 import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
+import Data.IORef (atomicModifyIORef', newIORef)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
@@ -149,6 +153,12 @@ data SourceFileMeta = SourceFileMeta
   } deriving (Show, Eq, Generic)
 
 instance Binary SourceFileMeta
+instance NFData SourceFileMeta
+
+data TyDbWriteProgress = TyDbWriteProgress
+  { tyDbWriteProgressLabel :: String
+  , tyDbWriteProgressRatio :: Double
+  } deriving (Show, Eq)
 
 type TyFile =
   ( [A.ModName]
@@ -542,18 +552,21 @@ isCorruptEnv err =
       _ -> False
 
 writeEntries :: FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
-writeEntries path entries = do
+writeEntries = writeEntriesWithProgress (\_ -> return ())
+
+writeEntriesWithProgress :: (Double -> IO ()) -> FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
+writeEntriesWithProgress onProgress path entries = do
     fileExists <- doesFileExist path
     when fileExists (removeFile path)
     createDirectoryIfMissing True path
-    entrySize <- entryMapSize entries
+    entrySize <- entryMapSize entries >>= E.evaluate
     existingSize <- readMapSize path
     go False (max entrySize existingSize)
   where
     go replaced size = do
       res <- E.try $ withWriteTxn path size $ \txn dbi -> do
         LMDB.mdb_clear txn dbi
-        forM_ entries $ \(k, v) -> putValue txn dbi k v
+        putEntries txn dbi
       case res of
         Right () -> return ()
         Left err | isMapFull err -> go replaced (size * 2)
@@ -562,6 +575,15 @@ writeEntries path entries = do
           createDirectoryIfMissing True path
           go True size
         Left (err :: E.SomeException) -> E.throwIO err
+    putEntries txn dbi = do
+      let total = length entries
+          step = max 1 (total `div` 20)
+      if total <= 0
+        then onProgress 1
+        else forM_ (zip [(1 :: Int)..] entries) $ \(i, (k, v)) -> do
+          putValue txn dbi k v
+          when (i == total || i `mod` step == 0) $
+            onProgress (fromIntegral i / fromIntegral total)
 
 setReadableInterfacePermissions :: FilePath -> IO ()
 setReadableInterfacePermissions path = do
@@ -663,37 +685,99 @@ extensionIndexEntries index =
     | (n, exts) <- Map.toList (extByProtocol index)
     ]
 
-interfaceEntries :: [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> [(BS.ByteString, BS.ByteString)]
-interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
-    [ (keyVersion, encodeStrict version)
-    , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
-    , (keyImports, encodeStrict imps)
-    , (keyRoots, encodeStrict roots)
-    , (keyTests, encodeStrict tests)
-    , (keyDoc, encodeStrict mdoc)
-    , (keyNameCount, encodeStrict (length te))
-    , (keyStmtCount, encodeStrict (length body))
-    , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
-    ]
-    ++ concat [ [ (keyNameOrder i, encodeStrict suffix)
-                , (keyNameInfoSuffix suffix, encodeStrict (n, info))
-                ]
-              | (i, (n, info)) <- zip [0..] te
-              , let suffix = nameKeySuffix n
-              ]
-    ++ [ (keyNameHash (nhName nh), encodeStrict nh) | nh <- nameHashes ]
-    ++ extensionIndexEntries (extensionIndexFromNameInfo tmn nmod)
-    ++ [ (keyStmt i, encodeStrict stmt) | (i, stmt) <- zip [0..] body ]
+forceEntries :: [(BS.ByteString, BS.ByteString)] -> IO [(BS.ByteString, BS.ByteString)]
+forceEntries entries = do
+    E.evaluate (rnf entries)
+    return entries
+
+entryEncodeChunkMin :: Int
+entryEncodeChunkMin = 256
+
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf _ [] = []
+chunksOf n ys = let (as, bs) = splitAt n ys in as : chunksOf n bs
+
+entryChunks :: Int -> [a] -> [[a]]
+entryChunks _ [] = []
+entryChunks caps xs =
+    chunksOf chunkSize xs
+  where
+    n = length xs
+    jobs = min caps ((n + entryEncodeChunkMin - 1) `div` entryEncodeChunkMin)
+    chunkSize = max 1 ((n + jobs - 1) `div` jobs)
+
+parallelEntries :: (String -> IO ()) -> String -> (a -> [(BS.ByteString, BS.ByteString)]) -> [[a]] -> IO [(BS.ByteString, BS.ByteString)]
+parallelEntries mark label mk chunks =
+    concat <$> mapConcurrently encodeChunk chunks
+  where
+    encodeChunk chunk = do
+      entries <- forceEntries (concatMap mk chunk)
+      mark label
+      return entries
+
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked = do
+    caps <- getNumCapabilities
+    let header =
+          [ (keyVersion, encodeStrict version)
+          , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
+          , (keyImports, encodeStrict imps)
+          , (keyRoots, encodeStrict roots)
+          , (keyTests, encodeStrict tests)
+          , (keyDoc, encodeStrict mdoc)
+          , (keyNameCount, encodeStrict (length te))
+          , (keyStmtCount, encodeStrict (length body))
+          , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
+          ]
+        nameChunks = entryChunks caps (zip [0..] te)
+        nameHashChunks = entryChunks caps nameHashes
+        stmtChunks = entryChunks caps (zip [0..] body)
+        totalPrep = 2 + length nameChunks + length nameHashChunks + length stmtChunks
+    prepDone <- newIORef (0 :: Int)
+    let mark label = do
+          done <- atomicModifyIORef' prepDone $ \n ->
+            let n' = n + 1 in (n', n')
+          onProgress label (fromIntegral done / fromIntegral totalPrep)
+    onProgress "Preparing .tydb" 0
+    headerEntries <- forceEntries header
+    mark "Preparing .tydb header"
+    nameEntries <- parallelEntries mark "Preparing .tydb names" nameInfoEntries nameChunks
+    nameHashEntries <- parallelEntries mark "Preparing .tydb hashes" nameHashEntry nameHashChunks
+    extEntries <- forceEntries (extensionIndexEntries (extensionIndexFromNameInfo tmn nmod))
+    mark "Preparing .tydb extensions"
+    stmtEntries <- parallelEntries mark "Preparing .tydb statements" stmtEntry stmtChunks
+    return (headerEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
+    nameInfoEntries (i, (n, info)) =
+      [ (keyNameOrder i, encodeStrict suffix)
+      , (keyNameInfoSuffix suffix, encodeStrict (n, info))
+      ]
+      where
+        suffix = nameKeySuffix n
+    nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict nh)]
+    stmtEntry (i, stmt) = [(keyStmt i, encodeStrict stmt)]
 
 writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
 writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
-    writeEntries f (interfaceEntries version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked)
+    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked
+
+writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked = do
+    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked
+    writeProgress 0
+    writeEntriesWithProgress writeProgress f entries
+  where
+    prepShare = 0.80
+    writeShare = 0.20
+    prepProgress label frac =
+      onProgress (TyDbWriteProgress label (prepShare * max 0 (min 1 frac)))
+    writeProgress frac =
+      onProgress (TyDbWriteProgress "Writing .tydb" (prepShare + writeShare * max 0 (min 1 frac)))
 
 readFile :: FilePath -> IO TyFile
 readFile f =
