@@ -790,7 +790,25 @@ instance InfEnv Stmt where
     infEnv env (VarAssign l pats e)
       | nodup pats                      = do (te,t,pats') <- infEnvT env pats
                                              (cs,e') <- inferSub env t e
-                                             return (cs, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
+                                             -- Commit initializer-derived state types when they are closed and concrete.
+                                             -- Otherwise keep the old flow so declarations like var x = None can be
+                                             -- refined by later assignments.
+                                             st <- currentState
+                                             _ <- solveAll env te cs
+                                             te' <- usubst te
+                                             if all commitVar te'
+                                               then do cs' <- usubst cs
+                                                       pats'' <- usubst pats'
+                                                       e'' <- usubst e'
+                                                       return (cs', [ (n,NSVar t) | (n,NVar t) <- te'], VarAssign l pats'' e'')
+                                               else do rollbackState st
+                                                       return (cs, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
+      where commitVar (_, NVar t)       = closed t && not (optional t)
+            commitVar _                 = False
+            closed t                    = null (ufree t)
+            optional TNone{}            = True
+            optional TOpt{}             = True
+            optional _                  = False
 
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
