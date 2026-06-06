@@ -222,6 +222,7 @@ assigned stmts                      = concatMap assig stmts
         assig (Try _ b hs els fin)  = assigned b ++ concat [ bound ex ++ assigned b | Handler ex b <- hs ] ++ assigned els ++ assigned fin
         assig (If _ bs els)         = concat [ assigned b | Branch _ b <- bs ] ++ assigned els
         assig (Assign _ ps _)       = bound ps
+        assig (VarAssign _ ps _)    = bound ps
         assig s                     = bound s
 
 

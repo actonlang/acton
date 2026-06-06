@@ -372,6 +372,7 @@ nTerms te                   = [ (n,i) | (n,i) <- te, isNTerm i ]
 
 isNTerm NDef{}              = True
 isNTerm NVar{}              = True
+isNTerm NSVar{}             = True
 isNTerm _                   = False
 
 sigTerms                    :: TEnv -> (TEnv, TEnv)
