@@ -41,6 +41,7 @@ executables:
       - -threaded
       - -rtsopts
       - '"-with-rtsopts=-N -A64M"'
+      - -Wno-x-partial
     when:
       - condition: os(linux)
         ghc-options:

@@ -789,8 +789,10 @@ instance InfEnv Stmt where
 
     infEnv env (VarAssign l pats e)
       | nodup pats                      = do (te,t,pats') <- infEnvT env pats
+                                             --traceM ("## VarAssign " ++ prstrs te)
                                              (cs,e') <- inferSub env t e
-                                             return (cs, [ (n,NSVar t) | (n,NVar t) <- te], VarAssign l pats' e')
+                                             let te' = [ (n, NSVar t) | n <- bound pats, let NVar t = findName n (define te env) ]
+                                             return (cs, te', VarAssign l pats' e')
 
     infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
@@ -1222,19 +1224,24 @@ instance (Check a) => Check [a] where
 infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
                                              return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
-  where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns, not $ isHidden n ]
+  where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns ]
         (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
-        dvars                           = notHidden $ methods ss \\ dom sigs
+        dvars                           = methods ss \\ dom sigs
         mkNDef n                        = do t <- newUnivar env
                                              return (n, NDef (monotype $ t) NoDec Nothing)
         svars                           = statevars ss
         pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
         pvarsF ss                       = nub $ concat $ map pvs ss
-          where pvs (Assign _ pats _)   = notHidden $ bound pats \\ svars   -- svars only excluded until we move stateful actor cmds to __init__
+          where pvs (Assign _ ps _)     = bound ps                   -- svars only excluded until we move stateful actor cmds to __init__
+                pvs (VarAssign _ ps _)  = bound ps
                 pvs (If _ bs els)       = foldr intersect (pvarsF els) [ pvarsF ss | Branch _ ss <- bs ]
                 pvs _                   = []
         mkNVar n                        = do t <- newUnivar env
-                                             return (n, NVar t)
+                                             return (n, if n `elem` svars then NSVar t else NVar t)
+
+maybeSeal env n ts
+  | isHidden n                          = []
+  | otherwise                           = [ Seal (locinfo n 114) env t | t <- ts ]
 
 matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption " ++ prstrs te)
                                              (css,eqs) <- unzip <$> mapM check1 te0
@@ -1248,12 +1255,15 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         te1                             = nTerms $ te `restrict` ns
         check1 (n, NSig _ _ _)          = return ([], [])
         check1 (n, NVar t0)             = do --traceM ("## matchActorAssumption for attribute " ++ prstr n)
-                                             return ([Cast (locinfo n 62) env t t0, Seal (locinfo n 114) env t0],[])
+                                             return (Cast (locinfo n 62) env t t0 : maybeSeal env n [t0], [])
           where Just (NVar t)           = lookup n te1
+        check1 (n, NSVar t0)            = do --traceM ("## matchActorAssumption for state var " ++ prstr n)
+                                             return ([Cast (locinfo n 62) env t t0], [])
+          where Just (NSVar t)          = lookup n te1
         check1 (n, NDef sc0 _ _)        = do (cs0,_,t) <- instantiate env sc
                                              (c0,t') <- wrap env t
                                              let c1 = Cast (locinfo n 63) env t' (sctype sc0)
-                                                 cs1 = map (Seal (locinfo n 115) env) (leaves sc0)
+                                                 cs1 = maybeSeal env n (leaves sc0)
                                                  q0 = scbind sc0
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
                                              (cs2,eq) <- markScoped env n0 q0 obs (c0:c1:cs0++cs1)
