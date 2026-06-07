@@ -68,6 +68,13 @@ packages:
   original:
     hackage: parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56
 - completed:
+    hackage: persist-1.0.0.0@sha256:192e7df7dc9d640306d4209ca836b9cbbfaaa81c251f308b72e780c713740c12,1849
+    pantry-tree:
+      sha256: 68723ae9b5cc641896dd648fa72239c420efd667448201cc65afd9adffcbd4f5
+      size: 504
+  original:
+    hackage: persist-1.0.0.0@sha256:192e7df7dc9d640306d4209ca836b9cbbfaaa81c251f308b72e780c713740c12,1849
+- completed:
     hackage: process-1.6.19.0@sha256:807bfa9b4038b59ae0c362bd94a783f898fbe0b42dbe1f2ede3c392bf2b8727d,3148
     pantry-tree:
       sha256: bf6056cc0e82ed9d85ab01ab57aea03c2202677a2c3015b686eb20993407816b

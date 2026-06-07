@@ -47,6 +47,7 @@ extra-deps:
   - lsp-2.7.0.0
   - lsp-types-2.3.0.0
   - parsec-3.1.17.0@sha256:8407cbd428d7f640a0fff8891bd2f7aca13cebe70a5e654856f8abec9a648b56
+  - persist-1.0.0.0@sha256:192e7df7dc9d640306d4209ca836b9cbbfaaa81c251f308b72e780c713740c12,1849
   - process-1.6.19.0
   - tasty-1.5.3
   - unix-2.8.2.1

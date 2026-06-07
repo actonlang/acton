@@ -31,8 +31,10 @@ More selective lookup by imported name is future work.
 
 ## LMDB Key Layout
 
-All values are Binary-encoded Haskell values. The values are not compressed;
-the layout splits the payload so readers can avoid decoding unrelated sections.
+All values are persist-encoded Haskell values. The values are trusted local cache
+data, not a stable cross-machine interchange format. The values are not
+compressed; the layout splits the payload so readers can avoid decoding
+unrelated sections.
 
 Metadata and module-level keys:
 

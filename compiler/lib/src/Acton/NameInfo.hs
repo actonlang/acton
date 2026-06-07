@@ -16,6 +16,7 @@ module Acton.NameInfo where
 
 import Control.DeepSeq
 import qualified Data.Binary
+import Data.Persist (Persist)
 import GHC.Generics (Generic)
 import Data.Typeable
 import qualified Data.HashMap.Strict as M
@@ -84,6 +85,7 @@ data HNameInfo          = HNVar      Type
                         deriving (Eq, Show, Read, Generic)
 
 instance Data.Binary.Binary NameInfo
+instance Persist NameInfo
 
 convNameInfo2HNameInfo               :: NameInfo -> HNameInfo
 convNameInfo2HNameInfo (NModule ms te mdoc)   = HNModule ms (convTEnv2HTEnv te) mdoc
