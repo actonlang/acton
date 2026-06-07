@@ -30,9 +30,12 @@
   box/unbox traffic for numeric Acton programs. Fewer boxes also means less
   memory traffic and less garbage for the runtime to collect, so numeric-heavy
   code can improve both by doing faster primitive work and by putting less
-  pressure on the memory subsystem and garbage collector. [#2824]
+  pressure on the memory subsystem and garbage collector. [#2824, #2890]
   - Builtin, base, and standard-library C implementations now use raw C values
     for unboxed integer and float operations where the Acton type is known.
+  - Cached module interfaces from older boxed-primitive compiler versions are
+    treated as stale and rebuilt instead of being reused across the
+    representation change.
   - As one example, the existing `examples/sumto.act` benchmark at 30 million
     integer additions dropped from about 960 MB of GC heap allocation to about
     54 KB, with reported GC time falling from about 2.05 seconds to 0 ms and
@@ -47,9 +50,12 @@
 - Store cached module interfaces in LMDB-backed `.tydb` directories instead of
   monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
   cache misses while adding keyed records for headers, imports, names, hashes,
-  and typed statements. [#2819, #2855, #2858]
+  and typed statements. [#2819, #2855, #2858, #2889]
   - Full reads reconstruct source-order environments from explicit order keys,
     and cache copy and cleanup paths now handle directory artifacts.
+  - Preparing `.tydb` entries for names, hashes, extensions, and typed
+    statements now happens in strict concurrent chunks before the LMDB write
+    transaction, and CLI progress distinguishes preparation from writing.
   - Read transactions retry transient LMDB lock-table setup errors with a fresh
     environment and a longer backoff window, matching the existing retry path
     for environment opens.
@@ -96,13 +102,20 @@
   forcing, hash computation, cached interface writes, and documentation output,
   and speed up signature validation by checking bindings through a set. [#2848]
 - Speed up back-end work on large modules by indexing code-generation name
-  membership and boxed variable lookups, reducing repeated scans during boxing
-  and generated C/H rendering. [#2806, #2810]
+  membership and boxed variable lookups, and by tracking boxing-pass witness
+  names with a hash set, reducing repeated scans during boxing and generated
+  C/H rendering. [#2806, #2810, #2895]
 - Hash implementation fragments directly as bytes, making cached implementation
   change detection cheaper while preserving per-name build hashes. [#2811]
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
+- Fix actor state-variable inference so unannotated `var` fields keep their
+  inferred type when actor assumptions are matched instead of being widened to
+  `value` after ordinary assignments. [#2894]
+- Fix generated protocol witness method tables so inherited abstract slots are
+  filled through forwarding wrappers when multiple protocol inheritance paths
+  would otherwise leave a slot empty. [#2887]
 - Bump the GHC toolchain to 9.8.4 (Stackage lts-23.28), fixing a rare arm64
   segfault in the compiler. GHC 9.6.6's runtime could crash in the garbage
   collector by following a NULL closure pointer (GHC #24791, black holes in
@@ -149,6 +162,8 @@
     compiler lookups include bundled `std` interfaces alongside base.
   - The distribution builds and ships `dist/std` separately from `dist/base`,
     keeping base focused on builtins and runtime support.
+- Fix XML decoding so comments between text/CDATA nodes and child elements are
+  ignored while preserving the surrounding text and tail content. [#2886]
 - Fix `list.index` on empty lists so it raises `KeyError` for a missing element
   instead of rejecting the default stop position. [#2801]
 
@@ -226,6 +241,10 @@
 - Run REPL command tests against the normal persistent scratch path and add
   in-process renderer checks, while keeping explicit `--tempdir` coverage for
   scratch-directory isolation behavior. [#2881]
+- Avoid running the compiler standard-library test groups twice in `make test`
+  by leaving those checks to `test-stdlib`. [#2870]
+- Switch external application CI coverage from the old Orchestron repository to
+  StratoWeave while keeping the reusable app-test workflow. [#2888]
 - Add a generated class-heavy type-checking fixture to exercise concurrent
   type-checking scheduler performance on large recursive class structures. [#2777]
 
@@ -4193,9 +4212,17 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2855]: https://github.com/actonlang/acton/pull/2855
 [#2856]: https://github.com/actonlang/acton/pull/2856
 [#2858]: https://github.com/actonlang/acton/pull/2858
+[#2870]: https://github.com/actonlang/acton/pull/2870
 [#2881]: https://github.com/actonlang/acton/pull/2881
 [#2882]: https://github.com/actonlang/acton/pull/2882
 [#2884]: https://github.com/actonlang/acton/pull/2884
+[#2886]: https://github.com/actonlang/acton/pull/2886
+[#2887]: https://github.com/actonlang/acton/pull/2887
+[#2888]: https://github.com/actonlang/acton/pull/2888
+[#2889]: https://github.com/actonlang/acton/pull/2889
+[#2890]: https://github.com/actonlang/acton/pull/2890
+[#2894]: https://github.com/actonlang/acton/pull/2894
+[#2895]: https://github.com/actonlang/acton/pull/2895
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
