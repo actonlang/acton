@@ -434,7 +434,7 @@ instance (Boxing a) => Boxing ([a]) where
 instance {-# OVERLAPS #-} Boxing ([Stmt]) where
 
     boxing env []                     = return (HashSet.empty,[])
-    boxing env (x@(Assign _ [PVar _ w _] _) : xs)
+    boxing env (x@(Assign _ [PVar _ w _] rhs) : xs)
 
     --  if witness n is not used in xs, delete statement x defining n
        | isWitness w                  = do (ws1,x') <- boxing env x      
@@ -466,7 +466,7 @@ instance Boxing Expr where
                                          (ws2,e1) <- boxingWitness env w attr p1 pr rest
                                          return (HashSet.union ws1 ws2,e1)
      where
-       rt@(TFun _ _ pr _ rest)       = rtypeOf' env w attr
+      rt@(TFun _ _ pr _ rest)       = rtypeOf' env w attr
       boxingWitness                 :: BoxEnv -> QName -> Name -> PosArg -> Type -> Type ->IO (HashSet.HashSet Name,Expr)
       boxingWitness env w attr p pr rest = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
@@ -481,9 +481,9 @@ instance Boxing Expr where
 --             vFree _                = False
       boxingDirectOrDynamic w attr p rt pr rest
                                     = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw,tc) of
-                                        Just (sw,tc) -> return ([], tryBox rest $ StaticWitnessCall NoLoc tc (swObjectName sw) (swObjectPath sw) attr rt (fixargs env p pr))
+                                        Just (sw,tc) -> return (HashSet.empty, tryBox rest $ StaticWitnessCall NoLoc tc (swObjectName sw) (swObjectPath sw) attr rt (fixargs env p pr))
                                         Nothing      -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
-                                                           return ([n], tryBox rest c)
+                                                           return (HashSet.singleton n, tryBox rest c)
       boxingFromAtom w ts [i@Int{}]
         | t == tBigint              = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) [i])
         | t `elem` numericTypes     = return (HashSet.empty, Box (last ts) (unbox t i))
@@ -491,21 +491,21 @@ instance Boxing Expr where
       boxingFromAtom w ts [x@Float{}]
                                     = return (HashSet.empty, Box (last ts) (unbox (head ts) x))
       boxingFromAtom w ts es        = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) es)
-      boxingBinop w attr es@[x1, x2] ts _ _
+      boxingBinop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t            =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
               op                    = bin2Binary attr
-      boxingBinop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingUnop w attr es@[x1] ts _ _
+      boxingBinop w attr es _ _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
+      boxingUnop w attr es@[x1] ts _ _ _
         | isUnboxable t             =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ UnOp NoLoc op (unbox t x1))
         where t                     = head ts
               op                    = un2Unary attr
-      boxingUnop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingCompop w attr es@[x1, x2] ts _ _
+      boxingUnop w attr es _ _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
+      boxingCompop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
-      boxingCompop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
+      boxingCompop w attr es _ _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))

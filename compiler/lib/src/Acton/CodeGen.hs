@@ -240,14 +240,39 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      constub env t n r b
+                                      constub env t n r b $+$
+                                      vcat [ methodDefStub env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
+        b'                          = vsubst [(tvSelf, tCon c)] b
+        c                           = TC (NoQ n) (map tVar $ qbound q)
+        env1                        = setInClass (defineTVars q env)
+        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
 methstub env Def{}                  = empty
 
 constub env t n r b
   | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
   | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
+
+methodDefStub env (Def _ n q p KwdNIL (Just t) _ d fx _)
+                                    = t3 <+> genTopName env n <> parens (genPosPar env n d t1 p) <> semi
+  where methnm n@(Derived c n0)
+          | n0 == suffixNewact      = n
+          | otherwise               = n0
+        methnm n0                   = n0
+        t1                          = case methodType n of
+                                         Just t' -> t'
+                                         Nothing -> error "Internal error: CodeGen.methodDefStub"
+        methodType n@(Derived c n0)
+          | contextIs env CtxClass,
+            NClass q _ _ _ <- findQName (NoQ c) env
+                                    = Just $ B.rtypeOf env (TC (NoQ c) (map tVar $ qbound q)) n0
+        methodType n                = B.generalType env (methnm n)
+        t2                          = exposeMsg fx t
+        t3                          = settype env (rawReturn (restype t1)) t2
+        rawReturn TUnboxed{}        = True
+        rawReturn _                 = False
+methodDefStub _ _                   = empty
 
 fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
@@ -1190,17 +1215,62 @@ staticWitnessReturnsBoxed rt         = case rt of
                                         _              -> False
 
 genStaticWitnessCall env tc obj path n rt p
-                                    = direct <> parens (witness <> comma' (genCallPosArgs env r p))
+                                    = callee <> parens (witness <> comma' (genCallPosArgs env r p))
   where TFun _ _ r _ _              = rt
         tc'@(TC qn _)               = unalias env tc
-        direct                      = case qn of
-                                        GName m cn -> gen env (GName m (methodname cn n))
-                                        _          -> error ("CodeGen.genStaticWitnessCall: " ++ show qn)
+        slot                        = staticWitnessSlotType env tc' n rt
+        callee                      = case staticWitnessMethodImpl env [] tc' n of
+                                        Just implTc -> staticWitnessDirectCallee env slot implTc n
+                                        Nothing     -> staticWitnessTableCallee env slot witness n
         witness                     = staticWitnessObject env tc' obj path
 
 staticWitnessObject env tc obj path = parens (gen env (tCon tc)) <> foldl field base path
   where base                        = staticwitness env (unalias env obj)
         field d n                   = d <> text "->" <> gen env n
+
+-- Resolve a static witness slot to the concrete implementation function that
+-- the method table would contain.  Defaults are often implemented by an
+-- ancestor protocol class, so the direct call is cast to the target slot ABI
+-- and still receives the target witness object.  If no concrete NDef provider
+-- is found, fall back to the static witness table slot instead of inventing a
+-- convention-based function name.
+staticWitnessSlotType env tc n rt
+  | Just slot <- slotType env tc n   = slot
+  | otherwise                       = addWitness rt
+  where addWitness (TFun l fx r k t)= TFun l fx (posRow (tCon tc) r) k t
+        addWitness t                = t
+
+staticWitnessDirectCallee env slot implTc n
+                                    = parens (parens (funsig2 env Nothing slot) <> staticWitnessMethodName env implTc n)
+
+staticWitnessTableCallee env slot witness n
+                                    = parens (parens (funsig2 env Nothing slot) <> parens witness <> text "->" <> gen env classKW <> text "->" <> gen env n)
+
+staticWitnessMethodName env (TC (GName m c) _) n
+                                    = gen env (GName m (methodname c n))
+staticWitnessMethodName env (TC (QName m c) _) n
+                                    = gen env (GName m (methodname c n))
+staticWitnessMethodName env (TC (NoQ c) _) n
+                                    = genTopName env (methodname c n)
+
+staticWitnessMethodImpl env seen tc n
+  | tcname tc `elem` seen           = Nothing
+  | directMethodImpl env (tcname tc) n
+                                    = Just tc
+  | otherwise                       = do provider <- first [ provider | (provider, n') <- inheritedAttrs env (tcname tc), n' == n ]
+                                         staticWitnessMethodImpl env (tcname tc : seen) (schematicClass env provider) n
+
+directMethodImpl env qn n           = case findQName qn env of
+                                        NClass _ _ te _ -> direct te
+                                        NProto _ _ te _ -> direct te
+                                        _               -> False
+  where direct te                   = case findAttrInfoIn n te of
+                                        Just (NDef{}) -> True
+                                        _             -> False
+
+schematicClass env qn               = case classQBinds env qn of
+                                        Just q  -> TC qn (map tVar $ qbound q)
+                                        Nothing -> TC qn []
 
 -- Compute the C-facing callable type used for argument rendering.  Public
 -- polymorphic callables are matched against a wildcard instantiation so
