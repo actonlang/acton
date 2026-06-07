@@ -746,6 +746,8 @@ instance USubst Expr where
     usubstWith s (Set l es)           = Set l (usubstWith s es)
     usubstWith s (SetComp l e c)      = SetComp l (usubstWith s e) (usubstWith s c)
     usubstWith s (Paren l e)          = Paren l (usubstWith s e)
+    usubstWith s (StaticWitnessCall l c o path n t p)
+                                      = StaticWitnessCall l (usubstWith s c) o path n (usubstWith s t) (usubstWith s p)
     usubstWith s e                    = e
 
 instance USubst Pattern where

@@ -106,6 +106,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
+                | StaticWitnessCall { eloc::SrcLoc, swclass::TCon, swobject::QName, swpath::[Name], attr::Name, swtype::Type, pargs::PosArg }
                 | Box           { tp :: Type, exp1 :: Expr }
                 | UnBox         { tp :: Type, exp1 :: Expr }
                 deriving (Show,Read,NFData,Generic)
@@ -674,6 +675,9 @@ instance Eq Expr where
     x@DictComp{}        ==  y@DictComp{}        = assoc1 x == assoc1 y && comp x == comp y
     x@Set{}             ==  y@Set{}             = elems x == elems y
     x@SetComp{}         ==  y@SetComp{}         = elem1 x == elem1 y && comp x == comp y
+    x@StaticWitnessCall{} == y@StaticWitnessCall{}
+                                                = swclass x == swclass y && swobject x == swobject y && swpath x == swpath y
+                                                  && attr x == attr y && swtype x == swtype y && pargs x == pargs y
     x@Paren{}           ==  y                   = exp1 x == y
     x                   ==  y@Paren{}           = x == exp1 y
     _                   ==  _                   = False

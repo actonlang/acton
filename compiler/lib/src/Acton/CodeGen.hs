@@ -1115,6 +1115,8 @@ rawExpr env UnBox{}                 = True
 rawExpr env (Var _ n)               = unboxedVar env n
 rawExpr env (Dot _ e n)             = unboxedField env e n
 rawExpr env (Paren _ e)             = rawExpr env e
+rawExpr env (StaticWitnessCall _ _ _ _ _ rt _)
+                                    = staticWitnessReturnsRaw rt
 rawExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = True
   | callableReturnsRaw env f        = True
@@ -1134,6 +1136,8 @@ boxedExpr env (Dot _ e n)           = not $ unboxedField env e n
 boxedExpr env DotI{}                = True
 boxedExpr env (Paren _ e)           = boxedExpr env e
 boxedExpr env Box{}                 = True
+boxedExpr env (StaticWitnessCall _ _ _ _ _ rt _)
+                                    = staticWitnessReturnsBoxed rt
 boxedExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
   | n == primCAST                   = True
   | n == primUGetItem               = True
@@ -1176,6 +1180,27 @@ callableReturnsBoxed env f          = case B.rtypeOfFun env f of
 callableReturnsRaw env f            = case B.rtypeOfFun env f of
                                         TFun _ _ _ _ TUnboxed{} -> True
                                         _                       -> False
+
+staticWitnessReturnsRaw rt           = case rt of
+                                        TFun _ _ _ _ TUnboxed{} -> True
+                                        _                       -> False
+
+staticWitnessReturnsBoxed rt         = case rt of
+                                        TFun _ _ _ _ t -> B.isUnboxable t
+                                        _              -> False
+
+genStaticWitnessCall env tc obj path n rt p
+                                    = direct <> parens (witness <> comma' (genCallPosArgs env r p))
+  where TFun _ _ r _ _              = rt
+        tc'@(TC qn _)               = unalias env tc
+        direct                      = case qn of
+                                        GName m cn -> gen env (GName m (methodname cn n))
+                                        _          -> error ("CodeGen.genStaticWitnessCall: " ++ show qn)
+        witness                     = staticWitnessObject env tc' obj path
+
+staticWitnessObject env tc obj path = parens (gen env (tCon tc)) <> foldl field base path
+  where base                        = staticwitness env (unalias env obj)
+        field d n                   = d <> text "->" <> gen env n
 
 -- Compute the C-facing callable type used for argument rendering.  Public
 -- polymorphic callables are matched against a wildcard instantiation so
@@ -1428,6 +1453,8 @@ instance Gen Expr where
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
       | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
+    gen env (StaticWitnessCall _ tc obj path n rt p)
+                                    = genStaticWitnessCall env tc obj path n rt p
     gen env c@(Call _ e p _)        = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
