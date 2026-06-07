@@ -42,23 +42,3 @@ B_list B_listD_copy(B_list lst);
 
 $WORD $listD_U__getitem__(B_list lst, int64_t n);
 B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val);
-
-B_Iterator B_CollectionD_SequenceD_listD___iter__(B_CollectionD_SequenceD_list wit, B_list lst);
-B_list B_CollectionD_SequenceD_listD___fromiter__ (B_CollectionD_SequenceD_list wit, B_Iterable wit2, $WORD iter);
-int64_t B_CollectionD_SequenceD_listD___len__(B_CollectionD_SequenceD_list wit, B_list self);
-$WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n);
-B_NoneType B_SequenceD_listD___setitem__(B_SequenceD_list wit, B_list lst, B_int n, $WORD val);
-B_NoneType B_SequenceD_listD___delitem__(B_SequenceD_list wit, B_list lst, B_int n);
-B_NoneType B_SequenceD_listD_append(B_SequenceD_list wit, B_list lst, $WORD elem);
-B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice slc);
-B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_Iterable wit2, B_slice slc, $WORD iter);
-B_NoneType B_SequenceD_listD___delslice__(B_SequenceD_list wit, B_list lst, B_slice slc);
-B_NoneType B_SequenceD_listD_reverse(B_SequenceD_list wit, B_list lst);
-B_Iterator B_SequenceD_listD___reversed__(B_SequenceD_list wit, B_list lst);
-B_NoneType B_SequenceD_listD_insert(B_SequenceD_list wit, B_list lst, int64_t n, $WORD elem);
-B_NoneType B_SequenceD_listD_append(B_SequenceD_list wit, B_list lst, $WORD elem);
-B_bool B_ContainerD_listD___contains__(B_ContainerD_list wit, B_list lst, $WORD elem);
-B_bool B_ContainerD_listD___containsnot__(B_ContainerD_list wit, B_list lst, $WORD elem);
-B_list B_TimesD_SequenceD_listD___add__ (B_TimesD_SequenceD_list wit, B_list lst, B_list other);
-B_list B_TimesD_SequenceD_listD___zero__ (B_TimesD_SequenceD_list wit);
-B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst, B_int n);
