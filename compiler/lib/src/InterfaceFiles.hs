@@ -23,8 +23,10 @@
 -- On-disk layout
 -- A .tydb is an LMDB directory environment (containing data.mdb and lock.mdb)
 -- holding a single unnamed database. Each field below is one key; values are
--- encoded with Data.Binary. Where the old .ty format wrote one blob in a fixed
--- order, here every field is an independently addressable key.
+-- encoded with persist. The persist format is used as a trusted local cache
+-- encoding, not as a stable cross-machine interchange format. Where the old
+-- .ty format wrote one blob in a fixed order, here every field is an
+-- independently addressable key.
 --
 --   Module-level keys (one each):
 --     "version"        :: [Int]                       -- Acton.Syntax.version
@@ -96,7 +98,6 @@ module InterfaceFiles
 
 import Prelude hiding (readFile, writeFile)
 import Control.DeepSeq (NFData, rnf)
-import Data.Binary
 import qualified Control.Exception as E
 import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
@@ -109,7 +110,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
 import qualified Data.Map.Strict as Map
-import qualified Data.ByteString.Lazy as BL
+import qualified Data.Persist as Persist
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
@@ -136,7 +137,7 @@ data NameHashInfo = NameHashInfo
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   } deriving (Show, Eq, Generic)
 
-instance Binary NameHashInfo
+instance Persist.Persist NameHashInfo
 instance NFData NameHashInfo
 
 data ExtensionIndex = ExtensionIndex
@@ -152,7 +153,7 @@ data SourceFileMeta = SourceFileMeta
   , sfmInode   :: Maybe Integer
   } deriving (Show, Eq, Generic)
 
-instance Binary SourceFileMeta
+instance Persist.Persist SourceFileMeta
 instance NFData SourceFileMeta
 
 data TyDbWriteProgress = TyDbWriteProgress
@@ -270,14 +271,14 @@ versionMismatch :: [Int] -> IO a
 versionMismatch vs =
     E.throwIO (TyCacheInvalid (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
 
-decodeStrict :: Binary a => String -> BS.ByteString -> IO a
+decodeStrict :: Persist.Persist a => String -> BS.ByteString -> IO a
 decodeStrict label bs =
-    case decodeOrFail (BL.fromStrict bs) of
-      Left (_, _, err) -> E.throwIO (TyCacheInvalid ("Failed to decode .tydb " ++ label ++ ": " ++ err))
-      Right (_, _, v) -> return v
+    case Persist.decode bs of
+      Left err -> E.throwIO (TyCacheInvalid ("Failed to decode .tydb " ++ label ++ ": " ++ err))
+      Right v -> return v
 
-encodeStrict :: Binary a => a -> BS.ByteString
-encodeStrict = BL.toStrict . encode
+encodeStrict :: Persist.Persist a => a -> BS.ByteString
+encodeStrict = Persist.encode
 
 key :: String -> BS.ByteString
 key = B.pack
@@ -493,14 +494,14 @@ nextPowerOfTwo n = go minMapSize
     go x | x >= n = x
          | otherwise = go (x * 2)
 
-getValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO a
+getValue :: Persist.Persist a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO a
 getValue label txn dbi k = do
     mv <- withVal k (LMDB.mdb_get txn dbi)
     case mv of
       Nothing -> E.throwIO (TyCacheInvalid ("Missing .tydb key: " ++ label))
       Just v -> copyVal v >>= decodeStrict label
 
-getMaybeValue :: Binary a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO (Maybe a)
+getMaybeValue :: Persist.Persist a => String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO (Maybe a)
 getMaybeValue label txn dbi k = do
     mv <- withVal k (LMDB.mdb_get txn dbi)
     case mv of

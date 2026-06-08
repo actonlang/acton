@@ -18,6 +18,7 @@ import Debug.Trace
 import Data.List hiding ((\\))
 import Data.Maybe
 import qualified Data.Binary
+import Data.Persist (Persist)
 import qualified Control.Exception
 import Data.Typeable
 import GHC.Generics (Generic)
@@ -31,6 +32,8 @@ import System.IO (openTempFile, hSetEncoding, utf8, hPutStr, hClose)
 import System.IO.Error (catchIOError)
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
+
+instance Persist SrcLoc
 
 instance Data.Binary.Binary SrcLoc where
     put NoLoc                    = Data.Binary.put False

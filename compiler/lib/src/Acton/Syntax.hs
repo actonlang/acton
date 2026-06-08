@@ -16,6 +16,7 @@ module Acton.Syntax where
 
 import Utils
 import qualified Data.Binary
+import Data.Persist (Persist)
 import qualified Data.Set
 import qualified Data.HashMap.Strict as M
 import qualified Data.Hashable
@@ -478,46 +479,87 @@ instance Leaves TVar where
 
 
 instance Data.Binary.Binary Prefix
+instance Persist Prefix
 instance Data.Binary.Binary Name
+instance Persist Name
 instance Data.Binary.Binary ModName
+instance Persist ModName
 instance Data.Binary.Binary QName
+instance Persist QName
 instance Data.Binary.Binary Deco
+instance Persist Deco
 instance Data.Binary.Binary TSchema
+instance Persist TSchema
 instance Data.Binary.Binary TVar
+instance Persist TVar
 instance Data.Binary.Binary TUni
+instance Persist TUni
 instance Data.Binary.Binary TCon
+instance Persist TCon
 instance Data.Binary.Binary QBind
+instance Persist QBind
 instance Data.Binary.Binary Type
+instance Persist Type
 instance Data.Binary.Binary Kind
+instance Persist Kind
 instance Data.Binary.Binary FX
+instance Persist FX
 instance Data.Binary.Binary Expr
+instance Persist Expr
 instance Data.Binary.Binary Stmt
+instance Persist Stmt
 instance Data.Binary.Binary Decl
+instance Persist Decl
 instance Data.Binary.Binary Branch
+instance Persist Branch
 instance Data.Binary.Binary Handler
+instance Persist Handler
 instance Data.Binary.Binary Except
+instance Persist Except
 instance Data.Binary.Binary Elem
+instance Persist Elem
 instance Data.Binary.Binary Assoc
+instance Persist Assoc
 instance Data.Binary.Binary Pattern
+instance Persist Pattern
 instance Data.Binary.Binary PosPar
+instance Persist PosPar
 instance Data.Binary.Binary KwdPar
+instance Persist KwdPar
 instance Data.Binary.Binary PosArg
+instance Persist PosArg
 instance Data.Binary.Binary KwdArg
+instance Persist KwdArg
 instance Data.Binary.Binary PosPat
+instance Persist PosPat
 instance Data.Binary.Binary KwdPat
+instance Persist KwdPat
 instance Data.Binary.Binary OpArg
+instance Persist OpArg
 instance Data.Binary.Binary Sliz
+instance Persist Sliz
 instance Data.Binary.Binary Comp
+instance Persist Comp
 instance Data.Binary.Binary WithItem
+instance Persist WithItem
 instance Data.Binary.Binary Unary
+instance Persist Unary
 instance Data.Binary.Binary Binary
+instance Persist Binary
 instance Data.Binary.Binary Aug
+instance Persist Aug
 instance Data.Binary.Binary Comparison
+instance Persist Comparison
 instance Data.Binary.Binary Module
+instance Persist Module
 instance Data.Binary.Binary Import
+instance Persist Import
 instance Data.Binary.Binary ModuleItem
+instance Persist ModuleItem
 instance Data.Binary.Binary ImportItem
+instance Persist ImportItem
 instance Data.Binary.Binary ModRef
+instance Persist ModRef
 
 
 -- Locations ----------------

@@ -49,6 +49,7 @@ dependencies:
   - random
   - scientific
   - stm
+  - persist
   - sydtest
   - sydtest-discover
   - temporary
