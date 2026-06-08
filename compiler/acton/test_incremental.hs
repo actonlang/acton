@@ -850,10 +850,10 @@ p16_dep_api_change = testCase "16-dependency API change triggers rebuild" $ do
   let depSrc = depDir </> "src" </> "lib.act"
   writeFileUtf8 depSrc originalContent
   writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
-    [ "import libfoo"
+    [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.calculate(21)"
+    , "    result = libfoo.lib.calculate(21)"
     , "    print(\"Result: %d\" % result)"
     , "    env.exit(0)"
     ]
@@ -881,10 +881,10 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
   let depSrc = depDir </> "src" </> "lib.act"
   writeFileUtf8 depSrc originalContent
   writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
-    [ "import libfoo"
+    [ "import libfoo.lib"
     , ""
     , "actor main(env: Env):"
-    , "    result = libfoo.calculate(21)"
+    , "    result = libfoo.lib.calculate(21)"
     , "    print(\"Result: %d\" % result)"
     , "    env.exit(0)"
     ]
@@ -893,7 +893,7 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
   writeFileUtf8 depSrc modifiedContent
   res2@(ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose"]
   assertExitSuccess "rebuild after impl change" res2
-  assertBool "expected impl change log" (T.isInfixOf "impl changes in libfoo.calculate" out2)
+  assertBool "expected impl change log" (T.isInfixOf "impl changes in libfoo.lib.calculate" out2)
   assertBool "did not expect main to type check" (not (typechecked out2 modMain))
   assertBool "expected main to compile codegen" (compiled out2 modMain)
 
@@ -1603,7 +1603,7 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
             ]
   writeFileUtf8 depSrc (libfooSource 5 False)
   writeFileUtf8 (src </> "a.act") $ T.unlines
-    [ "import libfoo"
+    [ "import libfoo.lib"
     , ""
     , "const = 7"
     , "x, y = 1, 2"
@@ -1621,17 +1621,17 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     , "    pass"
     , ""
     , "def dep_call() -> int:"
-    , "    return libfoo.dep_value()"
+    , "    return libfoo.lib.dep_value()"
     ]
   writeFileUtf8 (src </> "b.act") $ T.unlines
     [ "import a"
-    , "import libfoo"
+    , "import libfoo.lib"
     , ""
     , "def use_types(x: a.Local, w: a.Worker) -> int:"
     , "    return a.add(x.get())"
     , ""
     , "def use_values() -> int:"
-    , "    return a.add(libfoo.dep_const) + a.dep_call()"
+    , "    return a.add(libfoo.lib.dep_const) + a.dep_call()"
     , ""
     , "def use_method(x: a.Local) -> int:"
     , "    return x.get()"
@@ -1649,7 +1649,7 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  let tyDep = depDir </> "out" </> "types" </> "libfoo.tydb"
+  let tyDep = depDir </> "out" </> "types" </> "libfoo" </> "lib.tydb"
   depNameHashes <- readTyNameHashes tyDep
   let depNames = sort (map (prstr . InterfaceFiles.nhName) depNameHashes)
   assertBool "expected derived proto name" ("ExtraProtoD_MegaProto" `elem` depNames)
@@ -1662,12 +1662,12 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
   assertDepsContain "use_types pub deps" ["a.Local", "a.Worker", "a.add"] pubTypes
   assertDepsContain "use_types impl deps" ["a.add"] implTypes
   (pubVals, implVals) <- readTyDeps tyB "use_values"
-  assertDepsContain "use_values pub deps" ["a.add", "a.dep_call", "libfoo.dep_const"] pubVals
-  assertDepsContain "use_values impl deps" ["a.add", "a.dep_call", "libfoo.dep_const"] implVals
+  assertDepsContain "use_values pub deps" ["a.add", "a.dep_call", "libfoo.lib.dep_const"] pubVals
+  assertDepsContain "use_values impl deps" ["a.add", "a.dep_call", "libfoo.lib.dep_const"] implVals
   (pubActor, _) <- readTyDeps tyB "use_actor"
   assertDepsContain "use_actor pub deps" ["a.Worker"] pubActor
   (_, implDepCall) <- readTyDeps tyA "dep_call"
-  assertDepsContain "dep_call impl deps" ["libfoo.dep_value"] implDepCall
+  assertDepsContain "dep_call impl deps" ["libfoo.lib.dep_value"] implDepCall
   out1 <- runBinaryIn proj "c"
   out1 @?= "26\n"
   writeFileUtf8 depSrc (libfooSource 5 True)
@@ -1865,10 +1865,10 @@ p36_removed_dep_name_triggers_front_refresh =
       , "    return 1"
       ]
     writeFileUtf8 (src </> "main.act") $ T.unlines
-      [ "import libfoo"
+      [ "import libfoo.lib"
       , ""
       , "actor main(env: Env):"
-      , "    print(libfoo.foo())"
+      , "    print(libfoo.lib.foo())"
       , "    env.exit(0)"
       ]
     res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
@@ -1880,9 +1880,9 @@ p36_removed_dep_name_triggers_front_refresh =
     res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitFailure "rebuild after removing imported dep name" 1 res2
     assertBool "expected stale-cache log for missing dep hash"
-      (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "libfoo.foo" out2)
+      (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "libfoo.lib.foo" out2)
     assertBool "did not expect internal hash-missing diagnostic"
-      (not (T.isInfixOf "Hash info missing for libfoo.foo" out2))
+      (not (T.isInfixOf "Hash info missing for libfoo.lib.foo" out2))
 
 p37_impl_refresh_missing_dep_hashes_reruns_front :: TestTree
 p37_impl_refresh_missing_dep_hashes_reruns_front =
@@ -1902,10 +1902,10 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
       , "    return 2"
       ]
     writeFileUtf8 (src </> "main.act") $ T.unlines
-      [ "import libfoo"
+      [ "import libfoo.lib"
       , ""
       , "def value() -> int:"
-      , "    return libfoo.foo() + libfoo.bar()"
+      , "    return libfoo.lib.foo() + libfoo.lib.bar()"
       , ""
       , "actor main(env: Env):"
       , "    print(value())"
@@ -1914,17 +1914,17 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
     res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
     assertExitSuccess "initial build" res1
     let mainV2 = T.unlines
-          [ "import libfoo"
+          [ "import libfoo.lib"
           , ""
           , "def value() -> int:"
-          , "    return libfoo.foo()"
+          , "    return libfoo.lib.foo()"
           , ""
           , "actor main(env: Env):"
           , "    print(value())"
           , "    env.exit(0)"
           ]
     writeFileUtf8 (src </> "main.act") mainV2
-    rewriteTySrcHashAndNameHashes tyMain (SHA256.hash (TE.encodeUtf8 mainV2)) (dropTyDepByLabel "libfoo.bar")
+    rewriteTySrcHashAndNameHashes tyMain (SHA256.hash (TE.encodeUtf8 mainV2)) (dropTyDepByLabel "libfoo.lib.bar")
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 10"
@@ -1934,7 +1934,7 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
     assertBool ("expected impl-refresh fallback log\n" ++ T.unpack out2)
       (T.isInfixOf "impl refresh encountered unresolved dep hashes; rerunning front passes" out2)
     assertBool ("did not expect internal hash-missing diagnostic\n" ++ T.unpack out2)
-      (not (T.isInfixOf "Hash info missing for libfoo.bar" out2))
+      (not (T.isInfixOf "Hash info missing for libfoo.lib.bar" out2))
     assertBool ("did not expect internal NoItem failure\n" ++ T.unpack out2)
       (not (T.isInfixOf "NoItem" out2))
     assertBool ("expected main.act to type check after fallback\n" ++ T.unpack out2) (typechecked out2 modMain)
