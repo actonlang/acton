@@ -4462,10 +4462,8 @@ srcBase paths mn        = --trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath
                           fpath
   where fpath           = joinPath (srcDir paths : names)
         names           = case A.modPath mn of
-                            [n]  | isproj n -> ["lib"]
-                            n:ns | isproj n -> ns
+                            n:ns | n == projName paths -> ns
                             ns -> ns
-        isproj n        = n == projName paths
 
 
 -- | Walk upward from a path to find a project root.
@@ -4598,11 +4596,7 @@ moduleNameFromFile srcBase proj actFile = do
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-        mn = A.modName $ case (proj, names) of
-                ("", _)      -> names
-                ("base", _)  -> names
-                (_, ["lib"]) -> [proj]
-                _            -> proj:names
+        mn = A.modName $ if proj `elem` ["","base"] then names else proj:names
     --traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
     return mn
 
