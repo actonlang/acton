@@ -4672,10 +4672,14 @@ pruneMissingModuleOutputs ctx = do
         unless (Data.Set.member base srcMods) $
           removeFile absFile `catch` ignoreNotExists
 
+    proj = BuildSpec.specName $ projBuildSpec ctx
+
     pruneTyDb srcMods typesRoot absDir = do
       let rel = normalise (makeRelative typesRoot absDir)
-          base = normalise (dropExtension rel)
-      unless (Data.Set.member base srcMods) $
+          base = case splitDirectories $ normalise (dropExtension rel) of
+                    n:ns | n == proj -> joinPath ns
+                    ns -> joinPath ns
+      unless (Data.Set.member base srcMods) $ do
         removePathForcibly absDir `catch` ignoreNotExists
 
     ignoreNotExists :: IOException -> IO ()
