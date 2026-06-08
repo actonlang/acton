@@ -158,9 +158,8 @@ tnm env (Derived _ n)
 tnm _  _                            = word
         
 
-settype env True t
-                                    = rawType env t
-settype env _ t                      = repType env t
+settype env True t                  = rawType env t
+settype env _ t                     = repType env t
 
 -- C ABI type renderers.
 --
@@ -425,9 +424,9 @@ genPosPar env n d t p
     | otherwise                     = genTypeDecl env x (fromJust y) <+> gen env x <> comma <+> match p1 (posrow t)
     where PosPar x y z p1           = p
           match (PosPar n (Just t) Nothing PosNIL) (TRow _ _ _ t' _)
-                                    = settype env (rawParam t' t) t <+> gen env n
+                                    = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n
           match (PosPar n (Just t) Nothing r) (TRow _ _ _ t' tl)
-                                    = settype env (rawParam t' t) t <+> gen env n <> comma <+> match r tl
+                                    = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n <> comma <+> match r tl
           match PosNIL (TNil _ _)   = empty
           match p TVar{}            = gen env p
           match p t                 = error ("Internal error CodeGen.genPosPar: n = "++show n++", p = "++show p++", t ="++show t)
@@ -461,7 +460,7 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
                                       char '}'
         env1                        = setRet t2 $ ldefine (envOf p) $ defineTVars q env
         t2                          = exposeMsg fx t
-        t3                          = (if isVolVar n env then text "volatile" else empty) <+> settype env (rawReturn (restype t1)) t2
+        t3                          = genVolatile env n <+> settype env (rawReturn (restype t1)) t2
         rawReturn TUnboxed{}        = True
         rawReturn _                 = False
         emit                        = getLineEmit env
@@ -914,7 +913,9 @@ genSuite env (s:ss)                 = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filt
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
 
-genTypeDecl env n t                 =  (if isVolVar n env then text "volatile" else empty) <+> storageType env t
+genTypeDecl env n t                 = genVolatile env n <+> storageType env t
+
+genVolatile env n                   = if isVolVar n env then text "volatile" else empty
 
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
