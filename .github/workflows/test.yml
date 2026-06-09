@@ -702,8 +702,7 @@ jobs:
           name: acton-debs-${{ matrix.arch }}
       - name: "Install acton from .deb"
         run: |
-          sudo apt update
-          sudo apt install -y ./deb/acton_*.deb
+          sudo dpkg -i ./deb/acton_*.deb
           acton version
       # Cross-compiling all targets cold is slow, so cache the zig artifacts.
       # Same producer/consumer model as the test-X jobs: PRs and pushes restore
