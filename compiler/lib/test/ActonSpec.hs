@@ -28,6 +28,7 @@ import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
+import qualified Acton.Hashing as Hashing
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -39,8 +40,11 @@ import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Map as M
+import qualified Data.Set as Set
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
+import qualified Data.ByteString.Base16 as Base16
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
@@ -73,6 +77,66 @@ nameHash n src pub impl =
     , InterfaceFiles.nhPubDeps = []
     , InterfaceFiles.nhImplDeps = []
     }
+
+hashTestName :: S.Name
+hashTestName = S.name "value"
+
+publicHashFor :: I.NameInfo -> B8.ByteString
+publicHashFor info =
+  case Hashing.buildNameHashes
+         (Set.singleton hashTestName)
+         M.empty
+         M.empty
+         (M.singleton hashTestName info)
+         M.empty
+         M.empty
+         M.empty
+         M.empty
+         M.empty
+         M.empty of
+    [nh] -> InterfaceFiles.nhPubHash nh
+    _    -> error "expected one name hash"
+
+sourceHashFor :: S.Decl -> B8.ByteString
+sourceHashFor decl =
+  case M.lookup hashTestName (Hashing.nameHashesFromItems [Hashing.TLDecl hashTestName decl]) of
+    Just h  -> h
+    Nothing -> error "missing source hash"
+
+implSplitDepSetMaps :: Acton.Env.Env0
+                    -> S.ModName
+                    -> Set.Set S.Name
+                    -> [Hashing.TopLevelItem]
+                    -> (M.Map S.Name (Set.Set S.Name), M.Map S.Name (Set.Set S.QName))
+implSplitDepSetMaps env mn localNames items =
+  let (locals, externals) = Hashing.implSplitDepsFromItems mn env localNames items
+  in (M.map Set.fromList locals, M.map Set.fromList externals)
+
+implSplitDepSetMapsSlow :: Acton.Env.Env0
+                        -> S.ModName
+                        -> Set.Set S.Name
+                        -> [Hashing.TopLevelItem]
+                        -> (M.Map S.Name (Set.Set S.Name), M.Map S.Name (Set.Set S.QName))
+implSplitDepSetMapsSlow env mn localNames items =
+  let rawDeps = Hashing.implDepsFromItems items
+      (locals, externals) = Hashing.splitDeps mn env localNames rawDeps
+  in (M.map Set.fromList locals, M.map Set.fromList externals)
+
+locatedType :: SrcLoc -> S.Type
+locatedType l = S.TVar l (S.TV S.KType (S.Name l "T"))
+
+hashDecl :: SrcLoc -> Maybe String -> S.Decl
+hashDecl l doc =
+  S.Def l
+    (S.Name l "value")
+    []
+    S.PosNIL
+    S.KwdNIL
+    (Just (locatedType l))
+    [S.Pass l]
+    S.NoDec
+    S.fxPure
+    doc
 
 
 
@@ -220,6 +284,440 @@ main = do
           InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+
+    describe "Hashing" $ do
+      it "keeps public hashes independent of docs and source locations" $ do
+        let infoA = I.NDef (S.TSchema (Loc 1 3) [] (locatedType (Loc 4 5))) S.NoDec (Just "old docs")
+            infoB = I.NDef (S.TSchema (Loc 50 60) [] (locatedType (Loc 70 80))) S.NoDec (Just "new docs")
+        publicHashFor infoA `shouldBe` publicHashFor infoB
+
+      it "keeps source AST hashes independent of source locations" $ do
+        sourceHashFor (hashDecl (Loc 1 3) (Just "doc")) `shouldBe`
+          sourceHashFor (hashDecl (Loc 100 130) (Just "doc"))
+
+      it "keeps source AST hashes sensitive to docstrings" $ do
+        sourceHashFor (hashDecl NoLoc (Just "doc A")) `shouldNotBe`
+          sourceHashFor (hashDecl NoLoc (Just "doc B"))
+
+      it "keeps source AST hashes sensitive to unicode and nul bytes in strings" $ do
+        sourceHashFor (hashDecl NoLoc (Just "doc ä\0x")) `shouldNotBe`
+          sourceHashFor (hashDecl NoLoc (Just "doc äx"))
+
+      it "pins the source AST feed-operation hash format" $ do
+        Base16.encode (sourceHashFor (hashDecl NoLoc (Just "doc"))) `shouldBe`
+          "8c47274762de31c4eadf30ef3a01a17d2253a4514ab67745699c7989f8888b5b"
+
+      it "hashes Int fields at minBound without overflowing" $ do
+        let n = S.Internal S.Tempvar "tmp" (minBound :: Int)
+            decl =
+              S.Def NoLoc n [] S.PosNIL S.KwdNIL (Just S.tWild) [S.Pass NoLoc] S.NoDec S.fxPure Nothing
+            h = case M.lookup n (Hashing.nameHashesFromItems [Hashing.TLDecl n decl]) of
+                  Just hash -> hash
+                  Nothing   -> error "missing source hash"
+        Base16.encode h `shouldBe`
+          "789782467b319c383a544eb7e882f9b07d9580bf638fa9df6294ab02be71b62c"
+
+      it "keeps same-name source fragments in input order" $ do
+        let sig = Hashing.TLStmt hashTestName (S.Signature NoLoc [hashTestName] (S.tSchema [] S.tWild) S.NoDec)
+            decl = Hashing.TLDecl hashTestName (hashDecl NoLoc (Just "doc"))
+            hashItems items =
+              case M.lookup hashTestName (Hashing.nameHashesFromItems items) of
+                Just h  -> h
+                Nothing -> error "missing source hash"
+        hashItems [sig, decl] `shouldNotBe` hashItems [decl, sig]
+
+      it "prepares structural hash inputs for all local names" $ do
+        let mn = S.modName ["hash_structural_inputs"]
+            env = Acton.Env.setMod mn env0
+            names = [S.name ("value" ++ show i) | i <- [1 :: Int .. 8]]
+            deps = [S.GName (S.modName ["dep"]) (S.name ("dep_value" ++ show i)) | i <- [1 :: Int .. 8]]
+            nextNames = tail names ++ take 1 names
+            decl name dep localName =
+              S.Def
+                NoLoc
+                name
+                []
+                S.PosNIL
+                S.KwdNIL
+                Nothing
+                [ S.Expr NoLoc (S.Var NoLoc dep)
+                , S.Expr NoLoc (S.Var NoLoc (S.NoQ localName))
+                ]
+                S.NoDec
+                S.fxPure
+                Nothing
+            sig name dep =
+              S.Signature NoLoc [name] (S.tSchema [] (S.tCon (S.TC dep []))) S.NoDec
+            srcItems =
+              concat
+                [ [ Hashing.TLStmt name (sig name dep)
+                  , Hashing.TLDecl name (decl name dep localName)
+                  ]
+                | (name, dep, localName) <- zip3 names deps nextNames
+                ]
+            implItems =
+              [ Hashing.TLDecl name (decl name dep localName)
+              | (name, dep, localName) <- zip3 names deps nextNames
+              ]
+            info dep = I.NDef (S.tSchema [] (S.tCon (S.TC dep []))) S.NoDec Nothing
+            infos = M.fromList [(name, info dep) | (name, dep) <- zip names deps]
+            nameKeys = Set.fromList names
+            depSet = Set.fromList deps
+        let inputs = Hashing.prepareNameHashInputs mn env srcItems implItems infos
+        Hashing.nhiNameKeys inputs `shouldBe` nameKeys
+        M.keysSet (Hashing.nhiNameSrcHashes inputs) `shouldBe` nameKeys
+        M.keysSet (Hashing.nhiNameImplHashes inputs) `shouldBe` nameKeys
+        M.keysSet (Hashing.nhiSelfPubHashes inputs) `shouldBe` nameKeys
+        M.map Set.fromList (Hashing.nhiPubSigExtDeps inputs) `shouldBe`
+          M.fromList [(name, Set.singleton dep) | (name, dep) <- zip names deps]
+        M.map Set.fromList (Hashing.nhiImplLocalDeps inputs) `shouldBe`
+          M.fromList [(name, Set.singleton localName) | (name, localName) <- zip names nextNames]
+        Set.unions (M.elems (M.map Set.fromList (Hashing.nhiImplExtDeps inputs))) `shouldBe` depSet
+
+      it "collects public signature dependencies without derived names" $ do
+        let depMod = S.modName ["dep"]
+            depA = S.GName depMod (S.name "a")
+            depB = S.GName depMod (S.name "b")
+            depC = S.GName depMod (S.name "c")
+            depD = S.GName depMod (S.name "d")
+            localDepName = S.name "local_dep"
+            localDep = S.NoQ localDepName
+            derived = S.GName depMod (S.Derived (S.name "a") (S.name "generated"))
+            qbind = S.QBind (S.TV S.KType (S.name "T")) [S.TC depB []]
+            depAType = S.tCon (S.TC depA [S.tCon (S.TC derived [])])
+            depBType = S.tCon (S.TC depB [])
+            depCType = S.tCon (S.TC depC [S.tCon (S.TC localDep [])])
+            depDType = S.TUnboxed NoLoc (S.tCon (S.TC depD []))
+            info =
+              I.NModule
+                []
+                [ ( hashTestName
+                  , I.NExt
+                      [qbind]
+                      (S.TC depA [depBType])
+                      [([Left depB, Right depC], S.TC depC [depAType])]
+                      [ (S.name "alias", I.NAlias depB)
+                      , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
+                      , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
+                      ]
+                      []
+                      Nothing
+                  )
+                , (S.name "derived_alias", I.NAlias derived)
+                ]
+                Nothing
+            infos = M.singleton hashTestName info
+            expectedDeps = M.singleton hashTestName (Set.fromList [depA, depB, depC, depD, localDep])
+            mn = S.modName ["hash_pub_sig"]
+            env = Acton.Env.setMod mn env0
+            localNames = Set.fromList [hashTestName, localDepName]
+            legacyRaw = Hashing.pubSigDepsFromNameInfoMap infos
+            (legacyLocalDeps, legacyExtDeps) = Hashing.splitDeps mn env localNames legacyRaw
+            (directLocalDeps, directExtDeps) = Hashing.pubSigSplitDepsFromNameInfoMap mn env localNames infos
+        M.map Set.fromList legacyRaw `shouldBe` expectedDeps
+        M.map Set.fromList directLocalDeps `shouldBe` M.map Set.fromList legacyLocalDeps
+        M.map Set.fromList directExtDeps `shouldBe` M.map Set.fromList legacyExtDeps
+
+      it "propagates acyclic local dependency hashes" $ do
+        let a = S.name "a"
+            b = S.name "b"
+            c = S.name "c"
+            selfA = M.fromList [(a, "a"), (b, "b"), (c, "c")]
+            selfB = M.fromList [(a, "a"), (b, "b"), (c, "changed")]
+            localDeps = M.fromList [(a, [b]), (b, [c]), (c, [])]
+            hashesA = Hashing.computeHashes selfA localDeps M.empty
+            hashesB = Hashing.computeHashes selfB localDeps M.empty
+        M.lookup a hashesA `shouldNotBe` M.lookup a hashesB
+        M.lookup b hashesA `shouldNotBe` M.lookup b hashesB
+        M.lookup c hashesA `shouldNotBe` M.lookup c hashesB
+
+      it "handles cyclic local dependency hashes" $ do
+        let a = S.name "a"
+            b = S.name "b"
+            selfHashes = M.fromList [(a, "a"), (b, "b")]
+            localDeps = M.fromList [(a, [b]), (b, [a])]
+            hashes = Hashing.computeHashes selfHashes localDeps M.empty
+        M.keysSet hashes `shouldBe` Set.fromList [a, b]
+        all (not . B8.null) (M.elems hashes) `shouldBe` True
+
+      it "propagates finalized outside dependencies into cyclic local hashes" $ do
+        let a = S.name "a"
+            b = S.name "b"
+            c = S.name "c"
+            d = S.name "d"
+            selfA = M.fromList [(a, "a"), (b, "b"), (c, "c"), (d, "d")]
+            selfB = M.fromList [(a, "a"), (b, "b"), (c, "c"), (d, "changed")]
+            localDeps = M.fromList [(a, [b, c]), (b, [a]), (c, [d]), (d, [])]
+            hashesA = Hashing.computeHashes selfA localDeps M.empty
+            hashesB = Hashing.computeHashes selfB localDeps M.empty
+        M.lookup a hashesA `shouldNotBe` M.lookup a hashesB
+        M.lookup b hashesA `shouldNotBe` M.lookup b hashesB
+        M.lookup c hashesA `shouldNotBe` M.lookup c hashesB
+        M.lookup d hashesA `shouldNotBe` M.lookup d hashesB
+
+      it "keeps external dependency order canonical" $ do
+        let a = S.name "a"
+            q1 = S.GName (S.modName ["dep", "z"]) (S.name "z")
+            q2 = S.GName (S.modName ["dep", "a"]) (S.name "a")
+            selfHashes = M.singleton a "a"
+            extDepsA = M.singleton a [(q1, "h1"), (q2, "h2")]
+            extDepsB = M.singleton a [(q2, "h2"), (q1, "h1")]
+        Hashing.computeHashes selfHashes M.empty extDepsA `shouldBe`
+          Hashing.computeHashes selfHashes M.empty extDepsB
+
+      it "hashes module summaries from maps like assembled name hashes" $ do
+        let publicName = S.name "public_value"
+            privateName = S.name "__private_value"
+            missingImplName = S.name "missing_impl"
+            nmod =
+              I.NModule
+                []
+                [ (publicName, I.NVar Builtin.tInt)
+                , (privateName, I.NVar Builtin.tInt)
+                ]
+                Nothing
+            nameKeys = Set.fromList [publicName, privateName, missingImplName]
+            pubHashes = M.fromList [(publicName, "pub-public"), (privateName, "pub-private")]
+            implHashes = M.fromList [(publicName, "impl-public"), (privateName, "impl-private")]
+            nameHashes =
+              [ nameHash publicName "src-public" "pub-public" "impl-public"
+              , nameHash privateName "src-private" "pub-private" "impl-private"
+              , nameHash missingImplName "src-missing" "pub-missing" ""
+              ]
+        Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes `shouldBe`
+          ( Hashing.modulePubHashFromIface nmod nameHashes
+          , Hashing.moduleImplHashFromNameHashes nameHashes
+          )
+
+      it "hashes public interface names outside implementation keys" $ do
+        let publicName = S.name "public_value"
+            ifaceOnlyName = S.name "iface_only"
+            nmod =
+              I.NModule
+                []
+                [ (publicName, I.NVar Builtin.tInt)
+                , (ifaceOnlyName, I.NVar Builtin.tInt)
+                ]
+                Nothing
+            nameKeys = Set.singleton publicName
+            pubHashes = M.fromList [(publicName, "pub-public"), (ifaceOnlyName, "pub-iface-only")]
+            implHashes = M.singleton publicName "impl-public"
+            (modulePubHash, moduleImplHash) =
+              Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
+            publicNameHashes =
+              [ nameHash publicName "src-public" "pub-public" "impl-public"
+              , nameHash ifaceOnlyName "" "pub-iface-only" ""
+              ]
+            implNameHashes =
+              [ nameHash publicName "src-public" "pub-public" "impl-public" ]
+        modulePubHash `shouldBe` Hashing.modulePubHashFromIface nmod publicNameHashes
+        modulePubHash `shouldNotBe`
+          Hashing.modulePubHashFromIface nmod implNameHashes
+        moduleImplHash `shouldBe` Hashing.moduleImplHashFromNameHashes implNameHashes
+
+      it "merges canonical dependency lists without rebuilding sets" $ do
+        let a = S.name "a"
+            b = S.name "b"
+            c = S.name "c"
+            d = S.name "d"
+            q1 = S.GName (S.modName ["dep", "a"]) a
+            q2 = S.GName (S.modName ["dep", "b"]) b
+            q3 = S.GName (S.modName ["dep", "c"]) c
+        Hashing.mergeSortedDistinct [a, c, d] [b, c] `shouldBe`
+          Set.toList (Set.fromList [a, b, c, d])
+        Hashing.mergeSortedDistinct [q1, q3] [q2, q3] `shouldBe`
+          Set.toList (Set.fromList [q1, q2, q3])
+
+      it "returns canonical dependency lists from splitDeps" $ do
+        let owner = hashTestName
+            mn = S.modName ["hash_split_order"]
+            env = Acton.Env.setMod mn env0
+            a = S.name "a"
+            b = S.name "b"
+            extA = S.GName (S.modName ["dep"]) a
+            extB = S.GName (S.modName ["dep"]) b
+            rawDeps = M.singleton owner [extB, S.NoQ b, extA, S.NoQ a, extB, S.NoQ b]
+            localNames = Set.fromList [owner, a, b]
+            (localDeps, extDeps) = Hashing.splitDeps mn env localNames rawDeps
+        M.lookup owner localDeps `shouldBe` Just [a, b]
+        M.lookup owner extDeps `shouldBe` Just [extA, extB]
+
+      it "matches list-based impl dependency extraction after deduplication" $ do
+        let value = hashTestName
+            x = S.name "x"
+            y = S.name "y"
+            z = S.name "z"
+            aDep = S.name "a"
+            depA = S.GName (S.modName ["dep"]) aDep
+            depB = S.GName (S.modName ["dep"]) (S.name "b")
+            depZ = S.GName (S.modName ["dep"]) z
+            body =
+              [ S.For NoLoc
+                  (S.PVar NoLoc y Nothing)
+                  (S.Var NoLoc depZ)
+                  [ S.Expr NoLoc (S.Var NoLoc (S.NoQ y))
+                  , S.Expr NoLoc (S.Var NoLoc (S.NoQ z))
+                  ]
+                  []
+              , S.With NoLoc
+                  [S.WithItem (S.Var NoLoc (S.NoQ z)) (Just (S.PVar NoLoc x Nothing))]
+                  [ S.Expr NoLoc (S.Var NoLoc (S.NoQ x))
+                  , S.Expr NoLoc (S.Var NoLoc (S.NoQ z))
+                  ]
+              , S.Expr NoLoc (S.Var NoLoc depA)
+              , S.Expr NoLoc (S.Var NoLoc depA)
+              ]
+            decl =
+              S.Def
+                NoLoc
+                value
+                []
+                (S.PosPar x (Just (S.TUnboxed NoLoc (S.tCon (S.TC depB [])))) Nothing S.PosNIL)
+                S.KwdNIL
+                Nothing
+                body
+                S.NoDec
+                S.fxPure
+                Nothing
+            items = [Hashing.TLDecl value decl]
+        let mn = S.modName ["hash_split"]
+            env = Acton.Env.setMod mn env0
+            localNames = Set.fromList [value, z]
+            (directLocalDeps, directExtDeps) = Hashing.implSplitDepsFromItems mn env localNames items
+        implSplitDepSetMaps env mn localNames items `shouldBe`
+          implSplitDepSetMapsSlow env mn localNames items
+        M.lookup value directLocalDeps `shouldBe` Just [z]
+        M.lookup value directExtDeps `shouldBe` Just (sort [depA, depB, depZ])
+
+      it "merges same-name impl dependency splits across worker chunks" $ do
+        let value = hashTestName
+            localA = S.name "local_a"
+            localB = S.name "local_b"
+            extA = S.GName (S.modName ["dep"]) (S.name "ext_a")
+            extB = S.GName (S.modName ["dep"]) (S.name "ext_b")
+            mn = S.modName ["hash_split_chunks"]
+            env = Acton.Env.setMod mn env0
+            mkDecl dep =
+              S.Def
+                NoLoc
+                value
+                []
+                S.PosNIL
+                S.KwdNIL
+                Nothing
+                [S.Expr NoLoc (S.Var NoLoc dep)]
+                S.NoDec
+                S.fxPure
+                Nothing
+            items =
+              [ Hashing.TLDecl value (mkDecl (S.NoQ localA))
+              , Hashing.TLDecl value (mkDecl extA)
+              , Hashing.TLDecl value (mkDecl (S.NoQ localB))
+              , Hashing.TLDecl value (mkDecl extB)
+              ]
+            localNames = Set.fromList [value, localA, localB]
+            expected =
+              ( M.singleton value (Set.fromList [localA, localB])
+              , M.singleton value (Set.fromList [extA, extB])
+              )
+        implSplitDepSetMaps env mn localNames items `shouldBe` expected
+
+      it "keeps lexical local shadowing separate from qualified deps" $ do
+        let value = hashTestName
+            z = S.name "z"
+            ext = S.GName (S.modName ["dep"]) (S.name "ext")
+            mn = S.modName ["hash_shadow_local"]
+            env = Acton.Env.setMod mn env0
+            decl =
+              S.Def
+                NoLoc
+                value
+                []
+                (S.PosPar z Nothing Nothing S.PosNIL)
+                S.KwdNIL
+                Nothing
+                [ S.Expr NoLoc (S.Var NoLoc (S.NoQ z))
+                , S.Expr NoLoc (S.Var NoLoc ext)
+                ]
+                S.NoDec
+                S.fxPure
+                Nothing
+            items = [Hashing.TLDecl value decl]
+            localNames = Set.fromList [value, z]
+            (directLocalDeps, directExtDeps) = Hashing.implSplitDepsFromItems mn env localNames items
+        implSplitDepSetMaps env mn localNames items `shouldBe`
+          implSplitDepSetMapsSlow env mn localNames items
+        M.lookup value directLocalDeps `shouldBe` Just []
+        M.lookup value directExtDeps `shouldBe` Just [ext]
+
+      it "keeps shadowed imported aliases out of impl dependencies" $ do
+        let value = hashTestName
+            shadowed = S.name "shadowed"
+            dep = S.name "dep_value"
+            mn = S.modName ["hash_shadow"]
+            env =
+              Acton.Env.addActiveNames
+                [(shadowed, I.NAlias (S.GName (S.modName ["dep"]) dep))]
+                (Acton.Env.setMod mn env0)
+            decl =
+              S.Def
+                NoLoc
+                value
+                []
+                (S.PosPar shadowed Nothing Nothing S.PosNIL)
+                S.KwdNIL
+                Nothing
+                [S.Expr NoLoc (S.Var NoLoc (S.NoQ shadowed))]
+                S.NoDec
+                S.fxPure
+                Nothing
+            items = [Hashing.TLDecl value decl]
+            localNames = Set.singleton value
+        implSplitDepSetMaps env mn localNames items `shouldBe`
+          implSplitDepSetMapsSlow env mn localNames items
+        snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
+          M.singleton value []
+
+      it "keeps enclosing bindings across nested declarations" $ do
+        let value = hashTestName
+            inner = S.name "inner"
+            shadowed = S.name "shadowed"
+            dep = S.name "dep_value"
+            mn = S.modName ["hash_nested_shadow"]
+            env =
+              Acton.Env.addActiveNames
+                [(shadowed, I.NAlias (S.GName (S.modName ["dep"]) dep))]
+                (Acton.Env.setMod mn env0)
+            nested =
+              S.Def
+                NoLoc
+                inner
+                []
+                S.PosNIL
+                S.KwdNIL
+                Nothing
+                [S.Expr NoLoc (S.Var NoLoc (S.NoQ shadowed))]
+                S.NoDec
+                S.fxPure
+                Nothing
+            decl =
+              S.Def
+                NoLoc
+                value
+                []
+                (S.PosPar shadowed Nothing Nothing S.PosNIL)
+                S.KwdNIL
+                Nothing
+                [S.Decl NoLoc [nested]]
+                S.NoDec
+                S.fxPure
+                Nothing
+            items = [Hashing.TLDecl value decl]
+            localNames = Set.fromList [value, inner]
+        implSplitDepSetMaps env mn localNames items `shouldBe`
+          implSplitDepSetMapsSlow env mn localNames items
+        snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
+          M.singleton value []
 
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do

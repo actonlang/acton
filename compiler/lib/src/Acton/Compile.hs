@@ -2162,6 +2162,7 @@ formatCodegenDelta status =
 -- Returns the front result plus a BackJob for later passes when compilation is
 -- needed. Callers must wait for frOutputJobs before treating the compile as
 -- finished.
+
 runFrontPasses :: C.GlobalOptions
                -> C.CompileOptions
                -> Bool
@@ -2271,8 +2272,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                          else Right (Just (A.GName m n, h))
                   Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
           resolveForName (n, qns) =
-            let qnsSorted = Data.List.sortOn Hashing.qnameKey (Data.Set.toList (Data.Set.fromList qns))
-                resolved = map (resolveQName n) qnsSorted
+            let resolved = map (resolveQName n) qns
                 (errs, vals) = partitionEithers resolved
             in if null errs then Right (n, catMaybes vals) else Left (concat errs)
           (errs, vals) = partitionEithers (map resolveForName (M.toList deps))
@@ -2356,16 +2356,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           -- Extract top-level items from parsed and typed ASTs for per-name hashes.
           let srcItems = Hashing.topLevelItems parsed
               implItems = Hashing.topLevelItems tchecked
-              -- src hashes come only from parsed AST fragments.
-              nameSrcHashes = Hashing.nameHashesFromItems srcItems
-              -- impl hashes are derived from the typed AST bodies. this is the
-              -- local function hash, implDeps are added later
-              nameImplHashes = Hashing.nameHashesFromItems implItems
               -- NameInfo defines the full local environment for this module.
               nameInfoMap = M.fromList fullIface
-              nameSrcKeys = M.keysSet nameSrcHashes
-              nameImplKeys = M.keysSet nameImplHashes
-              nameKeys = Data.Set.union nameSrcKeys nameImplKeys
               nameLocsParsed = M.fromListWith (\a _ -> a)
                 [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
                 M.fromListWith (\a _ -> a)
@@ -2375,27 +2367,22 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 M.fromListWith (\a _ -> a)
                 [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
               nameLocs = M.union nameLocsParsed nameLocsTyped
-          -- pubSigDeps: signature-level deps from NameInfo (types only).
-          let isDerivedName n = case n of
-                A.Derived{} -> True
-                _ -> False
-              isDerivedQName qn = case qn of
-                A.GName _ n -> isDerivedName n
-                A.QName _ n -> isDerivedName n
-                A.NoQ n -> isDerivedName n
-              dropDerived = filter (not . isDerivedQName)
-              pubSigDepsRaw = M.fromList
-                [ (n, dropDerived (Names.freeQ info)) | (n, info) <- M.toList nameInfoMap ]
-              -- implDeps: term-level deps from typed bodies.
-              implDepsRaw = Hashing.implDepsFromItems implItems
-              -- pubDeps include signature deps plus any term-level deps for reuse in pubHash.
-              -- Derived names are internal and should never require a pub hash.
-              pubDepsRaw = M.map dropDerived (M.unionWith (++) pubSigDepsRaw implDepsRaw)
               hashEnv = setMod mn env
+          let hashInputs = Hashing.prepareNameHashInputs mn hashEnv srcItems implItems nameInfoMap
+              nameSrcHashes = Hashing.nhiNameSrcHashes hashInputs
+              nameImplHashes = Hashing.nhiNameImplHashes hashInputs
+              nameKeys = Hashing.nhiNameKeys hashInputs
               -- Split deps into local (same module) vs external (qualified) names.
-              (pubSigLocalDeps, pubSigExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubSigDepsRaw
-              (pubLocalDeps, pubExtDeps) = Hashing.splitDeps mn hashEnv nameKeys pubDepsRaw
-              (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv nameKeys implDepsRaw
+              pubSigLocalDeps = Hashing.nhiPubSigLocalDeps hashInputs
+              pubSigExtDeps = Hashing.nhiPubSigExtDeps hashInputs
+              -- implDeps: term-level deps from typed bodies.
+              implLocalDeps = Hashing.nhiImplLocalDeps hashInputs
+              implExtDeps = Hashing.nhiImplExtDeps hashInputs
+              -- pubDeps include signature deps plus term-level deps for reuse
+              -- in pubHash. Derived names are internal and should never require
+              -- a pub hash.
+              (pubLocalDeps, pubExtDeps) =
+                Hashing.mergePubDeps pubSigLocalDeps pubSigExtDeps implLocalDeps implExtDeps
               -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
           extMapsRes <- resolveNameHashMaps extMods
@@ -2411,27 +2398,24 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 (_, Left diags, _) -> return (Left diags)
                 (_, _, Left diags) -> return (Left diags)
                 (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
-                  -- Build per-name hash records (src/pub/impl + deps) for .tydb.
-                  let nameHashes =
-                        Hashing.buildNameHashes
+                  let selfPubHashes = Hashing.nhiSelfPubHashes hashInputs
+                  let pubHashes = Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes
+                      implHashes = Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes
+                      (modulePubHash, moduleImplHash) = Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
+                      nameHashes =
+                        Hashing.assembleNameHashes
                           nameKeys
                           nameSrcHashes
-                          nameImplHashes
-                          nameInfoMap
-                          pubSigLocalDeps
-                          pubSigExtHashes
+                          pubHashes
+                          implHashes
                           pubLocalDeps
                           implLocalDeps
-                          implExtHashes
                           pubExtHashes
-
-                  -- Module-level hashes summarize the per-name hashes.
-                  let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
-                      moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
+                          implExtHashes
+                  evaluate (rnf (pubHashes, implHashes, modulePubHash, moduleImplHash))
+                  evaluate (rnf nameHashes)
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
                   evaluate (rnf (nameHashes, roots, tests, mdoc))
-                  evaluate (rnf nmod)
-                  evaluate (rnf tchecked)
                   timeTypeHash <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
@@ -3447,11 +3431,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
 
           resolveDepHashes label getHash deps = do
             resolved <- traverseDiags (\(n, qns) -> do
-              let qnsSorted = Data.List.sortOn Hashing.qnameKey (Data.Set.toList (Data.Set.fromList qns))
-                  users = " (used by " ++ A.nstr n ++ ")"
+              let users = " (used by " ++ A.nstr n ++ ")"
               resolvedQns <- traverseDiags (\qn -> do
                 currE <- resolveQNameHash label getHash users qn
-                return (fmap (\curr -> (qn, curr)) currE)) qnsSorted
+                return (fmap (\curr -> (qn, curr)) currE)) qns
               return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
             return (fmap M.fromList resolved)
 
@@ -3650,14 +3633,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                | nh <- nameHashes
                                                ]
                                   nameKeys = M.keysSet nameSrcHashes
-                                  nameImplHashes0 = Hashing.nameHashesFromItems (Hashing.topLevelItems tmod)
-                                  nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
+                                  implItems0 = Hashing.topLevelItems tmod
                                   localNames = nameKeys
-                                  implDepsRaw0 = Hashing.implDepsFromItems (Hashing.topLevelItems tmod)
-                                  implDepsRaw = M.fromList
-                                    [ (n, M.findWithDefault [] n implDepsRaw0)
-                                    | n <- M.keys nameSrcHashes
-                                    ]
+                              let nameImplHashes0 = Hashing.nameHashesFromItems implItems0
+                                  nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
                                 Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
                               case envRes of
@@ -3665,7 +3644,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                 Right env1 -> do
                                   depRes <- (try :: IO a -> IO (Either SomeException a)) $ do
                                     let hashEnv = setMod mn env1
-                                        (implLocalDeps, implExtDeps) = Hashing.splitDeps mn hashEnv localNames implDepsRaw
+                                    let (implLocalDeps0, implExtDeps0) = Hashing.implSplitDepsFromItems mn hashEnv localNames implItems0
+                                        implLocalDeps = M.fromList
+                                          [ (n, M.findWithDefault [] n implLocalDeps0)
+                                          | n <- M.keys nameSrcHashes
+                                          ]
+                                        implExtDeps = M.fromList
+                                          [ (n, M.findWithDefault [] n implExtDeps0)
+                                          | n <- M.keys nameSrcHashes
+                                          ]
                                         depCount = sum (map length (M.elems implLocalDeps))
                                                  + sum (map length (M.elems implExtDeps))
                                     -- Force dep maps now so stale aliases/missing names

@@ -448,4 +448,5 @@ instance Vars Type where
     freeQ (TCon  _ c)               = freeQ c
     freeQ (TRow _ _ _ t r)          = freeQ t ++ freeQ r
     freeQ (TStar _ _ r)             = freeQ r
+    freeQ (TUnboxed _ t)            = freeQ t
     freeQ _                         = []
