@@ -784,7 +784,7 @@ p12_codegen_stale :: TestTree
 p12_codegen_stale =
   goldenVsString "12-codegen-stale.golden"
                  (goldenDir </> "project_12-codegen-stale.golden") $ do
-    let bBase = projDir </> "out" </> "types" </> "b"
+    let bBase = projDir </> "out" </> "types" </> "rebuild" </> "b"
     removeIfExists (bBase ++ ".c")
     removeIfExists (bBase ++ ".h")
     out <- buildOut
@@ -881,7 +881,7 @@ f10_alt_output = testCase "10-alt output" $ do
   let cmd = actonCmd "src/c.act --color never --types"
   (_ec,out) <- runIn projDir cmd
   -- Expect a types dump header for module c
-  assertBool "expected types dump for module c" (T.isInfixOf "== types: c" out)
+  assertBool "expected types dump for module c" (T.isInfixOf "== types: rebuild.c" out)
 
 -- Project case tests --------------------------------------------------------
 
@@ -1176,7 +1176,7 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modB = modLabel proj "b"
-      bC = proj </> "out" </> "types" </> "b.c"
+      bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "def foo() -> int:"
@@ -1207,8 +1207,8 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   let proj = casesProjDir
       src = casesSrcDir
       modB = modLabel proj "b"
-      bC = proj </> "out" </> "types" </> "b.c"
-      bH = proj </> "out" </> "types" </> "b.h"
+      bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
+      bH = proj </> "out" </> "types" </> "incremental_cases" </> "b.h"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "def foo() -> int:"
@@ -1275,7 +1275,7 @@ p26_corrupt_ty_header = testCase "26-corrupt .tydb header forces re-parse" $ do
   let proj = casesProjDir
       src = casesSrcDir
       modA = modLabel proj "a"
-      tyA = proj </> "out" </> "types" </> "a.tydb"
+      tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") "aaa = 1\n"
   writeFileUtf8 (src </> "c.act") $ T.unlines
@@ -1297,7 +1297,7 @@ p26_ty_version_mismatch = testCase "26b-.tydb version mismatch forces re-parse" 
   let proj = casesProjDir
       src = casesSrcDir
       modA = modLabel proj "a"
-      tyA = proj </> "out" </> "types" </> "a.tydb"
+      tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") "aaa = 1\n"
   writeFileUtf8 (src </> "c.act") $ T.unlines
@@ -1371,7 +1371,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
   docDiff <- Compile.readModuleDoc spDiff gopts Compile.defaultCompileOptions paths actAAbs
   case docDiff of
     Just (mn, Just doc) -> do
-      mn @?= A.modName ["a"]
+      mn @?= A.modName ["incremental_cases", "a"]
       doc @?= "Overlay doc"
     _ -> assertFailure "expected module doc from overlay header"
 
@@ -1379,8 +1379,8 @@ p28_protocol_extension_deps :: TestTree
 p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded by name" $ do
   let proj = casesProjDir
       src = casesSrcDir
-      tyA = proj </> "out" </> "types" </> "a.tydb"
-      tyB = proj </> "out" </> "types" </> "b.tydb"
+      tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
+      tyB = proj </> "out" </> "types" </> "incremental_cases" </> "b.tydb"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "protocol FooProto:"
@@ -1442,11 +1442,11 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   case find extMatch iface of
     Just (_, I.NExt _ _ ps _ _ _) -> do
       let protoNames = sort [ prstr (A.tcname p) | (_, p) <- ps ]
-      assertEqual "extension protocol mro" (sort ["a.BarProto", "a.BazProto", "a.FooProto"]) protoNames
+      assertEqual "extension protocol mro" (sort ["incremental_cases.a.BarProto", "incremental_cases.a.BazProto", "incremental_cases.a.FooProto"]) protoNames
     _ -> assertFailure "missing extension NameInfo for BarProtoD_Widget"
   (pubDeps, implDeps) <- readTyDeps tyB "runner"
-  let expectedPub = sort ["__builtin__.int", "a.BarProto", "a.Widget", "a.uses_class"]
-      expectedImpl = sort ["a.BarProto", "a.Widget", "a.uses_class"]
+  let expectedPub = sort ["__builtin__.int", "incremental_cases.a.BarProto", "incremental_cases.a.Widget", "incremental_cases.a.uses_class"]
+      expectedImpl = sort ["incremental_cases.a.BarProto", "incremental_cases.a.Widget", "incremental_cases.a.uses_class"]
   assertEqual "runner pub deps" expectedPub pubDeps
   assertEqual "runner impl deps" expectedImpl implDeps
 
@@ -1631,8 +1631,8 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
       modA = modLabel proj "a"
       modB = modLabel proj "b"
       modC = modLabel proj "c"
-      tyA = proj </> "out" </> "types" </> "a.tydb"
-      tyB = proj </> "out" </> "types" </> "b.tydb"
+      tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
+      tyB = proj </> "out" </> "types" </> "incremental_cases" </> "b.tydb"
   ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
   depDir <- ensureDepProject proj "libfoo"
   let depSrc = depDir </> "src" </> "lib.act"
@@ -1738,13 +1738,13 @@ p33_comprehensive_hashes = testCase "33-comprehensive hash propagation" $ do
     Just nh ->
       assertBool "expected empty pub hash for derived proto" (B.null (InterfaceFiles.nhPubHash nh))
   (pubTypes, implTypes) <- readTyDeps tyB "use_types"
-  assertDepsContain "use_types pub deps" ["a.Local", "a.Worker", "a.add"] pubTypes
-  assertDepsContain "use_types impl deps" ["a.add"] implTypes
+  assertDepsContain "use_types pub deps" ["incremental_cases.a.Local", "incremental_cases.a.Worker", "incremental_cases.a.add"] pubTypes
+  assertDepsContain "use_types impl deps" ["incremental_cases.a.add"] implTypes
   (pubVals, implVals) <- readTyDeps tyB "use_values"
-  assertDepsContain "use_values pub deps" ["a.add", "a.dep_call", "libfoo.lib.dep_const"] pubVals
-  assertDepsContain "use_values impl deps" ["a.add", "a.dep_call", "libfoo.lib.dep_const"] implVals
+  assertDepsContain "use_values pub deps" ["incremental_cases.a.add", "incremental_cases.a.dep_call", "libfoo.lib.dep_const"] pubVals
+  assertDepsContain "use_values impl deps" ["incremental_cases.a.add", "incremental_cases.a.dep_call", "libfoo.lib.dep_const"] implVals
   (pubActor, _) <- readTyDeps tyB "use_actor"
-  assertDepsContain "use_actor pub deps" ["a.Worker"] pubActor
+  assertDepsContain "use_actor pub deps" ["incremental_cases.a.Worker"] pubActor
   (_, implDepCall) <- readTyDeps tyA "dep_call"
   assertDepsContain "dep_call impl deps" ["libfoo.lib.dep_value"] implDepCall
   out1 <- runBinaryIn proj "c"
@@ -1771,7 +1771,7 @@ p34_removed_import_module :: TestTree
 p34_removed_import_module = testCase "34-removed imported module fails before Zig" $ do
   let proj = casesProjDir
       src = casesSrcDir
-      outA = proj </> "out" </> "types" </> "a"
+      outA = proj </> "out" </> "types" </> "incremental_cases" </> "a"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") "aaa = 1\n"
   writeFileUtf8 (src </> "b.act") $ T.unlines
@@ -1796,7 +1796,7 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
     assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
     [".tydb", ".c", ".h"]
   assertBool "expected missing import diagnostic"
-    (T.isInfixOf "Type interface file not found or unreadable for a" out)
+    (T.isInfixOf "Type interface file not found or unreadable for incremental_cases.a" out)
   assertBool "did not expect Zig build to run" (not (T.isInfixOf "zigCmd:" out))
 
 p35_changed_path_keeps_unaffected_provider :: TestTree
@@ -1849,12 +1849,12 @@ p35_changed_path_keeps_unaffected_provider =
       [actMainAbs]
       False
       (Just [actAAbs])
-    bTask <- case find (\t -> Compile.name (Compile.gtTask t) == A.modName ["b"]) (Compile.cpNeededTasks plan) of
+    bTask <- case find (\t -> Compile.name (Compile.gtTask t) == A.modName ["incremental_cases","b"]) (Compile.cpNeededTasks plan) of
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
     let bProviders = Compile.gtImportProviders bTask
-    assertBool "expected provider for changed import a" (M.member (A.modName ["a"]) bProviders)
-    assertBool "expected provider for unchanged import c" (M.member (A.modName ["c"]) bProviders)
+    assertBool "expected provider for changed import a" (M.member (A.modName ["incremental_cases","a"]) bProviders)
+    assertBool "expected provider for unchanged import c" (M.member (A.modName ["incremental_cases","c"]) bProviders)
 
 p35_dbp_changed_path_includes_provider :: TestTree
 p35_dbp_changed_path_includes_provider =
@@ -1927,9 +1927,9 @@ p35_dbp_changed_path_includes_provider =
       (Just [actAAbs])
     let selectedMods = [ Compile.name (Compile.gtTask t) | t <- Compile.cpNeededTasks plan ]
     assertBool "expected changed-path plan to include DBP provider"
-      (A.modName ["provider"] `elem` selectedMods)
+      (A.modName ["incremental_cases","provider"] `elem` selectedMods)
     assertBool "expected unchanged sibling consumer to register DBP interest"
-      (A.modName ["b"] `elem` selectedMods)
+      (A.modName ["incremental_cases","b"] `elem` selectedMods)
 
 p36_removed_dep_name_triggers_front_refresh :: TestTree
 p36_removed_dep_name_triggers_front_refresh =
@@ -1972,7 +1972,7 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
     ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
     depDir <- ensureDepProject proj "libfoo"
     let depSrc = depDir </> "src" </> "lib.act"
-        tyMain = proj </> "out" </> "types" </> "main.tydb"
+        tyMain = proj </> "out" </> "types" </> "incremental_cases" </> "main.tydb"
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 1"
@@ -2076,7 +2076,7 @@ p39_background_lock_does_not_block_build =
       res@(_ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
       assertExitSuccess "build should run under .acton.compile.lock" res
       assertBool ("expected build to rerun front passes while background lock is held\n" ++ T.unpack out)
-        (typechecked out "main")
+        (typechecked out "incremental_cases.main")
 
 p40_background_lock_blocks_watch :: TestTree
 p40_background_lock_blocks_watch =
@@ -2114,8 +2114,8 @@ p41_stale_header_missing_import_reparses_source =
         src = casesSrcDir
         actA = src </> "a.act"
         actB = src </> "b.act"
-        tyB = proj </> "out" </> "types" </> "b.tydb"
-        outA = proj </> "out" </> "types" </> "a"
+        tyB = proj </> "out" </> "types" </> "incremental_cases" </> "b.tydb"
+        outA = proj </> "out" </> "types" </> "incremental_cases" </> "a"
         modB = modLabel proj "b"
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
@@ -2157,7 +2157,7 @@ p42_metadata_drift_refreshes_header =
     let proj = casesProjDir
         src = casesSrcDir
         actA = src </> "a.act"
-        tyA = proj </> "out" </> "types" </> "a.tydb"
+        tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
         modA = modLabel proj "a"
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
@@ -2190,9 +2190,9 @@ p43_equal_act_ty_mtime_hashes_source =
         src = casesSrcDir
         actA = src </> "a.act"
         actB = src </> "b.act"
-        tyB = proj </> "out" </> "types" </> "b.tydb"
+        tyB = proj </> "out" </> "types" </> "incremental_cases" </> "b.tydb"
         tyBData = tyB </> "data.mdb"
-        outA = proj </> "out" </> "types" </> "a"
+        outA = proj </> "out" </> "types" </> "incremental_cases" </> "a"
         modB = modLabel proj "b"
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
@@ -2301,7 +2301,7 @@ p45_tydb_records_local_name_dependencies =
   testCase "45-tydb records local name dependencies" $ do
     let proj = casesProjDir
         src = casesSrcDir
-        tyA = proj </> "out" </> "types" </> "a.tydb"
+        tyA = proj </> "out" </> "types" </> "incremental_cases" </> "a.tydb"
     ensureCasesProject
     writeFileUtf8 (src </> "a.act") $ T.unlines
       [ "def base() -> int:"
@@ -2510,7 +2510,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p10_change_a_iface
       , p11_change_b_doc
       , p12_codegen_stale
-  ]
+      ]
   , sequentialTestGroup "incremental-file" AllSucceed
       [ f01_init
       , f02_initial_build
