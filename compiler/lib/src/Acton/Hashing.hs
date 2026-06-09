@@ -22,6 +22,10 @@ module Acton.Hashing
   , computeHashesSortedDeps
   , mergeSortedDistinct
   , nameInfoHashes
+  , nameInfoHashesWithProgress
+  , nameHashesFromItemsWithProgress
+  , pubSigSplitDepsFromNameInfoMapWithProgress
+  , implSplitDepsFromItemsWithProgress
   , buildNameHashes
   , nameKey
   , qnameKey
@@ -112,10 +116,27 @@ type HashFeed = HashSink -> IO ()
 -- | Hash each name's normalized AST fragments without pretty-printing them.
 nameHashesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
 nameHashesFromItems items =
-  unsafePerformIO $ withHashScratch $ \sink ->
-    M.traverseWithKey (\_ frags -> hashTopLevelFragmentsWith sink frags) grouped
+  unsafePerformIO $ nameHashesFromItemsWithProgress (\_ -> pure ()) items
+
+nameHashesFromItemsWithProgress :: (Int -> IO ()) -> [TopLevelItem] -> IO (M.Map A.Name B.ByteString)
+nameHashesFromItemsWithProgress onProgress items =
+  withHashScratch $ \sink -> do
+    (hashes, _) <- foldM (addHash sink) (M.empty, 0) (M.toAscList grouped)
+    pure hashes
   where
     grouped = topLevelItemsByName items
+
+    addHash sink (acc, done) (n, frags) = do
+      h <- hashTopLevelFragmentsWith sink frags
+      let acc' = M.insert n h acc
+          done' = done + topLevelFragmentsLength frags
+      onProgress done'
+      pure (acc', done')
+
+topLevelFragmentsLength :: TopLevelFragments -> Int
+topLevelFragmentsLength frags = case frags of
+  One _ -> 1
+  Many items -> length items
 
 topLevelItemsByName :: [TopLevelItem] -> M.Map A.Name TopLevelFragments
 topLevelItemsByName = foldl' addFrag M.empty
@@ -768,6 +789,23 @@ pubSigSplitDepsFromNameInfoMap :: A.ModName
 pubSigSplitDepsFromNameInfoMap mn env localNames =
   finishHashSplitDeps . M.map (pubSigSplitDepsFromNameInfo mn env localNames)
 
+pubSigSplitDepsFromNameInfoMapWithProgress :: (Int -> IO ())
+                                           -> A.ModName
+                                           -> Env.Env0
+                                           -> Data.Set.Set A.Name
+                                           -> M.Map A.Name I.NameInfo
+                                           -> IO (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
+pubSigSplitDepsFromNameInfoMapWithProgress onProgress mn env localNames infos = do
+  (deps, _) <- foldM addDeps (M.empty, 0) (M.toAscList infos)
+  pure (finishHashSplitDeps deps)
+  where
+    addDeps (acc, done) (n, info) = do
+      let deps = pubSigSplitDepsFromNameInfo mn env localNames info
+          acc' = M.insert n deps acc
+          done' = done + 1
+      depSplitSize deps `seq` onProgress done'
+      pure (acc', done')
+
 pubSigSplitDepsFromNameInfo :: A.ModName
                             -> Env.Env0
                             -> Data.Set.Set A.Name
@@ -1007,6 +1045,9 @@ type DepSplit = (HashSet.HashSet A.Name, HashSet.HashSet A.QName)
 emptyDepSplitDirect :: DepSplit
 emptyDepSplitDirect = (HashSet.empty, HashSet.empty)
 
+depSplitSize :: DepSplit -> Int
+depSplitSize (ls, es) = HashSet.size ls + HashSet.size es
+
 unionDepSplit :: DepSplit -> DepSplit -> DepSplit
 unionDepSplit (ls, es) (ls', es') =
   (HashSet.union ls ls', HashSet.union es es')
@@ -1034,6 +1075,22 @@ implSplitDepsFromItems mn env localNames items =
   finishHashSplitDeps (foldl' addDeps M.empty (map (implItemSplitDeps mn env localNames) items))
   where
     addDeps acc (n, deps) = M.insertWith unionDepSplit n deps acc
+
+implSplitDepsFromItemsWithProgress :: (Int -> IO ())
+                                   -> A.ModName
+                                   -> Env.Env0
+                                   -> Data.Set.Set A.Name
+                                   -> [TopLevelItem]
+                                   -> IO (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
+implSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
+  (deps, _) <- foldM addDeps (M.empty, 0) (map (implItemSplitDeps mn env localNames) items)
+  pure (finishHashSplitDeps deps)
+  where
+    addDeps (acc, done) (n, deps) = do
+      let acc' = M.insertWith unionDepSplit n deps acc
+          done' = done + 1
+      depSplitSize deps `seq` onProgress done'
+      pure (acc', done')
 
 implItemSplitDeps :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> TopLevelItem -> (A.Name, DepSplit)
 implItemSplitDeps mn env localNames item =
@@ -1422,8 +1479,20 @@ maxAcyclicHashDepth = 10000
 -- | Build NameHashInfo entries from per-name hashes and deps.
 nameInfoHashes :: M.Map A.Name I.NameInfo -> M.Map A.Name B.ByteString
 nameInfoHashes infos =
-  unsafePerformIO $ withHashScratch $ \sink ->
-    M.traverseWithKey (\_ info -> hashFeedWith sink (feedNameInfo info)) infos
+  unsafePerformIO $ nameInfoHashesWithProgress (\_ -> pure ()) infos
+
+nameInfoHashesWithProgress :: (Int -> IO ()) -> M.Map A.Name I.NameInfo -> IO (M.Map A.Name B.ByteString)
+nameInfoHashesWithProgress onProgress infos =
+  withHashScratch $ \sink -> do
+    (hashes, _) <- foldM (addHash sink) (M.empty, 0) (M.toAscList infos)
+    pure hashes
+  where
+    addHash sink (acc, done) (n, info) = do
+      h <- hashFeedWith sink (feedNameInfo info)
+      let acc' = M.insert n h acc
+          done' = done + 1
+      onProgress done'
+      pure (acc', done')
 
 prepareNameHashInputs :: A.ModName
                       -> Env.Env0

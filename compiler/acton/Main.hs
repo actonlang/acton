@@ -1744,8 +1744,9 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                else clamp01 (fromIntegral (fppCompleted p) / fromIntegral total)
         frontPassFraction p =
           case fppPass p of
-            FrontPassKinds -> 0.10 * progressRatio p
-            FrontPassTypes -> 0.10 + 0.90 * progressRatio p
+            FrontPassKinds -> 0.05 * progressRatio p
+            FrontPassTypes -> 0.05 + 0.85 * progressRatio p
+            FrontPassHash  -> 0.90 + 0.10 * progressRatio p
         frontStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1765,9 +1766,20 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                                 Just nm -> prefix ++ abbreviateRight (budget - staticLen) nm ++ countPart
                                 Nothing -> "Type checking" ++ countPart
                          else compact
+                  fullHashStatus mCurrent =
+                    let prefix = "Hashing "
+                        staticLen = length prefix + length countPart
+                    in if staticLen < budget
+                         then case mCurrent of
+                                Just label -> prefix ++ abbreviateRight (budget - staticLen) label ++ countPart
+                                Nothing -> "Hashing" ++ countPart
+                         else
+                           let base = if total > 0 then "Hash" ++ countPart else "Hash"
+                           in if length base <= budget then base else "Hash"
               in case fppPass p of
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
                    FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
+                   FrontPassHash  -> Just (fullHashStatus (fppCurrent p))
         backPassStatusRenderer (BackPassSkipped pass _ _) =
           let passName = backPassName pass
           in staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")

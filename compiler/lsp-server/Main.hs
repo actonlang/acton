@@ -539,6 +539,7 @@ frontProgressMessage task p =
         Just label -> " (" ++ label ++ ")"
     passName Compile.FrontPassKinds = "Checking kinds for"
     passName Compile.FrontPassTypes = "Typechecking"
+    passName Compile.FrontPassHash = "Hashing"
 
 backProgressMessage :: Compile.BackJob -> Compile.BackJobResult -> T.Text
 backProgressMessage job result =
