@@ -725,18 +725,28 @@ jobs:
           set -e
           cd test/compiler/hello
           build() { echo "=== acton build --target $* ==="; acton build --target "$@"; }
+          mkdir -p "$RUNNER_TEMP/acton-windows-hello/aarch64" "$RUNNER_TEMP/acton-windows-hello/x86_64"
           build aarch64-macos-none --db
           build aarch64-windows-gnu --no-threads
+          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/aarch64/hello.exe"
           build x86_64-macos-none --db
           build x86_64-linux-gnu.2.27 --db
           build x86_64-linux-musl --db
           build x86_64-windows-gnu --no-threads
-      - name: "Upload Windows hello executable"
+          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/x86_64/hello.exe"
+      - name: "Upload x86_64 Windows hello executable"
         if: matrix.arch == 'amd64'
         uses: actions/upload-artifact@v7
         with:
           name: acton-hello-windows-x86_64
-          path: test/compiler/hello/out/bin/hello.exe
+          path: ${{ runner.temp }}/acton-windows-hello/x86_64/hello.exe
+          if-no-files-found: error
+      - name: "Upload arm64 Windows hello executable"
+        if: matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-hello-windows-arm64
+          path: ${{ runner.temp }}/acton-windows-hello/aarch64/hello.exe
           if-no-files-found: error
       # Producer only: save the freshly-built cross-compile cache.
       - name: "Save cross-compile cache (~/.cache/acton)"
@@ -752,15 +762,26 @@ jobs:
 
   test-windows:
     needs: test-cross-compile
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-latest
+            artifact: acton-hello-windows-x86_64
+          - arch: arm64
+            runner: windows-11-arm
+            artifact: acton-hello-windows-arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: "Download Windows hello executable"
         uses: actions/download-artifact@v8
         with:
-          name: acton-hello-windows-x86_64
+          name: ${{ matrix.artifact }}
       - name: "Run Windows hello executable"
         shell: pwsh
         run: |
+          Write-Host "Running ${{ matrix.arch }} Windows hello executable"
           $out = & .\hello.exe
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
