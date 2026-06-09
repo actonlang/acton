@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
 {-|
 Overview
 
@@ -229,6 +229,7 @@ import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
 import qualified Pretty
+import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
 import Control.Applicative ((<|>))
@@ -1535,9 +1536,17 @@ importsOf (ParseErrorTask _ _) = []
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
-resolveProviders :: String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders proj order modSets imps = M.fromList $ catMaybes $ map findProvider imps
-  where p0              = head order
+resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders key proj order modSets imps = --trace ("#### resolveProviders " ++ prstr key) $
+                                               --trace ("   # proj: " ++ proj ++ " (head order: " ++ p0 ++ ") ") $
+                                               --trace ("   # order: " ++ prstrs order) $
+                                               --trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
+                                               --trace ("   # imps: " ++ prstrs imps ++ " (" ++ prstrs imps' ++ ")") $
+                                               --trace ("  ## map: "  ++ prstr result) $
+                                               result
+  where result          = M.fromList $ catMaybes $ map findProvider imps'
+        imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ imps
+        p0              = tkProj key
         Just mods0      = M.lookup p0 modSets
         findProvider mn
           | Data.Set.member mn' mods0
@@ -1594,7 +1603,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
               paths <- pathsForModule opts projMap ctx (tkMod k)
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  providers = resolveProviders (projName paths) order modSets (importsOf task)
+                  providers = resolveProviders k (projName paths) order modSets (importsOf task)
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
@@ -2094,8 +2103,18 @@ materializeTask opts sp mn actFile providers mOnProgress task =
       let displayFile = makeRelative cwd file
       parseActSource opts mn' displayFile srcContent mOnProgress
 
+instance Pretty (A.ModName, TaskKey) where
+    pretty (m, tk) = pretty m <+> text "-->" <+> pretty tk
+
+instance Pretty TaskKey where
+    pretty tk = pretty (tkMod tk) <+> parens (pretty (tkProj tk))
+
+instance Pretty (M.Map A.ModName TaskKey) where
+    pretty prov = nest 4 $ vcat $ map pretty (M.toList prov)
+
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
 adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
+                            --trace ("  ## providers:\n" ++ render (pretty providers))
                             m{ A.imps = imps' }
   where imps'                        = map adjust (A.imps m)
         adjust (A.Import l ms)       = A.Import l (map adj ms)
@@ -3842,6 +3861,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
+                    --traceM ("\n## runFront " ++ prstr mn ++ "\n")
                     prevNameHashes <- if C.verbose gopts
                       then case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
@@ -3881,7 +3901,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           (isDbpBlocked key)
                           paths
                           envSnap
-                          m
+                          (adjustImports providers m)
                           srcContent
                           srcBytes
                           mSourceMeta
@@ -3905,6 +3925,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
                   runImplRefresh = do
+                    --traceM ("\n## runImplRefresh " ++ prstr mn ++ "\n")
                     let rerunFront = do
                           when (C.verbose gopts) $
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
@@ -3938,7 +3959,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               let nameImplHashes0 = Hashing.nameHashesFromItems implItems0
                                   nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
-                                Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
+                                Acton.Env.mkEnv (searchPath paths) envSnap (adjustImports providers parsedMod)
                               case envRes of
                                 Left err -> handleSyncFailure err
                                 Right env1 -> do
@@ -4014,6 +4035,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           cacheFrontResult fr
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
+                    --traceM ("\n## runCodegenRefresh " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
                       ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
@@ -4035,6 +4057,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                    { frInterestDeps = interestDeps }
                         cacheFrontResult fr
                   runReuse = do
+                    --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
@@ -4445,7 +4468,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
-srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
+srcFile paths mn        = srcBase paths mn ++ ".act"
 
 -- | Compute the output base path (without extension) for a module.
 -- Used to locate .tydb/.c/.h output under the project's types directory.
@@ -4568,6 +4591,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
+                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [fileBody]
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
@@ -4662,19 +4686,21 @@ pruneMissingModuleOutputs ctx = do
       let ext = takeExtension absFile
       when (ext == ".c" || ext == ".h") $ do
         let rel = normalise (makeRelative typesRoot absFile)
-            base = normalise (moduleBase rel ext)
+            base = dropProjDir (moduleBase rel ext)
         unless (Data.Set.member base srcMods) $
           removeFile absFile `catch` ignoreNotExists
 
-    proj = BuildSpec.specName $ projBuildSpec ctx
-
     pruneTyDb srcMods typesRoot absDir = do
       let rel = normalise (makeRelative typesRoot absDir)
-          base = case splitDirectories $ normalise (dropExtension rel) of
-                    n:ns | n == proj -> joinPath ns
-                    ns -> joinPath ns
+          base = dropProjDir (dropExtension rel)
       unless (Data.Set.member base srcMods) $ do
         removePathForcibly absDir `catch` ignoreNotExists
+
+    proj = BuildSpec.specName $ projBuildSpec ctx
+
+    dropProjDir rel = case splitDirectories $ normalise (dropExtension rel) of
+                        n:ns | n == proj -> joinPath ns
+                        ns -> joinPath ns
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
