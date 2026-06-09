@@ -724,12 +724,29 @@ jobs:
           set -e
           cd test/compiler/hello
           build() { echo "=== acton build --target $* ==="; acton build --target "$@"; }
+          mkdir -p "$RUNNER_TEMP/acton-windows-hello/aarch64" "$RUNNER_TEMP/acton-windows-hello/x86_64"
           build aarch64-macos-none --db
           build aarch64-windows-gnu --no-threads
+          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/aarch64/hello.exe"
           build x86_64-macos-none --db
           build x86_64-linux-gnu.2.27 --db
           build x86_64-linux-musl --db
           build x86_64-windows-gnu --no-threads
+          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/x86_64/hello.exe"
+      - name: "Upload x86_64 Windows hello executable"
+        if: matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-hello-windows-x86_64
+          path: ${{ runner.temp }}/acton-windows-hello/x86_64/hello.exe
+          if-no-files-found: error
+      - name: "Upload arm64 Windows hello executable"
+        if: matrix.arch == 'amd64'
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-hello-windows-arm64
+          path: ${{ runner.temp }}/acton-windows-hello/aarch64/hello.exe
+          if-no-files-found: error
       # Producer only: save the freshly-built cross-compile cache.
       - name: "Save cross-compile cache (~/.cache/acton)"
         if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.cross_compile.outcome == 'success' }}
@@ -741,6 +758,37 @@ jobs:
       - name: "Show disk usage (after cross-compile)"
         if: always()
         run: df -h || true
+
+  test-windows:
+    needs: test-cross-compile
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: windows-latest
+            artifact: acton-hello-windows-x86_64
+          - arch: arm64
+            runner: windows-11-arm
+            artifact: acton-hello-windows-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: "Download Windows hello executable"
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+      - name: "Run Windows hello executable"
+        shell: pwsh
+        run: |
+          Write-Host "Running ${{ matrix.arch }} Windows hello executable"
+          $out = & .\hello.exe
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+          if ($out -ne "Hello World!") {
+            Write-Error "Unexpected output: '$out'"
+            exit 1
+          }
 
   perf-vs-main:
     needs: build-debs
@@ -873,7 +921,7 @@ jobs:
       repo_url: "actonlang/acton-http2"
 
   build-container-image:
-    needs: [test-macos, test-linux, test-cross-compile, build-debs]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -970,7 +1018,7 @@ jobs:
     # Only run on the main branch
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, build-debs, build-container-image]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, build-container-image]
     steps:
       - name: "Delete current tip release & tag"
         uses: dev-drprasad/delete-tag-and-release@v1.1
@@ -1057,7 +1105,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, build-debs, build-container-image]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, build-container-image]
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v6
@@ -1104,7 +1152,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:experimental
-    needs: [test-macos, test-linux, test-cross-compile, build-debs]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs]
     steps:
       - name: Install build prerequisites
         run: |
@@ -1158,7 +1206,7 @@ jobs:
       image: debian:experimental
     permissions:
       contents: write
-    needs: [test-macos, test-linux, test-cross-compile, build-debs]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs]
     steps:
       - name: Install build prerequisites
         run: |
@@ -1204,7 +1252,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     # Depend on all test jobs so we don't update brew repo in case anything fails
-    needs: [test-macos, test-linux, test-cross-compile, build-debs]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs]
     steps:
       - name: "Check out code of main acton repo"
         uses: actions/checkout@v6

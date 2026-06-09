@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
         flags.appendSlice(b.allocator, &.{
             "-D_FILE_OFFSET_BITS=64",
             "-D_LARGEFILE_SOURCE",
+            "-fno-sanitize=null",
         }) catch unreachable;
         if (optimize == .Debug) {
             flags.appendSlice(b.allocator, &.{
