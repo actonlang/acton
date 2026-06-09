@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex7.act using temporary scratch directory
-   ex7  Parse done                                                            0.000 s
+   ex7  Parse done                                                               0.000 s
 [error]: Constraint violation
      +--> ex7.act@4:16-4:17
      |

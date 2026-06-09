@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex9.act using temporary scratch directory
-   ex9  Parse done                                                            0.000 s
+   ex9  Parse done                                                               0.000 s
 [error]: Cannot satisfy the following simultaneous constraints for the unknown types
      +--> ex9.act@1:5-1:6
      |

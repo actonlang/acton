@@ -1564,7 +1564,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
-        timerMinWidth = length "999.999 s"
+        timerMinWidth = length "99999.999 s"
         plainLogWidth = timePadWidth + timerMinWidth
         detailStmtIndentWide = replicate 5 ' '
         detailBindsIndentWide = replicate 7 ' '
@@ -1577,7 +1577,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ padRight statusWidth (abbreviateRight statusWidth status)
         plainDoneTimedLine modLbl status t =
           padRight timePadWidth (plainDoneIndent ++ plainStatusColumns modLbl status)
-          ++ fmtTimePrecise t
+          ++ padLeft timerMinWidth (fmtTimePrecise t)
         plainDoneLine modLbl status =
           plainDoneIndent ++ plainStatusColumns modLbl status
         pickBestLine candidates =
