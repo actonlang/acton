@@ -1,4 +1,4 @@
-import b
+import dep_b.b
 import c
 
 def answer_a() -> int:

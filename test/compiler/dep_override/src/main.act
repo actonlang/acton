@@ -1,4 +1,4 @@
-import a
+import dep_a.a
 
 actor main(env):
     print(str(a.answer_a()))
