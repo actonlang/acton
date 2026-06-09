@@ -100,9 +100,15 @@ extern B_IntegralD_bigint B_IntegralD_bigintG_witness;
 extern B_HashableD_bool B_HashableD_boolG_witness;
 
 extern B_OrdD_list  B_OrdD_listD_bytesG_witness;
+
 extern B_MappingD_dict B_MappingD_dictD_strG_witness;
 extern B_MappingD_dict B_MappingD_dictD_intG_witness;
-extern B_MappingD_dict B_MappingD_dictD_bigintG_witness;
- 
+extern B_MappingD_dict B_MappingD_dictD_bytesG_witness;
+
+extern B_SetD_set B_SetD_SetD_strG_witness;
+extern B_SetD_set B_SetD_SetD_intG_witness;
+extern B_SetD_set B_SetD_SetD_bytesG_witness;
+
+
 #define $SequenceD_listG_witness B_SequenceD_listG_witness
 #define $CollectionD_listG_witness B_CollectionD_SequenceD_listG_witness
