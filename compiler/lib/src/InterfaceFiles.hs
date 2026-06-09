@@ -32,9 +32,9 @@
 --     "version"        :: [Int]                       -- Acton.Syntax.version
 --     "meta"           :: ( Maybe SourceFileMeta      -- cached source stat metadata
 --                         , ByteString                -- moduleSrcBytesHash: SHA-256 of raw source
---                         , ByteString                -- modulePubHash: SHA-256 of public NameInfo
+--                         , ByteString                -- modulePubHash: structural hash of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
---                         , ByteString )              -- moduleImplHash: SHA-256 of per-name impl hashes
+--                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes
 --     "imports"        :: [(A.ModName, ByteString)]   -- imported module and pub hash used
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
 --     "tests"          :: [String]                    -- discovered test names
