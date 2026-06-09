@@ -1,4 +1,4 @@
-import b
+import dep_b.b
 
 def answer_a() -> int:
-    return b.answer()
+    return dep_b.b.answer()
