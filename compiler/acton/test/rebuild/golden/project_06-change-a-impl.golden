@@ -1,41 +1,41 @@
 Resolving dependencies (fetching if missing)...
-   a  Parse done                                                            0.000 s
-  Stale a: source changed
-  Hash deltas a: ~aaa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
-   a  Type check done                                                       0.000 s
+   rebuild.a  Parse done                                                            0.000 s
+  Stale rebuild.a: source changed
+  Hash deltas rebuild.a: ~aaa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
+   rebuild.a  Type check done                                                       0.000 s
      Non-total inferred signature: aaa
        aaa : int
-  Stale b: impl changes in a.aaa HASH1 → HASH2 (used by baa)
-  Stale c: impl changes in b.baa HASH1 → HASH2 (used by main)
-   a  Wrote .tydb                                                           0.000 s
-   a  Generated docs                                                        0.000 s
-     Back normalize done: a                                                 0.000 s
-     Back deactorize done: a                                                0.000 s
-     Back cps done: a                                                       0.000 s
-     Back llift done: a                                                     0.000 s
-     Back boxing done: a                                                    0.000 s
-     Back codegen done: a                                                   0.000 s
-     Back render done: a                                                    0.000 s
-     Back write done: a                                                     0.000 s
-   a  Compilation done                                                      0.000 s
-   b  Wrote .tydb                                                           0.000 s
-     Back normalize done: b                                                 0.000 s
-     Back deactorize done: b                                                0.000 s
-     Back cps done: b                                                       0.000 s
-     Back llift done: b                                                     0.000 s
-     Back boxing done: b                                                    0.000 s
-     Back codegen done: b                                                   0.000 s
-     Back render done: b                                                    0.000 s
-     Back write done: b                                                     0.000 s
-   b  Compilation done                                                      0.000 s
-   c  Wrote .tydb                                                           0.000 s
-     Back normalize done: c                                                 0.000 s
-     Back deactorize done: c                                                0.000 s
-     Back cps done: c                                                       0.000 s
-     Back llift done: c                                                     0.000 s
-     Back boxing done: c                                                    0.000 s
-     Back codegen done: c                                                   0.000 s
-     Back render done: c                                                    0.000 s
-     Back write done: c                                                     0.000 s
-   c  Compilation done                                                      0.000 s
-      Final compilation done                                                0.000 s
+  Stale rebuild.b: impl changes in rebuild.a.aaa HASH1 → HASH2 (used by baa)
+  Stale rebuild.c: impl changes in rebuild.b.baa HASH1 → HASH2 (used by main)
+   rebuild.a  Wrote .tydb                                                           0.000 s
+   rebuild.a  Generated docs                                                        0.000 s
+     Back normalize done: rebuild.a                                                 0.000 s
+     Back deactorize done: rebuild.a                                                0.000 s
+     Back cps done: rebuild.a                                                       0.000 s
+     Back llift done: rebuild.a                                                     0.000 s
+     Back boxing done: rebuild.a                                                    0.000 s
+     Back codegen done: rebuild.a                                                   0.000 s
+     Back render done: rebuild.a                                                    0.000 s
+     Back write done: rebuild.a                                                     0.000 s
+   rebuild.a  Compilation done                                                      0.000 s
+   rebuild.b  Wrote .tydb                                                           0.000 s
+     Back normalize done: rebuild.b                                                 0.000 s
+     Back deactorize done: rebuild.b                                                0.000 s
+     Back cps done: rebuild.b                                                       0.000 s
+     Back llift done: rebuild.b                                                     0.000 s
+     Back boxing done: rebuild.b                                                    0.000 s
+     Back codegen done: rebuild.b                                                   0.000 s
+     Back render done: rebuild.b                                                    0.000 s
+     Back write done: rebuild.b                                                     0.000 s
+   rebuild.b  Compilation done                                                      0.000 s
+   rebuild.c  Wrote .tydb                                                           0.000 s
+     Back normalize done: rebuild.c                                                 0.000 s
+     Back deactorize done: rebuild.c                                                0.000 s
+     Back cps done: rebuild.c                                                       0.000 s
+     Back llift done: rebuild.c                                                     0.000 s
+     Back boxing done: rebuild.c                                                    0.000 s
+     Back codegen done: rebuild.c                                                   0.000 s
+     Back render done: rebuild.c                                                    0.000 s
+     Back write done: rebuild.c                                                     0.000 s
+   rebuild.c  Compilation done                                                      0.000 s
+              Final compilation done                                                0.000 s
