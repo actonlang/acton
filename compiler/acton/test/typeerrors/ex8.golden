@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex8.act using temporary scratch directory
-   ex8  Parse done                                                            0.000 s
+   ex8  Parse done                                                               0.000 s
 [error]: Cannot satisfy the following simultaneous constraints for the unknown type t0
      +--> ex8.act@3:14-3:15
      |

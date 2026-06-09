@@ -1,13 +1,13 @@
 Resolving dependencies (fetching if missing)...
-   a  Parse done                                                            0.000 s
+   a  Parse done                                                               0.000 s
   Stale a: source changed
   Hash deltas a: -W_aaa_3, ~aaa{src HASH1 -> HASH2, pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   a  Type check done                                                       0.000 s
+   a  Type check done                                                          0.000 s
      Non-total inferred signature: aaa
        aaa : str
   Stale b: pub changes in a.aaa HASH1 → HASH2 (used by baa)
   Hash deltas b: ~baa{pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   b  Type check done                                                       0.000 s
+   b  Type check done                                                          0.000 s
      Non-total inferred signature: baa
        baa : () -> str
      Non-total inferred signature: DocInfo
@@ -16,9 +16,9 @@ Resolving dependencies (fetching if missing)...
            get : () -> int
   Stale c: pub changes in b.baa HASH1 → HASH2 (used by main)
   Hash deltas c: ~main{impl HASH1 -> HASH2}
-   c  Type check done                                                       0.000 s
-   a  Wrote .tydb                                                           0.000 s
-   a  Generated docs                                                        0.000 s
+   c  Type check done                                                          0.000 s
+   a  Wrote .tydb                                                              0.000 s
+   a  Generated docs                                                           0.000 s
      Back normalize done: a                                                 0.000 s
      Back deactorize done: a                                                0.000 s
      Back cps done: a                                                       0.000 s
@@ -27,9 +27,9 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: a                                                   0.000 s
      Back render done: a                                                    0.000 s
      Back write done: a                                                     0.000 s
-   a  Compilation done                                                      0.000 s
-   b  Wrote .tydb                                                           0.000 s
-   b  Generated docs                                                        0.000 s
+   a  Compilation done                                                         0.000 s
+   b  Wrote .tydb                                                              0.000 s
+   b  Generated docs                                                           0.000 s
      Back normalize done: b                                                 0.000 s
      Back deactorize done: b                                                0.000 s
      Back cps done: b                                                       0.000 s
@@ -38,9 +38,9 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: b                                                   0.000 s
      Back render done: b                                                    0.000 s
      Back write done: b                                                     0.000 s
-   b  Compilation done                                                      0.000 s
-   c  Wrote .tydb                                                           0.000 s
-   c  Generated docs                                                        0.000 s
+   b  Compilation done                                                         0.000 s
+   c  Wrote .tydb                                                              0.000 s
+   c  Generated docs                                                           0.000 s
      Back normalize done: c                                                 0.000 s
      Back deactorize done: c                                                0.000 s
      Back cps done: c                                                       0.000 s
@@ -49,5 +49,5 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: c                                                   0.000 s
      Back render done: c                                                    0.000 s
      Back write done: c                                                     0.000 s
-   c  Compilation done                                                      0.000 s
-      Final compilation done                                                0.000 s
+   c  Compilation done                                                         0.000 s
+      Final compilation done                                                   0.000 s

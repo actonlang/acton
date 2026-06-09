@@ -1,5 +1,5 @@
 Building file test/typeerrors/funargs2.act using temporary scratch directory
-   funargs2  Parse done                                                            0.000 s
+   funargs2  Parse done                                                               0.000 s
 [error]: Unexpected keyword argument
      +--> funargs2.act@4:9-4:10
      |

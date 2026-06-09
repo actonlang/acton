@@ -1,5 +1,5 @@
 Building file test/typeerrors/ex16.act using temporary scratch directory
-   ex16  Parse done                                                            0.000 s
+   ex16  Parse done                                                               0.000 s
 [error]: Constraint violation
      +--> ex16.act@6:9-6:22
      |
