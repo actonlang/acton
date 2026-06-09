@@ -106,6 +106,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
+                -- StaticWitnessCall is only used to transfer static witness info from boxing to codegen
                 | StaticWitnessCall { eloc::SrcLoc, swclass::TCon, swobject::QName, swpath::[Name], attr::Name, swtype::Type, pargs::PosArg }
                 | Box           { tp :: Type, exp1 :: Expr }
                 | UnBox         { tp :: Type, exp1 :: Expr }

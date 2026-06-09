@@ -104,10 +104,12 @@ extern B_OrdD_list  B_OrdD_listD_bytesG_witness;
 extern B_MappingD_dict B_MappingD_dictD_strG_witness;
 extern B_MappingD_dict B_MappingD_dictD_intG_witness;
 extern B_MappingD_dict B_MappingD_dictD_bytesG_witness;
+extern B_MappingD_dict B_MappingD_dictD_u64G_witness;
 
 extern B_SetD_set B_SetD_SetD_strG_witness;
 extern B_SetD_set B_SetD_SetD_intG_witness;
 extern B_SetD_set B_SetD_SetD_bytesG_witness;
+extern B_SetD_set B_SetD_SetD_u64G_witness;
 
 
 #define $SequenceD_listG_witness B_SequenceD_listG_witness
