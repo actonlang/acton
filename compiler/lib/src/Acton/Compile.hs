@@ -361,6 +361,7 @@ data BackPassProgress
 data FrontPass
   = FrontPassKinds
   | FrontPassTypes
+  | FrontPassHash
   deriving (Eq, Show)
 
 data FrontPassProgress = FrontPassProgress
@@ -2286,6 +2287,14 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
         , fppCurrent = current
         }
 
+    emitHashProgress completed total current =
+      emitFrontProgress FrontPassHash completed total current
+
+    frontProgressMinIntervalNanos = 50000000 :: Integer
+
+    timeSpecNanos t =
+      fromIntegral (sec t) * 1000000000 + fromIntegral (nsec t)
+
     core = do
       timeStart <- getTime Monotonic
       let isRoot = mn == modName paths
@@ -2298,7 +2307,23 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       inferredSigsRef <- newIORef ([] :: [InferredSignature])
       typeActiveRef <- newIORef Nothing
       typeProgressDoneRef <- newIORef Nothing
+      typeProgressLastRef <- newIORef Nothing
+      hashProgressLastRef <- newIORef Nothing
       let collectTypeStmtTimings = C.timing gopts && C.verbose gopts
+      let shouldEmitPaced force lastRef now completed total = do
+            mLast <- readIORef lastRef
+            let done = min total (max 0 completed)
+                shouldEmit =
+                  force ||
+                  done >= total ||
+                  maybe True (\lastEmit -> timeSpecNanos now - timeSpecNanos lastEmit >= frontProgressMinIntervalNanos) mLast
+            when shouldEmit $
+              writeIORef lastRef (Just now)
+            pure (shouldEmit, done)
+          emitTypeProgressPaced force now completed total current = do
+            (shouldEmit, done) <- shouldEmitPaced force typeProgressLastRef now completed total
+            when shouldEmit $
+              emitFrontProgress FrontPassTypes done total current
       let onTypeProgress total completed current names _weight = do
             now <- getTime Monotonic
             when (total > 0 && completed >= total && isNothing current) $ do
@@ -2320,13 +2345,18 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               case current of
                 Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
                 Nothing -> writeIORef typeActiveRef Nothing
-            emitFrontProgress FrontPassTypes completed total current
+            emitTypeProgressPaced False now completed total current
           onInferredSignature names sig =
             modifyIORef' inferredSigsRef (InferredSignature names sig :)
           inferredSignatureCb =
             if C.timing gopts || C.verbose gopts
               then Just onInferredSignature
               else Nothing
+          emitHashProgressPaced force completed total current = do
+            now <- getTime Monotonic
+            (shouldEmit, done) <- shouldEmitPaced force hashProgressLastRef now completed total
+            when shouldEmit $
+              emitHashProgress done total current
 
       env <- Acton.Env.mkEnv (searchPath paths) env0 parsed
       timeEnv <- getTime Monotonic
@@ -2342,49 +2372,88 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
       timeTypeForce <- getTime Monotonic
-      -- Module-level src hash uses raw bytes so any source edit forces re-parse.
-      let moduleSrcBytesHash = SHA256.hash srcBytes
       -- Store roots so later builds can discover entry points without reparse.
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
       let roots = [ n | (n,i) <- fullIface, rootEligible i ]
+      -- Extract top-level items from parsed and typed ASTs for per-name hashes.
+      let srcItems = Hashing.topLevelItems parsed
+          implItems = Hashing.topLevelItems tchecked
+          -- NameInfo defines the full local environment for this module.
+          nameInfoMap = M.fromList fullIface
+          nameLocsParsed = M.fromListWith (\a _ -> a)
+            [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
+            M.fromListWith (\a _ -> a)
+            [ (n, A.sloc s) | Hashing.TLStmt n s <- srcItems ]
+          nameLocsTyped = M.fromListWith (\a _ -> a)
+            [ (n, A.dloc d) | Hashing.TLDecl n d <- implItems ] `M.union`
+            M.fromListWith (\a _ -> a)
+            [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
+          nameLocs = M.union nameLocsParsed nameLocsTyped
+          hashEnv = setMod mn env
+          sourceHashWork = length srcItems
+          implHashWork = length implItems
+          ifaceHashWork = M.size nameInfoMap
+          ifaceDepWork = M.size nameInfoMap
+          implDepWork = length implItems
+          afterSourceHashes = sourceHashWork
+          afterImplHashes = afterSourceHashes + implHashWork
+          afterIfaceHashes = afterImplHashes + ifaceHashWork
+          afterIfaceDeps = afterIfaceHashes + ifaceDepWork
+          afterImplDeps = afterIfaceDeps + implDepWork
+          hashProgressTotal = afterImplDeps + 1
+          hashProgressCheckStride = max 1 (hashProgressTotal `div` 1000)
+          hashProgress base done = do
+            let completed = base + done
+            when (completed `rem` hashProgressCheckStride == 0) $
+              emitHashProgressPaced False completed hashProgressTotal Nothing
+      evaluate (sourceHashWork + implHashWork + ifaceHashWork + ifaceDepWork + implDepWork + M.size nameLocs)
+      emitHashProgressPaced True 0 hashProgressTotal Nothing
+      -- Module-level src hash uses raw bytes so any source edit forces re-parse.
+      let moduleSrcBytesHash = SHA256.hash srcBytes
+      evaluate (rnf moduleSrcBytesHash)
       -- Import hashes are recorded in the .tydb header so dep changes can be detected.
       impsRes <- resolveImportHashes imps
       case impsRes of
         Left diags -> return (Left diags)
         Right impsWithHash -> do
-          -- Extract top-level items from parsed and typed ASTs for per-name hashes.
-          let srcItems = Hashing.topLevelItems parsed
-              implItems = Hashing.topLevelItems tchecked
-              -- NameInfo defines the full local environment for this module.
-              nameInfoMap = M.fromList fullIface
-              nameLocsParsed = M.fromListWith (\a _ -> a)
-                [ (n, A.dloc d) | Hashing.TLDecl n d <- srcItems ] `M.union`
-                M.fromListWith (\a _ -> a)
-                [ (n, A.sloc s) | Hashing.TLStmt n s <- srcItems ]
-              nameLocsTyped = M.fromListWith (\a _ -> a)
-                [ (n, A.dloc d) | Hashing.TLDecl n d <- implItems ] `M.union`
-                M.fromListWith (\a _ -> a)
-                [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
-              nameLocs = M.union nameLocsParsed nameLocsTyped
-              hashEnv = setMod mn env
-          let hashInputs = Hashing.prepareNameHashInputs mn hashEnv srcItems implItems nameInfoMap
-              nameSrcHashes = Hashing.nhiNameSrcHashes hashInputs
-              nameImplHashes = Hashing.nhiNameImplHashes hashInputs
-              nameKeys = Hashing.nhiNameKeys hashInputs
-              -- Split deps into local (same module) vs external (qualified) names.
-              pubSigLocalDeps = Hashing.nhiPubSigLocalDeps hashInputs
-              pubSigExtDeps = Hashing.nhiPubSigExtDeps hashInputs
-              -- implDeps: term-level deps from typed bodies.
-              implLocalDeps = Hashing.nhiImplLocalDeps hashInputs
-              implExtDeps = Hashing.nhiImplExtDeps hashInputs
-              -- pubDeps include signature deps plus term-level deps for reuse
-              -- in pubHash. Derived names are internal and should never require
-              -- a pub hash.
-              (pubLocalDeps, pubExtDeps) =
+          nameSrcHashes <-
+            Hashing.nameHashesFromItemsWithProgress
+              (hashProgress 0)
+              srcItems
+          evaluate (rnf nameSrcHashes)
+          nameImplHashes <-
+            Hashing.nameHashesFromItemsWithProgress
+              (hashProgress afterSourceHashes)
+              implItems
+          evaluate (rnf nameImplHashes)
+          let nameKeys = M.keysSet nameSrcHashes `Data.Set.union` M.keysSet nameImplHashes
+          evaluate (rnf nameKeys)
+          selfPubHashes <-
+            Hashing.nameInfoHashesWithProgress
+              (hashProgress afterImplHashes)
+              nameInfoMap
+          evaluate (rnf selfPubHashes)
+          -- Split deps into local (same module) vs external (qualified) names.
+          (pubSigLocalDeps, pubSigExtDeps) <-
+            Hashing.pubSigSplitDepsFromNameInfoMapWithProgress
+              (hashProgress afterIfaceHashes)
+              mn hashEnv nameKeys nameInfoMap
+          evaluate (rnf (pubSigLocalDeps, pubSigExtDeps))
+          -- implDeps: term-level deps from typed bodies.
+          (implLocalDeps, implExtDeps) <-
+            Hashing.implSplitDepsFromItemsWithProgress
+              (hashProgress afterIfaceDeps)
+              mn hashEnv nameKeys implItems
+          evaluate (rnf (implLocalDeps, implExtDeps))
+          -- pubDeps include signature deps plus term-level deps for reuse
+          -- in pubHash. Derived names are internal and should never require
+          -- a pub hash.
+          let (pubLocalDeps, pubExtDeps) =
                 Hashing.mergePubDeps pubSigLocalDeps pubSigExtDeps implLocalDeps implExtDeps
               -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
+          evaluate (rnf (pubLocalDeps, pubExtDeps, extMods))
           extMapsRes <- resolveNameHashMaps extMods
           case extMapsRes of
             Left diags -> return (Left diags)
@@ -2398,11 +2467,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 (_, Left diags, _) -> return (Left diags)
                 (_, _, Left diags) -> return (Left diags)
                 (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
-                  let selfPubHashes = Hashing.nhiSelfPubHashes hashInputs
+                  evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes))
                   let pubHashes = Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes
                       implHashes = Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes
                       (modulePubHash, moduleImplHash) = Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
-                      nameHashes =
+                  evaluate (rnf (pubHashes, implHashes, modulePubHash, moduleImplHash))
+                  let nameHashes =
                         Hashing.assembleNameHashes
                           nameKeys
                           nameSrcHashes
@@ -2412,10 +2482,10 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           implLocalDeps
                           pubExtHashes
                           implExtHashes
-                  evaluate (rnf (pubHashes, implHashes, modulePubHash, moduleImplHash))
                   evaluate (rnf nameHashes)
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
                   evaluate (rnf (nameHashes, roots, tests, mdoc))
+                  emitHashProgressPaced True hashProgressTotal hashProgressTotal Nothing
                   timeTypeHash <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
