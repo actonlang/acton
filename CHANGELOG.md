@@ -50,9 +50,12 @@
 - Store cached module interfaces in LMDB-backed `.tydb` directories instead of
   monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
   cache misses while adding keyed records for headers, imports, names, hashes,
-  and typed statements. [#2819, #2855, #2858, #2889]
+  and typed statements. [#2819, #2855, #2858, #2889, #2896]
   - Full reads reconstruct source-order environments from explicit order keys,
     and cache copy and cleanup paths now handle directory artifacts.
+  - Cache values are encoded with `persist`, improving `.tydb` write and read
+    time for large generated interfaces while treating older binary-encoded
+    caches as stale rebuilds.
   - Preparing `.tydb` entries for names, hashes, extensions, and typed
     statements now happens in strict concurrent chunks before the LMDB write
     transaction, and CLI progress distinguishes preparation from writing.
@@ -105,14 +108,19 @@
   membership and boxed variable lookups, and by tracking boxing-pass witness
   names with a hash set, reducing repeated scans during boxing and generated
   C/H rendering. [#2806, #2810, #2895]
-- Hash implementation fragments directly as bytes, making cached implementation
-  change detection cheaper while preserving per-name build hashes. [#2811]
+- Hash implementation fragments and normalized source/implementation AST
+  fragments directly as bytes, making cached change detection cheaper while
+  preserving per-name build hashes and ignoring location-only source changes.
+  [#2811, #2897]
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
 - Fix actor state-variable inference so unannotated `var` fields keep their
   inferred type when actor assumptions are matched instead of being widened to
   `value` after ordinary assignments. [#2894]
+- Fix generated C declarations so parameters, return values, and local
+  declarations all keep `volatile` when the compiler environment marks the
+  variable as volatile. [#2898]
 - Fix generated protocol witness method tables so inherited abstract slots are
   filled through forwarding wrappers when multiple protocol inheritance paths
   would otherwise leave a slot empty. [#2887]
@@ -4223,6 +4231,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2890]: https://github.com/actonlang/acton/pull/2890
 [#2894]: https://github.com/actonlang/acton/pull/2894
 [#2895]: https://github.com/actonlang/acton/pull/2895
+[#2896]: https://github.com/actonlang/acton/pull/2896
+[#2897]: https://github.com/actonlang/acton/pull/2897
+[#2898]: https://github.com/actonlang/acton/pull/2898
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
