@@ -34,6 +34,7 @@ import Acton.Builtin
 import Acton.Prim
 import Acton.NameInfo
 import Acton.Env
+import Acton.LookupStats
 import Acton.Solver
 import Acton.Subst
 import Acton.Transform
@@ -338,21 +339,36 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
 topProgress                             :: Maybe TypeProgressCallback -> Int -> Chan TopProgressEvent -> IO ()
 topProgress progressCb total q          = do when (total > 0) $
                                                emit [] 0
-                                             loop [] 0
-  where loop active done                = do event <- readChan q
+                                             loop [] 0 firstLookupStatsReport
+  where firstLookupStatsReport          = maybe maxBound id lookupStatsEvery
+        loop active done nextReport     = do event <- readChan q
                                              case event of
                                                TopProgressStarted item -> do
                                                  let active' = active ++ [item]
                                                  emit active' done
-                                                 loop active' done
+                                                 loop active' done nextReport
                                                TopProgressFinished item -> do
                                                  let active' = removeProgressItem item active
                                                      done' = done + snd item
                                                  emit active' done'
-                                                 loop active' done'
+                                                 nextReport' <- reportLookupStatsDue done' nextReport
+                                                 loop active' done' nextReport'
                                                TopProgressStop ->
-                                                 emit [] done
+                                                 emit [] done >> reportLookupStatsFinal done
         emit active done                = emitTypeProgressIO progressCb total done (activeProgressLabel active) (concatMap fst active) 0
+
+        reportLookupStatsDue done nextReport
+          | done < nextReport           = return nextReport
+          | otherwise                   = do reportLookupStats ("completed=" ++ show done ++ "/" ++ show total)
+                                             return $ advance nextReport
+          where step                    = maybe maxBound id lookupStatsEvery
+                advance n
+                  | step == maxBound    = maxBound
+                  | n > done            = n
+                  | otherwise           = advance (n + step)
+
+        reportLookupStatsFinal done     = when lookupStatsEnabled $
+                                            reportLookupStats ("final completed=" ++ show done ++ "/" ++ show total)
 
 topProgressItem                         :: Stmt -> TopProgressItem
 topProgressItem s                       = (stmtProgressNames s, stmtProgressWeight s)

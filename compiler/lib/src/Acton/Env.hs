@@ -34,6 +34,7 @@ import Acton.Printer
 import Acton.Names
 import Acton.Subst
 import Acton.NameInfo
+import Acton.LookupStats
 import Utils
 import Pretty
 import InterfaceFiles
@@ -359,7 +360,8 @@ addClosedNames te env       = env{ closedNames = te ++ closedNames env,
         dlocs               = extendDefLocs te (closedDefLocs env)
 
 lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
-lookupName n env            = M.lookup n (hnames env)
+lookupName n env            = recordLookup "env.lookupName" $
+                              M.lookup n (hnames env)
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
 reserve xs env
@@ -477,20 +479,23 @@ findQName n env             = case tryQName n env of
                                  Nothing -> nameNotFound (noq n)
 
 tryQName                    :: QName -> EnvF x -> Maybe HNameInfo
-tryQName (QName m n) env    = case findHMod m env of
+tryQName qn env             = recordLookup "env.tryQName" $ tryQName' qn env
+
+tryQName'                   :: QName -> EnvF x -> Maybe HNameInfo
+tryQName' (QName m n) env   = case findHMod m env of
                                 Just te -> case M.lookup n te of
-                                    Just (HNAlias qn) -> tryQName qn env
+                                    Just (HNAlias qn) -> tryQName' qn env
                                     Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
-tryQName (NoQ n) env        = case lookupName n env of
-                                Just (HNAlias qn) -> tryQName qn env
+tryQName' (NoQ n) env       = case lookupName n env of
+                                Just (HNAlias qn) -> tryQName' qn env
                                 Just ni -> Just ni
                                 Nothing -> Nothing
-tryQName (GName m n) env
-  | Just m == thismod env   = tryQName (NoQ n) env
+tryQName' (GName m n) env
+  | Just m == thismod env   = tryQName' (NoQ n) env
   | inBuiltin env,
-    m==mBuiltin             = tryQName (NoQ n) env
+    m==mBuiltin             = tryQName' (NoQ n) env
   | otherwise               = case lookupHMod m env of
                                 Just te -> case M.lookup n te of
                                     Just i -> Just i
@@ -705,7 +710,8 @@ conAttrs env qn             = dom te
   where (_,_,te)            = findConName qn env
 
 conHasAttr                  :: EnvF x -> QName -> Name -> Bool
-conHasAttr env qn n         = M.member n hte
+conHasAttr env qn n         = recordLookup "env.conHasAttr" $
+                              M.member n hte
   where (_, hte)            = findConHName qn env
 
 attributes                  :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> TCon -> [a]
@@ -721,7 +727,8 @@ parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
 parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c, (n,i) <- reverse te ]                                  -- in override order
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findAttr env tc n           = go (findAncestry env tc)
+findAttr env tc n           = recordLookup "env.findAttr" $
+                              go (findAncestry env tc)
   where go []               = Nothing
         go ((wp,c):cs)      = maybe (go cs) (attr wp) (findConAttrInfo env c n)
         attr wp (NSig sc d _) = Just (wexpr wp, sc, Just d)
@@ -753,17 +760,20 @@ findAttrInfoIn n            = scan Nothing
 -- The above function is replaced by the following version, as suggested in mail from Johan 260429.
 
 attributes'                 :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> QName -> [a]
-attributes' f env qn        = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
+attributes' f env qn        = recordLookupList "env.attributes" $
+                              catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
         aenv                = attrEnv env qn
 
 attrEnv                     :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
-attrEnv env qn              = [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
+attrEnv env qn              = recordLookupList "env.attrEnv" $
+                              [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
   where (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
 
 findAttrSchemas             :: EnvF x -> QName -> TEnv
-findAttrSchemas env qn      = [ (n,i) | n <- ns, let Just (_,i) = lookup n aenv ]
+findAttrSchemas env qn      = recordLookupList "env.findAttrSchemas" $
+                              [ (n,i) | n <- ns, let Just (_,i) = lookup n aenv ]
   where ns                  = nub $ dom aenv
         aenv                = reverse $ attrEnv env qn
 
@@ -851,7 +861,8 @@ allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = [ tc | tc <- allCons env, hasAttr env tc n ]
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
-allConAttrUFree env n       = concat [ ufree sc | tc <- activeCons env, Just (_,sc,_) <- [findAttr env tc n] ]
+allConAttrUFree env n       = recordLookupList "env.allConAttrUFree" $
+                              concat [ ufree sc | tc <- activeCons env, Just (_,sc,_) <- [findAttr env tc n] ]
 
 activeConAttr               :: EnvF x -> Name -> [TCon]
 activeConAttr env n         = [ tc | tc <- activeCons env, hasAttr env tc n ]
@@ -884,7 +895,8 @@ findTVBound env tv          = case findName (tvname tv) env of
                                 _ -> err1 tv "Unknown type variable"
 
 findTVAttr                  :: EnvF x -> TVar -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
-findTVAttr env tv n         = findAttr env c n
+findTVAttr env tv n         = recordLookup "env.findTVAttr" $
+                              findAttr env c n
   where c                   = findTVBound env tv
 
 tvarWit                     :: TVar -> PCon -> Name

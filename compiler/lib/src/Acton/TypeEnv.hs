@@ -45,6 +45,7 @@ import Acton.Names
 import Acton.NameInfo
 import Acton.Subst
 import Acton.Env
+import Acton.LookupStats
 
 
 data TypeX                      = TypeX {
@@ -202,7 +203,8 @@ conById x tid                   = case typeById x tid of
                                     _ -> Nothing
 
 lookupTypeId                    :: TypeX -> QName -> Maybe Int
-lookupTypeId x n                = HashMap.lookup n (tyidHash x)
+lookupTypeId x n                = recordLookup "type.lookupTypeId" $
+                                  HashMap.lookup n (tyidHash x)
 
 typeId                          :: TypeX -> QName -> Int
 typeId x n                      = fromJust $ lookupTypeId x n
@@ -300,10 +302,12 @@ witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
                                   Map.findWithDefault [] pn (closedWitMap x)
 
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = witsByPNameX (envX env) pn
+witsByPName env pn              = recordLookupList "type.witsByPName" $
+                                  witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = Map.findWithDefault [] tn (activeWitTypeMap x) ++
+witsByTName env tn              = recordLookupList "type.witsByTName" $
+                                  Map.findWithDefault [] tn (activeWitTypeMap x) ++
                                   Map.findWithDefault [] tn (closedWitTypeMap x)
   where x                       = envX env
 

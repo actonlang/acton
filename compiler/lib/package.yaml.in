@@ -79,6 +79,7 @@ library:
     - Acton.Hashing
     - Acton.Kinds
     - Acton.LambdaLifter
+    - Acton.LookupStats
     - Acton.NameInfo
     - Acton.Normalizer
     - Acton.Parser

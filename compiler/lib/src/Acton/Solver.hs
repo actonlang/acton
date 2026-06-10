@@ -31,6 +31,7 @@ import Acton.Names
 import Acton.Prim
 import Acton.NameInfo
 import Acton.Env
+import Acton.LookupStats
 import Acton.Subst
 import Acton.TypeEnv
 
@@ -433,14 +434,16 @@ rank _ c                                    = RRed c
 wildTuple                                   = tTuple tWild tWild
 
 typeIntersect :: Env -> [Type] -> [Type] -> [Type]
-typeIntersect env xs ys                     = filter keep xs
+typeIntersect env xs ys                     = recordLookupList "solver.typeIntersect" $
+                                              filter keep xs
   where (ykeys, yother)                     = typeKeySet env ys
         keep t
           | Just k <- typeKey env t         = k `IntSet.member` ykeys
           | otherwise                       = t `elem` yother
 
 typeUnion :: Env -> [Type] -> [Type] -> [Type]
-typeUnion env xs ys                         = xs ++ go IntSet.empty [] ys
+typeUnion env xs ys                         = recordLookupList "solver.typeUnion" $
+                                              xs ++ go IntSet.empty [] ys
   where (xkeys, xother)                     = typeKeySet env xs
         go _ _ []                           = []
         go seenKeys seenOther (y:ys)
@@ -453,7 +456,8 @@ typeUnion env xs ys                         = xs ++ go IntSet.empty [] ys
           | otherwise                       = y : go seenKeys (y:seenOther) ys
 
 typeDiff :: Env -> [Type] -> [Type] -> [Type]
-typeDiff env xs ys                          = filter keep xs
+typeDiff env xs ys                          = recordLookupList "solver.typeDiff" $
+                                              filter keep xs
   where (ykeys, yother)                     = typeKeySet env ys
         keep t
           | Just k <- typeKey env t         = k `IntSet.notMember` ykeys
@@ -747,13 +751,15 @@ solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
 ----------------------------------------------------------------------------------------------------------------------
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
-findWitness env t p         = reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
+findWitness env t p         = recordLookupList "solver.findWitness" $
+                              reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
   where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
         eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
         eqhead (TVar _ v) (TVar _ v')   = v == v'
         eqhead _          _             = False
 
-findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
+findProtoByAttr env cn n    = recordLookup "solver.findProtoByAttr" $
+                              case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
                                 w:_ -> Just $ schematic' $ proto w
   where hasAttr w           = conHasAttr env (tcname $ proto w) n
