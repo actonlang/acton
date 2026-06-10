@@ -1,0 +1,28 @@
+class Box:
+    value: int
+    __init__ : (int) -> None
+
+    def __init__(self, value):
+        self.value = value
+
+extension Box (Eq):
+    def __eq__(x, y):
+        return x.value == y.value
+
+class OrderedBox:
+    value: int
+    __init__ : (int) -> None
+
+    def __init__(self, value):
+        self.value = value
+
+extension OrderedBox (Ord):
+    def __eq__(x, y):
+        return x.value == y.value
+
+    def __lt__(x, y):
+        return x.value < y.value
+
+actor Worker():
+    def ping():
+        return 1
