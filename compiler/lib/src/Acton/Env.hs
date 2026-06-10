@@ -59,6 +59,7 @@ data EnvF x                 = EnvF {
                                 closedDefLocs:: LocEnv,
                                 activeStateNames:: [Name],
                                 closedStateNames:: [Name],
+                                activeTypeVars:: [(Name, Kind, CCon)],
                                 imports    :: [ModName],
                                 improots   :: [Name],
                                 modules    :: TEnv,
@@ -84,6 +85,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      defLocs = defLocs env, closedDefLocs = closedDefLocs env,
                                      activeStateNames = activeStateNames env,
                                      closedStateNames = closedStateNames env,
+                                     activeTypeVars = activeTypeVars env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
@@ -259,6 +261,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             closedDefLocs = M.empty,
                                             activeStateNames = [],
                                             closedStateNames = [],
+                                            activeTypeVars = [],
                                             imports = [],
                                             improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
@@ -282,6 +285,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  closedDefLocs = M.empty,
                                                  activeStateNames = [],
                                                  closedStateNames = [],
+                                                 activeTypeVars = [],
                                                  imports = [],
                                                  improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
@@ -317,19 +321,24 @@ extendDefLocs te locs       = foldr add locs te
 stateNamesIn                :: TEnv -> [Name]
 stateNamesIn te             = [ n | (n, NSVar _) <- te ]
 
+typeVarsIn                  :: TEnv -> [(Name, Kind, CCon)]
+typeVarsIn te               = [ (n, k, c) | (n, NTVar k c _) <- te ]
+
 setActiveNames              :: TEnv -> EnvF x -> EnvF x
 setActiveNames te env       = env{ activeNames = te,
                                    hnames = extendHNames te (closedHNames env),
                                    sigLocs = extendSigLocs te (closedSigLocs env),
                                    defLocs = extendDefLocs te (closedDefLocs env),
-                                   activeStateNames = stateNamesIn te }
+                                   activeStateNames = stateNamesIn te,
+                                   activeTypeVars = typeVarsIn te }
 
 addActiveNames              :: TEnv -> EnvF x -> EnvF x
 addActiveNames te env       = env{ activeNames = te ++ activeNames env,
                                    hnames = extendHNames te (hnames env),
                                    sigLocs = extendSigLocs te (sigLocs env),
                                    defLocs = extendDefLocs te (defLocs env),
-                                   activeStateNames = stateNamesIn te ++ activeStateNames env }
+                                   activeStateNames = stateNamesIn te ++ activeStateNames env,
+                                   activeTypeVars = typeVarsIn te ++ activeTypeVars env }
 
 addClosedNames              :: TEnv -> EnvF x -> EnvF x
 addClosedNames te env       = env{ closedNames = te ++ closedNames env,
@@ -435,7 +444,7 @@ quantScope                  :: EnvF x -> QBinds
 quantScope env              = [ q | q@(QBind tv _) <- quantScope0 env, tv /= tvSelf ]
 
 tvarDescendants             :: EnvF x -> [TCon] -> [TVar]
-tvarDescendants env cs      = [ TV k n | (n, NTVar k c _) <- activeNames env, c `elem` cs ]
+tvarDescendants env cs      = [ TV k n | (n, k, c) <- activeTypeVars env, c `elem` cs ]
 
 selfScopeSubst              :: EnvF x -> Substitution
 selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c ps) <- activeNames env, n == nSelf ]
