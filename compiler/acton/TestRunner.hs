@@ -557,10 +557,10 @@ readModuleTests paths mn = do
     if not exists
       then return []
       else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
         case hdrE of
           Left _ -> return []
-          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, _nameHashes, _roots, tests, _doc) ->
+          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, _nameCount, _roots, tests, _doc) ->
             return tests
 
 modNameFromString :: String -> A.ModName

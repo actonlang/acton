@@ -692,10 +692,10 @@ readModuleImports paths mn = do
     if not exists
       then return []
       else do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
         case hdrE of
           Left _ -> return []
-          Right (_sourceMeta, _hash, _ih, _implH, imps, _depModules, _nameHashes, _roots, _tests, _doc) -> return (map fst imps)
+          Right (_sourceMeta, _hash, _ih, _implH, imps, _depModules, _nameCount, _roots, _tests, _doc) -> return (map fst imps)
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -2203,9 +2203,9 @@ expectedRootStubs paths tasks = do
         let mn     = name t
             outbase = outBase paths mn
             tyPath = tyDbPath paths mn
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyPath
         case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
+          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) -> return (map (mkStub outbase) rs)
           _ -> return []
     return (concat roots)
   where
@@ -2351,7 +2351,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) m
         rootsHeader <- case tyPath of
-                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
+                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) <- InterfaceFiles.readHeaderSummary ty; return roots
                          Nothing -> return []
         let rootsEnv = case Acton.Env.lookupModuleInfo m env of
                          Nothing -> []
@@ -2963,9 +2963,9 @@ filterMainActor env paths binTask = do
     mty <- Acton.Env.findTyFile (searchPath paths) m
     case mty of
       Just ty -> do
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader ty
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary ty
         case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) | n `elem` roots -> return (Just binTask)
+          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) | n `elem` roots -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 
