@@ -50,6 +50,8 @@ data TypeX                      = TypeX {
                                     closedWits  :: [Witness],
                                     activeWitMap :: WitMap,
                                     closedWitMap :: WitMap,
+                                    activeWitTypeMap :: WitMap,
+                                    closedWitTypeMap :: WitMap,
                                     posnames    :: [Name],
                                     indecl      :: Bool,
                                     forced      :: Bool,
@@ -76,6 +78,8 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     closedWits  = primWits,
                                     activeWitMap = Map.empty,
                                     closedWitMap = witMap primWits,
+                                    activeWitTypeMap = Map.empty,
+                                    closedWitTypeMap = witTypeMap primWits,
                                     posnames    = [],
                                     indecl      = False,
                                     forced      = False,
@@ -128,7 +132,9 @@ prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> 
 
 instance USubst TypeX where
     usubstWith s x              = let we = usubstWith s (activeWits x)
-                                  in x{ activeWits = we, activeWitMap = witMap we }
+                                  in x{ activeWits = we,
+                                        activeWitMap = witMap we,
+                                        activeWitTypeMap = witTypeMap we }
 
 instance UFree TypeX where
     ufree x                     = ufree (activeWits x)
@@ -138,6 +144,9 @@ witnesses x                     = activeWits x ++ closedWits x
 
 witMap                          :: [Witness] -> WitMap
 witMap                          = foldr addWit Map.empty
+
+witTypeMap                      :: [Witness] -> WitMap
+witTypeMap                      = foldr addWitType Map.empty
 
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
@@ -206,19 +215,29 @@ tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
 addActiveWit                    :: TypeX -> Witness -> TypeX
 addActiveWit x wit
   | null same                   = x{ activeWits = wit : activeWits x,
-                                     activeWitMap = addWit wit (activeWitMap x) }
+                                     activeWitMap = addWit wit (activeWitMap x),
+                                     activeWitTypeMap = addWitType wit (activeWitTypeMap x) }
   | otherwise                   = x
   where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
 addClosedWit                    :: TypeX -> Witness -> TypeX
 addClosedWit x wit
   | null same                   = x{ closedWits = wit : closedWits x,
-                                     closedWitMap = addWit wit (closedWitMap x) }
+                                     closedWitMap = addWit wit (closedWitMap x),
+                                     closedWitTypeMap = addWitType wit (closedWitTypeMap x) }
   | otherwise                   = x
   where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
 addWit                          :: Witness -> WitMap -> WitMap
 addWit w                        = Map.insertWith (++) (tcname $ proto w) [w]
+
+addWitType                      :: Witness -> WitMap -> WitMap
+addWitType w m                  = maybe m (\n -> Map.insertWith (++) n [w] m) (wtypeKey $ wtype w)
+
+wtypeKey                        :: Type -> Maybe QName
+wtypeKey (TCon _ c)             = Just (tcname c)
+wtypeKey (TVar _ v)             = Just (NoQ $ tvname v)
+wtypeKey _                      = Nothing
 
 witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
                                   Map.findWithDefault [] pn (closedWitMap x)
@@ -227,18 +246,17 @@ witsByPName                     :: Env -> QName -> [Witness]
 witsByPName env pn              = witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++
-                                  [ w | w <- closedWits x, eqname (wtype w) ]
-  where eqname (TCon _ c)       = tcname c == tn
-        eqname (TVar _ v)       = NoQ (tvname v) == tn
-        eqname _                = False
-        x                       = envX env
+witsByTName env tn              = Map.findWithDefault [] tn (activeWitTypeMap x) ++
+                                  Map.findWithDefault [] tn (closedWitTypeMap x)
+  where x                       = envX env
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
   | otherwise                   = modX env1 $ \x -> let we = dropw (activeWits x)
-                                                    in x{ activeWits = we, activeWitMap = witMap we }
+                                                    in x{ activeWits = we,
+                                                          activeWitMap = witMap we,
+                                                          activeWitTypeMap = witTypeMap we }
   where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         vs                      = takev n (activeNames env)
