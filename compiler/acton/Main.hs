@@ -2087,7 +2087,7 @@ explicitBuildLibraries selectedSources spec =
   where
     selectedSet = Data.Set.fromList selectedSources
     moduleCSource modName =
-      collapseDots ("out/types/" ++ map dotToSlash modName ++ ".c")
+      collapseDots ("out/types/" ++ BuildSpec.specName spec ++ "/" ++ map dotToSlash modName ++ ".c")
     dotToSlash c
       | c == '.'  = '/'
       | otherwise = c
