@@ -115,6 +115,7 @@ module InterfaceFiles
   , readFileMaybe
   , readHeaderMaybe
   , openInterfaceDB
+  , openInterfaceDBMaybe
   , readInterfaceDBModuleInfo
   , readInterfaceDBNameInfoMaybe
   , readInterfaceDBPublicNames
@@ -754,6 +755,11 @@ openInterfaceDB :: FilePath -> IO InterfaceDB
 openInterfaceDB path = do
     withReadTxn path validateVersion
     return (InterfaceDB path)
+
+-- | Like openInterfaceDB, but treats a missing, corrupt, or version-mismatched
+-- cache as a miss, mirroring readFileMaybe.
+openInterfaceDBMaybe :: FilePath -> IO (Maybe InterfaceDB)
+openInterfaceDBMaybe = readTyMaybe openInterfaceDB
 
 withInterfaceDBReadTxn :: InterfaceDB -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withInterfaceDBReadTxn (InterfaceDB path) action = withReadTxn path action

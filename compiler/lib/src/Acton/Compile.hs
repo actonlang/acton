@@ -1208,6 +1208,7 @@ data FrontResult = FrontResult
   { frIfaceTE  :: [(A.Name, I.NameInfo)]
   , frImps     :: [A.ModName]
   , frDoc      :: Maybe String
+  , frModuleInfo :: Maybe Acton.Env.ModuleInfo
   , frPubHash :: B.ByteString
   , frImplHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
@@ -1219,6 +1220,10 @@ data FrontResult = FrontResult
   , frDeferredBackJob :: Maybe DeferredBackJob
   , frOutputJobs :: [FrontOutputJob]
   }
+
+frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
+frontResultModuleInfo mn fr =
+    fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
 
 data DbpRequest = DbpRequest
   { drMod :: A.ModName
@@ -2203,24 +2208,24 @@ readImports sp gopts opts paths tasks = do
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || altOutput opts
 
--- | Read an interface from a .tydb file and return its NameInfo and module hashes.
+-- | Read a reusable interface shell from a .tydb file and return its hashes.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
-readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString, B.ByteString))
+readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString, B.ByteString, Maybe Acton.Env.ModuleInfo))
 readIfaceFromTy paths mn src mHash = do
     mty <- Acton.Env.findTyFile (searchPath paths) mn
     case mty of
       Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
       Just tyF -> do
-        fileRes <- InterfaceFiles.readFileMaybe tyF
-        case fileRes of
-          Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
-          Just (_ms, nmod, _tmod, _sourceMeta, _srcH, pubH, implH, _imps, _depModules, _nameHashes, _roots, _tests, _tm) -> do
-            let I.NModule ms teFull mdoc = nmod
-                te = publicIfaceTE teFull
+        hashes <- InterfaceFiles.readModuleHashesMaybe tyF
+        mdb <- InterfaceFiles.openInterfaceDBMaybe tyF
+        case (hashes, mdb) of
+          (Just (_srcH, pubH, implH), Just db) -> do
+            (ms, mdoc) <- InterfaceFiles.readInterfaceDBModuleInfo db
             ih <- case mHash of
                     Just h -> return h
                     Nothing -> return pubH
-            return $ Right (ms, te, mdoc, ih, implH)
+            return $ Right (ms, [], mdoc, ih, implH, Just (Acton.Env.mkTyFileModuleInfo mn ms mdoc db))
+          _ -> return $ Left (missingIfaceDiagnostics mn src mn)
 
 
 -- | Snapshot of expected/recorded impl hashes for generated code.
@@ -2730,6 +2735,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                     return $ Right FrontResult { frIfaceTE = publicIface
                                                , frImps = imps
                                                , frDoc = mdoc
+                                               , frModuleInfo = Nothing
                                                , frPubHash = modulePubHash
                                                , frImplHash = moduleImplHash
                                                , frNameHashes = publicNameHashes nameHashes
@@ -3441,6 +3447,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               { frIfaceTE = ifaceTE
               , frImps = imps
               , frDoc = mdoc
+              , frModuleInfo = Nothing
               , frPubHash = pubHash
               , frImplHash = implHash
               , frNameHashes = nameHashes
@@ -3457,6 +3464,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               { frIfaceTE = []
               , frImps = []
               , frDoc = Nothing
+              , frModuleInfo = Nothing
               , frPubHash = B.empty
               , frImplHash = B.empty
               , frNameHashes = []
@@ -3830,14 +3838,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             ParseTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
                             ActonTask{ src = srcContent } -> readIfaceFromTy paths mn srcContent Nothing
               case ifaceRes of
-                Right (imps, ifaceTE, mdoc, ih, implH) -> do
+                Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
                   let cachedFullNameHashes = case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> nhs
                         _ -> []
                       cachedNameHashes = publicNameHashes cachedFullNameHashes
                   interestDeps <- cachedInterestDeps
                   let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing Nothing)
-                             { frInterestDeps = interestDeps }
+                             { frModuleInfo = mModuleInfo
+                             , frInterestDeps = interestDeps
+                             }
                   cacheFrontResult fr
                 Left _ ->
                   return (key, Right emptyFrontResult)
@@ -4096,14 +4106,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                   _ -> readIfaceFromTy paths mn "" Nothing
                     case ifaceRes of
                       Left diags -> return (key, Left diags)
-                      Right (imps, ifaceTE, mdoc, ih, implH) -> do
+                      Right (imps, ifaceTE, mdoc, ih, implH, mModuleInfo) -> do
                         let cachedFullNameHashes = case taskCurrent of
                               TyTask{ tyNameHashes = nhs } -> nhs
                               _ -> []
                             cachedNameHashes = publicNameHashes cachedFullNameHashes
                         interestDeps <- cachedInterestDeps
                         let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing cachedDeferredBackJob)
-                                   { frInterestDeps = interestDeps }
+                                   { frModuleInfo = mModuleInfo
+                                   , frInterestDeps = interestDeps
+                                   }
                         cacheFrontResult fr
               case () of
                 _ | needFront -> runFront
@@ -4277,7 +4289,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       implRes2 = M.insert keyDone (frImplHash fr) implRes
                       nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
                       parsedTasks2 = M.delete keyDone parsedTasks
-                      envAcc' = Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
+                      envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
                       interestMap2 = addInterestDeps (frInterestDeps fr) interestMap
                       frontDone2 = Data.Set.insert keyDone frontDone
                       deferredBacks1 =
