@@ -105,6 +105,9 @@ forceHTEnv = HashMap.foldl' forceHNameInfo () where
     forceHNameInfo () (NameInfo.HNModule _ te _) = forceHTEnv te
     forceHNameInfo () hni                        = hni `seq` ()
 
+forceModuleInfos = Map.foldl' forceModuleInfo () where
+    forceModuleInfo () mi = rnf (Env.modulePublicTEnv mi)
+
 fmtTime :: TimeSpec -> String
 fmtTime t = show seconds ++ "s"
   where seconds = (fromIntegral (toNanoSecs t) / 1000000000.0 :: Double)
@@ -221,14 +224,14 @@ prepareHashBench typesPath sourcePath = do
     E.evaluate (rnf parsed)
     env <- Env.mkEnv (Compile.searchPath paths) env0 parsed
     E.evaluate (forceHTEnv (Env.hnames env))
-    E.evaluate (forceHTEnv (Env.hmodules env))
+    E.evaluate (forceModuleInfos (Env.modules env))
     kchecked <- Kinds.check env parsed
     E.evaluate (rnf kchecked)
     (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked
     E.evaluate (rnf nmod)
     E.evaluate (rnf tchecked)
     E.evaluate (forceHTEnv (Env.hnames typeEnv))
-    E.evaluate (forceHTEnv (Env.hmodules typeEnv))
+    E.evaluate (forceModuleInfos (Env.modules typeEnv))
     E.evaluate (length tests)
 
     let NameInfo.NModule _ fullIface _ = nmod
@@ -713,7 +716,7 @@ runDirect mode typesPath sourcePath = do
       _ -> do
         env <- Env.mkEnv [typesPath] env0 parsed
         E.evaluate (forceHTEnv (Env.hnames env))
-        E.evaluate (forceHTEnv (Env.hmodules env))
+        E.evaluate (forceModuleInfos (Env.modules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
         elapsed "env" t1 t2
@@ -733,7 +736,7 @@ runDirect mode typesPath sourcePath = do
             E.evaluate (rnf nmod)
             E.evaluate (rnf tchecked)
             E.evaluate (forceHTEnv (Env.hnames typeEnv))
-            E.evaluate (forceHTEnv (Env.hmodules typeEnv))
+            E.evaluate (forceModuleInfos (Env.modules typeEnv))
             E.evaluate (length tests)
             t4 <- getCurrentTime
             s4 <- getStats statsEnabled

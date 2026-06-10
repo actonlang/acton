@@ -585,11 +585,7 @@ completionEnv searchPath baseEnv modName imps =
 -- fallback, which is enough for generated base classes and typed constructors.
 shallowCompletionEnv :: [FilePath] -> Env.Env0 -> [S.Import] -> IO Env.Env0
 shallowCompletionEnv searchPath baseEnv imps =
-  refreshHModules <$> foldM (shallowImport searchPath) baseEnv imps
-
-refreshHModules :: Env.Env0 -> Env.Env0
-refreshHModules env =
-  env { Env.hmodules = I.convTEnv2HTEnv (Env.modules env) }
+  foldM (shallowImport searchPath) baseEnv imps
 
 shallowImport :: [FilePath] -> Env.Env0 -> S.Import -> IO Env.Env0
 shallowImport searchPath env imp =

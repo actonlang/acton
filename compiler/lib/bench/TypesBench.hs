@@ -61,7 +61,6 @@ main = do
 
         env <- Env.mkEnv [typesPath] env0 parsed
         E.evaluate (forceHTEnv (Env.hnames env))
-        E.evaluate (forceHTEnv (Env.hmodules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
         elapsed "env" t1 t2
@@ -78,7 +77,6 @@ main = do
         E.evaluate (rnf nmod)
         E.evaluate (rnf tchecked)
         E.evaluate (forceHTEnv (Env.hnames typeEnv))
-        E.evaluate (forceHTEnv (Env.hmodules typeEnv))
         E.evaluate (length tests)
         t4 <- getCurrentTime
         s4 <- getStats statsEnabled
