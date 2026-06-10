@@ -989,6 +989,8 @@ transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env)
           | otherwise       = m : foldl trav seen ms
           where ms          = case lookupModuleInfo m env of Just mi -> moduleImports mi
 
+-- Enumerating every imported type forces each module's constructor records;
+-- solver queries go through the narrow per-query indexes instead.
 allTypes                    :: (NameInfo -> Bool) -> EnvF x -> [TCon]
 allTypes select env         = concatMap impcons mods ++ localcons
   where mods                = transitiveImports env
@@ -998,7 +1000,7 @@ allTypes select env         = concatMap impcons mods ++ localcons
         localcons
                             = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
         impcons m           = [ TC (GName m n) (wildargs i) | (n,i) <- te, select i ]
-          where Just te     = lookupMod m env
+          where Just te     = moduleConstructors <$> lookupModuleInfo m env
 
 allCons                     :: EnvF x -> [TCon]
 allCons env                 = allTypes isCon env
@@ -1007,9 +1009,11 @@ allCons env                 = allTypes isCon env
         isCon _             = False
 
 allActors                   :: EnvF x -> [TCon]
-allActors env               = allTypes isActor env
-  where isActor NAct{}      = True
-        isActor _           = False
+allActors env               = concatMap moduleActors (importedModuleInfos env) ++ localactors
+  where local te
+          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i@NAct{}) <- te ]
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i@NAct{}) <- te ]
+        localactors         = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
 
 allProtos env               = allTypes isProto env
   where isProto NProto{}    = True
