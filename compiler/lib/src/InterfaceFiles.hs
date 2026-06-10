@@ -35,7 +35,8 @@
 --                         , ByteString                -- modulePubHash: structural hash of public NameInfo
 --                                                     --   (doc-free) + imports' pub hashes
 --                         , ByteString )              -- moduleImplHash: structural hash of per-name impl hashes
---     "imports"        :: [(A.ModName, ByteString)]   -- imported module and pub hash used
+--     "imports"        :: [(A.ModName, ByteString)]   -- dependency module and pub hash used
+--     "deps"           :: [DepModuleInfo]              -- dependency modules with pub/impl hashes
 --     "roots"          :: [A.Name]                    -- root actors (e.g. main or test_main)
 --     "tests"          :: [String]                    -- discovered test names
 --     "doc"            :: Maybe String                -- module docstring
@@ -47,7 +48,11 @@
 --   Per-name keys (NameInfo / TEnv, one set per name):
 --     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
---     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local/external deps
+--     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local deps
+--
+--   Per-dependency keys:
+--     "deps/<module>"          :: [DepNameInfo]        -- dependency names with pub/impl hashes
+--     "deps/<module>/<suffix>" :: DepUsers             -- local names that use one dependency name
 --
 --   Per-extension keys:
 --     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
@@ -60,7 +65,7 @@
 -- the key verbatim) or "h/<sha256hex>" for long or unsafe names. See nameKeySuffix.
 --
 -- Rationale for the keyed layout
--- - Keep the small validity/header fields (version, meta, imports, roots, tests,
+-- - Keep the small validity/header fields (version, meta, dependency hashes, roots, tests,
 --   doc, name-hashes) as their own keys so callers can validate and reuse a cache
 --   entry, or do freshness/dependency checks, without decoding the large NameInfo
 --   and typed Module sections (readHeader vs readFile).
@@ -72,6 +77,9 @@
 
 module InterfaceFiles
   ( NameHashInfo(..)
+  , DepModuleInfo(..)
+  , DepNameInfo(..)
+  , DepUsers(..)
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
@@ -84,6 +92,10 @@ module InterfaceFiles
   , listInterfaceDirsRecursive
   , keyNameInfo
   , keyNameHash
+  , readDepNames
+  , readDepUsers
+  , readNameHashMaybe
+  , readModuleHashesMaybe
   , readFile
   , readHeader
   , readExtensionsByClass
@@ -109,6 +121,7 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
+import Data.List (foldl')
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
 import qualified Data.Text as T
@@ -121,7 +134,9 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension)
+import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
@@ -139,6 +154,35 @@ data NameHashInfo = NameHashInfo
 
 instance Persist.Persist NameHashInfo
 instance NFData NameHashInfo
+
+data DepModuleInfo = DepModuleInfo
+  { dmiModule   :: A.ModName
+  , dmiPubHash  :: BS.ByteString
+  , dmiImplHash :: BS.ByteString
+  } deriving (Show, Eq, Generic)
+
+instance Persist.Persist DepModuleInfo
+instance NFData DepModuleInfo
+
+data DepNameInfo = DepNameInfo
+  { dniName     :: A.Name
+  , dniPubHash  :: BS.ByteString
+  , dniImplHash :: BS.ByteString
+  } deriving (Show, Eq, Generic)
+
+instance Persist.Persist DepNameInfo
+instance NFData DepNameInfo
+
+data DepUsers = DepUsers
+  { duPubUsers  :: [A.Name]
+  , duImplUsers :: [A.Name]
+  } deriving (Show, Eq, Generic)
+
+instance Persist.Persist DepUsers
+instance NFData DepUsers
+
+emptyDepUsers :: DepUsers
+emptyDepUsers = DepUsers [] []
 
 data ExtensionIndex = ExtensionIndex
   { extByClass      :: Map.Map A.Name [A.Name]
@@ -170,6 +214,7 @@ type TyFile =
   , BS.ByteString
   , BS.ByteString
   , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
   , [NameHashInfo]
   , [A.Name]
   , [String]
@@ -182,6 +227,7 @@ type TyHeader =
   , BS.ByteString
   , BS.ByteString
   , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
   , [NameHashInfo]
   , [A.Name]
   , [String]
@@ -220,6 +266,16 @@ lmdbOpenLock = unsafePerformIO (newMVar ())
 interfaceLocks :: MVar (Map.Map FilePath (MVar ()))
 {-# NOINLINE interfaceLocks #-}
 interfaceLocks = unsafePerformIO (newMVar Map.empty)
+
+traceTydbReads :: Bool
+traceTydbReads =
+    unsafePerformIO $ maybe False (not . null) <$> lookupEnv "ACTON_TYDB_TRACE_READS"
+{-# NOINLINE traceTydbReads #-}
+
+traceTydbRead :: String -> FilePath -> String -> IO ()
+traceTydbRead op path detail =
+    when traceTydbReads $
+      hPutStrLn stderr (unwords ["tydb-read", op, path, detail])
 
 interfaceExists :: FilePath -> IO Bool
 interfaceExists = doesDirectoryExist
@@ -283,10 +339,11 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
+keyDeps         = key "deps"
 keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
@@ -302,17 +359,29 @@ padIndex i =
 plainNameKeyLimit :: Int
 plainNameKeyLimit = 400
 
-nameKeySuffix :: A.Name -> BS.ByteString
-nameKeySuffix n =
-    let raw = TE.encodeUtf8 (T.pack (A.rawstr n))
-    in if plainNameKey raw
-         then B.concat [key "p/", raw]
-         else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
+plainKeyRaw :: BS.ByteString -> Bool
+plainKeyRaw raw =
+    BS.length raw <= plainNameKeyLimit && BS.all safe raw
   where
-    plainNameKey raw =
-        BS.length raw <= plainNameKeyLimit && BS.all safe raw
     safe w =
         w > 32 && w < 127 && w /= 47
+
+safeKeySuffix :: BS.ByteString -> BS.ByteString
+safeKeySuffix raw =
+    if plainKeyRaw raw
+      then B.concat [key "p/", raw]
+      else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
+
+nameKeySuffix :: A.Name -> BS.ByteString
+nameKeySuffix n =
+    safeKeySuffix (TE.encodeUtf8 (T.pack (A.rawstr n)))
+
+moduleKeySuffix :: A.ModName -> BS.ByteString
+moduleKeySuffix mn =
+    let raw = TE.encodeUtf8 (T.pack (Data.List.intercalate "." (A.modPath mn)))
+    in if plainKeyRaw raw
+         then raw
+         else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
 
 keyNameInfo :: A.Name -> BS.ByteString
 keyNameInfo n = B.concat [key "name-info/", nameKeySuffix n]
@@ -328,6 +397,12 @@ keyNameHashPrefix = key "name-hash/"
 
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
+
+keyDepModule :: A.ModName -> BS.ByteString
+keyDepModule mn = B.concat [key "deps/", moduleKeySuffix mn]
+
+keyDepName :: A.ModName -> A.Name -> BS.ByteString
+keyDepName mn n = B.concat [keyDepModule mn, key "/", nameKeySuffix n]
 
 keyExtByClassPrefix, keyExtByProtocolPrefix :: BS.ByteString
 keyExtByClassPrefix      = key "ext-by-class/"
@@ -609,6 +684,13 @@ readMeta txn dbi = do
     validateVersion txn dbi
     getValue "meta" txn dbi keyMeta
 
+readModuleHashes :: FilePath -> IO (BS.ByteString, BS.ByteString, BS.ByteString)
+readModuleHashes f =
+    withReadTxn f $ \txn dbi -> do
+      (_sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
+      traceTydbRead "module-hashes" f "meta"
+      return (moduleSrcBytesHash, modulePubHash, moduleImplHash)
+
 readNameEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ([(A.Name, I.NameInfo)], [NameHashInfo])
 readNameEntries txn dbi = do
     te <- readNameInfoEntries txn dbi
@@ -716,8 +798,80 @@ parallelEntries mark label mk chunks =
       mark label
       return entries
 
-interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
-interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked = do
+stripExternalDeps :: NameHashInfo -> NameHashInfo
+stripExternalDeps nh =
+    nh { nhPubDeps = [], nhImplDeps = [] }
+
+depIndexEntries :: [DepModuleInfo] -> [NameHashInfo] -> [(BS.ByteString, BS.ByteString)]
+depIndexEntries depModules nameHashes =
+    (keyDeps, encodeStrict depModules)
+    : [ (keyDepModule mn, encodeStrict infos)
+      | (mn, infos) <- moduleRows
+      ]
+    ++
+    [ (keyDepName mn n, encodeStrict users)
+    | ((mn, n), users) <- userRows
+    ]
+  where
+    moduleNameKey = A.modPath
+    nameKey = A.nstr
+    sortModRows = Data.List.sortOn (moduleNameKey . fst)
+    sortNameInfos = Data.List.sortOn (nameKey . dniName)
+    sortUserRows = Data.List.sortOn (\((mn, n), _) -> (moduleNameKey mn, nameKey n))
+
+    depTarget qn =
+      case qn of
+        A.GName m n -> Just (m, n)
+        A.QName m n -> Just (m, n)
+        A.NoQ{} -> Nothing
+
+    addDep isPub owner acc (qn, h) =
+      case depTarget qn of
+        Nothing -> acc
+        Just key' -> Map.alter (Just . addToEntry) key' acc
+      where
+        addToEntry Nothing =
+          if isPub
+            then (Just h, Nothing, [owner], [])
+            else (Nothing, Just h, [], [owner])
+        addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
+          if isPub
+            then (Just h, implH, owner : pubUsers, implUsers)
+            else (pubH, Just h, pubUsers, owner : implUsers)
+
+    depMap =
+      foldl' addInfo Map.empty nameHashes
+
+    addInfo acc nh =
+      let owner = nhName nh
+          withPub = foldl' (addDep True owner) acc (nhPubDeps nh)
+      in foldl' (addDep False owner) withPub (nhImplDeps nh)
+
+    depNameInfo ((mn, n), (pubH, implH, _pubUsers, _implUsers)) =
+      (mn, DepNameInfo n (maybe BS.empty id pubH) (maybe BS.empty id implH))
+
+    moduleRows =
+      [ (mn, sortNameInfos infos)
+      | (mn, infos) <-
+          sortModRows $
+          Map.toList $
+          Map.fromListWith (++)
+            [ (mn, [info])
+            | entry <- Map.toList depMap
+            , let (mn, info) = depNameInfo entry
+            ]
+      ]
+
+    cleanNames = Data.List.sortOn nameKey . Data.List.nub
+
+    userRows =
+      sortUserRows
+        [ (key', DepUsers (cleanNames pubUsers) (cleanNames implUsers))
+        | (key', (_pubH, _implH, pubUsers, implUsers)) <- Map.toList depMap
+        ]
+
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
     let header =
           [ (keyVersion, encodeStrict version)
@@ -733,7 +887,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
         nameChunks = entryChunks caps (zip [0..] te)
         nameHashChunks = entryChunks caps nameHashes
         stmtChunks = entryChunks caps (zip [0..] body)
-        totalPrep = 2 + length nameChunks + length nameHashChunks + length stmtChunks
+        totalPrep = 3 + length nameChunks + length nameHashChunks + length stmtChunks
     prepDone <- newIORef (0 :: Int)
     let mark label = do
           done <- atomicModifyIORef' prepDone $ \n ->
@@ -742,12 +896,14 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     onProgress "Preparing .tydb" 0
     headerEntries <- forceEntries header
     mark "Preparing .tydb header"
+    depEntries <- forceEntries (depIndexEntries depModules nameHashes)
+    mark "Preparing .tydb deps"
     nameEntries <- parallelEntries mark "Preparing .tydb names" nameInfoEntries nameChunks
     nameHashEntries <- parallelEntries mark "Preparing .tydb hashes" nameHashEntry nameHashChunks
     extEntries <- forceEntries (extensionIndexEntries (extensionIndexFromNameInfo tmn nmod))
     mark "Preparing .tydb extensions"
     stmtEntries <- parallelEntries mark "Preparing .tydb statements" stmtEntry stmtChunks
-    return (headerEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
+    return (headerEntries ++ depEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
@@ -757,19 +913,19 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
       ]
       where
         suffix = nameKeySuffix n
-    nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict nh)]
+    nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh))]
     stmtEntry (i, stmt) = [(keyStmt i, encodeStrict stmt)]
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
-writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
-writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked =
-    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked
+writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
+    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
 
-writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
-writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked = do
-    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps nameHashes roots tests mdoc nmod tchecked
+writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
+    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
     writeProgress 0
     writeEntriesWithProgress writeProgress f entries
   where
@@ -785,15 +941,18 @@ readFile f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
       tests <- getValue "tests" txn dbi keyTests
       mdoc <- getValue "doc" txn dbi keyDoc
       (te, nameHashes) <- readNameEntries txn dbi
       (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
       stmts <- readStmtEntries txn dbi
-      let nmod = I.NModule (map fst imps) te mdoc
-          tmod = A.Module tmn timps tdoc stmts
-      return (map fst imps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, mdoc)
+      traceTydbRead "all" f ("names " ++ show (length te) ++ " stmts " ++ show (length stmts))
+      let tmod = A.Module tmn timps tdoc stmts
+          sourceImps = A.importsOf tmod
+          nmod = I.NModule sourceImps te mdoc
+      return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile
@@ -803,11 +962,47 @@ readHeader f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
       imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
       tests <- getValue "tests" txn dbi keyTests
       doc <- getValue "doc" txn dbi keyDoc
       nameHashes <- readNameHashEntries txn dbi
-      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, nameHashes, roots, tests, doc)
+      traceTydbRead "header" f "cached"
+      traceTydbRead "name-hash-all" f (show (length nameHashes))
+      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
+
+readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
+readDepNames f mn =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mDeps <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
+      let deps = maybe [] id mDeps
+      traceTydbRead "dep-names" f (Data.List.intercalate "." (A.modPath mn) ++ " " ++ show (length deps))
+      return deps
+
+readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
+readDepUsers f mn n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
+      traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr n)
+      return (maybe emptyDepUsers id mUsers)
+
+readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
+readNameHash f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
+      traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.rawstr n)
+      return mInfo
+
+readNameHashMaybe :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
+readNameHashMaybe f n =
+    readNameHash f n `E.catch` tyCacheMiss
+
+readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS.ByteString))
+readModuleHashesMaybe =
+    readTyMaybe readModuleHashes
 
 readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByClass f n =

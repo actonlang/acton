@@ -33,6 +33,7 @@ import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
 import Test.Syd
+import Test.Syd.Modify (sequential)
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
@@ -146,7 +147,7 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
-    describe "InterfaceFiles" $ do
+    sequential $ describe "InterfaceFiles" $ do
       it "round-trips payloads and preserves ordered name entries" $ do
         withSystemTempDirectory "acton-iface" $ \dir -> do
           let mn = S.modName ["iface"]
@@ -175,14 +176,14 @@ main = do
               tests = ["test_second", "test_first"]
               nmod = I.NModule [] iface (Just "module docs")
               tmod = S.Module mn [] (Just "typed docs") []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes roots tests (Just "module docs") nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes roots tests (Just "module docs") nmod tmod
           InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
           InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
           InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
           InterfaceFiles.keyNameInfo sourcePlainName `shouldBe` "name-info/p/foo_bar"
           InterfaceFiles.keyNameInfo derivedName `shouldBe` "name-info/p/encodeD_witness"
           InterfaceFiles.keyNameInfo longName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
-          (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, nameHashes', roots', tests', doc') <-
+          (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes', roots', tests', doc') <-
             InterfaceFiles.readFile tyPath
           te `shouldBe` iface
           mdoc `shouldBe` Just "module docs"
@@ -190,16 +191,18 @@ main = do
           sourceMeta `shouldBe` Nothing
           (srcHash, pubHash, implHash) `shouldBe` ("src", "pub", "impl")
           imps `shouldBe` []
+          depModules `shouldBe` []
           nameHashes' `shouldBe` nameHashes
           roots' `shouldBe` roots
           tests' `shouldBe` tests
           doc' `shouldBe` Just "module docs"
 
-          (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, nameHashesH, rootsH, testsH, docH) <-
+          (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, depModulesH, nameHashesH, rootsH, testsH, docH) <-
             InterfaceFiles.readHeader tyPath
           sourceMetaH `shouldBe` Nothing
           (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
           impsH `shouldBe` []
+          depModulesH `shouldBe` []
           nameHashesH `shouldBe` nameHashes
           rootsH `shouldBe` roots
           testsH `shouldBe` tests
@@ -214,10 +217,10 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
-                (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, nameHashesH, _rootsH, _testsH, _docH) <-
+                (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
                   InterfaceFiles.readHeader tyPath
                 (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
                 nameHashesH `shouldBe` nameHashes)
@@ -233,11 +236,11 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
-          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, nameHashesH, _rootsH, _testsH, _docH) <-
+          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
             InterfaceFiles.readHeader dstPath
           (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
           nameHashesH `shouldBe` nameHashes
@@ -253,7 +256,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
           let restore = do
                 setFileMode tyPath 0o755
                 setFileMode dataPath 0o644
@@ -261,7 +264,7 @@ main = do
           (do setFileMode tyPath 0o555
               setFileMode dataPath 0o444
               setFileMode lockPath 0o444
-              (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, nameHashesH, _rootsH, _testsH, _docH) <-
+              (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
                 InterfaceFiles.readHeader tyPath
               (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
               nameHashesH `shouldBe` nameHashes)
@@ -281,7 +284,7 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
@@ -770,10 +773,11 @@ main = do
             []
             []
             []
+            []
             Nothing
             directIface
             directModule
-          (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, nameHashes, roots, tests, mdoc) <-
+          (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <-
             InterfaceFiles.readFile directTy
           InterfaceFiles.writeFileWithVersion
             (map (+ 1) S.version)
@@ -783,6 +787,7 @@ main = do
             implHash
             sourceMeta
             imps
+            depModules
             nameHashes
             roots
             tests
@@ -1177,6 +1182,7 @@ main = do
               B8.empty
               Nothing
               [(staleMod, B8.empty)]
+              []
               []
               []
               []

@@ -251,7 +251,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             qlevel = 0,
                                             gtypes = [],
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
+initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     initialNames = [(nPrim,NMAlias mPrim), (nBuiltin,NMAlias mBuiltin)]
@@ -1167,7 +1167,7 @@ doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
               ty <- readFoundTy InterfaceFiles.readFileMaybe m
               case ty of
                 Nothing -> fileNotFound m
-                Just (ms,nmod,_,_,_,_,_,_,_,_,_,_) -> do
+                Just (ms,nmod,_,_,_,_,_,_,_,_,_,_,_) -> do
                   (env', seen'') <- subImpSeen seen' env ms
                   let NModule ms' teFull mdoc = nmod
                       te = publicTEnv teFull
