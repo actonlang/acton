@@ -29,7 +29,6 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (find, findIndex, intercalate, isPrefixOf, nubBy)
 import Data.Maybe (listToMaybe, mapMaybe)
-import qualified Data.HashMap.Strict as HM
 import qualified InterfaceFiles as IF
 import Text.Megaparsec (eof, runParser)
 
@@ -796,22 +795,22 @@ lookupQNameInfo env qn =
     S.NoQ n ->
       lookupNoQ n
     S.QName m n ->
-      lookupModuleItem env (Env.findHMod m env) n
+      lookupModuleItem env (Env.findModuleInfo m env) n
     S.GName m n
       | Just m == Env.thismod env ->
           lookupQNameInfo env (S.NoQ n)
       | otherwise ->
-          lookupModuleItem env (Env.lookupHMod m env) n
+          lookupModuleItem env (Env.lookupModuleInfo m env) n
   where
     lookupNoQ n              = resolve =<< Env.lookupName n env
 
     resolve (I.HNAlias qn')  = lookupQNameInfo env qn'
     resolve info             = Just (I.convHNameInfo2NameInfo info)
 
-lookupModuleItem :: Env.Env0 -> Maybe I.HTEnv -> S.Name -> Maybe I.NameInfo
-lookupModuleItem env mtenv n = do
-  tenv <- mtenv
-  info <- HM.lookup n tenv
+lookupModuleItem :: Env.Env0 -> Maybe Env.ModuleInfo -> S.Name -> Maybe I.NameInfo
+lookupModuleItem env mmi n = do
+  mi <- mmi
+  info <- Env.moduleLookupHName mi n
   case info of
     I.HNAlias qn -> lookupQNameInfo env qn
     _ -> Just (I.convHNameInfo2NameInfo info)

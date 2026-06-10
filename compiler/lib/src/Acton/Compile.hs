@@ -2572,8 +2572,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                       else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
                             docFileDir = takeDirectory docFile
                             -- Get the type environment for this module
-                            modTypeEnv = case Acton.Env.lookupMod mn typeEnv of
-                              Just te -> te
+                            modTypeEnv = case Acton.Env.lookupModuleInfo mn typeEnv of
+                              Just mi -> Acton.Env.modulePublicTEnv mi
                               Nothing -> publicIface
                             -- Apply the same simplification as --sigs uses
                             env1 = define publicIface $ setMod mn env
