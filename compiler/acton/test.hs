@@ -1624,9 +1624,9 @@ actonProjTests =
             barAct = srcDir </> "bar.act"
             fooContent = "actor main(env):\n    print(\"foo\")\n    env.exit(0)\n"
             barContent = "actor main(env):\n    print(\"bar\")\n    env.exit(0)\n"
-            barC    = proj </> "out/types/bar.c"
-            barH    = proj </> "out/types/bar.h"
-            barTydb = proj </> "out/types/bar.tydb"
+            barC    = proj </> "out/types/prune_partials/bar.c"
+            barH    = proj </> "out/types/prune_partials/bar.h"
+            barTydb = proj </> "out/types/prune_partials/bar.tydb"
         createDirectoryIfMissing True srcDir
         writeFile fooAct fooContent
         writeFile barAct barContent
