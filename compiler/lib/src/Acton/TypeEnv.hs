@@ -24,6 +24,8 @@ import Prelude hiding ((<>))
 
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict (HashMap)
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -56,6 +58,7 @@ data TypeX                      = TypeX {
                                     indecl      :: Bool,
                                     forced      :: Bool,
                                     tyids       :: Map QName Int,
+                                    tyidHash    :: HashMap QName Int,
                                     tyinfos     :: IntMap TyInfo,
                                     tycons      :: IntSet,
                                     typrotos    :: IntSet,
@@ -88,6 +91,7 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     indecl      = False,
                                     forced      = False,
                                     tyids       = Map.empty,
+                                    tyidHash    = HashMap.empty,
                                     tyinfos     = tyinfos0,
                                     tycons      = IntSet.empty,
                                     typrotos    = IntSet.empty,
@@ -170,12 +174,14 @@ addconinfo f x (n,i)
                                      typrotoAttrs = addTyAttrs tid (tyattrs info) (typrotoAttrs x) }
         addactor tid info x     = addclass tid info x{ tyactors = IntSet.insert tid (tyactors x) }
 
-        addcon n q us te index x = index tid info x{ tyids = Map.insert (f n) tid (tyids x),
+        addcon n q us te index x = index tid info x{ tyids = Map.insert qn tid (tyids x),
+                                                     tyidHash = HashMap.insert qn tid (tyidHash x),
                                                      tyinfos = IntMap.insert tid info tyinfos' }
           where tid             = nextid x
-                ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+                qn              = f n
+                ui              = [ typeId x (tcname c) | (_,c) <- us ]
                 info            = TyInfo {
-                                    tywild = tCon $ TC (f n) [ tWild | _ <- q ],
+                                    tywild = tCon $ TC qn [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
                                     tybelow = IntSet.singleton tid,
                                     tyattrs = foldr Set.union (Set.fromList $ dom te) [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
@@ -195,9 +201,15 @@ conById x tid                   = case typeById x tid of
                                     TCon _ c -> Just c
                                     _ -> Nothing
 
+lookupTypeId                    :: TypeX -> QName -> Maybe Int
+lookupTypeId x n                = HashMap.lookup n (tyidHash x)
+
+typeId                          :: TypeX -> QName -> Int
+typeId x n                      = fromJust $ lookupTypeId x n
+
 tyconDescendants                :: Env -> TCon -> [TCon]
 tyconDescendants env tc
-  | Just tid <- Map.lookup (tcname tc) (tyids x),
+  | Just tid <- lookupTypeId x (tcname tc),
     Just info <- IntMap.lookup tid (tyinfos x)
                                 = [ c | tid' <- tids tid info, Just c <- [conById x tid'] ]
   | otherwise                   = allDescendants env tc
@@ -231,9 +243,12 @@ setupWits                       :: (TypeX -> Witness -> TypeX) -> (Name -> QName
 setupWits add f te x            = foldl' add x wits
   where wits                    = [ WClass q (tCon c) p (f n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
-addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
+addvarinfo x (tv, c, _)         = x{ tyids = Map.insert qn tid (tyids x),
+                                     tyidHash = HashMap.insert qn tid (tyidHash x),
+                                     tyinfos = IntMap.insert tid info tyinfos' }
   where tid                     = nextid x
-        ci                      = tyinfos x IntMap.! (tyids x Map.! tcname c)
+        qn                      = NoQ $ tvname tv
+        ci                      = tyinfos x IntMap.! typeId x (tcname c)
         info                    = TyInfo {
                                     tywild = tVar tv,
                                     tyabove = IntSet.insert tid $ tyabove ci,

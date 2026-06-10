@@ -467,8 +467,8 @@ typeKeySet env                              = foldr add (IntSet.empty, [])
 
 typeKey :: Env -> Type -> Maybe Int
 typeKey env (TCon _ c)
-  | all isWild (tcargs c)                   = Map.lookup (tcname c) (tyids $ envX env)
-typeKey env (TVar _ tv)                     = Map.lookup (NoQ $ tvname tv) (tyids $ envX env)
+  | all isWild (tcargs c)                   = lookupTypeId (envX env) (tcname c)
+typeKey env (TVar _ tv)                     = lookupTypeId (envX env) (NoQ $ tvname tv)
 typeKey _ TNone{}                           = Just (-1)
 typeKey _ (TOpt _ TWild{})                  = Just (-2)
 typeKey _ (TFun _ TWild{} TWild{} TWild{} TWild{})

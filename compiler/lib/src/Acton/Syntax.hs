@@ -441,6 +441,14 @@ instance Data.Hashable.Hashable Name where
     hashWithSalt s (Derived  n1 n2) = s `Data.Hashable.hashWithSalt` n1 `Data.Hashable.hashWithSalt` n2
     hashWithSalt s (Internal pre str n) = s `Data.Hashable.hashWithSalt` (fromEnum pre) `Data.Hashable.hashWithSalt` str `Data.Hashable.hashWithSalt` n
 
+instance Data.Hashable.Hashable ModName where
+    hashWithSalt s (ModName ns)     = Data.Hashable.hashWithSalt s ns
+
+instance Data.Hashable.Hashable QName where
+    hashWithSalt s (QName m n)      = s `Data.Hashable.hashWithSalt` (0 :: Int) `Data.Hashable.hashWithSalt` m `Data.Hashable.hashWithSalt` n
+    hashWithSalt s (NoQ n)          = s `Data.Hashable.hashWithSalt` (1 :: Int) `Data.Hashable.hashWithSalt` n
+    hashWithSalt s (GName m n)      = s `Data.Hashable.hashWithSalt` (2 :: Int) `Data.Hashable.hashWithSalt` m `Data.Hashable.hashWithSalt` n
+
 
 -- Finding type leaves -----
 
