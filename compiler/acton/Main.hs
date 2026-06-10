@@ -2368,9 +2368,9 @@ writeRootC env gopts opts paths tasks binTask = do
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> throwProjectError ("Root module " ++ prstr mn' ++ " not found")
-        let rootsEnv = case Acton.Env.lookupMod mn env of
+        let rootsEnv = case Acton.Env.lookupModuleInfo mn env of
                          Nothing -> []
-                         Just te -> [ n' | (n', i) <- te, rootEligible i ]
+                         Just mi -> [ n' | (n', i) <- Acton.Env.modulePublicTEnv mi, rootEligible i ]
             shouldGen = n `elem` rootsHeader || n `elem` rootsEnv
         if shouldGen
           then do
@@ -2973,10 +2973,10 @@ normalizeZigDep b dep =
 filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)
 filterMainActor env paths binTask = do
     let qn@(A.GName m n) = rootActor binTask
-    let checkEnv = case Acton.Env.lookupMod m env of
+    let checkEnv = case Acton.Env.lookupModuleInfo m env of
                      Nothing -> return Nothing
-                     Just te -> do
-                       let rootsEnv = [ n' | (n', i) <- te, rootEligible i ]
+                     Just mi -> do
+                       let rootsEnv = [ n' | (n', i) <- Acton.Env.modulePublicTEnv mi, rootEligible i ]
                        if n `elem` rootsEnv then return (Just binTask) else return Nothing
     mty <- Acton.Env.findTyFile (searchPath paths) m
     case mty of
