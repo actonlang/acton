@@ -2220,7 +2220,7 @@ runFrontPasses :: C.GlobalOptions
                -> Maybe InterfaceFiles.SourceFileMeta
                -> (A.ModName -> IO (Maybe B.ByteString))
                -> (A.ModName -> IO (Maybe B.ByteString))
-               -> (A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo)))
+               -> (A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo))
                -> (FrontPassProgress -> IO ())
                -> (TaskKey -> FrontOutputKind -> IO ())
                -> (TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ())
@@ -2228,7 +2228,7 @@ runFrontPasses :: C.GlobalOptions
                -> IO Bool
                -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHashMap onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
+runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -2301,47 +2301,34 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       errsToDiagnostics "Compilation error" filename srcContent
         [(loc, label ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")]
 
-    resolveNameHashMaps :: [A.ModName] -> IO (Either [Diagnostic String] (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo)))
-    resolveNameHashMaps mrefs = do
-      resolved <- forM mrefs $ \mref -> do
-        mh <- resolveNameHashMap mref
-        case mh of
-          Just hm -> return (Right (mref, hm))
-          Nothing -> return (Left (missingIfaceDiagnostics mn srcContent mref))
-      let (errs, vals) = partitionEithers resolved
-      if null errs
-        then return (Right (M.fromList vals))
-        else return (Left (concat errs))
-
     resolveDepHashes :: String
                      -> (InterfaceFiles.NameHashInfo -> B.ByteString)
                      -> M.Map A.Name [A.QName]
-                     -> M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo)
                      -> M.Map A.Name SrcLoc
-                     -> Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)])
-    resolveDepHashes label getHash deps extMaps nameLocs =
-      let resolveQName owner qn = case qn of
-            A.GName m n -> lookupName owner m n
-            A.QName m n -> lookupName owner m n
-            A.NoQ _ -> Left (missingNameHashDiagnostics qn)
-          lookupName owner m n =
-            case M.lookup m extMaps of
-              Nothing -> Left (missingIfaceDiagnostics mn srcContent m)
-              Just hm ->
-                case M.lookup n hm of
-                  Just info ->
-                    let h = getHash info
-                        loc = M.findWithDefault NoLoc owner nameLocs
-                    in if B.null h
-                         then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
-                         else Right (Just (A.GName m n, h))
-                  Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
-          resolveForName (n, qns) =
-            let resolved = map (resolveQName n) qns
-                (errs, vals) = partitionEithers resolved
-            in if null errs then Right (n, catMaybes vals) else Left (concat errs)
-          (errs, vals) = partitionEithers (map resolveForName (M.toList deps))
-      in if null errs then Right (M.fromList vals) else Left (concat errs)
+                     -> IO (Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)]))
+    resolveDepHashes label getHash deps nameLocs = do
+      resolved <- forM (M.toList deps) $ \(owner, qns) -> do
+        resolvedQns <- forM qns $ \qn -> case qn of
+          A.GName m n -> lookupName owner m n
+          A.QName m n -> lookupName owner m n
+          A.NoQ _ -> return (Left (missingNameHashDiagnostics qn))
+        let (errs, vals) = partitionEithers resolvedQns
+        return $ if null errs
+          then Right (owner, catMaybes vals)
+          else Left (concat errs)
+      let (errs, vals) = partitionEithers resolved
+      return $ if null errs then Right (M.fromList vals) else Left (concat errs)
+      where
+        lookupName owner m n = do
+          mInfo <- resolveNameHash m n
+          return $ case mInfo of
+            Just info ->
+              let h = getHash info
+                  loc = M.findWithDefault NoLoc owner nameLocs
+              in if B.null h
+                   then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
+                   else Right (Just (A.GName m n, h))
+            Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
 
     emitFrontProgress pass completed total current =
       onFrontProgress FrontPassProgress
@@ -2519,19 +2506,16 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           -- a pub hash.
           let (pubLocalDeps, pubExtDeps) =
                 Hashing.mergePubDeps pubSigLocalDeps pubSigExtDeps implLocalDeps implExtDeps
-              -- Load .tydb maps for any external modules referenced by deps.
               extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
           evaluate (rnf (pubLocalDeps, pubExtDeps, extMods))
-          extMapsRes <- resolveNameHashMaps extMods
           depModulesRes <- resolveDepModuleHashes extMods
-          case (extMapsRes, depModulesRes) of
-            (Left diags, _) -> return (Left diags)
-            (_, Left diags) -> return (Left diags)
-            (Right extMaps, Right depModules) -> do
+          case depModulesRes of
+            Left diags -> return (Left diags)
+            Right depModules -> do
               -- Resolve external deps to their recorded hashes.
-              let pubSigExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps extMaps nameLocs
-                  pubExtRes = resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps extMaps nameLocs
-                  implExtRes = resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps extMaps nameLocs
+              pubSigExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps nameLocs
+              pubExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps nameLocs
+              implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps nameLocs
               case (pubSigExtRes, pubExtRes, implExtRes) of
                 (Left diags, _, _) -> return (Left diags)
                 (_, Left diags, _) -> return (Left diags)
@@ -3311,7 +3295,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 mSourceMeta
                 (getPubHashCached bPaths)
                 (getImplHashCached bPaths)
-                (getNameHashMapCached bPaths)
+                (getNameHashCached bPaths)
                 (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
                 (ccOnFrontOutputStart callbacks)
                 (ccOnFrontOutputProgress callbacks)
@@ -3447,16 +3431,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     | M.member depKey taskMap -> error ("Internal error: missing impl hash for dep " ++ modNameToString m)
                     | otherwise -> getImplHashCached paths m
               Nothing -> getImplHashCached paths m
-          resolveNameHashMap' m =
-            case M.lookup m providers of
-              Just depKey ->
-                case M.lookup depKey nameMap of
-                  Just hm -> return (Just hm)
-                  Nothing
-                    | isBuiltinKey depKey -> getNameHashMapCached paths m
-                    | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
-                    | otherwise -> getNameHashMapCached paths m
-              Nothing -> getNameHashMapCached paths m
           resolveNameHash' m n =
             case M.lookup m providers of
               Just depKey ->
@@ -3631,13 +3605,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             in if null items then Nothing else Just (intercalate ", " items)
 
           resolveNameHashInfo m n = do
-            hm <- resolveNameHashMap' m
-            case hm of
-              Nothing -> return (Left (missingIfaceDiagnostics mn "" m))
-              Just hmap ->
-                case M.lookup n hmap of
-                  Just info -> return (Right info)
-                  Nothing -> return (Left (missingNameHashDiagnostics (A.GName m n)))
+            mInfo <- resolveNameHash' m n
+            return $ case mInfo of
+              Just info -> Right info
+              Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
 
           resolveQNameHash label getHash users qn =
             case qn of
@@ -3862,7 +3833,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           mSourceMeta
                           resolveImportHash
                           resolveImportImplHash
-                          resolveNameHashMap'
+                          resolveNameHash'
                           (\p -> ccOnFrontProgress callbacks t optsT p)
                           (ccOnFrontOutputStart callbacks)
                           (ccOnFrontOutputProgress callbacks)

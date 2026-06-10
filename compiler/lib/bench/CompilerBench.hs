@@ -168,6 +168,13 @@ resolveNameHashMap paths mn = do
           Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
           Nothing -> Nothing
 
+resolveNameHash :: Compile.Paths -> Syntax.ModName -> Syntax.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
+resolveNameHash paths mn n = do
+    mty <- Env.findTyFile (Compile.searchPath paths) mn
+    case mty of
+      Nothing -> return Nothing
+      Just ty -> InterfaceFiles.readNameHashMaybe ty n
+
 resolveDepHashMap :: String
                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)
                   -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
@@ -764,7 +771,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       Nothing
       (Compile.getPubHashCached paths)
       (Compile.getImplHashCached paths)
-      (resolveNameHashMap paths)
+      (resolveNameHash paths)
       (\_ -> return ())
       (\_ _ -> return ())
       (\_ _ _ -> return ())
