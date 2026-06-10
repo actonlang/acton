@@ -2297,29 +2297,37 @@ void rts_shutdown() {
 
 
 #ifndef _WIN32
+// Keep path resolution out of crash signal handlers.
+static char crash_exe_path[512] = {0};
+static void capture_exe_path() {
+    size_t name_len = sizeof(crash_exe_path) - 1;
+    if (uv_exepath(crash_exe_path, &name_len) != 0)
+        name_len = 0;
+    crash_exe_path[name_len] = 0;
+}
+static void get_exe_path(char *name_buf, size_t buf_size) {
+    strncpy(name_buf, crash_exe_path, buf_size - 1);
+    name_buf[buf_size - 1] = 0;
+}
+
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
-    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+    get_exe_path(name_buf, sizeof(name_buf));
 #ifdef __linux__
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
 #endif
-#ifdef __linux__
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb\n");
-        exit(0); /* If lldb/gdb failed to start */
+        _exit(127); /* If lldb/gdb failed to start */
     } else {
         waitpid(child_pid, NULL, 0);
     }
-#else
-    fprintf(stderr, "Unable to get detailed backtrace on this platform\n");
-    exit(0); /* If lldb/gdb failed to start */
-#endif
 }
 
 void launch_debugger(int signum) {
@@ -2332,7 +2340,7 @@ void launch_debugger(int signum) {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
-    name_buf[readlink("/proc/self/exe", name_buf, 511)]=0;
+    get_exe_path(name_buf, sizeof(name_buf));
 #ifdef __linux__
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
 #endif
@@ -2342,7 +2350,7 @@ void launch_debugger(int signum) {
         sprintf(findthread + strlen(findthread), "%p", (void *)pthread_self());
         execlp("gdb", "gdb", "--quiet", "-n", "-ex", "set confirm off", "-ex", findthread, name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb");
-        exit(0); /* If lldb/gdb failed to start */
+        _exit(127); /* If lldb/gdb failed to start */
     } else {
         waitpid(child_pid, NULL, 0);
         exit(0);
@@ -2371,15 +2379,20 @@ void crash_handler(int signum) {
     fprintf(stderr, "NOTE: https://github.com/actonlang/acton/issues/new\n");
     fprintf(stderr, "NOTE: include the backtrace printed above between -- 8< -- lines\n");
 
-    // Restore / uninstall signal handlers for SIGILL & SIGSEGV
-    sa_ill.sa_handler = NULL;
-    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGILL: %s", strerror(errno));
+    // Restore every crash handler before re-raising the original signal.
+    sa_abrt.sa_handler = SIG_DFL;
+    if (sigaction(SIGABRT, &sa_abrt, NULL) == -1) {
+        log_fatal("Failed to restore signal handler for SIGABRT: %s", strerror(errno));
         exit(1);
     }
-    sa_segv.sa_handler = NULL;
+    sa_ill.sa_handler = SIG_DFL;
+    if (sigaction(SIGILL, &sa_ill, NULL) == -1) {
+        log_fatal("Failed to restore signal handler for SIGILL: %s", strerror(errno));
+        exit(1);
+    }
+    sa_segv.sa_handler = SIG_DFL;
     if (sigaction(SIGSEGV, &sa_segv, NULL) == -1) {
-        log_fatal("Failed to install signal handler for SIGSEGV: %s", strerror(errno));
+        log_fatal("Failed to restore signal handler for SIGSEGV: %s", strerror(errno));
         exit(1);
     }
     // Kill ourselves with original signal sent to us
@@ -2689,6 +2702,7 @@ int main(int argc, char **argv) {
     new_argv[new_argc] = NULL;
 
 #ifndef _WIN32
+    capture_exe_path();
     if (interactive_backtrace) {
         sa_abrt.sa_handler = &launch_debugger;
         sa_ill.sa_handler = &launch_debugger;
