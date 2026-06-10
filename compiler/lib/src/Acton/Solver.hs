@@ -18,6 +18,7 @@ import Control.Monad
 import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Data.IntSet as IntSet
 import qualified Control.Exception
 import Control.DeepSeq
 
@@ -362,11 +363,11 @@ solve' env select hist te eq cs
           where cond (RRed c : rs)          = RRed c
                 cond (RSealed v : rs)       = RSealed v
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
-                  where ts                  = foldr intersect as $ map alts rs
-                        ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
+                  where ts                  = foldr (typeIntersect env) as $ map alts rs
+                        ts'                 = if v `elem` optvs then typeDiff env ts [tOpt tWild] else ts
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
                         rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
-                cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
+                cond (RVar v as : rs)       = RVar v (foldr (typeUnion env) as $ map alts rs)
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
 
@@ -430,6 +431,59 @@ rank _ (Seal _ env (TUni _ v))
 rank _ c                                    = RRed c
 
 wildTuple                                   = tTuple tWild tWild
+
+typeIntersect :: Env -> [Type] -> [Type] -> [Type]
+typeIntersect env xs ys                     = filter keep xs
+  where (ykeys, yother)                     = typeKeySet env ys
+        keep t
+          | Just k <- typeKey env t         = k `IntSet.member` ykeys
+          | otherwise                       = t `elem` yother
+
+typeUnion :: Env -> [Type] -> [Type] -> [Type]
+typeUnion env xs ys                         = xs ++ go IntSet.empty [] ys
+  where (xkeys, xother)                     = typeKeySet env xs
+        go _ _ []                           = []
+        go seenKeys seenOther (y:ys)
+          | Just k <- typeKey env y,
+            k `IntSet.member` xkeys || k `IntSet.member` seenKeys
+                                                = go seenKeys seenOther ys
+          | Just k <- typeKey env y         = y : go (IntSet.insert k seenKeys) seenOther ys
+          | y `elem` xother || y `elem` seenOther
+                                                = go seenKeys seenOther ys
+          | otherwise                       = y : go seenKeys (y:seenOther) ys
+
+typeDiff :: Env -> [Type] -> [Type] -> [Type]
+typeDiff env xs ys                          = filter keep xs
+  where (ykeys, yother)                     = typeKeySet env ys
+        keep t
+          | Just k <- typeKey env t         = k `IntSet.notMember` ykeys
+          | otherwise                       = t `notElem` yother
+
+typeKeySet :: Env -> [Type] -> (IntSet.IntSet, [Type])
+typeKeySet env                              = foldr add (IntSet.empty, [])
+  where add t (ks, ts)
+          | Just k <- typeKey env t         = (IntSet.insert k ks, ts)
+          | otherwise                       = (ks, t:ts)
+
+typeKey :: Env -> Type -> Maybe Int
+typeKey env (TCon _ c)
+  | all isWild (tcargs c)                   = Map.lookup (tcname c) (tyids $ envX env)
+typeKey env (TVar _ tv)                     = Map.lookup (NoQ $ tvname tv) (tyids $ envX env)
+typeKey _ TNone{}                           = Just (-1)
+typeKey _ (TOpt _ TWild{})                  = Just (-2)
+typeKey _ (TFun _ TWild{} TWild{} TWild{} TWild{})
+                                                = Just (-3)
+typeKey _ (TTuple _ TWild{} TWild{})        = Just (-4)
+typeKey _ (TFX _ fx)                        = Just $ case fx of
+                                                    FXProc -> -5
+                                                    FXMut -> -6
+                                                    FXPure -> -7
+                                                    FXAction -> -8
+typeKey _ _                                 = Nothing
+
+isWild :: Type -> Bool
+isWild TWild{}                              = True
+isWild _                                    = False
 
 
 -------------------------------------------------------------------------------------------------------------------------
