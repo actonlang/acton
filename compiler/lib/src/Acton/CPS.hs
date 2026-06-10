@@ -29,7 +29,7 @@ import Acton.Env
 import Acton.QuickType
 
 convert                                 :: Env0 -> Module -> IO (Module, Env0)
-convert env0 m                          = return (runCpsM (convMod m), mapModules1 (conv env) env0)
+convert env0 m                          = return (runCpsM (convMod m), convertModules1 (conv env) env0)
   where env                             = cpsEnv env0
         convMod (Module m imps mdoc ss) = do ss' <- preSuite env ss
                                              --traceM ("######## preCPS:\n" ++ render (vcat $ map pretty ss') ++ "\n########")

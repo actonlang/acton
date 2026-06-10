@@ -1516,7 +1516,6 @@ forceTypeResult nmod tchecked typeEnv tests = do
   evaluate (rnf nmod)
   evaluate (rnf tchecked)
   evaluate (forceHTEnv (Acton.Env.hnames typeEnv))
-  evaluate (forceHTEnv (Acton.Env.hmodules typeEnv))
   evaluate (rnf tests)
 
 data GlobalTask = GlobalTask

@@ -29,8 +29,11 @@ import Control.Monad.State.Strict
 
 deactorize                          :: Env0 -> Module -> IO (Module, Env0)
 deactorize env0 (Module m imps mdoc b)
-                                    = return (Module m imps mdoc (runDeactM $ deactSuite env b), mapModules conv env0)
+                                    = return (Module m imps mdoc (runDeactM $ deactSuite env b), convertModules deactSources conv env0)
   where env                         = deactEnv env0
+        deactSources (Derived n s)
+          | s == suffixNewact       = [n]
+        deactSources _              = []
 
 
 -- Deactorizing monad
