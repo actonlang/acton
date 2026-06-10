@@ -1283,9 +1283,9 @@ dbpDeferredBackJob :: Bool
                    -> Paths
                    -> A.ModName
                    -> B.ByteString
-                   -> [InterfaceFiles.NameHashInfo]
+                   -> Int
                    -> Maybe DeferredBackJob
-dbpDeferredBackJob blocked opts paths mn moduleImplHash nameHashes
+dbpDeferredBackJob blocked opts paths mn moduleImplHash nameCount
   | C.no_dbp opts = Nothing
   | C.only_build opts = Nothing
   | altOutput opts = Nothing
@@ -1483,6 +1483,7 @@ data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes
                                     , tyImports :: [(A.ModName, B.ByteString)] -- imports with pub hash used
                                     , tyDepModules :: [InterfaceFiles.DepModuleInfo]
                                     , tyNameHashes :: [InterfaceFiles.NameHashInfo]
+                                    , tyNameCount :: Int
                                     , tyRoots :: [A.Name]
                                     , tyTests :: [String]
                                     , tyDoc :: Maybe String
@@ -1763,8 +1764,8 @@ dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affect
       case M.lookup k taskMap of
         Just t ->
           case gtTask t of
-            TyTask{ tyImplHash = implHash, tyNameHashes = nhs } ->
-              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) (optsFor k) (gtPaths t) (tkMod k) implHash nhs)
+            TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
+              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) (optsFor k) (gtPaths t) (tkMod k) implHash nameCount)
             _ -> False
         Nothing -> False
 
@@ -1895,6 +1896,7 @@ data ModuleHead
       , mhTyImports  :: [(A.ModName, B.ByteString)]
       , mhDepModules :: [InterfaceFiles.DepModuleInfo]
       , mhNameHashes :: [InterfaceFiles.NameHashInfo]
+      , mhNameCount  :: Int
       , mhRoots      :: [A.Name]
       , mhTests      :: [String]
       , mhDoc        :: Maybe String
@@ -1930,10 +1932,10 @@ readModuleHeader sp gopts opts paths actFile = do
       else do
         -- .tydb exists: read the cached header and validate it against compiler
         -- compatibility plus source metadata/content as needed.
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
         case hdrE of
           Left _ -> readSourceHead mn
-          Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc) -> do
+          Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, mdoc) -> do
             tyMTimeNs <- InterfaceFiles.interfaceModifiedTimeNs tyFile
             newCompiler <- compilerNewerThan tyMTimeNs
             mOverlay <- Source.spReadOverlay sp actFile
@@ -1941,21 +1943,21 @@ readModuleHeader sp gopts opts paths actFile = do
               Just snap ->
                 if newCompiler
                   then sourceHeadFromSnapshot mn snap
-                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta Nothing imps depModules nameHashes roots tests mdoc
+                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta Nothing imps depModules nameCount roots tests mdoc
               Nothing -> do
                 if newCompiler
                   then readSourceHead mn
                   else do
                     currentSourceMeta <- readSourceFileMeta actFile
                     if canReuseHeader cachedSourceMeta currentSourceMeta tyMTimeNs
-                      then return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameHashes roots tests mdoc)
+                      then return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc)
                       else do
                         snap <- Source.spReadFile sp actFile
-                        verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps depModules nameHashes roots tests mdoc
+                        verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps depModules nameCount roots tests mdoc
   where
     fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
 
-    mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameHashes roots tests mdoc =
+    mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc =
       TyHead
         { mhName       = mn
         , mhSrcHash    = moduleSrcBytesHash
@@ -1963,7 +1965,8 @@ readModuleHeader sp gopts opts paths actFile = do
         , mhImplHash   = moduleImplHash
         , mhTyImports  = imps
         , mhDepModules = depModules
-        , mhNameHashes = nameHashes
+        , mhNameHashes = []
+        , mhNameCount  = nameCount
         , mhRoots      = roots
         , mhTests      = tests
         , mhDoc        = mdoc
@@ -2014,7 +2017,7 @@ readModuleHeader sp gopts opts paths actFile = do
         Right (_ms, nmod, tmod, _oldSourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) ->
           InterfaceFiles.writeFile tyFilePath srcHash pubHash implHash currentSourceMeta imps depModules nameHashes roots tests mdoc nmod tmod
 
-    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps depModules nameHashes roots tests mdoc = do
+    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps depModules nameCount roots tests mdoc = do
       let curHash = SHA256.hash (Source.ssBytes snap)
           short8 bs = take 8 (B.unpack $ Base16.encode bs)
           same = curHash == moduleSrcBytesHash
@@ -2033,7 +2036,7 @@ readModuleHeader sp gopts opts paths actFile = do
         then do
           when (currentSourceMeta /= Nothing && currentSourceMeta /= cachedSourceMeta) $
             refreshCachedSourceMeta currentSourceMeta
-          return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameHashes roots tests mdoc)
+          return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc)
         else sourceHeadFromSnapshot mn snap
 
 -- | Prepare a task for dependency graph construction.
@@ -2050,6 +2053,7 @@ readModuleTask sp gopts opts paths actFile = do
           , mhTyImports = imps
           , mhDepModules = depModules
           , mhNameHashes = nameHashes
+          , mhNameCount = nameCount
           , mhRoots = roots
           , mhTests = tests
           , mhDoc = mdoc
@@ -2063,6 +2067,7 @@ readModuleTask sp gopts opts paths actFile = do
                 , tyImports  = imps
                 , tyDepModules = depModules
                 , tyNameHashes = nameHashes
+                , tyNameCount = nameCount
                 , tyRoots   = roots
                 , tyTests   = tests
                 , tyDoc     = mdoc
@@ -2100,8 +2105,8 @@ readModuleDocIndexEntry :: Source.SourceProvider
 readModuleDocIndexEntry sp gopts opts paths actFile = do
   h <- readModuleHeader sp gopts opts paths actFile
   return $ case h of
-    TyHead{ mhName = mn, mhNameHashes = nameHashes, mhDoc = mdoc } ->
-      Just (mn, mdoc, shouldGenerateDocOutput opts (isTmp paths) (length nameHashes))
+    TyHead{ mhName = mn, mhNameCount = nameCount, mhDoc = mdoc } ->
+      Just (mn, mdoc, shouldGenerateDocOutput opts (isTmp paths) nameCount)
     SrcHead{ mhName = mn, mhDoc = mdoc } -> Just (mn, mdoc, True)
     HeadError{} -> Nothing
 
@@ -2684,7 +2689,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked opts paths mn moduleImplHash nameHashes
+                      deferredBackJob = dbpDeferredBackJob dbpBlocked opts paths mn moduleImplHash (length nameHashes)
                       backJob =
                         case deferredBackJob of
                           Just _ -> Nothing
@@ -2756,7 +2761,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
       actFile = srcFile paths mn
-  (_sourceMeta, _moduleSrcBytesHash, _modulePubHash, _moduleImplHashStored, _imps, _depModules, nameHashes, roots, _tests, _mdoc) <- InterfaceFiles.readHeader tyFile
+  roots <- InterfaceFiles.readRoots tyFile
   let explicitSeeds = dbjSeeds dbj
       interested =
         if Data.Set.null explicitSeeds
@@ -2764,19 +2769,20 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
           else explicitSeeds
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
-  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds nameHashes
+      totalNames = dbjNameCount dbj
+  nameSelection <- selectDbpNames mn tyFile selectedSeeds
   let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
-      logDbpSelection gopts callbacks mn dbj (length nameHashes) (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
+      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
       return Nothing
     else do
       (_ms, _nmod, tmod, _sourceMetaFull, _moduleSrcBytesHashFull, _modulePubHashFull, _moduleImplHashStoredFull, _impsFull, _depModulesFull, _nameHashesFull, _rootsFull, _testsFull, _mdocFull) <- InterfaceFiles.readFile tyFile
       snap <- Source.readSource sp actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc tmod
-      let selection = selectDbpModule (length nameHashes) (Data.Set.size interested) nameSelection tmod
-      logDbpSelection gopts callbacks mn dbj (length nameHashes) (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
+      let selection = selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
+      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
         { bjPaths = paths
         , bjOpts = dbjOpts dbj
@@ -2820,34 +2826,25 @@ dbpCodegenHash moduleImplHash selected =
       | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
       ]
 
-selectDbpNames :: Paths
-               -> A.ModName
+selectDbpNames :: A.ModName
                -> FilePath
                -> Data.Set.Set A.Name
-               -> [InterfaceFiles.NameHashInfo]
                -> IO DbpNameSelection
-selectDbpNames paths mn tyFile seeds nameHashes
+selectDbpNames mn tyFile seeds
   | Data.Set.null seeds =
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.empty
         }
-  | otherwise =
-      case ( traverse (dbpOwningName topNames) (Data.Set.toList seeds)
-           , dbpLocalDepsFromNameHashes topNames nameHashes
-           ) of
-        (Left reason, _) -> dbpSelectionError paths mn reason
-        (_, Left reason) -> dbpSelectionError paths mn reason
-        (Right roots, Right localDeps) -> do
-          selected <- dbpNameClosure (dbpExtensionsForName paths mn tyFile topNames) localDeps (Data.Set.fromList roots)
-          return DbpNameSelection
-            { dnsSelectedNames = selected
-            }
-  where
-    topNames = dbpTopNamesFromNameHashes nameHashes
+  | otherwise = do
+      roots <- traverse (dbpReadOwningName mn tyFile) (Data.Set.toList seeds)
+      selected <- dbpNameHashClosure mn tyFile Data.Set.empty roots
+      return DbpNameSelection
+        { dnsSelectedNames = selected
+        }
 
-dbpSelectionError :: Paths -> A.ModName -> String -> IO a
-dbpSelectionError paths mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
+dbpSelectionError :: A.ModName -> String -> IO a
+dbpSelectionError mn reason =
+  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString mn ++ ": " ++ reason))
 
 selectDbpModule :: Int
                 -> Int
@@ -2874,65 +2871,50 @@ selectDbpModule totalNames interestedCount nameSelection tmod@(A.Module loc imps
         , dbsFallbackReason = Just reason
         }
 
-dbpTopNamesFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set A.Name
-dbpTopNamesFromNameHashes nameHashes =
-  Data.Set.fromList [ InterfaceFiles.nhName nh | nh <- nameHashes ]
+dbpReadNameHash :: A.ModName -> FilePath -> A.Name -> IO InterfaceFiles.NameHashInfo
+dbpReadNameHash mn tyFile n = do
+  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
+  case mnh of
+    Just nh -> return nh
+    Nothing -> dbpSelectionError mn ("hash info missing for " ++ nameToString n)
 
-dbpOwningName :: Data.Set.Set A.Name -> A.Name -> Either String A.Name
-dbpOwningName topNames n
-  | Data.Set.member n topNames = Right n
-  | otherwise =
+dbpReadOwningName :: A.ModName -> FilePath -> A.Name -> IO A.Name
+dbpReadOwningName mn tyFile n = do
+  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
+  case mnh of
+    Just _ -> return n
+    Nothing ->
       case n of
-        A.Derived base _ -> dbpOwningName topNames base
-        _ | Names.isWitness n -> Left ("unresolved witness owner for " ++ nameToString n)
-        _ -> Left ("no top-level owner for " ++ nameToString n)
+        A.Derived base _ -> dbpReadOwningName mn tyFile base
+        _ | Names.isWitness n -> dbpSelectionError mn ("unresolved witness owner for " ++ nameToString n)
+        _ -> dbpSelectionError mn ("no top-level owner for " ++ nameToString n)
 
-dbpLocalDepsFromNameHashes :: Data.Set.Set A.Name
-                           -> [InterfaceFiles.NameHashInfo]
-                           -> Either String (M.Map A.Name [A.Name])
-dbpLocalDepsFromNameHashes topNames nameHashes =
-  M.fromList <$> traverse depsFor nameHashes
+dbpNameHashClosure :: A.ModName
+                   -> FilePath
+                   -> Data.Set.Set A.Name
+                   -> [A.Name]
+                   -> IO (Data.Set.Set A.Name)
+dbpNameHashClosure _ _ selected [] = return selected
+dbpNameHashClosure mn tyFile selected (n:ns)
+  | Data.Set.member n selected = dbpNameHashClosure mn tyFile selected ns
+  | otherwise = do
+      nh <- dbpReadNameHash mn tyFile n
+      localDeps <- traverse (dbpReadOwningName mn tyFile)
+                     (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
+      exts <- dbpExtensionsForName tyFile n
+      extDeps <- traverse (dbpReadOwningName mn tyFile) exts
+      let deps = unionNames localDeps extDeps
+          selected' = Data.Set.insert n selected
+          new = filter (`Data.Set.notMember` selected') deps
+      dbpNameHashClosure mn tyFile selected' (new ++ ns)
   where
-    depsFor nh = do
-      deps <- traverse
-                (dbpOwningName topNames)
-                (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
-      return
-        ( InterfaceFiles.nhName nh
-        , unionNames deps []
-        )
     unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
 
-dbpExtensionsForName :: Paths -> A.ModName -> FilePath -> Data.Set.Set A.Name -> A.Name -> IO [A.Name]
-dbpExtensionsForName paths mn tyFile topNames n = do
+dbpExtensionsForName :: FilePath -> A.Name -> IO [A.Name]
+dbpExtensionsForName tyFile n = do
   byClass <- InterfaceFiles.readExtensionsByClass tyFile n
   byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
-  let exts = unionNames byClass byProtocol
-      missing = [ ext | ext <- exts, Data.Set.notMember ext topNames ]
-  if null missing
-    then return exts
-    else dbpSelectionError paths mn $
-           "extension index for " ++ nameToString n
-           ++ " points at non-top-level extension(s) "
-           ++ Data.List.intercalate ", " (map nameToString missing)
-  where
-    unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
-
-dbpNameClosure :: (A.Name -> IO [A.Name])
-               -> M.Map A.Name [A.Name]
-               -> Data.Set.Set A.Name
-               -> IO (Data.Set.Set A.Name)
-dbpNameClosure extensionsForName localDeps roots = go roots (Data.Set.toList roots)
-  where
-    go seen [] = return seen
-    go seen (n:ns) = do
-      exts <- extensionsForName n
-      let deps = unionNames (M.findWithDefault [] n localDeps) exts
-          new = filter (`Data.Set.notMember` seen) deps
-          seen' = foldl' (flip Data.Set.insert) seen new
-      go seen' (new ++ ns)
-
-    unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
+  return (Data.List.sortOn Hashing.nameKey (Data.List.nub (byClass ++ byProtocol)))
 
 dbpPruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
 dbpPruneTopStmt selected stmt =
@@ -3520,12 +3502,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey nameMap of
-                  Just hm -> return (M.lookup n hm)
+                  Just hm ->
+                    case M.lookup n hm of
+                      Just info -> return (Just info)
+                      Nothing
+                        | providerIsCachedTy depKey -> getNameHashCached paths m n
+                        | otherwise -> return Nothing
                   Nothing
                     | isBuiltinKey depKey -> getNameHashCached paths m n
                     | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
                     | otherwise -> getNameHashCached paths m n
               Nothing -> getNameHashCached paths m n
+          providerIsCachedTy depKey =
+            case M.lookup depKey taskMap of
+              Just GlobalTask{ gtTask = TyTask{} } -> True
+              _ -> False
 
           missingNameHashDiagnostics qn =
             errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
@@ -3861,7 +3852,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
                   cachedDeferredBackJob = case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameHashes = nhs } -> dbpDeferredBackJob (isDbpBlocked key) optsT paths mn implHash nhs
+                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> dbpDeferredBackJob (isDbpBlocked key) optsT paths mn implHash nameCount
                     _ -> Nothing
                   isCachedDbp =
                     case cachedDeferredBackJob of
@@ -3876,7 +3867,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     --traceM ("\n## runFront " ++ prstr mn ++ "\n")
                     prevNameHashes <- if C.verbose gopts
                       then case taskCurrent of
-                        TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
+                        TyTask{ tyNameHashes = nhs } | not (null nhs) -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
                         _ -> getNameHashMapCached paths mn
                       else return Nothing
                     when (C.verbose gopts) $ do
@@ -4036,7 +4027,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           rememberFrontOutputJobList frontOutputRef outputJobs
                                           let I.NModule imps ifaceFull _mdoc = nmod
                                               ifaceTE = publicIfaceTE ifaceFull
-                                              deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHash updatedNameHashes
+                                              deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHash (length updatedNameHashes)
                                               deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
                                               backJob =
                                                 case deferredBackJob of
@@ -4060,7 +4051,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
-                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHashStored nameHashes
+                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHashStored (length nameHashes)
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing

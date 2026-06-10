@@ -93,6 +93,7 @@ module InterfaceFiles
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
+  , TyHeaderSummary
   , InterfaceDB
   , interfaceExt
   , interfacePath
@@ -110,10 +111,13 @@ module InterfaceFiles
   , readModuleHashesMaybe
   , readFile
   , readHeader
+  , readHeaderSummary
+  , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
+  , readHeaderSummaryMaybe
   , openInterfaceDB
   , openInterfaceDBMaybe
   , readInterfaceDBModuleInfo
@@ -256,6 +260,19 @@ type TyHeader =
   , [(A.ModName, BS.ByteString)]
   , [DepModuleInfo]
   , [NameHashInfo]
+  , [A.Name]
+  , [String]
+  , Maybe String
+  )
+
+type TyHeaderSummary =
+  ( Maybe SourceFileMeta
+  , BS.ByteString
+  , BS.ByteString
+  , BS.ByteString
+  , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
+  , Int
   , [A.Name]
   , [String]
   , Maybe String
@@ -1325,6 +1342,27 @@ readHeader f =
       traceTydbRead "name-hash-all" f (show (length nameHashes))
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
 
+-- Like readHeader, but reads the stored name count instead of decoding every
+-- per-name hash row, so cache checks stay independent of module size.
+readHeaderSummary :: FilePath -> IO TyHeaderSummary
+readHeaderSummary f =
+    withReadTxn f $ \txn dbi -> do
+      (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
+      imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
+      roots <- getValue "roots" txn dbi keyRoots
+      tests <- getValue "tests" txn dbi keyTests
+      doc <- getValue "doc" txn dbi keyDoc
+      nameCount <- getValue "name-count" txn dbi keyNameCount
+      traceTydbRead "header" f "cached"
+      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, doc)
+
+readRoots :: FilePath -> IO [A.Name]
+readRoots f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      getValue "roots" txn dbi keyRoots
+
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
     withReadTxn f $ \txn dbi -> do
@@ -1384,6 +1422,9 @@ readFileMaybe = readTyMaybe readFile
 
 readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
 readHeaderMaybe = readTyMaybe readHeader
+
+readHeaderSummaryMaybe :: FilePath -> IO (Maybe TyHeaderSummary)
+readHeaderSummaryMaybe = readTyMaybe readHeaderSummary
 
 readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)
 readTyMaybe readTy f = (Just <$> readTy f) `E.catch` tyCacheMiss
