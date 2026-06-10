@@ -5,7 +5,6 @@
 #include <dlfcn.h>
 #endif
 
-#include <mbedtls/platform.h>
 #define LIBXML_STATIC
 #include <libxml/xmlmemory.h>
 #include <tlsuv/tlsuv.h>
@@ -53,19 +52,54 @@ void *GC_calloc(size_t count, size_t size) {
     return GC_malloc(count*size);
 }
 
+static void *uv_gc_malloc(size_t size) {
+    return GC_malloc_uncollectable(size);
+}
+static void *uv_gc_calloc(size_t count, size_t size) {
+    return GC_malloc_uncollectable(count * size);
+}
+
 void acton_init_alloc() {
-    // UV & TLSUV are used for IO, which is always done on the GC-heap. We don't
-    // have any constants related to UV, so we can always use the GC
+    // Allocator regimes for the native IO stack:
+    //
+    // tlsuv and mbedtls live on the libc heap with real malloc/free. tlsuv
+    // objects (the per-connection TLS engine especially) are reachable only
+    // through libc-allocated structs owned by net.ext.c, and Boehm GC does
+    // not scan libc memory: a GC-allocated engine looks unreachable and is
+    // collected mid-connection, leaving a dangling pointer behind. Real
+    // malloc/free ties their lifetimes to explicit close calls (with GC
+    // finalizers via __cleanup__ as a safety net) instead of GC reachability.
+    //
+    // libuv's internal allocations use GC_malloc_uncollectable + GC_free:
+    // they must be GC-SCANNED because they are load-bearing GC roots - the
+    // loop's watchers array holds the only reference to idle GC-allocated uv
+    // handles (and through handle->data, their actors) once an application
+    // retains a connection only via its callbacks. They must also never be
+    // collected, because tlsuv now stores libuv allocations (e.g. the
+    // getaddrinfo request buffer) inside its own libc structs where the
+    // collector cannot see them. libuv pairs every internal allocation with
+    // a free, so GC_free reclaims them deterministically.
+    //
+    // uv handles and requests allocated by Acton code remain ordinary GC
+    // memory; libuv never frees those (caller-owned).
+    //
+    // mbedtls needs no setup: with MBEDTLS_PLATFORM_MEMORY its allocator
+    // hooks default to calloc/free, which is the regime we want, and nothing
+    // may re-point them mid-run - mbedtls allocates and frees on widely
+    // separated code paths, so an allocator change frees objects through the
+    // wrong regime. (acton_replace_allocator used to re-point them on every
+    // call.) tlsuv_set_allocator passes its calloc/free pair through to
+    // mbedtls and also re-points libuv (tlsuv src/alloc.c), so it runs first
+    // and uv_replace_allocator then overrides libuv.
+    tlsuv_set_allocator(malloc,
+                        realloc,
+                        calloc,
+                        free);
 
-    uv_replace_allocator(GC_malloc,
+    uv_replace_allocator(uv_gc_malloc,
                          GC_realloc,
-                         GC_calloc,
-                         acton_noop_free);
-
-    tlsuv_set_allocator(GC_malloc,
-                            GC_realloc,
-                            GC_calloc,
-                            acton_noop_free);
+                         uv_gc_calloc,
+                         GC_free);
 }
 
 int acton_replace_allocator(acton_malloc_func malloc_func,
@@ -99,9 +133,6 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
                 acton__allocator.malloc,
                 acton__allocator.realloc,
                 acton__allocator.strdup);
-
-    mbedtls_platform_set_calloc_free(acton__allocator.calloc,
-                                     acton_noop_free);
 
     return 0;
 }

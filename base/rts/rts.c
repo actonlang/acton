@@ -212,10 +212,19 @@ pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
 
 #define NUM_THREADS num_wthreads+1
 
+WorkerCtx get_wctx() {
+    WorkerCtx wctx = GET_WCTX();
+    assert(wctx != NULL);
+    return wctx;
+}
+
+int get_wtid() {
+    return (int)get_wctx()->id;
+}
+
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
-    WorkerCtx wctx = (WorkerCtx)pthread_getspecific(pkey_wctx);
-    long i = wctx->id;
+    long i = get_wctx()->id;
     log_debug("Pinning affinity for %s actor %ld to current WT %d", a->$class->$GCINFO, a->$globkey, i);
     a->$affinity = i;
 }
@@ -230,6 +239,8 @@ $Actor self_actor;
 
 #define NUM_THREADS 1
 
+WorkerCtx get_wctx() { return GET_WCTX(); }
+int get_wtid() { return (int)get_wctx()->id; }
 void pin_actor_affinity() { }
 void set_actor_affinity(int wthread_id) { }
 #endif // ACTON_THREADS
@@ -2479,6 +2490,7 @@ int main(int argc, char **argv) {
         log_fatal("Unable to get CPU info");
         exit(1);
     }
+    uv_free_cpu_info(cpu_infos, num_cores);
     bool mon_on_exit = false;
     bool auto_backtrace = true;
     bool interactive_backtrace = false;

@@ -266,6 +266,9 @@ struct WorkerCtx {
 };
 extern WorkerCtx wctxs[MAX_WTHREADS];
 
+WorkerCtx get_wctx();
+int get_wtid();
+
 JumpBuf $PUSH_BUF();
 B_BaseException $POP();
 void $DROP();
