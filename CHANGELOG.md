@@ -22,6 +22,12 @@
     quadratic validation time in large projects.
 - Report parser progress percentages during builds, giving useful feedback for
   very large files before type checking starts. [#2784]
+- Report hashing as its own front-pass progress phase in CLI and LSP builds, so
+  large modules show source, implementation, interface, and dependency hashing
+  work instead of appearing stuck after type checking. [#2905]
+  - Type-checking and hashing progress updates are paced to keep detailed
+    progress reporting from slowing large-module builds through excessive UI
+    churn.
 - Report active back-pass progress for normalize, deactorize, CPS, lambda
   lifting, boxing, code generation, render, and write steps, so CLI and LSP
   builds show which generated-code phase is currently running. [#2808, #2853]
@@ -104,14 +110,16 @@
 - Report more detailed front-pass timing for type reconstruction, result
   forcing, hash computation, cached interface writes, and documentation output,
   and speed up signature validation by checking bindings through a set. [#2848]
+  - Build progress output now keeps long five-digit second durations aligned
+    with shorter timings. [#2901]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, and by tracking boxing-pass witness
   names with a hash set, reducing repeated scans during boxing and generated
   C/H rendering. [#2806, #2810, #2895]
 - Hash implementation fragments and normalized source/implementation AST
-  fragments directly as bytes, making cached change detection cheaper while
-  preserving per-name build hashes and ignoring location-only source changes.
-  [#2811, #2897]
+  fragments through direct byte and structural streams, making cached change
+  detection cheaper while preserving per-name build hashes and ignoring
+  location-only source changes. [#2811, #2897, #2900]
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
@@ -203,6 +211,9 @@
 - Port Acton and bundled dependency build files to Zig 0.16, including remote
   dependency fetching and cache archive extraction for `acton pkg add`,
   `acton fetch`, and project builds with remote dependencies. [#2807]
+- Fix Windows Acton program execution by building the vendored libuv Windows C
+  sources without Zig/Clang's null sanitizer, avoiding a sanitizer trap in
+  libuv's async wakeup path. [#2902]
 
 ### Documentation
 - Document when and how to use the Acton container image, including
@@ -230,13 +241,18 @@
     a week of duplicate snapshots.
 - Run cross-compilation checks in a dedicated CI job after Debian packages are
   built, covering macOS, Windows, GNU/Linux, and musl targets without bloating
-  the default test job's compile cache. [#2850, #2852]
+  the default test job's compile cache. [#2850, #2852, #2902]
   - Windows cross-compilation uses `--no-threads`, matching the supported
     Windows target mode, and nightly/manual runs refresh a separate
     cross-compilation cache.
+  - Cross-compiled Windows `hello.exe` artifacts are preserved and run on
+    matching x86_64 and arm64 Windows runners.
   - Linux container jobs free host disk before restoring compile caches, and
     release, container, apt, and Homebrew publishing jobs now wait for the
     cross-compilation job.
+  - The cross-compile job installs the freshly built Debian package with
+    `dpkg -i`, avoiding unrelated hosted-runner apt repository failures while
+    still testing the produced artifact. [#2904]
 - Keep CI cache restores clean after Stack/GHC changes by removing broad Stack
   restore-key fallbacks, and make the standard-library time test tolerate slow
   CI startup while still catching gross clock errors. [#2836, #2838]
@@ -4234,6 +4250,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2896]: https://github.com/actonlang/acton/pull/2896
 [#2897]: https://github.com/actonlang/acton/pull/2897
 [#2898]: https://github.com/actonlang/acton/pull/2898
+[#2900]: https://github.com/actonlang/acton/pull/2900
+[#2901]: https://github.com/actonlang/acton/pull/2901
+[#2902]: https://github.com/actonlang/acton/pull/2902
+[#2904]: https://github.com/actonlang/acton/pull/2904
+[#2905]: https://github.com/actonlang/acton/pull/2905
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
