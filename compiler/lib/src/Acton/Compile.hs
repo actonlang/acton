@@ -3092,7 +3092,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
 
     forcedDbpMods = M.keysSet (parseDbpRequests (projName rootPaths) opts)
 
-    formatTaskKey k = tkProj k ++ ":" ++ modNameToString (tkMod k)
+    formatTaskKey k = modNameToString (tkMod k)
 
     logForcedDbpBoundaryExclusions =
       unless (C.no_dbp opts) $
