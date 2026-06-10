@@ -1236,8 +1236,8 @@ shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts tmp nameCount =
   not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
-parseDbpSpec :: String -> Maybe DbpRequest
-parseDbpSpec raw = do
+parseDbpSpec :: String -> String -> Maybe DbpRequest
+parseDbpSpec proj raw = do
   let (modPart0, seedPart0) = break (== ':') raw
       modPart = map (\c -> if c == '/' then '.' else c) modPart0
       modPieces = filter (not . null) (splitChar '.' modPart)
@@ -1250,14 +1250,15 @@ parseDbpSpec raw = do
         | s <- splitChar ',' seedPart
         , not (null s)
         ]
-  return DbpRequest { drMod = A.modName modPieces, drSeeds = seeds }
+      mn = A.modName  $ if null proj then modPieces else proj:modPieces
+  return DbpRequest { drMod = mn, drSeeds = seeds }
 
-parseDbpRequests :: C.CompileOptions -> M.Map A.ModName (Data.Set.Set A.Name)
-parseDbpRequests opts =
+parseDbpRequests :: String -> C.CompileOptions -> M.Map A.ModName (Data.Set.Set A.Name)
+parseDbpRequests proj opts =
   M.fromListWith Data.Set.union
     [ (drMod req, drSeeds req)
     | raw <- C.dbp opts
-    , Just req <- [parseDbpSpec raw]
+    , Just req <- [parseDbpSpec proj raw]
     ]
 
 splitChar :: Char -> String -> [String]
@@ -1297,7 +1298,7 @@ dbpDeferredBackJob blocked opts paths mn moduleImplHash nameHashes
   | otherwise = Nothing
   where
     nameCount = length nameHashes
-    reqs = parseDbpRequests opts
+    reqs = parseDbpRequests (projName paths) opts
     forced = M.member mn reqs
     seeds = M.findWithDefault Data.Set.empty mn reqs
     reason
@@ -3210,7 +3211,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
 
-    forcedDbpMods = M.keysSet (parseDbpRequests opts)
+    forcedDbpMods = M.keysSet (parseDbpRequests (projName rootPaths) opts)
 
     formatTaskKey k = tkProj k ++ ":" ++ modNameToString (tkMod k)
 
