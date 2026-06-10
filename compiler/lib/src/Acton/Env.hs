@@ -53,6 +53,8 @@ data EnvF x                 = EnvF {
                                 closedNames:: TEnv,
                                 hnames     :: HTEnv,
                                 closedHNames:: HTEnv,
+                                sigLocs    :: LocEnv,
+                                closedSigLocs:: LocEnv,
                                 activeStateNames:: [Name],
                                 closedStateNames:: [Name],
                                 imports    :: [ModName],
@@ -67,6 +69,7 @@ data EnvF x                 = EnvF {
                               } deriving (Show)
 
 type Env0                   = EnvF ()
+type LocEnv                 = M.HashMap Name SrcLoc
 
 -- activeNames may contain live unification variables; closedNames must not.
 -- hnames is the full active-over-closed lookup index, while closedHNames is
@@ -75,6 +78,7 @@ type Env0                   = EnvF ()
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { activeNames = activeNames env, closedNames = closedNames env,
                                      hnames = hnames env, closedHNames = closedHNames env,
+                                     sigLocs = sigLocs env, closedSigLocs = closedSigLocs env,
                                      activeStateNames = activeStateNames env,
                                      closedStateNames = closedStateNames env,
                                      imports = imports env, improots = improots env,
@@ -246,6 +250,8 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             closedNames = [(nPrim,NMAlias mPrim)],
                                             hnames = hnamesFrom [(nPrim,NMAlias mPrim)],
                                             closedHNames = hnamesFrom [(nPrim,NMAlias mPrim)],
+                                            sigLocs = M.empty,
+                                            closedSigLocs = M.empty,
                                             activeStateNames = [],
                                             closedStateNames = [],
                                             imports = [],
@@ -265,6 +271,8 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  closedNames = initialNames,
                                                  hnames = hnamesFrom initialNames,
                                                  closedHNames = hnamesFrom initialNames,
+                                                 sigLocs = M.empty,
+                                                 closedSigLocs = M.empty,
                                                  activeStateNames = [],
                                                  closedStateNames = [],
                                                  imports = [],
@@ -289,25 +297,35 @@ extendHNames                :: TEnv -> HTEnv -> HTEnv
 extendHNames te hte         = foldr add hte te
   where add (n,i) hte       = M.insert n (convNameInfo2HNameInfo i) hte
 
+extendSigLocs               :: TEnv -> LocEnv -> LocEnv
+extendSigLocs te locs       = foldr add locs te
+  where add (n, NSig{}) locs = M.insert n (loc n) locs
+        add _ locs          = locs
+
 stateNamesIn                :: TEnv -> [Name]
 stateNamesIn te             = [ n | (n, NSVar _) <- te ]
 
 setActiveNames              :: TEnv -> EnvF x -> EnvF x
 setActiveNames te env       = env{ activeNames = te,
                                    hnames = extendHNames te (closedHNames env),
+                                   sigLocs = extendSigLocs te (closedSigLocs env),
                                    activeStateNames = stateNamesIn te }
 
 addActiveNames              :: TEnv -> EnvF x -> EnvF x
 addActiveNames te env       = env{ activeNames = te ++ activeNames env,
                                    hnames = extendHNames te (hnames env),
+                                   sigLocs = extendSigLocs te (sigLocs env),
                                    activeStateNames = stateNamesIn te ++ activeStateNames env }
 
 addClosedNames              :: TEnv -> EnvF x -> EnvF x
 addClosedNames te env       = env{ closedNames = te ++ closedNames env,
                                    hnames = extendHNames (activeNames env) hte,
                                    closedHNames = hte,
+                                   sigLocs = extendSigLocs (activeNames env) slocs,
+                                   closedSigLocs = slocs,
                                    closedStateNames = stateNamesIn te ++ closedStateNames env }
   where hte                 = extendHNames te (closedHNames env)
+        slocs               = extendSigLocs te (closedSigLocs env)
 
 lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
 lookupName n env            = M.lookup n (hnames env)
@@ -434,12 +452,7 @@ tryQName (GName m n) env
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
 
-findSigLoc n env            = findSL (activeNames env) (closedNames env)
-    where findSL ((n',t):ps) rest
-             | NSig{} <- t, n==n' = Just (loc n')
-             | otherwise          = findSL ps rest
-          findSL [] []            = Nothing
-          findSL [] rest          = findSL rest []
+findSigLoc n env            = M.lookup n (sigLocs env)
 
 findDefLoc n env            = findSL (activeNames env) (closedNames env)
     where findSL ((n',t):ps) rest
