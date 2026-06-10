@@ -1402,20 +1402,15 @@ doImp spath env m            = do (env', mi, _) <- doImpSeen S.empty env m
               (env', seen'') <- subImpSeen seen' env (moduleImports mi)
               return (env', mi, seen'')
             Nothing -> do
-              ty <- readFoundTy InterfaceFiles.readFileMaybe m
-              case ty of
+              tyFile <- findTyFile spath m
+              mdb <- maybe (return Nothing) InterfaceFiles.openInterfaceDBMaybe tyFile
+              case mdb of
                 Nothing -> fileNotFound m
-                Just (ms,nmod,_,_,_,_,_,_,_,_,_,_,_) -> do
+                Just db -> do
+                  (ms, mdoc) <- InterfaceFiles.readInterfaceDBModuleInfo db
                   (env', seen'') <- subImpSeen seen' env ms
-                  let NModule ms' teFull mdoc = nmod
-                      mi = mkModuleInfo m ms' (publicTEnv teFull) mdoc
-                  return (addModuleInfo m mi (addMod m ms' (publicTEnv teFull) mdoc env'), mi, seen'')
-
-    readFoundTy readTy m = do
-      tyFile <- findTyFile spath m
-      case tyFile of
-        Nothing -> return Nothing
-        Just tyF -> readTy tyF
+                  let mi = mkTyFileModuleInfo m ms mdoc db
+                  return (addModuleInfo m mi env', mi, seen'')
 
     subImpSeen seen env []   = return (env, seen)
     subImpSeen seen env (m:ms) = do
