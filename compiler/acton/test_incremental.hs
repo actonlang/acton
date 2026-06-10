@@ -17,6 +17,7 @@ import           Data.List (elemIndex, find, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (fromMaybe, isJust)
 import           System.Directory
+import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
@@ -422,6 +423,16 @@ runActonIn cwd args = do
   (ec,out,err) <- readCreateProcessWithExitCode (proc actonExe args'){ cwd = Just cwd } ""
   pure (ec, T.pack out <> T.pack err)
 
+runActonInEnv :: [(String, String)] -> FilePath -> [String] -> IO (ExitCode, T.Text)
+runActonInEnv extraEnv cwd args = do
+  actonExe <- actonPath
+  env0 <- getEnvironment
+  let args' = args ++ ["--jobs", "1"]
+      keys = map fst extraEnv
+      env' = extraEnv ++ filter (\(k, _) -> k `notElem` keys) env0
+  (ec,out,err) <- readCreateProcessWithExitCode (proc actonExe args'){ cwd = Just cwd, env = Just env' } ""
+  pure (ec, T.pack out <> T.pack err)
+
 -- | Assert an exit success and include output on failure.
 assertExitSuccess :: String -> (ExitCode, T.Text) -> IO ()
 assertExitSuccess label (ec, out) =
@@ -453,6 +464,34 @@ buildOutInArgs proj args = do
   res@(ec, out) <- runActonIn proj (["build", "--color", "never", "--verbose"] ++ args)
   assertExitSuccess ("build in " ++ proj) res
   pure out
+
+buildTraceOutInArgs :: FilePath -> [String] -> IO T.Text
+buildTraceOutInArgs proj args = do
+  res@(ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj (["build", "--color", "never", "--verbose"] ++ args)
+  assertExitSuccess ("traced build in " ++ proj) res
+  pure out
+
+tydbTraceLines :: T.Text -> [T.Text]
+tydbTraceLines =
+  filter (T.isPrefixOf "tydb-read ") . T.lines
+
+traceLinesForTydb :: String -> T.Text -> [T.Text]
+traceLinesForTydb modName =
+  filter (T.isInfixOf (T.pack ("out/types/" ++ modName ++ ".tydb"))) . tydbTraceLines
+
+traceHasOp :: String -> [T.Text] -> Bool
+traceHasOp op =
+  any (T.isPrefixOf (T.pack ("tydb-read " ++ op ++ " ")))
+
+assertTraceHas :: String -> String -> [T.Text] -> IO ()
+assertTraceHas label op lines' =
+  assertBool (label ++ " missing tydb-read " ++ op ++ "\n" ++ T.unpack (T.unlines lines'))
+    (traceHasOp op lines')
+
+assertTraceLacks :: String -> String -> [T.Text] -> IO ()
+assertTraceLacks label op lines' =
+  assertBool (label ++ " unexpectedly had tydb-read " ++ op ++ "\n" ++ T.unpack (T.unlines lines'))
+    (not (traceHasOp op lines'))
 
 -- | Format a module label for output comparisons.
 modLabel :: FilePath -> String -> T.Text
@@ -1926,7 +1965,7 @@ p36_removed_dep_name_triggers_front_refresh =
 
 p37_impl_refresh_missing_dep_hashes_reruns_front :: TestTree
 p37_impl_refresh_missing_dep_hashes_reruns_front =
-  testCase "37-impl refresh missing dep hashes reruns front passes" $ do
+  testCase "37-missing dep rows rerun front passes" $ do
     let proj = casesProjDir
         src = casesSrcDir
         modMain = modLabel proj "main"
@@ -1971,8 +2010,8 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
       ]
     res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitSuccess "rebuild after impl refresh dep hash miss" res2
-    assertBool ("expected impl-refresh fallback log\n" ++ T.unpack out2)
-      (T.isInfixOf "impl refresh encountered unresolved dep hashes; rerunning front passes" out2)
+    assertBool ("expected missing dep-row fallback log\n" ++ T.unpack out2)
+      (T.isInfixOf "missing dep hashes in rows libfoo" out2)
     assertBool ("did not expect internal hash-missing diagnostic\n" ++ T.unpack out2)
       (not (T.isInfixOf "Hash info missing for libfoo.bar" out2))
     assertBool ("did not expect internal NoItem failure\n" ++ T.unpack out2)
@@ -2333,6 +2372,125 @@ p46_huge_module_skips_doc_output =
     assertBool "skipped module should not link to missing page"
       (not ("href=\"huge.html\"" `T.isInfixOf` index))
 
+p47_unchanged_dep_reads_module_hashes_only :: TestTree
+p47_unchanged_dep_reads_module_hashes_only =
+  testCase "47-unchanged dependency reads module hashes only" $ do
+    let proj = casesProjDir
+        modSmall = modLabel proj "small"
+    depDir <- ensureHashTraceProjects
+    writeHashTraceBig depDir "1" 30
+    writeHashTraceSmall
+    writeHashTraceMain
+    buildHashTraceDep depDir
+    buildHashTraceRoot
+    out <- buildTraceOutInArgs proj hashTraceBuildArgs
+    let bigTrace = traceLinesForTydb "big" out
+    assertTraceHas "big should be checked by module hash" "module-hashes" bigTrace
+    assertTraceLacks "big should not scan all name hashes" "name-hash-all" bigTrace
+    assertTraceLacks "big should not read a selected name hash" "name-hash" bigTrace
+    assertTraceLacks "big should not read a full interface" "all" bigTrace
+    assertBool ("did not expect small to type check when dependency hashes are unchanged\n" ++ T.unpack out)
+      (not (typechecked out modSmall))
+
+p48_unrelated_dep_addition_reads_used_name_only :: TestTree
+p48_unrelated_dep_addition_reads_used_name_only =
+  testCase "48-unrelated dependency addition reads used name only" $ do
+    let proj = casesProjDir
+        modSmall = modLabel proj "small"
+    depDir <- ensureHashTraceProjects
+    writeHashTraceBig depDir "1" 30
+    writeHashTraceSmall
+    writeHashTraceMain
+    buildHashTraceDep depDir
+    buildHashTraceRoot
+    writeHashTraceBig depDir "1" 31
+    buildHashTraceDep depDir
+    out <- buildTraceOutInArgs proj hashTraceBuildArgs
+    let bigTrace = traceLinesForTydb "big" out
+        smallTrace = traceLinesForTydb "small" out
+    assertTraceHas "small should read dependency-name rows" "dep-names" smallTrace
+    assertTraceLacks "small should not read dependency users for unchanged used names" "dep-users" smallTrace
+    assertTraceHas "big should read the used name hash" "name-hash" bigTrace
+    assertTraceLacks "big should not scan all name hashes" "name-hash-all" bigTrace
+    assertTraceLacks "big should not read a full interface" "all" bigTrace
+    assertBool ("did not expect small to type check when only an unused dependency name was added\n" ++ T.unpack out)
+      (not (typechecked out modSmall))
+
+p49_changed_dep_name_reads_users :: TestTree
+p49_changed_dep_name_reads_users =
+  testCase "49-changed dependency name reads users" $ do
+    let proj = casesProjDir
+        modSmall = modLabel proj "small"
+    depDir <- ensureHashTraceProjects
+    writeHashTraceBig depDir "1" 30
+    writeHashTraceSmall
+    writeHashTraceMain
+    buildHashTraceDep depDir
+    buildHashTraceRoot
+    writeHashTraceBig depDir "\"changed\"" 30
+    buildHashTraceDep depDir
+    out <- buildTraceOutInArgs proj hashTraceBuildArgs
+    let bigTrace = traceLinesForTydb "big" out
+        smallTrace = traceLinesForTydb "small" out
+    assertTraceHas "small should read dependency users for the changed name" "dep-users" smallTrace
+    assertTraceHas "big should read the changed name hash" "name-hash" bigTrace
+    assertBool ("expected small to type check when the used dependency name changes\n" ++ T.unpack out)
+      (typechecked out modSmall)
+
+ensureHashTraceProjects :: IO FilePath
+ensureHashTraceProjects = do
+  ensureCasesProject
+  depDir <- ensureDepProject casesProjDir "big"
+  pure depDir
+
+writeHashTraceBig :: FilePath -> T.Text -> Int -> IO ()
+writeHashTraceBig depDir usedResult unusedCount =
+  writeFileUtf8 (depDir </> "src" </> "big.act") $
+    T.unlines $
+      [ "def used():"
+      , "    return " <> usedResult
+      , ""
+      ]
+      ++ concatMap unusedDef [1 .. unusedCount]
+  where
+    unusedDef i =
+      [ T.pack ("def unused" ++ show i ++ "() -> int:")
+      , T.pack ("    return " ++ show i)
+      , ""
+      ]
+
+writeHashTraceSmall :: IO ()
+writeHashTraceSmall =
+  writeFileUtf8 (casesSrcDir </> "small.act") $ T.unlines
+    [ "import big"
+    , ""
+    , "def value():"
+    , "    return big.used()"
+    ]
+
+writeHashTraceMain :: IO ()
+writeHashTraceMain =
+  writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
+    [ "import small"
+    , ""
+    , "actor main(env: Env):"
+    , "    print(small.value())"
+    , "    env.exit(0)"
+    ]
+
+buildHashTraceRoot :: IO ()
+buildHashTraceRoot = do
+  res <- runActonIn casesProjDir (["build", "--color", "never"] ++ hashTraceBuildArgs)
+  assertExitSuccess "build hash trace root" res
+
+buildHashTraceDep :: FilePath -> IO ()
+buildHashTraceDep depDir = do
+  res <- runActonIn depDir ["build", "--color", "never", "--skip-build"]
+  assertExitSuccess "build dependency big" res
+
+hashTraceBuildArgs :: [String]
+hashTraceBuildArgs = ["--skip-build", "--searchpath", "deps/big/out/types"]
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2403,5 +2561,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p44_provider_import_rename_reruns_dependent_front
       , p45_tydb_records_local_name_dependencies
       , p46_huge_module_skips_doc_output
+      , p47_unchanged_dep_reads_module_hashes_only
+      , p48_unrelated_dep_addition_reads_used_name_only
+      , p49_changed_dep_name_reads_users
       ]
   ]

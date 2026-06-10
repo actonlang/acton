@@ -33,6 +33,7 @@ import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
 import Test.Syd
+import Test.Syd.Modify (sequential)
 import Test.Syd.Def.Golden (goldenTextFile)
 import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
@@ -146,7 +147,7 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
-    describe "InterfaceFiles" $ do
+    sequential $ describe "InterfaceFiles" $ do
       it "round-trips payloads and preserves ordered name entries" $ do
         withSystemTempDirectory "acton-iface" $ \dir -> do
           let mn = S.modName ["iface"]

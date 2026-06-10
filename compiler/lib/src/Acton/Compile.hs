@@ -958,9 +958,9 @@ getPubHashCached paths mn = modifyMVar pubHashCache $ \m -> do
       mty <- getTyFileCached (searchPath paths) mn
       case mty of
         Just ty -> do
-          hdr <- InterfaceFiles.readHeaderMaybe ty
-          case hdr of
-            Just (_sourceMetaH, _srcH, ih, _implH, _impsH, _depModulesH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
+          hashes <- InterfaceFiles.readModuleHashesMaybe ty
+          case hashes of
+            Just (_srcH, ih, _implH) -> return (M.insert mn ih m, Just ih)
             Nothing -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
@@ -978,9 +978,9 @@ getImplHashCached paths mn = modifyMVar implHashCache $ \m -> do
       mty <- getTyFileCached (searchPath paths) mn
       case mty of
         Just ty -> do
-          hdr <- InterfaceFiles.readHeaderMaybe ty
-          case hdr of
-            Just (_sourceMetaH, _srcH, _pubH, ih, _impsH, _depModulesH, _nameHashesH, _rootsH, _testsH, _docH) -> return (M.insert mn ih m, Just ih)
+          hashes <- InterfaceFiles.readModuleHashesMaybe ty
+          case hashes of
+            Just (_srcH, _pubH, ih) -> return (M.insert mn ih m, Just ih)
             Nothing -> return (m, Nothing)
         Nothing -> return (m, Nothing)
 
@@ -1013,6 +1013,19 @@ getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
               let hm = nameHashMapFromList (publicNameHashes nameHashes)
               return (M.insert mn hm m, Just hm)
             Nothing -> return (m, Nothing)
+        Nothing -> return (m, Nothing)
+
+-- | Read one cached name hash without decoding all per-name hash rows.
+getNameHashCached :: Paths -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
+getNameHashCached paths mn n = modifyMVar nameHashCache $ \m -> do
+  case M.lookup mn m of
+    Just hm -> return (m, M.lookup n hm)
+    Nothing -> do
+      mty <- getTyFileCached (searchPath paths) mn
+      case mty of
+        Just ty -> do
+          nh <- InterfaceFiles.readNameHashMaybe ty n
+          return (m, nh)
         Nothing -> return (m, Nothing)
 
 -- | Update the name-hash cache after a successful compile.
@@ -3412,31 +3425,41 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               Just depKey ->
                 case M.lookup depKey pubMap of
                   Just h  -> return (Just h)
-                  Nothing ->
-                    if M.member depKey taskMap
-                      then error ("Internal error: missing pub hash for dep " ++ modNameToString m)
-                      else getPubHashCached paths m
+                  Nothing
+                    | isBuiltinKey depKey -> getPubHashCached paths m
+                    | M.member depKey taskMap -> error ("Internal error: missing pub hash for dep " ++ modNameToString m)
+                    | otherwise -> getPubHashCached paths m
               Nothing -> getPubHashCached paths m
           resolveImportImplHash m =
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey implMap of
                   Just h  -> return (Just h)
-                  Nothing ->
-                    if M.member depKey taskMap
-                      then error ("Internal error: missing impl hash for dep " ++ modNameToString m)
-                      else getImplHashCached paths m
+                  Nothing
+                    | isBuiltinKey depKey -> getImplHashCached paths m
+                    | M.member depKey taskMap -> error ("Internal error: missing impl hash for dep " ++ modNameToString m)
+                    | otherwise -> getImplHashCached paths m
               Nothing -> getImplHashCached paths m
           resolveNameHashMap' m =
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey nameMap of
                   Just hm -> return (Just hm)
-                  Nothing ->
-                    if M.member depKey taskMap
-                      then error ("Internal error: missing name hashes for dep " ++ modNameToString m)
-                      else getNameHashMapCached paths m
+                  Nothing
+                    | isBuiltinKey depKey -> getNameHashMapCached paths m
+                    | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                    | otherwise -> getNameHashMapCached paths m
               Nothing -> getNameHashMapCached paths m
+          resolveNameHash' m n =
+            case M.lookup m providers of
+              Just depKey ->
+                case M.lookup depKey nameMap of
+                  Just hm -> return (M.lookup n hm)
+                  Nothing
+                    | isBuiltinKey depKey -> getNameHashCached paths m n
+                    | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
+                    | otherwise -> getNameHashCached paths m n
+              Nothing -> getNameHashCached paths m n
 
           missingNameHashDiagnostics qn =
             errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
@@ -3652,7 +3675,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           , pubH /= InterfaceFiles.dmiPubHash depInfo
                           , implH /= InterfaceFiles.dmiImplHash depInfo
                           )
-                  _ -> Left (missingIfaceDiagnostics mn "" depMn)
+                  _ ->
+                    -- Stale dep rows may mention a removed transitive provider;
+                    -- the per-name rows decide whether any used name is affected.
+                    Right (depMn, True, True)
 
               foldRows rows =
                 ( Data.Set.fromList [ depMn | (depMn, pubChanged, _implChanged) <- rows, pubChanged ]
@@ -3663,50 +3689,54 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             let changedMods =
                   Data.List.sortOn modNameToString $
                   Data.Set.toList (Data.Set.union changedPubMods changedImplMods)
-            foldM checkModule ([], [], [], [], M.empty, M.empty) changedMods
+            foldM checkModule ([], [], [], [], M.empty, M.empty, Data.Set.empty) changedMods
             where
               checkModule acc depMn = do
                 depNames <- InterfaceFiles.readDepNames tyFile depMn
-                mhm <- resolveNameHashMap' depMn
-                foldM (checkName depMn mhm) acc depNames
+                if null depNames
+                  then return (noteMissingRows depMn acc)
+                  else foldM (checkName depMn) acc depNames
 
-              checkName depMn mhm acc depInfo = do
+              noteMissingRows depMn acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods)
+                | Data.Set.member depMn changedPubMods || Data.Set.member depMn changedImplMods =
+                    (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, Data.Set.insert depMn rowMissingMods)
+                | otherwise = acc
+
+              checkName depMn acc depInfo = do
                 let depName = InterfaceFiles.dniName depInfo
                     qn = A.GName depMn depName
-                    current getHash =
-                      case mhm >>= M.lookup depName of
-                        Nothing -> Nothing
-                        Just info ->
-                          let h = getHash info
-                          in if B.null h then Nothing else Just h
+                    current getHash info =
+                      let h = getHash info
+                      in if B.null h then Nothing else Just h
                     checkPub = Data.Set.member depMn changedPubMods && not (B.null (InterfaceFiles.dniPubHash depInfo))
                     checkImpl = Data.Set.member depMn changedImplMods && not (B.null (InterfaceFiles.dniImplHash depInfo))
+                mInfo <- resolveNameHash' depMn depName
                 acc1 <- if checkPub
-                          then addPub depMn depName qn (InterfaceFiles.dniPubHash depInfo) (current InterfaceFiles.nhPubHash) acc
+                          then addPub depMn depName qn (InterfaceFiles.dniPubHash depInfo) (mInfo >>= current InterfaceFiles.nhPubHash) acc
                           else return acc
                 if checkImpl
-                  then addImpl depMn depName qn (InterfaceFiles.dniImplHash depInfo) (current InterfaceFiles.nhImplHash) acc1
+                  then addImpl depMn depName qn (InterfaceFiles.dniImplHash depInfo) (mInfo >>= current InterfaceFiles.nhImplHash) acc1
                   else return acc1
 
-              addPub depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) =
+              addPub depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
                 case mNew of
                   Just new | new == old -> return acc
                   Just new -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return ((qn, old, new) : pubDeltas, implDeltas, pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers)
+                    return ((qn, old, new) : pubDeltas, implDeltas, pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, rowMissingMods)
                   Nothing -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, qn : pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers)
+                    return (pubDeltas, implDeltas, qn : pubMissing, implMissing, M.insert qn (InterfaceFiles.duPubUsers users) pubUsers, implUsers, rowMissingMods)
 
-              addImpl depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) =
+              addImpl depMn depName qn old mNew acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
                 case mNew of
                   Just new | new == old -> return acc
                   Just new -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, (qn, old, new) : implDeltas, pubMissing, implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers)
+                    return (pubDeltas, (qn, old, new) : implDeltas, pubMissing, implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, rowMissingMods)
                   Nothing -> do
                     users <- InterfaceFiles.readDepUsers tyFile depMn depName
-                    return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers)
+                    return (pubDeltas, implDeltas, pubMissing, qn : implMissing, pubUsers, M.insert qn (InterfaceFiles.duImplUsers users) implUsers, rowMissingMods)
 
       case taskCurrent of
         ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
@@ -3745,18 +3775,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     Left diags -> return (Left diags)
                     Right (changedPubMods, changedImplMods) ->
                       if Data.Set.null changedPubMods && Data.Set.null changedImplMods
-                        then return (Right ([], [], [], [], M.empty, M.empty))
+                        then return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
                         else Right <$> checkDepNameRows changedPubMods changedImplMods
             -- Source tasks always run front passes, so deps are irrelevant.
-            _ -> return (Right ([], [], [], [], M.empty, M.empty))
+            _ -> return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
 
           case needByDepsRes of
             Left diags -> return (key, Left diags)
-            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers) -> do
+            Right (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) -> do
               let needBySource = case taskCurrent of { ParseTask{} -> True; ActonTask{} -> True; _ -> False }
                   -- Public deltas require front passes; impl deltas only need back jobs.
                   needByPub = not (null pubDeltas)
-                  needByMissing = not (null pubMissing) || not (null implMissing)
+                  needByMissing = not (null pubMissing) || not (null implMissing) || not (Data.Set.null rowMissingMods)
                   needByImpl = not (null implDeltas)
                   forceAlt    = altOutput optsT && mn == rootAlt
                   forceAlways = C.alwaysbuild optsT
@@ -3800,7 +3830,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                   [ "impl " ++ fmtMissing implUsers qn
                                   | qn <- Data.List.sortOn Hashing.qnameKey implMissing
                                   ]
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems))
+                                rowMissingItems =
+                                  [ "rows " ++ modNameToString depMn
+                                  | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
+                                  ]
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
                             _ -> materializeTask optsT sp mn actFile Nothing taskCurrent

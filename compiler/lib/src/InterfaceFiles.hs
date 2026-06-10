@@ -94,6 +94,8 @@ module InterfaceFiles
   , keyNameHash
   , readDepNames
   , readDepUsers
+  , readNameHashMaybe
+  , readModuleHashesMaybe
   , readFile
   , readHeader
   , readExtensionsByClass
@@ -132,7 +134,9 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
+import System.Environment (lookupEnv)
 import System.FilePath ((</>), takeExtension)
+import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
@@ -262,6 +266,16 @@ lmdbOpenLock = unsafePerformIO (newMVar ())
 interfaceLocks :: MVar (Map.Map FilePath (MVar ()))
 {-# NOINLINE interfaceLocks #-}
 interfaceLocks = unsafePerformIO (newMVar Map.empty)
+
+traceTydbReads :: Bool
+traceTydbReads =
+    unsafePerformIO $ maybe False (not . null) <$> lookupEnv "ACTON_TYDB_TRACE_READS"
+{-# NOINLINE traceTydbReads #-}
+
+traceTydbRead :: String -> FilePath -> String -> IO ()
+traceTydbRead op path detail =
+    when traceTydbReads $
+      hPutStrLn stderr (unwords ["tydb-read", op, path, detail])
 
 interfaceExists :: FilePath -> IO Bool
 interfaceExists = doesDirectoryExist
@@ -670,6 +684,13 @@ readMeta txn dbi = do
     validateVersion txn dbi
     getValue "meta" txn dbi keyMeta
 
+readModuleHashes :: FilePath -> IO (BS.ByteString, BS.ByteString, BS.ByteString)
+readModuleHashes f =
+    withReadTxn f $ \txn dbi -> do
+      (_sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
+      traceTydbRead "module-hashes" f "meta"
+      return (moduleSrcBytesHash, modulePubHash, moduleImplHash)
+
 readNameEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ([(A.Name, I.NameInfo)], [NameHashInfo])
 readNameEntries txn dbi = do
     te <- readNameInfoEntries txn dbi
@@ -927,6 +948,7 @@ readFile f =
       (te, nameHashes) <- readNameEntries txn dbi
       (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
       stmts <- readStmtEntries txn dbi
+      traceTydbRead "all" f ("names " ++ show (length te) ++ " stmts " ++ show (length stmts))
       let tmod = A.Module tmn timps tdoc stmts
           sourceImps = A.importsOf tmod
           nmod = I.NModule sourceImps te mdoc
@@ -945,20 +967,42 @@ readHeader f =
       tests <- getValue "tests" txn dbi keyTests
       doc <- getValue "doc" txn dbi keyDoc
       nameHashes <- readNameHashEntries txn dbi
+      traceTydbRead "header" f "cached"
+      traceTydbRead "name-hash-all" f (show (length nameHashes))
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
 
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      getValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
+      mDeps <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
+      let deps = maybe [] id mDeps
+      traceTydbRead "dep-names" f (Data.List.intercalate "." (A.modPath mn) ++ " " ++ show (length deps))
+      return deps
 
 readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
 readDepUsers f mn n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
       mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
+      traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr n)
       return (maybe emptyDepUsers id mUsers)
+
+readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
+readNameHash f n =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
+      traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.rawstr n)
+      return mInfo
+
+readNameHashMaybe :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
+readNameHashMaybe f n =
+    readNameHash f n `E.catch` tyCacheMiss
+
+readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS.ByteString))
+readModuleHashesMaybe =
+    readTyMaybe readModuleHashes
 
 readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByClass f n =
