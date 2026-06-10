@@ -67,16 +67,17 @@ data NameInfo           = NVar      Type
 typeDecl (_,NDef{})     = False
 typeDecl _              = True
 
-type HTEnv            =  M.HashMap Name HNameInfo
+type HAttrEnv         = M.HashMap Name NameInfo
+type HTEnv            = M.HashMap Name HNameInfo
 
 data HNameInfo          = HNVar      Type
                         | HNSVar     Type
                         | HNDef      TSchema Deco (Maybe String)
                         | HNSig      TSchema Deco (Maybe String)
-                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
-                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
-                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | HNAct      QBinds PosRow KwdRow TEnv HAttrEnv (Maybe String)
+                        | HNClass    QBinds [WTCon] TEnv HAttrEnv (Maybe String)
+                        | HNProto    QBinds [WTCon] TEnv HAttrEnv (Maybe String)
+                        | HNExt      QBinds TCon [WTCon] TEnv HAttrEnv [Name] (Maybe String)
                         | HNTVar     Kind CCon [PCon]
                         | HNAlias    QName
                         | HNMAlias   ModName
@@ -93,10 +94,10 @@ convNameInfo2HNameInfo (NVar t)               = HNVar t
 convNameInfo2HNameInfo (NSVar t)              = HNSVar t
 convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
 convNameInfo2HNameInfo (NSig sc dec mdoc)     = HNSig sc dec mdoc
-convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
-convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
-convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
-convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
+convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te (convTEnv2HAttrEnv $ notHidden te) mdoc
+convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te (convTEnv2HAttrEnv te) mdoc
+convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te (convTEnv2HAttrEnv te) mdoc
+convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te (convTEnv2HAttrEnv te) ns mdoc
 convNameInfo2HNameInfo (NTVar k c ps)         = HNTVar k c ps
 convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
 convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
@@ -108,14 +109,18 @@ convHNameInfo2NameInfo (HNVar t)               = NVar t
 convHNameInfo2NameInfo (HNSVar t)              = NSVar t
 convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
 convHNameInfo2NameInfo (HNSig sc dec mdoc)     = NSig sc dec mdoc
-convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
-convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
-convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
-convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
+convHNameInfo2NameInfo (HNAct q p k te _ mdoc) = NAct q p k te mdoc
+convHNameInfo2NameInfo (HNClass q ws te _ mdoc) = NClass q ws te mdoc
+convHNameInfo2NameInfo (HNProto q ws te _ mdoc) = NProto q ws te mdoc
+convHNameInfo2NameInfo (HNExt q tc ws te _ ns mdoc) = NExt q tc ws te ns mdoc
 convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
 convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
 convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
 convHNameInfo2NameInfo (HNReserved)            = NReserved
+
+-- Same duplicate-name semantics as findAttrInfoIn: later bindings win.
+convTEnv2HAttrEnv                    :: TEnv -> HAttrEnv
+convTEnv2HAttrEnv                     = M.fromList
 
 convTEnv2HTEnv                       :: TEnv -> HTEnv
 convTEnv2HTEnv te                     = M.fromList (map convPair te)

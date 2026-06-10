@@ -660,6 +660,27 @@ findConName n env           = case findQName n env of
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
+findConAttrInfo             :: EnvF x -> TCon -> Name -> Maybe NameInfo
+findConAttrInfo env (TC n ts) attr
+  | Just i <- M.lookup attr hte = Just $ subst i
+  | otherwise                   = Nothing
+  where (q, hte)                = findConHName n env
+        tvs                     = qbound q
+        s                       = tvs `zip` ts
+        subst i
+          | map tVar tvs == ts  = i
+          | otherwise           = vsubst s i
+
+findConHName                 :: QName -> EnvF x -> (QBinds, HAttrEnv)
+findConHName n env           = case tryQName n env of
+                                Just (HNAct q _ _ _ hte _)  -> (q, hte)
+                                Just (HNClass q _ _ hte _)  -> (q, hte)
+                                Just (HNProto q _ _ hte _)  -> (q, hte)
+                                Just (HNExt q _ _ _ hte _ _) -> (q, hte)
+                                Just HNReserved -> nameReserved n
+                                Just i -> err1 n ("findConName: Class or protocol name expected, got " ++ show (convHNameInfo2NameInfo i) ++ " --- ")
+                                Nothing -> err1 n "Unknown class or protocol name"
+
 conAttrs                    :: EnvF x -> QName -> [Name]
 conAttrs env qn             = dom te
   where (_,_,te)            = findConName qn env
@@ -679,8 +700,7 @@ parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c,
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = go (findAncestry env tc)
   where go []               = Nothing
-        go ((wp,c):cs)      = maybe (go cs) (attr wp) (findAttrInfoIn n te)
-          where (_,te)      = findCon env c
+        go ((wp,c):cs)      = maybe (go cs) (attr wp) (findConAttrInfo env c n)
         attr wp (NSig sc d _) = Just (wexpr wp, sc, Just d)
         attr wp (NDef sc d _) = Just (wexpr wp, sc, Just d)
         attr wp (NVar t)      = Just (wexpr wp, monotype t, Nothing)
@@ -690,8 +710,7 @@ findAttr env tc n           = go (findAncestry env tc)
 findAttrInfo'               :: EnvF x -> QName -> Name -> Maybe NameInfo
 findAttrInfo' env qn n      = go (([],tc) : us)
   where go []               = Nothing
-        go ((_,c):cs)       = maybe (go cs) Just (findAttrInfoIn n te)
-          where (_,_,te)    = findConName (tcname c) env
+        go ((_,c):cs)       = maybe (go cs) Just (findConAttrInfo env c n)
         (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
 
