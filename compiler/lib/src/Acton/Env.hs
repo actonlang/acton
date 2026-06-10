@@ -1015,8 +1015,16 @@ allProtos env               = allTypes isProto env
   where isProto NProto{}    = True
         isProto _           = False
 
+-- The module indexes record attributes where they are declared, so imported
+-- owners are completed with the descendants of every declaring constructor
+-- (inheriting an attribute means having a declaring ancestor).
 allConAttr                  :: EnvF x -> Name -> [TCon]
-allConAttr env n            = [ tc | tc <- allCons env, hasAttr env tc n ]
+allConAttr env n            = imported ++ [ tc | tc <- localCons env, hasAttr env tc n ]
+  where mis                 = importedModuleInfos env
+        conOwners           = concat [ moduleConAttr mi n | mi <- mis ]
+        protoOwners         = concat [ moduleProtoAttr mi n | mi <- mis ]
+        inherited           = concat [ moduleDescendants mi (tcname o) | o <- conOwners ++ protoOwners, mi <- mis ]
+        imported            = nubBy (\c c' -> tcname c == tcname c') (conOwners ++ inherited)
 
 allConAttrUFree             :: EnvF x -> Name -> [TUni]
 allConAttrUFree env n       = concat [ ufree sc | tc <- activeCons env, Just (_,sc,_) <- [findAttr env tc n] ]
@@ -1034,7 +1042,17 @@ activeCons env              = [ TC (localQName x) (wildargs i) | (x,i) <- active
           | otherwise       = NoQ x
 
 allPConAttr                 :: EnvF x -> Name -> [PCon]
-allPConAttr env n           = [ p | p <- allProtos env, hasAttr env p n ]
+allPConAttr env n           = imported ++ [ p | p <- localProtos env, hasAttr env p n ]
+  where mis                 = importedModuleInfos env
+        owners              = concat [ moduleProtoAttr mi n | mi <- mis ]
+        inherited           = concat [ moduleProtoDescendants mi (tcname o) | o <- owners, mi <- mis ]
+        imported            = nubBy (\p p' -> tcname p == tcname p') (owners ++ inherited)
+
+localProtos                 :: EnvF x -> [PCon]
+localProtos env             = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
+  where local te
+          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i@NProto{}) <- te ]
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i@NProto{}) <- te ]
 
 hasAttr                     :: EnvF x -> TCon -> Name -> Bool
 hasAttr env tc n            = maybe False (const True) (findAttrInfo' env (tcname tc) n)
