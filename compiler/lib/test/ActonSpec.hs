@@ -54,6 +54,7 @@ import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirecto
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist)
 import System.Posix.Files (setFileMode)
 import System.IO.Temp (withSystemTempDirectory)
+import qualified System.IO.Unsafe
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
@@ -855,8 +856,8 @@ main = do
             mdoc
             nmod
             tmod
-          (_env2, te) <- Acton.Env.doImp [dir] env1 directMod
-          map fst te `shouldBe` [valueName]
+          (_env2, mi) <- Acton.Env.doImp [dir] env1 directMod
+          map fst (Acton.Env.modulePublicTEnv mi) `shouldBe` [valueName]
 
     describe "Pass 1: Parser" $ do
 
@@ -1821,6 +1822,54 @@ main = do
           Right _ -> expectationFailure "Expected multiple type errors but type checking succeeded"
 
     describe "Import Semantics" $ do
+      it "selected imports only look up requested names" $ do
+        lookedUp <- newIORef []
+        let wanted = S.name "wanted"
+            unused = S.name "unused"
+            m = S.modName ["lazy_import"]
+            mi = Acton.Env.ModuleInfo {
+                    Acton.Env.moduleImports = [],
+                    Acton.Env.moduleDoc = Nothing,
+                    Acton.Env.moduleLookupHName = \n -> System.IO.Unsafe.unsafePerformIO $ do
+                      modifyIORef' lookedUp (++ [S.nstr n])
+                      if n == wanted
+                        then return (Just (I.HNVar S.tWild))
+                        else error ("unexpected import lookup: " ++ S.nstr n),
+                    Acton.Env.modulePublicNames = [unused, wanted],
+                    Acton.Env.moduleConstructors = [],
+                    Acton.Env.moduleActors = [],
+                    Acton.Env.moduleConAttr = const [],
+                    Acton.Env.moduleProtoAttr = const [],
+                    Acton.Env.moduleDescendants = const [],
+                    Acton.Env.moduleProtoDescendants = const [],
+                    Acton.Env.moduleWitnessesByProto = const [],
+                    Acton.Env.moduleWitnessesByType = const []
+                  }
+            env = Acton.Env.importSome [S.ImportItem wanted Nothing] m mi env0
+
+        case Acton.Env.lookupName wanted env of
+          Just (I.HNAlias qn) -> qn `shouldBe` S.GName m wanted
+          other -> expectationFailure $ "Expected selected import alias, got " ++ show other
+        readIORef lookedUp `shouldReturn` ["wanted"]
+
+      it "rejects selected imports of private names" $ do
+        (envA, parsedA) <- parseAct env0 "import_private_a"
+        kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA
+        let I.NModule impsA tenvA mdocA = nmodA
+            env1 = Acton.Env.addMod (S.modname parsedA) impsA tenvA mdocA env0
+
+        result <- liftIO $ (E.try (do
+          (envB, _) <- parseAct env1 "import_private_selected"
+          _ <- E.evaluate (Acton.Env.lookupName (S.name "__foo") envB)
+          pure ()
+          ) :: IO (Either CompilationError ()))
+
+        case result of
+          Left NoItem{} -> pure ()
+          Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
+          Right _ -> expectationFailure "Expected selected private import to fail"
+
       it "omits private names from the public interface" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA

@@ -443,7 +443,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles
                                                  qlevel = 0,
                                                  gtypes = [],
                                                  envX = () }
-                                    env = importAll mBuiltin envBuiltinPublic env0
+                                    env = importAll mBuiltin (mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring) env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
@@ -1350,24 +1350,24 @@ findTyFile spaths mn = go spaths
         else go ps
 
 -- | Import a module, loading its .tydb and extending the environment.
-doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, TEnv)
-doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
-                                  return (addImport m env', te)
+doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, ModuleInfo)
+doImp spath env m            = do (env', mi, _) <- doImpSeen S.empty env m
+                                  return (addImport m env', mi)
   where
     -- A cached module still needs its recorded import closure available in the
-    -- environment. If the module is already loaded, NModule carries that
-    -- closure; otherwise we read it from the .tydb.
+    -- environment. If the module is already loaded, its ModuleInfo carries
+    -- that closure; otherwise we read it from the .tydb.
     doImpSeen seen env m
       | S.member m seen      =
-          case lookupMod m env of
-            Just te -> return (env, te, seen)
+          case lookupModuleInfo m env of
+            Just mi -> return (env, mi, seen)
             Nothing -> fileNotFound m
       | otherwise            =
           let seen' = S.insert m seen in
-          case lookupModule m env of
-            Just (imps, te, _) -> do
-              (env', seen'') <- subImpSeen seen' env imps
-              return (env', te, seen'')
+          case lookupModuleInfo m env of
+            Just mi -> do
+              (env', seen'') <- subImpSeen seen' env (moduleImports mi)
+              return (env', mi, seen'')
             Nothing -> do
               ty <- readFoundTy InterfaceFiles.readFileMaybe m
               case ty of
@@ -1375,8 +1375,8 @@ doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
                 Just (ms,nmod,_,_,_,_,_,_,_,_,_,_,_) -> do
                   (env', seen'') <- subImpSeen seen' env ms
                   let NModule ms' teFull mdoc = nmod
-                      te = publicTEnv teFull
-                  return (addMod m ms' te mdoc env', te, seen'')
+                      mi = mkModuleInfo m ms' (publicTEnv teFull) mdoc
+                  return (addModuleInfo m mi (addMod m ms' (publicTEnv teFull) mdoc env'), mi, seen'')
 
     readFoundTy readTy m = do
       tyFile <- findTyFile spath m
@@ -1389,28 +1389,31 @@ doImp spath env m            = do (env', te, _) <- doImpSeen S.empty env m
       (env', _, seen') <- doImpSeen seen env m
       subImpSeen seen' env' ms
 
-importSome                  :: [ImportItem] -> ModName -> TEnv -> EnvF x -> EnvF x
-importSome items m te env   = defineClosed (map pick items) env
+importSome                  :: [ImportItem] -> ModName -> ModuleInfo -> EnvF x -> EnvF x
+importSome items m mi env   = defineClosed (map pick items) env
   where
-    te1                     = impNames m te
-    pick (ImportItem n mbn) = case lookup n te1 of
+    pick (ImportItem n mbn) = case impName m mi n of
                                     Just i  -> (maybe n id mbn, i)
                                     Nothing -> noItem m n
 
-importAll                   :: ModName -> TEnv -> EnvF x -> EnvF x
-importAll m te env          = defineClosed (impNames m te) env
+importAll                   :: ModName -> ModuleInfo -> EnvF x -> EnvF x
+importAll m mi env          = defineClosed (impNames m mi) env
 
-impNames                    :: ModName -> TEnv -> TEnv
-impNames m te               = mapMaybe imp (publicTEnv te)
+impName                     :: ModName -> ModuleInfo -> Name -> Maybe NameInfo
+impName m mi n              = case moduleLookupName mi n of
+                                Just NAct{}   -> Just (NAlias (GName m n))
+                                Just NClass{} -> Just (NAlias (GName m n))
+                                Just NProto{} -> Just (NAlias (GName m n))
+                                Just NExt{}   -> Nothing
+                                Just NAlias{} -> Just (NAlias (GName m n))
+                                Just NVar{}   -> Just (NAlias (GName m n))
+                                Just NDef{}   -> Just (NAlias (GName m n))
+                                _             -> Nothing
+
+impNames                    :: ModName -> ModuleInfo -> TEnv
+impNames m mi               = mapMaybe imp (modulePublicNames mi)
   where
-    imp (n, NAct _ _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NClass _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NProto _ _ _ _)   = Just (n, NAlias (GName m n))
-    imp (n, NExt _ _ _ _ _ _) = Nothing
-    imp (n, NAlias _)       = Just (n, NAlias (GName m n))
-    imp (n, NVar t)         = Just (n, NAlias (GName m n))
-    imp (n, NDef t d _)       = Just (n, NAlias (GName m n))
-    imp _                   = Nothing                               -- cannot happen
+    imp n                   = fmap (\i -> (n,i)) (impName m mi n)
 
 
 
