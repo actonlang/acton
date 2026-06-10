@@ -338,11 +338,11 @@ instance Unalias ModName where
       | inBuiltin env               = m
       | otherwise                   = case lookupName (head ns) env of
                                         Just (HNMAlias m') -> m'
-                                        Nothing | m `elem` (mPrim:mBuiltin:imports env)  -> m
+                                        Nothing | m `elem` (mPrim:mBuiltin:imports env) || modulePrefix m env -> m
                                         _ -> noModule m
 instance Unalias QName where
-    unalias env n0@(QName m n)      = case findHMod m env of
-                                        Just te -> case M.lookup n te of
+    unalias env n0@(QName m n)      = case findModuleInfo m env of
+                                        Just mi -> case moduleLookupHName mi n of
                                                       Just (HNAlias qn) -> setLoc (loc n0) qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
@@ -637,8 +637,8 @@ findQName n env             = case tryQName n env of
                                  Nothing -> nameNotFound (noq n)
 
 tryQName                    :: QName -> EnvF x -> Maybe HNameInfo
-tryQName (QName m n) env    = case findHMod m env of
-                                Just te -> case M.lookup n te of
+tryQName (QName m n) env    = case findModuleInfo m env of
+                                Just mi -> case moduleLookupHName mi n of
                                     Just (HNAlias qn) -> tryQName qn env
                                     Just i -> Just i
                                     _ -> noItem m n
@@ -651,8 +651,8 @@ tryQName (GName m n) env
   | Just m == thismod env   = tryQName (NoQ n) env
   | inBuiltin env,
     m==mBuiltin             = tryQName (NoQ n) env
-  | otherwise               = case lookupHMod m env of
-                                Just te -> case M.lookup n te of
+  | otherwise               = case lookupModuleInfo m env of
+                                Just mi -> case moduleLookupHName mi n of
                                     Just i -> Just i
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
@@ -705,6 +705,13 @@ lookupModuleInfo m env
                             = Just (builtinModuleInfo env)
   | otherwise               = Map.lookup m (moduleInfos env)
 
+-- A parent package of a loaded module is itself a valid module path prefix,
+-- which the old NModule tree represented implicitly.
+modulePrefix                :: ModName -> EnvF x -> Bool
+modulePrefix (ModName ns) env
+                            = any prefix (Map.keys (moduleInfos env))
+  where prefix (ModName ns')= ns `isPrefixOf` ns'
+
 -- The builtin module is looked up through the active environment while it is
 -- itself being compiled.
 builtinModuleInfo           :: EnvF x -> ModuleInfo
@@ -726,7 +733,7 @@ lookupModule (ModName ns) env   = f ns (modules env)
 
 
 isMod                       :: EnvF x -> [Name] -> Bool
-isMod env ns@(n:_)          = maybe False (const True) (findHMod (ModName ns) env) && rooted
+isMod env ns@(n:_)          = (maybe False (const True) (findModuleInfo (ModName ns) env) || modulePrefix (ModName ns) env) && rooted
   where rooted              = n `elem` improots env || isMAlias n env
 
 isMAlias                    :: Name -> EnvF x -> Bool
@@ -966,7 +973,7 @@ transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env)
   where trav seen m
           | m `elem` seen   = seen
           | otherwise       = m : foldl trav seen ms
-          where ms          = case lookupModule m env of Just (imps,_,_) -> imps
+          where ms          = case lookupModuleInfo m env of Just mi -> moduleImports mi
 
 allTypes                    :: (NameInfo -> Bool) -> EnvF x -> [TCon]
 allTypes select env         = concatMap impcons mods ++ localcons
