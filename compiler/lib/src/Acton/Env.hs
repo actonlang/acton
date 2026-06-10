@@ -113,26 +113,23 @@ inLoop env                  = contextIs env CtxLoop
 
 setGtypes env te             = env{ gtypes = te }
 
-mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
-mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
+-- Back passes rewrite imported interface entries. The conversion wraps each
+-- module's lookup function, so only names that are actually demanded are
+-- converted (and memoized). sources maps a generated name to the source
+-- entries it may be derived from.
+convertModules1             :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> Env0
+convertModules1 f env       = convertModules (const []) (\_ ni -> [f ni]) env
 
-mapModules                  :: (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-mapModules f env            = env' { hmodules = convTEnv2HTEnv mods', moduleInfos = Map.mapWithKey conv (moduleInfos env) }
- where env'                 = env { modules = mods' }
-       prim : mods          = modules env
-       mods'                = prim : walk [] mods
-
-       walk ns              = concatMap (go ns)
-
-       go ns (n, NModule ms te doc)
-                            = [(n, NModule ms (walk (ns ++ [n]) te) doc)]
-       go ns ni             = f (ModName ns) ni
-
-       conv m mi
-         | m == mPrim       = mi
-         | otherwise        = case lookupMod m env' of
-                                Just te -> mkModuleInfo m (moduleImports mi) te (moduleDoc mi)
-                                Nothing -> mi
+convertModules              :: (Name -> [Name]) -> (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
+convertModules sources f env= env{ moduleInfos = Map.mapWithKey convMod (moduleInfos env) }
+  where convMod m mi
+          | m == mPrim      = mi
+          | otherwise       = mi{ moduleLookupHName = memoLookup lookupConverted }
+          where lookupConverted n
+                            = listToMaybe $ mapMaybe (lookupFrom n) (n : sources n)
+                lookupFrom n src
+                            = do i <- moduleLookupName mi src
+                                 lookup n (f m (src,i)) >>= return . convNameInfo2HNameInfo
 
 
 -- Module interfaces -----------------------------------------------------------------------------

@@ -238,8 +238,11 @@ fixupSelf s                             = s
 
 -- Convert a TEnv -------------------------------------------------------------------------------------------
 
-convEnvProtos env                       = mapModules conv env
+convEnvProtos env                       = convertModules convSources conv env
   where
+    convSources (Derived _ n)           = [n]
+    convSources _                       = []
+
     conv m (n, NDef sc d doc)           = [(n, NDef (convS sc) d doc)]
     conv m (n, NSig sc d doc)           = [(n, NSig (convS sc) d doc)]
     conv m (n, NAct q p k te doc)       = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv m) te) doc)]
