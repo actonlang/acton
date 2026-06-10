@@ -239,8 +239,7 @@ witsByTName env tn              = uniqueWits env $ locals ++ imported
         imported                = concat [ moduleWitnessesByType mi qn | mi <- importedModuleInfos env, qn <- queryQNames env tn ]
 
 -- Witnesses read from interfaces may name the same protocol or type in
--- aliased and unaliased form, so queries try both and results are deduped
--- under unaliasing.
+-- aliased and unaliased form, so queries try both forms.
 queryQNames                     :: Env -> QName -> [QName]
 queryQNames env qn
   | qn' == qn                   = [qn]
@@ -252,8 +251,7 @@ uniqueWits env                  = reverse . foldl' add []
   where add ws w
           | any (same w) ws     = ws
           | otherwise           = w : ws
-        same w w'               = tcname (unalias env $ proto w) == tcname (unalias env $ proto w') &&
-                                  unalias env (wtype w) == unalias env (wtype w')
+        same w w'               = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env

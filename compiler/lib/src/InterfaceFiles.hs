@@ -151,6 +151,7 @@ import qualified Data.List
 import Data.List (foldl')
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
@@ -1128,12 +1129,12 @@ depIndexEntries depModules nameHashes =
       where
         addToEntry Nothing =
           if isPub
-            then (Just h, Nothing, [owner], [])
-            else (Nothing, Just h, [], [owner])
+            then (Just h, Nothing, Set.singleton owner, Set.empty)
+            else (Nothing, Just h, Set.empty, Set.singleton owner)
         addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
           if isPub
-            then (Just h, implH, owner : pubUsers, implUsers)
-            else (pubH, Just h, pubUsers, owner : implUsers)
+            then (Just h, implH, Set.insert owner pubUsers, implUsers)
+            else (pubH, Just h, pubUsers, Set.insert owner implUsers)
 
     depMap =
       foldl' addInfo Map.empty nameHashes
@@ -1158,7 +1159,7 @@ depIndexEntries depModules nameHashes =
             ]
       ]
 
-    cleanNames = Data.List.sortOn nameKey . Data.List.nub
+    cleanNames = Data.List.sortOn nameKey . Set.toList
 
     userRows =
       sortUserRows

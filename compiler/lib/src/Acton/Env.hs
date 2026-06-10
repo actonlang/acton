@@ -744,7 +744,9 @@ allDescendants env tc       = concatMap imported (importedModuleInfos env) ++ lo
         local               = [ schematic' c | c <- localCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
 importedModuleInfos         :: EnvF x -> [ModuleInfo]
-importedModuleInfos env     = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
+importedModuleInfos env
+  | inBuiltin env           = []
+  | otherwise               = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
 
 localCons                   :: EnvF x -> [TCon]
 localCons env               = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
