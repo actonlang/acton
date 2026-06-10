@@ -1798,11 +1798,12 @@ libraryTaskGroups projMap globalTasks =
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
     , let keys = [ gtKey t
                  | modName <- BuildSpec.libModules lib
-                 , let mn = moduleStringToName modName
+                 , let mn = moduleStringToName (proj ++ "." ++ modName)
                  , t <- globalTasks
                  , tkMod (gtKey t) == mn
                  , taskInProject ctx t
                  ]
+          proj = BuildSpec.specName $ projBuildSpec ctx
     , not (null keys)
     ]
   where
