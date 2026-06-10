@@ -53,6 +53,8 @@ data EnvF x                 = EnvF {
                                 closedNames:: TEnv,
                                 hnames     :: HTEnv,
                                 closedHNames:: HTEnv,
+                                activeStateNames:: [Name],
+                                closedStateNames:: [Name],
                                 imports    :: [ModName],
                                 improots   :: [Name],
                                 modules    :: TEnv,
@@ -73,6 +75,8 @@ type Env0                   = EnvF ()
 setX                        :: EnvF y -> x -> EnvF x
 setX env x                  = EnvF { activeNames = activeNames env, closedNames = closedNames env,
                                      hnames = hnames env, closedHNames = closedHNames env,
+                                     activeStateNames = activeStateNames env,
+                                     closedStateNames = closedStateNames env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
@@ -242,6 +246,8 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             closedNames = [(nPrim,NMAlias mPrim)],
                                             hnames = hnamesFrom [(nPrim,NMAlias mPrim)],
                                             closedHNames = hnamesFrom [(nPrim,NMAlias mPrim)],
+                                            activeStateNames = [],
+                                            closedStateNames = [],
                                             imports = [],
                                             improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
@@ -259,6 +265,8 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  closedNames = initialNames,
                                                  hnames = hnamesFrom initialNames,
                                                  closedHNames = hnamesFrom initialNames,
+                                                 activeStateNames = [],
+                                                 closedStateNames = [],
                                                  imports = [],
                                                  improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
@@ -281,14 +289,24 @@ extendHNames                :: TEnv -> HTEnv -> HTEnv
 extendHNames te hte         = foldr add hte te
   where add (n,i) hte       = M.insert n (convNameInfo2HNameInfo i) hte
 
+stateNamesIn                :: TEnv -> [Name]
+stateNamesIn te             = [ n | (n, NSVar _) <- te ]
+
 setActiveNames              :: TEnv -> EnvF x -> EnvF x
-setActiveNames te env       = env{ activeNames = te, hnames = extendHNames te (closedHNames env) }
+setActiveNames te env       = env{ activeNames = te,
+                                   hnames = extendHNames te (closedHNames env),
+                                   activeStateNames = stateNamesIn te }
 
 addActiveNames              :: TEnv -> EnvF x -> EnvF x
-addActiveNames te env       = env{ activeNames = te ++ activeNames env, hnames = extendHNames te (hnames env) }
+addActiveNames te env       = env{ activeNames = te ++ activeNames env,
+                                   hnames = extendHNames te (hnames env),
+                                   activeStateNames = stateNamesIn te ++ activeStateNames env }
 
 addClosedNames              :: TEnv -> EnvF x -> EnvF x
-addClosedNames te env       = env{ closedNames = te ++ closedNames env, hnames = extendHNames (activeNames env) hte, closedHNames = hte }
+addClosedNames te env       = env{ closedNames = te ++ closedNames env,
+                                   hnames = extendHNames (activeNames env) hte,
+                                   closedHNames = hte,
+                                   closedStateNames = stateNamesIn te ++ closedStateNames env }
   where hte                 = extendHNames te (closedHNames env)
 
 lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
@@ -373,8 +391,7 @@ inBuiltin                   :: EnvF x -> Bool
 inBuiltin env               = length (modules env) == 1     -- mPrim only
 
 stateScope                  :: EnvF x -> [Name]
-stateScope env              = scopes (activeNames env) ++ scopes (closedNames env)
-  where scopes te           = [ z | (z, NSVar _) <- te ]
+stateScope env              = activeStateNames env ++ closedStateNames env
 
 quantScope0                 :: EnvF x -> QBinds
 quantScope0 env             = [ QBind (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- activeNames env ]
