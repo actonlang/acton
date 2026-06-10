@@ -60,6 +60,7 @@ data EnvF x                 = EnvF {
                                 activeStateNames:: [Name],
                                 closedStateNames:: [Name],
                                 activeTypeVars:: [(Name, Kind, CCon)],
+                                closedTypeVars:: [(Name, Kind, CCon)],
                                 imports    :: [ModName],
                                 improots   :: [Name],
                                 modules    :: TEnv,
@@ -86,6 +87,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      activeStateNames = activeStateNames env,
                                      closedStateNames = closedStateNames env,
                                      activeTypeVars = activeTypeVars env,
+                                     closedTypeVars = closedTypeVars env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
@@ -262,6 +264,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             activeStateNames = [],
                                             closedStateNames = [],
                                             activeTypeVars = [],
+                                            closedTypeVars = [],
                                             imports = [],
                                             improots = [],
                                             modules = [(nPrim,NModule [] primEnv Nothing)],
@@ -286,6 +289,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  activeStateNames = [],
                                                  closedStateNames = [],
                                                  activeTypeVars = [],
+                                                 closedTypeVars = [],
                                                  imports = [],
                                                  improots = [],
                                                  modules = [(nPrim,NModule [] primEnv Nothing), (nBuiltin,NModule [] envBuiltin builtinDocstring)],
@@ -348,7 +352,8 @@ addClosedNames te env       = env{ closedNames = te ++ closedNames env,
                                    closedSigLocs = slocs,
                                    defLocs = extendDefLocs (activeNames env) dlocs,
                                    closedDefLocs = dlocs,
-                                   closedStateNames = stateNamesIn te ++ closedStateNames env }
+                                   closedStateNames = stateNamesIn te ++ closedStateNames env,
+                                   closedTypeVars = typeVarsIn te ++ closedTypeVars env }
   where hte                 = extendHNames te (closedHNames env)
         slocs               = extendSigLocs te (closedSigLocs env)
         dlocs               = extendDefLocs te (closedDefLocs env)
@@ -436,6 +441,20 @@ inBuiltin env               = length (modules env) == 1     -- mPrim only
 
 stateScope                  :: EnvF x -> [Name]
 stateScope env              = activeStateNames env ++ closedStateNames env
+
+typeScope                   :: EnvF x -> [TVar]
+typeScope env               = tvs (activeTypeVars env) ++ tvs (closedTypeVars env)
+  where tvs xs              = [ TV k n | (n, k, _) <- xs ]
+
+lookupTypeVarKind           :: TVar -> EnvF x -> Maybe Kind
+lookupTypeVarKind (TV _ n) env
+                            = findKind (activeTypeVars env) `orElse` findKind (closedTypeVars env)
+  where findKind []         = Nothing
+        findKind ((n', k, _) : xs)
+          | n == n'         = Just k
+          | otherwise       = findKind xs
+        orElse (Just k) _   = Just k
+        orElse Nothing mk   = mk
 
 quantScope0                 :: EnvF x -> QBinds
 quantScope0 env             = [ QBind (TV k n) (if c==cValue then ps else (c:ps)) | (n, NTVar k c ps) <- activeNames env ]
