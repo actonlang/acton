@@ -685,6 +685,10 @@ conAttrs                    :: EnvF x -> QName -> [Name]
 conAttrs env qn             = dom te
   where (_,_,te)            = findConName qn env
 
+conHasAttr                  :: EnvF x -> QName -> Name -> Bool
+conHasAttr env qn n         = M.member n hte
+  where (_, hte)            = findConHName qn env
+
 attributes                  :: (WPath -> NameInfo -> Name -> Maybe a) -> EnvF x -> TCon -> [a]
 attributes f env tc         = catMaybes [ f wp i n | n <- ns, let Just (wp,i) = lookup n aenv ]
   where ns                  = nub $ reverse $ dom aenv                                                                                  -- in offset order
