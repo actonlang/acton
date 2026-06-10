@@ -923,6 +923,12 @@ implHashCache = unsafePerformIO (newMVar M.empty)
 nameHashCache :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))
 nameHashCache = unsafePerformIO (newMVar M.empty)
 
+-- | Per-name results of targeted name-hash reads. Kept apart from
+-- nameHashCache, whose per-module maps must stay complete.
+{-# NOINLINE nameHashOneCache #-}
+nameHashOneCache :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))
+nameHashOneCache = unsafePerformIO (newMVar M.empty)
+
 -- | Resolve the on-disk .tydb path for a module, using a process-wide cache.
 -- Avoids repeated filesystem walks when many modules share dependencies.
 getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
@@ -1017,21 +1023,26 @@ getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
 
 -- | Read one cached name hash without decoding all per-name hash rows.
 getNameHashCached :: Paths -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
-getNameHashCached paths mn n = modifyMVar nameHashCache $ \m -> do
+getNameHashCached paths mn n = do
+  m <- readMVar nameHashCache
   case M.lookup mn m of
-    Just hm -> return (m, M.lookup n hm)
-    Nothing -> do
-      mty <- getTyFileCached (searchPath paths) mn
-      case mty of
-        Just ty -> do
-          nh <- InterfaceFiles.readNameHashMaybe ty n
-          return (m, nh)
-        Nothing -> return (m, Nothing)
+    Just hm -> return (M.lookup n hm)
+    Nothing -> modifyMVar nameHashOneCache $ \c ->
+      case M.lookup (mn, n) c of
+        Just r -> return (c, r)
+        Nothing -> do
+          mty <- getTyFileCached (searchPath paths) mn
+          r <- case mty of
+                 Just ty -> InterfaceFiles.readNameHashMaybe ty n
+                 Nothing -> return Nothing
+          return (M.insert (mn, n) r c, r)
 
--- | Update the name-hash cache after a successful compile.
+-- | Update the name-hash cache after a successful compile. Cached modules
+-- carry no name hashes; their entries must not shadow targeted reads.
 updateNameHashCache :: A.ModName -> [InterfaceFiles.NameHashInfo] -> IO ()
 updateNameHashCache mn infos =
-  modifyMVar_ nameHashCache $ \m -> return (M.insert mn (nameHashMapFromList infos) m)
+  when (not (null infos)) $
+    modifyMVar_ nameHashCache $ \m -> return (M.insert mn (nameHashMapFromList infos) m)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
