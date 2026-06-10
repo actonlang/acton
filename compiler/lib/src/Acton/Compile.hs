@@ -1553,7 +1553,9 @@ resolveProviders key proj order modSets imps = --trace ("#### resolveProviders "
           | Data.Set.member mn' mods0
                         = Just (mn, TaskKey p0 mn')
           | otherwise   = listToMaybe [ (mn, TaskKey p mn) | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
-          where mn'     = if proj `elem` ["","base"] then mn else A.modName (proj : A.modPath mn)
+          where mn'     = if proj `elem` special_projects then mn else A.modName (proj : A.modPath mn)
+
+special_projects = ["", "base", "acton_scratch"]
 
 type ProjDir = FilePath
 type ActFile = FilePath
@@ -4622,7 +4624,7 @@ moduleNameFromFile srcBase proj actFile = do
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-        mn = A.modName $ if proj `elem` ["","base"] then names else proj:names
+        mn = A.modName $ if proj `elem` special_projects then names else proj:names
     --traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
     return mn
 
