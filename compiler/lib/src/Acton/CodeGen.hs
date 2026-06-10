@@ -732,7 +732,7 @@ allClasses env                      = active ++ closed ++ mods
         closed                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- closedNames env ]
         -- modulePublicTEnv resolves through each module's lookup function, so
         -- entries rewritten by earlier passes are seen in converted form.
-        mods                        = [ (GName m n, q) | (m, mi) <- Map.toList (moduleInfos env),
+        mods                        = [ (GName m n, q) | (m, mi) <- Map.toList (modules env),
                                                          (n, NClass q _ _ _) <- modulePublicTEnv mi ]
 
 nullConArgs env qn                  = case findQName qn env of
