@@ -2007,11 +2007,12 @@ runCliPostCompile cliHooks gopts plan env = do
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         sysRoot = addTrailingPathSeparator sysAbs
+        proj = projName pathsRoot
     rootSpec <- case M.lookup rootProj projMap of
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = init rootParts
+        rootMod   = if null proj then init rootParts else proj : init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
