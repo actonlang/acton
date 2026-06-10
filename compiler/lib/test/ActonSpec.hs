@@ -208,6 +208,67 @@ main = do
           testsH `shouldBe` tests
           docH `shouldBe` Just "module docs"
 
+      it "reads module query indexes independently" $ do
+        withSystemTempDirectory "acton-iface-indexes" $ \dir -> do
+          let mn = S.modName ["iface_indexes"]
+              tyPath = dir </> "iface_indexes.tydb"
+              clsName = S.name "Cls"
+              parentName = S.name "Parent"
+              childName = S.name "Child"
+              actorName = S.name "Worker"
+              protoName = S.name "Proto"
+              subProtoName = S.name "SubProto"
+              extName = S.name "Ext"
+              classAttr = S.name "class_attr"
+              actorAttr = S.name "actor_attr"
+              protoAttr = S.name "proto_attr"
+              clsTC = S.TC (S.NoQ clsName) []
+              parentTC = S.TC (S.NoQ parentName) []
+              protoTC = S.TC (S.NoQ protoName) []
+              iface =
+                [ (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
+                , (parentName, I.NClass [] [] [] Nothing)
+                , (childName, I.NClass [] [([], parentTC)] [] Nothing)
+                , (actorName, I.NAct [] S.posNil S.kwdNil [(actorAttr, I.NVar S.tWild)] Nothing)
+                , (protoName, I.NProto [] [] [(protoAttr, I.NVar S.tWild)] Nothing)
+                , (subProtoName, I.NProto [] [([], protoTC)] [] Nothing)
+                , (extName, I.NExt [] clsTC [([], protoTC)] [] [] Nothing)
+                ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+              names = sort . map fst
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
+              InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
+              InterfaceFiles.readInterfaceDBPublicNames db `shouldReturn` map fst iface
+              names <$> InterfaceFiles.readInterfaceDBConstructors db `shouldReturn` sort [actorName, childName, clsName, parentName, protoName, subProtoName]
+              names <$> InterfaceFiles.readInterfaceDBActors db `shouldReturn` [actorName]
+              names <$> InterfaceFiles.readInterfaceDBConAttr db classAttr `shouldReturn` [clsName]
+              names <$> InterfaceFiles.readInterfaceDBConAttr db actorAttr `shouldReturn` [actorName]
+              names <$> InterfaceFiles.readInterfaceDBProtoAttr db protoAttr `shouldReturn` [protoName]
+              names <$> InterfaceFiles.readInterfaceDBDescendants db (S.NoQ parentName) `shouldReturn` [childName]
+              names <$> InterfaceFiles.readInterfaceDBDescendants db (S.NoQ protoName) `shouldReturn` [subProtoName]
+              names <$> InterfaceFiles.readInterfaceDBExtByProto db (S.NoQ protoName) `shouldReturn` [extName]
+              names <$> InterfaceFiles.readInterfaceDBExtByType db (S.NoQ clsName) `shouldReturn` [extName]
+              fst <$> InterfaceFiles.readInterfaceDBModuleInfo db `shouldReturn` [])
+
+      it "serves fresh data through a handle across rewrites" $ do
+        withSystemTempDirectory "acton-iface-rewrite" $ \dir -> do
+          let mn = S.modName ["iface_rewrite"]
+              tyPath = dir </> "iface_rewrite.tydb"
+              vName = S.name "v"
+              wName = S.name "w"
+              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+          write [(vName, I.NVar S.tWild)]
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
+          -- Rewriting the same path retires the shared environment; reads
+          -- through the existing handle must observe the new contents.
+          write [(wName, I.NVar S.tWild)]
+          InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Nothing
+          fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db wName `shouldReturn` Just wName
+
       it "supports concurrent read-only access to one interface" $ do
         withSystemTempDirectory "acton-iface-concurrent" $ \dir -> do
           let mn = S.modName ["iface"]

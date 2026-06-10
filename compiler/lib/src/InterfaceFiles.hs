@@ -41,6 +41,9 @@
 --     "tests"          :: [String]                    -- discovered test names
 --     "doc"            :: Maybe String                -- module docstring
 --     "name-count"     :: Int                         -- number of NameInfo entries (see name-order)
+--     "public-names"   :: [A.Name]                    -- public top-level names, in TEnv order
+--     "constructors"   :: [A.Name]                    -- public class/protocol/actor names
+--     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
@@ -57,6 +60,13 @@
 --   Per-extension keys:
 --     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
 --     "ext-by-protocol/<suffix>"    :: (A.Name, [A.Name]) -- protocol name to extension names
+--
+--   Per-query index keys:
+--     "con-attr/<suffix>"     :: [A.Name]             -- class/actor names declaring an attribute
+--     "proto-attr/<suffix>"   :: [A.Name]             -- protocol names declaring an attribute
+--     "descendants/<suffix>"  :: [A.Name]             -- class/protocol names below a constructor
+--     "ext-proto/<suffix>"    :: [A.Name]             -- extension names implementing a protocol
+--     "ext-type/<suffix>"     :: [A.Name]             -- extension names for a type/class
 --
 --   Per-statement keys (typed Module body):
 --     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
@@ -83,6 +93,7 @@ module InterfaceFiles
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
+  , InterfaceDB
   , interfaceExt
   , interfacePath
   , interfaceExists
@@ -102,6 +113,17 @@ module InterfaceFiles
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
+  , openInterfaceDB
+  , readInterfaceDBModuleInfo
+  , readInterfaceDBNameInfoMaybe
+  , readInterfaceDBPublicNames
+  , readInterfaceDBConstructors
+  , readInterfaceDBActors
+  , readInterfaceDBConAttr
+  , readInterfaceDBProtoAttr
+  , readInterfaceDBDescendants
+  , readInterfaceDBExtByProto
+  , readInterfaceDBExtByType
   , TyDbWriteProgress(..)
   , writeFile
   , writeFileWithProgress
@@ -130,6 +152,8 @@ import Data.Time.Clock (UTCTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
+import Acton.Names (isPublicName)
+import Utils (SrcLoc(NoLoc))
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
@@ -240,6 +264,14 @@ type TyMeta =
   , BS.ByteString
   , BS.ByteString
   )
+
+-- | A handle for selective per-name and per-index lookups in one module's
+-- .tydb: the version is validated once at open, and each lookup runs a short
+-- read transaction on the shared per-path environment.
+newtype InterfaceDB = InterfaceDB FilePath
+
+instance Show InterfaceDB where
+    show (InterfaceDB path) = "InterfaceDB " ++ path
 
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
@@ -365,7 +397,7 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -374,6 +406,9 @@ keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
 keyNameCount    = key "name-count"
+keyPublicNames  = key "public-names"
+keyConstructors = key "constructors"
+keyActors       = key "actors"
 keyStmtCount    = key "stmt-count"
 keyModuleHeader = key "module-header"
 
@@ -442,6 +477,39 @@ keyExtByProtocol n = B.concat [keyExtByProtocolPrefix, nameKeySuffix n]
 
 keyStmt :: Int -> BS.ByteString
 keyStmt i = B.pack ("stmt/" ++ padIndex i)
+
+keyConAttr :: A.Name -> BS.ByteString
+keyConAttr n = B.concat [key "con-attr/", nameKeySuffix n]
+
+keyProtoAttr :: A.Name -> BS.ByteString
+keyProtoAttr n = B.concat [key "proto-attr/", nameKeySuffix n]
+
+keyDescendants :: A.QName -> BS.ByteString
+keyDescendants qn = B.concat [key "descendants/", qNameKeySuffix qn]
+
+keyExtProto :: A.QName -> BS.ByteString
+keyExtProto qn = B.concat [key "ext-proto/", qNameKeySuffix qn]
+
+keyExtType :: A.QName -> BS.ByteString
+keyExtType qn = B.concat [key "ext-type/", qNameKeySuffix qn]
+
+-- QName keys hash a location-free encoding so the same semantic name always
+-- maps to the same key regardless of where it occurred in the source.
+qNameKeySuffix :: A.QName -> BS.ByteString
+qNameKeySuffix qn = Base16.encode (SHA256.hash (encodeStrict (stripQNameKeyLocs qn)))
+
+stripQNameKeyLocs :: A.QName -> A.QName
+stripQNameKeyLocs (A.QName m n) = A.QName (stripModNameKeyLocs m) (stripNameKeyLocs n)
+stripQNameKeyLocs (A.NoQ n)     = A.NoQ (stripNameKeyLocs n)
+stripQNameKeyLocs (A.GName m n) = A.GName (stripModNameKeyLocs m) (stripNameKeyLocs n)
+
+stripModNameKeyLocs :: A.ModName -> A.ModName
+stripModNameKeyLocs (A.ModName ns) = A.ModName (map stripNameKeyLocs ns)
+
+stripNameKeyLocs :: A.Name -> A.Name
+stripNameKeyLocs (A.Name _ s)     = A.Name NoLoc s
+stripNameKeyLocs (A.Derived n n') = A.Derived (stripNameKeyLocs n) (stripNameKeyLocs n')
+stripNameKeyLocs n@A.Internal{}   = n
 
 withVal :: BS.ByteString -> (LMDB.MDB_val -> IO a) -> IO a
 withVal bs f =
@@ -665,6 +733,14 @@ withWriteTxn path mapSize action =
           LMDB.mdb_txn_commit txn
           return r
 
+openInterfaceDB :: FilePath -> IO InterfaceDB
+openInterfaceDB path = do
+    withReadTxn path validateVersion
+    return (InterfaceDB path)
+
+withInterfaceDBReadTxn :: InterfaceDB -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
+withInterfaceDBReadTxn (InterfaceDB path) action = withReadTxn path action
+
 -- The raw LMDB binding requires transaction setup from a bound thread; this
 -- applies to reads too because of its Haskell-side lock guard.
 runInLmdbThread :: IO a -> IO a
@@ -826,6 +902,80 @@ readNameInfoEntries txn dbi = do
     forM [0 .. nameCount - 1] $ \i -> do
       suffix <- getValue ("name-order " ++ show i) txn dbi (keyNameOrder i)
       getValue ("name-info " ++ show i) txn dbi (keyNameInfoSuffix suffix)
+
+readNameInfoEntryMaybe :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
+readNameInfoEntryMaybe txn dbi n =
+    getMaybeValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+
+readNameInfoEntriesByNames :: LMDB.MDB_txn -> LMDB.MDB_dbi -> [A.Name] -> IO I.TEnv
+readNameInfoEntriesByNames txn dbi ns =
+    forM ns $ \n ->
+      getValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+
+readInterfaceDBModuleInfo :: InterfaceDB -> IO ([A.ModName], Maybe String)
+readInterfaceDBModuleInfo db =
+    withInterfaceDBReadTxn db $ \txn dbi -> do
+      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      doc <- getValue "doc" txn dbi keyDoc
+      return (A.importsOf (A.Module tmn timps tdoc []), doc)
+
+readInterfaceDBNameInfoMaybe :: InterfaceDB -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
+readInterfaceDBNameInfoMaybe db@(InterfaceDB path) n = do
+    mi <- withInterfaceDBReadTxn db $ \txn dbi ->
+            readNameInfoEntryMaybe txn dbi n
+    traceTydbRead (case mi of Just _ -> "name-hit"; Nothing -> "name-miss") path (A.nstr n)
+    return mi
+
+readInterfaceDBPublicNames :: InterfaceDB -> IO [A.Name]
+readInterfaceDBPublicNames db@(InterfaceDB path) = do
+    ns <- withInterfaceDBReadTxn db $ \txn dbi ->
+            getValue "public-names" txn dbi keyPublicNames
+    traceTydbRead "public-names" path (show (length ns))
+    return ns
+
+readInterfaceDBConstructors :: InterfaceDB -> IO I.TEnv
+readInterfaceDBConstructors db@(InterfaceDB path) = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- getValue "constructors" txn dbi keyConstructors
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "constructors" path (show (length te))
+    return te
+
+readInterfaceDBActors :: InterfaceDB -> IO I.TEnv
+readInterfaceDBActors db@(InterfaceDB path) = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- getValue "actors" txn dbi keyActors
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "actors" path (show (length te))
+    return te
+
+readInterfaceDBConAttr :: InterfaceDB -> A.Name -> IO I.TEnv
+readInterfaceDBConAttr db n =
+    readTEnvIndex db ("con-attr " ++ A.nstr n) (keyConAttr n)
+
+readInterfaceDBProtoAttr :: InterfaceDB -> A.Name -> IO I.TEnv
+readInterfaceDBProtoAttr db n =
+    readTEnvIndex db ("proto-attr " ++ A.nstr n) (keyProtoAttr n)
+
+readInterfaceDBDescendants :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBDescendants db qn =
+    readTEnvIndex db ("descendants " ++ show qn) (keyDescendants qn)
+
+readInterfaceDBExtByProto :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBExtByProto db qn =
+    readTEnvIndex db ("ext-proto " ++ show qn) (keyExtProto qn)
+
+readInterfaceDBExtByType :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBExtByType db qn =
+    readTEnvIndex db ("ext-type " ++ show qn) (keyExtType qn)
+
+readTEnvIndex :: InterfaceDB -> String -> BS.ByteString -> IO I.TEnv
+readTEnvIndex db@(InterfaceDB path) label k = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- maybe [] id <$> getMaybeValue label txn dbi k
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "index" path (label ++ " " ++ show (length te))
+    return te
 
 readNameHashEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [NameHashInfo]
 readNameHashEntries txn dbi = do
@@ -993,6 +1143,62 @@ depIndexEntries depModules nameHashes =
         | (key', (_pubH, _implH, pubUsers, implUsers)) <- Map.toList depMap
         ]
 
+-- Narrow per-module query indexes, so dependent modules can answer solver and
+-- environment queries (attribute owners, descendants, extensions) without
+-- enumerating the whole public interface.
+data QueryIndexes = QueryIndexes
+  { qiPublicNames :: [A.Name]
+  , qiConstructors :: [A.Name]
+  , qiActors :: [A.Name]
+  , qiConAttrs :: Map.Map A.Name [A.Name]
+  , qiProtoAttrs :: Map.Map A.Name [A.Name]
+  , qiDescendants :: Map.Map A.QName [A.Name]
+  , qiExtProtos :: Map.Map A.QName [A.Name]
+  , qiExtTypes :: Map.Map A.QName [A.Name]
+  }
+
+queryIndexes :: I.NameInfo -> QueryIndexes
+queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattrs protoattrs descendants extprotos exttypes
+  where pte                    = filter (isPublicName . fst) te
+        cons                   = [ n | (n, i) <- pte, isCons i ]
+        actors                 = [ n | (n, I.NAct{}) <- pte ]
+        conattrs               = indexMap [ (a, n) | (n, i) <- pte, isCon i, a <- attrs i ]
+        protoattrs             = indexMap [ (a, n) | (n, i@I.NProto{}) <- pte, a <- attrs i ]
+        descendants            = indexMap [ (A.tcname c, n) | (n, i) <- pte, (_, c) <- ancestry i ]
+        extprotos              = indexMap [ (A.tcname p, n) | (n, I.NExt _ _ ps _ _ _) <- pte, (_, p) <- ps ]
+        exttypes               = indexMap [ (A.tcname c, n) | (n, I.NExt _ c _ _ _ _) <- pte ]
+        isCons I.NClass{}      = True
+        isCons I.NProto{}      = True
+        isCons I.NAct{}        = True
+        isCons _               = False
+        isCon I.NClass{}       = True
+        isCon I.NAct{}         = True
+        isCon _                = False
+        attrs (I.NClass _ _ te' _) = map fst te'
+        attrs (I.NProto _ _ te' _) = map fst te'
+        attrs (I.NAct _ _ _ te' _) = map fst te'
+        attrs _                = []
+        ancestry (I.NClass _ us _ _) = us
+        ancestry (I.NProto _ us _ _) = us
+        ancestry _             = []
+queryIndexes _                  = QueryIndexes [] [] [] Map.empty Map.empty Map.empty Map.empty Map.empty
+
+indexMap :: Ord k => [(k, A.Name)] -> Map.Map k [A.Name]
+indexMap xs = Map.fromListWith (++) [ (k, [v]) | (k, v) <- reverse xs ]
+
+queryIndexEntries :: I.NameInfo -> [(BS.ByteString, BS.ByteString)]
+queryIndexEntries nmod =
+    [ (keyPublicNames, encodeStrict (qiPublicNames ix))
+    , (keyConstructors, encodeStrict (qiConstructors ix))
+    , (keyActors, encodeStrict (qiActors ix))
+    ]
+    ++ [ (keyConAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiConAttrs ix) ]
+    ++ [ (keyProtoAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiProtoAttrs ix) ]
+    ++ [ (keyDescendants qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiDescendants ix) ]
+    ++ [ (keyExtProto qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtProtos ix) ]
+    ++ [ (keyExtType qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtTypes ix) ]
+  where ix = queryIndexes nmod
+
 interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
 interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
@@ -1010,7 +1216,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
         nameChunks = entryChunks caps (zip [0..] te)
         nameHashChunks = entryChunks caps nameHashes
         stmtChunks = entryChunks caps (zip [0..] body)
-        totalPrep = 3 + length nameChunks + length nameHashChunks + length stmtChunks
+        totalPrep = 4 + length nameChunks + length nameHashChunks + length stmtChunks
     prepDone <- newIORef (0 :: Int)
     let mark label = do
           done <- atomicModifyIORef' prepDone $ \n ->
@@ -1021,12 +1227,14 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     mark "Preparing .tydb header"
     depEntries <- forceEntries (depIndexEntries depModules nameHashes)
     mark "Preparing .tydb deps"
+    queryEntries <- forceEntries (queryIndexEntries nmod)
+    mark "Preparing .tydb query indexes"
     nameEntries <- parallelEntries mark "Preparing .tydb names" nameInfoEntries nameChunks
     nameHashEntries <- parallelEntries mark "Preparing .tydb hashes" nameHashEntry nameHashChunks
     extEntries <- forceEntries (extensionIndexEntries (extensionIndexFromNameInfo tmn nmod))
     mark "Preparing .tydb extensions"
     stmtEntries <- parallelEntries mark "Preparing .tydb statements" stmtEntry stmtChunks
-    return (headerEntries ++ depEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
+    return (headerEntries ++ depEntries ++ queryEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
