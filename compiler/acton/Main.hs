@@ -42,7 +42,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import Acton.Compile
 import Utils
-import qualified Pretty
+import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
@@ -1008,16 +1008,26 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
     let fullMod = A.modName parts
+        fullMod' = addProjPrefix paths fullMod
     case lookup fullMod moduleIndex of
-      Just (ctx, srcPath) ->
+      Just (ctx, srcPath) -> do
         return (SigSourceTarget ctx fullMod Nothing srcPath)
       Nothing -> do
-        mFullTy <- findSigTyFile tySearchPath fullMod
-        case mFullTy of
-          Just tyPath ->
-            return (SigTyTarget fullMod Nothing tyPath)
-          Nothing ->
-            resolveNameTarget parts moduleIndex
+        case lookup fullMod' moduleIndex of
+         Just (ctx, srcPath) -> do
+          return (SigSourceTarget ctx fullMod' Nothing srcPath)
+         Nothing -> do
+          mFullTy <- findSigTyFile tySearchPath fullMod
+          case mFullTy of
+            Just tyPath ->
+              return (SigTyTarget fullMod Nothing tyPath)
+            Nothing -> do
+              mFullTy' <- findSigTyFile tySearchPath fullMod'
+              case mFullTy' of
+                Just tyPath' ->
+                  return (SigTyTarget fullMod' Nothing tyPath')
+                Nothing ->
+                  resolveNameTarget parts moduleIndex
   where
     tySearchPath = sigTySearchPath opts paths rootProj projMap
 
@@ -1029,16 +1039,26 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
               namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
+              mn' = addProjPrefix paths mn
           case lookup mn moduleIndex of
-            Just (ctx, srcPath) ->
+            Just (ctx, srcPath) -> do
               return (SigSourceTarget ctx mn (Just n) srcPath)
             Nothing -> do
-              mTy <- findSigTyFile tySearchPath mn
-              case mTy of
-                Just tyPath ->
-                  return (SigTyTarget mn (Just n) tyPath)
-                Nothing ->
-                  printErrorAndExit ("Module not found: " ++ intercalate "." modParts
+              case lookup mn' moduleIndex of
+               Just (ctx, srcPath) -> do
+                return (SigSourceTarget ctx mn' (Just n) srcPath)
+               Nothing -> do
+                mTy <- findSigTyFile tySearchPath mn
+                case mTy of
+                  Just tyPath ->
+                    return (SigTyTarget mn (Just n) tyPath)
+                  Nothing -> do
+                    mTy' <- findSigTyFile tySearchPath mn'
+                    case mTy' of
+                      Just tyPath' ->
+                        return (SigTyTarget mn' (Just n) tyPath')
+                      Nothing ->
+                        printErrorAndExit ("Module not found: " ++ intercalate "." modParts
                                      ++ " (while resolving " ++ rawTarget ++ ")")
 
 parseSigTarget :: String -> IO [String]
@@ -1316,6 +1336,10 @@ printDocs gopts opts = do
                     openFileInGui outputPath
 
           _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
+
+addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
+  where proj                = projName paths
+        ns                  = A.modPath mn
 
 dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
   where n:ns                = A.modPath mn
