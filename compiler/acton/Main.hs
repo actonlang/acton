@@ -226,6 +226,9 @@ fmtTimeCompact t =
     roundedSecs =
       wholeSecs + if remNanos >= 500000000 then 1 else 0
 
+timeMinWidth :: Int
+timeMinWidth = length "99999.999 s"
+
 -- | Pad a string with trailing spaces for aligned output.
 padRight :: Int -> String -> String
 padRight width s
@@ -1564,8 +1567,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
-        timerMinWidth = length "99999.999 s"
-        plainLogWidth = timePadWidth + timerMinWidth
+        plainLogWidth = timePadWidth + timeMinWidth
         detailStmtIndentWide = replicate 5 ' '
         detailBindsIndentWide = replicate 7 ' '
         detailStmtIndentNarrow = "  "
@@ -1577,7 +1579,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           ++ padRight statusWidth (abbreviateRight statusWidth status)
         plainDoneTimedLine modLbl status t =
           padRight timePadWidth (plainDoneIndent ++ plainStatusColumns modLbl status)
-          ++ padLeft timerMinWidth (fmtTimePrecise t)
+          ++ padLeft timeMinWidth (fmtTimePrecise t)
         plainDoneLine modLbl status =
           plainDoneIndent ++ plainStatusColumns modLbl status
         pickBestLine candidates =
@@ -1608,7 +1610,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         doneStatusLine width modLbl statusRender shortStatus mt =
           let preciseTimer = maybe "" fmtTimePrecise mt
               compactTimer = maybe "" fmtTimeCompact mt
-              timerWidth = max timerMinWidth (length preciseTimer)
+              timerWidth = max timeMinWidth (length preciseTimer)
               fullRenderer budget =
                 case statusRender budget of
                   Just status
@@ -3225,7 +3227,6 @@ progressRefreshUnlocked ui st = do
     (_, _, cols) <- termSizeSync (puTermSize ui)
     let renderCols = safeLiveWidth cols
         spinnerPrefixWidth = progressPrefixWidth cols
-        timerMinWidth = length "999.999 s"
     let progressDone = "\ESC[48;5;24m"
         progressReset = "\ESC[0m"
         paintProgressLine mprog line =
@@ -3247,7 +3248,7 @@ progressRefreshUnlocked ui st = do
         formatLine task =
           let elapsedPrecise = fmtTimePrecise (diffTimeSpec now (ptStart task))
               elapsedCompact = fmtTimeCompact (diffTimeSpec now (ptStart task))
-              timerWidth = max timerMinWidth (length elapsedPrecise)
+              timerWidth = max timeMinWidth (length elapsedPrecise)
               liveCandidate timerRank timer =
                 let timerCols = if null timer then 0 else 1 + timerWidth
                     bodyWidth = max 0 (renderCols - spinnerPrefixWidth - timerCols)
