@@ -519,11 +519,11 @@ allBelowProto env p
   where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
 
 allClassAttr env n                  = map tCon tcons ++ map tVar tvars
-  where tcons                       = allConAttr env n
+  where tcons                       = tyconsByAttr env n
         tvars                       = tvarDescendants env tcons
 
 allProtoAttr env n                  = map tCon pcons ++ concatMap (allBelowProto env) pcons
-  where pcons                       = allPConAttr env n
+  where pcons                       = typrotosByAttr env n
 
 
 ----------------------------------------------------------------------------------------------------------------------

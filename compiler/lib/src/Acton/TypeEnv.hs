@@ -57,8 +57,11 @@ data TypeX                      = TypeX {
                                     forced      :: Bool,
                                     tyids       :: Map QName Int,
                                     tyinfos     :: IntMap TyInfo,
+                                    tycons      :: IntSet,
                                     typrotos    :: IntSet,
-                                    tyactors    :: IntSet
+                                    tyactors    :: IntSet,
+                                    tyconAttrs  :: TyAttrMap,
+                                    typrotoAttrs:: TyAttrMap
                                   }
 
 data TyInfo                     = TyInfo {
@@ -70,6 +73,7 @@ data TyInfo                     = TyInfo {
 
 type Env                        = EnvF TypeX
 type WitMap                     = Map QName [Witness]
+type TyAttrMap                  = Map Name [Int]
 
 initTypeEnv                     :: Env0 -> Env
 initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
@@ -85,8 +89,11 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     forced      = False,
                                     tyids       = Map.empty,
                                     tyinfos     = tyinfos0,
+                                    tycons      = IntSet.empty,
                                     typrotos    = IntSet.empty,
-                                    tyactors    = IntSet.empty
+                                    tyactors    = IntSet.empty,
+                                    tyconAttrs  = Map.empty,
+                                    typrotoAttrs= Map.empty
                                   }
         importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
           where f               = GName m
@@ -153,24 +160,48 @@ nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
 
 addconinfo                      :: (Name -> QName) -> TypeX -> (Name,NameInfo) -> TypeX
 addconinfo f x (n,i)
-  | NClass q us te _ <- i       = addcon n q us te x
-  | NProto q us te _ <- i       = addproto $ addcon n q us te x
-  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te x
+  | NClass q us te _ <- i       = addcon n q us te addclass x
+  | NProto q us te _ <- i       = addcon n q us te addproto x
+  | NAct q _ _ te _ <- i        = addcon n q [] te addactor x
   | otherwise                   = x
-  where tid                     = nextid x
-        addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
-        addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
+  where addclass tid info x     = x{ tycons = IntSet.insert tid (tycons x),
+                                     tyconAttrs = addTyAttrs tid (tyattrs info) (tyconAttrs x) }
+        addproto tid info x     = x{ typrotos = IntSet.insert tid (typrotos x),
+                                     typrotoAttrs = addTyAttrs tid (tyattrs info) (typrotoAttrs x) }
+        addactor tid info x     = addclass tid info x{ tyactors = IntSet.insert tid (tyactors x) }
 
-        addcon n q us te x      = x{ tyids = Map.insert (f n) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
-          where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+        addcon n q us te index x = index tid info x{ tyids = Map.insert (f n) tid (tyids x),
+                                                     tyinfos = IntMap.insert tid info tyinfos' }
+          where tid             = nextid x
+                ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
                 info            = TyInfo {
-                                    tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
+                                    tywild = tCon $ TC (f n) [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
                                     tybelow = IntSet.singleton tid,
                                     tyattrs = foldr Set.union (Set.fromList $ dom te) [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
                                   }
                 tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
                 addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
+
+addTyAttrs                      :: Int -> Set Name -> TyAttrMap -> TyAttrMap
+addTyAttrs tid attrs attrmap     = Set.foldr add attrmap attrs
+  where add n                   = Map.insertWith (++) n [tid]
+
+typeById                        :: TypeX -> Int -> Type
+typeById x tid                  = tywild (tyinfos x IntMap.! tid)
+
+conById                         :: TypeX -> Int -> Maybe TCon
+conById x tid                   = case typeById x tid of
+                                    TCon _ c -> Just c
+                                    _ -> Nothing
+
+tyconsByAttr                    :: Env -> Name -> [TCon]
+tyconsByAttr env n              = [ c | tid <- Map.findWithDefault [] n (tyconAttrs x), Just c <- [conById x tid] ]
+  where x                       = envX env
+
+typrotosByAttr                  :: Env -> Name -> [PCon]
+typrotosByAttr env n            = [ p | tid <- Map.findWithDefault [] n (typrotoAttrs x), Just p <- [conById x tid] ]
+  where x                       = envX env
 
 
 
