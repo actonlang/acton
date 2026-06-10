@@ -195,6 +195,17 @@ conById x tid                   = case typeById x tid of
                                     TCon _ c -> Just c
                                     _ -> Nothing
 
+tyconDescendants                :: Env -> TCon -> [TCon]
+tyconDescendants env tc
+  | Just tid <- Map.lookup (tcname tc) (tyids x),
+    Just info <- IntMap.lookup tid (tyinfos x)
+                                = [ c | tid' <- tids tid info, Just c <- [conById x tid'] ]
+  | otherwise                   = allDescendants env tc
+  where x                       = envX env
+        tids tid info           = IntSet.toAscList $
+                                  IntSet.delete tid $
+                                  IntSet.intersection (tybelow info) (tycons x)
+
 tyconsByAttr                    :: Env -> Name -> [TCon]
 tyconsByAttr env n              = [ c | tid <- Map.findWithDefault [] n (tyconAttrs x), Just c <- [conById x tid] ]
   where x                       = envX env
