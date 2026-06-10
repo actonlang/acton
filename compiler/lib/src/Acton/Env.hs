@@ -838,7 +838,21 @@ allAncestors env tc         = reverse [ schematic' c | (_, c) <- us ]
   where (us,te)             = findCon env tc
 
 allDescendants              :: EnvF x -> TCon -> [TCon]
-allDescendants env tc       = [ schematic' c | c <- allCons env, hasAncestor' env (tcname c) (tcname tc) ]
+allDescendants env tc       = concatMap imported (importedModuleInfos env) ++ local
+  where imported mi         = moduleDescendants mi (tcname tc)
+        local               = [ schematic' c | c <- localCons env, hasAncestor' env (tcname c) (tcname tc) ]
+
+importedModuleInfos         :: EnvF x -> [ModuleInfo]
+importedModuleInfos env     = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
+
+localCons                   :: EnvF x -> [TCon]
+localCons env               = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
+  where local te
+          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i) <- te, isCon i ]
+          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- te, isCon i ]
+        isCon NClass{}      = True
+        isCon NAct{}        = True
+        isCon _             = False
 
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
