@@ -1,0 +1,170 @@
+import acton.rts
+import net
+import random
+import test_net_tls
+import testing
+import time
+
+
+def _force_gc(t: testing.EnvT):
+    acton.rts.gc(t.env.syscap)
+    acton.rts.gc(t.env.syscap)
+
+WATCHDOG_INTERVAL_S = 0.25
+TLS_GC_TEST_TIMEOUT_S = 10.0
+
+
+actor _TLSDroppedActorChurn(t: testing.EnvT):
+    """Dropped TLS actors must survive a GC-driven cleanup cycle"""
+    TARGET_ROUNDS = 1
+
+    var done = False
+    var round = 0
+    var port = 0
+    var bind_attempts = 0
+    var phase = "start"
+    var listener: ?net.TLSListener = None
+    var client: ?net.TLSConnection = None
+    var server_conn: ?net.TLSListenConnection = None
+    timeout_sw = time.Stopwatch()
+    listen_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _cleanup_round():
+        if done:
+            return
+        round += 1
+        phase = "cleanup-drop-client"
+        listener = None
+        client = None
+        after 0: _cleanup_drain_1()
+
+    def _cleanup_drain_1():
+        if done:
+            return
+        phase = "cleanup-gc1"
+        _force_gc(t)
+        after 0.01: _cleanup_drain_2()
+
+    def _cleanup_drain_2():
+        if done:
+            return
+        phase = "cleanup-drop-server"
+        server_conn = None
+        after 0: _cleanup_drain_3()
+
+    def _cleanup_drain_3():
+        if done:
+            return
+        phase = "cleanup-gc2"
+        _force_gc(t)
+        if round >= TARGET_ROUNDS:
+            _finish_success()
+        else:
+            after 0.01: _start_round()
+
+    def _on_client_connect(c: net.TLSConnection):
+        phase = "client-connected"
+        client = c
+        await async c.write(b"PING")
+        phase = "client-write-complete"
+
+    def _on_client_receive(c: net.TLSConnection, data: bytes):
+        phase = "client-received"
+        if data != b"PONG":
+            _finish_failure("Unexpected response: " + str(data))
+            return
+        after 0: _cleanup_round()
+
+    def _on_client_error(c: net.TLSConnection, msg: str):
+        _finish_failure("TLS client error on round " + str(round + 1) + " during " + phase + ": " + msg)
+
+    def _on_client_remote_close(c: net.TLSConnection):
+        if not done:
+            if phase.startswith("cleanup"):
+                return
+            _finish_failure("TLS client closed before response on round " + str(round + 1) + " during " + phase)
+
+    def _on_server_receive(c: net.TLSListenConnection, data: bytes):
+        phase = "server-received"
+        server_conn = c
+        if data != b"PING":
+            _finish_failure("Unexpected request: " + str(data))
+            return
+        phase = "server-writing"
+        await async c.write(b"PONG")
+        phase = "server-write-complete"
+
+    def _on_server_error(c: net.TLSListenConnection, error: str):
+        _finish_error("TLS server error on round " + str(round + 1) + " during " + phase + ": " + error)
+
+    def _on_server_close(c: net.TLSListenConnection):
+        server_conn = None
+        if not done and not phase.startswith("cleanup"):
+            _finish_failure("TLS server connection closed before cleanup on round " + str(round + 1) + " during " + phase)
+
+    def _on_accept(c: net.TLSListenConnection):
+        phase = "accepted"
+        server_conn = c
+        c.cb_install(_on_server_receive, _on_server_error, _on_server_close)
+
+    def _on_listen(listener_ref, err):
+        phase = "listening"
+        if err is not None:
+            if bind_attempts < 10:
+                bind_attempts += 1
+                after 0: _start_round()
+            else:
+                _finish_error("TLS listen failed on round " + str(round + 1) + ": " + err)
+            return
+        bind_attempts = 0
+        listener = listener_ref
+        phase = "connecting"
+        client = net.TLSConnection(conn_cap, "127.0.0.1", port, _on_client_connect, _on_client_receive, _on_client_error, _on_client_remote_close, False, test_net_tls.ALPN_PROTOCOLS)
+
+    def _start_round():
+        if done:
+            return
+        phase = "binding"
+        port = random.randint(20000, 45000)
+        listener = net.TLSListener(
+            listen_cap,
+            "127.0.0.1",
+            port,
+            test_net_tls.CERT_PEM.encode(),
+            test_net_tls.KEY_PEM.encode(),
+            _on_listen,
+            _on_accept
+        )
+
+    def _timeout():
+        _finish_error("timeout during " + phase)
+
+    def _watchdog():
+        if done:
+            return
+        if timeout_sw.elapsed().to_float() >= TLS_GC_TEST_TIMEOUT_S:
+            _timeout()
+        else:
+            after WATCHDOG_INTERVAL_S: _watchdog()
+
+    _start_round()
+    _watchdog()
