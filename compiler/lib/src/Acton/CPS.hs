@@ -278,7 +278,7 @@ kRef k ns x t                           = eLambda' [(x,t)] $ eCall (eVar k) (map
 
 fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx
-  where TFun _ fx _ _ _                 = typeOf env e
+  where TFun _ fx _ _ _                 = sctype $ fst $ schemaOf env e
 fxCall env test e                       = False
 
 contCall env e                          = fxCall env contFX e
