@@ -1,0 +1,12 @@
+import big
+
+actor main(env):
+    box = big.Box(1)
+    other = big.Box(1)
+    ordered = big.OrderedBox(1)
+    ordered2 = big.OrderedBox(2)
+    worker = big.Worker()
+    if box == other and ordered == ordered and ordered < ordered2:
+        env.exit(0)
+    else:
+        env.exit(1)

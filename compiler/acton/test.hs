@@ -104,6 +104,9 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/subdash/out") ""
         testBuild "" ExitSuccess False "../../test/compiler/subdash/"
         testBuild "" ExitSuccess False "../../test/compiler/subdash/"
+  , testCase "module lookup exact imports" $ do
+        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/module_lookup/out") ""
+        testBuild "--skip-build" ExitSuccess False "../../test/compiler/module_lookup/"
   , testCase "dynamic module library build" $ do
         withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
