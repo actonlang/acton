@@ -598,17 +598,17 @@ shallowImport searchPath env imp =
     S.Import _ items ->
       foldM (shallowModuleItem searchPath) env items
     S.FromImport _ (S.ModRef (0, Just m)) items ->
-      shallowModule searchPath env m $ \te env' ->
-        Env.importSome items m te env'
+      shallowModule searchPath env m $ \mi env' ->
+        Env.importSome items m mi env'
     S.FromImportAll _ (S.ModRef (0, Just m)) ->
-      shallowModule searchPath env m $ \te env' ->
-        Env.importAll m te env'
+      shallowModule searchPath env m $ \mi env' ->
+        Env.importAll m mi env'
     _ ->
       return env
 
 shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
-  shallowModule searchPath env m $ \te env' ->
+  shallowModule searchPath env m $ \_ env' ->
     case as of
       Nothing -> Env.addImport m env'
       Just n -> Env.defineClosed [(n, I.NMAlias m)] env'
@@ -617,14 +617,17 @@ shallowModule
   :: [FilePath]
   -> Env.Env0
   -> S.ModName
-  -> (I.TEnv -> Env.Env0 -> Env.Env0)
+  -> (Env.ModuleInfo -> Env.Env0 -> Env.Env0)
   -> IO Env.Env0
 shallowModule searchPath env m applyImport = do
   loaded <- readModuleInterface searchPath m
   case loaded of
     Nothing -> return env
     Just (ms, te, mdoc) ->
-      return $ applyImport te (Env.addMod m ms te mdoc env)
+      let env' = Env.addMod m ms te mdoc env
+      in case Env.lookupModuleInfo m env' of
+           Just mi -> return $ applyImport mi env'
+           Nothing -> return env'
 
 readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe ([S.ModName], I.TEnv, Maybe String))
 readModuleInterface searchPath m = do
