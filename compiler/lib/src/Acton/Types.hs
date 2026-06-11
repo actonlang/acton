@@ -783,8 +783,7 @@ instance InfEnv Stmt where
                                              return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
     infEnv env (For l p e b els)
       | nodup p                         = do (te,t1,p') <- infEnvT env p
-                                             t2 <- newUnivar env
-                                             (cs2,e') <- inferSub env t2 e
+                                             (cs2,t2,e') <- inferIterable env e
                                              (cs3,te1,b') <- infSuiteEnv (define te env) b
                                              (cs4,te2,els') <- infSuiteEnv env els
                                              w <- newWitness
@@ -2464,12 +2463,17 @@ infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env 
                                              (cs2,env2,s',c') <- infComp env1 c
                                              return (cs1++cs2, env2, s++s', CompIf l e' (termsubst s c'))
 infComp env (CompFor l p e c)           = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p
-                                             t2 <- newUnivar env
-                                             (cs2,e') <- inferSub env t2 e
+                                             (cs2,t2,e') <- inferIterable env e
                                              (cs3,env',s,c') <- infComp (define te1 env) c
                                              w <- newWitness
                                              return (Proto (locinfo2 101 e) env w t2 (pIterable t1) :
                                                      cs2++cs3, env', s, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
+
+inferIterable env e@Var{}               = infer env e
+inferIterable env e                      = do
+                                             t <- newUnivar env
+                                             (cs,e') <- inferSub env t e
+                                             return (cs,t,e')
 
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (te1,t,p') <- infEnvT env p
