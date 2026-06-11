@@ -1856,6 +1856,62 @@ main = do
               Left err2 -> expectationFailure err2
               Right spec2 -> spec2 `shouldBe` spec
 
+      it "round-trips string values with literal braces through rewrite" $ do
+        let buildAct0 = unlines
+              [ "name = \"demo\""
+              , "description = \"Demo {{project}}\""
+              , "fingerprint = 0x1234abcd5678ef00"
+              , ""
+              , "dependencies = {"
+              , "}"
+              , ""
+              , "zig_dependencies = {"
+              , "  \"libssh\": ("
+              , "        url=\"https://z\","
+              , "        hash=\"abcd\","
+              , "        options={\"acton_sysdeps\": \"{{sysdeps}}\"},"
+              , "        artifacts=[\"ssh\"]"
+              , "    )"
+              , "}"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct0 of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            -- The parser unescapes {{ }} to literal braces in memory
+            BuildSpec.specDescription spec `shouldBe` Just "Demo {project}"
+            (BuildSpec.options <$> M.lookup "libssh" (BuildSpec.zig_dependencies spec))
+              `shouldBe` Just (M.fromList [("acton_sysdeps", "{sysdeps}")])
+            -- Rewriting Build.act must re-escape braces so values survive
+            case BuildSpec.updateBuildActFromJSON buildAct0 (BuildSpec.encodeBuildSpecJSON spec) of
+              Left err -> expectationFailure err
+              Right buildAct1 -> do
+                buildAct1 `shouldSatisfy` (isInfixOf "\"{{sysdeps}}\"")
+                buildAct1 `shouldSatisfy` (isInfixOf "\"Demo {{project}}\"")
+                case BuildSpec.parseBuildAct buildAct1 of
+                  Left err -> expectationFailure err
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "errors on interpolated string in zig dependency options" $ do
+        let buildAct = unlines
+              [ "name = \"demo\""
+              , "fingerprint = 0x1234abcd5678ef00"
+              , ""
+              , "zig_dependencies = {"
+              , "  \"libssh\": ("
+              , "        url=\"https://z\","
+              , "        options={\"acton_sysdeps\": \"{sysdeps}\"}"
+              , "    )"
+              , "}"
+              , ""
+              ]
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> do
+            err `shouldSatisfy` (isInfixOf "acton_sysdeps")
+            err `shouldSatisfy` (isInfixOf "{{")
+          Right _ ->
+            expectationFailure "Expected error for interpolated option value"
+
       it "errors when fingerprint prefix does not match name" $ do
         withSystemTempDirectory "acton-fp" $ \dir -> do
           let buildAct = unlines

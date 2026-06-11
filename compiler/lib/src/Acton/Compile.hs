@@ -4691,8 +4691,9 @@ loadBuildSpec dir = do
                 suggestion <- suggestProjectName dir
                 throwProjectError ("Missing project name in " ++ actPath ++ ".\n"
                                    ++ "Add: name = " ++ show suggestion)
-              BuildSpec.ParseError msg ->
-                throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n" ++ msg)
+              _ ->
+                throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n"
+                                   ++ BuildSpec.renderBuildSpecParseError err)
           Right (spec, _, _) -> validateBuildSpec actPath spec
       else
         throwProjectError ("Missing Build.act in " ++ dir ++ ".\n"
