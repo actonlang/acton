@@ -198,9 +198,17 @@ addconinfo env f x (n,i)
 indexAbstractAttrs              :: EnvF x -> [WTCon] -> TEnv -> [Name]
 indexAbstractAttrs env us te     = recordLookupList "type.indexAbstractAttrs" $
                                    [ n | n <- names, maybe False isAbstract (Map.lookup n visible) ]
-  where aenv                    = reverse te ++ concat [ reverse te' | (_,c) <- us, let (_,_,te') = findConName (tcname c) env ]
+  where aenv                    = reverse te ++ concatMap parentTEnv us
         names                   = nub $ reverse $ map fst aenv
         visible                 = foldl' add Map.empty aenv
+        parentTEnv (_,c)        = case tryQName (tcname c) env of
+                                    Just (HNAct _ _ _ te' _ _) -> reverse $ notHidden te'
+                                    Just (HNClass _ _ te' _ _) -> reverse te'
+                                    Just (HNProto _ _ te' _ _) -> reverse te'
+                                    Just (HNExt _ _ _ te' _ _ _) -> reverse te'
+                                    Just HNReserved | inBuiltin env -> []
+                                    Nothing | inBuiltin env -> []
+                                    _ -> let (_,_,te') = findConName (tcname c) env in reverse te'
         add m (n,i)             = Map.insertWith (\_ old -> old) n i m
         isAbstract (NSig _ dec _) = dec /= Property
         isAbstract _            = False

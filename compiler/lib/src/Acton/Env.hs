@@ -820,9 +820,21 @@ attrEnv env qn              = recordLookupList "env.attrEnv" $
 
 attrEnvRaw                  :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
 attrEnvRaw env qn           =
-                              [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
-  where (q,us,_)            = findConName qn env
+                              [ (n,(wp,i)) | (root,wp,c) <- (True,[],tc) : [ (False,wp,c) | (wp,c) <- us ],
+                                             (n,i) <- attrItems root c ]   -- in override order
+  where (q,us,te)           = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+        attrItems root c
+          | root             = reverse te
+          | otherwise        = reverse $ parentTEnv (tcname c)
+        parentTEnv n         = case tryQName n env of
+                                Just (HNAct _ _ _ te' _ _) -> notHidden te'
+                                Just (HNClass _ _ te' _ _) -> te'
+                                Just (HNProto _ _ te' _ _) -> te'
+                                Just (HNExt _ _ _ te' _ _ _) -> te'
+                                Just HNReserved | inBuiltin env -> []
+                                Nothing | inBuiltin env -> []
+                                _ -> let (_,_,te') = findConName n env in te'
 
 cachedAttrEnv               :: EnvF x -> QName -> Maybe [(Name,(WPath,NameInfo))]
 cachedAttrEnv env qn
