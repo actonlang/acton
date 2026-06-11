@@ -773,11 +773,15 @@ solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
 findWitness env t p         = recordLookupList "solver.findWitness" $
-                              reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
+                              reverse $ filter match $ candidates t
   where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
         eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
         eqhead (TVar _ v) (TVar _ v')   = v == v'
         eqhead _          _             = False
+        match w                         = tcname (proto w) == tcname p && eqhead t (wtype w)
+        candidates (TCon _ c)           = witsByTName env (tcname c)
+        candidates (TVar _ v)           = witsByTName env (NoQ $ tvname v)
+        candidates _                    = witsByPName env (tcname p)
 
 findProtoByAttr env cn n    = recordLookup "solver.findProtoByAttr" $
                               case filter hasAttr $ witsByTName env cn of
