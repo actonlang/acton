@@ -1086,7 +1086,7 @@ parseFlagTests =
           ]
 
         (sigCode, sigOut, sigErr) <- readCreateProcessWithExitCode
-          (proc actonExe ["sig", "--syspath", sysPath, "prebuilt"])
+          (proc actonExe ["sig", "--syspath", sysPath, "sig_dep.prebuilt"])
             { cwd = Just rootProj, env = Just envWithHome } ""
         when (sigCode /= ExitSuccess) $
           assertFailure ("acton sig failed:\nstdout:\n" ++ sigOut ++ "\nstderr:\n" ++ sigErr)
@@ -1207,7 +1207,7 @@ parseFlagTests =
             srcDir = proj </> "src"
             modName = "snap"
             srcFile = srcDir </> modName <.> "act"
-            expectedDir = proj </> "snapshots" </> "expected" </> modName
+            expectedDir = proj </> "snapshots" </> "expected" </> "snapshot_cache" <.> modName
             expectedFile = expectedDir </> "stable"
             runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
 
@@ -1404,7 +1404,7 @@ actonProjTests =
             , "zig_dependencies = {}"
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
-            [ "from lmdb import ready"
+            [ "from acton_lmdb.lmdb import ready"
             , ""
             , "actor main(env):"
             , "    if ready():"
@@ -1540,19 +1540,19 @@ actonProjTests =
             , "zig_dependencies = {}"
             ]
           writeFile (rootProj </> "src" </> "main.act") $ unlines
-            [ "import dep_a"
-            , "import dep_b"
-            , "import dep_c"
+            [ "import dep_a.lib"
+            , "import dep_b.lib"
+            , "import dep_c.lib"
             , ""
             , "actor main(env):"
-            , "    if dep_a.ready() and dep_b.ready() and dep_c.ready():"
+            , "    if dep_a.lib.ready() and dep_b.lib.ready() and dep_c.lib.ready():"
             , "        env.exit(0)"
             , "    else:"
             , "        env.exit(1)"
             ]
-          writeWrapper depAProj "dep_a" "../zig_common" "dep_a"
-          writeWrapper depBProj "dep_b" "../zig_common" "dep_b"
-          writeWrapper depCProj "dep_c" "../zig_other" "dep_c"
+          writeWrapper depAProj "dep_a" "../zig_common" "lib"
+          writeWrapper depBProj "dep_b" "../zig_common" "lib"
+          writeWrapper depCProj "dep_c" "../zig_other" "lib"
           writeZigPkg zigCommonProj
           writeZigPkg zigOtherProj
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
