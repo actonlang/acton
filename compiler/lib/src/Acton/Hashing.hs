@@ -324,7 +324,7 @@ splitDeps :: A.ModName
           -> M.Map A.Name [A.QName]
           -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 splitDeps mn env localNames depMap =
-  let toLocalExt qns = foldl' step (Data.Set.empty, Data.Set.empty) qns
+  let toLocalExt qns = Data.Set.foldl' step (Data.Set.empty, Data.Set.empty) (Data.Set.fromList qns)
       step (locals, externals) (A.NoQ n)
         | Data.Set.member n localNames = (Data.Set.insert n locals, externals)
       step (locals, externals) qn =
