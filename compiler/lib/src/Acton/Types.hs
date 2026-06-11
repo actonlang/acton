@@ -1923,7 +1923,7 @@ instance Infer Expr where
                                             NClass q _ _ _ -> do
                                                 (cs0,ts) <- instQBinds env q
                                                 --traceM ("## Instantiating " ++ prstr n)
-                                                let ns = abstractAttrs env n
+                                                let ns = abstractAttrsX env n
                                                 when (not $ null ns) (err3 (loc n) ns "Abstract attributes prevent instantiation:")
                                                 case findAttr env (TC n ts) initKW of
                                                     Just (_,sc,_) -> do

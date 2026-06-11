@@ -65,7 +65,8 @@ data TypeX                      = TypeX {
                                     typrotos    :: IntSet,
                                     tyactors    :: IntSet,
                                     tyconAttrs  :: TyAttrMap,
-                                    typrotoAttrs:: TyAttrMap
+                                    typrotoAttrs:: TyAttrMap,
+                                    tyabstracts :: Map QName [Name]
                                   }
 
 data TyInfo                     = TyInfo {
@@ -98,9 +99,10 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty,
                                     tyconAttrs  = Map.empty,
-                                    typrotoAttrs= Map.empty
+                                    typrotoAttrs= Map.empty,
+                                    tyabstracts = Map.empty
                                   }
-        importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
+        importInfo x (m,te)     = setupCons env0 f te $ setupWits addClosedWit f te x
           where f               = GName m
         imps | inBuiltin env0   = []
              | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
@@ -163,8 +165,8 @@ witTypeMap                      = foldr addWitType Map.empty
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
 
-addconinfo                      :: (Name -> QName) -> TypeX -> (Name,NameInfo) -> TypeX
-addconinfo f x (n,i)
+addconinfo                      :: EnvF x -> (Name -> QName) -> TypeX -> (Name,NameInfo) -> TypeX
+addconinfo env f x (n,i)
   | NClass q us te _ <- i       = addcon n q us te addclass x
   | NProto q us te _ <- i       = addcon n q us te addproto x
   | NAct q _ _ te _ <- i        = addcon n q [] te addactor x
@@ -175,9 +177,11 @@ addconinfo f x (n,i)
                                      typrotoAttrs = addTyAttrs tid (tyattrs info) (typrotoAttrs x) }
         addactor tid info x     = addclass tid info x{ tyactors = IntSet.insert tid (tyactors x) }
 
-        addcon n q us te index x = index tid info x{ tyids = Map.insert qn tid (tyids x),
-                                                     tyidHash = HashMap.insert qn tid (tyidHash x),
-                                                     tyinfos = IntMap.insert tid info tyinfos' }
+        addcon n q us te index x
+                                  = index tid info x{ tyids = Map.insert qn tid (tyids x),
+                                                      tyidHash = HashMap.insert qn tid (tyidHash x),
+                                                      tyinfos = IntMap.insert tid info tyinfos',
+                                                      tyabstracts = Map.insert qn abstracts (tyabstracts x) }
           where tid             = nextid x
                 qn              = f n
                 ui              = [ typeId x (tcname c) | (_,c) <- us ]
@@ -186,9 +190,10 @@ addconinfo f x (n,i)
                                     tyabove = IntSet.fromList ui,
                                     tybelow = IntSet.singleton tid,
                                     tyattrs = foldr Set.union (Set.fromList $ dom te) [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
-                                  }
+                }
                 tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
                 addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
+                abstracts       = abstractAttrs env qn
 
 addTyAttrs                      :: Int -> Set Name -> TyAttrMap -> TyAttrMap
 addTyAttrs tid attrs attrmap     = Set.foldr add attrmap attrs
@@ -228,18 +233,34 @@ typrotosByAttr                  :: Env -> Name -> [PCon]
 typrotosByAttr env n            = [ p | tid <- Map.findWithDefault [] n (typrotoAttrs x), Just p <- [conById x tid] ]
   where x                       = envX env
 
+abstractAttrsX                  :: Env -> QName -> [Name]
+abstractAttrsX env n            = recordLookupList "type.abstractAttrs" $
+                                  case lookupCached n of
+                                    Just attrs -> attrs
+                                    Nothing    -> case lookupCached un of
+                                                    Just attrs -> attrs
+                                                    Nothing    -> case un of
+                                                                    GName m n'
+                                                                      | Just m == thismod env -> maybe fallback id (lookupCached $ NoQ n')
+                                                                    _ -> fallback
+  where lookupCached n          = Map.lookup n (tyabstracts $ envX env)
+        un                      = unalias env n
+        fallback                = abstractAttrs env n
+
 
 
 tydefine                        :: TEnv -> Env -> Env
-tydefine te env                 = modX (define te env) (setupCons f te . setupWits addActiveWit NoQ te)
+tydefine te env                 = modX env' (setupCons env' f te . setupWits addActiveWit NoQ te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
+        env'                    = define te env
 
 tydefineClosed                  :: TEnv -> Env -> Env
-tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits addClosedWit NoQ te)
+tydefineClosed te env           = modX env' (setupCons env' f te . setupWits addClosedWit NoQ te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
+        env'                    = defineClosed te env
 
-setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
-setupCons f te x                = foldl' (addconinfo f) x te
+setupCons                       :: EnvF x -> (Name -> QName) -> TEnv -> TypeX -> TypeX
+setupCons env f te x            = foldl' (addconinfo env f) x te
  
 setupWits                       :: (TypeX -> Witness -> TypeX) -> (Name -> QName) -> TEnv -> TypeX -> TypeX
 setupWits add f te x            = foldl' add x wits
