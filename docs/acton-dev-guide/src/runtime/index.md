@@ -7,3 +7,4 @@ that the compiler targets.
 - [RTS sync pause](sync_pause.md)
 - [Actors](actors.md)
 - [Memory and GC](memory.md)
+- [IO memory management](io_memory.md)

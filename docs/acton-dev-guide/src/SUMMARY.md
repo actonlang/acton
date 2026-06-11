@@ -32,6 +32,7 @@
   - [RTS sync pause](runtime/sync_pause.md)
   - [Actors](runtime/actors.md)
   - [Memory and GC](runtime/memory.md)
+  - [IO memory management](runtime/io_memory.md)
 - [Tooling](tooling/index.md)
   - [Testing harness](tooling/testing.md)
 - [Design notes](design/index.md)
