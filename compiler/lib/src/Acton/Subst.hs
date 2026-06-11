@@ -149,6 +149,8 @@ instance VFree Expr where
     vfree (Set l es)                = vfree es
     vfree (SetComp l e c)           = vfree e ++ vfree c
     vfree (Paren l e)               = vfree e
+    vfree (StaticWitnessCall _ c _ _ _ t p)
+                                    = vfree c ++ vfree t ++ vfree p
     vfree e                         = []
 
 instance VFree Pattern where
@@ -323,6 +325,8 @@ instance VSubst Expr where
     vsubst s (Set l es)             = Set l (vsubst s es)
     vsubst s (SetComp l e c)        = SetComp l (vsubst s e) (vsubst s c)
     vsubst s (Paren l e)            = Paren l (vsubst s e)
+    vsubst s (StaticWitnessCall l c o path n t p)
+                                    = StaticWitnessCall l (vsubst s c) o path n (vsubst s t) (vsubst s p)
     vsubst s e                      = e
 
 instance VSubst Branch where
@@ -489,6 +493,8 @@ instance UFree Expr where
     ufree (Set l es)                = ufree es
     ufree (SetComp l e c)           = ufree e ++ ufree c
     ufree (Paren l e)               = ufree e
+    ufree (StaticWitnessCall _ c _ _ _ t p)
+                                    = ufree c ++ ufree t ++ ufree p
     ufree e                         = []
 
 instance UFree Pattern where

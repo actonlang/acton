@@ -21,14 +21,25 @@ doBoxing                           :: Acton.Env.Env0 -> Module -> IO Module
 doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
                                         return m{mbody = ss}   
 
+--BoxEnv environment --------------------------------------------------------------------------------------
+
 type BoxEnv                        = EnvF BoxX
 
+data StaticWitness                  = StaticWitness { swBaseClass :: TCon, swObjectName :: QName, swObjectPath :: [Name] }
 
-data BoxX                          = BoxX {inClassX :: Maybe (TCon, TEnv), inActionX :: Bool, returnTypeX :: Maybe Type}
+data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
+                                          , inActionX :: Bool
+                                          , returnTypeX :: Maybe Type
+                                          , staticWitnessesX :: M.HashMap Name StaticWitness
+                                          }
 
 
 boxEnv                             :: Env0 -> BoxEnv
-boxEnv env0                        = setX env0 BoxX{inClassX = Nothing, inActionX = False, returnTypeX = Nothing}
+boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
+                                                   , inActionX = False
+                                                   , returnTypeX = Nothing
+                                                   , staticWitnessesX = M.empty
+                                                   }
 
 
 setInClass mtc env                  = modX env $ \x -> x{ inClassX = mtc }
@@ -43,7 +54,91 @@ setReturnType t env                 = modX env $ \x -> x{ returnTypeX = t }
 
 getReturnType env                   = returnTypeX $ envX env
 
--- Unboxing helpers -------------------------------------
+--Helpers for static witnesses -----------------------------------------------------------------------
+
+setStaticWitness n mbw env          = modX env $ \x -> x{ staticWitnessesX = upd (staticWitnessesX x) }
+  where upd                         = maybe (M.delete n) (M.insert n) mbw
+
+lookupStaticWitness env n           = M.lookup n (staticWitnessesX $ envX env)
+
+
+-- Recognize witness expressions whose runtime object can be named statically.
+-- Dot expressions record paths through embedded super-witness fields, while
+-- constructor calls establish the root static witness object.
+staticWitnessOf                     :: BoxEnv -> Expr -> Maybe StaticWitness
+staticWitnessOf env (Dot _ e n)     = do w <- staticWitnessOf env e
+                                         return w{ swObjectPath = swObjectPath w ++ [n] }
+staticWitnessOf env (Call _ f p KwdNil)
+                                    = staticWitnessRoot env f p
+  where staticWitnessRoot env (TApp _ f ts) p
+                                    = staticWitnessRoot' env f ts p
+        staticWitnessRoot env f p   = staticWitnessRoot' env f [] p
+
+        staticWitnessRoot' env (Var _ qn) ts p
+                                    = do qn' <- builtinWitnessClass env qn
+                                         obj <- staticWitnessObject env qn' ts p
+                                         return StaticWitness{ swBaseClass = TC qn' ts, swObjectName = obj, swObjectPath = [] }
+        staticWitnessRoot' env _ _ _= Nothing
+
+        builtinWitnessClass env qn  = case unalias env qn of
+                                        qn'@(GName m _)
+                                          | m == mBuiltin,
+                                            Just HNClass{} <- tryQName qn' env
+                                              -> Just qn'
+                                        _ -> Nothing
+
+        staticWitnessObject env qn@(GName m n) ts p
+          | Just key <- specialStaticKey env n ts
+                                    = Just (GName m (Derived n key))
+          | p == PosNil             = Just qn
+        staticWitnessObject _ _ _ _ = Nothing
+        
+        specialStaticKey env (Derived n1 n2) [TCon _ (TC qn []) , _]
+           | n1 == nMapping,
+             n2 == nDict            = case unalias env qn of
+                                        GName m key
+                                          | m == mBuiltin,
+                                            key `elem` [nInt, nU64, nStr, nBytes]
+                                              -> Just key
+                                        _ -> Nothing
+           | n1 == nSetP,
+             n2 == nSetT            = case unalias env qn of
+                                        GName m key
+                                          | m == mBuiltin,
+                                            key `elem` [nInt, nU64, nStr, nBytes]
+                                              -> Just key
+                                        _ -> Nothing
+                                        
+        specialStaticKey _ _ _  = Nothing
+staticWitnessOf env _               = Nothing
+
+-- Follow a recorded super-witness path to the concrete witness class that owns
+-- the method table used by this call.  Only optimize if that class provides
+-- the requested method.
+staticWitnessMethodClass env w attr
+                                   = do tc <- followWitnessPath env (swBaseClass w) (swObjectPath w)
+                                        if hasAttr env tc attr then Just tc else Nothing
+  where followWitnessPath env tc []= Just tc
+        followWitnessPath env (TC qn ts) (w:ws)
+                                   = do p <- witnessPathProtocol w
+                                        qn' <- builtinWitnessPathClass env qn p
+                                        followWitnessPath env (TC qn' ts) ws
+
+        witnessPathProtocol (Internal Witness s _)
+                                   = Just (name s)
+        witnessPathProtocol _      = Nothing
+
+        builtinWitnessPathClass env qn p
+                                   = case unalias env qn of
+                                        GName m n
+                                          | m == mBuiltin ->
+                                              let qn' = GName mBuiltin (Derived p n)
+                                              in case tryQName qn' env of
+                                                   Just HNClass{} -> Just qn'
+                                                   _              -> Nothing
+                                        _ -> Nothing
+
+-- Unboxing helpers -------------------------------------------------------------------------------------
 
 -- returns the uninstantiated type of method n in class c, i.e. the type of the corresponding method in oldest superclass.
 -- n may be a method for which findAttrSchemas has no info, e.g. __init__, __str__, etc, in which case Nothing is returned.
@@ -355,14 +450,16 @@ instance (Boxing a) => Boxing ([a]) where
                                          return (HashSet.union ws1 ws2, x1:xs2)
 
 instance {-# OVERLAPS #-} Boxing ([Stmt]) where
+
     boxing env []                     = return (HashSet.empty,[])
-    boxing env (x@(Assign _ [PVar _ w _] _) : xs)
+    boxing env (x@(Assign _ [PVar _ w _] rhs) : xs)
+
     --  if witness n is not used in xs, delete statement x defining n
        | isWitness w                  = do (ws1,x') <- boxing env x      
                                            (ws2,xs') <- boxing env1 xs
-                                           return $ if HashSet.member w  ws2 then (HashSet.union ws1 ws2,x':xs') else (ws2,xs')
+                                           return $ if HashSet.member w ws2 then (HashSet.union ws1 (HashSet.delete w ws2),x':xs') else (ws2,xs')
       where te                        = envOf x
-            env1                      = define te env
+            env1                      = setStaticWitness w (staticWitnessOf env rhs) (define te env)
 
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
                                           let env1 = define (envOf x') env
@@ -387,42 +484,49 @@ instance Boxing Expr where
                                          (ws2,e1) <- boxingWitness env w attr p1 pr rest
                                          return (HashSet.union ws1 ws2,e1)
      where
-      TFun _ _ pr _ rest            = rtypeOf' env w attr
-      boxingWitness                 :: BoxEnv -> QName -> Name -> PosArg -> Type -> Type -> IO (HashSet.HashSet Name,Expr)
+      rt@(TFun _ _ pr _ rest)       = rtypeOf' env w attr
+      boxingWitness                 :: BoxEnv -> QName -> Name -> PosArg -> Type -> Type ->IO (HashSet.HashSet Name,Expr)
       boxingWitness env w attr p pr rest = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
-                                           | attr == fromatomKW      -> boxingFromAtom w ts es
-                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts pr rest  -- rest indicates "result type", not any form of remainder
-                                           | attr `elem` unopKWs     -> boxingUnop w attr es ts pr rest
-                                           | attr `elem` eqordKWs    -> boxingCompop w attr es ts pr rest
-                                        _                            -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
-                                                                           return (HashSet.singleton n, tryBox rest c)
+                                           | attr == fromatomKW      -> boxingFromAtom w es ts  rt pr rest
+                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts rt pr rest  -- rest indicates "result type", not any form of remainder
+                                           | attr `elem` unopKWs     -> boxingUnop w attr es ts rt pr rest
+                                           | attr `elem` eqordKWs    -> boxingCompop w attr es ts rt pr rest
+                                        _                            -> boxingDirectOrDynamic w attr p rt pr rest
        where es                     = posargs p
 --             vFree (TCon _ (TC _ _))= True
 --             vFree _                = False
-      boxingFromAtom w ts [i@Int{}]
-        | t == tBigint              = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) [i])
-        | t `elem` numericTypes     = return (HashSet.empty, Box (last ts) (unbox t i))
-        where t = head ts
-      boxingFromAtom w ts [x@Float{}]
+      boxingDirectOrDynamic w attr p rt pr rest
+                                    = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw,tc) of
+                                        Just (sw,tc) -> return (HashSet.empty, tryBox rest $ StaticWitnessCall NoLoc tc (swObjectName sw) (swObjectPath sw) attr rt (fixargs env p pr))
+                                        Nothing      -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
+                                                           return (HashSet.singleton n, tryBox rest c)
+      boxingFromAtom w [i@Int{}] ts _ _ _
+        | isUnboxable t             = return (HashSet.empty, Box (last ts) (unbox t i))
+        where t                     = head ts
+      boxingFromAtom w [x@Float{}] ts _ _ _
                                     = return (HashSet.empty, Box (last ts) (unbox (head ts) x))
-      boxingFromAtom w ts es        = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) es)
-      boxingBinop w attr es@[x1, x2] ts _ _
-        | isUnboxable t            =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
+      boxingFromAtom w es ts rt pr rest
+                                    = boxingDirectOrDynamic w fromatomKW (posarg es) rt pr rest
+      boxingBinop w attr es@[x1, x2] ts _ _ _
+        | isUnboxable t             = return (HashSet.empty, Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
               op                    = bin2Binary attr
-      boxingBinop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingUnop w attr es@[x1] ts _ _
+      boxingBinop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
+      boxingUnop w attr es@[x1] ts _ _ _
         | isUnboxable t             =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ UnOp NoLoc op (unbox t x1))
         where t                     = head ts
               op                    = un2Unary attr
-      boxingUnop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingCompop w attr es@[x1, x2] ts _ _
+      boxingUnop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
+      boxingCompop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
-      boxingCompop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
+      boxingCompop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
@@ -438,7 +542,7 @@ instance Boxing Expr where
     boxing env (Call l (Dot _ e n) PosNil KwdNil)
       | n == boolKW,
         Just rt <- unboxedRepType (typeOf env e)
-                                    = do (ws1,e1) <- boxing env e
+                                    = do (ws1,e1) <- boxing env e   
                                          let z = UnBox rt (Int l 0 "0")
                                          return (ws1, Box tBool $ CompOp l (forceUnbox env rt e1) [OpArg NEq z])
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f

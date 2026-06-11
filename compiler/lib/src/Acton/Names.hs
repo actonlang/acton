@@ -288,6 +288,8 @@ instance Vars Expr where
     freeQ (Set _ es)                = freeQ es
     freeQ (SetComp _ e co)          = (freeQ e `diffQ` bound co) ++ freeQ co
     freeQ (Paren _ e)               = freeQ e
+    freeQ (StaticWitnessCall _ c o _ _ t p)
+                                    = freeQ c ++ freeQ o ++ freeQ t ++ freeQ p
     freeQ (UnBox t e)               = freeQ e
     freeQ (Box t e)                 = freeQ e
 

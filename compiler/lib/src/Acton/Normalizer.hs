@@ -537,6 +537,10 @@ instance Norm Expr where
     norm env (Call l e p k)
       | Just (t, e1, e2) <- listGetItemCall env e (joinArg p k)
                                     = eCall (tApp (eQVar primUGetItem) [conv t]) <$> mapM (norm env) [e1, e2]
+      | Just (n, w, x) <- builtinWrapperCall env e (joinArg p k)
+                                    = do w' <- norm env w
+                                         x' <- norm env x
+                                         return $ Call l (Dot l w' n) (PosArg x' PosNil) KwdNil
       | otherwise                   = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
@@ -580,6 +584,17 @@ listGetItemCall env (Dot _ _ n) (PosArg e (PosArg ix PosNil))
                                     = Just (t, e, ix)
 listGetItemCall env (TApp _ e _) p  = listGetItemCall env e p
 listGetItemCall env _ _             = Nothing
+
+-- Type checking makes len/iter calls explicit witness calls.  Normalize these
+-- small builtin wrappers to the corresponding witness methods so Boxing sees
+-- the same shape as direct protocol dispatch.
+builtinWrapperCall env (TApp _ e _) p
+                                    = builtinWrapperCall env e p
+builtinWrapperCall env (Var _ qn) (PosArg w (PosArg x PosNil))
+  | unalias env qn == gBuiltin nLen = Just (lenKW, w, x)
+  | unalias env qn == gBuiltin (name "iter")
+                                    = Just (iterKW, w, x)
+builtinWrapperCall env _ _          = Nothing
 
 listElementType (TCon _ (TC q [t]))
   | q == qnList                     = Just t

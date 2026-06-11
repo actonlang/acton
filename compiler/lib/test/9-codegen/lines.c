@@ -3,7 +3,6 @@
 #include "out/types/lines.h"
 B_Eq linesQ_W_Apa_1097;
 B_Eq linesQ_W_Apa_759;
-B_Iterable linesQ_W_Apa_779;
 B_Eq linesQ_W_Apa_331;
 B_Eq linesQ_W_Apa_785;
 $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
@@ -494,7 +493,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         #line 68 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("loop body"), toB_int(((int64_t)((linesQ_main)(self))->i))), B_None, B_None, B_None, B_None);
     }
-    B_Iterator N_3iter = ((B_Iterator (*) ($WORD, B_list))((B_Iterable)(linesQ_W_Apa_779))->$class->__iter__)(linesQ_W_Apa_779, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
+    B_Iterator N_3iter = ((B_Iterator (*) (B_CollectionD_SequenceD_list, B_list))B_CollectionD_SequenceD_listD___iter__)((B_CollectionD_SequenceD_list)B_SequenceD_listG_witness->W_Collection, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     if ($PUSH()) {
         #line 73 "test/src/lines.act"
         while (true) {
@@ -1519,8 +1518,6 @@ void linesQ___init__ () {
     linesQ_W_Apa_1097 = W_Apa_1097;
     B_Eq W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
     linesQ_W_Apa_759 = W_Apa_759;
-    B_Iterable W_Apa_779 = (B_Iterable)B_SequenceD_listG_witness->W_Collection;
-    linesQ_W_Apa_779 = W_Apa_779;
     B_Eq W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
     linesQ_W_Apa_331 = W_Apa_331;
     B_Eq W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));

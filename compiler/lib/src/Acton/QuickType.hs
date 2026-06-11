@@ -216,6 +216,10 @@ instance QType Expr where
       where (ts, fxs, es')          = unzip3 $ map (qType env f) es
     qType env f (Paren l e)         = (t, fx, Paren l e')
       where (t, fx, e')             = qType env f e
+    qType env f (StaticWitnessCall l c o path n rt p)
+                                    = (t, upbound env [fx, fxp], StaticWitnessCall l c o path n rt (qMatch f p0 p1 p'))
+      where TFun _ fx p1 _ t        = rt
+            (p0, fxp, p')           = qType env f p
     qType env f (Box t e)           = (t, fx, Box t e')
       where (_, fx, e')             = qType env f e
     qType env f (UnBox t e)         = (t, fx, UnBox t e')
