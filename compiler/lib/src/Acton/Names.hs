@@ -18,6 +18,7 @@ import Utils
 import Acton.Syntax
 import Acton.Builtin
 import Debug.Trace
+import qualified Data.Set as Set
 
 
 isWitness (Internal Witness _ _)    = True
@@ -167,9 +168,15 @@ class Vars a where
     freeQ x                         = []
     bound x                         = []
 
-qns `diffQ` ns                      = filter f qns
-  where f (NoQ n)                   = n `notElem` ns
-        f _                         = True
+qns `diffQ` ns
+  | hasMany ns                      = filter fSet qns
+  | otherwise                       = filter fList qns
+  where fList (NoQ n)               = n `notElem` ns
+        fList _                     = True
+        fSet (NoQ n)                = not (Set.member n boundNames)
+        fSet _                      = True
+        boundNames                  = Set.fromList ns
+        hasMany xs                  = length (take 9 xs) > 8
 
 instance Vars a => Vars [a] where
     free                            = concatMap free
