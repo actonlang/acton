@@ -144,6 +144,7 @@ module Acton.Compile
   , readModuleDoc
   , readModuleDocIndexEntry
   , readImports
+  , special_projects
   , buildGlobalTasks
   , selectNeededTasks
   , selectAffectedTasks
@@ -183,6 +184,8 @@ module Acton.Compile
   , modNameToFilename
   , modNameToString
   , nameToString
+  , addProjPrefix
+  , dropProjPrefix
   , importsOf
   , quiet
   , altOutput
@@ -5420,6 +5423,13 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 -- | Render a name identifier to a plain string.
 nameToString :: A.Name -> String
 nameToString (A.Name _ s) = s
+
+addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
+  where proj                = projName paths
+        ns                  = A.modPath mn
+
+dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.
