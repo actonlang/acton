@@ -244,11 +244,11 @@ tyconDescendants env tc
                                   IntSet.intersection (tybelow info) (tycons x)
 
 tyconsByAttr                    :: Env -> Name -> [TCon]
-tyconsByAttr env n              = [ c | tid <- Map.findWithDefault [] n (tyconAttrs x), Just c <- [conById x tid] ]
+tyconsByAttr env n              = [ c | tid <- reverse $ Map.findWithDefault [] n (tyconAttrs x), Just c <- [conById x tid] ]
   where x                       = envX env
 
 typrotosByAttr                  :: Env -> Name -> [PCon]
-typrotosByAttr env n            = [ p | tid <- Map.findWithDefault [] n (typrotoAttrs x), Just p <- [conById x tid] ]
+typrotosByAttr env n            = [ p | tid <- reverse $ Map.findWithDefault [] n (typrotoAttrs x), Just p <- [conById x tid] ]
   where x                       = envX env
 
 abstractAttrsX                  :: Env -> QName -> [Name]

@@ -568,7 +568,7 @@ allAbove env (TFX _ FXPure)         = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)       = [fxProc, fxAction]
 
 allBelow env (TCon _ tc)            = map tCon tcons ++ map tVar tvars
-  where tcons                       = schematic' tc : allDescendants env tc
+  where tcons                       = schematic' tc : tyconDescendants env tc
         tvars                       = tvarDescendants env tcons
 allBelow env (TVar _ tv)            = [tVar tv]
 allBelow env (TOpt _ t)             = tOpt tWild : allBelow env t ++ [tNone]
@@ -589,11 +589,11 @@ allBelowProto env p
   where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
 
 allClassAttr env n                  = map tCon tcons ++ map tVar tvars
-  where tcons                       = allConAttr env n
+  where tcons                       = tyconsByAttr env n
         tvars                       = tvarDescendants env tcons
 
 allProtoAttr env n                  = map tCon pcons ++ concatMap (allBelowProto env) pcons
-  where pcons                       = allPConAttr env n
+  where pcons                       = typrotosByAttr env n
 
 
 ----------------------------------------------------------------------------------------------------------------------
