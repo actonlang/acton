@@ -169,7 +169,7 @@ addconinfo                      :: EnvF x -> (Name -> QName) -> TypeX -> (Name,N
 addconinfo env f x (n,i)
   | NClass q us te _ <- i       = addcon n q us te addclass x
   | NProto q us te _ <- i       = addcon n q us te addproto x
-  | NAct q _ _ te _ <- i        = addcon n q [] te addactor x
+  | NAct q _ _ te _ <- i        = addcon n q [] (notHidden te) addactor x
   | otherwise                   = x
   where addclass tid info x     = x{ tycons = IntSet.insert tid (tycons x),
                                      tyconAttrs = addTyAttrs tid (tyattrs info) (tyconAttrs x) }
@@ -193,7 +193,17 @@ addconinfo env f x (n,i)
                 }
                 tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
                 addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
-                abstracts       = abstractAttrs env qn
+                abstracts       = indexAbstractAttrs env us te
+
+indexAbstractAttrs              :: EnvF x -> [WTCon] -> TEnv -> [Name]
+indexAbstractAttrs env us te     = recordLookupList "type.indexAbstractAttrs" $
+                                   [ n | n <- names, maybe False isAbstract (Map.lookup n visible) ]
+  where aenv                    = reverse te ++ concat [ reverse te' | (_,c) <- us, let (_,_,te') = findConName (tcname c) env ]
+        names                   = nub $ reverse $ map fst aenv
+        visible                 = foldl' add Map.empty aenv
+        add m (n,i)             = Map.insertWith (\_ old -> old) n i m
+        isAbstract (NSig _ dec _) = dec /= Property
+        isAbstract _            = False
 
 addTyAttrs                      :: Int -> Set Name -> TyAttrMap -> TyAttrMap
 addTyAttrs tid attrs attrmap     = Set.foldr add attrmap attrs
@@ -927,12 +937,12 @@ instance USubst Witness where
 instance USubst Env where
     usubstWith s env                  = let ne = usubstWith s (activeNames env)
                                             ex = usubstWith s (envX env)
-                                            ae = HashMap.map (substAttrEnv s) (attrEnvs env)
+                                            ae = HashMap.filterWithKey keepQualifiedAttrEnv (attrEnvs env)
                                         in setActiveNames ne env{ envX = ex, attrEnvs = ae }
 
-substAttrEnv                          :: IntMap Type -> [(Name,(WPath,NameInfo))] -> [(Name,(WPath,NameInfo))]
-substAttrEnv s                        = map subst
-  where subst (n,(wp,i))              = (n,(wp,usubstWith s i))
+keepQualifiedAttrEnv                  :: QName -> [(Name,(WPath,NameInfo))] -> Bool
+keepQualifiedAttrEnv GName{} _        = True
+keepQualifiedAttrEnv _ _              = False
 
 instance UFree Env where
     ufree env                   = ufree (activeNames env) ++ ufree (envX env)
