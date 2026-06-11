@@ -78,6 +78,7 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplLocalDeps = []
     , InterfaceFiles.nhPubDeps = []
     , InterfaceFiles.nhImplDeps = []
+    , InterfaceFiles.nhStmtIndices = []
     }
 
 hashTestName :: S.Name
@@ -340,6 +341,31 @@ main = do
           write [(wName, I.NVar S.tWild)]
           InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Nothing
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db wName `shouldReturn` Just wName
+
+      it "reads selected statements by ownership" $ do
+        withSystemTempDirectory "acton-iface-stmts" $ \dir -> do
+          let mn = S.modName ["iface_stmts"]
+              tyPath = dir </> "iface_stmts.tydb"
+              aName = S.name "a"
+              bName = S.name "b"
+              cName = S.name "c"
+              stmtFor n v = S.Assign NoLoc [S.pVar' n] (S.eInt v)
+              body = [stmtFor aName 1, stmtFor bName 2, stmtFor cName 3]
+              iface = [ (n, I.NVar S.tWild) | n <- [aName, bName, cName] ]
+              nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing body
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] Nothing nmod tmod
+          (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
+            InterfaceFiles.readHeader tyPath
+          [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
+            `shouldBe` [[1]]
+          selected <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [aName, cName])
+          case selected of
+            Just (S.Module _ _ _ stmts) -> stmts `shouldBe` [stmtFor aName 1, stmtFor cName 3]
+            Nothing -> expectationFailure "expected selected statements"
+          missing <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [S.name "nope"])
+          missing `shouldBe` Nothing
 
       it "supports concurrent read-only access to one interface" $ do
         withSystemTempDirectory "acton-iface-concurrent" $ \dir -> do

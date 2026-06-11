@@ -1580,6 +1580,7 @@ assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps impl
         , InterfaceFiles.nhImplLocalDeps = localDeps implLocalDeps n
         , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
         , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
+        , InterfaceFiles.nhStmtIndices = []
         }
     | n <- namesSorted
     ]

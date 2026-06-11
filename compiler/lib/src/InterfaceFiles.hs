@@ -45,6 +45,7 @@
 --     "constructors"   :: [A.Name]                    -- public class/protocol/actor names
 --     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
+--     "stmt-has-not-impl" :: Bool                     -- any statement contains NotImplemented
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
 --
@@ -52,6 +53,7 @@
 --     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
 --     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
 --     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local deps
+--                                                     -- + owned statement indexes
 --
 --   Per-dependency keys:
 --     "deps/<module>"          :: [DepNameInfo]        -- dependency names with pub/impl hashes
@@ -130,6 +132,7 @@ module InterfaceFiles
   , readInterfaceDBDescendants
   , readInterfaceDBExtByProto
   , readInterfaceDBExtByType
+  , readSelectedModule
   , TyDbWriteProgress(..)
   , writeFile
   , writeFileWithProgress
@@ -161,6 +164,7 @@ import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Acton.Names (isPublicName)
+import qualified Acton.Names as Names
 import Utils (SrcLoc(NoLoc))
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
@@ -182,6 +186,7 @@ data NameHashInfo = NameHashInfo
   , nhImplLocalDeps :: [A.Name]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
   , nhImplDeps :: [(A.QName, BS.ByteString)]
+  , nhStmtIndices :: [Int]
   } deriving (Show, Eq, Generic)
 
 instance Persist.Persist NameHashInfo
@@ -431,7 +436,7 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -444,6 +449,7 @@ keyPublicNames  = key "public-names"
 keyConstructors = key "constructors"
 keyActors       = key "actors"
 keyStmtCount    = key "stmt-count"
+keyStmtHasNotImpl = key "stmt-has-not-impl"
 keyModuleHeader = key "module-header"
 
 padIndex :: Int -> String
@@ -1031,6 +1037,40 @@ readStmtEntries txn dbi = do
     forM [0 .. count - 1] $ \i ->
       getValue ("stmt " ++ show i) txn dbi (keyStmt i)
 
+-- | Reconstruct a typed module containing only the statements owned by the
+-- selected names. Returns Nothing when the cache predates statement
+-- ownership, when ownership is missing for a selected name, or when the
+-- module contains NotImplemented hooks (whose native-extension pairing needs
+-- the whole module); callers then fall back to a full read.
+readSelectedModule :: FilePath -> [NameHashInfo] -> Set.Set A.Name -> IO (Maybe A.Module)
+readSelectedModule f nameHashes selected =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      mHasNotImpl <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+      case mHasNotImpl of
+        Nothing -> do
+          traceTydbRead "stmt-index-miss" f "stmt-has-not-impl"
+          return Nothing
+        Just True -> do
+          traceTydbRead "stmt-fallback" f "not-impl"
+          return Nothing
+        Just False -> do
+          let names = Set.toList selected
+              stmtMap = Map.fromList [ (nhName nh, nhStmtIndices nh) | nh <- nameHashes ]
+              owners = [ (n, Map.lookup n stmtMap) | n <- names ]
+              unusable = [ n | (n, mis) <- owners, maybe True null mis ]
+          if not (null unusable)
+            then do
+              traceTydbRead "stmt-index-miss" f (Data.List.intercalate "," (map A.nstr unusable))
+              return Nothing
+            else do
+              let indices = Data.List.sort $ Data.List.nub $ concat [ is | (_, Just is) <- owners ]
+              stmts <- forM indices $ \i ->
+                getValue ("stmt " ++ show i) txn dbi (keyStmt i)
+              traceTydbRead "stmts" f ("selected " ++ show (length names) ++ " -> " ++ show (length stmts))
+              return $ Just (A.Module tmn timps tdoc stmts)
+
 emptyExtensionIndex :: ExtensionIndex
 emptyExtensionIndex =
     ExtensionIndex
@@ -1240,6 +1280,28 @@ queryIndexEntries nmod =
     ++ [ (keyExtType qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtTypes ix) ]
   where ix = queryIndexes nmod
 
+-- Statement ownership: each top-level name records the indexes of the typed
+-- statements that declare it, so a statement-selective reader can fetch just
+-- the stmt/<NNN> rows for a selected name set.
+addStmtIndices :: [A.Stmt] -> [NameHashInfo] -> [NameHashInfo]
+addStmtIndices body nameHashes =
+    [ nh { nhStmtIndices = Map.findWithDefault [] (nhName nh) owners }
+    | nh <- nameHashes
+    ]
+  where
+    owners = Map.map (Data.List.sort . Data.List.nub) $
+             foldl' addStmt Map.empty (zip [0..] body)
+    addStmt acc (i, stmt) = foldl' (\m n -> Map.insertWith (++) n [i] m) acc (stmtTopNames stmt)
+
+stmtTopNames :: A.Stmt -> [A.Name]
+stmtTopNames stmt =
+    case stmt of
+      A.Decl _ ds          -> [ Names.dname' d | d <- ds ]
+      A.Signature _ ns _ _ -> ns
+      A.Assign _ ps _      -> Data.List.nub (Names.bound ps)
+      A.VarAssign _ ps _   -> Data.List.nub (Names.bound ps)
+      _                    -> []
+
 interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
 interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
@@ -1252,10 +1314,11 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
           , (keyDoc, encodeStrict mdoc)
           , (keyNameCount, encodeStrict (length te))
           , (keyStmtCount, encodeStrict (length body))
+          , (keyStmtHasNotImpl, encodeStrict (A.hasNotImpl body))
           , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
           ]
         nameChunks = entryChunks caps (zip [0..] te)
-        nameHashChunks = entryChunks caps nameHashes
+        nameHashChunks = entryChunks caps (addStmtIndices body nameHashes)
         stmtChunks = entryChunks caps (zip [0..] body)
         totalPrep = 4 + length nameChunks + length nameHashChunks + length stmtChunks
     prepDone <- newIORef (0 :: Int)
