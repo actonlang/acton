@@ -44,6 +44,7 @@ import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
+import Debug.Trace
 
 data TestMode = TestModeRun | TestModeList | TestModePerf | TestModeStress deriving (Eq, Show)
 
@@ -119,10 +120,13 @@ isWindowsTarget targetTriple =
         let (os, _) = break (== '-') rest
         in os == "windows"
 
+modulesOpt paths topts = [ proj ++ "." ++ m | m <- C.testModules topts ]
+  where proj = projName paths
+
 -- | List tests for selected modules and print them in a stable order.
 listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
 listProjectTests opts paths topts modules = do
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
     tests <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
@@ -167,7 +171,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
     let emitJson = C.testJson topts
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
+    traceM ("## modules: " ++ show modules)
+    traceM ("## --modules: " ++ show (C.testModules topts))
+    traceM ("## wanted: " ++ show wantedModules)
     testsByModule <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
       let wantedNames = Data.List.sort (filterTests nameRegexes names)
