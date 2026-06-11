@@ -64,6 +64,7 @@ Metadata and module-level keys:
 | `constructors` | `[Name]` |
 | `actors` | `[Name]` |
 | `stmt-count` | `Int` |
+| `stmt-has-not-impl` | `Bool` |
 
 The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each
@@ -105,7 +106,8 @@ Per-name keys:
 
 Each `NameHashInfo` value contains the local name, `srcHash`, `pubHash`,
 `implHash`, local public/implementation dependency names
-(`pubLocalDeps` / `implLocalDeps`). External dependency snapshots are stored in
+(`pubLocalDeps` / `implLocalDeps`), and the indexes of the typed top-level
+statements owned by that name. External dependency snapshots are stored in
 dependency rows instead of being repeated inside every `NameHashInfo`.
 
 Dependency rows:
@@ -186,7 +188,11 @@ keys plus the `deps` row and the stored name count. It does not decode
 first compare the dependency module hashes in `deps`; if that gate changes,
 they use per-name dependency rows to decide which local names are affected.
 DBP reads `roots` and exact `name-hash/<suffix>` entries while expanding the
-selected local dependency closure.
+selected local dependency closure. When the selected codegen hash is stale,
+`readSelectedModule` reconstructs a pruned typed module from only the selected
+`stmt/<index>` records; it falls back to `readFile` when statement ownership
+is missing or the module contains NotImplemented hooks, whose
+native-extension pairing needs the whole module.
 
 `readExtensionsByClass` and `readExtensionsByProtocol` read one class or
 protocol key directly. DBP uses these exact lookups while expanding the selected
@@ -196,8 +202,8 @@ extension names that the typed module can actually retain.
 `readFile` opens a read-only transaction and reconstructs the full payload by
 following the explicit order keys for ordered sections. It does not depend on
 LMDB cursor order for `TEnv` or typed statement reconstruction. DBP calls this
-only when its selection-sensitive codegen hash says the existing `.c`/`.h`
-output is missing or stale.
+only when selected statement reconstruction cannot serve a stale
+selection-sensitive codegen output.
 
 All readers share one cached read-only LMDB environment per `.tydb` path,
 opened with the normal reader lock table so concurrent writers in other

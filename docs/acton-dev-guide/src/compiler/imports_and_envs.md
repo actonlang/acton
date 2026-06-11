@@ -107,7 +107,7 @@ normal imported-name lookup:
 
 - implementation-hash refresh
 - codegen refresh
-- DBP back-pass execution after the selected codegen hash is stale
+- DBP back-pass fallback when selected statements cannot be reconstructed
 - tools that intentionally inspect a whole interface
 - completion fallback when the normal import environment cannot be restored
 
