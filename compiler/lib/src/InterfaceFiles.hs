@@ -113,7 +113,7 @@ import Control.DeepSeq (NFData, rnf)
 import qualified Control.Exception as E
 import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
-import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, withMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
 import Data.IORef (atomicModifyIORef', newIORef)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -139,7 +139,7 @@ import System.FilePath ((</>), takeExtension)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
-import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
+import System.Posix.Files (deviceID, fileAccess, fileID, getFileStatus, modificationTimeHiRes, setFileMode)
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -261,11 +261,37 @@ lmdbOpenLock :: MVar ()
 {-# NOINLINE lmdbOpenLock #-}
 lmdbOpenLock = unsafePerformIO (newMVar ())
 
--- LMDB does not support opening the same environment twice in one process, so
--- keep one in-process lock per .tydb path while an environment handle is open.
+-- LMDB does not support opening the same environment twice in one process.
+-- Exclusive users (writers, env copies) serialize on a per-path lock and own
+-- the only environment while they run. Readers share one cached read-only
+-- environment per path, tracked in sharedEnvs with an active-reader count;
+-- exclusive users retire the cached environment and wait for its readers to
+-- drain before opening their own, so the process never holds two
+-- environments for one path.
 interfaceLocks :: MVar (Map.Map FilePath (MVar ()))
 {-# NOINLINE interfaceLocks #-}
 interfaceLocks = unsafePerformIO (newMVar Map.empty)
+
+data SharedEnv = SharedEnv
+  { seEnv :: LMDB.MDB_env
+  , seIdent :: Maybe (Integer, Integer)
+  , seReaders :: Int
+  , seRetiring :: Bool
+  }
+
+data SharedEnvClaim = Claimed SharedEnv | Retiring | Absent
+
+-- Identify the data file behind a path, so a cached environment whose file
+-- was removed and recreated (a new inode) is not mistaken for current.
+envFileIdent :: FilePath -> IO (Maybe (Integer, Integer))
+envFileIdent path =
+    (do st <- getFileStatus (dataFilePath path)
+        return (Just (fromIntegral (deviceID st), fromIntegral (fileID st))))
+      `E.catch` \e -> if isDoesNotExistError e then return Nothing else E.throwIO e
+
+sharedEnvs :: MVar (Map.Map FilePath SharedEnv)
+{-# NOINLINE sharedEnvs #-}
+sharedEnvs = unsafePerformIO (newMVar Map.empty)
 
 traceTydbReads :: Bool
 traceTydbReads =
@@ -427,11 +453,16 @@ copyVal (LMDB.MDB_val len ptr) =
     BS.packCStringLen (castPtr ptr, fromIntegral len)
 
 withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
-withEnv path readOnly mapSize action =
-    withInterfaceLock path $
-      E.bracket open LMDB.mdb_env_close action
+withEnv path readOnly mapSize action = do
+    cpath <- canonicalizePath path
+    withInterfaceLockC cpath $ do
+      evictSharedEnv cpath
+      E.bracket (openEnvWithRetry path readOnly mapSize) LMDB.mdb_env_close action
+
+openEnvWithRetry :: FilePath -> Bool -> Int -> IO LMDB.MDB_env
+openEnvWithRetry path readOnly mapSize =
+    withMVar lmdbOpenLock $ \_ -> openWithRetry lmdbTransientMaxAttempts
   where
-    open = withMVar lmdbOpenLock $ \_ -> openWithRetry lmdbTransientMaxAttempts
     -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
     -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
     -- retry. LMDB-semantic failures (corruption, version mismatch) are not
@@ -504,6 +535,10 @@ lmdbTransientRetryDelayUs = 20000
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
     cpath <- canonicalizePath path
+    withInterfaceLockC cpath action
+
+withInterfaceLockC :: FilePath -> IO a -> IO a
+withInterfaceLockC cpath action = do
     lock <- modifyMVar interfaceLocks $ \locks ->
       case Map.lookup cpath locks of
         Just lock -> return (locks, lock)
@@ -512,25 +547,113 @@ withInterfaceLock path action = do
           return (Map.insert cpath lock locks, lock)
     withMVar lock $ \_ -> action
 
+-- Claim the shared read environment for a path, opening it on first use. The
+-- open runs under the per-path lock so it cannot race an exclusive user; a
+-- retiring entry is waited out, since its last reader closes it.
+acquireSharedEnv :: FilePath -> FilePath -> IO LMDB.MDB_env
+acquireSharedEnv cpath path = do
+    ident <- envFileIdent path
+    claim <- claimSharedEnv cpath
+    case claim of
+      Claimed se
+        | seIdent se == ident -> return (seEnv se)
+        | otherwise -> do
+            -- The file behind the cached environment was replaced.
+            retireSharedEnv cpath
+            releaseSharedEnv cpath
+            acquireSharedEnv cpath path
+      Retiring -> threadDelay lmdbTransientRetryDelayUs >> acquireSharedEnv cpath path
+      Absent -> do
+        mopened <- withInterfaceLockC cpath $ do
+          claim' <- claimSharedEnv cpath
+          case claim' of
+            Claimed se -> return (Just (seEnv se))
+            Retiring -> return Nothing
+            Absent -> do
+              -- The binding adds MDB_NOTLS implicitly, so reader slots follow
+              -- transactions rather than the transient bound threads they run
+              -- on.
+              mapSize <- readMapSize path
+              env <- openEnvWithRetry path True mapSize
+              ident' <- envFileIdent path
+              modifyMVar_ sharedEnvs (return . Map.insert cpath (SharedEnv env ident' 1 False))
+              return (Just env)
+        case mopened of
+          Just env -> return env
+          Nothing -> threadDelay lmdbTransientRetryDelayUs >> acquireSharedEnv cpath path
+
+claimSharedEnv :: FilePath -> IO SharedEnvClaim
+claimSharedEnv cpath =
+    modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se | not (seRetiring se) ->
+          return (Map.insert cpath se{ seReaders = seReaders se + 1 } envs, Claimed se)
+        Just _ -> return (envs, Retiring)
+        Nothing -> return (envs, Absent)
+
+releaseSharedEnv :: FilePath -> IO ()
+releaseSharedEnv cpath = do
+    mclose <- modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se
+          | seReaders se <= 1 && seRetiring se -> return (Map.delete cpath envs, Just (seEnv se))
+          | otherwise -> return (Map.insert cpath se{ seReaders = seReaders se - 1 } envs, Nothing)
+        Nothing -> return (envs, Nothing)
+    mapM_ LMDB.mdb_env_close mclose
+
+-- Mark the shared environment stale (e.g. the map was grown by another
+-- process); the last reader closes it and the next acquire reopens.
+retireSharedEnv :: FilePath -> IO ()
+retireSharedEnv cpath = do
+    mclose <- modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se
+          | seReaders se <= 0 -> return (Map.delete cpath envs, Just (seEnv se))
+          | otherwise -> return (Map.insert cpath se{ seRetiring = True } envs, Nothing)
+        Nothing -> return (envs, Nothing)
+    mapM_ LMDB.mdb_env_close mclose
+
+-- Exclusive users call this under the per-path lock: retire the shared
+-- environment and wait until its active readers have drained and closed it.
+evictSharedEnv :: FilePath -> IO ()
+evictSharedEnv cpath = do
+    retireSharedEnv cpath
+    waitGone
+  where
+    waitGone = do
+      gone <- withMVar sharedEnvs (return . Map.notMember cpath)
+      unless gone (threadDelay lmdbTransientRetryDelayUs >> waitGone)
+
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withReadTxn path action = do
-    mapSize <- readMapSize path
-    -- mdb_txn_begin can still hit a transient lock-table OS error after a
-    -- successful env open, so retry the read transaction with a fresh env.
-    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts mapSize
+    cpath <- canonicalizePath path
+    -- mdb_txn_begin can hit a transient lock-table OS error, and another
+    -- process may have grown the map since the shared environment was opened;
+    -- both retire the cached environment and retry with a fresh one.
+    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts cpath
   where
-    readTxnWithRetry attempt mapSize = do
-      res <- withEnv path True mapSize $ \env ->
-        E.try $
-          E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
-            dbi <- LMDB.mdb_dbi_open txn Nothing []
-            action txn dbi
+    readTxnWithRetry attempt cpath = do
+      env <- acquireSharedEnv cpath path
+      res <- (E.try $
+               E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
+                 dbi <- LMDB.mdb_dbi_open txn Nothing []
+                 action txn dbi)
+             `E.onException` releaseSharedEnv cpath
       case res of
-        Right x -> return x
+        Right x -> releaseSharedEnv cpath >> return x
         Left (err :: LMDB.LMDB_Error)
-          | attempt > 1 && isTransientLmdbOsError err ->
-              threadDelay lmdbTransientRetryDelayUs >> readTxnWithRetry (attempt - 1) mapSize
-          | otherwise -> E.throwIO err
+          | attempt > 1 && (isTransientLmdbOsError err || isMapResized err) -> do
+              retireSharedEnv cpath
+              releaseSharedEnv cpath
+              threadDelay lmdbTransientRetryDelayUs
+              readTxnWithRetry (attempt - 1) cpath
+          | otherwise -> releaseSharedEnv cpath >> E.throwIO err
+
+isMapResized :: LMDB.LMDB_Error -> Bool
+isMapResized err =
+    case LMDB.e_code err of
+      Right LMDB.MDB_MAP_RESIZED -> True
+      _ -> False
 
 withWriteTxn :: FilePath -> Int -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withWriteTxn path mapSize action =
