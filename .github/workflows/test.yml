@@ -576,38 +576,48 @@ jobs:
           ./acton-test | grep "Hello, world"
 
 
+  matrix_maker_run_linux:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.setmatrix.outputs.matrix }}
+    steps:
+      - name: "Set Matrix for PR"
+        # Keep one package smoke in the PR loop; the full distro/target matrix
+        # still runs on main, tags, scheduled runs, and manual runs.
+        if: github.event_name == 'pull_request'
+        id: setmatrix_pr
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"amd64\"}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set Matrix for full run"
+        if: github.event_name != 'pull_request'
+        id: setmatrix_full
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"amd64\"},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"amd64\"},{\"os\":\"ubuntu\",\"version\":\"20.04\",\"arch\":\"amd64\"},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"amd64\"},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"amd64\"},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64\"},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"amd64\",\"target\":\"x86_64-linux-musl\"},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64\",\"target\":\"aarch64-linux-musl\"}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set final matrix output"
+        id: setmatrix
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+          else
+            echo "matrix=${{ steps.setmatrix_full.outputs.matrix }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Debug: Print matrix JSON"
+        run: |
+          echo "Matrix JSON:"
+          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+          echo "Event name: ${{ github.event_name }}"
+
+
   run-linux:
-    needs: build-debs
+    needs: [build-debs, matrix_maker_run_linux]
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: "debian"
-            version: "11"
-            arch: "amd64"
-          - os: "debian"
-            version: "12"
-            arch: "amd64"
-          - os: "ubuntu"
-            version: "20.04"
-            arch: "amd64"
-          - os: "ubuntu"
-            version: "22.04"
-            arch: "amd64"
-          - os: "ubuntu"
-            version: "24.04"
-            arch: "amd64"
-          - os: "ubuntu"
-            version: "24.04"
-            arch: "arm64"
-          - os: "ubuntu"
-            version: "24.04"
-            arch: "amd64"
-            target: "x86_64-linux-musl"
-          - os: "ubuntu"
-            version: "24.04"
-            arch: "arm64"
-            target: "aarch64-linux-musl"
+      matrix: ${{ fromJson(needs.matrix_maker_run_linux.outputs.matrix) }}
     env:
       # This makes it possible for the GitHub Action itself to run using an
       # older version of node, which is the only possibility to get it running
