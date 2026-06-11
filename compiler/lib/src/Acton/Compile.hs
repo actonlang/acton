@@ -2430,8 +2430,6 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                       moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
                   evaluate (rnf (nameHashes, roots, tests, mdoc))
-                  evaluate (rnf nmod)
-                  evaluate (rnf tchecked)
                   timeTypeHash <- getTime Monotonic
 
                   iff (C.types opts && isRoot) $ dump mn "types" (Pretty.print tchecked)
