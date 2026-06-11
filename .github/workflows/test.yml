@@ -715,10 +715,10 @@ jobs:
           path: |
             ~/.cache/acton/
           key: acton-cross-${{ matrix.arch }}
-      # Cross-compile hello for each target. --db on targets that support it;
+      # Cross-compile helloworld for each target. --db on targets that support it;
       # Windows has no RTS thread support, so those use --no-threads (per
       # AGENTS.md), which is the Windows build mode we actually ship.
-      - name: "Cross-compile hello for all targets"
+      - name: "Cross-compile helloworld for all targets"
         id: cross_compile
         run: |
           set -e
@@ -727,25 +727,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/acton-windows-hello/aarch64" "$RUNNER_TEMP/acton-windows-hello/x86_64"
           build aarch64-macos-none --db
           build aarch64-windows-gnu --no-threads
-          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/aarch64/hello.exe"
+          cp out/bin/helloworld.exe "$RUNNER_TEMP/acton-windows-hello/aarch64/helloworld.exe"
           build x86_64-macos-none --db
           build x86_64-linux-gnu.2.27 --db
           build x86_64-linux-musl --db
           build x86_64-windows-gnu --no-threads
-          cp out/bin/hello.exe "$RUNNER_TEMP/acton-windows-hello/x86_64/hello.exe"
-      - name: "Upload x86_64 Windows hello executable"
+          cp out/bin/helloworld.exe "$RUNNER_TEMP/acton-windows-hello/x86_64/helloworld.exe"
+      - name: "Upload x86_64 Windows helloworld executable"
         if: matrix.arch == 'amd64'
         uses: actions/upload-artifact@v7
         with:
-          name: acton-hello-windows-x86_64
-          path: ${{ runner.temp }}/acton-windows-hello/x86_64/hello.exe
+          name: acton-helloworld-windows-x86_64
+          path: ${{ runner.temp }}/acton-windows-hello/x86_64/helloworld.exe
           if-no-files-found: error
-      - name: "Upload arm64 Windows hello executable"
+      - name: "Upload arm64 Windows helloworld executable"
         if: matrix.arch == 'amd64'
         uses: actions/upload-artifact@v7
         with:
-          name: acton-hello-windows-arm64
-          path: ${{ runner.temp }}/acton-windows-hello/aarch64/hello.exe
+          name: acton-helloworld-windows-arm64
+          path: ${{ runner.temp }}/acton-windows-hello/aarch64/helloworld.exe
           if-no-files-found: error
       # Producer only: save the freshly-built cross-compile cache.
       - name: "Save cross-compile cache (~/.cache/acton)"
@@ -767,21 +767,21 @@ jobs:
         include:
           - arch: x86_64
             runner: windows-latest
-            artifact: acton-hello-windows-x86_64
+            artifact: acton-helloworld-windows-x86_64
           - arch: arm64
             runner: windows-11-arm
-            artifact: acton-hello-windows-arm64
+            artifact: acton-helloworld-windows-arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - name: "Download Windows hello executable"
+      - name: "Download Windows helloworld executable"
         uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.artifact }}
-      - name: "Run Windows hello executable"
+      - name: "Run Windows helloworld executable"
         shell: pwsh
         run: |
-          Write-Host "Running ${{ matrix.arch }} Windows hello executable"
-          $out = & .\hello.exe
+          Write-Host "Running ${{ matrix.arch }} Windows helloworld executable"
+          $out = & .\helloworld.exe
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
