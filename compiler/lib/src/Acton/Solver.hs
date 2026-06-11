@@ -437,11 +437,19 @@ typeIntersect :: Env -> [Type] -> [Type] -> [Type]
 typeIntersect env xs ys                     = recordLookupList "solver.typeIntersect" $
                                               recordLookupItems "solver.typeIntersect.xs" (length xs) $
                                               recordLookupItems "solver.typeIntersect.ys" (length ys) $
+                                              if xs `shorterOrEqual` ys then intersectLeft else intersectRight
+  where intersectLeft                       = recordLookupItems "solver.typeIntersect.yother" (length yother) $
                                               filter keep xs
-  where (ykeys, yother)                     = typeKeySet env ys
-        keep t
-          | Just k <- typeKey env t         = k `IntSet.member` ykeys
-          | otherwise                       = t `elem` yother
+          where (ykeys, yother)             = typeKeySet env ys
+                keep t
+                  | Just k <- typeKey env t = k `IntSet.member` ykeys
+                  | otherwise               = t `elem` yother
+        intersectRight                      = recordLookupItems "solver.typeIntersect.xother" (length xother) $
+                                              filter keep ys
+          where (xkeys, xother)             = typeKeySet env xs
+                keep t
+                  | Just k <- typeKey env t = k `IntSet.member` xkeys
+                  | otherwise               = t `elem` xother
 
 typeUnion :: Env -> [Type] -> [Type] -> [Type]
 typeUnion env xs ys                         = recordLookupList "solver.typeUnion" $
@@ -496,6 +504,11 @@ typeKey _ _                                 = Nothing
 isWild :: Type -> Bool
 isWild TWild{}                              = True
 isWild _                                    = False
+
+shorterOrEqual :: [a] -> [b] -> Bool
+shorterOrEqual [] _                         = True
+shorterOrEqual _ []                         = False
+shorterOrEqual (_:xs) (_:ys)                = shorterOrEqual xs ys
 
 
 -------------------------------------------------------------------------------------------------------------------------
