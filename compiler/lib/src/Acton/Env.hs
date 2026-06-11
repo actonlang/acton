@@ -70,6 +70,7 @@ data EnvF x                 = EnvF {
                                 context    :: [EnvCtx],
                                 qlevel     :: Int,
                                 gtypes     :: TEnv,      -- when traversing definition of a class c, gtypes contains result of findAttrSchemas c env 
+                                attrEnvs   :: M.HashMap QName [(Name,(WPath,NameInfo))],
                                 envX       :: x
                               } deriving (Show)
 
@@ -91,7 +92,8 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      closedTypeVars = closedTypeVars env,
                                      imports = imports env, improots = improots env,
                                      modules = modules env, hmodules = hmodules env, thismod = thismod env,
-                                     context = context env, qlevel = qlevel env, gtypes = gtypes env, envX = x }
+                                     context = context env, qlevel = qlevel env, gtypes = gtypes env,
+                                     attrEnvs = attrEnvs env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -127,8 +129,8 @@ mapModules1                 :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> E
 mapModules1 f env           = mapModules (\_ ni -> [f ni]) env
 
 mapModules                  :: (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-mapModules f env            = env' { hmodules = convTEnv2HTEnv mods' }
- where env'                 = env { modules = mods' }
+mapModules f env            = refreshEnvIndexes env { modules = mods' }
+ where
        prim : mods          = modules env
        mods'                = prim : walk [] mods
 
@@ -274,6 +276,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             context = [],
                                             qlevel = 0,
                                             gtypes = [],
+                                            attrEnvs = M.empty,
                                             envX = () }
 initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
                                 let NModule _ envBuiltin builtinDocstring = nmod
@@ -299,12 +302,15 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.r
                                                  context = [],
                                                  qlevel = 0,
                                                  gtypes = [],
+                                                 attrEnvs = M.empty,
                                                  envX = () }
-                                    env = importAll mBuiltin envBuiltinPublic env0
+                                    env = importAll mBuiltin envBuiltinPublic $ refreshEnvIndexes env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
-env `withModulesFrom` env'  = env{modules = modules env'}
+env `withModulesFrom` env'  = env{ modules = modules env',
+                                    hmodules = hmodules env',
+                                    attrEnvs = attrEnvs env' }
 
 hnamesFrom                  :: TEnv -> HTEnv
 hnamesFrom te               = extendHNames te M.empty
@@ -386,16 +392,18 @@ uniqueNames ns              = reverse $ snd $ foldl' add (M.empty, []) ns
 define                      :: TEnv -> EnvF x -> EnvF x
 define te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = addActiveNames te' env
+  | otherwise               = addAttrEnvEntries NoQ te' env'
   where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
         te'                 = reverse te
+        env'                = addActiveNames te' env
 
 defineClosed                :: TEnv -> EnvF x -> EnvF x
 defineClosed te env
   | not $ null badSelf      = selfParamError (loc $ head badSelf)
-  | otherwise               = addClosedNames te' env
+  | otherwise               = addAttrEnvEntries NoQ te' env'
   where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
         te'                 = reverse te
+        env'                = addClosedNames te' env
 
 
 addImport                   :: ModName -> EnvF x -> EnvF x
@@ -434,6 +442,45 @@ addMod m ms newte mdoc env  = env{ modules = addM ns (modules env) }
                             = (n, NModule ms1 (addM ns te1) doc) : te
     update n ns (ni:te)     = ni : update n ns te
     update n ns []          = (n, NModule ms (addM ns []) mdoc) : []
+
+refreshEnvIndexes           :: EnvF x -> EnvF x
+refreshEnvIndexes env       = rebuildAttrEnvCache env{ hmodules = convTEnv2HTEnv (modules env) }
+
+rebuildAttrEnvCache         :: EnvF x -> EnvF x
+rebuildAttrEnvCache env     = env{ attrEnvs = foldl' add M.empty entries }
+  where entries             = moduleCons [] (modules env) ++ localCons
+        localCons           = [ (NoQ n, i) | (n,i) <- activeNames env ++ closedNames env, isConNameInfo i ]
+        add cache (qn, _)   = insertAttrEnv env qn cache
+
+moduleCons                  :: [Name] -> TEnv -> [(QName,NameInfo)]
+moduleCons ns               = concatMap go
+  where go (n, NModule _ te _) = moduleCons (ns ++ [n]) te
+        go (n, i)
+          | isConNameInfo i    = [(GName (ModName ns) n, i)]
+          | otherwise          = []
+
+addAttrEnvEntries           :: (Name -> QName) -> TEnv -> EnvF x -> EnvF x
+addAttrEnvEntries f te env  = env{ attrEnvs = foldl' add (attrEnvs env) te }
+  where add cache (n,i)
+          | isConNameInfo i = insertAttrEnv env (f n) cache
+          | otherwise       = cache
+
+insertAttrEnv               :: EnvF x -> QName -> M.HashMap QName [(Name,(WPath,NameInfo))] -> M.HashMap QName [(Name,(WPath,NameInfo))]
+insertAttrEnv env qn cache  = M.insert qn (attrEnvRaw env qn) cache
+
+isConNameInfo               :: NameInfo -> Bool
+isConNameInfo NAct{}        = True
+isConNameInfo NClass{}      = True
+isConNameInfo NProto{}      = True
+isConNameInfo NExt{}        = True
+isConNameInfo _             = False
+
+isConHNameInfo              :: HNameInfo -> Bool
+isConHNameInfo HNAct{}      = True
+isConHNameInfo HNClass{}    = True
+isConHNameInfo HNProto{}    = True
+isConHNameInfo HNExt{}      = True
+isConHNameInfo _            = False
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
@@ -767,9 +814,32 @@ attributes' f env qn        = recordLookupList "env.attributes" $
 
 attrEnv                     :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
 attrEnv env qn              = recordLookupList "env.attrEnv" $
+                              case cachedAttrEnv env qn of
+                                Just aenv -> aenv
+                                Nothing   -> attrEnvRaw env qn
+
+attrEnvRaw                  :: EnvF x -> QName -> [(Name,(WPath,NameInfo))]
+attrEnvRaw env qn           =
                               [ (n,(wp,i)) | (wp,c) <- ([],tc) : us, let (_,_,te) = findConName (tcname c) env, (n,i) <- reverse te ]   -- in override order
   where (q,us,_)            = findConName qn env
         tc                  = TC qn [ tVar v | QBind v _ <- q ]
+
+cachedAttrEnv               :: EnvF x -> QName -> Maybe [(Name,(WPath,NameInfo))]
+cachedAttrEnv env qn
+  | maybe False isConHNameInfo (tryQName' qn env)
+                              = firstJust [ M.lookup qn' (attrEnvs env) | qn' <- cacheKeys ]
+  | otherwise                 = Nothing
+  where un                   = unalias env qn
+        cacheKeys            = nub $ qn : un : currentLocal un
+        currentLocal (GName m n)
+          | Just m == thismod env
+                              = [NoQ n]
+          | inBuiltin env && m == mBuiltin
+                              = [NoQ n]
+        currentLocal _        = []
+        firstJust []          = Nothing
+        firstJust (Just x:_)  = Just x
+        firstJust (Nothing:xs)= firstJust xs
 
 findAttrSchemas             :: EnvF x -> QName -> TEnv
 findAttrSchemas env qn      = recordLookupList "env.findAttrSchemas" $
@@ -1212,7 +1282,7 @@ instance Flows Handler where
 -- Import handling (local definitions only) -------------------------------------------------------------------------
 
 --getImps                         :: [FilePath] -> EnvF x -> [Import] -> IO (EnvF x)
-getImps spath env []         = return env { hmodules = convTEnv2HTEnv (modules env) }
+getImps spath env []         = return $ refreshEnvIndexes env
 getImps spath env (i:is)     = do env' <- impModule spath env i
                                   getImps spath env' is
 

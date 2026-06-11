@@ -927,7 +927,12 @@ instance USubst Witness where
 instance USubst Env where
     usubstWith s env                  = let ne = usubstWith s (activeNames env)
                                             ex = usubstWith s (envX env)
-                                        in setActiveNames ne env{ envX = ex }
+                                            ae = HashMap.map (substAttrEnv s) (attrEnvs env)
+                                        in setActiveNames ne env{ envX = ex, attrEnvs = ae }
+
+substAttrEnv                          :: IntMap Type -> [(Name,(WPath,NameInfo))] -> [(Name,(WPath,NameInfo))]
+substAttrEnv s                        = map subst
+  where subst (n,(wp,i))              = (n,(wp,usubstWith s i))
 
 instance UFree Env where
     ufree env                   = ufree (activeNames env) ++ ufree (envX env)
