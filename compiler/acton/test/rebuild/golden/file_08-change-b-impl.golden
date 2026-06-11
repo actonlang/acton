@@ -1,10 +1,10 @@
 Building file src/c.act in project .
 Resolving dependencies (fetching if missing)...
   Fresh rebuild.a: using cached .tydb
-   rebuild.b  Parse done                                                            0.000 s
+   rebuild.b  Parse done                                                               0.000 s
   Stale rebuild.b: source changed
   Hash deltas rebuild.b: +DocInfo, ~baa{src HASH1 -> HASH2, impl HASH1 -> HASH2}
-   rebuild.b  Type check done                                                       0.000 s
+   rebuild.b  Type check done                                                          0.000 s
      Non-total inferred signature: baa
        baa : () -> int
      Non-total inferred signature: DocInfo
@@ -12,8 +12,8 @@ Resolving dependencies (fetching if missing)...
            G_init : () -> None
            get : () -> int
   Stale rebuild.c: impl changes in rebuild.b.baa HASH1 → HASH2 (used by main)
-   rebuild.b  Wrote .tydb                                                           0.000 s
-   rebuild.b  Generated docs                                                        0.000 s
+   rebuild.b  Wrote .tydb                                                              0.000 s
+   rebuild.b  Generated docs                                                           0.000 s
      Back normalize done: rebuild.b                                                 0.000 s
      Back deactorize done: rebuild.b                                                0.000 s
      Back cps done: rebuild.b                                                       0.000 s
@@ -22,8 +22,8 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: rebuild.b                                                   0.000 s
      Back render done: rebuild.b                                                    0.000 s
      Back write done: rebuild.b                                                     0.000 s
-   rebuild.b  Compilation done                                                      0.000 s
-   rebuild.c  Wrote .tydb                                                           0.000 s
+   rebuild.b  Compilation done                                                         0.000 s
+   rebuild.c  Wrote .tydb                                                              0.000 s
      Back normalize done: rebuild.c                                                 0.000 s
      Back deactorize done: rebuild.c                                                0.000 s
      Back cps done: rebuild.c                                                       0.000 s
@@ -32,5 +32,5 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: rebuild.c                                                   0.000 s
      Back render done: rebuild.c                                                    0.000 s
      Back write done: rebuild.c                                                     0.000 s
-   rebuild.c  Compilation done                                                      0.000 s
-              Final compilation done                                                0.000 s
+   rebuild.c  Compilation done                                                         0.000 s
+              Final compilation done                                                   0.000 s

@@ -2384,11 +2384,11 @@ p47_unchanged_dep_reads_module_hashes_only =
     buildHashTraceDep depDir
     buildHashTraceRoot
     out <- buildTraceOutInArgs proj hashTraceBuildArgs
-    let bigTrace = traceLinesForTydb "big" out
-    assertTraceHas "big should be checked by module hash" "module-hashes" bigTrace
-    assertTraceLacks "big should not scan all name hashes" "name-hash-all" bigTrace
-    assertTraceLacks "big should not read a selected name hash" "name-hash" bigTrace
-    assertTraceLacks "big should not read a full interface" "all" bigTrace
+    let bigTrace = traceLinesForTydb "big_dep/big" out
+    assertTraceHas "big_dep.big should be checked by module hash" "module-hashes" bigTrace
+    assertTraceLacks "big_dep.big should not scan all name hashes" "name-hash-all" bigTrace
+    assertTraceLacks "big_dep.big should not read a selected name hash" "name-hash" bigTrace
+    assertTraceLacks "big_dep.big should not read a full interface" "all" bigTrace
     assertBool ("did not expect small to type check when dependency hashes are unchanged\n" ++ T.unpack out)
       (not (typechecked out modSmall))
 
@@ -2406,13 +2406,13 @@ p48_unrelated_dep_addition_reads_used_name_only =
     writeHashTraceBig depDir "1" 31
     buildHashTraceDep depDir
     out <- buildTraceOutInArgs proj hashTraceBuildArgs
-    let bigTrace = traceLinesForTydb "big" out
-        smallTrace = traceLinesForTydb "small" out
+    let bigTrace = traceLinesForTydb "big_dep/big" out
+        smallTrace = traceLinesForTydb "incremental_cases/small" out
     assertTraceHas "small should read dependency-name rows" "dep-names" smallTrace
     assertTraceLacks "small should not read dependency users for unchanged used names" "dep-users" smallTrace
-    assertTraceHas "big should read the used name hash" "name-hash" bigTrace
-    assertTraceLacks "big should not scan all name hashes" "name-hash-all" bigTrace
-    assertTraceLacks "big should not read a full interface" "all" bigTrace
+    assertTraceHas "big_dep.big should read the used name hash" "name-hash" bigTrace
+    assertTraceLacks "big_dep.big should not scan all name hashes" "name-hash-all" bigTrace
+    assertTraceLacks "big_dep.big should not read a full interface" "all" bigTrace
     assertBool ("did not expect small to type check when only an unused dependency name was added\n" ++ T.unpack out)
       (not (typechecked out modSmall))
 
@@ -2430,17 +2430,19 @@ p49_changed_dep_name_reads_users =
     writeHashTraceBig depDir "\"changed\"" 30
     buildHashTraceDep depDir
     out <- buildTraceOutInArgs proj hashTraceBuildArgs
-    let bigTrace = traceLinesForTydb "big" out
-        smallTrace = traceLinesForTydb "small" out
+    let bigTrace = traceLinesForTydb "big_dep/big" out
+        smallTrace = traceLinesForTydb "incremental_cases/small" out
     assertTraceHas "small should read dependency users for the changed name" "dep-users" smallTrace
-    assertTraceHas "big should read the changed name hash" "name-hash" bigTrace
+    assertTraceHas "big_dep.big should read the changed name hash" "name-hash" bigTrace
     assertBool ("expected small to type check when the used dependency name changes\n" ++ T.unpack out)
       (typechecked out modSmall)
 
 ensureHashTraceProjects :: IO FilePath
 ensureHashTraceProjects = do
   ensureCasesProject
-  depDir <- ensureDepProject casesProjDir "big"
+  let depDir = casesProjDir </> "deps" </> "big"
+  createDirectoryIfMissing True (depDir </> "src")
+  writeBuildAct depDir "big_dep" []
   pure depDir
 
 writeHashTraceBig :: FilePath -> T.Text -> Int -> IO ()
@@ -2462,10 +2464,10 @@ writeHashTraceBig depDir usedResult unusedCount =
 writeHashTraceSmall :: IO ()
 writeHashTraceSmall =
   writeFileUtf8 (casesSrcDir </> "small.act") $ T.unlines
-    [ "import big"
+    [ "import big_dep.big"
     , ""
     , "def value():"
-    , "    return big.used()"
+    , "    return big_dep.big.used()"
     ]
 
 writeHashTraceMain :: IO ()
@@ -2486,7 +2488,7 @@ buildHashTraceRoot = do
 buildHashTraceDep :: FilePath -> IO ()
 buildHashTraceDep depDir = do
   res <- runActonIn depDir ["build", "--color", "never", "--skip-build"]
-  assertExitSuccess "build dependency big" res
+  assertExitSuccess "build dependency big_dep" res
 
 hashTraceBuildArgs :: [String]
 hashTraceBuildArgs = ["--skip-build", "--searchpath", "deps/big/out/types"]

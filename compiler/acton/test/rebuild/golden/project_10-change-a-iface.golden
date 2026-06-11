@@ -1,13 +1,13 @@
 Resolving dependencies (fetching if missing)...
-   rebuild.a  Parse done                                                            0.000 s
+   rebuild.a  Parse done                                                               0.000 s
   Stale rebuild.a: source changed
   Hash deltas rebuild.a: -W_aaa_3, ~aaa{src HASH1 -> HASH2, pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   rebuild.a  Type check done                                                       0.000 s
+   rebuild.a  Type check done                                                          0.000 s
      Non-total inferred signature: aaa
        aaa : str
   Stale rebuild.b: pub changes in rebuild.a.aaa HASH1 → HASH2 (used by baa)
   Hash deltas rebuild.b: ~baa{pub HASH1 -> HASH2, impl HASH1 -> HASH2}
-   rebuild.b  Type check done                                                       0.000 s
+   rebuild.b  Type check done                                                          0.000 s
      Non-total inferred signature: baa
        baa : () -> str
      Non-total inferred signature: DocInfo
@@ -16,9 +16,9 @@ Resolving dependencies (fetching if missing)...
            get : () -> int
   Stale rebuild.c: pub changes in rebuild.b.baa HASH1 → HASH2 (used by main)
   Hash deltas rebuild.c: ~main{impl HASH1 -> HASH2}
-   rebuild.c  Type check done                                                       0.000 s
-   rebuild.a  Wrote .tydb                                                           0.000 s
-   rebuild.a  Generated docs                                                        0.000 s
+   rebuild.c  Type check done                                                          0.000 s
+   rebuild.a  Wrote .tydb                                                              0.000 s
+   rebuild.a  Generated docs                                                           0.000 s
      Back normalize done: rebuild.a                                                 0.000 s
      Back deactorize done: rebuild.a                                                0.000 s
      Back cps done: rebuild.a                                                       0.000 s
@@ -27,9 +27,9 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: rebuild.a                                                   0.000 s
      Back render done: rebuild.a                                                    0.000 s
      Back write done: rebuild.a                                                     0.000 s
-   rebuild.a  Compilation done                                                      0.000 s
-   rebuild.b  Wrote .tydb                                                           0.000 s
-   rebuild.b  Generated docs                                                        0.000 s
+   rebuild.a  Compilation done                                                         0.000 s
+   rebuild.b  Wrote .tydb                                                              0.000 s
+   rebuild.b  Generated docs                                                           0.000 s
      Back normalize done: rebuild.b                                                 0.000 s
      Back deactorize done: rebuild.b                                                0.000 s
      Back cps done: rebuild.b                                                       0.000 s
@@ -38,9 +38,9 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: rebuild.b                                                   0.000 s
      Back render done: rebuild.b                                                    0.000 s
      Back write done: rebuild.b                                                     0.000 s
-   rebuild.b  Compilation done                                                      0.000 s
-   rebuild.c  Wrote .tydb                                                           0.000 s
-   rebuild.c  Generated docs                                                        0.000 s
+   rebuild.b  Compilation done                                                         0.000 s
+   rebuild.c  Wrote .tydb                                                              0.000 s
+   rebuild.c  Generated docs                                                           0.000 s
      Back normalize done: rebuild.c                                                 0.000 s
      Back deactorize done: rebuild.c                                                0.000 s
      Back cps done: rebuild.c                                                       0.000 s
@@ -49,5 +49,5 @@ Resolving dependencies (fetching if missing)...
      Back codegen done: rebuild.c                                                   0.000 s
      Back render done: rebuild.c                                                    0.000 s
      Back write done: rebuild.c                                                     0.000 s
-   rebuild.c  Compilation done                                                      0.000 s
-              Final compilation done                                                0.000 s
+   rebuild.c  Compilation done                                                         0.000 s
+              Final compilation done                                                   0.000 s
