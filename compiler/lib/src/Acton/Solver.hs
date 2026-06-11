@@ -435,6 +435,8 @@ wildTuple                                   = tTuple tWild tWild
 
 typeIntersect :: Env -> [Type] -> [Type] -> [Type]
 typeIntersect env xs ys                     = recordLookupList "solver.typeIntersect" $
+                                              recordLookupItems "solver.typeIntersect.xs" (length xs) $
+                                              recordLookupItems "solver.typeIntersect.ys" (length ys) $
                                               filter keep xs
   where (ykeys, yother)                     = typeKeySet env ys
         keep t
@@ -443,6 +445,9 @@ typeIntersect env xs ys                     = recordLookupList "solver.typeInter
 
 typeUnion :: Env -> [Type] -> [Type] -> [Type]
 typeUnion env xs ys                         = recordLookupList "solver.typeUnion" $
+                                              recordLookupItems "solver.typeUnion.xs" (length xs) $
+                                              recordLookupItems "solver.typeUnion.ys" (length ys) $
+                                              recordLookupItems "solver.typeUnion.xother" (length xother) $
                                               xs ++ go IntSet.empty [] ys
   where (xkeys, xother)                     = typeKeySet env xs
         go _ _ []                           = []
@@ -457,6 +462,9 @@ typeUnion env xs ys                         = recordLookupList "solver.typeUnion
 
 typeDiff :: Env -> [Type] -> [Type] -> [Type]
 typeDiff env xs ys                          = recordLookupList "solver.typeDiff" $
+                                              recordLookupItems "solver.typeDiff.xs" (length xs) $
+                                              recordLookupItems "solver.typeDiff.ys" (length ys) $
+                                              recordLookupItems "solver.typeDiff.yother" (length yother) $
                                               filter keep xs
   where (ykeys, yother)                     = typeKeySet env ys
         keep t

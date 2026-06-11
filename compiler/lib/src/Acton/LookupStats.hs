@@ -3,6 +3,7 @@ module Acton.LookupStats
   ( lookupStatsEnabled
   , lookupStatsEvery
   , recordLookup
+  , recordLookupItems
   , recordLookupList
   , reportLookupStats
   ) where
@@ -104,6 +105,15 @@ recordLookupList bucket xs
       addLookupStat bucket (fromIntegral (t1 - t0)) (fromIntegral n)
       return xs
 {-# NOINLINE recordLookupList #-}
+
+recordLookupItems :: String -> Int -> a -> a
+recordLookupItems bucket items x
+  | not lookupStatsEnabled = x
+  | otherwise = unsafePerformIO $ do
+      let !n = items
+      addLookupStat bucket 0 (fromIntegral n)
+      return x
+{-# NOINLINE recordLookupItems #-}
 
 addLookupStat :: String -> Integer -> Integer -> IO ()
 addLookupStat bucket ns items =
