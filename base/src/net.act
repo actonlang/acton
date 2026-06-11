@@ -292,7 +292,7 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
         NotImplemented
     _init()
 
-actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int):
+actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int, tls_owner: int, worker_id: int):
     """TLS Listener Connection"""
     var _stream = -1
     var on_receive: ?action(TLSListenConnection, bytes) -> None = None
@@ -321,6 +321,9 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int):
         """Write data to remote"""
         NotImplemented
 
+    action def __cleanup__() -> None:
+        NotImplemented
+
     mut def __resume__() -> None:
         NotImplemented
 
@@ -332,11 +335,18 @@ actor TLSListenConnection(cap: _TCPListenConnectCap, server_stream: int):
 actor TLSListener(cap: TCPListenCap, address: str, port: int, cert_pem: bytes, key_pem: bytes, on_listen: action(TLSListener, ?str) -> None, on_accept: action(TLSListenConnection) -> None):
     """TLS Listener"""
     _stream = -1
-    _tls_ctx = -1
-    def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int):
+    _tls_owner = -1
+    def create_tls_listen_connection(cap: _TCPListenConnectCap, stream: int, tls_owner: int, worker_id: int):
         """Implementation internal"""
-        c = TLSListenConnection(cap, stream)
+        c = TLSListenConnection(cap, stream, tls_owner, worker_id)
         on_accept(c)
+
+    action def close() -> None:
+        """Close listener"""
+        NotImplemented
+
+    action def __cleanup__() -> None:
+        NotImplemented
 
     mut def __resume__() -> None:
         NotImplemented
@@ -381,6 +391,9 @@ actor TLSConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
     action def write(data: bytes) -> None:
         """Write data to remote"""
+        NotImplemented
+
+    action def __cleanup__() -> None:
         NotImplemented
 
     def reconnect():
