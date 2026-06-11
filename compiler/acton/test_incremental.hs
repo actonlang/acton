@@ -2718,6 +2718,43 @@ p53_imported_attr_inference_stays_selective =
     assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
+p55_dbp_reads_selected_statements :: TestTree
+p55_dbp_reads_selected_statements =
+  testCase "55-cached DBP reads selected .tydb statements" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modSmall = modLabel proj "small"
+    ensureCasesProjectWithDeps [("big", "deps/big")]
+    depDir <- ensureDepProject proj "big"
+    let bigSrc = depDir </> "src" </> "big.act"
+    writeHeavyClassModule bigSrc 40
+    bigRes <- runActonIn depDir ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "build cached big dependency" bigRes
+    writeFileUtf8 (src </> "small.act") $ T.unlines
+      [ "import big"
+      , ""
+      , "def use_one() -> int:"
+      , "    return big.Node000A(1).score_node000a(2)"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(use_one())"
+      , "    env.exit(0)"
+      ]
+    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build", "--dbp", "big:Node000A"]
+    assertExitSuccess "selective DBP .tydb trace build" res
+    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
+        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+        bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
+        bigNodeLines = filter (\line -> T.isInfixOf "name-hash" line && T.isInfixOf "Node000A" line) bigLines
+        bigStmtLines = filter (\line -> T.isInfixOf "tydb-read stmts" line && T.isInfixOf "selected 1 -> 1" line) bigLines
+    assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
+    assertBool ("expected exact Node000A hash lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+      (not (null bigNodeLines))
+    assertBool ("expected selected statement read in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+      (not (null bigStmtLines))
+    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+      [] bigForbiddenLines
+
 p54_unused_import_reads_no_names :: TestTree
 p54_unused_import_reads_no_names =
   testCase "54-unused import full build reads no .tydb names" $ do
@@ -2829,5 +2866,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p52_imported_witness_lookup_stays_selective
       , p53_imported_attr_inference_stays_selective
       , p54_unused_import_reads_no_names
+      , p55_dbp_reads_selected_statements
       ]
   ]

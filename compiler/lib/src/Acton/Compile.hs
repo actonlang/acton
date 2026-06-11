@@ -2757,6 +2757,7 @@ data DbpSelection = DbpSelection
 
 data DbpNameSelection = DbpNameSelection
   { dnsSelectedNames :: Data.Set.Set A.Name
+  , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
   }
 
 prepareDeferredBackJob :: Source.SourceProvider
@@ -2789,10 +2790,14 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
       return Nothing
     else do
-      (_ms, _nmod, tmod, _sourceMetaFull, _moduleSrcBytesHashFull, _modulePubHashFull, _moduleImplHashStoredFull, _impsFull, _depModulesFull, _nameHashesFull, _rootsFull, _testsFull, _mdocFull) <- InterfaceFiles.readFile tyFile
+      selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
+      selection <- case selectedTmod of
+        Just tmod -> return $ selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
+        Nothing -> do
+          (_ms, _nmod, tmod, _sourceMetaFull, _moduleSrcBytesHashFull, _modulePubHashFull, _moduleImplHashStoredFull, _impsFull, _depModulesFull, _nameHashesFull, _rootsFull, _testsFull, _mdocFull) <- InterfaceFiles.readFile tyFile
+          return $ selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
       snap <- Source.readSource sp actFile
-      env1 <- Acton.Env.mkEnv (searchPath paths) envAcc tmod
-      let selection = selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
+      env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
         { bjPaths = paths
@@ -2845,12 +2850,14 @@ selectDbpNames mn tyFile seeds
   | Data.Set.null seeds =
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.empty
+        , dnsNameHashes = []
         }
   | otherwise = do
       roots <- traverse (dbpReadOwningName mn tyFile) (Data.Set.toList seeds)
-      selected <- dbpNameHashClosure mn tyFile Data.Set.empty roots
+      selected <- dbpNameHashClosure mn tyFile M.empty roots
       return DbpNameSelection
-        { dnsSelectedNames = selected
+        { dnsSelectedNames = Data.Set.fromList (M.keys selected)
+        , dnsNameHashes = M.elems selected
         }
 
 dbpSelectionError :: A.ModName -> String -> IO a
@@ -2902,12 +2909,12 @@ dbpReadOwningName mn tyFile n = do
 
 dbpNameHashClosure :: A.ModName
                    -> FilePath
-                   -> Data.Set.Set A.Name
+                   -> M.Map A.Name InterfaceFiles.NameHashInfo
                    -> [A.Name]
-                   -> IO (Data.Set.Set A.Name)
+                   -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
 dbpNameHashClosure _ _ selected [] = return selected
 dbpNameHashClosure mn tyFile selected (n:ns)
-  | Data.Set.member n selected = dbpNameHashClosure mn tyFile selected ns
+  | M.member n selected = dbpNameHashClosure mn tyFile selected ns
   | otherwise = do
       nh <- dbpReadNameHash mn tyFile n
       localDeps <- traverse (dbpReadOwningName mn tyFile)
@@ -2915,8 +2922,8 @@ dbpNameHashClosure mn tyFile selected (n:ns)
       exts <- dbpExtensionsForName tyFile n
       extDeps <- traverse (dbpReadOwningName mn tyFile) exts
       let deps = unionNames localDeps extDeps
-          selected' = Data.Set.insert n selected
-          new = filter (`Data.Set.notMember` selected') deps
+          selected' = M.insert n nh selected
+          new = filter (`M.notMember` selected') deps
       dbpNameHashClosure mn tyFile selected' (new ++ ns)
   where
     unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
