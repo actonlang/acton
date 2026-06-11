@@ -304,19 +304,23 @@ tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
 
 addActiveWit                    :: TypeX -> Witness -> TypeX
 addActiveWit x wit
-  | null same                   = x{ activeWits = wit : activeWits x,
+  | not $ hasWit x wit          = x{ activeWits = wit : activeWits x,
                                      activeWitMap = addWit wit (activeWitMap x),
                                      activeWitTypeMap = addWitType wit (activeWitTypeMap x) }
   | otherwise                   = x
-  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
 addClosedWit                    :: TypeX -> Witness -> TypeX
 addClosedWit x wit
-  | null same                   = x{ closedWits = wit : closedWits x,
+  | not $ hasWit x wit          = x{ closedWits = wit : closedWits x,
                                      closedWitMap = addWit wit (closedWitMap x),
                                      closedWitTypeMap = addWitType wit (closedWitTypeMap x) }
   | otherwise                   = x
-  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
+
+hasWit                          :: TypeX -> Witness -> Bool
+hasWit x wit                     = any same $ case wtypeKey (wtype wit) of
+                                      Just n  -> witsByTNameX x n
+                                      Nothing -> witsByPNameX x (tcname $ proto wit)
+  where same w                   = tcname (proto w) == tcname (proto wit) && wtype w == wtype wit
 
 addWit                          :: Witness -> WitMap -> WitMap
 addWit w                        = Map.insertWith (++) (tcname $ proto w) [w]
@@ -332,15 +336,16 @@ wtypeKey _                      = Nothing
 witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
                                   Map.findWithDefault [] pn (closedWitMap x)
 
+witsByTNameX x tn               = Map.findWithDefault [] tn (activeWitTypeMap x) ++
+                                  Map.findWithDefault [] tn (closedWitTypeMap x)
+
 witsByPName                     :: Env -> QName -> [Witness]
 witsByPName env pn              = recordLookupList "type.witsByPName" $
                                   witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
 witsByTName env tn              = recordLookupList "type.witsByTName" $
-                                  Map.findWithDefault [] tn (activeWitTypeMap x) ++
-                                  Map.findWithDefault [] tn (closedWitTypeMap x)
-  where x                       = envX env
+                                  witsByTNameX (envX env) tn
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
