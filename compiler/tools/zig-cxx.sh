@@ -144,7 +144,7 @@ case "$(uname -s)" in
       aarch64|arm64) ZIG_ARCH=aarch64 ;;
       *) echo "Unsupported architecture for Linux: ${ARCH}" >&2; exit 1 ;;
     esac
-    GLIBC_VERSION="${ACTON_ZIG_GLIBC_VERSION:-2.31}"
+    GLIBC_VERSION="${ACTON_ZIG_GLIBC_VERSION:-2.28}"
     args=()
     add_bdeps_include_dirs
     add_system_include_dirs

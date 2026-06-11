@@ -80,7 +80,7 @@ endif
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
-ACTON_ZIG_GLIBC_VERSION ?= 2.31
+ACTON_ZIG_GLIBC_VERSION ?= 2.28
 export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
 STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= CPPFLAGS= LDFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"

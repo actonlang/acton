@@ -192,6 +192,11 @@
   instead of rejecting the default stop position. [#2801]
 
 ### Packages & Distribution
+- Lower the Linux glibc floor from 2.31 to 2.28 so released binaries run on
+  OracleLinux 8 / RHEL 8 (and Debian 10, Ubuntu 18.04+). The target is set via
+  Zig's `-target <arch>-linux-gnu.2.28`, so the floor is independent of the build
+  host's glibc; the existing `make ldd` check verifies the maximum required GLIBC
+  symbol stays within the target for `acton`, `lsp-server-acton`, and `actondb`.
 - Change x86_64 Linux builds from statically linked GNU libc to dynamically
   linked GNU libc while keeping other libraries statically linked. [#2774,
   #2781]
