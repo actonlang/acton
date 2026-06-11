@@ -1567,10 +1567,18 @@ instance Simp QName where
       | inBuiltin env               = NoQ n                                                     -- Restore builtins
       | Just m == thismod env       = NoQ n                                                     -- Restore locals
     simp env n
+      | Just n1 <- findIndexedAlias n = NoQ n1
       | Just n1 <- findAlias (activeNames env) = NoQ n1                                      -- Restore aliases
       | Just n1 <- findAlias (closedNames env) = NoQ n1                                      -- Restore aliases
       | otherwise                   = n
-      where findAlias ((n1, NAlias n2):te)
+      where findIndexedAlias qn@(GName _ n1) = case lookupName n1 env of
+                                                  Just (HNAlias n2) | n2 == qn -> Just n1
+                                                  _ -> Nothing
+            findIndexedAlias qn@(QName _ n1) = case lookupName n1 env of
+                                                  Just (HNAlias n2) | n2 == qn -> Just n1
+                                                  _ -> Nothing
+            findIndexedAlias _               = Nothing
+            findAlias ((n1, NAlias n2):te)
               | n2 == n             = Just n1
             findAlias (_:te)        = findAlias te
             findAlias []            = Nothing
