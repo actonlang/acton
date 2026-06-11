@@ -1307,7 +1307,7 @@ splitDeps :: A.ModName
           -> M.Map A.Name [A.QName]
           -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 splitDeps mn env localNames depMap =
-  finishSplitDeps (M.map (foldl' (addSplitDep mn env localNames) emptyDepSplit) depMap)
+  finishSplitDeps (M.map (Data.Set.foldl' (addSplitDep mn env localNames) emptyDepSplit . Data.Set.fromList) depMap)
 
 emptyDepSplit :: (NameSet, QNameSet)
 emptyDepSplit = (Data.Set.empty, Data.Set.empty)
