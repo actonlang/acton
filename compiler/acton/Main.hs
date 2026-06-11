@@ -2499,7 +2499,7 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
         mergedSpec = addImplicitStdDependency absSys mergedSpec1
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
-    writeFile buildZigPath (genBuildZig buildZigTemplate mergedSpec resolvedZigs depModuleOpts)
+    writeFile buildZigPath (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
     writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
 
 addImplicitStdDependency :: FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
@@ -2609,8 +2609,8 @@ resolveZigDepRefs pkgDepNames refs =
          , resolved : acc
          )
 
-genBuildZig :: String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> M.Map String String -> String
-genBuildZig template spec zigDeps depModuleOpts =
+genBuildZig :: String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> M.Map String String -> String
+genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
     let
         depsDefs = concatMap pkgDepDef (M.toList (BuildSpec.dependencies spec))
         zigDefs  = concatMap zigDepDef zigDeps
@@ -2652,7 +2652,13 @@ genBuildZig template spec zigDeps depModuleOpts =
     zigDepDef resolved
       | null (BuildSpec.artifacts dep) = ""
       | otherwise =
-          let opts = concat [ "        ." ++ k ++ " = " ++ v ++ ",\n" | (k, v) <- M.toList (BuildSpec.options dep) ]
+          -- {sysdeps} is a sentinel a project can place in a zig dependency's
+          -- options to receive the toolchain's bundled-deps path (<dist>/deps).
+          -- In Build.act it is written "{{sysdeps}}" (Acton string escaping turns
+          -- {{ }} into single braces, so it reaches us here as {sysdeps}). We
+          -- substitute the quoted absolute path so the wrapper can, e.g., add an
+          -- mbedtls include path without hardcoding the toolchain location.
+          let opts = concat [ "        ." ++ k ++ " = " ++ replace "{sysdeps}" ("\"" ++ sysDepsPath ++ "\"") v ++ ",\n" | (k, v) <- M.toList (BuildSpec.options dep) ]
           in unlines [ "    const dep_" ++ zigDepResolvedVarName resolved ++ " = b.dependency(\"" ++ zigDepResolvedPkgName resolved ++ "\", .{"
                      , "        .target = target,"
                      , "        .optimize = optimize,"
