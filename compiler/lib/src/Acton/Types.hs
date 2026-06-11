@@ -748,12 +748,12 @@ instance (InfEnv a) => InfEnv [a] where
 
 instance InfEnv Stmt where
     infEnv env (Expr l e)
-      | e == eNotImpl                   = return ([], [], Expr l e)
+      | isNotImplExpr e                 = return ([], [], Expr l e)
       | otherwise                       = do (cs,_,e') <- infer env e
                                              return (cs, [], Expr l e')
 
     infEnv env (Assign l pats e)
-      | nodup pats, e == eNotImpl       = do (te,t,pats') <- infEnvT env pats
+      | nodup pats, isNotImplExpr e     = do (te,t,pats') <- infEnvT env pats
                                              return ([], te, Assign l pats' e)
       | otherwise                       = do (te,t,pats') <- infEnvT env pats
                                              (cs,e') <- inferSub env t e

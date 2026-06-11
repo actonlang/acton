@@ -860,14 +860,17 @@ hasCleanup ss                       = any isCleanup ss
 
 isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
 
-isNotImpl (Expr _ e)                = e == eNotImpl
-isNotImpl (Assign _ _ e)            = e == eNotImpl
+isNotImpl (Expr _ e)                = isNotImplExpr e
+isNotImpl (Assign _ _ e)            = isNotImplExpr e
 isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
 isNotImpl _                         = False
 
 notImplBody b                       = not $ null $ notImpls b
 
-notImpls b                          = [ e | Expr _ e <- b, e == eNotImpl ]
+notImpls b                          = [ e | Expr _ e <- b, isNotImplExpr e ]
+
+isNotImplExpr NotImplemented{}      = True
+isNotImplExpr _                     = False
 
 isUnivar TUni{}                     = True
 isUnivar _                          = False

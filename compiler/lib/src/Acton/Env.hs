@@ -1187,7 +1187,7 @@ instance Flows a => Flows [a] where
 
 instance Flows Stmt where
     flows (Expr _ e)
-      | e == eNotImpl               = []                -- Not tracked
+      | isNotImplExpr e             = []                -- Not tracked
       | Call _ (Var _ n) _ _ <- e,
         n == primRAISE              = []                -- Not tracked
     flows Raise{}                   = []                -- Not tracked
