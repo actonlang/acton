@@ -1334,13 +1334,6 @@ printDocs gopts opts = do
 
           _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
 
-addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
-  where proj                = projName paths
-        ns                  = A.modPath mn
-
-dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
-  where n:ns                = A.modPath mn
-
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
     withProjectLockNotice gopts projDir $
