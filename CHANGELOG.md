@@ -56,12 +56,16 @@
 - Store cached module interfaces in LMDB-backed `.tydb` directories instead of
   monolithic `.ty` files, keeping corrupt or version-mismatched entries as safe
   cache misses while adding keyed records for headers, imports, names, hashes,
-  and typed statements. [#2819, #2855, #2858, #2889, #2896]
+  dependency hashes, and typed statements. [#2819, #2855, #2858, #2889, #2896,
+  #2907]
   - Full reads reconstruct source-order environments from explicit order keys,
     and cache copy and cleanup paths now handle directory artifacts.
   - Cache values are encoded with `persist`, improving `.tydb` write and read
     time for large generated interfaces while treating older binary-encoded
     caches as stale rebuilds.
+  - Dependency hashes are indexed by provider module and name, so stale-cache
+    checks can skip unchanged modules cheaply and only inspect the dependency
+    names a cached module actually used when an upstream module changed.
   - Preparing `.tydb` entries for names, hashes, extensions, and typed
     statements now happens in strict concurrent chunks before the LMDB write
     transaction, and CLI progress distinguishes preparation from writing.
@@ -111,7 +115,8 @@
   forcing, hash computation, cached interface writes, and documentation output,
   and speed up signature validation by checking bindings through a set. [#2848]
   - Build progress output now keeps long five-digit second durations aligned
-    with shorter timings. [#2901]
+    with shorter timings, using the same width for active progress lines and
+    completed timing logs. [#2901, #2908]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, and by tracking boxing-pass witness
   names with a hash set, reducing repeated scans during boxing and generated
@@ -180,6 +185,9 @@
     keeping base focused on builtins and runtime support.
 - Fix XML decoding so comments between text/CDATA nodes and child elements are
   ignored while preserving the surrounding text and tail content. [#2886]
+- Fix macOS crash handling so the RTS can print a backtrace without relying on
+  Linux `/proc/self/exe`, then restore the platform crash handler before
+  re-raising the original signal. [#2909]
 - Fix `list.index` on empty lists so it raises `KeyError` for a missing element
   instead of rejecting the default stop position. [#2801]
 
@@ -4255,6 +4263,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2902]: https://github.com/actonlang/acton/pull/2902
 [#2904]: https://github.com/actonlang/acton/pull/2904
 [#2905]: https://github.com/actonlang/acton/pull/2905
+[#2907]: https://github.com/actonlang/acton/pull/2907
+[#2908]: https://github.com/actonlang/acton/pull/2908
+[#2909]: https://github.com/actonlang/acton/pull/2909
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
