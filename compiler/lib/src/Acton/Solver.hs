@@ -396,12 +396,16 @@ solve' env select hist te eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (2, 0, 0, 0)
-        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+        deco (RTry v as r)                  = (w, boundedLength 256 as, length $ filter (==v) embvs, length $ filter (==v) univs)
           where w | uvkind v == KFX         =  5    -- effect search, last to be explored
                   | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
                   | otherwise               =  3    -- types and rows, normal search
-        deco (RVar v as)                    = (6, length as, 0, 0)
+        deco (RVar v as)                    = (6, boundedLength 256 as, 0, 0)
         deco (RSkip)                        = (7, 0, 0, 0)
+
+        boundedLength n _ | n <= 0          = n
+        boundedLength _ []                  = 0
+        boundedLength n (_:xs)              = 1 + boundedLength (n-1) xs
 
 
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
