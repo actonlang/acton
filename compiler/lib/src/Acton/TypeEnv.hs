@@ -24,6 +24,8 @@ import Prelude hiding ((<>))
 
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Data.HashMap.Strict as HashMap
+import Data.HashMap.Strict (HashMap)
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -54,9 +56,13 @@ data TypeX                      = TypeX {
                                     indecl      :: Bool,
                                     forced      :: Bool,
                                     tyids       :: Map QName Int,
+                                    tyidHash    :: HashMap QName Int,
                                     tyinfos     :: IntMap TyInfo,
+                                    tycons      :: IntSet,
                                     typrotos    :: IntSet,
-                                    tyactors    :: IntSet
+                                    tyactors    :: IntSet,
+                                    tyconAttrs  :: TyAttrMap,
+                                    typrotoAttrs:: TyAttrMap
                                   }
 
 data TyInfo                     = TyInfo {
@@ -68,6 +74,7 @@ data TyInfo                     = TyInfo {
 
 type Env                        = EnvF TypeX
 type WitMap                     = Map QName [Witness]
+type TyAttrMap                  = Map Name IntSet
 
 initTypeEnv                     :: Env0 -> Env
 initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
@@ -80,14 +87,18 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     indecl      = False,
                                     forced      = False,
                                     tyids       = Map.empty,
+                                    tyidHash    = HashMap.empty,
                                     tyinfos     = tyinfos0,
+                                    tycons      = IntSet.empty,
                                     typrotos    = IntSet.empty,
-                                    tyactors    = IntSet.empty
+                                    tyactors    = IntSet.empty,
+                                    tyconAttrs  = Map.empty,
+                                    typrotoAttrs= Map.empty
                                   }
         importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
           where f               = GName m
         imps | inBuiltin env0   = []
-             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
+             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- transitiveImports env0 ]
 
 
 tyinfos0                        = IntMap.fromDistinctAscList pairs
@@ -144,18 +155,25 @@ nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
 
 addconinfo                      :: (Name -> QName) -> TypeX -> (Name,NameInfo) -> TypeX
 addconinfo f x (n,i)
-  | NClass q us te _ <- i       = addcon n q us te x
-  | NProto q us te _ <- i       = addproto $ addcon n q us te x
-  | NAct q _ _ te _ <- i        = addactor $ addcon n q [] te x
+  | NClass q us te _ <- i       = addcon n q us te addclass x
+  | NProto q us te _ <- i       = addcon n q us te addproto x
+  | NAct q _ _ te _ <- i        = addcon n q [] (notHidden te) addactor x
   | otherwise                   = x
-  where tid                     = nextid x
-        addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
-        addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
+  where addclass tid info x     = x{ tycons = IntSet.insert tid (tycons x),
+                                     tyconAttrs = addTyAttrs tid (tyattrs info) (tyconAttrs x) }
+        addproto tid info x     = x{ typrotos = IntSet.insert tid (typrotos x),
+                                     typrotoAttrs = addTyAttrs tid (tyattrs info) (typrotoAttrs x) }
+        addactor tid info x     = addclass tid info x{ tyactors = IntSet.insert tid (tyactors x) }
 
-        addcon n q us te x      = x{ tyids = Map.insert (f n) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
-          where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+        addcon n q us te index x
+                                  = index tid info x{ tyids = Map.insert qn tid (tyids x),
+                                                      tyidHash = HashMap.insert qn tid (tyidHash x),
+                                                      tyinfos = IntMap.insert tid info tyinfos' }
+          where tid             = nextid x
+                qn              = f n
+                ui              = [ typeId x (tcname c) | (_,c) <- us ]
                 info            = TyInfo {
-                                    tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
+                                    tywild = tCon $ TC qn [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
                                     tybelow = IntSet.singleton tid,
                                     tyattrs = foldr Set.union (Set.fromList $ dom te) [ tyattrs $ fromJust $ IntMap.lookup u $ tyinfos x | u <- ui ]
@@ -163,6 +181,77 @@ addconinfo f x (n,i)
                 tyinfos'        = foldr (IntMap.adjust addbelow) (tyinfos x) ui
                 addbelow info   = info{ tybelow = IntSet.insert tid (tybelow info) }
 
+addTyAttrs                      :: Int -> Set Name -> TyAttrMap -> TyAttrMap
+addTyAttrs tid attrs attrmap     = Set.foldr add attrmap attrs
+  where add n                   = Map.insertWith IntSet.union n (IntSet.singleton tid)
+
+typeById                        :: TypeX -> Int -> Type
+typeById x tid                  = tywild (tyinfos x IntMap.! tid)
+
+conById                         :: TypeX -> Int -> Maybe TCon
+conById x tid                   = case typeById x tid of
+                                    TCon _ c -> Just c
+                                    _ -> Nothing
+
+lookupTypeId                    :: TypeX -> QName -> Maybe Int
+lookupTypeId x n                = HashMap.lookup n (tyidHash x)
+
+typeId                          :: TypeX -> QName -> Int
+typeId x n                      = fromJust $ lookupTypeId x n
+
+tyconDescendants                :: Env -> TCon -> [TCon]
+tyconDescendants env tc
+  | Just tid <- lookupTypeId x (tcname tc),
+    Just info <- IntMap.lookup tid (tyinfos x)
+                                = [ c | tid' <- tids tid info, Just c <- [conById x tid'] ]
+  | otherwise                   = allDescendants env tc
+  where x                       = envX env
+        tids tid info           = IntSet.toAscList $
+                                  IntSet.delete tid $
+                                  IntSet.intersection (tybelow info) (tycons x)
+
+-- Attr-indexed candidate tid sets. IntSet.toAscList is insertion order (ids grow
+-- monotonically) and is produced lazily, so consumers that only inspect a prefix
+-- of the candidate list do not pay for the whole, ever-growing population.
+tyconAttrTids                   :: Env -> Name -> IntSet
+tyconAttrTids env n             = Map.findWithDefault IntSet.empty n (tyconAttrs (envX env))
+
+typrotoAttrTids                 :: Env -> Name -> IntSet
+typrotoAttrTids env n           = Map.findWithDefault IntSet.empty n (typrotoAttrs (envX env))
+
+tyconsByAttr                    :: Env -> Name -> [TCon]
+tyconsByAttr env n              = [ c | tid <- IntSet.toAscList (tyconAttrTids env n), Just c <- [conById x tid] ]
+  where x                       = envX env
+
+typrotosByAttr                  :: Env -> Name -> [PCon]
+typrotosByAttr env n            = [ p | tid <- IntSet.toAscList (typrotoAttrTids env n), Just p <- [conById x tid] ]
+  where x                       = envX env
+
+-- Self-plus-descendants tid set for a class, when indexed.
+tyconBelowTids                  :: Env -> TCon -> Maybe IntSet
+tyconBelowTids env tc
+  | Just tid <- lookupTypeId x (tcname tc),
+    Just info <- IntMap.lookup tid (tyinfos x)
+                                = Just (IntSet.intersection (tybelow info) (IntSet.insert tid (tycons x)))
+  | otherwise                   = Nothing
+  where x                       = envX env
+
+-- Active type variables whose class bound is one of the given indexed types.
+-- Equivalent to tvarDescendants against the corresponding wild-argument TCon
+-- list, but a membership test instead of a scan of that list.
+tvarsInTids                     :: Env -> IntSet -> [TVar]
+tvarsInTids env tids            = [ TV k n | (n, k, c) <- activeTypeVars env,
+                                            Just tid <- [lookupTypeId x (tcname c)],
+                                            tid `IntSet.member` tids,
+                                            Just c' <- [conById x tid],
+                                            c == c' ]
+  where x                       = envX env
+
+-- All actor types in scope, in definition order (imports first). Mirrors what
+-- allTypes/allActors produce, without scanning the name environment.
+tyactorsAll                     :: Env -> [TCon]
+tyactorsAll env                 = [ c | tid <- IntSet.toAscList (tyactors x), Just c <- [conById x tid] ]
+  where x                       = envX env
 
 
 tydefine                        :: TEnv -> Env -> Env
@@ -180,9 +269,12 @@ setupWits                       :: (TypeX -> Witness -> TypeX) -> (Name -> QName
 setupWits add f te x            = foldl' add x wits
   where wits                    = [ WClass q (tCon c) p (f n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
 
-addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
+addvarinfo x (tv, c, _)         = x{ tyids = Map.insert qn tid (tyids x),
+                                     tyidHash = HashMap.insert qn tid (tyidHash x),
+                                     tyinfos = IntMap.insert tid info tyinfos' }
   where tid                     = nextid x
-        ci                      = tyinfos x IntMap.! (tyids x Map.! tcname c)
+        qn                      = NoQ $ tvname tv
+        ci                      = tyinfos x IntMap.! typeId x (tcname c)
         info                    = TyInfo {
                                     tywild = tVar tv,
                                     tyabove = IntSet.insert tid $ tyabove ci,
@@ -825,6 +917,15 @@ instance USubst Witness where
 
 
 instance USubst Env where
+    -- A fully closed env (no active names, no active witnesses) cannot contain
+    -- unification variables, so substitution is the identity. This is the common
+    -- case for top-level statements.
+    usubstWith s env
+      | null (activeNames env) && null (activeWits (envX env))
+                                      = env
+    -- The attribute environment cache only holds closed definitions (imports and
+    -- defineClosed entries), which cannot contain unification variables, so it
+    -- survives substitution unchanged.
     usubstWith s env                  = let ne = usubstWith s (activeNames env)
                                             ex = usubstWith s (envX env)
                                         in setActiveNames ne env{ envX = ex }

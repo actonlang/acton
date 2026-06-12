@@ -574,16 +574,6 @@ actorSelf env               = case lookupName selfKW env of
                                 Just (HNVar (TCon _ tc)) | isActor env (tcname tc) -> True
                                 _ -> False
 
-actorMethod env n0          = walk [] (activeNames env) (closedNames env)
-  where
-    walk ns ((n,NDef{}):te) rest
-                            = walk (n:ns) te rest
-    walk ns ((n,NVar (TCon _ tc)):te) rest
-      | n == selfKW         = isActor env (tcname tc) && n0 `elem` ns
-    walk ns (_ : te) rest   = walk ns te rest
-    walk ns [] []           = False
-    walk ns [] rest         = walk ns rest []
-
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case tryQName n env of
                                 Just HNDef{} -> True

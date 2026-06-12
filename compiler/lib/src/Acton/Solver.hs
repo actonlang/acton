@@ -18,6 +18,7 @@ import Control.Monad
 import Control.Monad.Except
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
+import qualified Data.IntSet as IntSet
 import qualified Control.Exception
 import Control.DeepSeq
 
@@ -362,11 +363,11 @@ solve' env select hist te eq cs
           where cond (RRed c : rs)          = RRed c
                 cond (RSealed v : rs)       = RSealed v
                 cond (RTry v as r : rs)     = RTry v (if rev' then subrev ts' else ts') rev'
-                  where ts                  = foldr intersect as $ map alts rs
-                        ts'                 = if v `elem` optvs then ts \\ [tOpt tWild] else ts
+                  where ts                  = foldr (typeIntersect env) as $ map alts rs
+                        ts'                 = if v `elem` optvs then typeDiff env ts [tOpt tWild] else ts
 --                        rev'                = (or $ r : map rev rs) || v `elem` posvs       -- (new, matches new solver but picks bad order for lower None)
                         rev'                = (and $ r : map rev rs) || v `elem` posvs        -- (old, incorrect in general, but avoids the None problem)
-                cond (RVar v as : rs)       = RVar v (foldr union as $ map alts rs)
+                cond (RVar v as : rs)       = RVar v (foldr (typeUnion env) as $ map alts rs)
                 cond (RSkip : rs)           = RSkip
                 cond rs                     = error ("### condense " ++ show rs)
 
@@ -394,12 +395,16 @@ solve' env select hist te eq cs
 
         deco (RRed cs)                      = (0, 0, 0, 0)
         deco (RSealed v)                    = (2, 0, 0, 0)
-        deco (RTry v as r)                  = (w, length as, length $ filter (==v) embvs, length $ filter (==v) univs)
+        deco (RTry v as r)                  = (w, boundedLength 256 as, length $ filter (==v) embvs, length $ filter (==v) univs)
           where w | uvkind v == KFX         =  5    -- effect search, last to be explored
                   | [TTuple{}] <- as        =  4    -- default selection solution, deferred search
                   | otherwise               =  3    -- types and rows, normal search
-        deco (RVar v as)                    = (6, length as, 0, 0)
+        deco (RVar v as)                    = (6, boundedLength 256 as, 0, 0)
         deco (RSkip)                        = (7, 0, 0, 0)
+
+        boundedLength n _ | n <= 0          = n
+        boundedLength _ []                  = 0
+        boundedLength n (_:xs)              = 1 + boundedLength (n-1) xs
 
 
 -- subrev [int,Pt,float,CPt,C3Pt]           = [] ++ int : subrev [Pt,float,CPt,C3Pt]
@@ -430,6 +435,75 @@ rank _ (Seal _ env (TUni _ v))
 rank _ c                                    = RRed c
 
 wildTuple                                   = tTuple tWild tWild
+
+-- The id-keyed paths below pay one QName hash per element, which beats list
+-- scans only once the lists grow. The overwhelmingly common case in condense
+-- is tiny lists, where structural equality (which bails out on the first
+-- differing character) is much cheaper than hashing whole generated names,
+-- so short inputs take the plain Data.List route. Both routes implement the
+-- same (order- and duplicate-preserving) semantics.
+shortList :: [a] -> Bool
+shortList xs                                = null (drop 8 xs)
+
+typeIntersect :: Env -> [Type] -> [Type] -> [Type]
+typeIntersect env xs ys
+  | shortList xs && shortList ys            = xs `intersect` ys
+  | otherwise                               = filter keep xs
+  where (ykeys, yother)                     = typeKeySet env ys
+        keep t
+          | Just k <- typeKey env t         = k `IntSet.member` ykeys
+          | otherwise                       = t `elem` yother
+
+typeUnion :: Env -> [Type] -> [Type] -> [Type]
+typeUnion env xs ys
+  | shortList xs && shortList ys            = xs `union` ys
+  | otherwise                               = xs ++ go IntSet.empty [] ys
+  where (xkeys, xother)                     = typeKeySet env xs
+        go _ _ []                           = []
+        go seenKeys seenOther (y:ys)
+          | Just k <- typeKey env y,
+            k `IntSet.member` xkeys || k `IntSet.member` seenKeys
+                                                = go seenKeys seenOther ys
+          | Just k <- typeKey env y         = y : go (IntSet.insert k seenKeys) seenOther ys
+          | y `elem` xother || y `elem` seenOther
+                                                = go seenKeys seenOther ys
+          | otherwise                       = y : go seenKeys (y:seenOther) ys
+
+-- Unlike intersection and union, a keyed set difference cannot reproduce the
+-- per-element multiplicity of Data.List.(\\): it would drop every occurrence
+-- whose key appears in ys rather than one occurrence per element of ys, which
+-- in condense could remove all copies of a duplicated alternative (e.g.
+-- tOpt tWild for a nested optional) and thus a solver alternative the old code
+-- kept. The only caller subtracts a single element, so plain list difference
+-- is already linear here; keep the exact list semantics.
+typeDiff :: Env -> [Type] -> [Type] -> [Type]
+typeDiff _ xs ys                            = xs \\ ys
+
+typeKeySet :: Env -> [Type] -> (IntSet.IntSet, [Type])
+typeKeySet env                              = foldr add (IntSet.empty, [])
+  where add t (ks, ts)
+          | Just k <- typeKey env t         = (IntSet.insert k ks, ts)
+          | otherwise                       = (ks, t:ts)
+
+typeKey :: Env -> Type -> Maybe Int
+typeKey env (TCon _ c)
+  | all isWild (tcargs c)                   = lookupTypeId (envX env) (tcname c)
+typeKey env (TVar _ tv)                     = lookupTypeId (envX env) (NoQ $ tvname tv)
+typeKey _ TNone{}                           = Just (-1)
+typeKey _ (TOpt _ TWild{})                  = Just (-2)
+typeKey _ (TFun _ TWild{} TWild{} TWild{} TWild{})
+                                                = Just (-3)
+typeKey _ (TTuple _ TWild{} TWild{})        = Just (-4)
+typeKey _ (TFX _ fx)                        = Just $ case fx of
+                                                    FXProc -> -5
+                                                    FXMut -> -6
+                                                    FXPure -> -7
+                                                    FXAction -> -8
+typeKey _ _                                 = Nothing
+
+isWild :: Type -> Bool
+isWild TWild{}                              = True
+isWild _                                    = False
 
 
 -------------------------------------------------------------------------------------------------------------------------
@@ -497,8 +571,12 @@ allAbove env (TFX _ FXMut)          = [fxProc, fxMut]
 allAbove env (TFX _ FXPure)         = [fxProc, fxMut, fxPure]
 allAbove env (TFX _ FXAction)       = [fxProc, fxAction]
 
-allBelow env (TCon _ tc)            = map tCon tcons ++ map tVar tvars
-  where tcons                       = schematic' tc : allDescendants env tc
+allBelow env (TCon _ tc)
+  | Just tids <- tyconBelowTids env tc
+                                    = map tCon (schematic' tc : tyconDescendants env tc) ++
+                                      map tVar (tvarsInTids env tids)
+  | otherwise                       = map tCon tcons ++ map tVar tvars
+  where tcons                       = schematic' tc : tyconDescendants env tc
         tvars                       = tvarDescendants env tcons
 allBelow env (TVar _ tv)            = [tVar tv]
 allBelow env (TOpt _ t)             = tOpt tWild : allBelow env t ++ [tNone]
@@ -513,17 +591,16 @@ allBelow env (TFX _ FXAction)       = [fxAction]
 allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = reverse [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
-  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- allActors env ]
+  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ]
   | p == pEq                        = ts ++ [tOpt tWild]
   | otherwise                       = ts
   where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
 
-allClassAttr env n                  = map tCon tcons ++ map tVar tvars
-  where tcons                       = allConAttr env n
-        tvars                       = tvarDescendants env tcons
+allClassAttr env n                  = map tCon (tyconsByAttr env n) ++
+                                      map tVar (tvarsInTids env (tyconAttrTids env n))
 
 allProtoAttr env n                  = map tCon pcons ++ concatMap (allBelowProto env) pcons
-  where pcons                       = allPConAttr env n
+  where pcons                       = typrotosByAttr env n
 
 
 ----------------------------------------------------------------------------------------------------------------------
