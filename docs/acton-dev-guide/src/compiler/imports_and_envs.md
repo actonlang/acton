@@ -32,14 +32,19 @@ finished modules. In `Acton.Compile.compileTasks`, each completed module extends
 that snapshot with:
 
 ```haskell
-Acton.Env.addMod (tkMod keyDone) (frImps fr) (frIfaceTE fr) (frDoc fr) envAcc
+Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
 ```
 
-This shared cache stores loaded module interfaces in `modules` as
-`NModule imps te doc`: the module's recorded imports, public interface, and
-optional docstring. It does not store the current module's local names, and it
-should not be thought of as "the current type-checker env". It is a shared cache
-of interfaces that later tasks start from.
+This shared cache stores loaded module interfaces in
+`modules :: Map ModName ModuleInfo`. It does not store the current module's
+local names, and it should not be thought of as "the current type-checker env".
+It is a shared cache of interfaces that later tasks start from.
+
+`ModuleInfo` is the only Env-side representation of dependency modules. A local
+module backs it with an in-memory `TEnv`; an imported module backs it with a
+read-only `.tydb` handle plus compact metadata. Normal compiler code should ask
+`ModuleInfo` for specific names or specific indexes, not for a whole imported
+`TEnv`.
 
 ### Current-module import overlay
 
@@ -80,32 +85,31 @@ available later through `Acton.Env`.
 
 ## When `.tydb` headers are read
 
-The compiler reads `.tydb` data in two different modes.
+The compiler reads `.tydb` data in three different modes.
 
 ### Header-only reads
 
-Header reads are used for cheap decisions:
+Header summary reads are used for cheap decisions:
 
 - module freshness
 - direct import names for graph construction
-- module public and implementation hashes
-- per-name dependency hash snapshots
+- module public and implementation hashes and the stored name count
 - roots, tests, and docstrings
 
 This is the path used by `readModuleTask` and the various cache lookups in
-`Acton.Compile`. It is also the first DBP path: deferred jobs read the header
-to collect per-name dependency edges, root actor seeds, and enough metadata to
-decide whether the selected generated code is already up to date.
+`Acton.Compile`. Per-name dependency hashes are no longer part of the header
+read; stale checks and DBP selection read exact `name-hash` rows on demand.
 
 ### Full `.tydb` reads
 
-Full reads are used when the compiler needs actual interface contents or the
-typed module:
+Full reads are used when the compiler needs the full typed payload, not for
+normal imported-name lookup:
 
-- reusing an interface from a fresh cached module
 - implementation-hash refresh
 - codegen refresh
 - DBP back-pass execution after the selected codegen hash is stale
+- tools that intentionally inspect a whole interface
+- completion fallback when the normal import environment cannot be restored
 
 Reading a full `.tydb` does not by itself reconstruct the import closure in the
 active environment. It only gives the caller the stored interface and typed
@@ -118,6 +122,38 @@ DBP later uses that map to prune a provider's typed module. That does not make
 the selected provider names available to the active type-checker environment;
 imports still become type-checker bindings only through `mkEnv`/`doImp`.
 
+### Selective interface reads
+
+Normal imported-module lookup uses selective reads. `doImp` opens the imported
+module's `.tydb` with `InterfaceFiles.openInterfaceDB`, reads only imports and
+docstring, then installs a `ModuleInfo` shell in `modules`.
+
+The shell has a pure-looking lookup function. `tryQName`, selected imports, and
+generated-name lookup call that function with one `Name`; the implementation
+runs `readInterfaceDBNameInfoMaybe` for that name and memoizes the result.
+Read/decode failure aborts the compilation like any other corrupt interface
+cache error.
+
+Passes that rewrite imported names do not materialize the module either. They
+wrap `moduleLookupHName` with their conversion function (`convertModules`), so
+Normalizer, Converter, Deactorizer, CPS, and LambdaLifter convert only names
+that are actually demanded. Generated names map back to their source name
+before lookup when necessary.
+
+Solver queries go through narrow per-module indexes: attribute owners,
+descendants, and extension witnesses keyed by protocol or by type. The
+attribute indexes record attributes where they are declared; `allConAttr` and
+`allPConAttr` complete inherited owners with the descendants of each declaring
+constructor, which preserves the ancestry-aware semantics of the old full
+scan. All transitive imports are consulted with keyed reads, so query cost is
+proportional to the number of imported modules, never to their size.
+
+Broad enumeration stays explicit. `from module import *` walks
+`modulePublicNames` and forces one lookup per importable public name.
+Completion, documentation, and debug paths may also choose broad reads, but
+those paths are separate from normal qualified-name and selected-import
+lookup.
+
 ## How transitive imports become available
 
 The transitive import closure is reconstructed through `Acton.Env.mkEnv`,
@@ -128,23 +164,22 @@ When a module imports another module:
 1. `mkEnv` walks the AST import list
 2. `impModule` delegates to `doImp`
 3. `doImp` first checks whether the imported module is already in `modules`
-4. if it is loaded, `doImp` follows the in-memory `NModule` import list
-5. otherwise, `doImp` reads the imported module's `.tydb` and follows its stored
-   imports
-6. only then does it return the imported module interface
+4. if it is loaded, `doImp` follows the recorded `moduleImports` list
+5. otherwise, `doImp` opens the imported module's `.tydb`, reads its import
+   metadata, and follows the stored imports
+6. only then does it return the imported module interface shell
 
 This is the mechanism that turns a direct import into a transitive environment
 closure suitable for kinds and type checking.
 
 An important invariant is that a cached direct module must still restore its own
-recorded imports. When the module is already present in the shared scheduler
-env, that closure is in memory: `lookupModule` returns the `NModule` import list
-alongside the public interface. `doImp` should use that in-memory list and avoid
-opening `.tydb` for modules compiled earlier in the same build process.
+recorded imports. `ModuleInfo` stores the imported module's import list, so a
+module already present in `modules` can restore its transitive imports without
+any `.tydb` read.
 
 When the module is not present in `modules`, `doImp` falls back to the `.tydb`
-cache on the search path, reads the stored interface, recursively materializes
-its imports, and then adds the module to the shared cache.
+cache on the search path, opens the module metadata, recursively materializes
+its imports, and then adds the module shell to the shared cache.
 
 The boundary is important: `.tydb` is a persistent cache and cross-process
 interface artifact, not an IPC mechanism between front stages in one compiler
@@ -171,9 +206,9 @@ When debugging import failures, it helps to ask which layer is failing:
   Then look at `mkEnv` and `doImp`.
 - Is a cached module present but its transitives missing? Then the issue is in
   environment materialization, not scheduler ordering.
-- Is a full `.tydb` being read but imports still not appearing? Then check
-  whether the caller is only decoding interface payload rather than invoking the
-  import loader.
+- Is a full `.tydb` being read during normal import lookup? Then look for a
+  caller that asks for broad enumeration instead of `tryQName` or
+  `moduleLookupName`.
 
 ## Related pages
 

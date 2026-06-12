@@ -28,7 +28,7 @@ import Acton.Subst
 import Pretty
 import Prelude hiding((<>))
 
-liftModule env0 (Module m imp mdoc stmts) = return $ (Module m imp mdoc stmts', mapModules1 conv env0)
+liftModule env0 (Module m imp mdoc stmts) = return $ (Module m imp mdoc stmts', convertModules1 conv env0)
   where stmts' = runL (llSuite (liftEnv env0) stmts)
 
 

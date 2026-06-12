@@ -41,6 +41,9 @@
 --     "tests"          :: [String]                    -- discovered test names
 --     "doc"            :: Maybe String                -- module docstring
 --     "name-count"     :: Int                         -- number of NameInfo entries (see name-order)
+--     "public-names"   :: [A.Name]                    -- public top-level names, in TEnv order
+--     "constructors"   :: [A.Name]                    -- public class/protocol/actor names
+--     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
@@ -57,6 +60,13 @@
 --   Per-extension keys:
 --     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
 --     "ext-by-protocol/<suffix>"    :: (A.Name, [A.Name]) -- protocol name to extension names
+--
+--   Per-query index keys:
+--     "con-attr/<suffix>"     :: [A.Name]             -- class/actor names declaring an attribute
+--     "proto-attr/<suffix>"   :: [A.Name]             -- protocol names declaring an attribute
+--     "descendants/<suffix>"  :: [A.Name]             -- class/protocol names below a constructor
+--     "ext-proto/<suffix>"    :: [A.Name]             -- extension names implementing a protocol
+--     "ext-type/<suffix>"     :: [A.Name]             -- extension names for a type/class
 --
 --   Per-statement keys (typed Module body):
 --     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
@@ -83,6 +93,8 @@ module InterfaceFiles
   , SourceFileMeta(..)
   , TyFile
   , TyHeader
+  , TyHeaderSummary
+  , InterfaceDB
   , interfaceExt
   , interfacePath
   , interfaceExists
@@ -98,10 +110,25 @@ module InterfaceFiles
   , readModuleHashesMaybe
   , readFile
   , readHeader
+  , readHeaderSummary
+  , readRoots
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
   , readHeaderMaybe
+  , readHeaderSummaryMaybe
+  , openInterfaceDB
+  , openInterfaceDBMaybe
+  , readInterfaceDBModuleInfo
+  , readInterfaceDBNameInfoMaybe
+  , readInterfaceDBPublicNames
+  , readInterfaceDBConstructors
+  , readInterfaceDBActors
+  , readInterfaceDBConAttr
+  , readInterfaceDBProtoAttr
+  , readInterfaceDBDescendants
+  , readInterfaceDBExtByProto
+  , readInterfaceDBExtByType
   , TyDbWriteProgress(..)
   , writeFile
   , writeFileWithProgress
@@ -113,7 +140,7 @@ import Control.DeepSeq (NFData, rnf)
 import qualified Control.Exception as E
 import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
-import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, withMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newMVar, withMVar)
 import Control.Monad (forM, forM_, unless, when)
 import Data.IORef (atomicModifyIORef', newIORef)
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -124,12 +151,15 @@ import qualified Data.List
 import Data.List (foldl')
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
+import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
+import Acton.Names (isPublicName)
+import Utils (SrcLoc(NoLoc))
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
@@ -139,7 +169,7 @@ import System.FilePath ((</>), takeExtension)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
-import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
+import System.Posix.Files (deviceID, fileAccess, fileID, getFileStatus, modificationTimeHiRes, setFileMode)
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -234,12 +264,33 @@ type TyHeader =
   , Maybe String
   )
 
+type TyHeaderSummary =
+  ( Maybe SourceFileMeta
+  , BS.ByteString
+  , BS.ByteString
+  , BS.ByteString
+  , [(A.ModName, BS.ByteString)]
+  , [DepModuleInfo]
+  , Int
+  , [A.Name]
+  , [String]
+  , Maybe String
+  )
+
 type TyMeta =
   ( Maybe SourceFileMeta
   , BS.ByteString
   , BS.ByteString
   , BS.ByteString
   )
+
+-- | A handle for selective per-name and per-index lookups in one module's
+-- .tydb: the version is validated once at open, and each lookup runs a short
+-- read transaction on the shared per-path environment.
+newtype InterfaceDB = InterfaceDB FilePath
+
+instance Show InterfaceDB where
+    show (InterfaceDB path) = "InterfaceDB " ++ path
 
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
@@ -261,11 +312,37 @@ lmdbOpenLock :: MVar ()
 {-# NOINLINE lmdbOpenLock #-}
 lmdbOpenLock = unsafePerformIO (newMVar ())
 
--- LMDB does not support opening the same environment twice in one process, so
--- keep one in-process lock per .tydb path while an environment handle is open.
+-- LMDB does not support opening the same environment twice in one process.
+-- Exclusive users (writers, env copies) serialize on a per-path lock and own
+-- the only environment while they run. Readers share one cached read-only
+-- environment per path, tracked in sharedEnvs with an active-reader count;
+-- exclusive users retire the cached environment and wait for its readers to
+-- drain before opening their own, so the process never holds two
+-- environments for one path.
 interfaceLocks :: MVar (Map.Map FilePath (MVar ()))
 {-# NOINLINE interfaceLocks #-}
 interfaceLocks = unsafePerformIO (newMVar Map.empty)
+
+data SharedEnv = SharedEnv
+  { seEnv :: LMDB.MDB_env
+  , seIdent :: Maybe (Integer, Integer)
+  , seReaders :: Int
+  , seRetiring :: Bool
+  }
+
+data SharedEnvClaim = Claimed SharedEnv | Retiring | Absent
+
+-- Identify the data file behind a path, so a cached environment whose file
+-- was removed and recreated (a new inode) is not mistaken for current.
+envFileIdent :: FilePath -> IO (Maybe (Integer, Integer))
+envFileIdent path =
+    (do st <- getFileStatus (dataFilePath path)
+        return (Just (fromIntegral (deviceID st), fromIntegral (fileID st))))
+      `E.catch` \e -> if isDoesNotExistError e then return Nothing else E.throwIO e
+
+sharedEnvs :: MVar (Map.Map FilePath SharedEnv)
+{-# NOINLINE sharedEnvs #-}
+sharedEnvs = unsafePerformIO (newMVar Map.empty)
 
 traceTydbReads :: Bool
 traceTydbReads =
@@ -339,7 +416,7 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyStmtCount, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -348,6 +425,9 @@ keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
 keyNameCount    = key "name-count"
+keyPublicNames  = key "public-names"
+keyConstructors = key "constructors"
+keyActors       = key "actors"
 keyStmtCount    = key "stmt-count"
 keyModuleHeader = key "module-header"
 
@@ -417,6 +497,39 @@ keyExtByProtocol n = B.concat [keyExtByProtocolPrefix, nameKeySuffix n]
 keyStmt :: Int -> BS.ByteString
 keyStmt i = B.pack ("stmt/" ++ padIndex i)
 
+keyConAttr :: A.Name -> BS.ByteString
+keyConAttr n = B.concat [key "con-attr/", nameKeySuffix n]
+
+keyProtoAttr :: A.Name -> BS.ByteString
+keyProtoAttr n = B.concat [key "proto-attr/", nameKeySuffix n]
+
+keyDescendants :: A.QName -> BS.ByteString
+keyDescendants qn = B.concat [key "descendants/", qNameKeySuffix qn]
+
+keyExtProto :: A.QName -> BS.ByteString
+keyExtProto qn = B.concat [key "ext-proto/", qNameKeySuffix qn]
+
+keyExtType :: A.QName -> BS.ByteString
+keyExtType qn = B.concat [key "ext-type/", qNameKeySuffix qn]
+
+-- QName keys hash a location-free encoding so the same semantic name always
+-- maps to the same key regardless of where it occurred in the source.
+qNameKeySuffix :: A.QName -> BS.ByteString
+qNameKeySuffix qn = Base16.encode (SHA256.hash (encodeStrict (stripQNameKeyLocs qn)))
+
+stripQNameKeyLocs :: A.QName -> A.QName
+stripQNameKeyLocs (A.QName m n) = A.QName (stripModNameKeyLocs m) (stripNameKeyLocs n)
+stripQNameKeyLocs (A.NoQ n)     = A.NoQ (stripNameKeyLocs n)
+stripQNameKeyLocs (A.GName m n) = A.GName (stripModNameKeyLocs m) (stripNameKeyLocs n)
+
+stripModNameKeyLocs :: A.ModName -> A.ModName
+stripModNameKeyLocs (A.ModName ns) = A.ModName (map stripNameKeyLocs ns)
+
+stripNameKeyLocs :: A.Name -> A.Name
+stripNameKeyLocs (A.Name _ s)     = A.Name NoLoc s
+stripNameKeyLocs (A.Derived n n') = A.Derived (stripNameKeyLocs n) (stripNameKeyLocs n')
+stripNameKeyLocs n@A.Internal{}   = n
+
 withVal :: BS.ByteString -> (LMDB.MDB_val -> IO a) -> IO a
 withVal bs f =
     BS.useAsCStringLen bs $ \(ptr, len) ->
@@ -427,11 +540,16 @@ copyVal (LMDB.MDB_val len ptr) =
     BS.packCStringLen (castPtr ptr, fromIntegral len)
 
 withEnv :: FilePath -> Bool -> Int -> (LMDB.MDB_env -> IO a) -> IO a
-withEnv path readOnly mapSize action =
-    withInterfaceLock path $
-      E.bracket open LMDB.mdb_env_close action
+withEnv path readOnly mapSize action = do
+    cpath <- canonicalizePath path
+    withInterfaceLockC cpath $ do
+      evictSharedEnv cpath
+      E.bracket (openEnvWithRetry path readOnly mapSize) LMDB.mdb_env_close action
+
+openEnvWithRetry :: FilePath -> Bool -> Int -> IO LMDB.MDB_env
+openEnvWithRetry path readOnly mapSize =
+    withMVar lmdbOpenLock $ \_ -> openWithRetry lmdbTransientMaxAttempts
   where
-    open = withMVar lmdbOpenLock $ \_ -> openWithRetry lmdbTransientMaxAttempts
     -- Concurrent opens of the same env race on lock.mdb setup, which surfaces as
     -- a transient OS-level mdb_env_open failure (e.g. ENOENT) that resolves on
     -- retry. LMDB-semantic failures (corruption, version mismatch) are not
@@ -504,6 +622,10 @@ lmdbTransientRetryDelayUs = 20000
 withInterfaceLock :: FilePath -> IO a -> IO a
 withInterfaceLock path action = do
     cpath <- canonicalizePath path
+    withInterfaceLockC cpath action
+
+withInterfaceLockC :: FilePath -> IO a -> IO a
+withInterfaceLockC cpath action = do
     lock <- modifyMVar interfaceLocks $ \locks ->
       case Map.lookup cpath locks of
         Just lock -> return (locks, lock)
@@ -512,25 +634,113 @@ withInterfaceLock path action = do
           return (Map.insert cpath lock locks, lock)
     withMVar lock $ \_ -> action
 
+-- Claim the shared read environment for a path, opening it on first use. The
+-- open runs under the per-path lock so it cannot race an exclusive user; a
+-- retiring entry is waited out, since its last reader closes it.
+acquireSharedEnv :: FilePath -> FilePath -> IO LMDB.MDB_env
+acquireSharedEnv cpath path = do
+    ident <- envFileIdent path
+    claim <- claimSharedEnv cpath
+    case claim of
+      Claimed se
+        | seIdent se == ident -> return (seEnv se)
+        | otherwise -> do
+            -- The file behind the cached environment was replaced.
+            retireSharedEnv cpath
+            releaseSharedEnv cpath
+            acquireSharedEnv cpath path
+      Retiring -> threadDelay lmdbTransientRetryDelayUs >> acquireSharedEnv cpath path
+      Absent -> do
+        mopened <- withInterfaceLockC cpath $ do
+          claim' <- claimSharedEnv cpath
+          case claim' of
+            Claimed se -> return (Just (seEnv se))
+            Retiring -> return Nothing
+            Absent -> do
+              -- The binding adds MDB_NOTLS implicitly, so reader slots follow
+              -- transactions rather than the transient bound threads they run
+              -- on.
+              mapSize <- readMapSize path
+              env <- openEnvWithRetry path True mapSize
+              ident' <- envFileIdent path
+              modifyMVar_ sharedEnvs (return . Map.insert cpath (SharedEnv env ident' 1 False))
+              return (Just env)
+        case mopened of
+          Just env -> return env
+          Nothing -> threadDelay lmdbTransientRetryDelayUs >> acquireSharedEnv cpath path
+
+claimSharedEnv :: FilePath -> IO SharedEnvClaim
+claimSharedEnv cpath =
+    modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se | not (seRetiring se) ->
+          return (Map.insert cpath se{ seReaders = seReaders se + 1 } envs, Claimed se)
+        Just _ -> return (envs, Retiring)
+        Nothing -> return (envs, Absent)
+
+releaseSharedEnv :: FilePath -> IO ()
+releaseSharedEnv cpath = do
+    mclose <- modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se
+          | seReaders se <= 1 && seRetiring se -> return (Map.delete cpath envs, Just (seEnv se))
+          | otherwise -> return (Map.insert cpath se{ seReaders = seReaders se - 1 } envs, Nothing)
+        Nothing -> return (envs, Nothing)
+    mapM_ LMDB.mdb_env_close mclose
+
+-- Mark the shared environment stale (e.g. the map was grown by another
+-- process); the last reader closes it and the next acquire reopens.
+retireSharedEnv :: FilePath -> IO ()
+retireSharedEnv cpath = do
+    mclose <- modifyMVar sharedEnvs $ \envs ->
+      case Map.lookup cpath envs of
+        Just se
+          | seReaders se <= 0 -> return (Map.delete cpath envs, Just (seEnv se))
+          | otherwise -> return (Map.insert cpath se{ seRetiring = True } envs, Nothing)
+        Nothing -> return (envs, Nothing)
+    mapM_ LMDB.mdb_env_close mclose
+
+-- Exclusive users call this under the per-path lock: retire the shared
+-- environment and wait until its active readers have drained and closed it.
+evictSharedEnv :: FilePath -> IO ()
+evictSharedEnv cpath = do
+    retireSharedEnv cpath
+    waitGone
+  where
+    waitGone = do
+      gone <- withMVar sharedEnvs (return . Map.notMember cpath)
+      unless gone (threadDelay lmdbTransientRetryDelayUs >> waitGone)
+
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withReadTxn path action = do
-    mapSize <- readMapSize path
-    -- mdb_txn_begin can still hit a transient lock-table OS error after a
-    -- successful env open, so retry the read transaction with a fresh env.
-    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts mapSize
+    cpath <- canonicalizePath path
+    -- mdb_txn_begin can hit a transient lock-table OS error, and another
+    -- process may have grown the map since the shared environment was opened;
+    -- both retire the cached environment and retry with a fresh one.
+    runInLmdbThread $ readTxnWithRetry lmdbTransientMaxAttempts cpath
   where
-    readTxnWithRetry attempt mapSize = do
-      res <- withEnv path True mapSize $ \env ->
-        E.try $
-          E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
-            dbi <- LMDB.mdb_dbi_open txn Nothing []
-            action txn dbi
+    readTxnWithRetry attempt cpath = do
+      env <- acquireSharedEnv cpath path
+      res <- (E.try $
+               E.bracket (LMDB.mdb_txn_begin env Nothing True) LMDB.mdb_txn_abort $ \txn -> do
+                 dbi <- LMDB.mdb_dbi_open txn Nothing []
+                 action txn dbi)
+             `E.onException` releaseSharedEnv cpath
       case res of
-        Right x -> return x
+        Right x -> releaseSharedEnv cpath >> return x
         Left (err :: LMDB.LMDB_Error)
-          | attempt > 1 && isTransientLmdbOsError err ->
-              threadDelay lmdbTransientRetryDelayUs >> readTxnWithRetry (attempt - 1) mapSize
-          | otherwise -> E.throwIO err
+          | attempt > 1 && (isTransientLmdbOsError err || isMapResized err) -> do
+              retireSharedEnv cpath
+              releaseSharedEnv cpath
+              threadDelay lmdbTransientRetryDelayUs
+              readTxnWithRetry (attempt - 1) cpath
+          | otherwise -> releaseSharedEnv cpath >> E.throwIO err
+
+isMapResized :: LMDB.LMDB_Error -> Bool
+isMapResized err =
+    case LMDB.e_code err of
+      Right LMDB.MDB_MAP_RESIZED -> True
+      _ -> False
 
 withWriteTxn :: FilePath -> Int -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withWriteTxn path mapSize action =
@@ -541,6 +751,19 @@ withWriteTxn path mapSize action =
           r <- restore (LMDB.mdb_dbi_open txn Nothing [] >>= action txn) `E.onException` LMDB.mdb_txn_abort txn
           LMDB.mdb_txn_commit txn
           return r
+
+openInterfaceDB :: FilePath -> IO InterfaceDB
+openInterfaceDB path = do
+    withReadTxn path validateVersion
+    return (InterfaceDB path)
+
+-- | Like openInterfaceDB, but treats a missing, corrupt, or version-mismatched
+-- cache as a miss, mirroring readFileMaybe.
+openInterfaceDBMaybe :: FilePath -> IO (Maybe InterfaceDB)
+openInterfaceDBMaybe = readTyMaybe openInterfaceDB
+
+withInterfaceDBReadTxn :: InterfaceDB -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
+withInterfaceDBReadTxn (InterfaceDB path) action = withReadTxn path action
 
 -- The raw LMDB binding requires transaction setup from a bound thread; this
 -- applies to reads too because of its Haskell-side lock guard.
@@ -704,6 +927,80 @@ readNameInfoEntries txn dbi = do
       suffix <- getValue ("name-order " ++ show i) txn dbi (keyNameOrder i)
       getValue ("name-info " ++ show i) txn dbi (keyNameInfoSuffix suffix)
 
+readNameInfoEntryMaybe :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
+readNameInfoEntryMaybe txn dbi n =
+    getMaybeValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+
+readNameInfoEntriesByNames :: LMDB.MDB_txn -> LMDB.MDB_dbi -> [A.Name] -> IO I.TEnv
+readNameInfoEntriesByNames txn dbi ns =
+    forM ns $ \n ->
+      getValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+
+readInterfaceDBModuleInfo :: InterfaceDB -> IO ([A.ModName], Maybe String)
+readInterfaceDBModuleInfo db =
+    withInterfaceDBReadTxn db $ \txn dbi -> do
+      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      doc <- getValue "doc" txn dbi keyDoc
+      return (A.importsOf (A.Module tmn timps tdoc []), doc)
+
+readInterfaceDBNameInfoMaybe :: InterfaceDB -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
+readInterfaceDBNameInfoMaybe db@(InterfaceDB path) n = do
+    mi <- withInterfaceDBReadTxn db $ \txn dbi ->
+            readNameInfoEntryMaybe txn dbi n
+    traceTydbRead (case mi of Just _ -> "name-hit"; Nothing -> "name-miss") path (A.nstr n)
+    return mi
+
+readInterfaceDBPublicNames :: InterfaceDB -> IO [A.Name]
+readInterfaceDBPublicNames db@(InterfaceDB path) = do
+    ns <- withInterfaceDBReadTxn db $ \txn dbi ->
+            getValue "public-names" txn dbi keyPublicNames
+    traceTydbRead "public-names" path (show (length ns))
+    return ns
+
+readInterfaceDBConstructors :: InterfaceDB -> IO I.TEnv
+readInterfaceDBConstructors db@(InterfaceDB path) = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- getValue "constructors" txn dbi keyConstructors
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "constructors" path (show (length te))
+    return te
+
+readInterfaceDBActors :: InterfaceDB -> IO I.TEnv
+readInterfaceDBActors db@(InterfaceDB path) = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- getValue "actors" txn dbi keyActors
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "actors" path (show (length te))
+    return te
+
+readInterfaceDBConAttr :: InterfaceDB -> A.Name -> IO I.TEnv
+readInterfaceDBConAttr db n =
+    readTEnvIndex db ("con-attr " ++ A.nstr n) (keyConAttr n)
+
+readInterfaceDBProtoAttr :: InterfaceDB -> A.Name -> IO I.TEnv
+readInterfaceDBProtoAttr db n =
+    readTEnvIndex db ("proto-attr " ++ A.nstr n) (keyProtoAttr n)
+
+readInterfaceDBDescendants :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBDescendants db qn =
+    readTEnvIndex db ("descendants " ++ show qn) (keyDescendants qn)
+
+readInterfaceDBExtByProto :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBExtByProto db qn =
+    readTEnvIndex db ("ext-proto " ++ show qn) (keyExtProto qn)
+
+readInterfaceDBExtByType :: InterfaceDB -> A.QName -> IO I.TEnv
+readInterfaceDBExtByType db qn =
+    readTEnvIndex db ("ext-type " ++ show qn) (keyExtType qn)
+
+readTEnvIndex :: InterfaceDB -> String -> BS.ByteString -> IO I.TEnv
+readTEnvIndex db@(InterfaceDB path) label k = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            ns <- maybe [] id <$> getMaybeValue label txn dbi k
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "index" path (label ++ " " ++ show (length te))
+    return te
+
 readNameHashEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [NameHashInfo]
 readNameHashEntries txn dbi = do
     vals <- getValuesWithPrefix txn dbi keyNameHashPrefix
@@ -832,12 +1129,12 @@ depIndexEntries depModules nameHashes =
       where
         addToEntry Nothing =
           if isPub
-            then (Just h, Nothing, [owner], [])
-            else (Nothing, Just h, [], [owner])
+            then (Just h, Nothing, Set.singleton owner, Set.empty)
+            else (Nothing, Just h, Set.empty, Set.singleton owner)
         addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
           if isPub
-            then (Just h, implH, owner : pubUsers, implUsers)
-            else (pubH, Just h, pubUsers, owner : implUsers)
+            then (Just h, implH, Set.insert owner pubUsers, implUsers)
+            else (pubH, Just h, pubUsers, Set.insert owner implUsers)
 
     depMap =
       foldl' addInfo Map.empty nameHashes
@@ -862,13 +1159,69 @@ depIndexEntries depModules nameHashes =
             ]
       ]
 
-    cleanNames = Data.List.sortOn nameKey . Data.List.nub
+    cleanNames = Data.List.sortOn nameKey . Set.toList
 
     userRows =
       sortUserRows
         [ (key', DepUsers (cleanNames pubUsers) (cleanNames implUsers))
         | (key', (_pubH, _implH, pubUsers, implUsers)) <- Map.toList depMap
         ]
+
+-- Narrow per-module query indexes, so dependent modules can answer solver and
+-- environment queries (attribute owners, descendants, extensions) without
+-- enumerating the whole public interface.
+data QueryIndexes = QueryIndexes
+  { qiPublicNames :: [A.Name]
+  , qiConstructors :: [A.Name]
+  , qiActors :: [A.Name]
+  , qiConAttrs :: Map.Map A.Name [A.Name]
+  , qiProtoAttrs :: Map.Map A.Name [A.Name]
+  , qiDescendants :: Map.Map A.QName [A.Name]
+  , qiExtProtos :: Map.Map A.QName [A.Name]
+  , qiExtTypes :: Map.Map A.QName [A.Name]
+  }
+
+queryIndexes :: I.NameInfo -> QueryIndexes
+queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattrs protoattrs descendants extprotos exttypes
+  where pte                    = filter (isPublicName . fst) te
+        cons                   = [ n | (n, i) <- pte, isCons i ]
+        actors                 = [ n | (n, I.NAct{}) <- pte ]
+        conattrs               = indexMap [ (a, n) | (n, i) <- pte, isCon i, a <- attrs i ]
+        protoattrs             = indexMap [ (a, n) | (n, i@I.NProto{}) <- pte, a <- attrs i ]
+        descendants            = indexMap [ (A.tcname c, n) | (n, i) <- pte, (_, c) <- ancestry i ]
+        extprotos              = indexMap [ (A.tcname p, n) | (n, I.NExt _ _ ps _ _ _) <- pte, (_, p) <- ps ]
+        exttypes               = indexMap [ (A.tcname c, n) | (n, I.NExt _ c _ _ _ _) <- pte ]
+        isCons I.NClass{}      = True
+        isCons I.NProto{}      = True
+        isCons I.NAct{}        = True
+        isCons _               = False
+        isCon I.NClass{}       = True
+        isCon I.NAct{}         = True
+        isCon _                = False
+        attrs (I.NClass _ _ te' _) = map fst te'
+        attrs (I.NProto _ _ te' _) = map fst te'
+        attrs (I.NAct _ _ _ te' _) = map fst te'
+        attrs _                = []
+        ancestry (I.NClass _ us _ _) = us
+        ancestry (I.NProto _ us _ _) = us
+        ancestry _             = []
+queryIndexes _                  = QueryIndexes [] [] [] Map.empty Map.empty Map.empty Map.empty Map.empty
+
+indexMap :: Ord k => [(k, A.Name)] -> Map.Map k [A.Name]
+indexMap xs = Map.fromListWith (++) [ (k, [v]) | (k, v) <- reverse xs ]
+
+queryIndexEntries :: I.NameInfo -> [(BS.ByteString, BS.ByteString)]
+queryIndexEntries nmod =
+    [ (keyPublicNames, encodeStrict (qiPublicNames ix))
+    , (keyConstructors, encodeStrict (qiConstructors ix))
+    , (keyActors, encodeStrict (qiActors ix))
+    ]
+    ++ [ (keyConAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiConAttrs ix) ]
+    ++ [ (keyProtoAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiProtoAttrs ix) ]
+    ++ [ (keyDescendants qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiDescendants ix) ]
+    ++ [ (keyExtProto qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtProtos ix) ]
+    ++ [ (keyExtType qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtTypes ix) ]
+  where ix = queryIndexes nmod
 
 interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
 interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
@@ -887,7 +1240,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
         nameChunks = entryChunks caps (zip [0..] te)
         nameHashChunks = entryChunks caps nameHashes
         stmtChunks = entryChunks caps (zip [0..] body)
-        totalPrep = 3 + length nameChunks + length nameHashChunks + length stmtChunks
+        totalPrep = 4 + length nameChunks + length nameHashChunks + length stmtChunks
     prepDone <- newIORef (0 :: Int)
     let mark label = do
           done <- atomicModifyIORef' prepDone $ \n ->
@@ -898,12 +1251,14 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     mark "Preparing .tydb header"
     depEntries <- forceEntries (depIndexEntries depModules nameHashes)
     mark "Preparing .tydb deps"
+    queryEntries <- forceEntries (queryIndexEntries nmod)
+    mark "Preparing .tydb query indexes"
     nameEntries <- parallelEntries mark "Preparing .tydb names" nameInfoEntries nameChunks
     nameHashEntries <- parallelEntries mark "Preparing .tydb hashes" nameHashEntry nameHashChunks
     extEntries <- forceEntries (extensionIndexEntries (extensionIndexFromNameInfo tmn nmod))
     mark "Preparing .tydb extensions"
     stmtEntries <- parallelEntries mark "Preparing .tydb statements" stmtEntry stmtChunks
-    return (headerEntries ++ depEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
+    return (headerEntries ++ depEntries ++ queryEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
@@ -971,6 +1326,27 @@ readHeader f =
       traceTydbRead "name-hash-all" f (show (length nameHashes))
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, doc)
 
+-- Like readHeader, but reads the stored name count instead of decoding every
+-- per-name hash row, so cache checks stay independent of module size.
+readHeaderSummary :: FilePath -> IO TyHeaderSummary
+readHeaderSummary f =
+    withReadTxn f $ \txn dbi -> do
+      (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
+      imps <- getValue "imports" txn dbi keyImports
+      depModules <- getValue "deps" txn dbi keyDeps
+      roots <- getValue "roots" txn dbi keyRoots
+      tests <- getValue "tests" txn dbi keyTests
+      doc <- getValue "doc" txn dbi keyDoc
+      nameCount <- getValue "name-count" txn dbi keyNameCount
+      traceTydbRead "header" f "cached"
+      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, doc)
+
+readRoots :: FilePath -> IO [A.Name]
+readRoots f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      getValue "roots" txn dbi keyRoots
+
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
     withReadTxn f $ \txn dbi -> do
@@ -1030,6 +1406,9 @@ readFileMaybe = readTyMaybe readFile
 
 readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
 readHeaderMaybe = readTyMaybe readHeader
+
+readHeaderSummaryMaybe :: FilePath -> IO (Maybe TyHeaderSummary)
+readHeaderSummaryMaybe = readTyMaybe readHeaderSummary
 
 readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)
 readTyMaybe readTy f = (Just <$> readTy f) `E.catch` tyCacheMiss

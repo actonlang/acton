@@ -69,8 +69,11 @@ data TyInfo                     = TyInfo {
 type Env                        = EnvF TypeX
 type WitMap                     = Map QName [Witness]
 
+-- Imported modules are not preloaded here: witsByPName/witsByTName merge in
+-- imported witnesses per query, and the tyids/tyinfos lattice only covers
+-- local definitions.
 initTypeEnv                     :: Env0 -> Env
-initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
+initTypeEnv env0                = setX env0 x0
   where x0                      = TypeX {
                                     activeWits  = [],
                                     closedWits  = primWits,
@@ -84,10 +87,6 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty
                                   }
-        importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
-          where f               = GName m
-        imps | inBuiltin env0   = []
-             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- mBuiltin : transitiveImports env0 ]
 
 
 tyinfos0                        = IntMap.fromDistinctAscList pairs
@@ -152,8 +151,10 @@ addconinfo f x (n,i)
         addproto x              = x{ typrotos = IntSet.insert tid (typrotos x) }
         addactor x              = x{ tyactors = IntSet.insert tid (tyactors x) }
 
+        -- Imported ancestors are not registered in tyids, so they contribute
+        -- no ids or attrs here. The lattice only feeds the debug printer.
         addcon n q us te x      = x{ tyids = Map.insert (f n) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
-          where ui              = [ tyids x Map.! tcname c | (_,c) <- us ]
+          where ui              = [ u | (_,c) <- us, Just u <- [Map.lookup (tcname c) (tyids x)] ]
                 info            = TyInfo {
                                     tywild = tCon $ TC (NoQ n) [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
@@ -182,14 +183,14 @@ setupWits add f te x            = foldl' add x wits
 
 addvarinfo x (tv, c, _)         = x{ tyids = Map.insert (NoQ $ tvname tv) tid (tyids x), tyinfos = IntMap.insert tid info tyinfos' }
   where tid                     = nextid x
-        ci                      = tyinfos x IntMap.! (tyids x Map.! tcname c)
+        ci                      = Map.lookup (tcname c) (tyids x) >>= \i -> IntMap.lookup i (tyinfos x)
         info                    = TyInfo {
                                     tywild = tVar tv,
-                                    tyabove = IntSet.insert tid $ tyabove ci,
+                                    tyabove = maybe (IntSet.singleton tid) (IntSet.insert tid . tyabove) ci,
                                     tybelow = IntSet.singleton tid,
-                                    tyattrs = tyattrs ci
+                                    tyattrs = maybe Set.empty tyattrs ci
                                   }
-        tyinfos'                = IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove ci)
+        tyinfos'                = maybe (tyinfos x) (\i -> IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove i)) ci
         addbelow info           = info{ tybelow = IntSet.insert tid (tybelow info) }
 
 tydefineVars                    :: QBinds -> Env -> Env
@@ -224,15 +225,33 @@ witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
                                   Map.findWithDefault [] pn (closedWitMap x)
 
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = witsByPNameX (envX env) pn
+witsByPName env pn              = uniqueWits env $ witsByPNameX (envX env) pn ++ imported
+  where imported                = concat [ moduleWitnessesByProto mi qn | mi <- importedModuleInfos env, qn <- queryQNames env pn ]
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++
+witsByTName env tn              = uniqueWits env $ locals ++ imported
+  where locals                  = [ w | w <- activeWits x, eqname (wtype w) ] ++
                                   [ w | w <- closedWits x, eqname (wtype w) ]
-  where eqname (TCon _ c)       = tcname c == tn
+        eqname (TCon _ c)       = tcname c == tn
         eqname (TVar _ v)       = NoQ (tvname v) == tn
         eqname _                = False
         x                       = envX env
+        imported                = concat [ moduleWitnessesByType mi qn | mi <- importedModuleInfos env, qn <- queryQNames env tn ]
+
+-- Witnesses read from interfaces may name the same protocol or type in
+-- aliased and unaliased form, so queries try both forms.
+queryQNames                     :: Env -> QName -> [QName]
+queryQNames env qn
+  | qn' == qn                   = [qn]
+  | otherwise                   = [qn, qn']
+  where qn'                     = unalias env qn
+
+uniqueWits                      :: Env -> [Witness] -> [Witness]
+uniqueWits env                  = reverse . foldl' add []
+  where add ws w
+          | any (same w) ws     = ws
+          | otherwise           = w : ws
+        same w w'               = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env

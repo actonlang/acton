@@ -30,7 +30,7 @@ import Debug.Trace
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
 normalize env0 m                    = return (evalState (norm env m) (0,[]), env0')
   where env                         = normEnv env0
-        env0'                       = mapModules convEnv env0
+        env0'                       = convertModules (const []) convEnv env0
 
 
 --  Normalization:
