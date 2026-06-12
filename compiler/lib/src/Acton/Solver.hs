@@ -589,12 +589,12 @@ allBelow env (TFX _ FXPure)         = [fxPure]
 allBelow env (TFX _ FXAction)       = [fxAction]
 
 allBelowProto env (TC n [t@TFX{},_])
-  | n == primWrappedP               = reverse [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
+  | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ]
   | p == pEq                        = ts ++ [tOpt tWild]
   | otherwise                       = ts
-  where ts                          = reverse [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars
+  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first
 
 allClassAttr env n                  = map tCon (tyconsByAttr env n) ++
                                       map tVar (tvarsInTids env (tyconAttrTids env n))
@@ -770,15 +770,19 @@ solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
 ----------------------------------------------------------------------------------------------------------------------
 
 findWitness                 :: Env -> Type -> PCon -> [Witness]
-findWitness env t p         = reverse $ filter (eqhead t . wtype) $ witsByPName env $ tcname p
+findWitness env t p         = filter match $ candidates t
   where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
         eqhead (TFX _ fx) (TFX _ fx')   = fx == fx'
         eqhead (TVar _ v) (TVar _ v')   = v == v'
         eqhead _          _             = False
+        match w                         = tcname (proto w) == tcname p && eqhead t (wtype w)
+        candidates (TCon _ c)           = witsByTName env (tcname c)
+        candidates (TVar _ v)           = witsByTName env (NoQ $ tvname v)
+        candidates _                    = witsByPName env (tcname p)
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
-                                w:_ -> Just $ schematic' $ proto w
+                                ws -> Just $ schematic' $ proto (last ws)   -- newest matching witness, as before
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool

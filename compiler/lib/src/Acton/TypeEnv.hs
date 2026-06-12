@@ -26,6 +26,8 @@ import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 import qualified Data.HashMap.Strict as HashMap
 import Data.HashMap.Strict (HashMap)
+import qualified Data.Sequence as Seq
+import qualified Data.Foldable
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -52,6 +54,8 @@ data TypeX                      = TypeX {
                                     closedWits  :: [Witness],
                                     activeWitMap :: WitMap,
                                     closedWitMap :: WitMap,
+                                    activeWitTypeMap :: WitMap,
+                                    closedWitTypeMap :: WitMap,
                                     posnames    :: [Name],
                                     indecl      :: Bool,
                                     forced      :: Bool,
@@ -73,7 +77,7 @@ data TyInfo                     = TyInfo {
                                   }
 
 type Env                        = EnvF TypeX
-type WitMap                     = Map QName [Witness]
+type WitMap                     = Map QName (Seq.Seq Witness)
 type TyAttrMap                  = Map Name IntSet
 
 initTypeEnv                     :: Env0 -> Env
@@ -83,6 +87,8 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     closedWits  = primWits,
                                     activeWitMap = Map.empty,
                                     closedWitMap = witMap primWits,
+                                    activeWitTypeMap = Map.empty,
+                                    closedWitTypeMap = witTypeMap primWits,
                                     posnames    = [],
                                     indecl      = False,
                                     forced      = False,
@@ -139,7 +145,9 @@ prinfo x (n, tid)               = pretty (noq n) <+> text "=" <+> pretty tid <> 
 
 instance USubst TypeX where
     usubstWith s x              = let we = usubstWith s (activeWits x)
-                                  in x{ activeWits = we, activeWitMap = witMap we }
+                                  in x{ activeWits = we,
+                                        activeWitMap = witMap we,
+                                        activeWitTypeMap = witTypeMap we }
 
 instance UFree TypeX where
     ufree x                     = ufree (activeWits x)
@@ -149,6 +157,9 @@ witnesses x                     = activeWits x ++ closedWits x
 
 witMap                          :: [Witness] -> WitMap
 witMap                          = foldr addWit Map.empty
+
+witTypeMap                      :: [Witness] -> WitMap
+witTypeMap                      = foldr addWitType Map.empty
 
 
 nextid x                        = 1 + fst (IntMap.findMax $ tyinfos x)
@@ -297,40 +308,60 @@ tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
 
 addActiveWit                    :: TypeX -> Witness -> TypeX
 addActiveWit x wit
-  | null same                   = x{ activeWits = wit : activeWits x,
-                                     activeWitMap = addWit wit (activeWitMap x) }
+  | not $ hasWit x wit          = x{ activeWits = wit : activeWits x,
+                                     activeWitMap = addWit wit (activeWitMap x),
+                                     activeWitTypeMap = addWitType wit (activeWitTypeMap x) }
   | otherwise                   = x
-  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
 addClosedWit                    :: TypeX -> Witness -> TypeX
 addClosedWit x wit
-  | null same                   = x{ closedWits = wit : closedWits x,
-                                     closedWitMap = addWit wit (closedWitMap x) }
+  | not $ hasWit x wit          = x{ closedWits = wit : closedWits x,
+                                     closedWitMap = addWit wit (closedWitMap x),
+                                     closedWitTypeMap = addWitType wit (closedWitTypeMap x) }
   | otherwise                   = x
-  where same                    = [ w | w <- witsByPNameX x (tcname $ proto wit), wtype w == wtype wit ]
 
+hasWit                          :: TypeX -> Witness -> Bool
+hasWit x wit                     = any same $ case wtypeKey (wtype wit) of
+                                      Just n  -> witsByTNameX x n
+                                      Nothing -> witsByPNameX x (tcname $ proto wit)
+  where same w                   = tcname (proto w) == tcname (proto wit) && wtype w == wtype wit
+
+-- Witness buckets are kept in insertion (oldest-first) order, the order in
+-- which consumers want to enumerate them, so queries need no reversal of the
+-- ever-growing bucket.
 addWit                          :: Witness -> WitMap -> WitMap
-addWit w                        = Map.insertWith (++) (tcname $ proto w) [w]
+addWit w                        = Map.insertWith (\_ old -> old Seq.|> w) (tcname $ proto w) (Seq.singleton w)
 
-witsByPNameX x pn               = Map.findWithDefault [] pn (activeWitMap x) ++
-                                  Map.findWithDefault [] pn (closedWitMap x)
+addWitType                      :: Witness -> WitMap -> WitMap
+addWitType w m                  = maybe m (\n -> Map.insertWith (\_ old -> old Seq.|> w) n (Seq.singleton w) m) (wtypeKey $ wtype w)
+
+wtypeKey                        :: Type -> Maybe QName
+wtypeKey (TCon _ c)             = Just (tcname c)
+wtypeKey (TVar _ v)             = Just (NoQ $ tvname v)
+wtypeKey _                      = Nothing
+
+-- Closed witnesses precede active ones: combined with oldest-first buckets this
+-- equals the reverse of the old newest-first active++closed enumeration, which
+-- is the order the (previously reversing) consumers rely on.
+witsByPNameX x pn               = Data.Foldable.toList (Map.findWithDefault Seq.empty pn (closedWitMap x)) ++
+                                  Data.Foldable.toList (Map.findWithDefault Seq.empty pn (activeWitMap x))
+
+witsByTNameX x tn               = Data.Foldable.toList (Map.findWithDefault Seq.empty tn (closedWitTypeMap x)) ++
+                                  Data.Foldable.toList (Map.findWithDefault Seq.empty tn (activeWitTypeMap x))
 
 witsByPName                     :: Env -> QName -> [Witness]
 witsByPName env pn              = witsByPNameX (envX env) pn
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = [ w | w <- activeWits x, eqname (wtype w) ] ++
-                                  [ w | w <- closedWits x, eqname (wtype w) ]
-  where eqname (TCon _ c)       = tcname c == tn
-        eqname (TVar _ v)       = NoQ (tvname v) == tn
-        eqname _                = False
-        x                       = envX env
+witsByTName env tn              = witsByTNameX (envX env) tn
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
   | n <= 0                      = env
   | otherwise                   = modX env1 $ \x -> let we = dropw (activeWits x)
-                                                    in x{ activeWits = we, activeWitMap = witMap we }
+                                                    in x{ activeWits = we,
+                                                          activeWitMap = witMap we,
+                                                          activeWitTypeMap = witTypeMap we }
   where env1                    = setActiveNames (dropv n (activeNames env)) env{ qlevel = qlevel env - n }
         n                       = qlevel env - l
         vs                      = takev n (activeNames env)
