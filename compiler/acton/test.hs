@@ -1328,6 +1328,10 @@ actonProjTests =
   , testCase "qualified --root test.main" $ do
         testBuild "--root test.main" ExitSuccess False "test/project/qualified_root"
 
+  , testCase "local imports" $ do
+        testBuild "--root proj.main" ExitSuccess False "test/project/local_imports"
+        testBuild "--root main.alt" ExitSuccess False "test/project/local_imports"
+
   -- after used to avoid races on files in same project dir as above test
   , after AllFinish "qualified_root" $
     testCase "unqualified --root main" $ do

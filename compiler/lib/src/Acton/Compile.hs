@@ -4656,12 +4656,8 @@ enumerateProjectModules ctx = do
             proj = BuildSpec.specName $ projBuildSpec ctx
             rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
             depNames = map fst $ projDeps ctx
-            projOverlaps = filter ((== proj) . rootName) actFiles
             depOverlaps = filter ((`elem` depNames) . rootName) actFiles
 
-        when (not $ null projOverlaps) $
-            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared project name:\n" ++
-                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- projOverlaps])
         when (not $ null depOverlaps) $
             throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
                                concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
