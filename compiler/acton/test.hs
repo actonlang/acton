@@ -1686,6 +1686,8 @@ actonRootArgTests =
         testBuild "--root test.main" ExitSuccess False "test/root/test.act"
   , testCase "unqualified --root main" $
         testBuild "--root main" ExitSuccess False "test/root/test.act"
+  , testCase "overqualified --root proj.test.main" $
+        testBuild "--root proj.test.main" ExitSuccess False "test/root/proj"
   , after AllFinish "qualified --root" $
     after AllFinish "unqualified --root" $
     testCase "discover root actor" $
