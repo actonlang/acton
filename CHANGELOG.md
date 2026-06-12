@@ -171,6 +171,16 @@
 - Use the canonical `acton` binary in Makefile build, test, distribution, and
   release recipes while keeping `actonc` as a compatibility symlink and install
   alias. [#2882]
+- Let `Build.act` Zig dependency options refer to the compiler toolchain's
+  bundled dependency directory with the `{sysdeps}` sentinel, written as
+  `"{{sysdeps}}"` in Acton strings, so project wrappers can use bundled headers
+  and libraries without hardcoding the installed `dist` path. [#2915, #2917]
+  - Commands that rewrite `Build.act`, such as `acton pkg add`, now re-escape
+    literal braces in strings so sentinel values and other brace-containing
+    names, descriptions, dependency keys, and option values round-trip safely.
+  - Unescaped interpolation in Zig dependency option values now reports a clear
+    project error naming the dependency and option instead of silently dropping
+    the option from the generated Zig build.
 
 ### Runtime & Standard Library
 - Add an RTS sync-pause primitive for worker threads, allowing a worker to
@@ -188,6 +198,15 @@
 - Fix macOS crash handling so the RTS can print a backtrace without relying on
   Linux `/proc/self/exe`, then restore the platform crash handler before
   re-raising the original signal. [#2909]
+- Move TLS and DNS native I/O allocations to explicit ownership, keeping
+  mbedtls and tlsuv state off the GC heap while preserving GC roots for libuv
+  handles. TLS listeners and connections now close native streams through
+  explicit close paths with actor cleanup as a safety net, queued TLS writes
+  keep their payloads alive until completion, and immediate TLS connect setup
+  errors are reported to callbacks instead of being ignored. [#2911]
+  - `TLSListener` now exposes `close()`, accepted TLS connections can outlive
+    the listener actor, and accepted connections stay pinned to the worker
+    thread that owns their libuv stream.
 - Fix `list.index` on empty lists so it raises `KeyError` for a missing element
   instead of rejecting the default stop position. [#2801]
 
@@ -4266,6 +4285,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2907]: https://github.com/actonlang/acton/pull/2907
 [#2908]: https://github.com/actonlang/acton/pull/2908
 [#2909]: https://github.com/actonlang/acton/pull/2909
+[#2911]: https://github.com/actonlang/acton/pull/2911
+[#2915]: https://github.com/actonlang/acton/pull/2915
+[#2917]: https://github.com/actonlang/acton/pull/2917
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
