@@ -646,16 +646,34 @@ slotType env tc n                   = case lookup n (fullAttrEnv env tc) of
                                         _                     -> Nothing
   where rt                          = B.rtypeOf env tc n
 
--- Pick the first concrete witness that already provides the requested slot.
--- Provider expressions may be roots such as B_OrdD_strG_witness or fields from
--- another witness, for example B_SequenceD_listG_witness->W_Collection.
+-- Pick the first concrete witness that already provides the requested slot for
+-- the same protocol/type owner.  This still permits a sibling witness such as
+-- Ord[str] to fill an Eq[str] slot in Hashable[str], but excludes unrelated
+-- classes that only happen to have the same method name and ABI.
 forwardProvider env providers targetTc n targetSlot
                                     = first [ (providerTc, providerExpr, providerSlot)
-                                            | (providerTc, providerExpr) <- providers,
+                                            | ownerTc <- slotOwners env targetTc n,
+                                              (providerTc, providerExpr) <- providers,
                                               providerTc /= targetTc,
+                                              providerCoversOwner env providerTc ownerTc,
                                               concreteProvider env providerTc n,
                                               Just providerSlot <- [slotType env providerTc n],
                                               compatibleSlots targetSlot providerSlot ]
+
+slotOwners env targetTc n           = [ ownerTc
+                                      | (_, ownerTc) <- tail (findAncestry env targetTc),
+                                        ownsSlotDirectly env ownerTc n ]
+
+ownsSlotDirectly env tc n           = case findAttrInfoIn n te of
+                                        Just NDef{}  -> True
+                                        Just NSig{}  -> True
+                                        Just NVar{}  -> True
+                                        Just NSVar{} -> True
+                                        _            -> False
+  where (_, te)                     = findCon env tc
+
+providerCoversOwner env providerTc ownerTc
+                                    = any ((== ownerTc) . snd) (findAncestry env providerTc)
 
 providerObjects env                 = concat [ providerRoot qn q | (qn, q) <- allClasses env, nullConArgs env qn ]
   where providerRoot qn q           = walk [] rootExpr rootTc
