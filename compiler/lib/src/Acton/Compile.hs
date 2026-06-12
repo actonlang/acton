@@ -1540,28 +1540,37 @@ importsOf (ParseErrorTask _ _) = []
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
-resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders key proj order modSets imps = --trace ("#### resolveProviders " ++ prstr key) $
-                                               --trace ("   # proj: " ++ proj ++ " (head order: " ++ p0 ++ ") ") $
-                                               --trace ("   # order: " ++ prstrs order) $
-                                               --trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
-                                               --trace ("   # imps: " ++ prstrs imps ++ " (" ++ prstrs imps' ++ ")") $
-                                               --trace ("  ## map: "  ++ prstr result) $
-                                               result
-  where result          = M.fromList $ catMaybes $ map findProvider imps'
-        imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ imps
+resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> Data.Set.Set ProjName -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders key proj order modSets deps imps =
+    --trace ("#### resolveProviders " ++ prstr key) $
+    --trace ("   # proj: " ++ proj ++ " (head order: " ++ p0 ++ ") ") $
+--    trace ("   # order: " ++ prstrs order) $
+--    trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
+    --trace ("   # imps: " ++ prstrs imps) $
+    --trace ("   # imps': " ++ prstrs imps') $
+    --trace ("  ## map: "  ++ prstr result) $
+    result
+  where result          = M.fromList $ concat $ map findProvider imps'
+        imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ map dropLib imps
         p0              = tkProj key
         Just mods0      = M.lookup p0 modSets
         findProvider mn
-          | Data.Set.member mn' mods0
-                        = Just (mn, TaskKey p0 mn')
-          | otherwise   = listToMaybe [ (mn, TaskKey p mn) | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
-          where mn'     = if proj `elem` special_projects then mn else A.modName (proj : A.modPath mn)
+          | Data.Set.member mn0 mods0
+                        = [ (mn, TaskKey p0 mn0) ]
+          | otherwise   = [ (mn, TaskKey p mn') | p <- order, mn' <- [mn,addLib mn], maybe False (Data.Set.member mn') (M.lookup p modSets) ]
+          where mn0     = if proj `elem` special_projects then mn else A.modName (proj : A.modPath mn)
+        addLib mn       = case A.modPath mn of
+                            [n] | Data.Set.member n deps -> A.modName [n, "lib"]
+                            _ -> mn
+        dropLib mn      = case A.modPath mn of
+                            [n,"lib"] | Data.Set.member n deps -> A.modName [n]
+                            _ -> mn
 
 special_projects = ["", "base", "acton_scratch"]
 
 type ProjDir = FilePath
 type ActFile = FilePath
+type ProjName = String
 
 -- | Build GlobalTasks for all discovered projects.
 -- Crawls project sources, resolves provider edges, and optionally limits the
@@ -1584,6 +1593,8 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
         modSets :: M.Map ProjDir (Data.Set.Set A.ModName)
         modSets = M.map (Data.Set.fromList . M.keys) modMaps
         -- Project dependencies, in their BuildSpec order (per project)
+        allDeps :: M.Map ProjDir (Data.Set.Set ProjName)
+        allDeps = M.fromList [ (projRoot ctx, Data.Set.fromList (map fst $ projDeps ctx)) | (ctx,_) <- perProj ]
         orderCache :: M.Map ProjDir [ProjDir]
         orderCache = M.fromList [ (projRoot ctx, projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
         -- Declared modules in all reachable projects (paired with their project paths)
@@ -1595,28 +1606,29 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
                     let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
-    tasks <- go modMaps modSets orderCache Data.Set.empty seedKeys []
+    tasks <- go modMaps modSets allDeps orderCache Data.Set.empty seedKeys []
     return (reverse tasks, modSets)
   where
-    go modMaps modSets orderCache seen [] acc = return acc
-    go modMaps modSets orderCache seen (k:qs) acc
-      | Data.Set.member k seen = go modMaps modSets orderCache seen qs acc
+    go modMaps modSets allDeps orderCache seen [] acc = return acc
+    go modMaps modSets allDeps orderCache seen (k:qs) acc
+      | Data.Set.member k seen = go modMaps modSets allDeps orderCache seen qs acc
       | otherwise =
           case M.lookup (tkProj k) modMaps >>= M.lookup (tkMod k) of
-            Nothing -> go modMaps modSets orderCache (Data.Set.insert k seen) qs acc
+            Nothing -> go modMaps modSets allDeps orderCache (Data.Set.insert k seen) qs acc
             Just actFile -> do
               let ctx = projMap M.! tkProj k
               paths <- pathsForModule opts projMap ctx (tkMod k)
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  providers = resolveProviders k (projName paths) order modSets (importsOf task)
+                  deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
+                  providers = resolveProviders k (projName paths) order modSets deps (importsOf task)
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
                                     , gtTask = task
                                     , gtImportProviders = providers
                                     } : acc
-              go modMaps modSets orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+              go modMaps modSets allDeps orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
 
 
 -- | Select the subgraph needed for a given build request.
