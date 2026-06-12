@@ -1,0 +1,5 @@
+msg = "Hello World!"
+
+actor main(env):
+    print(msg)
+    env.exit(0)

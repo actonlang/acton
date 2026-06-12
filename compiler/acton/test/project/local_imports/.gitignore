@@ -1,0 +1,5 @@
+.acton.compile.lock
+.acton.lock
+build.zig
+build.zig.zon
+out

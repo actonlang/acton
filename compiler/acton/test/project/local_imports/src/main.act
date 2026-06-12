@@ -1,0 +1,11 @@
+import proj as p1
+import proj.proj as p2
+import lib as l1
+import proj.lib as l2
+
+actor alt(env):
+    print(p1.msg)
+    print(p2.msg + " Really!")
+    print("News?", l1.news,)
+    print("News?", l2.news, "really")
+    env.exit(0)
