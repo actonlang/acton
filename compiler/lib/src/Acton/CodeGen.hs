@@ -684,6 +684,8 @@ providerObjects env                 = concat [ providerRoot qn q | (qn, q) <- al
           | otherwise               = (tc, expr) : concat [ walk (tcname tc : seen) (expr <> text "->" <> gen env w) tc'
                                                           | (w, tc') <- witnessFields env tc ]
 
+-- Not to intrude in Types.hs, we accept that we do not have the complete list of witnesses in Env
+-- For completing method tables, we start with all classes in the program but filter to only consider ancestor witness classes.
 allClasses env                      = active ++ closed ++ mods
   where active                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- activeNames env ]
         closed                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- closedNames env ]
