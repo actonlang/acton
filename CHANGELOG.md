@@ -147,6 +147,20 @@
   builds that reproduced it on 9.6.x). [#2832, #2834]
 
 ### CLI & Project Workflow
+- Resolve project modules under their `Build.act` project name, so dependency
+  modules are imported through the name declared in the `dependencies` table.
+  For example, a dependency listed as `"analytics": (...)` is imported with
+  `import analytics.events`, while local project modules still support
+  unprefixed imports. [#2914]
+  - Importing a dependency name resolves to that dependency's `lib.act`, so
+    `import analytics` works for the dependency root module and
+    `import analytics.events` works for other dependency modules.
+  - `acton sig`, root actor selection, `--modules`, deferred-back-pass module
+    selectors, library outputs, generated file paths, and incremental rebuild
+    traces understand project-qualified module names.
+  - Projects now reject source trees whose first module path segment overlaps a
+    declared dependency name, avoiding ambiguous imports between local source
+    modules and dependency projects.
 - Add `acton repl`, a live interactive Acton shell for trying code, inspecting
   values, and getting immediate feedback as you explore. [#2842]
   - It uses the normal compiler pipeline inside a scratch REPL directory, so
@@ -300,6 +314,10 @@
   type-checking scheduler performance on large recursive class structures. [#2777]
 
 ### Compatibility Notes
+- Projects that import dependency modules by bare source module names may need
+  to qualify those imports with the dependency name from `Build.act`;
+  dependency `lib.act` modules can be imported as that dependency name itself.
+  [#2914]
 - C extension bindings that implement functions taking or returning Acton
   numeric primitive types may need to follow the new unboxed C signatures for
   bounded integers and floats instead of passing boxed wrapper pointers. [#2824]
@@ -4286,6 +4304,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2908]: https://github.com/actonlang/acton/pull/2908
 [#2909]: https://github.com/actonlang/acton/pull/2909
 [#2911]: https://github.com/actonlang/acton/pull/2911
+[#2914]: https://github.com/actonlang/acton/pull/2914
 [#2915]: https://github.com/actonlang/acton/pull/2915
 [#2917]: https://github.com/actonlang/acton/pull/2917
 
