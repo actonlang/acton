@@ -30,21 +30,13 @@ uint8_min: UNBOXED __builtin__.u8 = (UNBOX __builtin__.u8 0)
 
 uint8_max: UNBOXED __builtin__.u8 = (UNBOX __builtin__.u8 255)
 
-W_bigint_small_2: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+bigint_small: __builtin__.bigint = __builtin__.IntegralD_bigintD___fromatom__(__builtin__.IntegralD_bigint(), (BOX __builtin__.int 42))
 
-bigint_small: __builtin__.bigint = W_bigint_small_2.__fromatom__(42)
+bigint_neg_small: __builtin__.bigint = __builtin__.IntegralD_bigintD___fromatom__(__builtin__.IntegralD_bigint(), (BOX __builtin__.int -1))
 
-W_bigint_neg_small_2: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
+bigint_i64_max: __builtin__.bigint = __builtin__.IntegralD_bigintD___fromatom__(__builtin__.IntegralD_bigint(), (BOX __builtin__.int 9223372036854775807))
 
-bigint_neg_small: __builtin__.bigint = W_bigint_neg_small_2.__fromatom__(-1)
-
-W_bigint_i64_max_2: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
-
-bigint_i64_max: __builtin__.bigint = W_bigint_i64_max_2.__fromatom__(9223372036854775807)
-
-W_bigint_i64_min_2: __builtin__.Number[__builtin__.bigint] = __builtin__.IntegralD_bigint()
-
-bigint_i64_min: __builtin__.bigint = W_bigint_i64_min_2.__fromatom__(-9223372036854775808)
+bigint_i64_min: __builtin__.bigint = __builtin__.IntegralD_bigintD___fromatom__(__builtin__.IntegralD_bigint(), (BOX __builtin__.int -9223372036854775808))
 
 bigint_i64_underflow: __builtin__.bigint = -9223372036854775809
 

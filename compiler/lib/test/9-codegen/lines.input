@@ -2,8 +2,6 @@ W_Apa_1097: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 W_Apa_759: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_Apa_1097)
 
-W_Apa_779: __builtin__.Iterable[__builtin__.list[?__builtin__.int], ?__builtin__.int] = __builtin__.SequenceD_list@[?__builtin__.int]().W_Collection
-
 W_Apa_331: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_Apa_1097)
 
 W_Apa_785: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_Apa_1097)
@@ -218,7 +216,7 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
             print@[(__builtin__.str,)](("\"break path\"",), None, None, None, None)
             break
         print@[(__builtin__.str, __builtin__.int)](("\"loop body\"", (BOX __builtin__.int self.i)), None, None, None, None)
-    N_3iter: __builtin__.Iterator[?__builtin__.int] = W_Apa_779.__iter__([(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
+    N_3iter: __builtin__.Iterator[?__builtin__.int] = __builtin__.CollectionD_SequenceD_listD___iter__@[?__builtin__.int](__builtin__.SequenceD_list().W_Collection, [(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
     if $PUSH():
         while True:
             if True:
