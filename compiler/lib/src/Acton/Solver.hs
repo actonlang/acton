@@ -591,16 +591,19 @@ allBelow env (TFX _ FXAction)       = [fxAction]
 allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
-  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ]
+  | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
   | p == pEq                        = ts ++ [tOpt tWild]
   | otherwise                       = ts
-  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first
+  where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first, lazy
 
-allClassAttr env n                  = map tCon (tyconsByAttr env n) ++
+-- Local candidate classes come from the in-memory type-id lattice (lazy, O(1)
+-- attribute lookup, preserving the speedup on large local modules); imported
+-- candidate classes come from the per-module indexes.
+allClassAttr env n                  = map tCon (tyconsByAttr env n ++ importedConAttr env n) ++
                                       map tVar (tvarsInTids env (tyconAttrTids env n))
 
 allProtoAttr env n                  = map tCon pcons ++ concatMap (allBelowProto env) pcons
-  where pcons                       = typrotosByAttr env n
+  where pcons                       = typrotosByAttr env n ++ importedProtoAttr env n
 
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -769,6 +772,10 @@ solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
 -- witness lookup
 ----------------------------------------------------------------------------------------------------------------------
 
+-- Search the type-keyed bucket (witsByTName) for concrete goals: those buckets
+-- are small and enumerated lazily, so we never force the whole, ever-growing
+-- proto-keyed list. Only the rare TFX goal falls back to the proto-keyed bucket.
+-- Imported witnesses are merged in lazily by witsByTName/witsByPName.
 findWitness                 :: Env -> Type -> PCon -> [Witness]
 findWitness env t p         = filter match $ candidates t
   where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'
@@ -782,7 +789,7 @@ findWitness env t p         = filter match $ candidates t
 
 findProtoByAttr env cn n    = case filter hasAttr $ witsByTName env cn of
                                 [] -> Nothing
-                                ws -> Just $ schematic' $ proto (last ws)   -- newest matching witness, as before
+                                ws -> Just $ schematic' $ proto (last ws)   -- newest matching witness
   where hasAttr w           = n `elem` conAttrs env (tcname $ proto w)
 
 hasWitness                  :: Env -> Type -> PCon -> Bool

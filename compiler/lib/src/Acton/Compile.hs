@@ -1315,7 +1315,6 @@ dbpDeferredBackJob blocked opts paths mn moduleImplHash nameCount
         }
   | otherwise = Nothing
   where
-    nameCount = length nameHashes
     reqs = parseDbpRequests (projName paths) opts
     forced = M.member mn reqs
     seeds = M.findWithDefault Data.Set.empty mn reqs
