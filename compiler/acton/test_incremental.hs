@@ -186,7 +186,7 @@ sanitize = LBS.fromStrict
     reorderConcurrentProgressLines ls =
       let (progressLines, otherLines) = partition isConcurrentProgressLine ls
           (pre, post) = break isFinalLine otherLines
-      in pre ++ sortOn progressLineKey progressLines ++ post
+      in reorderFrontLines pre ++ sortOn progressLineKey progressLines ++ post
       where
         isConcurrentProgressLine t = isFrontOutputLine t || isBackLine t
         isFrontOutputLine t =
@@ -218,6 +218,64 @@ sanitize = LBS.fromStrict
             _ -> (t, 101, t)
         passIndex pass = fromMaybe 99 (pass `elemIndex` backPassOrder)
         backPassOrder = ["normalize", "deactorize", "cps", "llift", "boxing", "codegen", "render", "write"]
+
+        -- Canonicalize the front-pass section the same way the back/front-output
+        -- section above is canonicalized. The "Parse done" line comes from the
+        -- ParseStage, which (unlike the type-check stage) is not gated on a
+        -- module's imports, so parse completions can interleave in any order
+        -- under load. Grouping every front line by (module, phase) makes the
+        -- output independent of that scheduling. Global lines that precede the
+        -- per-module work (e.g. "Resolving dependencies...") are kept pinned at
+        -- the top, and multi-line "Non-total inferred signature" blocks travel
+        -- with their header.
+        reorderFrontLines :: [T.Text] -> [T.Text]
+        reorderFrontLines ls0 =
+          let (headLines, rest) = span (not . isFrontPrimary) ls0
+              units = buildFrontUnits Nothing rest
+          in headLines ++ concatMap (\(_, _, lns) -> lns) (sortOn (\(m, r, _) -> (m, r)) units)
+
+        isFrontPrimary :: T.Text -> Bool
+        isFrontPrimary = isJust . classifyFront
+
+        -- For a front "primary" line, return (its module if the line names one,
+        -- phase rank). "Non-total inferred signature" lines name no module and
+        -- inherit the module of the preceding "Type check done".
+        classifyFront :: T.Text -> Maybe (Maybe T.Text, Int)
+        classifyFront raw
+          | "Non-total inferred signature" `T.isPrefixOf` s = Just (Nothing, 3)
+          | "Stale " `T.isPrefixOf` s                       = staleLike 1
+          | "Fresh " `T.isPrefixOf` s                       = staleLike 1
+          | "Parse done" `T.isInfixOf` s                    = headMod 0
+          | "Type check done" `T.isInfixOf` s               = headMod 2
+          | otherwise                                       = Nothing
+          where s            = T.stripStart raw
+                ws           = T.words s
+                headMod rank = case ws of (m:_) -> Just (Just m, rank); _ -> Nothing
+                -- "Stale <mod>: source changed" / "Fresh <mod>: using cached ..."
+                staleLike rank = case ws of
+                                   (_:m:_) -> Just (Just (T.dropWhileEnd (== ':') m), rank)
+                                   _       -> Nothing
+
+        -- Group each primary line with the continuation (non-primary) lines that
+        -- follow it, tag it with (module, rank), then stable-sort. Stable sort
+        -- preserves the emission order of equal keys, e.g. a module's two
+        -- "Non-total" blocks.
+        buildFrontUnits :: Maybe T.Text -> [T.Text] -> [(T.Text, Int, [T.Text])]
+        buildFrontUnits _ [] = []
+        buildFrontUnits cur (l:rest) =
+          case classifyFront l of
+            Just (mMod, rank) ->
+              let modName       = fromMaybe (fromMaybe "" cur) mMod
+                  -- Only "Type check done" establishes the module that a
+                  -- following "Non-total" block belongs to.
+                  cur'          = if rank == 2 then mMod else cur
+                  (cont, rest') = span (not . isFrontPrimary) rest
+              in (modName, rank, l : cont) : buildFrontUnits cur' rest'
+            Nothing ->
+              -- Unreachable: the caller only hands us lists that start at a
+              -- primary line. Attach defensively to the current module.
+              let (cont, rest') = span (not . isFrontPrimary) rest
+              in (fromMaybe "" cur, 3, l : cont) : buildFrontUnits cur rest'
 
 -- | Atomically write UTF-8 text to a file.
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
