@@ -90,10 +90,18 @@ jobs:
     outputs:
       matrix: ${{ steps.setmatrix.outputs.matrix }}
     steps:
-      - name: "Set Matrix for PR or push"
-        # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+      - name: "Set Matrix for PR"
+        # Keep PR matrix minimal; full macOS coverage still runs on main, tags,
+        # scheduled runs, and manual runs.
+        if: github.event_name == 'pull_request'
         id: setmatrix_pr
+        run: |
+          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true}]}'
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Set Matrix for push"
+        if: github.event_name == 'push'
+        id: setmatrix_push
         run: |
           MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
@@ -108,10 +116,12 @@ jobs:
       - name: "Set final matrix output"
         id: setmatrix
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
           else
-            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+            echo "matrix=${{ steps.setmatrix_push.outputs.matrix }}" >> $GITHUB_OUTPUT
           fi
 
       - name: "Debug: Print matrix JSON"
