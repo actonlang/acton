@@ -1,6 +1,0 @@
-Building file src/c.act in project .
-Resolving dependencies (fetching if missing)...
-  Fresh rebuild.a: using cached .tydb
-  Fresh rebuild.b: using cached .tydb
-  Fresh rebuild.c: using cached .tydb
-              Final compilation done                                                   0.000 s
