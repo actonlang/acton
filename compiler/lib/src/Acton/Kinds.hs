@@ -75,8 +75,8 @@ type KindEnv                        = EnvF ()
 
 kindEnv env0                        = env0
 
-tvars env                           = tvs (activeNames env) ++ tvs (closedNames env)
-  where tvs te                      = [ TV k n | (n, NTVar k _ _) <- te ]
+tvars                              :: KindEnv -> [TVar]
+tvars                              = typeScope
 
 extcons ke env                      = define ke env
 
@@ -89,9 +89,9 @@ extvars vs env
 
 tcKind qn env                       = tconKind qn env
 
-tvKind v env                        = case filter (==v) (tvars env) of
-                                        [] -> err1 v "Unbound type variable:"
-                                        TV k _ : _ -> k
+tvKind v env                        = case lookupTypeVarKind v env of
+                                        Nothing -> err1 v "Unbound type variable:"
+                                        Just k -> k
 
 instance Pretty (Name,Kind) where
     pretty (n,k)                    = pretty n <+> colon <+> pretty k
