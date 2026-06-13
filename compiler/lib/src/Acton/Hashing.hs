@@ -46,7 +46,9 @@ import Data.Bits (shiftR, (.&.), (.|.))
 import Data.Char (ord)
 import Data.Graph (SCC(..), stronglyConnComp)
 import qualified Data.HashSet as HashSet
-import Data.IORef (IORef, newIORef, readIORef, writeIORef)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
+import Control.Concurrent.Async (mapConcurrently)
+import GHC.Conc (getNumCapabilities)
 import Data.List (foldl', intercalate, nub)
 import qualified Data.List
 import qualified Data.Map as M
@@ -118,20 +120,35 @@ nameHashesFromItems :: [TopLevelItem] -> M.Map A.Name B.ByteString
 nameHashesFromItems items =
   unsafePerformIO $ nameHashesFromItemsWithProgress (\_ -> pure ()) items
 
+-- Each name's fragments hash independently, so the groups are split into one
+-- chunk per capability, each with its own hashing scratch, and hashed
+-- concurrently. The maps are disjoint, so the merged result is identical to
+-- the sequential fold; progress counts through a shared atomic counter.
 nameHashesFromItemsWithProgress :: (Int -> IO ()) -> [TopLevelItem] -> IO (M.Map A.Name B.ByteString)
-nameHashesFromItemsWithProgress onProgress items =
-  withHashScratch $ \sink -> do
-    (hashes, _) <- foldM (addHash sink) (M.empty, 0) (M.toAscList grouped)
-    pure hashes
+nameHashesFromItemsWithProgress onProgress items = do
+  caps <- getNumCapabilities
+  let groups = M.toAscList grouped
+      chunkSize = max 16 ((length groups + caps - 1) `max` 1 `div` max 1 caps)
+      chunks = chunksOf (max 1 chunkSize) groups
+  doneRef <- newIORef 0
+  maps <- mapConcurrently (hashChunk doneRef) chunks
+  pure (M.unions maps)
   where
     grouped = topLevelItemsByName items
 
-    addHash sink (acc, done) (n, frags) = do
+    chunksOf _ [] = []
+    chunksOf k xs = let (h, t) = splitAt k xs in h : chunksOf k t
+
+    hashChunk doneRef chunk =
+      withHashScratch $ \sink ->
+        M.fromList <$> mapM (hashOne sink doneRef) chunk
+
+    hashOne sink doneRef (n, frags) = do
       h <- hashTopLevelFragmentsWith sink frags
-      let acc' = M.insert n h acc
-          done' = done + topLevelFragmentsLength frags
-      onProgress done'
-      pure (acc', done')
+      done <- atomicModifyIORef' doneRef $ \d ->
+        let d' = d + topLevelFragmentsLength frags in (d', d')
+      onProgress done
+      pure (n, h)
 
 topLevelFragmentsLength :: TopLevelFragments -> Int
 topLevelFragmentsLength frags = case frags of
@@ -1307,7 +1324,7 @@ splitDeps :: A.ModName
           -> M.Map A.Name [A.QName]
           -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 splitDeps mn env localNames depMap =
-  finishSplitDeps (M.map (foldl' (addSplitDep mn env localNames) emptyDepSplit) depMap)
+  finishSplitDeps (M.map (Data.Set.foldl' (addSplitDep mn env localNames) emptyDepSplit . Data.Set.fromList) depMap)
 
 emptyDepSplit :: (NameSet, QNameSet)
 emptyDepSplit = (Data.Set.empty, Data.Set.empty)
@@ -1482,17 +1499,27 @@ nameInfoHashes infos =
   unsafePerformIO $ nameInfoHashesWithProgress (\_ -> pure ()) infos
 
 nameInfoHashesWithProgress :: (Int -> IO ()) -> M.Map A.Name I.NameInfo -> IO (M.Map A.Name B.ByteString)
-nameInfoHashesWithProgress onProgress infos =
-  withHashScratch $ \sink -> do
-    (hashes, _) <- foldM (addHash sink) (M.empty, 0) (M.toAscList infos)
-    pure hashes
+nameInfoHashesWithProgress onProgress infos = do
+  caps <- getNumCapabilities
+  let groups = M.toAscList infos
+      chunkSize = max 16 ((length groups + caps - 1) `max` 1 `div` max 1 caps)
+      chunks = chunksOf (max 1 chunkSize) groups
+  doneRef <- newIORef 0
+  maps <- mapConcurrently (hashChunk doneRef) chunks
+  pure (M.unions maps)
   where
-    addHash sink (acc, done) (n, info) = do
+    chunksOf _ [] = []
+    chunksOf k xs = let (h, t) = splitAt k xs in h : chunksOf k t
+
+    hashChunk doneRef chunk =
+      withHashScratch $ \sink ->
+        M.fromList <$> mapM (hashOne sink doneRef) chunk
+
+    hashOne sink doneRef (n, info) = do
       h <- hashFeedWith sink (feedNameInfo info)
-      let acc' = M.insert n h acc
-          done' = done + 1
-      onProgress done'
-      pure (acc', done')
+      done <- atomicModifyIORef' doneRef $ \d -> (d + 1, d + 1)
+      onProgress done
+      pure (n, h)
 
 prepareNameHashInputs :: A.ModName
                       -> Env.Env0

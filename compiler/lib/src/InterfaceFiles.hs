@@ -121,6 +121,7 @@ import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
+import qualified Data.Set
 import Data.List (foldl')
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
@@ -862,7 +863,7 @@ depIndexEntries depModules nameHashes =
             ]
       ]
 
-    cleanNames = Data.List.sortOn nameKey . Data.List.nub
+    cleanNames = Data.List.sortOn nameKey . Data.Set.toList . Data.Set.fromList
 
     userRows =
       sortUserRows
