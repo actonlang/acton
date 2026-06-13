@@ -57,7 +57,7 @@ import Data.Bits
 import Data.Default.Class (def)
 import Data.List.Split
 import Data.IORef
-import Data.Maybe (catMaybes, isJust, isNothing)
+import Data.Maybe (catMaybes, isJust, isNothing, maybeToList)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
 import Data.Graph
@@ -1936,20 +1936,33 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               forM_ (frFrontTime fr) $ \tFront -> do
                 let proj = tkProj (gtKey t)
                     mn = tkMod (gtKey t)
-                logRendered (\cols -> frontDoneLine cols proj mn tFront)
-                when (C.timing gopts) $
-                  forM_ (frFrontTiming fr) $ \ft -> do
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTimingLine ft))
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTypeTimingLine ft))
-                    when (C.verbose gopts) $
-                      forM_ (ftTypeStmtTimings ft) $ \st -> do
-                        logRendered (\cols -> detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st))
-                        logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st))
-                when (C.timing gopts || C.verbose gopts) $
-                  forM_ (frInferredSigs fr) $ \sig -> do
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (inferredSignatureLine sig))
-                    forM_ (lines (isigSignature sig)) $ \line ->
-                      logRendered (\cols -> detailLine cols detailBindsIndentWide detailBindsIndentNarrow line)
+                    -- Render the whole front-result block (the module's "Type
+                    -- check done" line plus any timing/inferred-signature detail)
+                    -- and emit it as one atomic log write. The detail lines carry
+                    -- no module name, so logging them separately would let another
+                    -- module's progress interleave between them and leave the line
+                    -- stream impossible to attribute. One write keeps the block
+                    -- intact (and reads as one module's result either way).
+                    timingLines cols
+                      | C.timing gopts =
+                          concat [ detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTimingLine ft)
+                                 : detailLine cols detailStmtIndentWide detailStmtIndentNarrow (frontTypeTimingLine ft)
+                                 : (if C.verbose gopts
+                                      then concat [ [ detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow (typeStmtTimingLine st) (tstTime st)
+                                                    , detailLine cols detailBindsIndentWide detailBindsIndentNarrow (typeStmtBindsLine st)
+                                                    ]
+                                                  | st <- ftTypeStmtTimings ft ]
+                                      else [])
+                                 | ft <- maybeToList (frFrontTiming fr) ]
+                      | otherwise = []
+                    sigLines cols
+                      | C.timing gopts || C.verbose gopts =
+                          concat [ detailLine cols detailStmtIndentWide detailStmtIndentNarrow (inferredSignatureLine sig)
+                                 : [ detailLine cols detailBindsIndentWide detailBindsIndentNarrow line
+                                   | line <- lines (isigSignature sig) ]
+                                 | sig <- frInferredSigs fr ]
+                      | otherwise = []
+                logRendered (\cols -> intercalate "\n" (frontDoneLine cols proj mn tFront : (timingLines cols ++ sigLines cols)))
               case (frBackJob fr, frDeferredBackJob fr) of
                 (Nothing, Nothing) -> creditBack (gtKey t)
                 _ -> return ()
