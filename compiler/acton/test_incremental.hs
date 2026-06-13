@@ -220,62 +220,56 @@ sanitize = LBS.fromStrict
         backPassOrder = ["normalize", "deactorize", "cps", "llift", "boxing", "codegen", "render", "write"]
 
         -- Canonicalize the front-pass section the same way the back/front-output
-        -- section above is canonicalized. The "Parse done" line comes from the
-        -- ParseStage, which (unlike the type-check stage) is not gated on a
-        -- module's imports, so parse completions can interleave in any order
-        -- under load. Grouping every front line by (module, phase) makes the
-        -- output independent of that scheduling. Global lines that precede the
-        -- per-module work (e.g. "Resolving dependencies...") are kept pinned at
-        -- the top, and multi-line "Non-total inferred signature" blocks travel
-        -- with their header.
+        -- section above is canonicalized. "Parse done" comes from the ParseStage,
+        -- which (unlike the type-check stage) is not gated on a module's imports,
+        -- so parse completions can interleave in any order under load. Grouping
+        -- every front line by (module, phase) makes the output independent of that
+        -- scheduling. Each front line names its own module, read from the line
+        -- text itself -- never from surrounding scan state -- so interleaving of
+        -- independent modules cannot misattribute a line. The module-less detail
+        -- lines (the inferred-signature header and body) are the one exception:
+        -- the compiler emits them in the same atomic write as their "Type check
+        -- done" line, so here they ride along as continuation lines of that unit.
+        -- Global lines that precede the per-module work (e.g. "Resolving
+        -- dependencies...") are kept pinned at the top.
         reorderFrontLines :: [T.Text] -> [T.Text]
         reorderFrontLines ls0 =
           let (headLines, rest) = span (not . isFrontPrimary) ls0
-              units = buildFrontUnits Nothing rest
+              units = buildFrontUnits rest
           in headLines ++ concatMap (\(_, _, lns) -> lns) (sortOn (\(m, r, _) -> (m, r)) units)
 
         isFrontPrimary :: T.Text -> Bool
         isFrontPrimary = isJust . classifyFront
 
-        -- For a front "primary" line, return (its module if the line names one,
-        -- phase rank). "Non-total inferred signature" lines name no module and
-        -- inherit the module of the preceding "Type check done".
-        classifyFront :: T.Text -> Maybe (Maybe T.Text, Int)
+        -- A front "primary" names a module and a lifecycle phase, both read from
+        -- the line's own words. Lines that name no module (the inferred-signature
+        -- header and its body) are not primaries; they attach to the preceding
+        -- primary's unit.
+        classifyFront :: T.Text -> Maybe (T.Text, Int)
         classifyFront raw
-          | "Non-total inferred signature" `T.isPrefixOf` s = Just (Nothing, 3)
-          | "Stale " `T.isPrefixOf` s                       = staleLike 1
-          | "Fresh " `T.isPrefixOf` s                       = staleLike 1
-          | "Parse done" `T.isInfixOf` s                    = headMod 0
-          | "Type check done" `T.isInfixOf` s               = headMod 2
-          | otherwise                                       = Nothing
-          where s            = T.stripStart raw
-                ws           = T.words s
-                headMod rank = case ws of (m:_) -> Just (Just m, rank); _ -> Nothing
-                -- "Stale <mod>: source changed" / "Fresh <mod>: using cached ..."
-                staleLike rank = case ws of
-                                   (_:m:_) -> Just (Just (T.dropWhileEnd (== ':') m), rank)
-                                   _       -> Nothing
+          | "Stale " `T.isPrefixOf` s         = wordModule 1 1
+          | "Fresh " `T.isPrefixOf` s         = wordModule 1 1
+          | "Hash deltas " `T.isPrefixOf` s   = wordModule 2 2
+          | "Parse done" `T.isInfixOf` s      = wordModule 0 0
+          | "Type check done" `T.isInfixOf` s = wordModule 0 3
+          | otherwise                         = Nothing
+          where s    = T.stripStart raw
+                ws   = T.words s
+                -- Module name is the word at index i (any trailing ':' dropped).
+                wordModule i rank
+                  | i < length ws = Just (T.dropWhileEnd (== ':') (ws !! i), rank)
+                  | otherwise     = Nothing
 
         -- Group each primary line with the continuation (non-primary) lines that
         -- follow it, tag it with (module, rank), then stable-sort. Stable sort
         -- preserves the emission order of equal keys, e.g. a module's two
-        -- "Non-total" blocks.
-        buildFrontUnits :: Maybe T.Text -> [T.Text] -> [(T.Text, Int, [T.Text])]
-        buildFrontUnits _ [] = []
-        buildFrontUnits cur (l:rest) =
-          case classifyFront l of
-            Just (mMod, rank) ->
-              let modName       = fromMaybe (fromMaybe "" cur) mMod
-                  -- Only "Type check done" establishes the module that a
-                  -- following "Non-total" block belongs to.
-                  cur'          = if rank == 2 then mMod else cur
-                  (cont, rest') = span (not . isFrontPrimary) rest
-              in (modName, rank, l : cont) : buildFrontUnits cur' rest'
-            Nothing ->
-              -- Unreachable: the caller only hands us lists that start at a
-              -- primary line. Attach defensively to the current module.
-              let (cont, rest') = span (not . isFrontPrimary) rest
-              in (fromMaybe "" cur, 3, l : cont) : buildFrontUnits cur rest'
+        -- inferred-signature blocks.
+        buildFrontUnits :: [T.Text] -> [(T.Text, Int, [T.Text])]
+        buildFrontUnits [] = []
+        buildFrontUnits (l:rest) =
+          let (cont, rest')   = span (not . isFrontPrimary) rest
+              (modName, rank) = fromMaybe ("", -1) (classifyFront l)
+          in (modName, rank, l : cont) : buildFrontUnits rest'
 
 -- | Atomically write UTF-8 text to a file.
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
