@@ -44,6 +44,7 @@ import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
+import Debug.Trace
 
 data TestMode = TestModeRun | TestModeList | TestModePerf | TestModeStress deriving (Eq, Show)
 
@@ -97,7 +98,7 @@ listTestModules :: C.CompileOptions -> Paths -> IO [String]
 listTestModules _opts paths = do
     srcFiles <- listActFilesRecursive (srcDir paths)
     mods <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       tests <- readModuleTests paths mn
       return $ if null tests then Nothing else Just (modNameToString mn)
     return (Data.List.sort (catMaybes mods))
@@ -105,7 +106,8 @@ listTestModules _opts paths = do
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
-    let base = ".test_" ++ modName
+    let base = ".test_" ++ modNameToString mn
+        mn = dropProjPrefix paths (modNameFromString modName)
         exe = if isWindowsTarget (C.target opts) then base <.> "exe" else base
     in binDir paths </> exe
 
@@ -118,10 +120,13 @@ isWindowsTarget targetTriple =
         let (os, _) = break (== '-') rest
         in os == "windows"
 
+modulesOpt paths topts = [ proj ++ "." ++ m | m <- C.testModules topts ]
+  where proj = projName paths
+
 -- | List tests for selected modules and print them in a stable order.
 listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
 listProjectTests opts paths topts modules = do
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
     tests <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
@@ -166,7 +171,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
     timeStart <- getTime Monotonic
     let emitJson = C.testJson topts
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
-    let wantedModules = Data.List.sort (filterModules (C.testModules topts) modules)
+    let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
+    traceM ("## modules: " ++ show modules)
+    traceM ("## --modules: " ++ show (C.testModules topts))
+    traceM ("## wanted: " ++ show wantedModules)
     testsByModule <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
       let wantedNames = Data.List.sort (filterTests nameRegexes names)

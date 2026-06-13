@@ -42,7 +42,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import Acton.Compile
 import Utils
-import qualified Pretty
+import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
@@ -681,7 +681,7 @@ exitWithTestCode code
 changedModulesFromPaths :: Paths -> [FilePath] -> IO [String]
 changedModulesFromPaths paths files = do
     mods <- forM files $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       return (modNameToString mn)
     return (Data.List.sort (nub mods))
 
@@ -700,7 +700,7 @@ readModuleImports paths mn = do
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
     depsByMod <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) file
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       imps <- readModuleImports paths mn
       return (modNameToString mn, map modNameToString imps)
     let revMap = foldl'
@@ -1008,16 +1008,26 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
     let fullMod = A.modName parts
+        fullMod' = addProjPrefix paths fullMod
     case lookup fullMod moduleIndex of
-      Just (ctx, srcPath) ->
+      Just (ctx, srcPath) -> do
         return (SigSourceTarget ctx fullMod Nothing srcPath)
       Nothing -> do
-        mFullTy <- findSigTyFile tySearchPath fullMod
-        case mFullTy of
-          Just tyPath ->
-            return (SigTyTarget fullMod Nothing tyPath)
-          Nothing ->
-            resolveNameTarget parts moduleIndex
+        case lookup fullMod' moduleIndex of
+         Just (ctx, srcPath) -> do
+          return (SigSourceTarget ctx fullMod' Nothing srcPath)
+         Nothing -> do
+          mFullTy <- findSigTyFile tySearchPath fullMod
+          case mFullTy of
+            Just tyPath ->
+              return (SigTyTarget fullMod Nothing tyPath)
+            Nothing -> do
+              mFullTy' <- findSigTyFile tySearchPath fullMod'
+              case mFullTy' of
+                Just tyPath' ->
+                  return (SigTyTarget fullMod' Nothing tyPath')
+                Nothing ->
+                  resolveNameTarget parts moduleIndex
   where
     tySearchPath = sigTySearchPath opts paths rootProj projMap
 
@@ -1029,16 +1039,26 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
               namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
+              mn' = addProjPrefix paths mn
           case lookup mn moduleIndex of
-            Just (ctx, srcPath) ->
+            Just (ctx, srcPath) -> do
               return (SigSourceTarget ctx mn (Just n) srcPath)
             Nothing -> do
-              mTy <- findSigTyFile tySearchPath mn
-              case mTy of
-                Just tyPath ->
-                  return (SigTyTarget mn (Just n) tyPath)
-                Nothing ->
-                  printErrorAndExit ("Module not found: " ++ intercalate "." modParts
+              case lookup mn' moduleIndex of
+               Just (ctx, srcPath) -> do
+                return (SigSourceTarget ctx mn' (Just n) srcPath)
+               Nothing -> do
+                mTy <- findSigTyFile tySearchPath mn
+                case mTy of
+                  Just tyPath ->
+                    return (SigTyTarget mn (Just n) tyPath)
+                  Nothing -> do
+                    mTy' <- findSigTyFile tySearchPath mn'
+                    case mTy' of
+                      Just tyPath' ->
+                        return (SigTyTarget mn' (Just n) tyPath')
+                      Nothing ->
+                        printErrorAndExit ("Module not found: " ++ intercalate "." modParts
                                      ++ " (while resolving " ++ rawTarget ++ ")")
 
 parseSigTarget :: String -> IO [String]
@@ -1316,7 +1336,6 @@ printDocs gopts opts = do
                     openFileInGui outputPath
 
           _ -> printErrorAndExit ("Unknown filetype: " ++ filename)
-
 
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
@@ -2005,11 +2024,12 @@ runCliPostCompile cliHooks gopts plan env = do
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         sysRoot = addTrailingPathSeparator sysAbs
+        proj = projName pathsRoot
     rootSpec <- case M.lookup rootProj projMap of
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = init rootParts
+        rootMod   = if null proj then init rootParts else proj : init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
@@ -2023,6 +2043,7 @@ runCliPostCompile cliHooks gopts plan env = do
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
+
     -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
     let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
     forM_ (Data.Set.toList projKeys) $ \p -> do
@@ -2084,7 +2105,7 @@ explicitBuildLibraries selectedSources spec =
   where
     selectedSet = Data.Set.fromList selectedSources
     moduleCSource modName =
-      collapseDots ("out/types/" ++ map dotToSlash modName ++ ".c")
+      collapseDots ("out/types/" ++ BuildSpec.specName spec ++ "/" ++ map dotToSlash modName ++ ".c")
     dotToSlash c
       | c == '.'  = '/'
       | otherwise = c
@@ -2126,6 +2147,9 @@ selectedRootStubEntriesForBins paths bins =
       [ collapseDots (makeRelativeOrAbsolute (projPath paths) (binTaskRoot paths b))
       | b <- bins
       ]
+  where binTaskRoots = [ binTaskRoot paths b | b <- bins ]
+        absOrRel = map (makeRelativeOrAbsolute (projPath paths)) binTaskRoots
+        collapsed = map collapseDots absOrRel
 
 -- | For each consuming project, map dep name to selected C-source CSV.
 depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
@@ -2170,7 +2194,8 @@ removeOrphanFiles :: Paths -> [CompileTask] -> [FilePath] -> IO ()
 removeOrphanFiles paths tasks roots = do
     let dir = projTypes paths
     absOutFiles <- getFilesRecursive dir
-    let allowedBases = [ outBase paths (name t) | t <- tasks ]
+    let allowedBases = [ outBase paths (name t) | t <- tasks ] ++
+                       [ outBase paths (dropProjPrefix paths (name t)) | t <- tasks ]
     forM_ absOutFiles $ \absFile -> do
         let isC  = takeExtension absFile == ".c"
             isH  = takeExtension absFile == ".h"
@@ -2200,9 +2225,10 @@ removeOrphanFiles paths tasks roots = do
 expectedRootStubs :: Paths -> [CompileTask] -> IO [FilePath]
 expectedRootStubs paths tasks = do
     roots <- forM tasks $ \t -> do
-        let mn     = name t
-            outbase = outBase paths mn
-            tyPath = tyDbPath paths mn
+        let mn      = name t
+            mn'     = dropProjPrefix paths mn
+            outbase = outBase paths mn'
+            tyPath  = tyDbPath paths mn
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyPath
         case hdrE of
           Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, rs, _tests, _) -> return (map (mkStub outbase) rs)
@@ -2227,7 +2253,8 @@ encodeBuildLibraries libs =
 binTaskRoot :: Paths -> BinTask -> FilePath
 binTaskRoot paths binTask =
     let A.GName m _ = rootActor binTask
-        outbase = outBase paths m
+        m' = dropProjPrefix paths m
+        outbase = outBase paths m'
     in if isTest binTask then outbase ++ ".test_root.c" else outbase ++ ".root.c"
 
 {-
@@ -2337,9 +2364,9 @@ printDiagnostics gopts opts diags =
 -- | Generate a root actor C file when a root is still declared.
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths tasks binTask = do
-    let qn@(A.GName m n) = rootActor binTask
-        mn = A.mname qn
-        outbase = outBase paths mn
+    let qn@(A.GName mn n) = rootActor binTask
+        mn' = dropProjPrefix paths mn
+        outbase = outBase paths mn'
         rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
     existing <- if C.only_build opts then doesFileExist rootFile else return False
@@ -2349,11 +2376,11 @@ writeRootC env gopts opts paths tasks binTask = do
         -- Read the up-to-date roots from the on-disk .tydb header (post-compile)
         -- Avoid using preloaded TyTask roots, which may be stale if the module
         -- was rebuilt during this run.
-        tyPath <- Acton.Env.findTyFile (searchPath paths) m
+        tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
                          Nothing -> return []
-        let rootsEnv = case Acton.Env.lookupMod m env of
+        let rootsEnv = case Acton.Env.lookupMod mn env of
                          Nothing -> []
                          Just te -> [ n' | (n', i) <- te, rootEligible i ]
             shouldGen = n `elem` rootsHeader || n `elem` rootsEnv

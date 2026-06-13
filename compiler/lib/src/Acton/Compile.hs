@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, FlexibleInstances #-}
 {-|
 Overview
 
@@ -144,6 +144,7 @@ module Acton.Compile
   , readModuleDoc
   , readModuleDocIndexEntry
   , readImports
+  , special_projects
   , buildGlobalTasks
   , selectNeededTasks
   , selectAffectedTasks
@@ -183,6 +184,8 @@ module Acton.Compile
   , modNameToFilename
   , modNameToString
   , nameToString
+  , addProjPrefix
+  , dropProjPrefix
   , importsOf
   , quiet
   , altOutput
@@ -229,6 +232,7 @@ import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
 import qualified Pretty
+import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
 import Control.Applicative ((<|>))
@@ -1235,8 +1239,8 @@ shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts tmp nameCount =
   not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
-parseDbpSpec :: String -> Maybe DbpRequest
-parseDbpSpec raw = do
+parseDbpSpec :: String -> String -> Maybe DbpRequest
+parseDbpSpec proj raw = do
   let (modPart0, seedPart0) = break (== ':') raw
       modPart = map (\c -> if c == '/' then '.' else c) modPart0
       modPieces = filter (not . null) (splitChar '.' modPart)
@@ -1249,14 +1253,15 @@ parseDbpSpec raw = do
         | s <- splitChar ',' seedPart
         , not (null s)
         ]
-  return DbpRequest { drMod = A.modName modPieces, drSeeds = seeds }
+      mn = A.modName  $ if null proj then modPieces else proj:modPieces
+  return DbpRequest { drMod = mn, drSeeds = seeds }
 
-parseDbpRequests :: C.CompileOptions -> M.Map A.ModName (Data.Set.Set A.Name)
-parseDbpRequests opts =
+parseDbpRequests :: String -> C.CompileOptions -> M.Map A.ModName (Data.Set.Set A.Name)
+parseDbpRequests proj opts =
   M.fromListWith Data.Set.union
     [ (drMod req, drSeeds req)
     | raw <- C.dbp opts
-    , Just req <- [parseDbpSpec raw]
+    , Just req <- [parseDbpSpec proj raw]
     ]
 
 splitChar :: Char -> String -> [String]
@@ -1296,7 +1301,7 @@ dbpDeferredBackJob blocked opts paths mn moduleImplHash nameHashes
   | otherwise = Nothing
   where
     nameCount = length nameHashes
-    reqs = parseDbpRequests opts
+    reqs = parseDbpRequests (projName paths) opts
     forced = M.member mn reqs
     seeds = M.findWithDefault Data.Set.empty mn reqs
     reason
@@ -1535,12 +1540,37 @@ importsOf (ParseErrorTask _ _) = []
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
-resolveProviders :: [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> M.Map A.ModName TaskKey
-resolveProviders order modSets imps =
-    M.fromList $ catMaybes $ map (\mn -> fmap (\p -> (mn, TaskKey p mn)) (findProvider mn)) imps
-  where
-    findProvider mn = listToMaybe [ p | p <- order, maybe False (Data.Set.member mn) (M.lookup p modSets) ]
+resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> Data.Set.Set ProjName -> [A.ModName] -> M.Map A.ModName TaskKey
+resolveProviders key proj order modSets deps imps =
+    --trace ("#### resolveProviders " ++ prstr key) $
+    --trace ("   # proj: " ++ proj ++ " (head order: " ++ p0 ++ ") ") $
+--    trace ("   # order: " ++ prstrs order) $
+--    trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
+    --trace ("   # imps: " ++ prstrs imps) $
+    --trace ("   # imps': " ++ prstrs imps') $
+    --trace ("  ## map: "  ++ prstr result) $
+    result
+  where result          = M.fromList $ concat $ map findProvider imps'
+        imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ map dropLib imps
+        p0              = tkProj key
+        Just mods0      = M.lookup p0 modSets
+        findProvider mn
+          | Data.Set.member mn0 mods0
+                        = [ (mn, TaskKey p0 mn0) ]
+          | otherwise   = [ (mn, TaskKey p mn') | p <- order, mn' <- [mn,addLib mn], maybe False (Data.Set.member mn') (M.lookup p modSets) ]
+          where mn0     = if proj `elem` special_projects then mn else A.modName (proj : A.modPath mn)
+        addLib mn       = case A.modPath mn of
+                            [n] | Data.Set.member n deps -> A.modName [n, "lib"]
+                            _ -> mn
+        dropLib mn      = case A.modPath mn of
+                            [n,"lib"] | Data.Set.member n deps -> A.modName [n]
+                            _ -> mn
 
+special_projects = ["", "base", "acton_scratch"]
+
+type ProjDir = FilePath
+type ActFile = FilePath
+type ProjName = String
 
 -- | Build GlobalTasks for all discovered projects.
 -- Crawls project sources, resolves provider edges, and optionally limits the
@@ -1552,12 +1582,22 @@ buildGlobalTasks :: Source.SourceProvider
                  -> Maybe [String]                  -- optional seed source files; Nothing = all modules
                  -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
 buildGlobalTasks sp gopts opts projMap mSeeds = do
+    -- perProj :: [(ProjCtx, (ActFile,A.ModName))]
     perProj <- forM (M.elems projMap) $ \ctx -> do
                   mods <- enumerateProjectModules ctx
                   return (ctx, mods)
-    let modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
-        modSets = M.map Data.Set.fromList (M.map M.keys modMaps)
-        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+    let -- Declared modules mapped to their source files (per project)
+        modMaps :: M.Map ProjDir (M.Map A.ModName ActFile)
+        modMaps = M.fromList [ (projRoot ctx, M.fromList [ (mn, actFile) | (actFile, mn) <- mods ]) | (ctx, mods) <- perProj ]
+        -- Declared modules (per project)
+        modSets :: M.Map ProjDir (Data.Set.Set A.ModName)
+        modSets = M.map (Data.Set.fromList . M.keys) modMaps
+        -- Project dependencies, in their BuildSpec order (per project)
+        allDeps :: M.Map ProjDir (Data.Set.Set ProjName)
+        allDeps = M.fromList [ (projRoot ctx, Data.Set.fromList (map fst $ projDeps ctx)) | (ctx,_) <- perProj ]
+        orderCache :: M.Map ProjDir [ProjDir]
+        orderCache = M.fromList [ (projRoot ctx, projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+        -- Declared modules in all reachable projects (paired with their project paths)
         allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
     seedKeys <- case mSeeds of
                   Nothing -> return allKeys
@@ -1566,28 +1606,29 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
                     let pathIndex = M.fromList [ (actFile, TaskKey (projRoot ctx) mn) | (ctx, mods) <- perProj, (actFile, mn) <- mods ]
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
-    tasks <- go modMaps modSets orderCache Data.Set.empty seedKeys []
+    tasks <- go modMaps modSets allDeps orderCache Data.Set.empty seedKeys []
     return (reverse tasks, modSets)
   where
-    go modMaps modSets orderCache seen [] acc = return acc
-    go modMaps modSets orderCache seen (k:qs) acc
-      | Data.Set.member k seen = go modMaps modSets orderCache seen qs acc
+    go modMaps modSets allDeps orderCache seen [] acc = return acc
+    go modMaps modSets allDeps orderCache seen (k:qs) acc
+      | Data.Set.member k seen = go modMaps modSets allDeps orderCache seen qs acc
       | otherwise =
           case M.lookup (tkProj k) modMaps >>= M.lookup (tkMod k) of
-            Nothing -> go modMaps modSets orderCache (Data.Set.insert k seen) qs acc
+            Nothing -> go modMaps modSets allDeps orderCache (Data.Set.insert k seen) qs acc
             Just actFile -> do
               let ctx = projMap M.! tkProj k
               paths <- pathsForModule opts projMap ctx (tkMod k)
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
-                  providers = resolveProviders order modSets (importsOf task)
+                  deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
+                  providers = resolveProviders k (projName paths) order modSets deps (importsOf task)
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
                                     , gtTask = task
                                     , gtImportProviders = providers
                                     } : acc
-              go modMaps modSets orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+              go modMaps modSets allDeps orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
 
 
 -- | Select the subgraph needed for a given build request.
@@ -1620,7 +1661,7 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
       case byPath of
         Just k -> return (Just k)
         Nothing -> do
-          mn <- moduleNameFromFile (srcDir pathsRoot) absF
+          mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absF
           return $ listToMaybe [ gtKey t
                                | t <- ts
                                , tkProj (gtKey t) == rootProj
@@ -1774,11 +1815,12 @@ libraryTaskGroups projMap globalTasks =
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
     , let keys = [ gtKey t
                  | modName <- BuildSpec.libModules lib
-                 , let mn = moduleStringToName modName
+                 , let mn = moduleStringToName (proj ++ "." ++ modName)
                  , t <- globalTasks
                  , tkMod (gtKey t) == mn
                  , taskInProject ctx t
                  ]
+          proj = BuildSpec.specName $ projBuildSpec ctx
     , not (null keys)
     ]
   where
@@ -2054,31 +2096,61 @@ materializeTask :: C.CompileOptions
                 -> Source.SourceProvider
                 -> A.ModName
                 -> FilePath
+                -> M.Map A.ModName TaskKey
                 -> Maybe (ParseProgress -> IO ())
                 -> CompileTask
                 -> IO CompileTask
-materializeTask opts sp mn actFile mOnProgress task =
+materializeTask opts sp mn actFile providers mOnProgress task =
   case task of
     ActonTask{} -> return task
     ParseErrorTask{} -> return task
     ParseTask{ src = srcContent, srcBytes = bytes, sourceMeta = mSourceMeta } -> do
       emod <- parseStoredSource mn actFile srcContent
       case emod of
-        Left diags -> return (ParseErrorTask mn diags)
-        Right m -> return (ActonTask mn srcContent bytes mSourceMeta m)
+        Left diags -> return $ ParseErrorTask mn diags
+        Right m -> return $ ActonTask mn srcContent bytes mSourceMeta (adjustImports providers m)
     TyTask{} -> do
       parsedRes <- parseActFile opts sp mn actFile mOnProgress
       case parsedRes of
         Left diags -> return (ParseErrorTask mn diags)
         Right (snap, m) -> do
           mSourceMeta <- if Source.ssIsOverlay snap then return Nothing else Just <$> readSourceFileMeta actFile
-          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta m
+          return $ ActonTask mn (Source.ssText snap) (Source.ssBytes snap) mSourceMeta (adjustImports providers m)
   where
     parseStoredSource mn' file srcContent = do
       cwd <- getCurrentDirectory
       let displayFile = makeRelative cwd file
       parseActSource opts mn' displayFile srcContent mOnProgress
 
+instance Pretty (A.ModName, TaskKey) where
+    pretty (m, tk) = pretty m <+> text "-->" <+> pretty tk
+
+instance Pretty TaskKey where
+    pretty tk = pretty (tkMod tk) <+> parens (pretty (tkProj tk))
+
+instance Pretty (M.Map A.ModName TaskKey) where
+    pretty prov = nest 4 $ vcat $ map pretty (M.toList prov)
+
+adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
+adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
+                            --trace ("  ## providers:\n" ++ render (pretty providers))
+                            m{ A.imps = imps' }
+  where imps'                        = map adjust (A.imps m)
+        adjust (A.Import l ms)       = A.Import l (map adj ms)
+        adjust (A.FromImport l m i)  = A.FromImport l (adj' m) i
+        adjust (A.FromImportAll l m) = A.FromImportAll l (adj' m)
+        adj mi@(A.ModuleItem m mbn)
+          | Just m' <- adjusted m   = case (m, mbn) of
+                                         (A.ModName [n], Nothing) -> A.ModuleItem m' (Just n)
+                                         (_,             Just n)  -> A.ModuleItem m' (Just n)
+                                         _                        -> error ("Local multi-level import without alias not yet supported: " ++ prstr mi)
+          | otherwise               = mi
+        adj' mr@(A.ModRef (0, Just m))
+          | Just m' <- adjusted m   = (A.ModRef (0, Just m'))
+          | otherwise               = mr
+        adjusted m = case M.lookup m providers of
+                        Just tk | tkMod tk /= m -> Just (tkMod tk)
+                        _                       -> Nothing
 
 -- | Recursively read imports for a set of tasks within the same project.
 -- Any missing module is added by parsing or reading its .tydb header via
@@ -3157,9 +3229,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
 
-    forcedDbpMods = M.keysSet (parseDbpRequests opts)
+    forcedDbpMods = M.keysSet (parseDbpRequests (projName rootPaths) opts)
 
-    formatTaskKey k = tkProj k ++ ":" ++ modNameToString (tkMod k)
+    formatTaskKey k = modNameToString (tkMod k)
 
     logForcedDbpBoundaryExclusions =
       unless (C.no_dbp opts) $
@@ -3282,8 +3354,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
         then return (Right ())
         else do
           t' <- case gtTask t of
-            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
-            ParseTask{} -> materializeTask optsBuiltin sp mn actFile Nothing (gtTask t)
+            TyTask{} | forceAlt -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
+            ParseTask{} -> materializeTask optsBuiltin sp mn actFile M.empty Nothing (gtTask t)
             _ -> return (gtTask t)
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
@@ -3808,6 +3880,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
+                    --traceM ("\n## runFront " ++ prstr mn ++ "\n")
                     prevNameHashes <- if C.verbose gopts
                       then case taskCurrent of
                         TyTask{ tyNameHashes = nhs } -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
@@ -3837,7 +3910,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
-                            _ -> materializeTask optsT sp mn actFile Nothing taskCurrent
+                            _ -> materializeTask optsT sp mn actFile providers Nothing taskCurrent
                     case t' of
                       ParseErrorTask{ parseDiagnostics = diags } -> return (key, Left diags)
                       ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -3847,7 +3920,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           (isDbpBlocked key)
                           paths
                           envSnap
-                          m
+                          (adjustImports providers m)
                           srcContent
                           srcBytes
                           mSourceMeta
@@ -3871,6 +3944,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
                   runImplRefresh = do
+                    --traceM ("\n## runImplRefresh " ++ prstr mn ++ "\n")
                     let rerunFront = do
                           when (C.verbose gopts) $
                             ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
@@ -3904,7 +3978,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               let nameImplHashes0 = Hashing.nameHashesFromItems implItems0
                                   nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
-                                Acton.Env.mkEnv (searchPath paths) envSnap parsedMod
+                                Acton.Env.mkEnv (searchPath paths) envSnap (adjustImports providers parsedMod)
                               case envRes of
                                 Left err -> handleSyncFailure err
                                 Right env1 -> do
@@ -3980,6 +4054,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           cacheFrontResult fr
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
+                    --traceM ("\n## runCodegenRefresh " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
                       ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
@@ -4001,6 +4076,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                    { frInterestDeps = interestDeps }
                         cacheFrontResult fr
                   runReuse = do
+                    --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
@@ -4045,11 +4121,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           mn = name (gtTask t)
           actFile = srcFile (gtPaths t) mn
           onProgress p = ccOnParseProgress callbacks t optsT p
+          providers = gtImportProviders t
       timeStart <- getTime Monotonic
       parsed <- if C.only_build optsT
                   then return (gtTask t)
                   else case gtTask t of
-                         ParseTask{} -> materializeTask optsT sp mn actFile (Just onProgress) (gtTask t)
+                         ParseTask{} -> materializeTask optsT sp mn actFile providers (Just onProgress) (gtTask t)
                          _ -> return (gtTask t)
       case parsed of
         ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
@@ -4268,7 +4345,8 @@ data Paths      = Paths {
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
                     fileExt     :: String,
-                    modName     :: A.ModName
+                    modName     :: A.ModName,
+                    projName    :: String
                   }
 
 -- Per-project context used for multi-project orchestration.
@@ -4409,7 +4487,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
-srcFile paths mn        = joinPath (srcDir paths : A.modPath mn) ++ ".act"
+srcFile paths mn        = srcBase paths mn ++ ".act"
 
 -- | Compute the output base path (without extension) for a module.
 -- Used to locate .tydb/.c/.h output under the project's types directory.
@@ -4422,7 +4500,12 @@ tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = joinPath (srcDir paths : A.modPath mn)
+srcBase paths mn        = --trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath) $
+                          fpath
+  where fpath           = joinPath (srcDir paths : names)
+        names           = case A.modPath mn of
+                            n:ns | n == projName paths -> ns
+                            ns -> ns
 
 
 -- | Walk upward from a path to find a project root.
@@ -4525,13 +4608,14 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
-                             depTypePaths <- if isTmp then return [] else collectDepTypePaths projPath depOverrides
+                             (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
+                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [fileBody]
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName projName
   where (fileBody,fileExt) = splitExtension $ takeFileName actFile
 
         analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
@@ -4549,12 +4633,15 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
 
 -- | Derive a module name from a file path under a project's src root.
 -- The result uses path segments and strips the .act extension.
-moduleNameFromFile :: FilePath -> FilePath -> IO A.ModName
-moduleNameFromFile srcBase actFile = do
+moduleNameFromFile :: FilePath -> String -> FilePath -> IO A.ModName
+moduleNameFromFile srcBase proj actFile = do
     base <- normalizePathSafe srcBase
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
-    return $ A.modName (splitDirectories rel)
+        names = splitDirectories rel
+        mn = A.modName $ if proj `elem` special_projects then names else proj:names
+    --traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
+    return mn
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
@@ -4566,8 +4653,17 @@ enumerateProjectModules ctx = do
       else do
         files <- getFilesRecursive (projSrcDir ctx)
         let actFiles = filter (\f -> takeExtension f == ".act") files
+            proj = BuildSpec.specName $ projBuildSpec ctx
+            rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
+            depNames = map fst $ projDeps ctx
+            depOverlaps = filter ((`elem` depNames) . rootName) actFiles
+
+        when (not $ null depOverlaps) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
+                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
+
         forM actFiles $ \f -> do
-          mn <- moduleNameFromFile (projSrcDir ctx) f
+          mn <- moduleNameFromFile (projSrcDir ctx) proj f
           return (f, mn)
 
 -- | Remove stale generated module artifacts when source modules disappear.
@@ -4605,15 +4701,21 @@ pruneMissingModuleOutputs ctx = do
       let ext = takeExtension absFile
       when (ext == ".c" || ext == ".h") $ do
         let rel = normalise (makeRelative typesRoot absFile)
-            base = normalise (moduleBase rel ext)
+            base = dropProjDir (moduleBase rel ext)
         unless (Data.Set.member base srcMods) $
           removeFile absFile `catch` ignoreNotExists
 
     pruneTyDb srcMods typesRoot absDir = do
       let rel = normalise (makeRelative typesRoot absDir)
-          base = normalise (dropExtension rel)
-      unless (Data.Set.member base srcMods) $
+          base = dropProjDir (dropExtension rel)
+      unless (Data.Set.member base srcMods) $ do
         removePathForcibly absDir `catch` ignoreNotExists
+
+    proj = BuildSpec.specName $ projBuildSpec ctx
+
+    dropProjDir rel = case splitDirectories $ normalise (dropExtension rel) of
+                        n:ns | n == proj -> joinPath ns
+                        ns -> joinPath ns
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
@@ -4656,7 +4758,8 @@ pathsForModule opts projMap ctx mn = do
     let sPaths = searchPathForProject opts projMap ctx
         bin = joinPath [projOutDir ctx, "bin"]
         src = projSrcDir ctx
-        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn
+        proj = BuildSpec.specName $ projBuildSpec ctx
+        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn proj
     createDirectoryIfMissing True bin
     createDirectoryIfMissing True (projOutDir ctx)
     createDirectoryIfMissing True (projTypesDir ctx)
@@ -5274,16 +5377,14 @@ resolveDepBase base name dep =
 
 -- | Recursively collect out/types paths for all declared dependencies.
 -- Reads Build.act and follows dependency edges.
-collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO [FilePath]
+collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO (String,[FilePath])
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
-  (_, _, paths) <- go Data.Set.empty M.empty root Nothing
-  return paths
+  spec <- loadBuildSpec root
+  (_, _, paths) <- go Data.Set.empty M.empty root spec
+  return (BuildSpec.specName spec, paths)
   where
-    go seen fpMap dir mSpec = do
-      spec0 <- case mSpec of
-                 Just s -> return s
-                 Nothing -> loadBuildSpec dir
+    go seen fpMap dir spec0 = do
       spec <- applyDepOverrides dir overrides spec0
       let (_, fpMap1, _) = applyFingerprint dir spec fpMap
       foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
@@ -5306,7 +5407,8 @@ collectDepTypePaths projDir overrides = do
             then return (seen, fpMap', acc)
             else do
               let seen' = Data.Set.insert depPath seen
-              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath Nothing
+              spec <- loadBuildSpec depPath
+              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath spec
               return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
 
     canonicalizeDep depAbs fpMap = do
@@ -5330,6 +5432,13 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 -- | Render a name identifier to a plain string.
 nameToString :: A.Name -> String
 nameToString (A.Name _ s) = s
+
+addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
+  where proj                = projName paths
+        ns                  = A.modPath mn
+
+dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
 
 
 -- | Check whether a NameInfo represents a root-eligible actor.

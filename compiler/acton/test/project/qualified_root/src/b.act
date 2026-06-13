@@ -1,2 +1,2 @@
 def foo():
-    print("qualified_root foo")
+    print("qualified_root.b.foo")

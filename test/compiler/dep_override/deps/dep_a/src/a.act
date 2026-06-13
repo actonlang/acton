@@ -1,5 +1,5 @@
-import b
-import c
+import dep_b.b
+import dep_c.c
 
 def answer_a() -> int:
-    return b.answer_b() + c.answer_c()
+    return dep_b.b.answer_b() + dep_c.c.answer_c()

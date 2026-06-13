@@ -1,14 +1,14 @@
 Resolving dependencies (fetching if missing)...
-  Fresh a: using cached .tydb
-  Stale b: generated code out of date {impl c missing -> HASH2, h missing -> HASH2}
-  Fresh c: using cached .tydb
-     Back normalize done: b                                                 0.000 s
-     Back deactorize done: b                                                0.000 s
-     Back cps done: b                                                       0.000 s
-     Back llift done: b                                                     0.000 s
-     Back boxing done: b                                                    0.000 s
-     Back codegen done: b                                                   0.000 s
-     Back render done: b                                                    0.000 s
-     Back write done: b                                                     0.000 s
-   b  Compilation done                                                         0.000 s
-      Final compilation done                                                   0.000 s
+  Fresh rebuild.a: using cached .tydb
+  Stale rebuild.b: generated code out of date {impl c missing -> HASH2, h missing -> HASH2}
+  Fresh rebuild.c: using cached .tydb
+     Back normalize done: rebuild.b                                                 0.000 s
+     Back deactorize done: rebuild.b                                                0.000 s
+     Back cps done: rebuild.b                                                       0.000 s
+     Back llift done: rebuild.b                                                     0.000 s
+     Back boxing done: rebuild.b                                                    0.000 s
+     Back codegen done: rebuild.b                                                   0.000 s
+     Back render done: rebuild.b                                                    0.000 s
+     Back write done: rebuild.b                                                     0.000 s
+   rebuild.b  Compilation done                                                         0.000 s
+              Final compilation done                                                   0.000 s
