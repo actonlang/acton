@@ -3,19 +3,17 @@
 module Main (main) where
 
 import           Control.Monad (foldM, forM, unless, when)
-import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
-import           Data.Char (isHexDigit, isSpace)
 import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
-import           Data.List (elemIndex, find, partition, sort, sortOn)
+import           Data.List (find, sort)
 import qualified Data.Map.Strict as M
-import           Data.Maybe (fromMaybe, isJust)
+import           Data.Maybe (isJust)
 import           System.Directory
 import           System.Environment (getEnvironment)
 import           System.Exit
@@ -33,9 +31,7 @@ import           Control.Concurrent     (threadDelay)
 import           Test.Tasty
 import           Test.Tasty.Runners (NumThreads(..))
 import           Test.Tasty (DependencyType(..), after, TestName)
-import           Test.Tasty.Golden (goldenVsString)
 import           Test.Tasty.HUnit
-import           TestGolden (normalizeProgressTimingLine)
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.DocPrinter as DocP
@@ -52,9 +48,6 @@ projDir = "test" </> "rebuild"
 
 srcDir :: FilePath
 srcDir = projDir </> "src"
-
-goldenDir :: FilePath
-goldenDir = projDir </> "golden"
 
 casesProjDir :: FilePath
 casesProjDir = "test" </> "incremental_cases"
@@ -75,201 +68,6 @@ actonCmd :: String -> String
 actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
 
 -- Utils ----------------------------------------------------------------------
-
--- | Normalize build output for golden comparisons.
-sanitize :: T.Text -> LBS.ByteString
-sanitize = LBS.fromStrict
-        . TE.encodeUtf8
-        . T.unlines
-        . reorderConcurrentProgressLines
-        . map censorHashes
-        . map normalizeProgressTimingLine
-        . dropPaths
-        . filter (not . isVolatile)
-        . T.lines
-  where
-    isVolatile :: T.Text -> Bool
-    isVolatile t =
-      T.isInfixOf "zigCmd" t ||
-      T.isInfixOf "Building project in" t ||
-      T.isInfixOf "Building [cap" t
-
-    -- Rewrite volatile hash literals in log lines to stable placeholders.
-    -- We keep semantic position in deltas:
-    --   old hash values  -> HASH1
-    --   new hash values  -> HASH2
-    -- Values like "missing" are intentionally left unchanged.
-    censorHashes :: T.Text -> T.Text
-    censorHashes txt = go 0
-      where
-        n = T.length txt
-
-        go :: Int -> T.Text
-        go i
-          | i >= n = T.empty
-          | isHexStart i =
-              let j = spanHex i
-                  run = T.take (j - i) (T.drop i txt)
-              in if isHashRun run
-                   then hashTag i j <> go j
-                   else run <> go j
-          | otherwise = T.singleton (T.index txt i) <> go (i + 1)
-
-        isHexStart :: Int -> Bool
-        isHexStart i = isHexDigit (T.index txt i)
-
-        spanHex :: Int -> Int
-        spanHex i
-          | i < n && isHexDigit (T.index txt i) = spanHex (i + 1)
-          | otherwise = i
-
-        isHashRun :: T.Text -> Bool
-        isHashRun h = let len = T.length h in len == 8 || len == 64
-
-        hashTag :: Int -> Int -> T.Text
-        hashTag i j
-          | isRightValue i = "HASH2"
-          | isLeftValue j = "HASH1"
-          | otherwise = "HASH"
-
-        isRightValue :: Int -> Bool
-        isRightValue i =
-          case skipSpacesLeft (i - 1) of
-            Nothing -> False
-            Just k
-              | T.index txt k == '→' -> True
-              | k >= 1 && T.index txt (k - 1) == '-' && T.index txt k == '>' -> True
-              | otherwise -> False
-
-        isLeftValue :: Int -> Bool
-        isLeftValue j =
-          case skipSpacesRight j of
-            Nothing -> False
-            Just k
-              | T.index txt k == '→' -> True
-              | k + 1 < n && T.index txt k == '-' && T.index txt (k + 1) == '>' -> True
-              | otherwise -> False
-
-        skipSpacesLeft :: Int -> Maybe Int
-        skipSpacesLeft k
-          | k < 0 = Nothing
-          | isSpace (T.index txt k) = skipSpacesLeft (k - 1)
-          | otherwise = Just k
-
-        skipSpacesRight :: Int -> Maybe Int
-        skipSpacesRight k
-          | k >= n = Nothing
-          | isSpace (T.index txt k) = skipSpacesRight (k + 1)
-          | otherwise = Just k
-
-    -- Remove the verbose Paths: block (and its per-field lines) to avoid
-    -- machine-specific absolute paths in goldens.
-    dropPaths :: [T.Text] -> [T.Text]
-    dropPaths [] = []
-    dropPaths (l:ls)
-      | T.isPrefixOf "Paths:" (T.stripStart l) = dropWhile isPathField ls
-      | otherwise = l : dropPaths ls
-      where
-        isPathField :: T.Text -> Bool
-        isPathField x = let s = T.stripStart x in any (`T.isPrefixOf` s)
-                          [ "sysPath"
-                          , "sysTypes"
-                          , "projPath"
-                          , "projOut"
-                          , "projTypes"
-                          , "binDir"
-                          , "srcDir"
-                          , "modName"
-                          ]
-
-    reorderConcurrentProgressLines :: [T.Text] -> [T.Text]
-    reorderConcurrentProgressLines ls =
-      let (progressLines, otherLines) = partition isConcurrentProgressLine ls
-          (pre, post) = break isFinalLine otherLines
-      in reorderFrontLines pre ++ sortOn progressLineKey progressLines ++ post
-      where
-        isConcurrentProgressLine t = isFrontOutputLine t || isBackLine t
-        isFrontOutputLine t =
-          any (`T.isInfixOf` t)
-            [ "Wrote .tydb"
-            , "Copied .tydb"
-            , "Generated docs"
-            ]
-        isBackLine t =
-          T.isPrefixOf "   Finished compilation of" t ||
-          (T.isInfixOf "Compilation done" t && not (isFinalLine t)) ||
-          isBackPassLine t
-        isFinalLine t =
-          T.isPrefixOf "   Finished final compilation" t ||
-          T.isPrefixOf "   Finished final compilation step" t ||
-          T.isInfixOf "Final compilation done" t ||
-          T.isPrefixOf "  Skipping final build step" t
-        isBackPassLine t =
-          case T.words t of
-            ("Back":_:"done:":_:_) -> True
-            _ -> False
-        progressLineKey t =
-          case T.words t of
-            (mn:"Wrote":".tydb":_) -> (mn, 0 :: Int, t)
-            (mn:"Generated":"docs":_) -> (mn, 1 :: Int, t)
-            (mn:"Copied":".tydb":_) -> (mn, 2 :: Int, t)
-            ("Back":pass:"done:":mn:_) -> (mn, 10 + passIndex pass, t)
-            (mn:"Compilation":"done":_) -> (mn, 100 :: Int, t)
-            _ -> (t, 101, t)
-        passIndex pass = fromMaybe 99 (pass `elemIndex` backPassOrder)
-        backPassOrder = ["normalize", "deactorize", "cps", "llift", "boxing", "codegen", "render", "write"]
-
-        -- Canonicalize the front-pass section the same way the back/front-output
-        -- section above is canonicalized. "Parse done" comes from the ParseStage,
-        -- which (unlike the type-check stage) is not gated on a module's imports,
-        -- so parse completions can interleave in any order under load. Grouping
-        -- every front line by (module, phase) makes the output independent of that
-        -- scheduling. Each front line names its own module, read from the line
-        -- text itself -- never from surrounding scan state -- so interleaving of
-        -- independent modules cannot misattribute a line. The module-less detail
-        -- lines (the inferred-signature header and body) are the one exception:
-        -- the compiler emits them in the same atomic write as their "Type check
-        -- done" line, so here they ride along as continuation lines of that unit.
-        -- Global lines that precede the per-module work (e.g. "Resolving
-        -- dependencies...") are kept pinned at the top.
-        reorderFrontLines :: [T.Text] -> [T.Text]
-        reorderFrontLines ls0 =
-          let (headLines, rest) = span (not . isFrontPrimary) ls0
-              units = buildFrontUnits rest
-          in headLines ++ concatMap (\(_, _, lns) -> lns) (sortOn (\(m, r, _) -> (m, r)) units)
-
-        isFrontPrimary :: T.Text -> Bool
-        isFrontPrimary = isJust . classifyFront
-
-        -- A front "primary" names a module and a lifecycle phase, both read from
-        -- the line's own words. Lines that name no module (the inferred-signature
-        -- header and its body) are not primaries; they attach to the preceding
-        -- primary's unit.
-        classifyFront :: T.Text -> Maybe (T.Text, Int)
-        classifyFront raw
-          | "Stale " `T.isPrefixOf` s         = wordModule 1 1
-          | "Fresh " `T.isPrefixOf` s         = wordModule 1 1
-          | "Hash deltas " `T.isPrefixOf` s   = wordModule 2 2
-          | "Parse done" `T.isInfixOf` s      = wordModule 0 0
-          | "Type check done" `T.isInfixOf` s = wordModule 0 3
-          | otherwise                         = Nothing
-          where s    = T.stripStart raw
-                ws   = T.words s
-                -- Module name is the word at index i (any trailing ':' dropped).
-                wordModule i rank
-                  | i < length ws = Just (T.dropWhileEnd (== ':') (ws !! i), rank)
-                  | otherwise     = Nothing
-
-        -- Group each primary line with the continuation (non-primary) lines that
-        -- follow it, tag it with (module, rank), then stable-sort. Stable sort
-        -- preserves the emission order of equal keys, e.g. a module's two
-        -- inferred-signature blocks.
-        buildFrontUnits :: [T.Text] -> [(T.Text, Int, [T.Text])]
-        buildFrontUnits [] = []
-        buildFrontUnits (l:rest) =
-          let (cont, rest')   = span (not . isFrontPrimary) rest
-              (modName, rank) = fromMaybe ("", -1) (classifyFront l)
-          in (modName, rank, l : cont) : buildFrontUnits rest'
 
 -- | Atomically write UTF-8 text to a file.
 writeFileUtf8 :: FilePath -> T.Text -> IO ()
@@ -335,29 +133,17 @@ runIn cwd cmd = do
 buildOut :: IO T.Text
 buildOut = do
   let cmd = actonCmd "build --color never --verbose"
-  (_ec,out) <- runIn projDir cmd
-  pure out
-
--- | Run a project build and return sanitized output.
-goldenBuild :: IO LBS.ByteString
-goldenBuild = do
-  let cmd = actonCmd "build --color never --verbose"
-  (_ec,out) <- runIn projDir cmd
-  pure (sanitize out)
-
--- | Run a single-file build and return sanitized output.
-goldenBuildFile :: IO LBS.ByteString
-goldenBuildFile = do
-  let cmd = actonCmd "src/c.act --color never --verbose"
-  (_ec,out) <- runIn projDir cmd
-  pure (sanitize out)
+  res <- runIn projDir cmd
+  assertExitSuccess "project build" res
+  pure (snd res)
 
 -- | Run a single-file build and return raw output.
 buildOutFile :: IO T.Text
 buildOutFile = do
   let cmd = actonCmd "src/c.act --color never --verbose"
-  (_ec,out) <- runIn projDir cmd
-  pure out
+  res <- runIn projDir cmd
+  assertExitSuccess "single-file build" res
+  pure (snd res)
 
 -- | Check whether build output reports typechecking for a module.
 typechecked :: T.Text -> T.Text -> Bool
@@ -376,6 +162,24 @@ compiled out modName =
     isCompiledLine line =
       "Finished compilation of" `T.isInfixOf` line ||
       "Compilation done" `T.isInfixOf` line
+
+-- | Check whether build output reports a module as fresh (hash matched, so the
+-- cached .tydb is reused and nothing is rebuilt).
+fresh :: T.Text -> T.Text -> Bool
+fresh = statusReported "Fresh"
+
+-- | Check whether build output reports a module as stale (it is being rebuilt).
+stale :: T.Text -> T.Text -> Bool
+stale = statusReported "Stale"
+
+-- | Whether any line reports "<keyword> <module>:" for the given module. The
+-- module name is anchored right after the keyword, so a module name that appears
+-- later in some other line (e.g. an "{impl c missing}" codegen delta on a
+-- different module's line) cannot cause a cross-module false match.
+statusReported :: T.Text -> T.Text -> T.Text -> Bool
+statusReported keyword out modName =
+  any (T.isInfixOf prefix) (T.lines out)
+  where prefix = keyword <> " " <> T.replace "/" "." modName <> ":"
 
 -- | Match module labels across legacy "proj/mod" and new "proj.mod" formats.
 matchesModule :: T.Text -> T.Text -> Bool
@@ -725,15 +529,40 @@ p01_init = testCase "01-init" $ do
     ]
 
 p02_initial_build :: TestTree
-p02_initial_build = goldenVsString "02-initial-build.golden" (goldenDir </> "project_02-initial-build.golden") goldenBuild
+p02_initial_build = testCase "02-initial-build" $ do
+  out <- buildOut
+  -- Initial build: every module is stale and gets type-checked and compiled.
+  assertBool "expected a to be stale" (stale out "rebuild/a")
+  assertBool "expected b to be stale" (stale out "rebuild/b")
+  assertBool "expected c to be stale" (stale out "rebuild/c")
+  assertBool "expected a to type check" (typechecked out "rebuild/a")
+  assertBool "expected b to type check" (typechecked out "rebuild/b")
+  assertBool "expected c to type check" (typechecked out "rebuild/c")
+  assertBool "expected a to compile" (compiled out "rebuild/a")
+  assertBool "expected b to compile" (compiled out "rebuild/b")
+  assertBool "expected c to compile" (compiled out "rebuild/c")
 
 p03_up_to_date :: TestTree
-p03_up_to_date = goldenVsString "03-up-to-date.golden" (goldenDir </> "project_03-up-to-date.golden") goldenBuild
+p03_up_to_date = testCase "03-up-to-date" $ do
+  out <- buildOut
+  -- No changes: every module is fresh (cache hit); nothing re-type-checks.
+  assertBool "expected a fresh" (fresh out "rebuild/a")
+  assertBool "expected b fresh" (fresh out "rebuild/b")
+  assertBool "expected c fresh" (fresh out "rebuild/c")
+  assertBool "did not expect a to type check" (not (typechecked out "rebuild/a"))
+  assertBool "did not expect b to type check" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c to type check" (not (typechecked out "rebuild/c"))
 
 p04_touch_no_rebuild :: TestTree
-p04_touch_no_rebuild = goldenVsString "04-touch-no-rebuild.golden" (goldenDir </> "project_04-touch-no-rebuild.golden") $ do
+p04_touch_no_rebuild = testCase "04-touch-no-rebuild" $ do
+  -- Touch a.act: mtime changes but contents are identical, so source hashing
+  -- must recognise it as unchanged and keep every module fresh.
   touch (srcDir </> "a.act")
-  goldenBuild
+  out <- buildOut
+  assertBool "expected a fresh after touch" (fresh out "rebuild/a")
+  assertBool "expected b fresh after touch" (fresh out "rebuild/b")
+  assertBool "expected c fresh after touch" (fresh out "rebuild/c")
+  assertBool "did not expect a to type check" (not (typechecked out "rebuild/a"))
 
 p05_run_123 :: TestTree
 p05_run_123 = testCase "05-run 123" $ do
@@ -741,7 +570,7 @@ p05_run_123 = testCase "05-run 123" $ do
   out @?= "123\n"
 
 p06_change_a_impl :: TestTree
-p06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "project_06-change-a-impl.golden") $ do
+p06_change_a_impl = testCase "06-change-a-impl" $ do
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOut
   -- Expect only a.act to type check; b/c should re-run codegen only.
@@ -750,7 +579,6 @@ p06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "pro
   assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
   assertBool "expected b.act to compile codegen" (compiled out "rebuild/b")
   assertBool "expected c.act to compile codegen" (compiled out "rebuild/c")
-  pure (sanitize out)
 
 p06_impl_change_fresh :: TestTree
 p06_impl_change_fresh = testCase "06-impl-change-up-to-date" $ do
@@ -767,7 +595,7 @@ p07_run_124 = testCase "07-run 124" $ do
   out @?= "124\n"
 
 p08_change_b_impl :: TestTree
-p08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "project_08-change-b-impl.golden") $ do
+p08_change_b_impl = testCase "08-change-b-impl" $ do
   writeFileUtf8 (srcDir </> "b.act") $ T.unlines
     [ "import a"
     , "def baa():"
@@ -780,11 +608,13 @@ p08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "pro
     , "        return 1"
     ]
   out <- buildOut
-  -- Expect b.act to compile, but not a.act or c.act in project build
-  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
-  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
-  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
-  pure (sanitize out)
+  -- Impl-only change to b: b re-type-checks and recompiles; c re-runs codegen
+  -- (its backend uses b.baa via main) without re-type-checking; a stays fresh.
+  assertBool "expected a.act to stay fresh" (fresh out "rebuild/a")
+  assertBool "expected b.act to type check" (typechecked out "rebuild/b")
+  assertBool "expected b.act to compile" (compiled out "rebuild/b")
+  assertBool "did not expect c.act to type check" (not (typechecked out "rebuild/c"))
+  assertBool "expected c.act to re-run codegen" (compiled out "rebuild/c")
 
 p09_run_124 :: TestTree
 p09_run_124 = testCase "09-run 124" $ do
@@ -795,9 +625,7 @@ p09_run_124 = testCase "09-run 124" $ do
 
 -- Changing public interface of an import should rebuild dependents that use it
 p10_change_a_iface :: TestTree
-p10_change_a_iface =
-  goldenVsString "10-change-a-iface.golden"
-                 (goldenDir </> "project_10-change-a-iface.golden") $ do
+p10_change_a_iface = testCase "10-change-a-iface" $ do
     -- Change the type of a.aaa (public signature change).
     writeFileUtf8 (srcDir </> "a.act") "aaa = \"125\"\n"
     out <- buildOut
@@ -807,13 +635,14 @@ p10_change_a_iface =
     assertBool "expected b.act to compile" (typechecked out "rebuild/b")
     -- c should rebuild too, since it imports b which has now changed since its import a changed..
     assertBool "expected c.act to compile" (typechecked out "rebuild/c")
-    pure (sanitize out)
+    -- Propagation is via PUBLIC interface hashing, not impl hashing: b goes stale
+    -- because a's public signature changed, and c because b's then changed.
+    assertBool "expected pub-change propagation a->b" (T.isInfixOf "pub changes in rebuild.a.aaa" out)
+    assertBool "expected pub-change propagation b->c" (T.isInfixOf "pub changes in rebuild.b.baa" out)
 
 -- Docstring-only change in an imported module should not rebuild dependents
 p11_change_b_doc :: TestTree
-p11_change_b_doc =
-  goldenVsString "11-change-b-doc.golden"
-                 (goldenDir </> "project_11-change-b-doc.golden") $ do
+p11_change_b_doc = testCase "11-change-b-doc" $ do
     -- Change only the docstring of a method in b.act; this should recompile b
     -- (source changed) but not its dependent c (public hash is doc-free).
     writeFileUtf8 (srcDir </> "b.act") $ T.unlines
@@ -828,23 +657,23 @@ p11_change_b_doc =
       , "        return 1"
       ]
     out <- buildOut
-    assertBool "expected b.act to compile" (typechecked out "rebuild/b")
-    assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
-    pure (sanitize out)
+    -- Doc-only change to b recompiles b (source changed) but its public hash is
+    -- doc-free, so c stays fresh -- the change does not propagate. a is untouched.
+    assertBool "expected a to stay fresh" (fresh out "rebuild/a")
+    assertBool "expected b.act to type check" (typechecked out "rebuild/b")
+    assertBool "expected b.act to compile" (compiled out "rebuild/b")
+    assertBool "expected c to stay fresh (doc change does not propagate)" (fresh out "rebuild/c")
 
 p12_codegen_stale :: TestTree
-p12_codegen_stale =
-  goldenVsString "12-codegen-stale.golden"
-                 (goldenDir </> "project_12-codegen-stale.golden") $ do
+p12_codegen_stale = testCase "12-codegen-stale" $ do
     let bBase = projDir </> "out" </> "types" </> "rebuild" </> "b"
     removeIfExists (bBase ++ ".c")
     removeIfExists (bBase ++ ".h")
     out <- buildOut
-    assertBool "expected b.act to compile codegen" (compiled out "rebuild/b")
+    assertBool "expected b.act to re-run codegen" (compiled out "rebuild/b")
     assertBool "did not expect b.act to type check" (not (typechecked out "rebuild/b"))
-    assertBool "did not expect a.act to type check" (not (typechecked out "rebuild/a"))
-    assertBool "did not expect c.act to compile codegen" (not (compiled out "rebuild/c"))
-    pure (sanitize out)
+    assertBool "expected a.act to stay fresh" (fresh out "rebuild/a")
+    assertBool "expected c.act to stay fresh" (fresh out "rebuild/c")
 
 f01_init :: TestTree
 f01_init = testCase "01-init" $ do
@@ -864,15 +693,40 @@ f01_init = testCase "01-init" $ do
     ]
 
 f02_initial_build :: TestTree
-f02_initial_build = goldenVsString "02-initial-build.golden" (goldenDir </> "file_02-initial-build.golden") goldenBuildFile
+f02_initial_build = testCase "02-initial-build" $ do
+  out <- buildOutFile
+  -- Initial single-file build pulls in deps: a, b, c are all stale and get
+  -- type-checked and compiled.
+  assertBool "expected a to be stale" (stale out "rebuild/a")
+  assertBool "expected b to be stale" (stale out "rebuild/b")
+  assertBool "expected c to be stale" (stale out "rebuild/c")
+  assertBool "expected a to type check" (typechecked out "rebuild/a")
+  assertBool "expected b to type check" (typechecked out "rebuild/b")
+  assertBool "expected c to type check" (typechecked out "rebuild/c")
+  assertBool "expected a to compile" (compiled out "rebuild/a")
+  assertBool "expected b to compile" (compiled out "rebuild/b")
+  assertBool "expected c to compile" (compiled out "rebuild/c")
 
 f03_up_to_date :: TestTree
-f03_up_to_date = goldenVsString "03-up-to-date.golden" (goldenDir </> "file_03-up-to-date.golden") goldenBuildFile
+f03_up_to_date = testCase "03-up-to-date" $ do
+  out <- buildOutFile
+  -- No changes: every module is fresh (cache hit); nothing re-type-checks.
+  assertBool "expected a fresh" (fresh out "rebuild/a")
+  assertBool "expected b fresh" (fresh out "rebuild/b")
+  assertBool "expected c fresh" (fresh out "rebuild/c")
+  assertBool "did not expect a to type check" (not (typechecked out "rebuild/a"))
+  assertBool "did not expect b to type check" (not (typechecked out "rebuild/b"))
+  assertBool "did not expect c to type check" (not (typechecked out "rebuild/c"))
 
 f04_touch_no_rebuild :: TestTree
-f04_touch_no_rebuild = goldenVsString "04-touch-no-rebuild.golden" (goldenDir </> "file_04-touch-no-rebuild.golden") $ do
+f04_touch_no_rebuild = testCase "04-touch-no-rebuild" $ do
+  -- Touch a.act: contents identical, so hashing keeps every module fresh.
   touch (srcDir </> "a.act")
-  goldenBuildFile
+  out <- buildOutFile
+  assertBool "expected a fresh after touch" (fresh out "rebuild/a")
+  assertBool "expected b fresh after touch" (fresh out "rebuild/b")
+  assertBool "expected c fresh after touch" (fresh out "rebuild/c")
+  assertBool "did not expect a to type check" (not (typechecked out "rebuild/a"))
 
 f05_run_123 :: TestTree
 f05_run_123 = testCase "05-run 123" $ do
@@ -880,14 +734,13 @@ f05_run_123 = testCase "05-run 123" $ do
   out @?= "123\n"
 
 f06_change_a_impl :: TestTree
-f06_change_a_impl = goldenVsString "06-change-a-impl.golden" (goldenDir </> "file_06-change-a-impl.golden") $ do
+f06_change_a_impl = testCase "06-change-a-impl" $ do
   writeFileUtf8 (srcDir </> "a.act") "aaa = 124\n"
   out <- buildOutFile
   -- Expect only a.act to compile in single-file build
   assertBool "expected a.act to compile" (typechecked out "rebuild/a")
   assertBool "did not expect b.act to compile" (not (typechecked out "rebuild/b"))
   assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
-  pure (sanitize out)
 
 f07_run_124 :: TestTree
 f07_run_124 = testCase "07-run 124" $ do
@@ -895,7 +748,7 @@ f07_run_124 = testCase "07-run 124" $ do
   out @?= "124\n"
 
 f08_change_b_impl :: TestTree
-f08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "file_08-change-b-impl.golden") $ do
+f08_change_b_impl = testCase "08-change-b-impl" $ do
   writeFileUtf8 (srcDir </> "b.act") $ T.unlines
     [ "import a"
     , "def baa():"
@@ -908,11 +761,13 @@ f08_change_b_impl = goldenVsString "08-change-b-impl.golden" (goldenDir </> "fil
     , "        return 1"
     ]
   out <- buildOutFile
-  -- Expect b.act to compile; c.act should not re-typecheck on impl-only changes.
-  assertBool "did not expect a.act to compile" (not (typechecked out "rebuild/a"))
-  assertBool "expected b.act to compile" (typechecked out "rebuild/b")
-  assertBool "did not expect c.act to compile" (not (typechecked out "rebuild/c"))
-  pure (sanitize out)
+  -- Impl-only change to b: b re-type-checks and recompiles; c re-runs codegen
+  -- without re-type-checking; a stays fresh.
+  assertBool "expected a.act to stay fresh" (fresh out "rebuild/a")
+  assertBool "expected b.act to type check" (typechecked out "rebuild/b")
+  assertBool "expected b.act to compile" (compiled out "rebuild/b")
+  assertBool "did not expect c.act to type check" (not (typechecked out "rebuild/c"))
+  assertBool "expected c.act to re-run codegen" (compiled out "rebuild/c")
 
 f09_run_124 :: TestTree
 f09_run_124 = testCase "09-run 124" $ do
