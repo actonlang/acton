@@ -154,6 +154,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.List
 import qualified Data.Set
 import Data.List (foldl')
+import qualified Data.IntSet as IntSet
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
 import qualified Data.Set as Set
@@ -1065,7 +1066,10 @@ readSelectedModule f nameHashes selected =
               traceTydbRead "stmt-index-miss" f (Data.List.intercalate "," (map A.nstr unusable))
               return Nothing
             else do
-              let indices = Data.List.sort $ Data.List.nub $ concat [ is | (_, Just is) <- owners ]
+              -- Selected names can cover most of a large module; dedup the
+              -- pooled statement indices with an IntSet (O(n log n)) rather than
+              -- Data.List.nub (O(n^2)). toAscList also yields them sorted.
+              let indices = IntSet.toAscList $ IntSet.fromList $ concat [ is | (_, Just is) <- owners ]
               stmts <- forM indices $ \i ->
                 getValue ("stmt " ++ show i) txn dbi (keyStmt i)
               traceTydbRead "stmts" f ("selected " ++ show (length names) ++ " -> " ++ show (length stmts))
