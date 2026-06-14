@@ -222,6 +222,7 @@ import qualified Acton.Normalizer
 import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
+import Acton.Analytics
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import Acton.Builtin (mBuiltin)
@@ -802,8 +803,9 @@ runCompilePlan :: Source.SourceProvider
                -> Int
                -> CompileHooks
                -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-runCompilePlan sp gopts plan sched gen hooks = do
-  let ctx = cpContext plan
+runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
+  let hooks = instrumentHooksForAnalytics ana hooks0
+      ctx = cpContext plan
       opts' = ccOpts ctx
       pathsRoot = ccPathsRoot ctx
       rootProj = ccRootProj ctx
@@ -836,6 +838,28 @@ runCompilePlan sp gopts plan sched gen hooks = do
         , ccOnInfo = chOnInfo hooks
         }
   compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+
+-- | Tap the generic progress hooks to feed the analytics sampler. Each pass
+-- already reports through these callbacks, so a single wrapper covers parse,
+-- type check and the back passes without touching any individual pass.
+instrumentHooksForAnalytics :: Analytics -> CompileHooks -> CompileHooks
+instrumentHooksForAnalytics ana hooks = hooks
+  { chOnParseDone = \t mtime -> do
+      recordParseDone ana (taskMod t)
+      chOnParseDone hooks t mtime
+  , chOnFrontProgress = \t p -> do
+      when (fppPass p == FrontPassTypes) $
+        recordType ana (taskMod t) (fppCompleted p) (fppTotal p)
+      chOnFrontProgress hooks t p
+  , chOnBackProgress = \job bp -> do
+      case bp of
+        BackPassFinished pass _ _ _ -> recordBackPass ana (backMod job) (backPassName pass)
+        _                           -> return ()
+      chOnBackProgress hooks job bp
+  }
+  where taskMod t   = modNameToString (tkMod (gtKey t))
+        backMod job = modNameToString (A.modname (biTypedMod (bjInput job)))
+
 -- | Baseline compile options for internal helpers and tests.
 -- This mirrors CLI defaults so path discovery and parsing behave predictably
 -- when no command-line flags are present.

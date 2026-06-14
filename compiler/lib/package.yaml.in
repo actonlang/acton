@@ -64,6 +64,7 @@ library:
   source-dirs: src
   exposed-modules:
     - Acton.ArchiveDownload
+    - Acton.Analytics
     - Acton.Boxing
     - Acton.BuildSpec
     - Acton.Builtin
