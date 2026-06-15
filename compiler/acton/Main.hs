@@ -1572,17 +1572,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           let rootDeps = maybe [] projDeps (M.lookup rootProj projMap)
               otherDeps = concatMap projDeps (M.elems projMap)
           in M.fromListWith (\_ old -> old) [ (p, n) | (n, p) <- rootDeps ++ otherDeps ]
-        projectLabelFor proj
-          | proj == rootProj = ""
-          | otherwise =
-              case M.lookup proj depNameMap of
-                Just name -> name
-                Nothing -> projectLabel rootProj proj
-        projectModuleLabel proj mn =
-          case projectLabelFor proj of
-            "" -> modLabel mn
-            label -> label ++ "." ++ modLabel mn
-        labelWidth = maximum (0 : [ length (projectModuleLabel (tkProj (gtKey t)) (tkMod (gtKey t))) | t <- neededTasks ])
+        labelWidth = maximum (0 : [ length (modLabel (tkMod (gtKey t))) | t <- neededTasks ])
         statusWidth = 68
         nameWidth = labelWidth + 2 + statusWidth
         timePadWidth = nameWidth + length timeSep
@@ -1692,64 +1682,63 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               else Just (abbreviateRight budget (backFailStatus msg))
         finalDoneRenderer =
           staticStatusRenderer finalDoneStatus "Final"
-        parseDoneLine width proj mn t =
+        parseDoneLine width mn t =
           if puWidthAware progressUI
-            then doneStatusLine width (projectModuleLabel proj mn) parseDoneRenderer "Parsed" (Just t)
-            else plainDoneTimedLine (projectModuleLabel proj mn) parseDoneStatus t
-        frontDoneLine width proj mn t =
+            then doneStatusLine width (modLabel mn) parseDoneRenderer "Parsed" (Just t)
+            else plainDoneTimedLine (modLabel mn) parseDoneStatus t
+        frontDoneLine width mn t =
           if puWidthAware progressUI
-            then doneStatusLine width (projectModuleLabel proj mn) frontDoneRenderer "Typed" (Just t)
-            else plainDoneTimedLine (projectModuleLabel proj mn) frontDoneStatus t
-        backDoneLine width proj mn mt =
+            then doneStatusLine width (modLabel mn) frontDoneRenderer "Typed" (Just t)
+            else plainDoneTimedLine (modLabel mn) frontDoneStatus t
+        backDoneLine width mn mt =
           if puWidthAware progressUI
             then
               case mt of
-                Just t -> doneStatusLine width (projectModuleLabel proj mn) backDoneRenderer "Built" (Just t)
-                Nothing -> doneStatusLine width (projectModuleLabel proj mn) backDoneRenderer "Built" Nothing
+                Just t -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" (Just t)
+                Nothing -> doneStatusLine width (modLabel mn) backDoneRenderer "Built" Nothing
             else
               case mt of
-                Just t -> plainDoneTimedLine (projectModuleLabel proj mn) backDoneStatus t
-                Nothing -> plainDoneLine (projectModuleLabel proj mn) backDoneStatus
-        backFailLine width proj mn msg =
+                Just t -> plainDoneTimedLine (modLabel mn) backDoneStatus t
+                Nothing -> plainDoneLine (modLabel mn) backDoneStatus
+        backFailLine width mn msg =
           if puWidthAware progressUI
-            then doneStatusLine width (projectModuleLabel proj mn) (backFailRenderer msg) "Failed" Nothing
-            else plainDoneLine (projectModuleLabel proj mn) (backFailStatus msg)
+            then doneStatusLine width (modLabel mn) (backFailRenderer msg) "Failed" Nothing
+            else plainDoneLine (modLabel mn) (backFailStatus msg)
         finalDoneLine width t =
           if puWidthAware progressUI
             then doneStatusLine width "" finalDoneRenderer "Final" (Just t)
             else plainDoneTimedLine "" finalDoneStatus t
         frontOutputDoneLine width key kind t =
-          let proj = tkProj key
-              mn = tkMod key
+          let mn = tkMod key
               status = frontOutputDoneStatus kind
               short = frontOutputShortStatus kind
               renderer = staticStatusRenderer status short
           in if puWidthAware progressUI
-               then doneStatusLine width (projectModuleLabel proj mn) renderer short (Just t)
-               else plainDoneTimedLine (projectModuleLabel proj mn) status t
-        renderProjectLine proj mn statusRender width =
-          let modLbl = projectModuleLabel proj mn
+               then doneStatusLine width (modLabel mn) renderer short (Just t)
+               else plainDoneTimedLine (modLabel mn) status t
+        renderProjectLine mn statusRender width =
+          let modLbl = modLabel mn
           in fitBuildLineLayout width labelWidth statusWidth False modLbl statusRender
-        parseActiveLine proj mn =
-          renderProjectLine proj mn (staticStatusRenderer "Parsing" "Parse")
-        parseProgressLine proj mn p =
-          renderProjectLine proj mn (parseStatusRenderer p)
-        frontInitialLine proj mn =
-          renderProjectLine proj mn (staticStatusRenderer "Checking module" "Check")
+        parseActiveLine mn =
+          renderProjectLine mn (staticStatusRenderer "Parsing" "Parse")
+        parseProgressLine mn p =
+          renderProjectLine mn (parseStatusRenderer p)
+        frontInitialLine mn =
+          renderProjectLine mn (staticStatusRenderer "Checking module" "Check")
         frontOutputActiveLine key kind =
-          renderProjectLine (tkProj key) (tkMod key)
+          renderProjectLine (tkMod key)
             (staticStatusRenderer (frontOutputActiveStatus kind) (frontOutputShortStatus kind))
         frontOutputProgressLine key kind p =
-          renderProjectLine (tkProj key) (tkMod key)
+          renderProjectLine (tkMod key)
             (staticStatusRenderer (fopLabel p) (frontOutputProgressShortStatus kind p))
         frontOutputInitialProgress kind =
           case kind of
             FrontOutputTydb -> Just 0
             _ -> Nothing
-        backActiveLine proj mn =
-          renderProjectLine proj mn (staticStatusRenderer "Back passes" "Back")
-        backProgressLine proj mn p =
-          renderProjectLine proj mn (backPassStatusRenderer p)
+        backActiveLine mn =
+          renderProjectLine mn (staticStatusRenderer "Back passes" "Back")
+        backProgressLine mn p =
+          renderProjectLine mn (backPassStatusRenderer p)
         finalActiveLine width =
           fitBuildLineLayout width labelWidth statusWidth True "" (staticStatusRenderer "Final compilation" "Final")
         clamp01 x = max 0 (min 1 x)
@@ -1818,8 +1807,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                    else if length short <= budget
                           then Just short
                           else Just (show pct ++ "%")
-        frontProgressLine proj mn p =
-          renderProjectLine proj mn (frontStatusRenderer p)
+        frontProgressLine mn p =
+          renderProjectLine mn (frontStatusRenderer p)
         backProgressPass (BackPassStarted pass _ _) = pass
         backProgressPass (BackPassFinished pass _ _ _) = pass
         backProgressPass (BackPassSkipped pass _ _) = pass
@@ -1834,8 +1823,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           in if total <= 0
                then 1
                else clamp01 (fromIntegral (backProgressCompleted p) / fromIntegral total)
-        backPassDoneLine proj mn pass =
-          "Back " ++ backPassName pass ++ " done: " ++ projectModuleLabel proj mn
+        backPassDoneLine mn pass =
+          "Back " ++ backPassName pass ++ " done: " ++ modLabel mn
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
         taskProgressKey = ProgressTaskKey
         frontOutputTaskKey = ProgressFrontOutputKey
@@ -1878,21 +1867,19 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
     let backJobKey job =
           TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
         onBackStart job =
-          let proj = projPath (bjPaths job)
-              mn = A.modname (biTypedMod (bjInput job))
+          let mn = A.modname (biTypedMod (bjInput job))
           in do
-            gate (progressStartTask progressUI progressState (taskProgressKey (backJobKey job)) (backActiveLine proj mn) (Just 0))
+            gate (progressStartTask progressUI progressState (taskProgressKey (backJobKey job)) (backActiveLine mn) (Just 0))
         onBackProgress job p = do
-          let proj = projPath (bjPaths job)
-              mn = A.modname (biTypedMod (bjInput job))
+          let mn = A.modname (biTypedMod (bjInput job))
           gate (progressUpdateTask progressUI progressState (taskProgressKey (backJobKey job))
-                  (backProgressLine proj mn p) (Just (backProgressRatio p)))
+                  (backProgressLine mn p) (Just (backProgressRatio p)))
           when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
             case p of
               BackPassFinished pass _ _ elapsed ->
                 logRendered (\cols ->
                   detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
-                    (backPassDoneLine proj mn pass) elapsed)
+                    (backPassDoneLine mn pass) elapsed)
               _ -> return ()
         onBackDone job result = do
           gate (progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
@@ -1900,42 +1887,36 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           when (not (quiet gopts optsPlan)) $
             case result of
               BackJobOk mtime mtiming -> do
-                logRendered (\cols -> backDoneLine cols (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job))) mtime)
+                logRendered (\cols -> backDoneLine cols (A.modname (biTypedMod (bjInput job))) mtime)
                 when (C.timing gopts) $
                   forM_ mtiming $ \bt ->
                     logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine bt))
               BackJobFailed failure ->
-                logRendered (\cols -> backFailLine cols (projPath (bjPaths job))
-                                                    (A.modname (biTypedMod (bjInput job)))
-                                                    (bpfMessage failure))
+                logRendered (\cols -> backFailLine cols (A.modname (biTypedMod (bjInput job))) (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
               gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               logDiagnostics optsT diags
           , chOnParseStart = \t ->
               let key = gtKey t
-                  proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine proj mn) (Just 0))
+              in gate (progressStartTask progressUI progressState (taskProgressKey key) (parseActiveLine mn) (Just 0))
           , chOnParseProgress = \t p ->
               let key = gtKey t
-                  proj = tkProj key
                   mn = tkMod key
               in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine proj mn p) (Just (parseProgressRatio p)))
+                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
                 creditParseProgress key p
           , chOnParseDone = \t mtime -> do
               gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               creditParse (gtKey t)
               when (not (quiet gopts optsPlan)) $
                 forM_ mtime $ \tParse -> do
-                  let proj = tkProj (gtKey t)
-                      mn = tkMod (gtKey t)
-                  logRendered (\cols -> parseDoneLine cols proj mn tParse)
+                  let mn = tkMod (gtKey t)
+                  logRendered (\cols -> parseDoneLine cols mn tParse)
           , chOnFrontResult = \t fr -> do
               forM_ (frFrontTime fr) $ \tFront -> do
-                let proj = tkProj (gtKey t)
-                    mn = tkMod (gtKey t)
+                let mn = tkMod (gtKey t)
                     -- Render the whole front-result block (the module's "Type
                     -- check done" line plus any timing/inferred-signature detail)
                     -- and emit it as one atomic log write. The detail lines carry
@@ -1962,21 +1943,19 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                                    | line <- lines (isigSignature sig) ]
                                  | sig <- frInferredSigs fr ]
                       | otherwise = []
-                logRendered (\cols -> intercalate "\n" (frontDoneLine cols proj mn tFront : (timingLines cols ++ sigLines cols)))
+                logRendered (\cols -> intercalate "\n" (frontDoneLine cols mn tFront : (timingLines cols ++ sigLines cols)))
               case (frBackJob fr, frDeferredBackJob fr) of
                 (Nothing, Nothing) -> creditBack (gtKey t)
                 _ -> return ()
           , chOnFrontStart = \t ->
               let key = gtKey t
-                  proj = tkProj key
                   mn = tkMod key
-              in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine proj mn) (Just 0))
+              in gate (progressStartTask progressUI progressState (taskProgressKey key) (frontInitialLine mn) (Just 0))
           , chOnFrontProgress = \t p ->
               let key = gtKey t
-                  proj = tkProj key
                   mn = tkMod key
               in do
-                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine proj mn p) (Just (frontPassFraction p)))
+                gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
                 creditFrontProgress key p
           , chOnFrontDone = \t -> do
               gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
