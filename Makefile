@@ -43,7 +43,7 @@ else
 endif
 
 # This is the version we will stamp into acton
-BUILD_TIME=$(shell date "+%Y%m%d.%-H.%-M.%-S")
+BUILD_TIME:=$(shell date "+%Y%m%d.%-H.%-M.%-S")
 ifdef BUILD_RELEASE
 export VERSION_INFO?=$(VERSION)
 export DEB_DIST=stable
@@ -708,16 +708,13 @@ else
 TAR_TRANSFORM_OPT=-s ,^dist,acton,
 endif
 
-# Do grep to only get a version number. If there's an error, we get an empty
-# string which is better than getting the error message itself.
-ACTON_VERSION=$(shell $(ACTON) --numeric-version 2>/dev/null | grep -E "^[0-9.]+$$")
-.PHONY: acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz
-acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz:
+.PHONY: acton-$(OS)-$(ARCH)-$(VERSION_INFO).tar.xz
+acton-$(OS)-$(ARCH)-$(VERSION_INFO).tar.xz:
 	tar cv $(TAR_TRANSFORM_OPT) --exclude .gitignore dist | xz -z -0 --threads=0 > "$@"
 
 .PHONY: release
 release: distribution
-	$(MAKE) acton-$(OS)-$(ARCH)-$(ACTON_VERSION).tar.xz
+	$(MAKE) acton-$(OS)-$(ARCH)-$(VERSION_INFO).tar.xz
 
 # This target is used by the debian packaging
 .PHONY: install
