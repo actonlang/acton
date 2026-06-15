@@ -127,19 +127,21 @@ staticWitnessMethodClass env w attr
                                               in if isClass env qn' then Just qn' else Nothing
                                         _ -> Nothing
 
-staticWitnessExpr w                 = foldl (Dot NoLoc) (eCallP (eQVar (swObjectName w)) PosNil) (swObjectPath w)
+staticWitnessExpr w                 = foldl (Dot NoLoc) (eCallP root PosNil) (swObjectPath w)
+  where root
+          | swObjectName w == tcname (swBaseClass w)
+                                    = tApp (eQVar (swObjectName w)) (tcargs (swBaseClass w))
+          | otherwise               = eQVar (swObjectName w)
 
 methodQName (TC (GName m c) _) n    = GName m (Derived c n)
 methodQName (TC (QName m c) _) n    = GName m (Derived c n)
 methodQName (TC (NoQ c) _) n        = NoQ (Derived c n)
 
 generatedMethodName (GName m (Derived c n))
-                                    = Just (GName m c, n)
+  | m == mBuiltin                  = Just (GName m c, n)
 generatedMethodName (QName m (Derived c n))
-                                    = Just (GName m c, n)
-generatedMethodName (NoQ (Derived c n))
-                                    = Just (NoQ c, n)
-generatedMethodName _               = Nothing
+  | m == mBuiltin                  = Just (GName m c, n)
+generatedMethodName _              = Nothing
 
 generatedMethodType env qn ts       = do (tc, n) <- generatedMethodClass env qn ts
                                          return (rtypeOf env tc n)
@@ -152,13 +154,8 @@ generatedCallableType env (Var _ n)
                                     = generatedMethodType env n []
 generatedCallableType _ _           = Nothing
 
-generatedMethodClass env (GName m (Derived c n)) ts
-                                    = generatedClass env (GName m c) n ts
-generatedMethodClass env (QName m (Derived c n)) ts
-                                    = generatedClass env (GName m c) n ts
-generatedMethodClass env (NoQ (Derived c n)) ts
-                                    = generatedClass env (NoQ c) n ts
-generatedMethodClass _ _ _          = Nothing
+generatedMethodClass env qn ts      = do (c, n) <- generatedMethodName qn
+                                         generatedClass env c n ts
 
 generatedClass env qn n ts
   | isClass env qn,

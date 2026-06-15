@@ -1278,12 +1278,10 @@ callableTypeReturnsRaw rt           = case rt of
                                         _                       -> False
 
 generatedMethodName (GName m (Derived c n))
-                                    = Just (GName m c, n)
+  | m == mBuiltin                  = Just (GName m c, n)
 generatedMethodName (QName m (Derived c n))
-                                    = Just (GName m c, n)
-generatedMethodName (NoQ (Derived c n))
-                                    = Just (NoQ c, n)
-generatedMethodName _               = Nothing
+  | m == mBuiltin                  = Just (GName m c, n)
+generatedMethodName _              = Nothing
 
 generatedMethodQName qn@(GName _ (Derived _ _))
                                     = qn
