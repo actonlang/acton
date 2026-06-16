@@ -87,11 +87,6 @@ printErrorAndExit msg = do
     errorWithoutStackTrace msg
     exitFailure
 
-moduleHeaderLine :: String -> String
-moduleHeaderLine modName
-  | null modName = "Tests"
-  | otherwise = "Tests - module " ++ modName ++ ":"
-
 -- | List test modules by reading discovered tests from .tydb headers.
 listTestModules :: C.CompileOptions -> Paths -> IO [String]
 listTestModules _opts paths = do
@@ -141,7 +136,7 @@ listProjectTests opts paths topts modules = do
                    ]
             moduleObj (modName, names) =
               Aeson.object
-                [ AesonKey.fromString "name" Aeson..= modName
+                [ AesonKey.fromString "name" Aeson..= displayModName paths modName
                 , AesonKey.fromString "tests" Aeson..= map testObj names
                 ]
             report = Aeson.object
@@ -155,7 +150,7 @@ listProjectTests opts paths topts modules = do
           exitSuccess
         else do
           forM_ (Data.List.sortOn fst nonEmpty) $ \(modName, names) -> do
-            putStrLn ("Module " ++ modName ++ ":")
+            putStrLn ("Module " ++ displayModName paths modName ++ ":")
             forM_ names $ \name -> do
               let display = displayTestName name
               if display /= name
@@ -186,7 +181,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         if emitJson
           then do
             timeEnd <- getTime Monotonic
-            outputJsonReport (timeEnd - timeStart) []
+            outputJsonReport paths (timeEnd - timeStart) []
             return 0
           else do
             putStrLn "Nothing to test"
@@ -260,6 +255,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             startSpec spec running results = do
               let key = TestKey (tsModule spec) (tsName spec)
                   display = tsDisplay spec
+                  modDisplay = displayModName paths (tsModule spec)
                   useColorLine = tpuUseColor ui
                   showLog = tpuShowLog ui
               case M.lookup key cachedMap of
@@ -268,7 +264,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                       details = formatTestDetailLines useColorLine showLog cachedRes
                   if shouldShowCached cachedRes
                     then do
-                      ok <- testUiAppendFinal ui key (tsModule spec) line
+                      ok <- testUiAppendFinal ui key modDisplay line
                       if not ok
                         then return Nothing
                         else do
@@ -305,7 +301,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             , trCached = False
                             }
                           initLine = formatTestLiveLineRenderer useColorLine expectedDurationMs nameWidth display initRes
-                      started <- testUiStart ui key (tsModule spec) initLine
+                      started <- testUiStart ui key modDisplay initLine
                       if not started
                         then return Nothing
                         else do
@@ -360,12 +356,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           writeTestCache (testCachePath paths) newCache
         if emitJson
           then do
-            outputJsonReport (timeEnd - timeStart) results
+            outputJsonReport paths (timeEnd - timeStart) results
             testUiProgressClear ui
             return (testExitCode results)
           else do
             when (not (tpuEnabled ui)) $
-              printTestResultsOrdered (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
+              printTestResultsOrdered paths (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
             _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
             testUiProgressClear ui
             return (testExitCode results)
@@ -384,8 +380,8 @@ testExitCode results =
         errors = length [ r | r <- results, trSuccess r == Nothing ]
     in if errors > 0 then 2 else if failures > 0 then 1 else 0
 
-outputJsonReport :: TimeSpec -> [TestResult] -> IO ()
-outputJsonReport elapsed results = do
+outputJsonReport :: Paths -> TimeSpec -> [TestResult] -> IO ()
+outputJsonReport paths elapsed results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
@@ -414,7 +410,7 @@ outputJsonReport elapsed results = do
               name = displayTestName (trName res)
               combinedOutput = if includeOutput then formatCombinedOutput (trStdOut res) (trStdErr res) else Nothing
           in Aeson.object
-               [ AesonKey.fromString "module" Aeson..= trModule res
+               [ AesonKey.fromString "module" Aeson..= displayModName paths (trModule res)
                , AesonKey.fromString "name" Aeson..= name
                , AesonKey.fromString "raw_name" Aeson..= trName res
                , AesonKey.fromString "status" Aeson..= status
@@ -569,6 +565,12 @@ readModuleTests paths mn = do
 
 modNameFromString :: String -> A.ModName
 modNameFromString s = A.modName (splitOnChar '.' s)
+
+-- | Render a module name for user-facing output, dropping the project-name
+-- prefix so consumers (the VS Code extension, the --module flag, the on-disk
+-- src/ layout) see the bare module name instead of e.g. "proj.mod".
+displayModName :: Paths -> String -> String
+displayModName paths = modNameToString . dropProjPrefix paths . modNameFromString
 
 splitOnChar :: Char -> String -> [String]
 splitOnChar ch input = case break (== ch) input of
@@ -1155,8 +1157,8 @@ printTestSummary useColor elapsed showCached results = do
             then return 1
             else return 0
 
-printTestResultsOrdered :: Bool -> Bool -> Bool -> Int -> [TestSpec] -> [TestResult] -> IO ()
-printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
+printTestResultsOrdered :: Paths -> Bool -> Bool -> Bool -> Int -> [TestSpec] -> [TestResult] -> IO ()
+printTestResultsOrdered paths useColor showLog showCached nameWidth specs results = do
     let resMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- results ]
         isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
@@ -1176,7 +1178,7 @@ printTestResultsOrdered useColor showLog showCached nameWidth specs results = do
                       then return printedMods
                       else do
                         when printedAny $ putStrLn ""
-                        putStrLn (moduleHeaderLine modName)
+                        putStrLn (moduleHeaderLine (displayModName paths modName))
                         return (Set.insert modName printedMods)
                   putStrLn (formatLine spec res)
                   mapM_ putStrLn (formatTestDetailLines useColor showLog res)
