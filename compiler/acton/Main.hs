@@ -1457,7 +1457,7 @@ data CliCompileHooks = CliCompileHooks
   , cchLogLine :: String -> IO ()
   , cchClearProgress :: IO ()
   , cchFinalStart :: IO ()
-  , cchFinalDone :: Maybe TimeSpec -> IO ()
+  , cchFinalDone :: Bool -> IO ()
   , cchProgressUI :: ProgressUI
   }
 
@@ -1882,7 +1882,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                     (backPassDoneLine mn pass) elapsed)
               _ -> return ()
         onBackDone job result = do
-          gate (progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
+          gate (void $ progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
           creditBack (backJobKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
@@ -1895,7 +1895,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                 logRendered (\cols -> backFailLine cols (A.modname (biTypedMod (bjInput job))) (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
-              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               logDiagnostics optsT diags
           , chOnParseStart = \t ->
               let key = gtKey t
@@ -1908,7 +1908,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                 gate (progressUpdateTask progressUI progressState (taskProgressKey key) (parseProgressLine mn p) (Just (parseProgressRatio p)))
                 creditParseProgress key p
           , chOnParseDone = \t mtime -> do
-              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               creditParse (gtKey t)
               when (not (quiet gopts optsPlan)) $
                 forM_ mtime $ \tParse -> do
@@ -1958,7 +1958,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                 gate (progressUpdateTask progressUI progressState (taskProgressKey key) (frontProgressLine mn p) (Just (frontPassFraction p)))
                 creditFrontProgress key p
           , chOnFrontDone = \t -> do
-              gate (progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
+              gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))
               creditFront (gtKey t)
           , chOnFrontOutputStart = \key kind ->
               gate (progressStartTask progressUI progressState (frontOutputTaskKey key kind)
@@ -1967,7 +1967,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               gate (progressUpdateTask progressUI progressState (frontOutputTaskKey key kind)
                       (frontOutputProgressLine key kind p) (Just (clamp01 (fopRatio p))))
           , chOnFrontOutputDone = \key kind melapsed -> do
-              gate (progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
+              gate (void $ progressDoneTask progressUI progressState (frontOutputTaskKey key kind))
               when (not (quiet gopts optsPlan)) $
                 forM_ melapsed $ \elapsed ->
                   logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
@@ -1981,12 +1981,15 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
           setPercent 85
-        onFinalDone mtime = do
-          gate (progressDoneTask progressUI progressState finalKey)
-          setPercent 100
-          forM_ mtime $ \tFinal ->
-            when (not (quiet gopts optsPlan)) $
-              logRendered (\cols -> finalDoneLine cols tFinal)
+        onFinalDone success = do
+          current <- readIORef (csGenRef sched)
+          when (current == gen) $ do
+            mElapsed <- progressDoneTask progressUI progressState finalKey
+            setPercent 100
+            when success $
+              forM_ mElapsed $ \tFinal ->
+                when (not (quiet gopts optsPlan)) $
+                  logRendered (\cols -> finalDoneLine cols tFinal)
     return CliCompileHooks
       { cchHooks = hooks
       , cchLogLine = logLine
@@ -2053,8 +2056,8 @@ runCliPostCompile cliHooks gopts plan env = do
           Nothing -> return ()
     let runFinal action = do
           cchFinalStart cliHooks
-          mtime <- action `onException` cchFinalDone cliHooks Nothing
-          cchFinalDone cliHooks (Just mtime)
+          action `onException` cchFinalDone cliHooks False
+          cchFinalDone cliHooks True
     if C.skip_build opts'
       then
         logLine "  Skipping final build step"
@@ -2337,7 +2340,7 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO ()
 compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
     zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
@@ -2758,7 +2761,7 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO TimeSpec
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO ()
 zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
@@ -2775,8 +2778,6 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
       unless (isTmp paths) $
         -- Clean old binaries from out/bin
         removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
-
-    timeStart <- getTime Monotonic
 
     homeDir <- getHomeDirectory
     let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
@@ -2833,8 +2834,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
-    timeEnd <- getTime Monotonic
-    return (timeEnd - timeStart)
+    return ()
 
 -- Remove executables that no longer have corresponding root actors
 -- | Remove binaries that no longer have corresponding roots.
@@ -3236,12 +3236,16 @@ progressUpdateTask ui st key renderLine mprog = withProgressLock ui $ do
            }) key)
     progressRefreshUnlocked ui st
 
--- | Remove a task from the progress UI.
-progressDoneTask :: ProgressUI -> ProgressState -> ProgressKey -> IO ()
+-- | Remove a task from the progress UI and return the elapsed live-task time.
+progressDoneTask :: ProgressUI -> ProgressState -> ProgressKey -> IO (Maybe TimeSpec)
 progressDoneTask ui st key = withProgressLock ui $ do
+    active <- readIORef (psActive st)
+    now <- getTime Monotonic
+    let mElapsed = fmap (\task -> diffTimeSpec now (ptStart task)) (M.lookup key active)
     modifyIORef' (psActive st) (M.delete key)
     modifyIORef' (psOrder st) (filter (/= key))
     progressRefreshUnlocked ui st
+    return mElapsed
 
 -- | Recompute and render progress lines from active tasks.
 progressRefreshUnlocked :: ProgressUI -> ProgressState -> IO ()
