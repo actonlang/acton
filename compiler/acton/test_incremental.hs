@@ -2503,50 +2503,63 @@ broadReadMarkers =
   , "tydb-read name-hash-all"
   ]
 
+-- | Create and build a heavy-class dependency project "big_dep" under deps/big
+-- with `trees` classes. Importers find it via "--searchpath deps/big/out/types"
+-- (hashTraceBuildArgs / buildHashTraceRoot) and import it as "big_dep.big",
+-- matching the project-prefixed layout out/types/big_dep/big.tydb.
+ensureHeavyDep :: Int -> IO FilePath
+ensureHeavyDep trees = do
+  ensureCasesProject
+  let depDir = casesProjDir </> "deps" </> "big"
+  createDirectoryIfMissing True (depDir </> "src")
+  writeBuildAct depDir "big_dep" []
+  writeHeavyClassModule (depDir </> "src" </> "big.act") trees
+  buildHashTraceDep depDir
+  pure depDir
+
 p50_big_dep_added_name_keeps_small_fresh :: TestTree
 p50_big_dep_added_name_keeps_small_fresh =
   testCase "50-added name in big dependency keeps small fresh" $ do
     let proj = casesProjDir
         src = casesSrcDir
         modSmall = modLabel proj "small"
-        tySmall = proj </> "out" </> "types" </> "small.tydb"
-    ensureCasesProjectWithDeps [("big", "deps/big")]
-    depDir <- ensureDepProject proj "big"
+        tySmall = proj </> "out" </> "types" </> casesProjName </> "small.tydb"
+    depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
-    writeHeavyClassModule bigSrc 20
     writeFileUtf8 (src </> "small.act") $ T.unlines
-      [ "import big"
+      [ "import big_dep.big"
       , ""
       , "def use_one() -> int:"
-      , "    return big.Node000A(1).score_node000a(2)"
+      , "    return big_dep.big.Node000A(1).score_node000a(2)"
       , ""
       , "actor main(env: Env):"
       , "    print(use_one())"
       , "    env.exit(0)"
       ]
-    _ <- buildOutInArgs proj ["--skip-build"]
+    buildHashTraceRoot
     (pubDeps, implDeps) <- readTyDeps tySmall "use_one"
-    let bigPubDeps = sort [ dep | dep <- pubDeps, "big." `isPrefixOf` dep ]
-        bigImplDeps = sort [ dep | dep <- implDeps, "big." `isPrefixOf` dep ]
-    assertEqual "small pub deps into big" ["big.Node000A"] bigPubDeps
-    assertEqual "small impl deps into big" ["big.Node000A"] bigImplDeps
+    let bigPubDeps = sort [ dep | dep <- pubDeps, "big_dep.big." `isPrefixOf` dep ]
+        bigImplDeps = sort [ dep | dep <- implDeps, "big_dep.big." `isPrefixOf` dep ]
+    assertEqual "small pub deps into big" ["big_dep.big.Node000A"] bigPubDeps
+    assertEqual "small impl deps into big" ["big_dep.big.Node000A"] bigImplDeps
     bigV1 <- T.readFile bigSrc
     writeFileUtf8 bigSrc $ bigV1 <> T.unlines
       [ ""
       , "def unrelated_added_name() -> int:"
       , "    return 123"
       ]
-    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    buildHashTraceDep depDir
+    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj (["build", "--color", "never", "--verbose"] ++ hashTraceBuildArgs)
     assertExitSuccess "selective unchanged dependency build" res
     -- big itself recompiles here, and the verbose delta report reads big's
     -- own previous hashes; only reads serving small's freshness are pinned.
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "big_dep/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) (filter (/= "tydb-read name-hash-all") broadReadMarkers)) bigLines
     assertBool ("expected small.act to stay fresh\n" ++ T.unpack out)
-      (T.isInfixOf "Fresh small: using cached .tydb" out)
+      (T.isInfixOf (T.pack "Fresh small: using cached .tydb") out)
     assertBool "did not expect small.act to type check" (not (typechecked out modSmall))
-    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect broad big_dep.big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 p51_imported_lookup_stays_selective :: TestTree
@@ -2556,38 +2569,37 @@ p51_imported_lookup_stays_selective =
         src = casesSrcDir
         modSmall = modLabel proj "small"
         writeSmall offset = writeFileUtf8 (src </> "small.act") $ T.unlines
-          [ "import big"
+          [ "import big_dep.big"
           , ""
           , "def use_one() -> int:"
-          , T.pack ("    return big.used_value() + " ++ show (offset :: Int))
+          , T.pack ("    return big_dep.big.used_value() + " ++ show (offset :: Int))
           , ""
           , "actor main(env: Env):"
           , "    print(use_one())"
           , "    env.exit(0)"
           ]
-    ensureCasesProjectWithDeps [("big", "deps/big")]
-    depDir <- ensureDepProject proj "big"
+    depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
-    writeHeavyClassModule bigSrc 20
     bigV1 <- T.readFile bigSrc
     writeFileUtf8 bigSrc $ bigV1 <> T.unlines
       [ ""
       , "def used_value() -> int:"
       , "    return Node000A(1).score_node000a(2)"
       ]
+    buildHashTraceDep depDir
     writeSmall 1
-    _ <- buildOutInArgs proj ["--skip-build"]
+    buildHashTraceRoot
     writeSmall 2
-    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj (["build", "--color", "never", "--verbose"] ++ hashTraceBuildArgs)
     assertExitSuccess "selective .tydb trace build" res
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "big_dep/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
         bigUsedValueLines = filter (\line -> T.isInfixOf "name-hit" line && T.isInfixOf "used_value" line) bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
-    assertBool ("expected exact used_value lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected exact used_value lookup in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigUsedValueLines))
-    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect broad big_dep.big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 p52_imported_witness_lookup_stays_selective :: TestTree
@@ -2597,24 +2609,22 @@ p52_imported_witness_lookup_stays_selective =
         src = casesSrcDir
         modSmall = modLabel proj "small"
         writeSmall offset = writeFileUtf8 (src </> "small.act") $ T.unlines
-          [ "import big"
+          [ "import big_dep.big"
           , ""
           , "actor main(env: Env):"
-          , "    box = big.Box(1)"
-          , "    other = big.Box(1)"
-          , "    ordered = big.OrderedBox(1)"
-          , T.pack ("    ordered2 = big.OrderedBox(" ++ show (offset :: Int) ++ ")")
-          , "    worker = big.Worker()"
-          , "    direct = big.Box(1).value"
+          , "    box = big_dep.big.Box(1)"
+          , "    other = big_dep.big.Box(1)"
+          , "    ordered = big_dep.big.OrderedBox(1)"
+          , T.pack ("    ordered2 = big_dep.big.OrderedBox(" ++ show (offset :: Int) ++ ")")
+          , "    worker = big_dep.big.Worker()"
+          , "    direct = big_dep.big.Box(1).value"
           , "    if box == other and ordered == ordered and ordered < ordered2 and direct == 1:"
           , "        env.exit(0)"
           , "    else:"
           , "        env.exit(1)"
           ]
-    ensureCasesProjectWithDeps [("big", "deps/big")]
-    depDir <- ensureDepProject proj "big"
+    depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
-    writeHeavyClassModule bigSrc 20
     bigV1 <- T.readFile bigSrc
     writeFileUtf8 bigSrc $ bigV1 <> T.unlines
       [ ""
@@ -2647,25 +2657,26 @@ p52_imported_witness_lookup_stays_selective =
       , "    def ping():"
       , "        return 1"
       ]
+    buildHashTraceDep depDir
     writeSmall 2
-    _ <- buildOutInArgs proj ["--skip-build"]
+    buildHashTraceRoot
     writeSmall 3
-    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj (["build", "--color", "never", "--verbose"] ++ hashTraceBuildArgs)
     assertExitSuccess "selective .tydb witness trace build" res
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "big_dep/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
         bigBoxLines = filter (\line -> T.isInfixOf "name-hit" line && T.isInfixOf "Box" line) bigLines
         bigWorkerLines = filter (\line -> T.isInfixOf "name-hit" line && T.isInfixOf "Worker" line) bigLines
         bigWitnessLines = filter (\line -> T.isInfixOf "ext-" line) bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
-    assertBool ("expected exact Box lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected exact Box lookup in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigBoxLines))
-    assertBool ("expected exact Worker lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected exact Worker lookup in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigWorkerLines))
-    assertBool ("expected keyed extension index lookups in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected keyed extension index lookups in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigWitnessLines))
-    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect broad big_dep.big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 p53_imported_attr_inference_stays_selective :: TestTree
@@ -2675,21 +2686,19 @@ p53_imported_attr_inference_stays_selective =
         src = casesSrcDir
         modSmall = modLabel proj "small"
         writeSmall offset = writeFileUtf8 (src </> "small.act") $ T.unlines
-          [ "import big"
+          [ "import big_dep.big"
           , ""
           , "def read_flag(args):"
           , "    return args.get_bool(\"flag\")"
           , ""
           , "actor main(env: Env):"
-          , T.pack ("    if read_flag(big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
+          , T.pack ("    if read_flag(big_dep.big.Args()) and " ++ show (offset :: Int) ++ " > 0:")
           , "        env.exit(0)"
           , "    else:"
           , "        env.exit(1)"
           ]
-    ensureCasesProjectWithDeps [("big", "deps/big")]
-    depDir <- ensureDepProject proj "big"
+    depDir <- ensureHeavyDep 20
     let bigSrc = depDir </> "src" </> "big.act"
-    writeHeavyClassModule bigSrc 20
     bigV1 <- T.readFile bigSrc
     writeFileUtf8 bigSrc $ bigV1 <> T.unlines
       [ ""
@@ -2700,22 +2709,23 @@ p53_imported_attr_inference_stays_selective =
       , "    def get_bool(self, name: str) -> bool:"
       , "        return True"
       ]
+    buildHashTraceDep depDir
     writeSmall 1
-    _ <- buildOutInArgs proj ["--skip-build"]
+    buildHashTraceRoot
     writeSmall 2
-    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj (["build", "--color", "never", "--verbose"] ++ hashTraceBuildArgs)
     assertExitSuccess "selective .tydb attr inference trace build" res
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "big_dep/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
         bigArgsLines = filter (\line -> T.isInfixOf "name-hit" line && T.isInfixOf "Args" line) bigLines
         bigAttrLines = filter (\line -> T.isInfixOf "con-attr" line && T.isInfixOf "get_bool" line) bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
-    assertBool ("expected attr-index get_bool lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected attr-index get_bool lookup in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigAttrLines))
-    assertBool ("expected exact Args lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected exact Args lookup in big_dep.big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigArgsLines))
-    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect broad big_dep.big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 p55_dbp_reads_selected_statements :: TestTree
@@ -2724,12 +2734,13 @@ p55_dbp_reads_selected_statements =
     let proj = casesProjDir
         src = casesSrcDir
         modSmall = modLabel proj "small"
-    ensureCasesProjectWithDeps [("big", "deps/big")]
-    depDir <- ensureDepProject proj "big"
-    let bigSrc = depDir </> "src" </> "big.act"
+    -- --dbp targets root-project modules (parseDbpSpec prefixes the project
+    -- name), so big must be a local module here, not a searchpath dependency.
+    ensureCasesProject
+    let bigSrc = src </> "big.act"
     writeHeavyClassModule bigSrc 40
-    bigRes <- runActonIn depDir ["build", "--color", "never", "--skip-build"]
-    assertExitSuccess "build cached big dependency" bigRes
+    bigRes <- runActonIn proj ["build", "--color", "never", "--skip-build", "src/big.act"]
+    assertExitSuccess "build cached big module" bigRes
     writeFileUtf8 (src </> "small.act") $ T.unlines
       [ "import big"
       , ""
@@ -2742,17 +2753,17 @@ p55_dbp_reads_selected_statements =
       ]
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build", "--dbp", "big:Node000A"]
     assertExitSuccess "selective DBP .tydb trace build" res
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "incremental_cases/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
         bigNodeLines = filter (\line -> T.isInfixOf "name-hash" line && T.isInfixOf "Node000A" line) bigLines
         bigStmtLines = filter (\line -> T.isInfixOf "tydb-read stmts" line && T.isInfixOf "selected 1 -> 1" line) bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
-    assertBool ("expected exact Node000A hash lookup in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected exact Node000A hash lookup in incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigNodeLines))
-    assertBool ("expected selected statement read in big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertBool ("expected selected statement read in incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigStmtLines))
-    assertEqual ("did not expect broad big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect broad incremental_cases/big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 p54_unused_import_reads_no_names :: TestTree
@@ -2774,8 +2785,8 @@ p54_unused_import_reads_no_names =
       ]
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build", "src/small.act"]
     assertExitSuccess "unused import .tydb trace build" res
-    let traceLines = filter (T.isPrefixOf "tydb-read ") (T.lines out)
-        bigLines = filter (T.isInfixOf "big.tydb") traceLines
+    let traceLines = tydbTraceLines out
+        bigLines = traceLinesForTydb "incremental_cases/big" out
         -- Solver witness queries may still probe each import's keyed
         -- extension indexes; those reads are per-module, not per-size.
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line)
@@ -2785,7 +2796,7 @@ p54_unused_import_reads_no_names =
                                       , "tydb-read name-hash"
                                       ])) bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
-    assertEqual ("did not expect any broad or name reads from unused big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
+    assertEqual ("did not expect any broad or name reads from unused incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
 -- Main -----------------------------------------------------------------------
