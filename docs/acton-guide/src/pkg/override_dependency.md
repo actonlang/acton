@@ -16,3 +16,8 @@ zig_dependencies = {}
 ```
 
 Now we want to make some modifications to the `foo` library, so we clone it to a local path. We can now build our project using `acton build --dep foo=../foo` to temporarily override the `foo` dependency to use the path `../foo` instead of the url in the configuration.
+
+The override changes only where the dependency is loaded from. It does
+not change the import prefix: `../foo/src/lib.act` is still imported as
+`import foo`, and `../foo/src/parser.act` is still imported as
+`import foo.parser`.

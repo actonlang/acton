@@ -20,6 +20,28 @@ Fetch still needs them, though. For each reachable Acton project, the fetch
 phase downloads or copies both that project's package dependencies and its zig
 dependencies before later compile planning uses them.
 
+## Acton import prefixes
+
+Each reachable Acton project contributes modules under the dependency name used
+by its consumer. A dependency entry named `foo` therefore exposes that
+dependency's modules under the `foo` import prefix:
+
+| Source file in dependency project `foo` | Stored module | Import from a consumer |
+| --- | --- | --- |
+| `src/lib.act` | `foo.lib` | `import foo` |
+| `src/bar.act` | `foo.bar` | `import foo.bar` |
+| `src/a/b.act` | `foo.a.b` | `import foo.a.b` |
+| `src/foo.act` | `foo.foo` | `import foo.foo` |
+
+The `src/lib.act` case is the package-root alias for dependency imports.
+Consumers should import it as `foo`; the resolver maps that import to the
+stored `foo.lib` module.
+
+Currently, dependency entries must use the same name as the dependency
+project's `name` field. The import-prefix rule is still described in terms of
+the dependency entry name so the docs continue to match the public model when
+separate dependency aliases are supported.
+
 ## Generated `build.zig` inputs
 
 `acton build` generates a `build.zig` and `build.zig.zon` for the current

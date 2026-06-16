@@ -82,11 +82,14 @@ def email_count(contact: Contact) -> int:
     return len(contact.email_addresses)
 ```
 
-This same approach works for dependencies. If `directory` comes from a
-package dependency, `acton sig directory.Contact` still uses the
-project's normal build resolution: it reads `Build.act`, fetches missing
-dependencies, compiles the interface files it needs, and skips the final
-executable build.
+This same approach works for dependencies. Dependency signatures use the
+same names as dependency imports. If `directory` is a dependency and
+`Contact` is defined in that dependency's `src/lib.act`,
+`acton sig directory.Contact` uses the project's normal build
+resolution: it reads `Build.act`, fetches missing dependencies,
+compiles the interface files it needs, and skips the final executable
+build. If `Contact` is defined in `src/models.act`, ask for
+`acton sig directory.models.Contact` instead.
 
 If you are testing a local checkout of a dependency, pass the same
 override you would pass to `acton build`:
@@ -232,10 +235,18 @@ class DraftStep(Step):
 
 This pattern also appears with dependency types. If the known type comes
 from a dependency, still run `acton sig` for the exact public name shown
-in the error:
+in the error. For a dependency named `package`, a type in
+`src/module.act` is addressed through the dependency prefix:
 
 ```sh
 acton sig package.module.TypeName
+```
+
+If the type is in the dependency's `src/lib.act`, the package root
+module is the dependency name itself:
+
+```sh
+acton sig package.TypeName
 ```
 
 If you are using a local dependency override, pass the same override to

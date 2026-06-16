@@ -1,12 +1,31 @@
 # Modules
 
 Modules let you split a program into smaller named units. In a project,
-modules live under `src/`, and subdirectories become part of the module
-name. For example, `src/a/b.act` is imported as `import a.b`.
+local modules live under `src/`, and subdirectories become part of the
+module name. For example, `src/a/b.act` is imported as `import a.b`
+from another module in the same project.
 
 See [Projects](projects.md) for how `acton build` discovers those files
 and [Package Management](package_management.md) for external
 dependencies that live alongside local modules.
+
+Package dependencies use the dependency name as an import prefix. If
+your `Build.act` has a dependency named `foo`, Acton exposes modules
+from that dependency under `foo`:
+
+| Dependency source file | Import path |
+| --- | --- |
+| `foo/src/lib.act` | `import foo` |
+| `foo/src/bar.act` | `import foo.bar` |
+| `foo/src/a/b.act` | `import foo.a.b` |
+| `foo/src/foo.act` | `import foo.foo` |
+
+`src/lib.act` is the package root module for dependency imports. The
+dependency name comes from the key in the consuming project's
+`dependencies` block.
+
+Currently, that dependency name must match the dependency project's
+`name` field.
 
 Use modules to group code by responsibility. A good module has a clear
 job. For example:
