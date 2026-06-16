@@ -437,7 +437,7 @@ compilerTests =
             ]
           firstLog <- assertOk "initial dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:make_box", "--color", "never"]
-          assertBool "initial build should report DBP selection" ("DBP dbp_fixture.provider: forced by --dbp" `isInfixOf` firstLog)
+          assertBool "initial build should report DBP selection" ("DBP provider: forced by --dbp" `isInfixOf` firstLog)
           assertBool "initial build should select a subset" ("selected closure" `isInfixOf` firstLog)
           providerC <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
@@ -445,7 +445,7 @@ compilerTests =
           badSeedLog <- assertFails "bad dbp seed reports selection failure" =<<
             runBuild ["build", "--skip-build", "--dbp", "provider:not_a_name", "--color", "never"]
           assertBool "bad dbp seed should report selection failure"
-            ("DBP selection failed for dbp_fixture.provider" `isInfixOf` badSeedLog)
+            ("DBP selection failed for provider" `isInfixOf` badSeedLog)
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -455,20 +455,20 @@ compilerTests =
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "changed consumer should rerun provider DBP" ("DBP dbp_fixture.provider: forced by --dbp" `isInfixOf` changedConsumerLog)
+          assertBool "changed consumer should rerun provider DBP" ("DBP provider: forced by --dbp" `isInfixOf` changedConsumerLog)
           assertBool "changed consumer should make DBP codegen stale" ("generated code out of date" `isInfixOf` changedConsumerLog)
           providerC1b <- readFile (typesDir </> "provider.c")
           assertBool "changed consumer C should include newly interested root" ("unused_0" `isInfixOf` providerC1b)
           assertBool "changed consumer C should omit previously selected root" (not ("make_box" `isInfixOf` providerC1b))
           sameSelectionLog <- assertOk "cached dbp selection is up to date" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "same selection should reuse cached consumer" ("Fresh dbp_fixture.main: using cached .tydb" `isInfixOf` sameSelectionLog)
+          assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .tydb" `isInfixOf` sameSelectionLog)
           assertBool "same selection should skip provider back passes" ("generated code up to date" `isInfixOf` sameSelectionLog)
           removeFile (typesDir </> "provider.c")
           removeFile (typesDir </> "provider.h")
           secondLog <- assertOk "cached dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "cached consumer should be reused" ("Fresh dbp_fixture.main: using cached .tydb" `isInfixOf` secondLog)
+          assertBool "cached consumer should be reused" ("Fresh main: using cached .tydb" `isInfixOf` secondLog)
           assertBool "cached build should collect provider interest from headers" ("interested names 1" `isInfixOf` secondLog)
           assertBool "cached build should still select the dependency closure" ("selected closure" `isInfixOf` secondLog)
           removeFile (typesDir </> "provider.c")
@@ -504,13 +504,13 @@ compilerTests =
           removeIfExists (typesDir </> "main.root.c")
           sixthLog <- assertOk "dbp keeps executable root actor" =<<
             runBuild ["build", "--verbose", "--dbp", "main", "--dbp", "provider", "--color", "never"]
-          assertBool "root module should report root seed" ("DBP dbp_fixture.main: forced by --dbp" `isInfixOf` sixthLog)
+          assertBool "root module should report root seed" ("DBP main: forced by --dbp" `isInfixOf` sixthLog)
           assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
           mainC <- readFile (typesDir </> "main.c")
           assertBool "selected main C should keep root actor" ("mainQ_main" `isInfixOf` mainC)
           seventhLog <- assertOk "no-dbp disables forced dbp" =<<
             runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--no-dbp", "--color", "never"]
-          assertBool "no-dbp should suppress provider DBP" (not ("DBP dbp_fixture.provider" `isInfixOf` seventhLog))
+          assertBool "no-dbp should suppress provider DBP" (not ("DBP provider:" `isInfixOf` seventhLog))
           providerC5 <- readFile (typesDir </> "provider.c")
           assertBool "no-dbp provider C should include full module definitions" ("unused_1" `isInfixOf` providerC5)
 
@@ -568,9 +568,9 @@ compilerTests =
             putStrLn ("\nDBP library boundary log:\n" ++ logTxt)
           assertBool "library boundary should explain forced DBP exclusion" hasBoundaryInfo
           assertBool "internal library module should still run DBP"
-            ("DBP dbp_library_boundary.a: forced by --dbp" `isInfixOf` logTxt)
+            ("DBP a: forced by --dbp" `isInfixOf` logTxt)
           assertBool "boundary library module should not run DBP"
-            (not ("DBP dbp_library_boundary.b:" `isInfixOf` logTxt))
+            (not ("DBP b:" `isInfixOf` logTxt))
           aC <- readFile (typesDir </> "a.c")
           bC <- readFile (typesDir </> "b.c")
           assertBool "internal DBP module should keep used name" ("used" `isInfixOf` aC)

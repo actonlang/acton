@@ -2305,7 +2305,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
     `catch` handleTypeError
   where
     mn = A.modname parsed
-    filename = modNameToFilename mn
+    filename = modNameToFilename (dropProjPrefix paths mn)
     outbase = outBase paths mn
     absSrcBase = srcBase paths mn
     actFile = absSrcBase ++ ".act"
@@ -2763,7 +2763,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
           else explicitSeeds
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
-  nameSelection <- selectDbpNames mn tyFile selectedSeeds nameHashes
+  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds nameHashes
   let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
@@ -2801,7 +2801,7 @@ logDbpSelection :: C.GlobalOptions
 logDbpSelection gopts callbacks mn dbj totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
   when (C.verbose gopts) $
     ccOnInfo callbacks $
-      "  DBP " ++ modNameToString mn
+      "  DBP " ++ modNameToString (dropProjPrefix (dbjPaths dbj) mn)
       ++ ": " ++ dbjReason dbj
       ++ ", total names " ++ show totalNames
       ++ ", interested names " ++ show interestedCount
@@ -2819,12 +2819,13 @@ dbpCodegenHash moduleImplHash selected =
       | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
       ]
 
-selectDbpNames :: A.ModName
+selectDbpNames :: Paths
+               -> A.ModName
                -> FilePath
                -> Data.Set.Set A.Name
                -> [InterfaceFiles.NameHashInfo]
                -> IO DbpNameSelection
-selectDbpNames mn tyFile seeds nameHashes
+selectDbpNames paths mn tyFile seeds nameHashes
   | Data.Set.null seeds =
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.empty
@@ -2833,19 +2834,19 @@ selectDbpNames mn tyFile seeds nameHashes
       case ( traverse (dbpOwningName topNames) (Data.Set.toList seeds)
            , dbpLocalDepsFromNameHashes topNames nameHashes
            ) of
-        (Left reason, _) -> dbpSelectionError mn reason
-        (_, Left reason) -> dbpSelectionError mn reason
+        (Left reason, _) -> dbpSelectionError paths mn reason
+        (_, Left reason) -> dbpSelectionError paths mn reason
         (Right roots, Right localDeps) -> do
-          selected <- dbpNameClosure (dbpExtensionsForName mn tyFile topNames) localDeps (Data.Set.fromList roots)
+          selected <- dbpNameClosure (dbpExtensionsForName paths mn tyFile topNames) localDeps (Data.Set.fromList roots)
           return DbpNameSelection
             { dnsSelectedNames = selected
             }
   where
     topNames = dbpTopNamesFromNameHashes nameHashes
 
-dbpSelectionError :: A.ModName -> String -> IO a
-dbpSelectionError mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString mn ++ ": " ++ reason))
+dbpSelectionError :: Paths -> A.ModName -> String -> IO a
+dbpSelectionError paths mn reason =
+  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
 
 selectDbpModule :: Int
                 -> Int
@@ -2901,15 +2902,15 @@ dbpLocalDepsFromNameHashes topNames nameHashes =
         )
     unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
 
-dbpExtensionsForName :: A.ModName -> FilePath -> Data.Set.Set A.Name -> A.Name -> IO [A.Name]
-dbpExtensionsForName mn tyFile topNames n = do
+dbpExtensionsForName :: Paths -> A.ModName -> FilePath -> Data.Set.Set A.Name -> A.Name -> IO [A.Name]
+dbpExtensionsForName paths mn tyFile topNames n = do
   byClass <- InterfaceFiles.readExtensionsByClass tyFile n
   byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
   let exts = unionNames byClass byProtocol
       missing = [ ext | ext <- exts, Data.Set.notMember ext topNames ]
   if null missing
     then return exts
-    else dbpSelectionError mn $
+    else dbpSelectionError paths mn $
            "extension index for " ++ nameToString n
            ++ " points at non-top-level extension(s) "
            ++ Data.List.intercalate ", " (map nameToString missing)
@@ -3231,7 +3232,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
 
     forcedDbpMods = M.keysSet (parseDbpRequests (projName rootPaths) opts)
 
-    formatTaskKey k = modNameToString (tkMod k)
+    formatTaskKey k = modNameToString (dropProjPrefix rootPaths (tkMod k))
 
     logForcedDbpBoundaryExclusions =
       unless (C.no_dbp opts) $
@@ -3534,11 +3535,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               Nothing -> getNameHashCached paths m n
 
           missingNameHashDiagnostics qn =
-            errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+            errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
               [(NoLoc, "Hash info missing for " ++ prstr qn)]
 
           missingDepHashDiagnostics label qn users =
-            errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+            errsToDiagnostics "Compilation error" (modNameToFilename (dropProjPrefix paths mn)) ""
               [(NoLoc, label ++ " hash missing for " ++ prstr qn ++ users)]
 
           checkImportHashes imps = do
@@ -3888,11 +3889,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       else return Nothing
                     when (C.verbose gopts) $ do
                       if needBySource
-                        then ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": source changed")
+                        then ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": source changed")
                         else do
                           when needByPub $ do
                             let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers pubUsers qn
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": pub changes in " ++ Data.List.intercalate ", " (map fmtDelta pubDeltas))
                           when needByMissing $ do
                             let fmtMissing users qn = prstr qn ++ fmtUsers users qn
                                 pubMissingItems =
@@ -3907,7 +3908,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                   [ "rows " ++ modNameToString depMn
                                   | depMn <- Data.List.sortOn modNameToString (Data.Set.toList rowMissingMods)
                                   ]
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": missing dep hashes in " ++ Data.List.intercalate ", " (pubMissingItems ++ implMissingItems ++ rowMissingItems))
                     t' <- case taskCurrent of
                             ActonTask{} -> return taskCurrent
                             _ -> materializeTask optsT sp mn actFile providers Nothing taskCurrent
@@ -3939,7 +3940,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             when (C.verbose gopts) $
                               forM_ prevNameHashes $ \prevMap ->
                                 forM_ (nameHashSummary prevMap (frNameHashes fr)) $ \summary ->
-                                  ccOnInfo callbacks ("  Hash deltas " ++ modNameToString mn ++ ": " ++ summary)
+                                  ccOnInfo callbacks ("  Hash deltas " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ summary)
                             cacheFrontResult fr
                       ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
@@ -3947,7 +3948,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     --traceM ("\n## runImplRefresh " ++ prstr mn ++ "\n")
                     let rerunFront = do
                           when (C.verbose gopts) $
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
+                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
                           runFront
                         handleSyncFailure :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
                         handleSyncFailure err =
@@ -3959,7 +3960,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     (do
                       when (C.verbose gopts) $ do
                         let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
-                        ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
+                        ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
                       tyRes <- readTyFile
                       case tyRes of
                         Left diags -> return (key, Left diags)
@@ -4057,7 +4058,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     --traceM ("\n## runCodegenRefresh " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
-                      ccOnInfo callbacks ("  Stale " ++ modNameToString mn ++ ": generated code out of date" ++ suffix)
+                      ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": generated code out of date" ++ suffix)
                     tyRes <- readTyFile
                     case tyRes of
                       Left diags -> return (key, Left diags)
@@ -4078,7 +4079,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   runReuse = do
                     --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $
-                      ccOnInfo callbacks ("  Fresh " ++ modNameToString mn ++ ": using cached .tydb")
+                      ccOnInfo callbacks ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
                                   TyTask{ tyPubHash = h } -> readIfaceFromTy paths mn "" (Just h)
                                   _ -> readIfaceFromTy paths mn "" Nothing

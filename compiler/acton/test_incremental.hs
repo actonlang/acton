@@ -178,16 +178,26 @@ stale = statusReported "Stale"
 -- different module's line) cannot cause a cross-module false match.
 statusReported :: T.Text -> T.Text -> T.Text -> Bool
 statusReported keyword out modName =
-  any (T.isInfixOf prefix) (T.lines out)
-  where prefix = keyword <> " " <> T.replace "/" "." modName <> ":"
+  any matches (T.lines out)
+  where
+    dotName = T.replace "/" "." modName
+    matches line =
+      case T.stripPrefix (keyword <> " ") (T.dropWhile (== ' ') line) of
+        Just afterKw ->
+          let tok = T.takeWhile (/= ':') afterKw
+          in tok == dotName || ("." <> tok) `T.isSuffixOf` dotName
+        Nothing -> False
 
--- | Match module labels across legacy "proj/mod" and new "proj.mod" formats.
+-- | Match module labels across "proj/mod", "proj.mod", and bare de-prefixed
+-- formats. A token matches when it equals the (dotted) module name or is a
+-- dot-boundary suffix of it, so bare "main" matches "proj.main" and "sub.bar"
+-- matches "proj.sub.bar" without falsely matching unrelated modules.
 matchesModule :: T.Text -> T.Text -> Bool
 matchesModule line modName =
   let dotName = T.replace "/" "." modName
-      leafName = T.takeWhileEnd (/= '/') modName
       tokens = T.words line
-  in any (`elem` tokens) [modName, dotName, leafName]
+      matchesTok tok = tok == modName || tok == dotName || ("." <> tok) `T.isSuffixOf` dotName
+  in any matchesTok tokens
 
 -- | Remove a file if it exists.
 removeIfExists :: FilePath -> IO ()

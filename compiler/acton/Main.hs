@@ -1472,6 +1472,7 @@ initCliCompileHooks :: ProgressUI
 initCliCompileHooks progressUI progressState gopts sched gen plan = do
     let neededTasks = cpNeededTasks plan
         rootProj = ccRootProj (cpContext plan)
+        rootPaths = ccPathsRoot (cpContext plan)
         optsPlan = ccOpts (cpContext plan)
         isBuiltinTask t = tkMod (gtKey t) == A.modName ["__builtin__"]
         parseNeeded t =
@@ -1539,7 +1540,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           gate (progressWithLog progressUI (printDiagnostics gopts optsT diags))
         termProgress = puTermProgress progressUI
         termEnabled = termProgressEnabled termProgress
-        modLabel mn = modNameToString mn
+        modLabel mn = modNameToString (dropProjPrefix rootPaths mn)
         timeSep = "    "
         parseDoneStatus = "Parse done"
         frontDoneStatus = "Type check done"
