@@ -2457,8 +2457,8 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
               closeFd readFd `catch` ignoreIO
               takeMVar doneVar
         return (Just ("ZIG_PROGRESS", envVal), onStart', onStop', False)
-    let env1 = if System.Info.os == "darwin" && not (any ((== "DEVELOPER_DIR") . fst) env0)
-               then ("DEVELOPER_DIR", "/dev/null") : env0
+    let env1 = if System.Info.os == "darwin"
+               then ("DEVELOPER_DIR", "/dev/null") : filter ((/= "DEVELOPER_DIR") . fst) env0
                else env0
     homeDir <- getHomeDirectory
     let zigEnv = [ ("ZIG_LOCAL_CACHE_DIR", joinPath [homeDir, ".cache", "acton", "zig-local-cache"])

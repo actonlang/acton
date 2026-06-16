@@ -641,7 +641,7 @@ ifeq ($(OS),macos)
 # /dev/null to prevent Zig from trying to use them and instead falling back to
 # its own implementation.
 # See https://codeberg.org/ziglang/zig/issues/31658.
-dist/bin/actondb: export DEVELOPER_DIR := $(or $(DEVELOPER_DIR),/dev/null)
+dist/bin/actondb: export DEVELOPER_DIR := /dev/null
 endif
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
