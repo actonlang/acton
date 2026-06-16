@@ -100,14 +100,16 @@
   lock-file setup races and propagate environmental errors with their real
   cause instead of reporting a missing interface. [#2841]
 - Speed up compiler environment lookups, scans, module-environment rewrites,
-  attribute queries, substitutions, and witness resolution in large modules by
-  indexing active names, term substitutions, and type witnesses; separating
-  closed imports and finalized top-level names from live local bindings;
-  avoiding temporary inherited-attribute lists for single-attribute queries;
-  reading substitution state once per traversal; narrowing used-substitution
-  tracking to active entries; and deduplicating reserved names with a hash index
-  while preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800,
-  #2816, #2833, #2837, #2839, #2840]
+  attribute queries, solver candidate enumeration, substitutions, and witness
+  resolution in large modules by indexing active names, signature and
+  definition locations, state-variable and type-variable names, solver
+  candidate sets, term substitutions, and type witnesses; separating closed
+  imports and finalized top-level names from live local bindings; avoiding
+  temporary inherited-attribute lists for single-attribute queries; reading
+  substitution state once per traversal; narrowing used-substitution tracking to
+  active entries; and deduplicating reserved names with a hash index while
+  preserving source-order semantics. [#2789, #2796, #2797, #2799, #2800, #2816,
+  #2833, #2837, #2839, #2840, #2924]
 - Speed up documentation rendering and generated-name hashing by indexing
   documentation type lookups and hashing internal/generated names without
   rendering prefix strings. [#2830, #2831]
@@ -117,6 +119,12 @@
   - Build progress output now keeps long five-digit second durations aligned
     with shorter timings, using the same width for active progress lines and
     completed timing logs. [#2901, #2908]
+  - Multi-line type-check result blocks, including timing details and inferred
+    signatures, are emitted atomically so concurrent module builds cannot
+    interleave another module's progress between detail lines. [#2925]
+  - Build progress labels avoid repeating the project prefix when module names
+    are already project-qualified, keeping dependency build output shorter and
+    easier to scan. [#2929]
 - Speed up back-end work on large modules by indexing code-generation name
   membership and boxed variable lookups, and by tracking boxing-pass witness
   names with a hash set, reducing repeated scans during boxing and generated
@@ -125,6 +133,10 @@
   fragments through direct byte and structural streams, making cached change
   detection cheaper while preserving per-name build hashes and ignoring
   location-only source changes. [#2811, #2897, #2900]
+- Hash per-name source/implementation and interface fragments in parallel, and
+  deduplicate dependency lists before unaliasing or writing `.tydb`
+  dependency-user rows, speeding the hash phase and large generated interface
+  writes while preserving stable cache contents. [#2921]
 - Fix quantified type-variable scope cleanup so leaving an inner quantifier only
   drops witnesses associated with the removed variables, preserving unrelated
   witnesses for later type checking. [#2802]
@@ -135,8 +147,10 @@
   declarations all keep `volatile` when the compiler environment marks the
   variable as volatile. [#2898]
 - Fix generated protocol witness method tables so inherited abstract slots are
-  filled through forwarding wrappers when multiple protocol inheritance paths
-  would otherwise leave a slot empty. [#2887]
+  filled through forwarding wrappers only from concrete ancestor witness
+  classes, avoiding both empty slots across multiple protocol inheritance paths
+  and unrelated classes that merely share a method name and ABI. [#2887,
+  #2927]
 - Bump the GHC toolchain to 9.8.4 (Stackage lts-23.28), fixing a rare arm64
   segfault in the compiler. GHC 9.6.6's runtime could crash in the garbage
   collector by following a NULL closure pointer (GHC #24791, black holes in
@@ -147,6 +161,20 @@
   builds that reproduced it on 9.6.x). [#2832, #2834]
 
 ### CLI & Project Workflow
+- Resolve project modules under their `Build.act` project name, so dependency
+  modules are imported through the name declared in the `dependencies` table.
+  For example, a dependency listed as `"analytics": (...)` is imported with
+  `import analytics.events`, while local project modules still support
+  unprefixed imports. [#2914]
+  - Importing a dependency name resolves to that dependency's `lib.act`, so
+    `import analytics` works for the dependency root module and
+    `import analytics.events` works for other dependency modules.
+  - `acton sig`, root actor selection, `--modules`, deferred-back-pass module
+    selectors, library outputs, generated file paths, and incremental rebuild
+    traces understand project-qualified module names.
+  - Projects now reject source trees whose first module path segment overlaps a
+    declared dependency name, avoiding ambiguous imports between local source
+    modules and dependency projects.
 - Add `acton repl`, a live interactive Acton shell for trying code, inspecting
   values, and getting immediate feedback as you explore. [#2842]
   - It uses the normal compiler pipeline inside a scratch REPL directory, so
@@ -238,6 +266,9 @@
 - Port Acton and bundled dependency build files to Zig 0.16, including remote
   dependency fetching and cache archive extraction for `acton pkg add`,
   `acton fetch`, and project builds with remote dependencies. [#2807]
+- Fix release tarball naming to use the stamped `VERSION_INFO` directly, so
+  `make release` keeps the tarball version aligned with the compiler version
+  and tagged releases keep plain version numbers. [#2928]
 - Fix Windows Acton program execution by building the vendored libuv Windows C
   sources without Zig/Clang's null sanitizer, avoiding a sanitizer trap in
   libuv's async wakeup path. [#2902]
@@ -246,11 +277,19 @@
 - Document when and how to use the Acton container image, including
   copy-pastable Docker commands for checking the compiler version and building
   the current project. [#2767]
+- Document dependency import prefixes across the user and developer guides,
+  including `Build.act` dependency-name examples, dependency `src/lib.act`
+  imports through the dependency name, and other dependency modules under the
+  same prefix. [#2932]
 
 ### Testing & CI
 - Add make targets for accepting compiler golden outputs, including separate
   targets for Sydtest goldens, Acton Tasty goldens, and the combined compiler
   golden workflow documented in the developer guide. [#2821]
+- Assert incremental rebuild behavior directly in compiler tests, checking
+  stale and fresh modules, type checking, code generation, public-hash
+  propagation, doc-only edits, and codegen-only stale outputs instead of
+  comparing fragile concurrent progress-output goldens. [#2923, #2926]
 - Add dedicated compiler benchmark drivers for performance work. [#2794, #2813]
   - The type-checking benchmark reports parse, environment, kind-checking, and
     type-checking timings, with optional RTS allocation and GC statistics.
@@ -266,6 +305,7 @@
   - The Acton/Zig compile cache uses one stable per-platform key refreshed by
     producer runs, with stale entries evicted before saving so CI does not keep
     a week of duplicate snapshots.
+  - The nightly producer workflow now runs at 02:00 UTC. [#2931]
 - Run cross-compilation checks in a dedicated CI job after Debian packages are
   built, covering macOS, Windows, GNU/Linux, and musl targets without bloating
   the default test job's compile cache. [#2850, #2852, #2902]
@@ -300,6 +340,10 @@
   type-checking scheduler performance on large recursive class structures. [#2777]
 
 ### Compatibility Notes
+- Projects that import dependency modules by bare source module names may need
+  to qualify those imports with the dependency name from `Build.act`;
+  dependency `lib.act` modules can be imported as that dependency name itself.
+  [#2914]
 - C extension bindings that implement functions taking or returning Acton
   numeric primitive types may need to follow the new unboxed C signatures for
   bounded integers and floats instead of passing boxed wrapper pointers. [#2824]
@@ -4286,8 +4330,19 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2908]: https://github.com/actonlang/acton/pull/2908
 [#2909]: https://github.com/actonlang/acton/pull/2909
 [#2911]: https://github.com/actonlang/acton/pull/2911
+[#2914]: https://github.com/actonlang/acton/pull/2914
 [#2915]: https://github.com/actonlang/acton/pull/2915
 [#2917]: https://github.com/actonlang/acton/pull/2917
+[#2921]: https://github.com/actonlang/acton/pull/2921
+[#2923]: https://github.com/actonlang/acton/pull/2923
+[#2924]: https://github.com/actonlang/acton/pull/2924
+[#2925]: https://github.com/actonlang/acton/pull/2925
+[#2926]: https://github.com/actonlang/acton/pull/2926
+[#2927]: https://github.com/actonlang/acton/pull/2927
+[#2928]: https://github.com/actonlang/acton/pull/2928
+[#2929]: https://github.com/actonlang/acton/pull/2929
+[#2931]: https://github.com/actonlang/acton/pull/2931
+[#2932]: https://github.com/actonlang/acton/pull/2932
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
