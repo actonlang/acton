@@ -42,6 +42,11 @@ Module names come from file paths, so filename choice matters. Use
 short, lower-case names and let the import path reflect the structure of
 `src/`. For example, `src/a/b.act` is imported as `import a.b`.
 
+When a project is used as a dependency, the dependency name is added to
+the front of that path. A dependency named `foo` exposes `src/lib.act`
+as `import foo` and `src/a/b.act` as `import foo.a.b`. Currently, the
+dependency name must match the dependency project's `name`.
+
 Naming is part of API design. In Acton, a module name, an imported
 symbol, and a type name often appear together, so keeping them short and
 predictable reduces noise in the code. This matters even more once a

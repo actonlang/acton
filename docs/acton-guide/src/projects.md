@@ -33,6 +33,12 @@ dependencies. See [Modules](modules.md) for local source layout and
 [Package Management](package_management.md) for remote dependencies and
 override behavior.
 
+When another project depends on this project, the dependency name in the
+consuming project's `Build.act` becomes the import prefix. A dependency
+named `foo` exposes this project's `src/lib.act` root module as
+`import foo`, and exposes `src/parser.act` as `import foo.parser`.
+Currently, the dependency name must match this project's `name`.
+
 ## Build configuration and lineage
 
 Projects must include a `Build.act` file. Two common fields are `name` and `fingerprint`, where the fingerprint captures the project’s **lineage**:

@@ -72,6 +72,10 @@ project's normal build resolution, so it reads `Build.act`, honors
 dependency overrides such as `--dep name=path`, fetches missing
 dependencies, and compiles the module interfaces it needs before
 printing the signatures. It does not perform the final executable build.
+Dependency signatures use the same import prefix as dependency imports:
+if `Build.act` has a dependency named `mylib`, then
+`acton sig mylib` inspects that dependency's `src/lib.act`, while
+`acton sig mylib.parser` inspects `src/parser.act`.
 
 For example:
 

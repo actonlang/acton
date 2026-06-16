@@ -21,7 +21,8 @@ In this case we add the example `foo` package as a dependency.
 acton pkg add foo --repo-url https://github.com/actonlang/foo --repo-ref main
 ```
 
-This will fetch the dependency and add it to the `dependencies` block in `Build.act`, resulting in something like:
+This will fetch the dependency and add it to the `dependencies` block in
+`Build.act`, resulting in something like:
 ```python
 dependencies = {
   "foo": (
@@ -39,7 +40,19 @@ zig_dependencies = {}
 It is possible to edit `Build.act` by hand, but adding dependencies requires filling in the `hash` field, which is somewhat tricky.
 ```
 
-The `foo` package provides a single `foo` module with a `foo` function (that appropriately returns `foo`). We can now access it from our main actor:
+The dependency key is the import prefix. In the example above, the key
+is `"foo"`, so modules from that dependency are imported under `foo`.
+
+| File in the `foo` dependency | Import from your project |
+| --- | --- |
+| `src/lib.act` | `import foo` |
+| `src/bar.act` | `import foo.bar` |
+| `src/a/b.act` | `import foo.a.b` |
+| `src/foo.act` | `import foo.foo` |
+
+`src/lib.act` is the dependency's root module. If the `foo` package
+defines a `foo` function in `src/lib.act`, we can access it from our
+main actor:
 
 ```python
 import foo

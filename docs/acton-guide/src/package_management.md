@@ -38,6 +38,14 @@ each installed binary and remove those binaries again with
 All dependencies are fetched and included, linked statically, at compile time,
 so there are no runtime dependencies.
 
+The dependency name in `Build.act` is also the import prefix for that
+package. A dependency recorded as `"foo": (...)` exposes its root module
+as `import foo`, where the root module is `src/lib.act` inside the
+dependency project. Other files in that dependency are imported below
+the same prefix, such as `import foo.parser` for `src/parser.act`.
+Currently, the dependency name must match the dependency project's
+`name` field.
+
 ## Project lineage fingerprint
 
 Each project must declare a **fingerprint** in `Build.act` to represent its lineage — the stable identity of the project across versions. This is separate from dependency content hashes:
