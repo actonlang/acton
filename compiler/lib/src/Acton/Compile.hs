@@ -4611,6 +4611,7 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                              (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
                                  modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [fileBody]
+                             InterfaceFiles.registerSystemTypeRoots (systemTypePaths sysPath sysTypes)
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
@@ -4760,6 +4761,7 @@ pathsForModule opts projMap ctx mn = do
         src = projSrcDir ctx
         proj = BuildSpec.specName $ projBuildSpec ctx
         p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn proj
+    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (projSysPath ctx) (projSysTypes ctx))
     createDirectoryIfMissing True bin
     createDirectoryIfMissing True (projOutDir ctx)
     createDirectoryIfMissing True (projTypesDir ctx)

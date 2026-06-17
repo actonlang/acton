@@ -623,6 +623,8 @@ dist/base: base base/.build base/__root.zig base/acton.zig base/build.zig base/b
 	rm -rf "$@/src" "$@/out/types/std"
 	cp -a base/__root.zig base/Build.act base/acton.zig base/build.zig base/build.zig.zon base/builtin base/rts base/src dist/base/
 	cd dist/base && ../bin/acton build --skip-build && rm -rf .build
+	find "$@/out/types" -name lock.mdb -type f -delete
+	find "$@/out/types" -name data.mdb -type f -exec chmod 0644 {} +
 
 .PHONY: dist/std
 dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/acton $(DEPS)
@@ -630,6 +632,8 @@ dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/a
 	rm -rf "$@/src" "$@/out/types"
 	cp -a std/Build.act std/build.zig std/build.zig.zon std/src dist/std/
 	cd dist/std && ../bin/acton build --skip-build && rm -rf .build
+	find "$@/out/types" -name lock.mdb -type f -delete
+	find "$@/out/types" -name data.mdb -type f -exec chmod 0644 {} +
 
 # This does a little hack, first copying and then moving the file in place. This
 # is to avoid an error if the executable is currently running. cp tries to open
