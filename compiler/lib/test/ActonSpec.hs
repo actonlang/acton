@@ -51,8 +51,7 @@ import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
-import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist)
-import System.Posix.Files (setFileMode)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
@@ -245,11 +244,11 @@ main = do
           (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
           nameHashesH `shouldBe` nameHashes
 
-      it "reads interfaces from read-only installed directories" $ do
-        withSystemTempDirectory "acton-iface-readonly" $ \dir -> do
+      it "does not create lock files when reading registered system roots" $ do
+        withSystemTempDirectory "acton-iface-syspath" $ \dir -> do
           let mn = S.modName ["iface"]
-              tyPath = dir </> "iface.tydb"
-              dataPath = tyPath </> "data.mdb"
+              typesRoot = dir </> "sys" </> "base" </> "out" </> "types"
+              tyPath = typesRoot </> "iface.tydb"
               lockPath = tyPath </> "lock.mdb"
               firstName = S.name "first"
               iface = [(firstName, I.NVar S.tWild)]
@@ -257,18 +256,19 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
           InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
-          let restore = do
-                setFileMode tyPath 0o755
-                setFileMode dataPath 0o644
-                setFileMode lockPath 0o644
-          (do setFileMode tyPath 0o555
-              setFileMode dataPath 0o444
-              setFileMode lockPath 0o444
-              (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-                InterfaceFiles.readHeader tyPath
-              (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
-              nameHashesH `shouldBe` nameHashes)
-            `E.finally` restore
+          removeFile lockPath
+          InterfaceFiles.registerSystemTypeRoots [typesRoot]
+          (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
+            InterfaceFiles.readHeader tyPath
+          (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
+          nameHashesH `shouldBe` nameHashes
+          doesFileExist lockPath `shouldReturn` False
+
+      it "treats missing .tydb directories as cache misses" $ do
+        withSystemTempDirectory "acton-iface-missing" $ \dir -> do
+          let tyPath = dir </> "missing.tydb"
+          InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+          InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
       it "treats corrupt .tydb directories as cache misses" $ do
         withSystemTempDirectory "acton-iface-corrupt" $ \dir -> do

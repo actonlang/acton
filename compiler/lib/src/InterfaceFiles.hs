@@ -90,6 +90,7 @@ module InterfaceFiles
   , interfaceModifiedTimeNs
   , copyInterface
   , listInterfaceDirsRecursive
+  , registerSystemTypeRoots
   , keyNameInfo
   , keyNameHash
   , readDepNames
@@ -135,12 +136,12 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, getFileSize, getModificationTime, listDirectory, removeFile, removePathForcibly)
-import System.Environment (lookupEnv)
-import System.FilePath ((</>), takeExtension)
+import System.Environment (getExecutablePath, lookupEnv)
+import System.FilePath ((</>), addTrailingPathSeparator, normalise, takeDirectory, takeExtension)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
-import System.Posix.Files (fileAccess, getFileStatus, modificationTimeHiRes, setFileMode)
+import System.Posix.Files (getFileStatus, modificationTimeHiRes, setFileMode)
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -267,6 +268,19 @@ lmdbOpenLock = unsafePerformIO (newMVar ())
 interfaceLocks :: MVar (Map.Map FilePath (MVar ()))
 {-# NOINLINE interfaceLocks #-}
 interfaceLocks = unsafePerformIO (newMVar Map.empty)
+
+systemTypeRoots :: MVar [FilePath]
+{-# NOINLINE systemTypeRoots #-}
+systemTypeRoots = unsafePerformIO (newMVar [])
+
+registerSystemTypeRoots :: [FilePath] -> IO ()
+registerSystemTypeRoots roots =
+    modifyMVar systemTypeRoots $ \old ->
+      return (foldl' addRoot old (map normalise roots), ())
+  where
+    addRoot acc root
+      | root `elem` acc = acc
+      | otherwise       = root : acc
 
 traceTydbReads :: Bool
 traceTydbReads =
@@ -463,38 +477,34 @@ isTransientLmdbOsError err =
       Left _  -> True
       Right _ -> False
 
--- Choose read-only open flags. A writable cache may be rewritten by a
--- concurrent acton process, so it MUST keep LMDB's lock table for reader/writer
--- safety (the lock.mdb open race there is handled by retrying the open). Only an
--- installed cache the user cannot write -- where no writer can exist -- uses
--- MDB_NOLOCK, so it stays readable even when lock.mdb cannot be created in a
--- read-only directory.
+-- Choose read-only open flags. Project and dependency caches may be rewritten
+-- by a concurrent acton process, so they MUST keep LMDB's lock table for
+-- reader/writer safety (the lock.mdb open race there is handled by retrying the
+-- open). Selected Acton system type roots are immutable runtime input, so
+-- bundled base/std interfaces are read without lock-table state.
 readOnlyOpenFlags :: FilePath -> IO [LMDB.MDB_EnvFlag]
 readOnlyOpenFlags path = do
-    useLock <- canUseLockFile path
-    noLock <- canReadWithoutLock path
-    return $ if useLock || not noLock
-               then [LMDB.MDB_RDONLY]
-               else [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
+    noLock <- isUnderImmutableInterfaceRoot path
+    return $ if noLock
+               then [LMDB.MDB_RDONLY, LMDB.MDB_NOLOCK]
+               else [LMDB.MDB_RDONLY]
 
-canUseLockFile :: FilePath -> IO Bool
-canUseLockFile path = do
-    let lockPath = lockFilePath path
-    exists <- doesFileExist lockPath
-    if exists
-      then fileAccess lockPath False True False
-      else fileAccess path False True True
+actonDistributionRoot :: FilePath
+{-# NOINLINE actonDistributionRoot #-}
+actonDistributionRoot =
+    unsafePerformIO $ do
+      exe <- getExecutablePath
+      canonicalizePath (takeDirectory exe </> "..")
 
-canReadWithoutLock :: FilePath -> IO Bool
-canReadWithoutLock path = do
-    let dataPath = dataFilePath path
-    exists <- doesFileExist dataPath
-    if not exists
-      then return False
-      else do
-        dataWritable <- fileAccess dataPath False True False
-        dirWritable <- fileAccess path False True True
-        return (not dataWritable && not dirWritable)
+isUnderImmutableInterfaceRoot :: FilePath -> IO Bool
+isUnderImmutableInterfaceRoot path = do
+    cpath <- canonicalizePath path
+    roots <- withMVar systemTypeRoots return
+    return (any (`containsPath` cpath) (actonDistributionRoot : roots))
+  where
+    containsPath root child =
+      let rootDir = addTrailingPathSeparator root
+      in child == root || rootDir `Data.List.isPrefixOf` child
 
 lmdbTransientMaxAttempts :: Int
 lmdbTransientMaxAttempts = 10
@@ -515,6 +525,9 @@ withInterfaceLock path action = do
 
 withReadTxn :: FilePath -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withReadTxn path action = do
+    exists <- doesFileExist (dataFilePath path)
+    unless exists $
+      E.throwIO (TyCacheInvalid ("Missing .tydb data file: " ++ dataFilePath path))
     mapSize <- readMapSize path
     -- mdb_txn_begin can still hit a transient lock-table OS error after a
     -- successful env open, so retry the read transaction with a fresh env.
