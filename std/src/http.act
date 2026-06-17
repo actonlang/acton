@@ -1,5 +1,5 @@
 import acton.rts
-import std.json as json
+import json
 import logging
 import net
 import time
