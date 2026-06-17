@@ -1,5 +1,5 @@
-import dep_a.a
+import dep_a
 
 actor main(env):
-    print(str(dep_a.a.answer_a()))
+    print(str(dep_a.answer_a()))
     env.exit(0)

@@ -1341,6 +1341,7 @@ actonProjTests =
             depB = proj </> "deps/dep_b"
             wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
         mapM_ wipe [proj, depA, depB]
+        actonExe <- canonicalizePath "../../dist/bin/acton"
         -- Build main project via acton; dependencies should be built automatically
         testBuild "" ExitSuccess False proj
         -- Run produced binary
@@ -1349,6 +1350,12 @@ actonProjTests =
         zon <- readFile (proj </> "build.zig.zon")
         assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
         assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
+        (cSig, outSig, _errSig) <- readCreateProcessWithExitCode (proc actonExe ["sig", "dep_a"]){ cwd = Just proj } ""
+        assertEqual "acton sig dep_a should work" ExitSuccess cSig
+        assertBool "acton sig dep_a should list answer_a" ("answer_a" `isInfixOf` outSig)
+        (cFail, _outFail, err) <- readCreateProcessWithExitCode (proc actonExe ["sig", "dep_b"]){ cwd = Just proj } ""
+        assertEqual "acton sig dep_b should fail" (ExitFailure 1) cFail
+        assertBool "acton sig dep_b should state the error" ("Module not found" `isInfixOf` err)
   , testCase "builds dependencies even if unused in imports" $ do
         let proj = "../../test/compiler/unused_dep"
             depU = proj </> "deps/dep_unused"
@@ -1677,7 +1684,6 @@ actonProjTests =
         testBuild "" ExitSuccess False proj
         assertBool "bar root stub should be removed after source deletion" . not =<< doesFileExist barRoot
         assertBool "bar binary should be removed after source deletion" . not =<< doesFileExist barBin
-
   ]
 
 actonRootArgTests =

@@ -186,6 +186,7 @@ module Acton.Compile
   , nameToString
   , addProjPrefix
   , dropProjPrefix
+  , dropProjPrefixOrLib
   , importsOf
   , quiet
   , altOutput
@@ -5451,6 +5452,12 @@ addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then n
         ns                  = A.modPath mn
 
 dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
+
+dropProjPrefixOrLib paths mn
+  | n == projName paths     = A.modName ns
+  | ns == ["lib"]           = A.modName [n]
+  | otherwise               = A.modName (n:ns)
   where n:ns                = A.modPath mn
 
 
