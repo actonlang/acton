@@ -1003,15 +1003,20 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
     targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
     return (tyDbPath targetPaths mn)
 
+fixupTarget locals paths mn
+  | mn `elem` locals    = return $ addProjPrefix paths mn
+  | n == projName paths = printErrorAndExit ("Module not found: " ++ prstr mn)
+  | null ns             = return $ A.modName [n,"lib"]
+  | otherwise           = return mn
+  where n:ns            = A.modPath mn
+
 resolveSigTarget :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> String -> IO SigTarget
 resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
     let fullMod = A.modName parts
         locals = [ dropProjPrefix paths mn | (mn, (ctx,fp)) <- moduleIndex, projRoot ctx == rootProj ]
-        fullMod' = if fullMod `elem` locals then addProjPrefix paths fullMod else fullMod
-    when (fullMod' == fullMod && head parts == projName paths) $ do
-        printErrorAndExit ("Module not found: " ++ prstr fullMod)
+    fullMod' <- fixupTarget locals paths fullMod
     case lookup fullMod' moduleIndex of
         Just (ctx, srcPath) ->
             return (SigSourceTarget ctx fullMod' Nothing srcPath)
@@ -1033,9 +1038,7 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
               namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
-              mn' = if mn `elem` locals then addProjPrefix paths mn else mn
-          when (mn' == mn && head parts == projName paths) $ do
-              printErrorAndExit ("Module not found: " ++ prstr mn)
+          mn' <- fixupTarget locals paths mn
           case lookup mn' moduleIndex of
               Just (ctx, srcPath) -> do
                   return (SigSourceTarget ctx mn' (Just n) srcPath)
