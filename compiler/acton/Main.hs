@@ -1126,7 +1126,7 @@ printSigInterface paths mn mName tyFile = do
           Just n | null selected ->
             printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
-            putStrLn (Acton.Types.prettySigs envForPrint mn imps selected)
+            putStrLn (Acton.Types.prettySigs envForPrint mn (map (dropProjPrefix paths) imps) selected)
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()
@@ -2024,7 +2024,7 @@ runCliPostCompile cliHooks gopts plan env = do
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = if null proj then init rootParts else proj : init rootParts
+        rootMod   = if proj `elem` special_projects then init rootParts else proj : init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
@@ -2374,7 +2374,7 @@ writeRootC env gopts opts paths tasks binTask = do
         tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
-                         Nothing -> return []
+                         Nothing -> throwProjectError ("Root module " ++ prstr mn' ++ " not found")
         let rootsEnv = case Acton.Env.lookupMod mn env of
                          Nothing -> []
                          Just te -> [ n' | (n', i) <- te, rootEligible i ]
