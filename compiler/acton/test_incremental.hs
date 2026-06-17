@@ -39,7 +39,7 @@ import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
-import           Utils (SrcLoc(NoLoc), prstr)
+import           Utils (SrcLoc(NoLoc), prstr, prstrs)
 
 -- Paths ----------------------------------------------------------------------
 
@@ -1760,8 +1760,8 @@ p35_changed_path_keeps_unaffected_provider =
       Just t -> pure t
       Nothing -> assertFailure "expected b in changed-path compile plan" >> fail "missing b task"
     let bProviders = Compile.gtImportProviders bTask
-    assertBool "expected provider for changed import a" (M.member (A.modName ["incremental_cases","a"]) bProviders)
-    assertBool "expected provider for unchanged import c" (M.member (A.modName ["incremental_cases","c"]) bProviders)
+    assertBool "expected provider for changed import a" (M.member (A.modName ["a"]) bProviders)
+    assertBool "expected provider for unchanged import c" (M.member (A.modName ["c"]) bProviders)
 
 p35_dbp_changed_path_includes_provider :: TestTree
 p35_dbp_changed_path_includes_provider =
