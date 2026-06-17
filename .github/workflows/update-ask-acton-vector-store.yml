@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'docs/acton-guide/**'
+      - 'CHANGELOG.md'
   workflow_dispatch:
 
 concurrency:
@@ -40,12 +41,31 @@ jobs:
         working-directory: ask-acton
         run: npm ci
 
-      - name: Update vector store
+      - name: Update guide vector store data
         working-directory: ask-acton
         env:
           OPENAI_API_KEY: ${{ secrets.ASK_ACTON_OPENAI_API_KEY || secrets.OPENAI_API_KEY }}
           OPENAI_VECTOR_STORE_ID: ${{ secrets.ASK_ACTON_VECTOR_STORE_ID || secrets.OPENAI_VECTOR_STORE_ID }}
           DOCS_DIR: ${{ github.workspace }}/docs/acton-guide/src
+          DOCS_SOURCE: acton-guide
+          DOCS_REVISION: ${{ github.sha }}
+          INDEX_REPLACE_SOURCE: 'true'
+        run: npm run index:docs
+
+      - name: Prepare changelog vector store data
+        run: |
+          changelog_docs_dir="${RUNNER_TEMP}/ask-acton-changelog"
+          rm -rf "${changelog_docs_dir}"
+          mkdir -p "${changelog_docs_dir}"
+          cp CHANGELOG.md "${changelog_docs_dir}/CHANGELOG.md"
+
+      - name: Update changelog vector store data
+        working-directory: ask-acton
+        env:
+          OPENAI_API_KEY: ${{ secrets.ASK_ACTON_OPENAI_API_KEY || secrets.OPENAI_API_KEY }}
+          OPENAI_VECTOR_STORE_ID: ${{ secrets.ASK_ACTON_VECTOR_STORE_ID || secrets.OPENAI_VECTOR_STORE_ID }}
+          DOCS_DIR: ${{ runner.temp }}/ask-acton-changelog
+          DOCS_SOURCE: acton-changelog
           DOCS_REVISION: ${{ github.sha }}
           INDEX_REPLACE_SOURCE: 'true'
         run: npm run index:docs
