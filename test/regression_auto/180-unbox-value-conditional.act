@@ -1,0 +1,13 @@
+# Regression: a conditional expression (a if c else b) whose join type is not
+# unboxable (here `value`/`atom`) must box an unboxed-primitive branch. The raw
+# integer would otherwise be dereferenced by the following isinstance.
+PORT: u64 = u64(2001)
+
+def pick(b: bool) -> value:
+    n: u64 = u64(1000)
+    return n if b else "x"       # unboxed-rep then-branch into a `value` result
+
+actor main(env):
+    if isinstance(pick(True), atom) and isinstance(pick(False), atom):
+        env.exit(0)
+    env.exit(1)

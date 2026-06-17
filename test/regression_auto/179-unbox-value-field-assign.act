@@ -1,0 +1,24 @@
+# Regression: assigning an unboxed primitive (u64) to a `value`/`?value` field
+# or variable must box it. Otherwise the raw integer is stored where a heap
+# pointer is expected and the first virtual access (isinstance) dereferences it,
+# crashing with "member access within misaligned address".
+PORT: u64 = u64(2001)
+
+class Cell(object):
+    v: ?value
+    def __init__(self):
+        self.v = None
+
+def build() -> Cell:
+    c = Cell()
+    n: u64 = u64(1000)
+    c.v = n              # bare local u64 -> ?value field
+    return c
+
+actor main(env):
+    c1 = Cell()
+    c1.v = PORT          # module global u64 -> ?value field
+    c2 = build()
+    if isinstance(c1.v, atom) and isinstance(c2.v, atom):
+        env.exit(0)
+    env.exit(1)
