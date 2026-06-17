@@ -1008,30 +1008,24 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
     let fullMod = A.modName parts
-        fullMod' = addProjPrefix paths fullMod
-    case lookup fullMod moduleIndex of
-      Just (ctx, srcPath) -> do
-        return (SigSourceTarget ctx fullMod Nothing srcPath)
-      Nothing -> do
-        case lookup fullMod' moduleIndex of
-         Just (ctx, srcPath) -> do
-          return (SigSourceTarget ctx fullMod' Nothing srcPath)
-         Nothing -> do
-          mFullTy <- findSigTyFile tySearchPath fullMod
-          case mFullTy of
-            Just tyPath ->
-              return (SigTyTarget fullMod Nothing tyPath)
-            Nothing -> do
-              mFullTy' <- findSigTyFile tySearchPath fullMod'
-              case mFullTy' of
-                Just tyPath' ->
-                  return (SigTyTarget fullMod' Nothing tyPath')
+        locals = [ dropProjPrefix paths mn | (mn, (ctx,fp)) <- moduleIndex, projRoot ctx == rootProj ]
+        fullMod' = if fullMod `elem` locals then addProjPrefix paths fullMod else fullMod
+    when (fullMod' == fullMod && head parts == projName paths) $ do
+        printErrorAndExit ("Module not found: " ++ prstr fullMod)
+    case lookup fullMod' moduleIndex of
+        Just (ctx, srcPath) ->
+            return (SigSourceTarget ctx fullMod' Nothing srcPath)
+        Nothing -> do
+            mFullTy <- findSigTyFile tySearchPath fullMod'
+            case mFullTy of
+                Just tyPath ->
+                    return (SigTyTarget fullMod' Nothing tyPath)
                 Nothing ->
-                  resolveNameTarget parts moduleIndex
+                    resolveNameTarget parts locals moduleIndex
   where
     tySearchPath = sigTySearchPath opts paths rootProj projMap
 
-    resolveNameTarget parts moduleIndex
+    resolveNameTarget parts locals moduleIndex
       | length parts < 2 =
           printErrorAndExit ("Module not found: " ++ rawTarget)
       | otherwise = do
@@ -1039,27 +1033,20 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
               namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
-              mn' = addProjPrefix paths mn
-          case lookup mn moduleIndex of
-            Just (ctx, srcPath) -> do
-              return (SigSourceTarget ctx mn (Just n) srcPath)
-            Nothing -> do
-              case lookup mn' moduleIndex of
-               Just (ctx, srcPath) -> do
-                return (SigSourceTarget ctx mn' (Just n) srcPath)
-               Nothing -> do
-                mTy <- findSigTyFile tySearchPath mn
-                case mTy of
-                  Just tyPath ->
-                    return (SigTyTarget mn (Just n) tyPath)
-                  Nothing -> do
-                    mTy' <- findSigTyFile tySearchPath mn'
-                    case mTy' of
-                      Just tyPath' ->
-                        return (SigTyTarget mn' (Just n) tyPath')
-                      Nothing ->
-                        printErrorAndExit ("Module not found: " ++ intercalate "." modParts
-                                     ++ " (while resolving " ++ rawTarget ++ ")")
+              mn' = if mn `elem` locals then addProjPrefix paths mn else mn
+          when (mn' == mn && head parts == projName paths) $ do
+              printErrorAndExit ("Module not found: " ++ prstr mn)
+          case lookup mn' moduleIndex of
+              Just (ctx, srcPath) -> do
+                  return (SigSourceTarget ctx mn' (Just n) srcPath)
+              Nothing -> do
+                  mTy <- findSigTyFile tySearchPath mn'
+                  case mTy of
+                      Just tyPath ->
+                          return (SigTyTarget mn' (Just n) tyPath)
+                      Nothing -> do
+                          printErrorAndExit ("Module not found: " ++ intercalate "." modParts
+                                             ++ " (while resolving " ++ rawTarget ++ ")")
 
 parseSigTarget :: String -> IO [String]
 parseSigTarget rawTarget = do
