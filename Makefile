@@ -104,6 +104,7 @@ help:
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
 	@echo "  make PROFILE=1 dist/bin/acton - build profiled acton binary"
+	@echo "  rpms    - build RPM package from existing dist/"
 	@echo ""
 	@echo "  clean   - /normal/ clean repo"
 	@echo "  clean-all - thorough cleaning"
@@ -359,6 +360,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBBSDNT_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/configure" "$@/test"
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
@@ -373,7 +375,7 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBGC_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/tests" "$@/tools"
+	rm -rf "$@/.github" "$@/autogen.sh" "$@/cord/tests" "$@/docs" "$@/tests" "$@/tools"
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
@@ -388,6 +390,10 @@ dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBMBEDTLS_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/cmake" "$@/docs" "$@/doxygen" "$@/programs" "$@/scripts" "$@/visualc"
+	# The TLS test server builds against mbed TLS' certificate fixtures.
+	find "$@/tests" -mindepth 1 -maxdepth 1 ! -name include ! -name src -exec rm -rf {} +
+	find "$@/tests/src" -mindepth 1 ! -name certs.c ! -name test_certs.h -exec rm -rf {} +
 	touch "$(TD)/$@"
 
 # /deps/libprotobuf_c --------------------------------------------
@@ -402,6 +408,9 @@ dist/deps/libprotobuf_c: deps-download/$(LIBPROTOBUF_C_REF).tar.gz $(LIBPROTOBUF
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBPROTOBUF_C_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/autogen.sh" "$@/build-cmake" "$@/protoc-c" "$@/t"
+	rm -f "$@/.commit_docs.sh"
+	chmod a-x "$@/protobuf-c/protobuf-c.h"
 	touch "$(TD)/$@"
 
 # /deps/tlsuv ---------------------------------------------
@@ -418,6 +427,7 @@ dist/deps/tlsuv: deps-download/$(TLSUV_REF).tar.gz dist/deps/libuv dist/deps/mbe
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(TLSUV_BUILD_ZIG)" "$@/build.zig"
 	cp "$(TD)/$(TLSUV_BUILD_ZON)" "$@/build.zig.zon"
+	rm -rf "$@/.github" "$@/.idea" "$@/cmake" "$@/deps/uv_link_t/docs" "$@/deps/uv_link_t/example" "$@/deps/uv_link_t/test" "$@/sample" "$@/tests"
 	touch "$(TD)/$@"
 
 # /deps/libutf8proc --------------------------------------
@@ -432,6 +442,7 @@ dist/deps/libutf8proc: deps-download/$(LIBUTF8PROC_REF).tar.gz $(LIBUTF8PROC_BUI
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBUTF8PROC_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/bench" "$@/data" "$@/test"
 	touch "$(TD)/$@"
 
 # /deps/libuuid ------------------------------------------
@@ -465,7 +476,8 @@ dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG)
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBXML2_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" $@/test*
+	rm -rf "$@/.gitlab-ci" "$@/autogen.sh" "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" "$@/result" "$@/vms" "$@/win32" "$@/xstc" $@/test*
+	rm -f "$@"/check-*.py "$@"/dbgen*.pl "$@"/gen*.py "$@"/gentest.py "$@"/build_glob.py "$@"/xml2-config.in
 	touch "$(TD)/$@"
 
 # /deps/pcre2 --------------------------------------------
@@ -480,6 +492,8 @@ dist/deps/pcre2: deps-download/$(LIBPCRE2_REF).tar.gz $(LIBPCRE2_BUILD_ZIG)
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBPCRE2_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/autogen.sh" "$@/doc" "$@/maint" "$@/testdata" "$@/vms"
+	rm -f "$@"/132html "$@"/CheckMan "$@"/CleanTxt "$@"/Detrail "$@"/PrepareRelease "$@"/RunGrepTest "$@"/RunTest "$@"/pcre2-config.in "$@"/perltest.sh
 	touch "$(TD)/$@"
 
 # /deps/libsnappy_c --------------------------------------------
@@ -494,6 +508,7 @@ dist/deps/libsnappy_c: deps-download/$(LIBSNAPPY_C_REF).tar.gz $(LIBSNAPPY_C_BUI
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBSNAPPY_C_BUILD_ZIG)" "$@/build.zig"
+	rm -rf "$@/.github" "$@/cmake" "$@/docs" "$@/testdata" "$@/third_party"
 	touch "$(TD)/$@"
 
 dist/deps/libnetstring: deps/libnetstring $(DIST_ZIG)
@@ -593,8 +608,8 @@ online-tests: dist/bin/acton
 	cd compiler && stack test acton:test_acton_online
 
 
-.PHONY: clean clean-all clean-base clean-std clean-bdeps
-clean: clean-distribution clean-base clean-std clean-bdeps
+.PHONY: clean clean-all clean-base clean-std clean-bdeps clean-rpm
+clean: clean-distribution clean-base clean-std clean-bdeps clean-rpm
 
 clean-all: clean clean-compiler
 	rm -rf $(ZIG_LOCAL_CACHE_DIR)
@@ -607,6 +622,9 @@ clean-std:
 
 clean-bdeps:
 	rm -rf bdeps/out bdeps/*/zig-out bdeps/*/zig-pkg bdeps/*/.zig-cache
+
+clean-rpm:
+	rm -rf rpmbuild
 
 # == DIST ==
 #
@@ -738,6 +756,57 @@ debian/changelog: debian/changelog.in CHANGELOG.md
 .PHONY: debs
 debs: debian/changelog
 	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT --preserve-envvar ZIG_DOWNLOAD_BASE_URL --preserve-envvar ACTON_ZIG_GLIBC_VERSION -i -us -uc -nc -b
+
+RPM_RELEASE ?= 1
+.PHONY: rpms rpm-validate
+
+rpms: rpm/acton.spec.in LICENSE README.md
+	command -v rpmbuild >/dev/null 2>&1 || { echo "ERROR: rpmbuild is required to build RPM packages"; exit 1; }
+	test -x dist/bin/acton || { echo "ERROR: dist/ is not built; run make first"; exit 1; }
+	rm -rf rpmbuild/payload
+	mkdir -p rpmbuild/payload rpmbuild/SOURCES
+	$(MAKE) install DESTDIR="$(TD)/rpmbuild/payload"
+	install -D -m 0644 completion/acton.bash-completion "rpmbuild/payload/usr/share/bash-completion/completions/acton"
+	tar -C rpmbuild/payload -cJf "rpmbuild/SOURCES/acton-rpm-payload-$(VERSION_INFO).tar.xz" .
+	mkdir -p rpmbuild/SPECS rpmbuild/SOURCES
+	sed -e 's,@VERSION@,$(VERSION_INFO),g' -e 's,@RELEASE@,$(RPM_RELEASE),g' "rpm/acton.spec.in" > rpmbuild/SPECS/acton.spec
+	cp LICENSE README.md rpmbuild/SOURCES/
+	mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SRPMS
+	rpmbuild --define "_topdir $(TD)/rpmbuild" -bb rpmbuild/SPECS/acton.spec
+	@find rpmbuild/RPMS -name '*.rpm' -print
+
+rpm-validate:
+	@command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required to validate RPM packages"; exit 1; }
+	@rpm_file="$$(find "$(TD)/rpmbuild/RPMS" -name 'acton-[0-9]*.rpm' 2>/dev/null | sort | tail -n1)"; \
+	if [ -z "$$rpm_file" ]; then \
+		echo "ERROR: no Acton RPM found under rpmbuild/RPMS; run 'make rpms' first"; \
+		exit 1; \
+	fi; \
+	rpm_dir="$$(dirname "$$rpm_file")"; \
+	rpm_base="$$(basename "$$rpm_file")"; \
+	echo "Validating $$rpm_base in fedora:latest"; \
+	docker run --rm -v "$$rpm_dir:/rpms:ro" -e ACTON_RPM="/rpms/$$rpm_base" fedora:latest sh -lc '\
+		set -eu; \
+		rpm -qip "$$ACTON_RPM"; \
+		dnf install -y "$$ACTON_RPM"; \
+		rpm -q acton; \
+		acton version; \
+		acton --help >/dev/null; \
+		test -x /usr/lib/acton/bin/acton; \
+		test -L /usr/bin/acton; \
+		test -L /usr/bin/actonc; \
+		test -L /usr/bin/actondb; \
+		test -L /usr/bin/runacton; \
+		test -L /usr/bin/lsp-server-acton; \
+		work="$$(mktemp -d)"; \
+		cd "$$work"; \
+		printf "%s\n" "#!/usr/bin/env runacton" "actor main(env):" "    print(\"Hello, world\")" "    env.exit(0)" > acton-test.act; \
+		chmod a+x acton-test.act; \
+		./acton-test.act; \
+		./acton-test.act | grep "Hello, world"; \
+		acton build acton-test.act; \
+		./acton-test; \
+		./acton-test | grep "Hello, world"'
 
 .PHONY: container-image image image-deb push-image
 container-image: all

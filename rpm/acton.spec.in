@@ -1,0 +1,55 @@
+%global debug_package %{nil}
+%global _build_id_links none
+%global _missing_build_ids_terminate_build 0
+%global __provides_exclude_from ^/usr/lib/acton/.*$
+%global __brp_strip %{nil}
+%global __brp_strip_static_archive %{nil}
+%global __brp_strip_comment_note %{nil}
+
+Name:           acton
+Version:        @VERSION@
+Release:        @RELEASE@%{?dist}
+Summary:        Acton programming language
+License:        BSD-3-Clause
+URL:            https://acton.now/
+Source0:        acton-rpm-payload-%{version}.tar.xz
+Source1:        LICENSE
+Source2:        README.md
+
+BuildRequires:  tar
+BuildRequires:  xz
+
+%description
+Acton is a general purpose programming language designed for desktop,
+embedded, and distributed systems.
+
+%prep
+# The top-level Makefile builds and stages the release payload before rpmbuild
+# runs. Source0 is that staged install tree.
+
+%build
+# Nothing to build here.
+
+%install
+rm -rf %{buildroot}
+mkdir -p %{buildroot}
+tar -xJf %{SOURCE0} -C %{buildroot}
+install -D -m 0644 %{SOURCE1} %{buildroot}%{_licensedir}/%{name}/LICENSE
+install -D -m 0644 %{SOURCE2} %{buildroot}%{_docdir}/%{name}/README.md
+
+%check
+test -x %{buildroot}%{_bindir}/acton
+test -x %{buildroot}/usr/lib/acton/bin/acton
+test -x %{buildroot}/usr/lib/acton/bin/actondb
+test -x %{buildroot}/usr/lib/acton/bin/lsp-server-acton
+
+%files
+%license %{_licensedir}/%{name}/LICENSE
+%doc %{_docdir}/%{name}/README.md
+%{_bindir}/acton
+%{_bindir}/actonc
+%{_bindir}/actondb
+%{_bindir}/runacton
+%{_bindir}/lsp-server-acton
+%{_datadir}/bash-completion/completions/acton
+/usr/lib/acton

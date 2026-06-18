@@ -1,6 +1,6 @@
 class Acton < Formula
   desc "Delightful distributed programming language"
-  homepage "https://www.acton-lang.org"
+  homepage "https://acton.now/"
   url "https://github.com/actonlang/acton/archive/refs/tags/v0.0.0.tar.gz"
   sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "BSD-3-Clause"

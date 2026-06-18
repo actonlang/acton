@@ -12,7 +12,7 @@ Build-Depends:
  make,
  zlib1g-dev
 Standards-Version: 4.6.0
-Homepage: http://www.acton-lang.org
+Homepage: https://acton.now/
 Rules-Requires-Root: no
 
 Package: acton
