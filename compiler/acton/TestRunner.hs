@@ -665,7 +665,10 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           , trSnapshotUpdated = False
           , trCached = False
           }
-        res0 = maybe fallback id final
+        -- The test binary self-reports its bare module name; the runner keys
+        -- results, caches, and snapshots off the project-qualified discovery
+        -- name, so pin trModule to the module we launched.
+        res0 = (maybe fallback id final) { trModule = modName }
         mergedStd field captured =
           case field of
             Just txt | not (null txt) -> Just txt
@@ -1210,7 +1213,7 @@ writeSnapshotOutput paths res =
     case trOutput res of
       Just out -> do
         let fileName = displayTestName (trName res)
-            outDir = joinPath [projPath paths, "snapshots", "output", trModule res]
+            outDir = joinPath [projPath paths, "snapshots", "output", displayModName paths (trModule res)]
         createDirectoryIfMissing True outDir
         writeFile (outDir </> fileName) out
       Nothing -> return ()
@@ -1222,7 +1225,7 @@ applySnapshotUpdate paths res =
       (Just exc, Just out)
         | isSnapshotMismatch exc -> do
             let fileName = displayTestName (trName res)
-                snapshotDir = joinPath [projPath paths, "snapshots", "expected", trModule res]
+                snapshotDir = joinPath [projPath paths, "snapshots", "expected", displayModName paths (trModule res)]
             createDirectoryIfMissing True snapshotDir
             writeFile (snapshotDir </> fileName) out
             return (markSnapshotUpdated res)
@@ -1262,11 +1265,12 @@ snapshotMetadataAllowsCacheHit logCache paths res = do
             | otherwise -> return True
   where
     fileName = displayTestName (trName res)
+    dispMod = displayModName paths (trModule res)
     expectedPaths =
-      [ joinPath [projPath paths, "snapshots", "expected", trModule res, fileName]
-      , joinPath [projPath paths, "test", "golden", trModule res, fileName]
+      [ joinPath [projPath paths, "snapshots", "expected", dispMod, fileName]
+      , joinPath [projPath paths, "test", "golden", dispMod, fileName]
       ]
-    outputPath = joinPath [projPath paths, "snapshots", "output", trModule res, fileName]
+    outputPath = joinPath [projPath paths, "snapshots", "output", dispMod, fileName]
     miss reason = do
       logCache ("[test-cache] " ++ snapshotCacheLabel res ++ " cache=miss (" ++ reason ++ ")")
       return False

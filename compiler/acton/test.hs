@@ -1208,7 +1208,7 @@ parseFlagTests =
             srcDir = proj </> "src"
             modName = "snap"
             srcFile = srcDir </> modName <.> "act"
-            expectedDir = proj </> "snapshots" </> "expected" </> "snapshot_cache" <.> modName
+            expectedDir = proj </> "snapshots" </> "expected" </> modName
             expectedFile = expectedDir </> "stable"
             runTest args = readCreateProcessWithExitCode (proc acton ("test" : args)) { cwd = Just proj } ""
 

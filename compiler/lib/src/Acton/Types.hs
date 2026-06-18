@@ -45,7 +45,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Set as Set
 import Data.List (foldl', intersperse, isPrefixOf, partition)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe)
 import GHC.Conc (getNumCapabilities)
 
 type TypeProgressCallback = Int -> Int -> Maybe String -> [String] -> Int -> IO ()
@@ -65,14 +65,14 @@ data TypeErrors = TypeErrors [TypeError]
 instance Control.Exception.Exception TypeErrors
 
 -- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> IO (NameInfo, Module, Env0, [String])
-reconstruct progressCb inferredCb env0 (Module m i mdoc ss)    = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
+reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> Maybe String -> IO (NameInfo, Module, Env0, [String])
+reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss
                                              let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
                                                    if hasTesting i
-                                                     then let (testSs, discovered) = testStmts env2 (modNameStr m) ss1
+                                                     then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameStr m) bareMod) ss1
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
                                                  iface = unalias env2 teT

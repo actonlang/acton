@@ -2500,7 +2500,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeKindsCheck <- getTime Monotonic
 
       -- Type-check and return both the typed AST and the interface NameInfo.
-      (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked
+      (nmod,tchecked,typeEnv,tests) <- Acton.Types.reconstruct (Just onTypeProgress) inferredSignatureCb env kchecked (Just (modNameToString (dropProjPrefix paths mn)))
       timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
       timeTypeForce <- getTime Monotonic
