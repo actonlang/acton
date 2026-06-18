@@ -39,8 +39,10 @@ import qualified Acton.Builtin
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Fingerprint as Fingerprint
+import qualified Acton.FetchDependencies as Fetch
 import qualified Acton.SourceProvider as Source
 import Acton.Compile
+import Acton.Project
 import Utils
 import  Pretty
 import qualified InterfaceFiles
@@ -925,7 +927,7 @@ runWatchFile gopts absFile sched runOnce = do
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
     paths <- loadProjectPaths defaultCompileOptions
-    res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
+    res <- try (Fetch.fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
       Right () ->
@@ -951,7 +953,7 @@ sigCommand gopts sigOpts = do
     rootProj <- normalizePathSafe (projPath paths)
     sysAbs <- normalizePathSafe (sysPath paths)
     withProjectLockNotice queryGopts rootProj $ do
-      fetchDependencies queryGopts paths depOverrides
+      Fetch.fetchDependencies queryGopts paths depOverrides
       projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of

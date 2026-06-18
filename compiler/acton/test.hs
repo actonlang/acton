@@ -621,6 +621,84 @@ compilerTests =
           assertBool "should not fail with missing Build.act in unresolved deps cache path"
             (not ("Missing Build.act in " `isInfixOf` cmdErr))
 
+  , testCase "url dependency fetch failure reports proxy diagnostics" $ do
+        withSystemTempDirectory "acton-url-dep-fetch-proxy-diagnostics" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          env0 <- getEnvironment
+          let homeDir = tmp </> "home"
+              rootProj = tmp </> "root"
+              proxyUrl = "http://user:secret@127.0.0.1:9"
+              depUrl = "https://127.0.0.1:9/dep.tar.gz?token=download-secret"
+              fakeHash = "proxy-diagnostics-hash-does-not-exist"
+              proxyEnvNames = ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "no_proxy", "NO_PROXY"]
+              envWithHome =
+                ("HOME", homeDir) :
+                ("https_proxy", proxyUrl) :
+                filter (\(k, _) -> k /= "HOME" && k `notElem` proxyEnvNames) env0
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True homeDir
+          createDirectoryIfMissing True (rootProj </> "src")
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root\""
+            , "fingerprint = " ++ mkFp "root"
+            , "dependencies = {"
+            , "    \"dep\": (url=\"" ++ depUrl ++ "\", hash=\"" ++ fakeHash ++ "\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["fetch", "--quiet"]) { cwd = Just rootProj, env = Just envWithHome } ""
+          assertEqual "acton fetch should fail" (ExitFailure 1) returnCode
+          assertBool "should render fetch diagnostics" ("Fetch diagnostics:" `isInfixOf` cmdErr)
+          assertBool "should redact dependency URL query" (not ("token=download-secret" `isInfixOf` cmdErr))
+          assertBool "should show redacted proxy value" ("https_proxy=http://user:***@127.0.0.1:9" `isInfixOf` cmdErr)
+          assertBool "should not leak proxy password" (not ("secret@127.0.0.1" `isInfixOf` cmdErr))
+          assertBool "should not leak proxy userinfo" (not ("user:secret" `isInfixOf` cmdErr))
+          assertBool "should show selected proxy" ("selected proxy: http://user:***@127.0.0.1:9" `isInfixOf` cmdErr)
+          assertBool "should report no_proxy non-match" ("no_proxy matched 127.0.0.1: no" `isInfixOf` cmdErr)
+          assertBool "should label zig fallback" ("Zig fallback:" `isInfixOf` cmdErr)
+          assertBool "should explain zig fallback proxy behavior" ("fallback uses Zig's network stack" `isInfixOf` cmdErr)
+
+  , testCase "url dependency fetch failure reports no_proxy direct decision" $ do
+        withSystemTempDirectory "acton-url-dep-fetch-noproxy-diagnostics" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          env0 <- getEnvironment
+          let homeDir = tmp </> "home"
+              rootProj = tmp </> "root"
+              proxyUrl = "http://user:secret@127.0.0.1:9"
+              depUrl = "https://127.0.0.1:9/dep.tar.gz"
+              fakeHash = "noproxy-diagnostics-hash-does-not-exist"
+              proxyEnvNames = ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "no_proxy", "NO_PROXY"]
+              envWithHome =
+                ("HOME", homeDir) :
+                ("https_proxy", proxyUrl) :
+                ("no_proxy", "127.0.0.1") :
+                filter (\(k, _) -> k /= "HOME" && k `notElem` proxyEnvNames) env0
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True homeDir
+          createDirectoryIfMissing True (rootProj </> "src")
+          writeFile (rootProj </> "Build.act") $ unlines
+            [ "name = \"root\""
+            , "fingerprint = " ++ mkFp "root"
+            , "dependencies = {"
+            , "    \"dep\": (url=\"" ++ depUrl ++ "\", hash=\"" ++ fakeHash ++ "\")"
+            , "}"
+            , "zig_dependencies = {}"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["fetch", "--quiet"]) { cwd = Just rootProj, env = Just envWithHome } ""
+          assertEqual "acton fetch should fail" (ExitFailure 1) returnCode
+          assertBool "should render fetch diagnostics" ("Fetch diagnostics:" `isInfixOf` cmdErr)
+          assertBool "should print full no_proxy value" ("no_proxy=127.0.0.1" `isInfixOf` cmdErr)
+          assertBool "should report selected direct" ("selected proxy: direct" `isInfixOf` cmdErr)
+          assertBool "should report no_proxy match" ("no_proxy matched 127.0.0.1: yes" `isInfixOf` cmdErr)
+          assertBool "should not leak proxy password" (not ("secret@127.0.0.1" `isInfixOf` cmdErr))
+          assertBool "should not leak proxy userinfo" (not ("user:secret" `isInfixOf` cmdErr))
+
   , testCase "url dependency archive fetches without project build.zig" $ do
         withSystemTempDirectory "acton-url-dep-fetch" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

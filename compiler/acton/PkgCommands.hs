@@ -24,7 +24,7 @@ import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Compile (loadBuildSpec, throwProjectError)
+import Acton.Project (loadBuildSpec, throwProjectError)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
 import Control.Concurrent (threadDelay)

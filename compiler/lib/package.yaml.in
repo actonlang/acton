@@ -75,6 +75,7 @@ library:
     - Acton.Diagnostics
     - Acton.DocPrinter
     - Acton.Env
+    - Acton.FetchDependencies
     - Acton.Fingerprint
     - Acton.Hashing
     - Acton.Kinds
@@ -83,6 +84,7 @@ library:
     - Acton.Normalizer
     - Acton.Parser
     - Acton.Printer
+    - Acton.Project
     - Acton.QuickType
     - Acton.Solver
     - Acton.SourceProvider

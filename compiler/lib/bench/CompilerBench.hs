@@ -1,5 +1,6 @@
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Compile as Compile
+import qualified Acton.Project as Project
 import qualified Acton.Env as Env
 import qualified Acton.Hashing as Hashing
 import qualified Acton.Kinds as Kinds
@@ -157,9 +158,9 @@ nameHashMapFromHeader :: [InterfaceFiles.NameHashInfo] -> Map.Map Syntax.Name In
 nameHashMapFromHeader infos =
     Map.fromList [ (InterfaceFiles.nhName info, info) | info <- infos ]
 
-resolveNameHashMap :: Compile.Paths -> Syntax.ModName -> IO (Maybe (Map.Map Syntax.Name InterfaceFiles.NameHashInfo))
+resolveNameHashMap :: Project.Paths -> Syntax.ModName -> IO (Maybe (Map.Map Syntax.Name InterfaceFiles.NameHashInfo))
 resolveNameHashMap paths mn = do
-    mty <- Env.findTyFile (Compile.searchPath paths) mn
+    mty <- Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return Nothing
       Just ty -> do
@@ -206,13 +207,13 @@ prepareHashBench :: FilePath -> FilePath -> IO HashBenchState
 prepareHashBench typesPath sourcePath = do
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Compile.findPaths sourcePath opts
+    paths <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
+    let modName = Project.modName paths
 
     parsed <- Parser.parseModule modName sourcePath src Nothing
     E.evaluate (rnf parsed)
-    env <- Env.mkEnv (Compile.searchPath paths) env0 parsed
+    env <- Env.mkEnv (Project.searchPath paths) env0 parsed
     E.evaluate (forceHTEnv (Env.hnames env))
     E.evaluate (forceHTEnv (Env.hmodules env))
     kchecked <- Kinds.check env parsed
@@ -688,9 +689,9 @@ runDirect mode typesPath sourcePath = do
     statsEnabled <- getRTSStatsEnabled
     src <- readFile sourcePath
     let opts = benchOpts typesPath True
-    paths <- Compile.findPaths sourcePath opts
+    paths <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
+    let modName = Project.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime
@@ -739,9 +740,9 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
     src <- readFile sourcePath
     srcBytes <- B.readFile sourcePath
     let opts = benchOpts typesPath (not buildFront)
-    paths <- Compile.findPaths sourcePath opts
+    paths <- Project.findPaths sourcePath opts
     env0 <- Env.initEnv typesPath False
-    let modName = Compile.modName paths
+    let modName = Project.modName paths
 
     s0 <- getStats statsEnabled
     t0 <- getCurrentTime

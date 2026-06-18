@@ -8,6 +8,7 @@ module TestRunner
 import qualified Acton.CommandLineParser as C
 import Acton.Testing
 import Acton.Compile
+import Acton.Project
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import TestFormat

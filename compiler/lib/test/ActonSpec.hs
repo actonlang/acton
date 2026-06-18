@@ -25,7 +25,9 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Project as Project
 import qualified Acton.CommandLineParser as C
+import qualified Acton.FetchDependencies as FetchDependencies
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified Acton.Hashing as Hashing
@@ -721,6 +723,33 @@ main = do
           implSplitDepSetMapsSlow env mn localNames items
         snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
           M.singleton value []
+
+    describe "Fetch diagnostics" $ do
+      it "redacts URL credentials and query strings" $ do
+        FetchDependencies.redactUrlForDiagnostics "http://user:secret@proxy.corp.example:8080/path?token=secret#frag"
+          `shouldBe` "http://user:***@proxy.corp.example:8080/path"
+        FetchDependencies.redactUrlForDiagnostics "http://tokenvalue@proxy.corp.example:8080"
+          `shouldBe` "http://***@proxy.corp.example:8080"
+        FetchDependencies.redactUrlForDiagnostics "https://github.com/org/repo/archive/ref.zip?download=secret"
+          `shouldBe` "https://github.com/org/repo/archive/ref.zip"
+
+      it "matches no_proxy hosts and suffixes" $ do
+        FetchDependencies.noProxyMatchesHost "localhost,127.0.0.1,.corp.example" "api.corp.example"
+          `shouldBe` True
+        FetchDependencies.noProxyMatchesHost "github.com:443" "github.com"
+          `shouldBe` True
+        FetchDependencies.noProxyMatchesHost "localhost,.corp.example" "github.com"
+          `shouldBe` False
+
+      it "reports selected proxy or direct for diagnostics" $ do
+        let env =
+              [ ("https_proxy", "http://user:secret@proxy.corp.example:8080")
+              , ("no_proxy", "localhost,.corp.example")
+              ]
+        FetchDependencies.selectedProxyForDiagnostics env True "github.com"
+          `shouldBe` Just "http://user:secret@proxy.corp.example:8080"
+        FetchDependencies.selectedProxyForDiagnostics env True "api.corp.example"
+          `shouldBe` Nothing
 
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do
@@ -1920,9 +1949,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Fingerprint mismatch")
             Right _ ->
               expectationFailure "Expected fingerprint mismatch error"
@@ -1937,9 +1966,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               expectationFailure ("Unexpected fingerprint error: " ++ msg)
             Right spec ->
               BuildSpec.fingerprint spec `shouldBe` fp
@@ -1952,9 +1981,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -1967,9 +1996,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -1982,9 +2011,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -1996,9 +2025,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing project name")
             Right _ ->
               expectationFailure "Expected missing project name error"
@@ -2010,9 +2039,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing fingerprint")
             Right _ ->
               expectationFailure "Expected missing fingerprint error"

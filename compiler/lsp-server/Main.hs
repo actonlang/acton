@@ -34,6 +34,7 @@ import Language.LSP.Server
 
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Compile as Compile
+import qualified Acton.Project as Project
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
 import qualified Acton.Env as Env
@@ -48,7 +49,7 @@ import Error.Diagnose.Position (Position(..))
 
 type OverlayMap = HM.HashMap FilePath Source.SourceSnapshot
 type UriMap = HM.HashMap FilePath Uri
-type BackgroundCompilerLockMap = HM.HashMap FilePath Compile.BackgroundCompilerLock
+type BackgroundCompilerLockMap = HM.HashMap FilePath Project.BackgroundCompilerLock
 type BackgroundCompilerWarned = HM.HashMap FilePath ()
 type CompletionStateMap = HM.HashMap FilePath CompletionState
 type CompletionEnvCacheMap = HM.HashMap FilePath CompletionEnvCache
@@ -70,7 +71,7 @@ data CompletionEnvCache = CompletionEnvCache
 
 data ProjectBuildCache = ProjectBuildCache
   { cachedCompileContext :: Compile.CompileContext
-  , cachedProjectMap :: M.Map FilePath Compile.ProjCtx
+  , cachedProjectMap :: M.Map FilePath Project.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
   , cachedDbpBlocked :: Data.Set.Set Compile.TaskKey
   , cachedRootPins :: M.Map String BuildSpec.PkgDep
@@ -214,7 +215,7 @@ ensureBackgroundCompilerLock projRoot = do
   case HM.lookup projRoot locks of
     Just _ -> return True
     Nothing -> do
-      mlock <- Compile.tryBackgroundCompilerLock projRoot
+      mlock <- Project.tryBackgroundCompilerLock projRoot
       case mlock of
         Nothing -> return False
         Just lock -> do
@@ -225,7 +226,7 @@ ensureBackgroundCompilerLock projRoot = do
 releaseBackgroundCompilerLocks :: IO ()
 releaseBackgroundCompilerLocks = do
   locks <- readIORef backgroundCompilerLocksRef
-  forM_ (HM.elems locks) Compile.releaseBackgroundCompilerLock
+  forM_ (HM.elems locks) Project.releaseBackgroundCompilerLock
   writeIORef backgroundCompilerLocksRef HM.empty
 
 rememberCompletionStates :: Int -> Compile.CompilePlan -> Env.Env0 -> IO ()
@@ -234,8 +235,8 @@ rememberCompletionStates gen plan env = do
     let key = Compile.gtKey t
         paths = Compile.gtPaths t
         mn = Compile.tkMod key
-    path <- Compile.normalizePathSafe (Compile.srcFile paths mn)
-    return (path, CompletionState env (Compile.searchPath paths) mn gen)
+    path <- Project.normalizePathSafe (Project.srcFile paths mn)
+    return (path, CompletionState env (Project.searchPath paths) mn gen)
   atomicModifyIORef' completionStatesRef $ \m ->
     (foldr (uncurry HM.insert) m entries, ())
 
@@ -248,12 +249,12 @@ cacheCompletionState path state =
 
 loadDiskCompletionState :: FilePath -> IO CompletionState
 loadDiskCompletionState path = do
-  paths <- Compile.findPaths path lspCompileOpts
-  env <- Env.initEnv (Compile.sysTypes paths) False
+  paths <- Project.findPaths path lspCompileOpts
+  env <- Env.initEnv (Project.sysTypes paths) False
   return CompletionState
     { completionEnv = env
-    , completionSearchPath = Compile.searchPath paths
-    , completionModuleName = Compile.modName paths
+    , completionSearchPath = Project.searchPath paths
+    , completionModuleName = Project.modName paths
     , completionStateGen = 0
     }
 
@@ -294,8 +295,8 @@ globalTaskImportKeys tasks =
 
 taskImportKeyEntry :: Compile.GlobalTask -> IO (FilePath, String)
 taskImportKeyEntry task = do
-  path <- Compile.normalizePathSafe $
-    Compile.srcFile (Compile.gtPaths task) (Compile.tkMod (Compile.gtKey task))
+  path <- Project.normalizePathSafe $
+    Project.srcFile (Compile.gtPaths task) (Compile.tkMod (Compile.gtKey task))
   return (path, taskImportKey task)
 
 taskImportKey :: Compile.GlobalTask -> String
@@ -342,7 +343,7 @@ prepareLspCompilePlan
 prepareLspCompilePlan sp gopts opts path = do
   planE <- liftIO ((try $ do
     ctx <- Compile.prepareCompileContext opts [path]
-    path' <- Compile.normalizePathSafe path
+    path' <- Project.normalizePathSafe path
     mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
     case mcache of
       Just cache
@@ -356,7 +357,7 @@ prepareLspCompilePlan sp gopts opts path = do
   case planE of
     Left err ->
       case fromException err of
-        Just (Compile.ProjectError msg) -> return (Left msg)
+        Just (Project.ProjectError msg) -> return (Left msg)
         Nothing -> return (Left (displayException err))
     Right plan -> return (Right plan)
   where
@@ -435,7 +436,7 @@ refreshChangedGlobalTask changedPath opts cache =
           return (Just (tasks', importKeys'))
   where
     isChanged t =
-      Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) == changedPath
+      Project.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t)) == changedPath
 
 progressToken :: Int -> FilePath -> ProgressToken
 progressToken gen path =
@@ -659,18 +660,18 @@ runCompile gen path = do
 -- | Resolve the project root used for compile locking.
 resolveCompileRoot :: FilePath -> C.CompileOptions -> IO FilePath
 resolveCompileRoot path opts = do
-  mproj <- Compile.findProjectDir path
+  mproj <- Project.findProjectDir path
   case mproj of
-    Just proj -> Compile.normalizePathSafe proj
+    Just proj -> Project.normalizePathSafe proj
     Nothing -> do
-      paths <- Compile.findPaths path opts
-      Compile.normalizePathSafe (Compile.projPath paths)
+      paths <- Project.findPaths path opts
+      Project.normalizePathSafe (Project.projPath paths)
 
 -- | Prepare and run a compile while holding the per-run project work lock.
 runCompilePlanWithHooks :: Int -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
 runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
-  let taskPath t = Compile.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
+  let taskPath t = Project.srcFile (Compile.gtPaths t) (Compile.tkMod (Compile.gtKey t))
       publishFor t diags =
         runLspT env $ whenCurrentGen gen $
           publishDiagnosticsFor (taskPath t) diags
@@ -704,7 +705,7 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
         }
   progressReportImmediate progress "Preparing Acton project" Nothing
   compileRes <- liftIO $
-    Compile.withProjectLock rootProj $
+    Project.withProjectLock rootProj $
       do
         planE <- runLspT env $
           prepareLspCompilePlan sp gopts opts path
@@ -1029,7 +1030,7 @@ resolvePath uri =
   case uriToFilePath uri of
     Nothing -> return Nothing
     Just path -> liftIO $ do
-      tryLspIO (Compile.normalizePathSafe path)
+      tryLspIO (Project.normalizePathSafe path)
 
 -- | LSP notification handlers for open/change/close events.
 handlers :: Handlers (LspM ())

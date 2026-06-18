@@ -29,7 +29,7 @@ import qualified Acton.Parser
 import qualified Acton.Syntax as A
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
-import Acton.Compile (ProjectError(..), findProjectDir)
+import Acton.Project (ProjectError(..), findProjectDir)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified PkgCommands
 import FileUtil (readFile, writeFile, writeFileChanged, writeFileIfChanged)
