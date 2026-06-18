@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Compiler & Build
+- Report the final Zig build step duration from the live progress task shown
+  during `acton build`, keeping the final build log consistent with the visible
+  CLI progress timer and avoiding a misleading completion line when the final
+  build fails. [#2939]
+- Read bundled base and std `.tydb` interface databases as immutable system
+  inputs, so installed distributions and `--syspath` roots can reuse read-only
+  interfaces without LMDB lock files while project and dependency caches keep
+  normal locking. [#2945]
+  - Distribution builds remove generated LMDB lock files from packaged base/std
+    caches and normalize `data.mdb` permissions so release tarballs ship
+    world-readable interface databases.
+
+### Packages & Distribution
+- Force Acton's macOS Zig SDK fallback for spawned Zig builds even when
+  `DEVELOPER_DIR` is already set, fixing Homebrew source builds with macOS 26
+  Command Line Tools. [#2938]
+  - The Homebrew formula installs `lsp-server-acton` explicitly and avoids
+    copying `dist/bin` into the formula prefix.
+
+### Documentation
+- Index `CHANGELOG.md` into Ask Acton separately from the guide docs, so release
+  notes are available in chat search and changelog updates refresh that source
+  independently. [#2944]
+
 ## [0.28.0] - 2026-06-16
 
 By a wide margin, the fastest Acton to date! Massive compilation speedups,
@@ -4351,6 +4378,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2929]: https://github.com/actonlang/acton/pull/2929
 [#2931]: https://github.com/actonlang/acton/pull/2931
 [#2932]: https://github.com/actonlang/acton/pull/2932
+[#2938]: https://github.com/actonlang/acton/pull/2938
+[#2939]: https://github.com/actonlang/acton/pull/2939
+[#2944]: https://github.com/actonlang/acton/pull/2944
+[#2945]: https://github.com/actonlang/acton/pull/2945
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -4491,6 +4522,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.25.0]: https://github.com/actonlang/acton/compare/v0.24.1...v0.25.0
 [0.26.0]: https://github.com/actonlang/acton/compare/v0.25.0...v0.26.0
 [0.27.0]: https://github.com/actonlang/acton/compare/v0.26.0...v0.27.0
+[0.28.0]: https://github.com/actonlang/acton/compare/v0.27.0...v0.28.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
