@@ -1,0 +1,10 @@
+# Regression: isinstance(x, T) lowers to $ISINSTANCE, which reads x->$class.
+# An unboxed-primitive operand (a module global or a bare local) must be boxed
+# first, otherwise the raw integer is dereferenced as a pointer.
+PORT: u64 = u64(2001)
+
+actor main(env):
+    n: u64 = u64(1000)
+    if isinstance(PORT, atom) and isinstance(n, atom):
+        env.exit(0)
+    env.exit(1)

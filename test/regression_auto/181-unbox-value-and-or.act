@@ -1,0 +1,19 @@
+# Regression: the runtime $AND/$OR macros call __bool__ on their operands via
+# the object's class pointer, so an unboxed-primitive operand must be boxed.
+# Also guards the use-site: an and/or of unboxable type passed where a `value`
+# is expected must not be double-boxed (which would emit toB_u64(B_u64), a
+# compile error), while staying unboxed in arithmetic.
+PORT: u64 = u64(2001)
+
+def take(v: value) -> bool:
+    return isinstance(v, atom)
+
+actor main(env):
+    a: u64 = u64(5)
+    b: u64 = u64(6)
+    ok_isinstance = isinstance(a or b, atom)     # and/or operand via $ISINSTANCE
+    ok_value_arg = take(a or PORT)               # and/or -> `value` argument (fixarg)
+    ok_unboxed = (a or b) + u64(1) == u64(6)     # and/or stays unboxed in arithmetic
+    if ok_isinstance and ok_value_arg and ok_unboxed:
+        env.exit(0)
+    env.exit(1)

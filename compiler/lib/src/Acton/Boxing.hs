@@ -242,6 +242,11 @@ literalUnboxedRep _              = Nothing
 exprUnboxedRep env e@Int{}       = literalUnboxedRep e
 exprUnboxedRep env e@Float{}     = literalUnboxedRep e
 exprUnboxedRep env e@DotI{}      = Nothing
+-- After boxing, an And/Or expression has boxed operands and yields a boxed
+-- value (its result IS one of the operands), so it must not be re-boxed by a
+-- use-site fallback, even though its static type is unboxable.
+exprUnboxedRep env (BinOp _ _ op _)
+  | op `elem` [And, Or]           = Nothing
 exprUnboxedRep env c@(Call _ f _ KwdNil)
   | callReturnsMsg env f          = Nothing
   | rawClassConstructor env c f    = unboxedRepType (typeOf env c)
@@ -266,6 +271,8 @@ fixassign env (TOpt _ t) e
     exprUnboxedRep env e == Just t = Box t e
 fixassign env t e
   | Just t' <- unboxedRepType t    = forceUnbox env t' e
+  | Box{} <- e                     = e
+  | Just rt <- exprUnboxedRep env e = Box rt e
   | otherwise                      = e
 
 fixarg env (TUnboxed _ t) e     = forceUnbox env t e
@@ -460,9 +467,9 @@ instance Boxing Expr where
                                          (ws3,e3') <- boxing env e3
                                          case unboxedRepType (typeOf env e) of
                                              Just t -> return (HashSet.unions [ws1, ws2, ws3], Box t $ Cond l (forceUnbox env t e1') e2' (forceUnbox env t e3'))
-                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l e1' e2' e3')
+                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l (boxValueExpr env e1 e1') e2' (boxValueExpr env e3 e3'))
     boxing env (IsInstance l e qn)  = do (ws1,e1) <- boxing env e
-                                         return (ws1, IsInstance l e1 qn)
+                                         return (ws1, IsInstance l (boxValueExpr env e e1) qn)
     boxing env e@(BinOp l e1 op e2)
       | op `notElem` [And, Or],
         Just rt <- unboxedRepType t
@@ -471,6 +478,10 @@ instance Boxing Expr where
                                          return (HashSet.union ws1 ws2, Box rt $ Paren NoLoc $ BinOp l (unboxArg e1 e1') op (unboxArg e2 e2'))
       where t                       = typeOf env e
             unboxArg e0 e'          = maybe e' (\t -> forceUnbox env t e') (unboxedRepType (typeOf env e0))
+    boxing env e@(BinOp l e1 op e2)
+      | op `elem` [And, Or]         = do (ws1,e1') <- boxing env e1
+                                         (ws2,e2') <- boxing env e2
+                                         return (HashSet.union ws1 ws2, BinOp l (boxValueExpr env e1 e1') op (boxValueExpr env e2 e2'))
     boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1
                                          (ws2,e2') <- boxing env e2
                                          return (HashSet.union ws1 ws2, BinOp l e1' op e2')
