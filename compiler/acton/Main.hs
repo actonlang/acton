@@ -2845,8 +2845,8 @@ removeOrphanExecutables binDir projTypes binTasks = do
     when binDirExists $ do
         binFiles <- listDirectory binDir
         forM_ binFiles $ \exeFile -> do
-            let exeName = takeBaseName exeFile
-                modPath = map (\c -> if c == '.' then '/' else c) (case exeName of '.':nm -> nm; nm -> nm)
+            let exeName = takeBaseName (case exeFile of '.':nm -> nm; nm -> nm)
+                modPath = map (\c -> if c == '.' then '/' else c) (if "test_" `isPrefixOf` exeName then drop 5 exeName else exeName)
                 rootCFile = projTypes </> modPath <.> "root.c"
                 testRootCFile = projTypes </> modPath <.> "test_root.c"
 
