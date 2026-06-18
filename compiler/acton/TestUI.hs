@@ -12,6 +12,7 @@ module TestUI
   , testUiProgressClear
   , queuePendingDetails
   , flushPendingDetails
+  , moduleHeaderLine
   ) where
 
 import qualified Acton.CommandLineParser as C
