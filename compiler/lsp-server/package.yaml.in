@@ -48,3 +48,7 @@ executables:
           - -no-pie
           - -optl-no-pie
           - -pgml=../tools/ld-wrapper.sh
+        # zig cc's -no-pie link leaves `environ` unpopulated, which breaks GHC's
+        # getEnvironment(); this shim repairs it. Shared with the acton exe.
+        c-sources:
+          - ../acton/cbits/environ_fix.c

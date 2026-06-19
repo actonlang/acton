@@ -93,6 +93,10 @@ executables:
         - -no-pie
         - -optl-no-pie
         - -pgml=../tools/ld-wrapper.sh
+      # zig cc's -no-pie link leaves `environ` unpopulated, which breaks GHC's
+      # getEnvironment(); this shim repairs it. See cbits/environ_fix.c.
+      c-sources:
+        - cbits/environ_fix.c
     - condition: os(darwin)
       ghc-options:
         - -pgml=../tools/ld-wrapper.sh
