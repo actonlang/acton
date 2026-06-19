@@ -14,6 +14,15 @@
   - Distribution builds remove generated LMDB lock files from packaged base/std
     caches and normalize `data.mdb` permissions so release tarballs ship
     world-readable interface databases.
+- Box unboxed numeric values before they flow through `value` use sites,
+  fixing assignments, conditionals, `isinstance`, and `and`/`or` expressions
+  after primitive unboxing. [#2943]
+
+### CLI & Project Workflow
+- Show local module names without redundant project prefixes in build and test
+  output, diagnostics, snapshot directories, and stale-output pruning while
+  keeping project-qualified identities for internal caches and dependency
+  layout. [#2937, #2946, #2949]
 
 ### Packages & Distribution
 - Force Acton's macOS Zig SDK fallback for spawned Zig builds even when
@@ -4378,10 +4387,14 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2929]: https://github.com/actonlang/acton/pull/2929
 [#2931]: https://github.com/actonlang/acton/pull/2931
 [#2932]: https://github.com/actonlang/acton/pull/2932
+[#2937]: https://github.com/actonlang/acton/pull/2937
 [#2938]: https://github.com/actonlang/acton/pull/2938
 [#2939]: https://github.com/actonlang/acton/pull/2939
+[#2943]: https://github.com/actonlang/acton/pull/2943
 [#2944]: https://github.com/actonlang/acton/pull/2944
 [#2945]: https://github.com/actonlang/acton/pull/2945
+[#2946]: https://github.com/actonlang/acton/pull/2946
+[#2949]: https://github.com/actonlang/acton/pull/2949
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
