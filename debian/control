@@ -19,6 +19,7 @@ Package: acton
 Architecture: any
 Depends:
  libc6 (>= 2.27),
+ ca-certificates,
  ${shlibs:Depends},
  ${misc:Depends}
 Description: Acton Programming Language
