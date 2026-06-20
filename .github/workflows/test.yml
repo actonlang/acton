@@ -566,7 +566,7 @@ jobs:
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Install RPM build prerequisites"
         run: |
-          dnf install -y findutils make rpm-build tar xz
+          dnf install -y findutils gnupg2 make rpm-build rpm-sign tar xz
           dnf clean all || true
       - name: "Check out repository code"
         uses: actions/checkout@v6
@@ -585,6 +585,19 @@ jobs:
           make -C "${GITHUB_WORKSPACE}" rpms BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
           mkdir -p rpm
           find rpmbuild/RPMS -name 'acton-*.rpm' -exec cp -v {} rpm/ \;
+      - name: Import RPM signing key
+        id: import_rpm_gpg
+        if: github.event_name != 'pull_request'
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      - name: "Sign RPM package"
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          printf '%%_signature gpg\n%%_gpg_name %s\n%%_gpg_digest_algo sha256\n%%__gpg /usr/bin/gpg\n' \
+            '${{ steps.import_rpm_gpg.outputs.fingerprint }}' > ~/.rpmmacros
+          rpmsign --addsign rpm/acton-*.rpm
       - name: "Show RPM package metadata"
         run: |
           rpm -qip rpm/acton-*.rpm
@@ -1341,6 +1354,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:experimental
+    env:
+      REPO_DEPLOY_KEY: ${{ secrets.APT_DEPLOY_KEY }}
     needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs]
     steps:
       - name: Install build prerequisites
@@ -1358,7 +1373,7 @@ jobs:
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
-          ssh-key: ${{ secrets.APT_DEPLOY_KEY }}
+          ssh-key: ${{ env.REPO_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v8
         with:
@@ -1393,6 +1408,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: debian:experimental
+    env:
+      REPO_DEPLOY_KEY: ${{ secrets.APT_TIP_DEPLOY_KEY }}
     permissions:
       contents: write
     needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs]
@@ -1407,7 +1424,7 @@ jobs:
         with:
           repository: actonlang/aptip.acton-lang.io
           path: apt
-          ssh-key: ${{ secrets.APT_TIP_DEPLOY_KEY }}
+          ssh-key: ${{ env.REPO_DEPLOY_KEY }}
       - name: "Download artifacts for Debian Linux"
         uses: actions/download-artifact@v8
         with:
@@ -1434,6 +1451,166 @@ jobs:
           git add deb/*
           git status
           git commit -a -m "Add Acton tip v${VERSION}"
+          git push
+
+  # Update RPM repo
+  update-rpm-repo:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    env:
+      REPO_DEPLOY_KEY: ${{ secrets.RPM_DEPLOY_KEY }}
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms]
+    steps:
+      - name: Install build prerequisites
+        run: dnf install -y createrepo_c dnf git gnupg2 rpm
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      - name: Check out code of rpm.acton.now repo
+        uses: actions/checkout@v6
+        with:
+          repository: actonlang/rpm.acton.now
+          path: rpmrepo
+          ssh-key: ${{ env.REPO_DEPLOY_KEY }}
+      - name: "Download RPM artifacts"
+        uses: actions/download-artifact@v8
+        with:
+          path: rpm-artifacts
+          pattern: acton-rpms-*
+          merge-multiple: true
+      - name: "Get the version"
+        id: get_version
+        run: |
+          rpm_file="$(ls rpm-artifacts/acton-*x86_64.rpm | head -n1)"
+          echo "VERSION=$(rpm -qp --queryformat '%{VERSION}' "$rpm_file")" >> $GITHUB_ENV
+          echo "version=$(rpm -qp --queryformat '%{VERSION}' "$rpm_file")" >> $GITHUB_OUTPUT
+      - name: "Include new RPMs in DNF repository"
+        run: |
+          set -euo pipefail
+          mkdir -p rpmrepo/x86_64 rpmrepo/aarch64
+          cp rpm-artifacts/acton-*x86_64.rpm rpmrepo/x86_64/
+          cp rpm-artifacts/acton-*aarch64.rpm rpmrepo/aarch64/
+          gpg --armor --export "${{ steps.import_gpg.outputs.fingerprint }}" > rpmrepo/acton.gpg
+          createrepo_c --update rpmrepo/x86_64
+          createrepo_c --update rpmrepo/aarch64
+          gpg --batch --yes --local-user "${{ steps.import_gpg.outputs.fingerprint }}" \
+            --armor --detach-sign rpmrepo/x86_64/repodata/repomd.xml
+          gpg --batch --yes --local-user "${{ steps.import_gpg.outputs.fingerprint }}" \
+            --armor --detach-sign rpmrepo/aarch64/repodata/repomd.xml
+          test -s rpmrepo/x86_64/repodata/repomd.xml
+          test -s rpmrepo/x86_64/repodata/repomd.xml.asc
+          test -s rpmrepo/aarch64/repodata/repomd.xml
+          test -s rpmrepo/aarch64/repodata/repomd.xml.asc
+      - name: "Verify DNF repository"
+        run: |
+          set -euo pipefail
+          basearch="$(uname -m)"
+          cat > /etc/yum.repos.d/acton-local.repo <<EOF
+          [acton-local]
+          name=Acton local
+          baseurl=file://${PWD}/rpmrepo/${basearch}
+          enabled=1
+          gpgcheck=1
+          repo_gpgcheck=1
+          gpgkey=file://${PWD}/rpmrepo/acton.gpg
+          EOF
+          dnf --disablerepo='*' --enablerepo=acton-local -y makecache
+          dnf --enablerepo=acton-local -y install acton
+          acton version
+      - name: "Push updates to git repository for rpm.acton.now"
+        run: |
+          cd rpmrepo
+          git config user.name "RPM Bot"
+          git config user.email rpm@acton.now
+          git add .
+          git status
+          git diff --cached --quiet && exit 0
+          git commit -m "Add Acton v${VERSION}"
+          git push
+
+  # Update RPM tip repo
+  update-rpm-tip-repo:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    env:
+      REPO_DEPLOY_KEY: ${{ secrets.RPM_TIP_DEPLOY_KEY }}
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms]
+    steps:
+      - name: Install build prerequisites
+        run: dnf install -y createrepo_c dnf git gnupg2 rpm
+      - name: Import GPG key
+        id: import_gpg
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      - name: Check out code of rpmtip.acton.now repo
+        uses: actions/checkout@v6
+        with:
+          repository: actonlang/rpmtip.acton.now
+          path: rpmrepo
+          ssh-key: ${{ env.REPO_DEPLOY_KEY }}
+      - name: "Download RPM artifacts"
+        uses: actions/download-artifact@v8
+        with:
+          path: rpm-artifacts
+          pattern: acton-rpms-*
+          merge-multiple: true
+      - name: "Get the version"
+        id: get_version
+        run: |
+          rpm_file="$(ls rpm-artifacts/acton-*x86_64.rpm | head -n1)"
+          echo "VERSION=$(rpm -qp --queryformat '%{VERSION}' "$rpm_file")" >> $GITHUB_ENV
+          echo "version=$(rpm -qp --queryformat '%{VERSION}' "$rpm_file")" >> $GITHUB_OUTPUT
+      - name: "Move RPMs in place"
+        run: |
+          set -euo pipefail
+          mkdir -p rpmrepo/x86_64 rpmrepo/aarch64
+          rm -f rpmrepo/x86_64/acton-*.rpm rpmrepo/aarch64/acton-*.rpm
+          cp rpm-artifacts/acton-*x86_64.rpm rpmrepo/x86_64/
+          cp rpm-artifacts/acton-*aarch64.rpm rpmrepo/aarch64/
+          gpg --armor --export "${{ steps.import_gpg.outputs.fingerprint }}" > rpmrepo/acton.gpg
+          rm -rf rpmrepo/x86_64/repodata rpmrepo/aarch64/repodata
+          createrepo_c rpmrepo/x86_64
+          createrepo_c rpmrepo/aarch64
+          gpg --batch --yes --local-user "${{ steps.import_gpg.outputs.fingerprint }}" \
+            --armor --detach-sign rpmrepo/x86_64/repodata/repomd.xml
+          gpg --batch --yes --local-user "${{ steps.import_gpg.outputs.fingerprint }}" \
+            --armor --detach-sign rpmrepo/aarch64/repodata/repomd.xml
+          test -s rpmrepo/x86_64/repodata/repomd.xml
+          test -s rpmrepo/x86_64/repodata/repomd.xml.asc
+          test -s rpmrepo/aarch64/repodata/repomd.xml
+          test -s rpmrepo/aarch64/repodata/repomd.xml.asc
+      - name: "Verify DNF repository"
+        run: |
+          set -euo pipefail
+          basearch="$(uname -m)"
+          cat > /etc/yum.repos.d/acton-local.repo <<EOF
+          [acton-local]
+          name=Acton local
+          baseurl=file://${PWD}/rpmrepo/${basearch}
+          enabled=1
+          gpgcheck=1
+          repo_gpgcheck=1
+          gpgkey=file://${PWD}/rpmrepo/acton.gpg
+          EOF
+          dnf --disablerepo='*' --enablerepo=acton-local -y makecache
+          dnf --enablerepo=acton-local -y install acton
+          acton version
+      - name: "Push updates to git repository for rpmtip.acton.now"
+        run: |
+          cd rpmrepo
+          git config user.name "RPM Bot"
+          git config user.email rpm@acton.now
+          git add .
+          git status
+          git diff --cached --quiet && exit 0
+          git commit -m "Add Acton tip v${VERSION}"
           git push
 
   # Update our homebrew tap

@@ -25,6 +25,8 @@
   layout. [#2937, #2946, #2949]
 
 ### Packages & Distribution
+- Publish signed RPM package repositories at `rpm.acton.now` and
+  `rpmtip.acton.now`, with signed repository metadata for DNF/YUM clients.
 - Force Acton's macOS Zig SDK fallback for spawned Zig builds even when
   `DEVELOPER_DIR` is already set, fixing Homebrew source builds with macOS 26
   Command Line Tools. [#2938]

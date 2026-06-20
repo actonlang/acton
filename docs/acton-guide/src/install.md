@@ -12,6 +12,24 @@ sudo apt-get update
 sudo apt-get install -qy acton
 ```
 {{#endtab }}
+{{#tab name="RPM / DNF / YUM" }}
+For RPM distributions that use DNF or YUM. Add the Acton RPM repo and install from there:
+```console
+sudo rpm --import https://rpm.acton.now/acton.gpg
+sudo tee /etc/yum.repos.d/acton.repo >/dev/null <<'EOF'
+[acton]
+name=Acton
+baseurl=https://rpm.acton.now/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://rpm.acton.now/acton.gpg
+EOF
+sudo dnf install -y acton
+```
+On systems that use YUM instead of DNF, use `sudo yum install -y acton`
+for the final install command.
+{{#endtab }}
 {{#tab name="MacOS" }}
 ```console
 brew install actonlang/acton/acton
