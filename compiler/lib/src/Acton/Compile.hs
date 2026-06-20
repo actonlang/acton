@@ -186,6 +186,7 @@ module Acton.Compile
   , nameToString
   , addProjPrefix
   , dropProjPrefix
+  , dropProjPrefixOrLib
   , importsOf
   , quiet
   , altOutput
@@ -1536,6 +1537,17 @@ importsOf (ActonTask _ _ _ _ m) = A.importsOf m
 importsOf (TyTask { tyImports = ms }) = map fst ms
 importsOf (ParseErrorTask _ _) = []
 
+restoredImportsOf paths TyTask{ tyImports = ms } = map (dropProjPrefix paths . fst) ms
+restoredImportsOf paths task = importsOf task
+
+checkImportPrefixes key proj modSets imps
+  | proj `elem` special_projects
+                        = return ()
+  | not $ null prefixed = throwProjectError ("Do not use prefix '" ++ proj ++ "' when referring to modules in that project (" ++ prstrs prefixed ++ ")")
+  | otherwise           = return ()
+  where p0              = tkProj key
+        Just mods0      = M.lookup p0 modSets
+        prefixed        = [ mn | mn <- imps, Data.Set.member mn mods0 ]
 
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
@@ -1543,7 +1555,7 @@ importsOf (ParseErrorTask _ _) = []
 resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> Data.Set.Set ProjName -> [A.ModName] -> M.Map A.ModName TaskKey
 resolveProviders key proj order modSets deps imps =
     --trace ("#### resolveProviders " ++ prstr key) $
-    --trace ("   # proj: " ++ proj ++ " (head order: " ++ p0 ++ ") ") $
+    --trace ("   # proj: " ++ proj) $
 --    trace ("   # order: " ++ prstrs order) $
 --    trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
     --trace ("   # imps: " ++ prstrs imps) $
@@ -1621,7 +1633,9 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
               task  <- readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
                   deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
-                  providers = resolveProviders k (projName paths) order modSets deps (importsOf task)
+                  imps = restoredImportsOf paths task
+              checkImportPrefixes k (projName paths) modSets imps
+              let providers = resolveProviders k (projName paths) order modSets deps imps
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
                                     , gtPaths = paths
@@ -5573,6 +5587,12 @@ addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then n
         ns                  = A.modPath mn
 
 dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
+
+dropProjPrefixOrLib paths mn
+  | n == projName paths     = A.modName ns
+  | ns == ["lib"]           = A.modName [n]
+  | otherwise               = A.modName (n:ns)
   where n:ns                = A.modPath mn
 
 

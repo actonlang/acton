@@ -1003,35 +1003,35 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
     targetPaths <- pathsForModule opts' (cpProjMap plan) targetCtx' mn
     return (tyDbPath targetPaths mn)
 
+fixupTarget locals deps paths mn
+  | mn `elem` locals            = return $ addProjPrefix paths mn
+  | n == projName paths         = printErrorAndExit ("Module not found: " ++ prstr mn)
+  | null ns && n `elem` deps    = return $ A.modName [n,"lib"]
+  | otherwise                   = return mn
+  where n:ns                    = A.modPath mn
+
 resolveSigTarget :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> String -> IO SigTarget
 resolveSigTarget opts paths rootProj projMap rawTarget = do
     parts <- parseSigTarget rawTarget
     moduleIndex <- sigModuleIndex projMap rootProj
     let fullMod = A.modName parts
-        fullMod' = addProjPrefix paths fullMod
-    case lookup fullMod moduleIndex of
-      Just (ctx, srcPath) -> do
-        return (SigSourceTarget ctx fullMod Nothing srcPath)
-      Nothing -> do
-        case lookup fullMod' moduleIndex of
-         Just (ctx, srcPath) -> do
-          return (SigSourceTarget ctx fullMod' Nothing srcPath)
-         Nothing -> do
-          mFullTy <- findSigTyFile tySearchPath fullMod
-          case mFullTy of
-            Just tyPath ->
-              return (SigTyTarget fullMod Nothing tyPath)
-            Nothing -> do
-              mFullTy' <- findSigTyFile tySearchPath fullMod'
-              case mFullTy' of
-                Just tyPath' ->
-                  return (SigTyTarget fullMod' Nothing tyPath')
+        locals = [ dropProjPrefix paths mn | (mn, (ctx,fp)) <- moduleIndex, projRoot ctx == rootProj ]
+        deps = [ dep | (mn, (ctx,fp)) <- moduleIndex, projRoot ctx == rootProj, (dep,_) <- projDeps ctx ]
+    fullMod' <- fixupTarget locals deps paths fullMod
+    case lookup fullMod' moduleIndex of
+        Just (ctx, srcPath) ->
+            return (SigSourceTarget ctx fullMod' Nothing srcPath)
+        Nothing -> do
+            mFullTy <- findSigTyFile tySearchPath fullMod'
+            case mFullTy of
+                Just tyPath ->
+                    return (SigTyTarget fullMod' Nothing tyPath)
                 Nothing ->
-                  resolveNameTarget parts moduleIndex
+                    resolveNameTarget parts locals deps moduleIndex
   where
     tySearchPath = sigTySearchPath opts paths rootProj projMap
 
-    resolveNameTarget parts moduleIndex
+    resolveNameTarget parts locals deps moduleIndex
       | length parts < 2 =
           printErrorAndExit ("Module not found: " ++ rawTarget)
       | otherwise = do
@@ -1039,27 +1039,18 @@ resolveSigTarget opts paths rootProj projMap rawTarget = do
               namePart = last parts
               mn = A.modName modParts
               n = A.name namePart
-              mn' = addProjPrefix paths mn
-          case lookup mn moduleIndex of
-            Just (ctx, srcPath) -> do
-              return (SigSourceTarget ctx mn (Just n) srcPath)
-            Nothing -> do
-              case lookup mn' moduleIndex of
-               Just (ctx, srcPath) -> do
-                return (SigSourceTarget ctx mn' (Just n) srcPath)
-               Nothing -> do
-                mTy <- findSigTyFile tySearchPath mn
-                case mTy of
-                  Just tyPath ->
-                    return (SigTyTarget mn (Just n) tyPath)
-                  Nothing -> do
-                    mTy' <- findSigTyFile tySearchPath mn'
-                    case mTy' of
-                      Just tyPath' ->
-                        return (SigTyTarget mn' (Just n) tyPath')
-                      Nothing ->
-                        printErrorAndExit ("Module not found: " ++ intercalate "." modParts
-                                     ++ " (while resolving " ++ rawTarget ++ ")")
+          mn' <- fixupTarget locals deps paths mn
+          case lookup mn' moduleIndex of
+              Just (ctx, srcPath) -> do
+                  return (SigSourceTarget ctx mn' (Just n) srcPath)
+              Nothing -> do
+                  mTy <- findSigTyFile tySearchPath mn'
+                  case mTy of
+                      Just tyPath ->
+                          return (SigTyTarget mn' (Just n) tyPath)
+                      Nothing -> do
+                          printErrorAndExit ("Module not found: " ++ intercalate "." modParts
+                                             ++ " (while resolving " ++ rawTarget ++ ")")
 
 parseSigTarget :: String -> IO [String]
 parseSigTarget rawTarget = do
@@ -1097,7 +1088,8 @@ sigProjectSearchOrder projMap rootProj =
 sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
 sigTySearchPath opts paths rootProj projMap =
     case M.lookup rootProj projMap of
-      Just rootCtx -> searchPathForProject opts projMap rootCtx
+      Just rootCtx -> let ps = searchPathForProject opts projMap rootCtx
+                      in ps ++ [projTypesDir rootCtx </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
       Nothing      -> searchPath paths
 
 findSigTyFile :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
@@ -1126,7 +1118,7 @@ printSigInterface paths mn mName tyFile = do
           Just n | null selected ->
             printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
-            putStrLn (Acton.Types.prettySigs envForPrint mn imps selected)
+            putStrLn (Acton.Types.prettySigs envForPrint mn (map (dropProjPrefixOrLib paths) imps) selected)
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()
@@ -2025,7 +2017,7 @@ runCliPostCompile cliHooks gopts plan env = do
                   Just ctx -> return (projBuildSpec ctx)
                   Nothing -> throwProjectError ("Missing root project context for " ++ rootProj)
     let rootParts = splitOn "." (C.root opts')
-        rootMod   = if null proj then init rootParts else proj : init rootParts
+        rootMod   = if proj `elem` special_projects then init rootParts else proj : init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
         binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
@@ -2375,7 +2367,7 @@ writeRootC env gopts opts paths tasks binTask = do
         tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameHashes, roots, _tests, _) <- InterfaceFiles.readHeader ty; return roots
-                         Nothing -> return []
+                         Nothing -> throwProjectError ("Root module " ++ prstr mn' ++ " not found")
         let rootsEnv = case Acton.Env.lookupMod mn env of
                          Nothing -> []
                          Just te -> [ n' | (n', i) <- te, rootEligible i ]
