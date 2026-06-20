@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.28.1] - 2026-06-20
 
 ### Compiler & Build
 - Report the final Zig build step duration from the live progress task shown
@@ -4565,6 +4565,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.26.0]: https://github.com/actonlang/acton/compare/v0.25.0...v0.26.0
 [0.27.0]: https://github.com/actonlang/acton/compare/v0.26.0...v0.27.0
 [0.28.0]: https://github.com/actonlang/acton/compare/v0.27.0...v0.28.0
+[0.28.1]: https://github.com/actonlang/acton/compare/v0.28.0...v0.28.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
