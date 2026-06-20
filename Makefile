@@ -557,6 +557,13 @@ test-goldens-accept: test-compiler-accept test-incremental-accept test-syntaxerr
 test-cross-compile:
 	cd compiler && stack test acton --ta '-p "/cross-compilation/"'
 
+# Docker-based reproduction: acton must fetch a dependency through an HTTP proxy
+# from a network with no direct egress. Defaults to ./dist; override ACTON_DIST
+# (e.g. CI points it at the installed release). See test/proxy/README.md.
+.PHONY: test-proxy
+test-proxy:
+	ACTON_DIST="$(or $(ACTON_DIST),$(CURDIR)/dist)" bash test/proxy/run.sh
+
 test-incremental: dist/bin/acton
 	cd compiler && stack test acton:incremental
 

@@ -1,0 +1,13 @@
+name = "proxytest"
+fingerprint = 0x6fa9d198b98853f8
+
+# A single remote dependency, declared as a zig_dependency so that `acton fetch`
+# downloads + hashes it but does NOT require it to be a full Acton package.
+# The download goes through Acton's HTTP fetch path (the one with the proxy
+# diagnostics). The URL is HTTPS, exactly like real GitHub package fetches.
+zig_dependencies = {
+    "zlib": (
+        url="https://github.com/madler/zlib/archive/refs/tags/v1.3.1.tar.gz",
+        hash="N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o"
+    )
+}
