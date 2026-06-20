@@ -19,14 +19,36 @@
   after primitive unboxing. [#2943]
 
 ### CLI & Project Workflow
-- Show local module names without redundant project prefixes in build and test
-  output, diagnostics, snapshot directories, and stale-output pruning while
-  keeping project-qualified identities for internal caches and dependency
-  layout. [#2937, #2946, #2949]
+- Use local module names without redundant project prefixes in imports,
+  signature inspection, build and test output, diagnostics, snapshot
+  directories, and stale-output pruning while keeping project-qualified
+  identities for internal caches and dependency layout. [#2937, #2941, #2946,
+  #2949]
+  - Dependency `lib` modules can be imported and inspected with the dependency
+    package name, for example `import dep_a` and `acton sig dep_a`, instead of
+    spelling the generated `dep_a.lib` module.
 
 ### Packages & Distribution
 - Publish signed RPM package repositories at `rpm.acton.now` and
-  `rpmtip.acton.now`, with signed repository metadata for DNF/YUM clients.
+  `rpmtip.acton.now`, with signed package and repository metadata for DNF/YUM
+  clients and install docs for stable and tip repositories. [#2957]
+- Restore `http_proxy` and `https_proxy` handling when x86_64 Linux release
+  builds fetch package dependencies, fixing a proxy-only-network regression from
+  the 0.28 build and linking changes where Acton connected directly even though
+  earlier Acton releases used the proxy. [#2956]
+  - Dependency download failures report the proxy variable and proxy
+    environment Acton used, with a hint for checking proxy configuration.
+  - A `make test-proxy` Docker harness and CI job validate release artifacts on
+    amd64 and arm64 hosts behind a proxy-only network.
+- Add RPM packaging via `make rpms`, producing packages from an existing
+  `dist/` tree and validating them in Fedora CI by building, installing, and
+  compile-testing the generated RPMs. [#2948]
+- Prune upstream tests, scripts, maintenance files, and docs when extracting
+  distribution dependencies, keeping release artifacts focused on runtime
+  files. [#2948]
+- Declare `ca-certificates` as a Debian package dependency and install it in the
+  container image, so package downloads over TLS work on stripped-down systems
+  without relying on another package to provide system CA roots. [#2952]
 - Force Acton's macOS Zig SDK fallback for spawned Zig builds even when
   `DEVELOPER_DIR` is already set, fixing Homebrew source builds with macOS 26
   Command Line Tools. [#2938]
@@ -4392,11 +4414,16 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2937]: https://github.com/actonlang/acton/pull/2937
 [#2938]: https://github.com/actonlang/acton/pull/2938
 [#2939]: https://github.com/actonlang/acton/pull/2939
+[#2941]: https://github.com/actonlang/acton/pull/2941
 [#2943]: https://github.com/actonlang/acton/pull/2943
 [#2944]: https://github.com/actonlang/acton/pull/2944
 [#2945]: https://github.com/actonlang/acton/pull/2945
 [#2946]: https://github.com/actonlang/acton/pull/2946
+[#2948]: https://github.com/actonlang/acton/pull/2948
 [#2949]: https://github.com/actonlang/acton/pull/2949
+[#2952]: https://github.com/actonlang/acton/pull/2952
+[#2956]: https://github.com/actonlang/acton/pull/2956
+[#2957]: https://github.com/actonlang/acton/pull/2957
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
