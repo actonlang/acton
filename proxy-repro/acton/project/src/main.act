@@ -1,0 +1,3 @@
+actor main(env):
+    print("hello")
+    env.exit(0)

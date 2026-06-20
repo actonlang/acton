@@ -1,0 +1,4 @@
+# The release tarball is large and machine-specific; never commit it.
+acton-dist.tar.xz
+.tar.err
+.tar.rc
