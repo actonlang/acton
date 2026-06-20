@@ -267,7 +267,7 @@ import Network.HTTP.Types.Status (statusCode)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive (getFilesRecursive)
-import System.Environment (getExecutablePath, lookupEnv)
+import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
 import System.FilePath.Posix
@@ -4971,6 +4971,132 @@ validateDepOverridePath depName depPath = do
                          ++ "Hint: Local dependency paths must point to an Acton project root\n"
                          ++ "(directory with src/ and Build.act).")
 
+-- Proxy diagnostics -----------------------------------------------------------
+-- Dependency archives are fetched over HTTPS with http-client, whose proxy
+-- selection (proxyEnvironment) is protocol-specific: an https URL is proxied
+-- only via https_proxy/HTTPS_PROXY, never via http_proxy. When a fetch fails we
+-- report which proxy variable applies to the request and the proxy environment
+-- acton actually saw, so a missing/unexported https_proxy (e.g. under sudo or a
+-- non-interactive make/CI shell, where the interactive shell's proxy vars are
+-- not inherited) is obvious instead of hidden behind a raw "proxy = Nothing"
+-- request-record dump.
+
+-- | Proxy-related environment variables, in the order we report them.
+proxyEnvVarNames :: [String]
+proxyEnvVarNames =
+  [ "http_proxy", "HTTP_PROXY"
+  , "https_proxy", "HTTPS_PROXY"
+  , "all_proxy", "ALL_PROXY"
+  , "no_proxy", "NO_PROXY"
+  ]
+
+-- | Snapshot the proxy environment acton actually sees. Reads via
+--   getEnvironment (the `environ` array), the SAME source http-client's
+--   proxyEnvironment consults -- NOT lookupEnv/getenv. The two can disagree on
+--   Linux binaries hit by the `environ` copy-relocation bug (getEnvironment
+--   returns [] while getenv works); reading getEnvironment keeps this diagnostic
+--   honest about what proxy selection actually saw.
+readProxyEnv :: IO [(String, Maybe String)]
+readProxyEnv = do
+  env <- getEnvironment
+  return [ (n, lookup n env) | n <- proxyEnvVarNames ]
+
+-- | Render one proxy env var for display, masking any embedded credentials.
+formatProxyEnvVar :: (String, Maybe String) -> String
+formatProxyEnvVar (n, v) =
+  n ++ "=" ++ maybe "(unset)" (\x -> if null x then "(empty)" else maskProxyUrl x) v
+
+-- | Indented "proxy environment acton sees" block for use in messages.
+proxyEnvReportLines :: String -> [(String, Maybe String)] -> [String]
+proxyEnvReportLines indent env =
+  (indent ++ "proxy environment acton sees:")
+  : [ indent ++ "  " ++ formatProxyEnvVar kv | kv <- env ]
+
+-- | Mask user:password@ credentials embedded in a proxy URL.
+maskProxyUrl :: String -> String
+maskProxyUrl url =
+  let (scheme, afterScheme) = case findSubstring "://" url of
+                                Just i  -> (take (i + 3) url, drop (i + 3) url)
+                                Nothing -> ("", url)
+      (authority, rest)     = break (== '/') afterScheme
+  in case break (== '@') authority of
+       (_, '@':hostPort) -> scheme ++ "***@" ++ hostPort ++ rest
+       _                 -> url
+
+findSubstring :: String -> String -> Maybe Int
+findSubstring needle = go 0
+  where go _ []              = Nothing
+        go i hay@(_:t)
+          | needle `isPrefixOf` hay = Just i
+          | otherwise               = go (i + 1) t
+
+-- | The proxy variable http-client consults for a request of this scheme, and
+--   its value if set. Selection is protocol-specific (https_proxy for https,
+--   http_proxy for http); ALL_PROXY is intentionally excluded because
+--   http-client does not honor it. NB: we report from the environment rather
+--   than the failed request's `proxy` field, which http-client leaves unset for
+--   https CONNECT tunnels even when a proxy is used.
+applicableProxy :: Bool -> [(String, Maybe String)] -> Maybe (String, String)
+applicableProxy secure env =
+  listToMaybe [ (n, v) | n <- names, Just (Just v) <- [lookup n env], not (null v) ]
+  where names = if secure then ["https_proxy", "HTTPS_PROXY"] else ["http_proxy", "HTTP_PROXY"]
+
+-- | Turn an http-client fetch exception into a clean, actionable message: the
+--   underlying cause, the proxy variable that applies to the request, the proxy
+--   environment acton saw, and a hint when no proxy is configured for the URL.
+describeFetchException :: [(String, Maybe String)] -> SomeException -> String
+describeFetchException env ex =
+  case fromException ex :: Maybe HTTP.HttpException of
+    Just (HTTP.HttpExceptionRequest req content) ->
+      let secure  = HTTP.secure req
+          scheme  = if secure then "https" else "http"
+          target  = B.unpack (HTTP.host req) ++ ":" ++ show (HTTP.port req)
+          vars    = if secure then "https_proxy/HTTPS_PROXY" else "http_proxy/HTTP_PROXY"
+          proxyLn = case applicableProxy secure env of
+                      Just (n, v) -> "  proxy for this " ++ scheme ++ " request: "
+                                     ++ maskProxyUrl v ++ " (from " ++ n ++ ")"
+                      Nothing     -> "  proxy for this " ++ scheme ++ " request: none ("
+                                     ++ vars ++ " unset)"
+      in intercalate "\n"
+           ( [ describeFetchContent content
+             , "  request: " ++ scheme ++ " to " ++ target
+             , proxyLn
+             ]
+             ++ proxyEnvReportLines "  " env
+             ++ proxyFailureHint secure env )
+    Just other -> displayException other
+    Nothing    -> displayException ex
+
+-- | One-line summary of an http-client failure cause (no Request record dump).
+describeFetchContent :: HTTP.HttpExceptionContent -> String
+describeFetchContent c = case c of
+  HTTP.ConnectionTimeout            -> "connection timed out"
+  HTTP.ConnectionFailure e          -> "connection failed: " ++ show e
+  HTTP.ResponseTimeout              -> "response timed out"
+  HTTP.ProxyConnectException h p st -> "proxy CONNECT to " ++ B.unpack h ++ ":" ++ show p
+                                       ++ " failed (status " ++ show (statusCode st) ++ ")"
+  HTTP.StatusCodeException res _    -> "unexpected HTTP status "
+                                       ++ show (statusCode (HTTP.responseStatus res))
+  HTTP.InternalException e          -> "connection failed: " ++ show e
+  other                             -> show other
+
+-- | Hint shown when a fetch failed and no proxy variable applies to its scheme:
+--   the common real-world trap where proxy vars live in an interactive shell but
+--   are absent from the build's environment (sudo/root, make, CI).
+proxyFailureHint :: Bool -> [(String, Maybe String)] -> [String]
+proxyFailureHint secure env
+  | isJust (applicableProxy secure env) = []
+  | otherwise =
+      [ "  hint: no " ++ vars ++ " is set in acton's environment, so this " ++ scheme
+      , "        download was attempted directly. If you use a proxy, make sure "
+        ++ varLower ++ " is"
+      , "        exported in the environment that runs the build. sudo/root shells and"
+      , "        many make/CI setups do not inherit the proxy variables from your"
+      , "        interactive shell." ]
+  where scheme   = if secure then "https" else "http"
+        vars     = if secure then "https_proxy/HTTPS_PROXY" else "http_proxy/HTTP_PROXY"
+        varLower = if secure then "https_proxy" else "http_proxy"
+
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides = do
     if isTmp paths
@@ -4980,6 +5106,9 @@ fetchDependencies gopts paths depOverrides = do
         rootSpec <- applyDepOverrides (projPath paths) depOverrides rootSpec0
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
+        when (C.verbose gopts) $ do
+          env <- readProxyEnv
+          putStr (unlines (proxyEnvReportLines "" env))
         home <- getHomeDirectory
         let zigExe      = joinPath [sysPath paths, "zig", "zig"]
             globalCache = joinPath [home, ".cache", "acton", "zig-global-cache"]
@@ -5197,7 +5326,9 @@ fetchDependencies gopts paths depOverrides = do
           manager <- HTTP.newManager settings
           opened <- try (HTTP.responseOpen req manager) :: IO (Either SomeException (HTTP.Response HTTP.BodyReader))
           case opened of
-            Left ex -> return (Left (displayException ex))
+            Left ex -> do
+              env <- readProxyEnv
+              return (Left (describeFetchException env ex))
             Right response -> do
               let code = statusCode (HTTP.responseStatus response)
               if code < 200 || code >= 300

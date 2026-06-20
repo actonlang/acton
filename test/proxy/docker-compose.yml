@@ -1,0 +1,36 @@
+# Two-container proxy reproduction for Acton dependency fetching.
+#
+#   acton  - Oracle Linux 9, Acton installed from the release tarball. Attached
+#            ONLY to the `internal` network, so it has NO direct route to the
+#            internet. Its only way out is the proxy.
+#   proxy  - tinyproxy. Attached to both `internal` (to receive requests from
+#            acton) and `egress` (which has real internet via NAT).
+#
+# This mirrors a locked-down corporate / Oracle Linux host where direct egress
+# is blocked and all traffic must go through an HTTP proxy.
+
+services:
+  proxy:
+    build: ./proxy
+    container_name: acton-proxy
+    networks:
+      - internal
+      - egress
+
+  acton:
+    build:
+      context: ./acton
+    container_name: acton-client
+    depends_on:
+      - proxy
+    networks:
+      - internal          # internal only => no direct internet
+    volumes:
+      - ./acton-dist.tar.xz:/acton-dist.tar.xz:ro
+    command: ["sleep", "infinity"]
+
+networks:
+  internal:
+    internal: true         # no gateway to host/internet
+  egress:
+    driver: bridge         # normal outbound internet
