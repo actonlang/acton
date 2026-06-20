@@ -535,6 +535,144 @@ jobs:
           if-no-files-found: error
 
 
+  build-rpms:
+    needs: [build-version, test-linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rpm_arch: x86_64
+            tar_arch: x86_64
+            artifact: acton-debian-11-x86_64
+            runner: ubuntu-24.04
+          - rpm_arch: aarch64
+            tar_arch: aarch64
+            artifact: acton-ubuntu-24.04-arm64v8
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: fedora:latest
+    env:
+      BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
+    steps:
+      - name: "Show platform and environment"
+        run: |
+          uname -a
+          cat /etc/os-release
+          rpm --version
+      - name: "Set BUILD_RELEASE when we are building for a version tag"
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
+      - name: "Install RPM build prerequisites"
+        run: |
+          dnf install -y findutils make rpm-build tar xz
+          dnf clean all || true
+      - name: "Check out repository code"
+        uses: actions/checkout@v6
+      - name: "Download Linux release artifact"
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.artifact }}
+      - name: "Build RPM from release artifact"
+        run: |
+          set -euo pipefail
+          tarball="$(ls acton-linux-${{ matrix.tar_arch }}-*.tar.xz | tail -n1)"
+          rm -rf dist acton
+          rm -f rpm/*.rpm
+          tar -xJf "$tarball"
+          mv acton dist
+          make -C "${GITHUB_WORKSPACE}" rpms BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+          mkdir -p rpm
+          find rpmbuild/RPMS -name 'acton-*.rpm' -exec cp -v {} rpm/ \;
+      - name: "Show RPM package metadata"
+        run: |
+          rpm -qip rpm/acton-*.rpm
+          rpm -qlp rpm/acton-*.rpm | sed -n '1,120p'
+      - name: "Upload artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-rpms-${{ matrix.rpm_arch }}
+          path: rpm/*.rpm
+          if-no-files-found: error
+
+
+  test-rpms:
+    needs: build-rpms
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rpm_arch: x86_64
+            runner: ubuntu-24.04
+          - rpm_arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: fedora:latest
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
+    steps:
+      - name: "Show platform and environment"
+        run: |
+          uname -a
+          cat /etc/os-release
+          rpm --version
+      - name: "Download RPM artifact"
+        uses: actions/download-artifact@v8
+        with:
+          name: acton-rpms-${{ matrix.rpm_arch }}
+          path: rpm
+      - name: "Install Acton from RPM"
+        run: |
+          set -euo pipefail
+          rpm -qip rpm/acton-*.rpm
+          dnf install -y rpm/acton-*.rpm
+          rpm -q acton
+          acton version
+          acton --help >/dev/null
+          test -x /usr/lib/acton/bin/acton
+          test -L /usr/bin/acton
+          test -L /usr/bin/actonc
+          test -L /usr/bin/actondb
+          test -L /usr/bin/runacton
+          test -L /usr/bin/lsp-server-acton
+      - name: "Enable dumping core files to /tmp/core..."
+        run: |
+          dnf install -y procps-ng
+          cat /proc/sys/kernel/core_pattern
+          sysctl kernel.core_pattern='/tmp/core.%h.%e.%t' || true
+          cat /proc/sys/kernel/core_pattern
+          ulimit -c unlimited
+      - name: "Compile acton program"
+        run: |
+          echo '#!/usr/bin/env runacton'   > acton-test.act
+          echo 'actor main(env):'          >> acton-test.act
+          echo '    print("Hello, world")' >> acton-test.act
+          echo '    env.exit(0)'           >> acton-test.act
+          chmod a+x acton-test.act
+          ./acton-test.act
+          ./acton-test.act | grep "Hello, world"
+          acton build acton-test.act
+          ./acton-test
+          ./acton-test | grep "Hello, world"
+      - name: "ls core"
+        if: failure()
+        run: |
+          pwd
+          ls
+          find /tmp
+          mv /tmp/core* .
+      - name: "Upload core file & binaries as artifacts on test failure"
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rpm-coredumps-${{ matrix.rpm_arch }}-${{ github.run_id }}.zip
+          path: |
+            ${{ github.workspace }}/core*
+            ${{ github.workspace }}/acton-test
+            ${{ github.workspace }}/out/**
+
+
   run-macos:
     needs: test-macos
     strategy:
@@ -1018,7 +1156,7 @@ jobs:
     # Only run on the main branch
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, build-container-image]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, test-rpms, build-container-image]
     steps:
       - name: "Delete current tip release & tag"
         uses: dev-drprasad/delete-tag-and-release@v1.1
@@ -1050,10 +1188,17 @@ jobs:
         with:
           pattern: acton-debs-*
           merge-multiple: true
+      - name: "Download RPM artifacts for Linux x86_64 & aarch64"
+        uses: actions/download-artifact@v8
+        with:
+          pattern: acton-rpms-*
+          path: rpm
+          merge-multiple: true
       - name: "List downloaded artifacts"
         run: |
           ls
           ls deb
+          ls rpm
       - name: "Workaround for changelog extractor that looks for number versions in headlines, which won't work for 'Unreleased'"
         run: sed -i -e 's/^## Unreleased/## [999.9] Unreleased\nThis is an unreleased snapshot built from the main branch. Like a nightly but more up to date./' CHANGELOG.md
       - name: "Extract release notes"
@@ -1063,7 +1208,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "acton*.tar*,deb/*deb"
+          artifacts: "acton*.tar*,deb/*deb,rpm/*rpm"
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           prerelease: true
@@ -1083,15 +1228,20 @@ jobs:
         run: mv $(ls deb/acton_*amd64.deb | tail -n1) deb/acton_tip_amd64.deb
       - name: "Remove version number from debian arm64 package"
         run: mv $(ls deb/acton_*arm64.deb | tail -n1) deb/acton_tip_arm64.deb
+      - name: "Remove version number from RPM x86_64 package"
+        run: mv $(ls rpm/acton-*x86_64.rpm | tail -n1) rpm/acton-tip-x86_64.rpm
+      - name: "Remove version number from RPM aarch64 package"
+        run: mv $(ls rpm/acton-*aarch64.rpm | tail -n1) rpm/acton-tip-aarch64.rpm
       - name: "List files for debug"
         run: |
           ls
           ls deb
+          ls rpm
       - name: "Upload artifacts without version number for stable links"
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "acton*.tar*,deb/acton_*.deb"
+          artifacts: "acton*.tar*,deb/acton_*.deb,rpm/acton-*.rpm"
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           prerelease: true
@@ -1105,7 +1255,7 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, build-container-image]
+    needs: [test-macos, test-linux, test-cross-compile, test-windows, build-debs, test-rpms, build-container-image]
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v6
@@ -1130,8 +1280,16 @@ jobs:
         with:
           pattern: acton-debs-*
           merge-multiple: true
+      - name: "Download RPM artifacts for Linux"
+        uses: actions/download-artifact@v8
+        with:
+          pattern: acton-rpms-*
+          path: rpm
+          merge-multiple: true
       - name: "List downloaded artifacts"
-        run: ls
+        run: |
+          ls
+          ls rpm
       - name: "Extract release notes"
         id: extract-release-notes
         uses: ffurrer2/extract-release-notes@v3
@@ -1139,7 +1297,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
-          artifacts: "acton*.tar*,deb/*deb"
+          artifacts: "acton*.tar*,deb/*deb,rpm/*rpm"
           body: ${{ steps.extract-release-notes.outputs.release_notes }}
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}

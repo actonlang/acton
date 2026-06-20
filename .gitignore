@@ -69,6 +69,7 @@ bdeps/**/zig-out
 bdeps/**/zig-pkg
 
 dist/*
+rpmbuild/
 
 builder/deps/*
 

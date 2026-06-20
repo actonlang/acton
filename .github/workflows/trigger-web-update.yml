@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: "Trigger build of www.acton-lang.org"
+      - name: "Trigger build of acton.now"
         uses: benc-uk/workflow-dispatch@v1
         with:
           repo: actonlang/www.acton-lang.org

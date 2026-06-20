@@ -32,7 +32,7 @@ worked out, there may be changes.
 
 ## Install Acton
 
-Check out the [installation guide](https://www.acton-lang.org/install) for more details.
+Check out the [installation guide](https://acton.now/install) for more details.
 
 ### Debian / Ubuntu
 ```sh
@@ -82,11 +82,11 @@ Hello, world!
 ```
 
 ## And then...?
-Check out our [learning resources](https://www.acton-lang.org/learn).
+Check out our [learning resources](https://acton.now/learn).
 
 
 # Building Acton from source
-See [building Acton from source](https://www.acton-lang.org/install/from-source).
+See [building Acton from source](https://acton.now/install/from-source).
 
 # Developing Acton
 See [dev info](docs/dev.md).
