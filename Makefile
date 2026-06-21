@@ -80,7 +80,7 @@ endif
 # -- Linux ---------------------------------------------------------------------
 ifeq ($(shell uname -s),Linux)
 OS:=linux
-ACTON_ZIG_GLIBC_VERSION ?= 2.31
+ACTON_ZIG_GLIBC_VERSION ?= 2.28
 export ACTON_ZIG_GLIBC_VERSION
 ACTON_STACK_NEEDS_ZIG=1
 STACK=CC="$(ACTON_STACK_CC)" CXX="$(ACTON_STACK_CXX)" CFLAGS= CPPFLAGS= LDFLAGS= ACTON_REAL_LD="$(ACTON_STACK_CC)" stack --with-gcc="$(ACTON_STACK_CC)"
@@ -142,13 +142,11 @@ endif
 # and needs a fixed location independent of the directory the link runs from.
 ACTON_BDEPS_DIR := $(TD)/bdeps/out
 export ACTON_BDEPS_DIR
-# libz is the one bdeps lib that GHC actually links into acton on every platform,
-# so we build and statically link it everywhere. The ld-wrapper rewrites -lz to
-# this archive's full path; dropping any future lib's .a into bdeps/out/lib (e.g.
-# liblmdb.a) makes it link statically the same way, with no per-lib wiring.
+# zlib is pulled in by the Haskell zlib package on every platform, so we build
+# and statically link it everywhere.
 BDEPS += bdeps/out/lib/libz.a
 # liblmdb backs the compiler's .tydb interface cache; GHC links it into acton on
-# every platform, so -- unlike gmp/tinfo below -- it is an unconditional bdep.
+# every platform, so it is also an unconditional bdep.
 BDEPS += bdeps/out/lib/liblmdb.a
 ifeq ($(OS),linux)
 # gmp and tinfo are only pulled in by GHC on Linux (macOS GHC uses the native
@@ -260,8 +258,8 @@ clean-downloads:
 
 # /bdeps -------------------------------------------------
 # Build-time dependencies of the acton compiler executable itself. These are
-# libraries that GHC statically links into `acton` and which we otherwise would
-# pull as host .a files via `gcc -print-file-name` (see compiler/tools/*.sh).
+# libraries that GHC statically links into `acton`; compiler/tools/*.sh now
+# requires these archives under bdeps/out instead of falling back to host .a files.
 # Building them ourselves with zig lets us target an older/chosen libc instead of
 # inheriting whatever the build machine has installed. Each bdeps/<name> is a
 # standalone zig project that fetches its upstream source via build.zig.zon and
@@ -276,11 +274,10 @@ clean-downloads:
 # wrapper instead rewrites each -lfoo to the full path of bdeps/out/lib/libfoo.a
 # (a positional arg ld64 links statically) and execs the system clang/ld64 GHC is
 # configured for; zig only builds the archive, since its bundled linker rejects
-# the ld64 flags GHC emits. gmp and tinfo are not linked into a macOS acton
-# (native bignum backend; libncurses comes from the SDK), so only the zlib rule
-# below runs there. The mechanism generalises: any .a placed in bdeps/out/lib
-# links statically on either platform, which is how future compiler libs (e.g.
-# LMDB) will be linked.
+# the ld64 flags GHC emits. zlib and LMDB are linked on every platform; gmp and
+# tinfo are Linux-only because macOS GHC uses the native bignum backend and the
+# SDK's libncurses. The mechanism generalises: any .a placed in bdeps/out/lib
+# links statically on either platform.
 #
 # The BDEPS list and ACTON_BDEPS_DIR are defined earlier (near
 # ACTON_STACK_PREREQS) so they're in scope when the dist/bin/acton rule is read;
@@ -474,7 +471,7 @@ deps-download/$(LIBXML2_REF).tar.gz:
 dist/deps/libxml2: deps-download/$(LIBXML2_REF).tar.gz $(LIBXML2_BUILD_ZIG)
 	rm -rf "$@"
 	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && tar zx --exclude='libxml2-$(LIBXML2_REF)/test*' --strip-components=1 -f "$(TD)/$<"
 	cp "$(TD)/$(LIBXML2_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/.gitlab-ci" "$@/autogen.sh" "$@/doc" "$@/example" "$@/fuzz" "$@/os400" "$@/python" "$@/result" "$@/vms" "$@/win32" "$@/xstc" $@/test*
 	rm -f "$@"/check-*.py "$@"/dbgen*.pl "$@"/gen*.py "$@"/gentest.py "$@"/build_glob.py "$@"/xml2-config.in

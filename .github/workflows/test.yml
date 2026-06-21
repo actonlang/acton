@@ -372,18 +372,15 @@ jobs:
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
           "${HOME}/.local/bin/stack" --version
-      - name: "Use container glibc target for source build"
-        run: |
-          GLIBC_VERSION="$(getconf GNU_LIBC_VERSION | awk '{print $2}')"
-          echo "ACTON_ZIG_GLIBC_VERSION=${GLIBC_VERSION}" >> "$GITHUB_ENV"
-          echo "Using Zig glibc target ${GLIBC_VERSION}"
       - name: "Build Acton"
         id: build_acton
         run: |
           make -j2 -C ${GITHUB_WORKSPACE} BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
       - name: "Build a release"
         id: build_release
-        run: make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
+        run: |
+          make -C ${GITHUB_WORKSPACE} release BUILD_TIME=${BUILD_TIME}
+          make -C ${GITHUB_WORKSPACE} ldd
       - name: "Upload artifact"
         uses: actions/upload-artifact@v7
         with:

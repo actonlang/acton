@@ -81,7 +81,7 @@ executables:
       - '"-with-rtsopts=-N -A64M"'
       - -Wno-x-partial
     # Route the link through our wrapper so host libs are replaced with our
-    # self-built static archives under bdeps/out/lib (libz.a, future LMDB, ...).
+    # self-built static archives under bdeps/out/lib (libz.a, liblmdb.a, ...).
     # Gated per-OS rather than applied unconditionally so an unvalidated platform
     # (e.g. Windows, where this bash wrapper would not run) falls back to the
     # default linker instead of breaking. The script branches internally: GNU ld
