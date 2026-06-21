@@ -19,20 +19,9 @@ run_zig_with_lock() {
   flock "$lock_root/acton-zig-cc.lock" "${ZIG}" "$@"
 }
 
-gcc_lib_path() {
-  local lib="$1"
-  local lib_path
-  lib_path="$(gcc -print-file-name="$lib" 2>/dev/null || true)"
-  if [[ -n "$lib_path" && "$lib_path" != "$lib" ]]; then
-    echo "$lib_path"
-    return 0
-  fi
-  return 1
-}
-
-# Static archives we build ourselves under bdeps/out take precedence over the
-# host's apt-installed .a files, so the acton binary links against libs targeting
-# our chosen libc version rather than the build machine's.
+# Static archives we build ourselves under bdeps/out are required so the acton
+# binary links against libs targeting our chosen libc version rather than the
+# build machine's.
 bdeps_lib_path() {
   local archive="$1"
   if [[ -n "${ACTON_BDEPS_DIR:-}" && -f "${ACTON_BDEPS_DIR}/lib/${archive}" ]]; then
@@ -40,6 +29,16 @@ bdeps_lib_path() {
     return 0
   fi
   return 1
+}
+
+require_bdeps_lib_path() {
+  local archive="$1"
+  if bdeps_lib_path "$archive"; then
+    return 0
+  fi
+  echo "required bdeps archive not found: ${ACTON_BDEPS_DIR:-<unset>}/lib/${archive}" >&2
+  echo "run make to build bdeps before invoking the Zig compiler wrapper" >&2
+  exit 1
 }
 
 add_bdeps_include_dirs() {
@@ -67,25 +66,12 @@ add_arch_feature_args() {
 
 rewrite_lib_arg() {
   local arg="$1"
-  local lib_path
   case "$arg" in
     -lgmp|-l:libgmp.a)
-      if lib_path="$(bdeps_lib_path libgmp.a)"; then
-        echo "$lib_path"
-      elif lib_path="$(gcc_lib_path libgmp.a)"; then
-        echo "$lib_path"
-      else
-        echo "$arg"
-      fi
+      require_bdeps_lib_path libgmp.a
       ;;
     -lz|-l:libz.a)
-      if lib_path="$(bdeps_lib_path libz.a)"; then
-        echo "$lib_path"
-      elif lib_path="$(gcc_lib_path libz.a)"; then
-        echo "$lib_path"
-      else
-        echo "$arg"
-      fi
+      require_bdeps_lib_path libz.a
       ;;
     -lstdc++|-l:libstdc++.a)
       # zig's bundled static libc++ replaces the host libstdc++.a.
@@ -96,13 +82,7 @@ rewrite_lib_arg() {
       echo "-lunwind"
       ;;
     -ltinfo|-l:libtinfo.a)
-      if lib_path="$(bdeps_lib_path libtinfo.a)"; then
-        echo "$lib_path"
-      elif lib_path="$(gcc_lib_path libtinfo.a)"; then
-        echo "$lib_path"
-      else
-        echo "$arg"
-      fi
+      require_bdeps_lib_path libtinfo.a
       ;;
     *)
       echo "$arg"
@@ -144,7 +124,7 @@ case "$(uname -s)" in
       aarch64|arm64) ZIG_ARCH=aarch64 ;;
       *) echo "Unsupported architecture for Linux: ${ARCH}" >&2; exit 1 ;;
     esac
-    GLIBC_VERSION="${ACTON_ZIG_GLIBC_VERSION:-2.31}"
+    GLIBC_VERSION="${ACTON_ZIG_GLIBC_VERSION:-2.28}"
     args=()
     add_bdeps_include_dirs
     add_system_include_dirs

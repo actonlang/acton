@@ -32,6 +32,6 @@ dist/bin/actonc path/to/file.act   # compatibility alias
 
 - `ZIG_LOCAL_CACHE_DIR` controls Zig's cache location (defaults to `~/.cache/acton/zig-local-cache` when `HOME` is set).
 - `BUILD_RELEASE=1 make` stamps release versions; default builds get a timestamped version suffix.
-- On Linux, the Makefile uses Zig for the Stack/GHC C compiler path and pins the default glibc target to 2.31 for compatibility.
+- On Linux, the Makefile uses Zig for the Stack/GHC C compiler path and pins the default glibc target to 2.28 for compatibility.
 - `ACTON_ZIG_GLIBC_VERSION` overrides the glibc version used for Stack/GHC linking on Linux.
 - Linux release builds should run in a builder with system static libraries no newer than the requested glibc target.
