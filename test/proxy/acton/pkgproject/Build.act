@@ -1,0 +1,16 @@
+name = "pkgtest"
+fingerprint = 0xc11efa8100000001
+
+# A github dependency (repo_url set) so `acton pkg upgrade` resolves the latest
+# ref via the GitHub API and re-hashes the archive -- both through the proxy.
+# zlib is not an Acton package, but pkg upgrade only resolves + hashes; it does
+# not build the dependency.
+dependencies = {
+    "zlib": (
+        url="https://github.com/madler/zlib/archive/refs/tags/v1.3.1.tar.gz",
+        hash="N-V-__8AAB0eQwD-0MdOEBmz7intriBReIsIDNlukNVoNu6o",
+        repo_url="https://github.com/madler/zlib"
+    )
+}
+
+zig_dependencies = {}
