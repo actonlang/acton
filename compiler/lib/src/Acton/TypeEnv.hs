@@ -974,9 +974,6 @@ instance USubst NameInfo where
     usubstWith s (NMAlias m)          = NMAlias m
     usubstWith s NReserved            = NReserved
 
-instance USubst NModule where
-    usubstWith s (NModule ms te doc)  = NModule ms te doc       -- actually usubstWith s te, but te has no free variables (top-level)
-
 instance USubst Witness where
     usubstWith s w@WClass{}           = w                               -- A WClass (i.e., an extension) can't have any free type variables
     usubstWith s w@WInst{}            = w{ wtype  = usubstWith s (wtype w), proto = usubstWith s (proto w) }

@@ -72,9 +72,7 @@ typeDecl _              = True
 type HTEnv            =  M.HashMap Name NameInfo
 
 instance Data.Binary.Binary NameInfo
-instance Data.Binary.Binary NModule
 instance Persist NameInfo
-instance Persist NModule
 
 -- | Strip all docstrings from NameInfo (and nested environments).
 -- This is used when computing a public-interface hash so that
@@ -182,17 +180,6 @@ stripLocsNModule (NModule ms te doc) = NModule ms (stripLocsTEnv te) doc
       Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
       Internal{}     -> n
 
-instance Leaves NameInfo where
-    leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
-    leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
-    leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
-    leaves (NDef sc dec _)    = leaves sc
-    leaves _                  = []
-
-instance Leaves NModule where
-    leaves (NModule _ te _)    = leaves te
-
 instance Pretty TEnv where
     pretty tenv               = vcat (map pretty $ normTEnv tenv)
       where normTEnv te       = f [] te
@@ -230,13 +217,6 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
 
-instance Pretty (Name,NModule) where
-    pretty (n, NModule ms te doc)
-                                = text "module" <+> pretty n <> colon $+$
-                                  nest 4 (vcat [ text "import" <+> pretty m | m <- ms ]) $+$
-                                  nest 4 (prettyDocstring doc) $+$
-                                  nest 4 (pretty te)
-
 prettyOrPass te
   | isEmpty doc                 = text "pass"
   | otherwise                   = doc
@@ -260,9 +240,6 @@ instance VFree NameInfo where
     vfree (NMAlias qn)          = []
     vfree NReserved             = []
 
-instance VFree NModule where
-    vfree (NModule ms te doc)   = []        -- actually vfree te, but a module has no free variables on the top level
-
 instance VSubst NameInfo where
     vsubst s (NVar t)           = NVar (vsubst s t)
     vsubst s (NSVar t)          = NSVar (vsubst s t)
@@ -277,9 +254,6 @@ instance VSubst NameInfo where
     vsubst s (NMAlias m)        = NMAlias m
     vsubst s NReserved          = NReserved
 
-instance VSubst NModule where
-    vsubst s (NModule ms te x)  = NModule ms te x        -- actually vsubst s te, but te has no free variables (top-level)
-
 instance UFree NameInfo where
     ufree (NVar t)              = ufree t
     ufree (NSVar t)             = ufree t
@@ -293,9 +267,6 @@ instance UFree NameInfo where
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
     ufree NReserved             = []
-
-instance UFree NModule where
-    ufree (NModule ms te doc)   = []        -- actually ufree te, but a module has no free variables on the top level
 
 instance Polarity (Name,NameInfo) where
     polvars (n, i)              = polvars i
@@ -399,23 +370,14 @@ instance UFree Witness where
     ufree w@WInst{}     = ufree (wtype w) ++ ufree (proto w)
 
 
-instance Leaves WTCon where
-    leaves (wp,p)       = leaves p
-
 instance VFree WTCon where
     vfree (wpath, p)    = vfree p
 
 instance UFree WTCon where
     ufree (wpath, p)    = ufree p
 
-instance Tailvars WTCon where
-    tailvars (wpath, p) = tailvars p
-
 instance VSubst WTCon where
     vsubst s (w,u)      = (w, vsubst s u)
-
-instance Vars WTCon where
-    freeQ (wpath, p)    = freeQ p
 
 instance Vars NameInfo where
     freeQ ni = case ni of
@@ -446,12 +408,6 @@ instance Vars NameInfo where
           where
             step (Left qn) = freeQ qn
             step (Right qn) = freeQ qn
-
-instance Vars NModule where
-    freeQ (NModule _ te _) = concatMap (freeQ . snd) te
-
-instance UWild WTCon where
-    uwild (wpath, p)    = (wpath, uwild p)
 
 instance Pretty WTCon where
     pretty (wpath, p)   = pretty p

@@ -390,9 +390,6 @@ instance Unalias NameInfo where
     unalias env (NMAlias m)         = NMAlias (unalias env m)
     unalias env NReserved           = NReserved
 
-instance Unalias NModule where
-    unalias env (NModule ms te doc) = NModule (unalias env ms) (unalias env te) doc
-
 instance Unalias (Name,NameInfo) where
     unalias env (n,i)               = (n, unalias env i)
 
