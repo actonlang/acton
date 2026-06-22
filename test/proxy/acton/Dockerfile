@@ -17,6 +17,9 @@ ENV HOME=/root
 # A minimal Acton project whose only dependency is a remote GitHub archive,
 # which forces the network fetch path that carries the proxy diagnostics.
 COPY project /work/proxytest
+# A second project with a github 'dependency' (repo_url set) for the `acton pkg`
+# command tests (pkg upgrade resolves a ref + re-hashes through the proxy).
+COPY pkgproject /work/pkgtest
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

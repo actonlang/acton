@@ -36,11 +36,13 @@ Two containers (`docker-compose.yml`):
 3. **control** — runs `curl` on the same internal-only network through the same
    proxy; it must reach GitHub (so a later failure is acton's fault, not the
    network/proxy);
-4. runs `acton fetch` (the project has one remote HTTPS `zig_dependency`) with
-   the proxy variables set.
+4. runs three scenarios with the proxy variables set, covering every HTTP path:
+   `acton fetch` (dependency archive download), `acton pkg update` (the package
+   index over http-client), and `acton pkg upgrade` (GitHub API ref resolution
+   plus archive re-hash).
 
-Because the acton box has no direct egress, a successful fetch is only possible
-if acton routed through the proxy:
+Because the acton box has no direct egress, a scenario can only succeed if acton
+routed that request through the proxy:
 
 | result | meaning |
 |--------|---------|

@@ -22,12 +22,13 @@ module PkgCommands
 
 import Prelude hiding (readFile, writeFile)
 
+import Acton.ArchiveDownload (downloadArchive)
+import Acton.HttpFetch (httpGetBytes, isHttpUrl, newProxyManager)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.Compile (loadBuildSpec, throwProjectError)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
-import Control.Concurrent (threadDelay)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isHexDigit, isSpace)
 import Data.Foldable (toList)
@@ -41,10 +42,7 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.Text as T
-import Network.HTTP.Client (Manager, Response, httpLbs, parseRequest, requestHeaders, responseBody, responseStatus)
-import Network.HTTP.Client.TLS (newTlsManager)
-import Network.HTTP.Types.Header (Header)
-import Network.HTTP.Types.Status (statusCode)
+import Network.HTTP.Client (Manager)
 import System.Directory (Permissions, canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, doesPathExist, getCurrentDirectory, getHomeDirectory, getPermissions, listDirectory, removeFile, setPermissions)
 import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
@@ -90,7 +88,7 @@ installCommand gopts opts = do
         repoRefArg = normalizeMaybe (C.installRepoRef opts)
         pkgNameArg = C.installPkgName opts
     validateInstallName appName
-    manager <- newTlsManager
+    manager <- newProxyManager
     token <- resolveGithubToken (normalizeMaybe (C.installGithubToken opts))
     repoUrl <-
       if null repoUrlArg
@@ -158,7 +156,7 @@ pkgAddCommand _ opts = do
     validateDepName depName
     cwd <- getCurrentDirectory
     spec0 <- loadBuildSpec cwd
-    manager <- newTlsManager
+    manager <- newProxyManager
     token <- resolveGithubToken (normalizeMaybe (C.pkgAddGithubToken opts))
     let urlArg = C.pkgAddUrl opts
         repoUrlArg = C.pkgAddRepoUrl opts
@@ -189,7 +187,7 @@ pkgAddCommand _ opts = do
 resolveLibraryDependency :: String -> IO BuildSpec.PkgDep
 resolveLibraryDependency depName = do
     validateDepName depName
-    manager <- newTlsManager
+    manager <- newProxyManager
     token <- resolveGithubToken Nothing
     repoUrl <- lookupRepoUrlFromIndex depName ""
     ensureGithubUrl "repl :dep add" repoUrl
@@ -223,7 +221,7 @@ pkgUpgradeCommand _ opts = do
     cwd <- getCurrentDirectory
     spec <- loadBuildSpec cwd
     let deps = BuildSpec.dependencies spec
-    manager <- newTlsManager
+    manager <- newProxyManager
     token <- resolveGithubToken (normalizeMaybe (C.pkgUpgradeGithubToken opts))
     resolved <- mapM (resolveDep manager token) (M.toList deps)
     let newUrls = M.fromList [ (n,u) | Just (n,u) <- resolved ]
@@ -293,8 +291,8 @@ pkgUpgradeCommand _ opts = do
 pkgUpdateCommand :: C.GlobalOptions -> IO ()
 pkgUpdateCommand _ = do
     let indexUrl = "https://actonlang.github.io/package-index/index.json"
-    manager <- newTlsManager
-    body <- requireRightWith ("ERROR: Failed to download package index from " ++ indexUrl ++ ": ") =<< httpGet manager [] indexUrl
+    manager <- newProxyManager
+    body <- requireRightWith ("ERROR: Failed to download package index from " ++ indexUrl ++ ": ") =<< httpGetBytes manager [] indexUrl
     home <- getHomeDirectory
     let indexDir = home </> ".cache" </> "acton"
         indexPath = indexDir </> "package-index.json"
@@ -837,7 +835,7 @@ fetchGithubObject manager token url = do
             Just t -> [("Authorization", B.pack ("Bearer " ++ t))]
             Nothing -> []
         headers = ("Accept", "application/vnd.github.v3+json") : authHeader
-    body <- httpGet manager headers url
+    body <- httpGetBytes manager headers url
     case body of
       Left err -> return (Left ("Failed to download " ++ url ++ ": " ++ err))
       Right bs ->
@@ -845,43 +843,6 @@ fetchGithubObject manager token url = do
           Left err -> return (Left err)
           Right (Aeson.Object obj) -> return (Right obj)
           Right _ -> return (Left "Invalid JSON response")
-
-httpGet :: Manager -> [Header] -> String -> IO (Either String BL.ByteString)
-httpGet manager extraHeaders url = do
-    req0 <- parseRequest url
-    let headers = ("User-Agent", "acton") : extraHeaders
-        req = req0 { requestHeaders = headers ++ requestHeaders req0 }
-    let maxAttempts = 10
-        baseDelay = 500000
-        maxDelay = 120000000
-    let go attempt delay = do
-          res <- try (httpLbs req manager) :: IO (Either SomeException (Response BL.ByteString))
-          case res of
-            Left err ->
-              retryOrFail attempt delay (displayException err)
-            Right response -> do
-              let status = statusCode (responseStatus response)
-                  body = responseBody response
-              if status >= 200 && status < 300
-                then return (Right body)
-                else
-                  if shouldRetry status
-                    then retryOrFail attempt delay (httpErrorMessage status body)
-                    else return (Left (httpErrorMessage status body))
-        retryOrFail attempt delay errMsg
-          | attempt >= maxAttempts = return (Left errMsg)
-          | otherwise = do
-              threadDelay delay
-              go (attempt + 1) (min maxDelay (delay * 2))
-    go 1 baseDelay
-  where
-    shouldRetry status = status == 403 || status == 429 || status >= 500
-    httpErrorMessage status body =
-      let raw = trim (B.unpack (BL.toStrict body))
-          clipped = take 200 raw
-          suffix = if length raw > length clipped then "..." else ""
-          detail = if null clipped then "" else ": " ++ clipped ++ suffix
-      in "HTTP " ++ show status ++ detail
 
 lookupString :: String -> Aeson.Object -> Maybe String
 lookupString key obj =
@@ -944,32 +905,38 @@ readIndexFile path = do
       Left err -> throwProjectError ("ERROR: Failed to read package index at " ++ path ++ ": " ++ displayException err)
       Right content -> return content
 
+-- | Download an archive and return its zig package hash. For http(s) URLs the
+--   download goes through the proxy-aware http-client (Acton.ArchiveDownload), and
+--   only the resulting LOCAL file is handed to `zig fetch` -- so it works behind an
+--   HTTP CONNECT proxy, which zig's own network stack does not. Non-http targets
+--   (local paths) go straight to zig fetch.
 zigFetchHash :: FilePath -> String -> IO (Either String String)
-zigFetchHash zigExe depUrl = do
+zigFetchHash zigExe depUrl
+  | isHttpUrl depUrl = do
+      dl <- downloadArchive depUrl
+      case dl of
+        Left err -> return (Left ("Error fetching " ++ err))
+        Right localFile -> do
+          res <- zigFetchLocalHash zigExe localFile
+          _ <- try (removeFile localFile) :: IO (Either IOException ())
+          return res
+  | otherwise = zigFetchLocalHash zigExe depUrl
+
+-- | Run `zig fetch` on a local archive (or non-http target) and return its hash.
+zigFetchLocalHash :: FilePath -> String -> IO (Either String String)
+zigFetchLocalHash zigExe target = do
     home <- getHomeDirectory
     let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
     createDirectoryIfMissing True globalCache
     createDirectoryIfMissing True (globalCache </> "tmp")
     withSystemTempDirectory "acton-zig-fetch" $ \tmp -> do
       writeFile (tmp </> "build.zig") zigFetchBuildZig
-      let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, depUrl]) { cwd = Just tmp }
-      let maxAttempts = 10
-          baseDelay = 500000
-          maxDelay = 120000000
-      let go attempt delay = do
-            res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-            case res of
-              Left err ->
-                retryOrFail attempt delay ("Error fetching " ++ displayException err)
-              Right (ExitSuccess, out, _) -> return (Right (trim out))
-              Right (ExitFailure _, _, err) ->
-                retryOrFail attempt delay ("Error fetching " ++ trim err)
-          retryOrFail attempt delay errMsg
-            | attempt >= maxAttempts = return (Left errMsg)
-            | otherwise = do
-                threadDelay delay
-                go (attempt + 1) (min maxDelay (delay * 2))
-      go 1 baseDelay
+      let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, target]) { cwd = Just tmp }
+      res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+      case res of
+        Left err -> return (Left ("Error hashing archive: " ++ displayException err))
+        Right (ExitSuccess, out, _) -> return (Right (trim out))
+        Right (ExitFailure _, _, err) -> return (Left ("Error hashing archive: " ++ trim err))
 
 zigFetchBuildZig :: String
 zigFetchBuildZig = unlines

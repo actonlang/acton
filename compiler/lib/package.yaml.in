@@ -63,6 +63,7 @@ dependencies:
 library:
   source-dirs: src
   exposed-modules:
+    - Acton.ArchiveDownload
     - Acton.Boxing
     - Acton.BuildSpec
     - Acton.Builtin
@@ -77,6 +78,7 @@ library:
     - Acton.Env
     - Acton.Fingerprint
     - Acton.Hashing
+    - Acton.HttpFetch
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo

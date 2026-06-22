@@ -76,34 +76,62 @@ if ! docker run --rm --network "$INTERNAL_NET" \
 fi
 echo "    [ok] proxy reaches GitHub"
 
-# 4. The actual test: acton fetch on the proxy-only network.
-note "acton fetch through the proxy (http_proxy + https_proxy set)"
-set +e
-out="$("${COMPOSE[@]}" exec -T \
+# 4. Scenarios. With no direct egress, a command can only succeed if acton routed
+#    through the proxy. Each scenario asserts the command's positive success
+#    marker, covering both HTTP code paths: the build/fetch archive download and
+#    the `acton pkg` commands (github API ref resolution + archive re-hash).
+run_in_proxy() {  # $1 = workdir, $2 = command -> prints combined stdout+stderr
+    # Forward GITHUB_TOKEN when set so the pkg-upgrade scenario authenticates to
+    # the GitHub API; unauthenticated requests share the runner IP's 60/hr limit
+    # and rate-limit (403) on CI. Optional locally, recommended in CI.
+    local tok=()
+    [ -n "${GITHUB_TOKEN:-}" ] && tok=(-e "GITHUB_TOKEN=$GITHUB_TOKEN")
+    "${COMPOSE[@]}" exec -T \
         -e http_proxy="$PROXY_URL"  -e https_proxy="$PROXY_URL" \
-        -e HTTP_PROXY="$PROXY_URL"  -e HTTPS_PROXY="$PROXY_URL" \
-        -e HOME=/root \
-        acton sh -c 'rm -rf /root/.cache/acton; cd /work/proxytest && exec /opt/acton/bin/acton fetch' 2>&1)"
-code=$?
+        -e HTTP_PROXY="$PROXY_URL"  -e HTTPS_PROXY="$PROXY_URL" -e HOME=/root \
+        "${tok[@]}" \
+        acton sh -c "rm -rf /root/.cache/acton; cd $1 && $2" 2>&1
+}
+
+fails=0
+check() {  # $1 = label, $2 = exit code, $3 = output, $4 = required success marker
+    echo "$3" | sed 's/^/    acton| /'
+    if [ "$2" -eq 0 ] && printf '%s\n' "$3" | grep -qiE "$4"; then
+        echo "  [PASS] $1"
+    else
+        echo "  [FAIL] $1 (exit $2; expected /$4/)"
+        fails=$((fails + 1))
+    fi
+}
+
+set +e
+note "[1/3] acton fetch  (dependency archive download)"
+o="$(run_in_proxy /work/proxytest '/opt/acton/bin/acton fetch')"; c=$?
+check "acton fetch"       "$c" "$o" 'Dependencies fetched'
+
+note "[2/3] acton pkg update  (package index over http-client)"
+o="$(run_in_proxy /work '/opt/acton/bin/acton pkg update')"; c=$?
+check "acton pkg update"  "$c" "$o" 'Updated package index'
+
+note "[3/3] acton pkg upgrade  (github ref resolve + archive re-hash)"
+o="$(run_in_proxy /work/pkgtest '/opt/acton/bin/acton pkg upgrade')"; c=$?
+check "acton pkg upgrade" "$c" "$o" 'Wrote changes to Build.act'
 set -e
-echo "$out" | sed 's/^/    acton| /'
 
-connects="$("${COMPOSE[@]}" logs --no-color proxy 2>/dev/null | grep -c -i 'CONNECT' || true)"
-
-# 5. Verdict.
 echo
-if [ "$code" -eq 0 ]; then
-    note "PASS: acton fetched the dependency through the proxy (proxy CONNECTs: $connects)"
+connects="$("${COMPOSE[@]}" logs --no-color proxy 2>/dev/null | grep -c -i 'CONNECT' || true)"
+if [ "$fails" -eq 0 ]; then
+    note "PASS: acton routed fetch + pkg commands through the proxy ($connects CONNECTs)"
     exit 0
 fi
 
-note "FAIL: acton fetch failed (exit $code) on a proxy-only network"
+note "FAIL: $fails scenario(s) did not complete through the proxy"
 echo "    proxy CONNECT log:" >&2
 "${COMPOSE[@]}" logs --no-color proxy 2>/dev/null | grep -i 'CONNECT' | sed 's/^/      /' >&2 || true
 cat >&2 <<'EOF'
-    With no direct egress, this means acton's HTTP client did not route through
-    the proxy. The usual cause is GHC's getEnvironment() returning an empty
-    environment on x86_64 -no-pie binaries (the `environ` copy-relocation bug),
-    so http-client's proxyEnvironment never saw http(s)_proxy.
+    With no direct egress, a failure means acton did not route a request through
+    the proxy. Causes: GHC getEnvironment() empty on x86_64 -no-pie binaries (the
+    `environ` bug), or a download/hash step using zig's network stack instead of
+    the proxy-aware http-client.
 EOF
 exit 1

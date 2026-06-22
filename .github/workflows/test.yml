@@ -936,6 +936,10 @@ jobs:
           sudo dpkg -i ./deb/acton_*.deb
           acton version
       - name: "Proxy dependency-fetch test"
+        env:
+          # Authenticate the pkg-upgrade scenario's GitHub API calls so they
+          # don't hit the 60/hr unauthenticated limit on shared runner IPs.
+          GITHUB_TOKEN: ${{ github.token }}
         run: make test-proxy ACTON_DIST=/usr/lib/acton
 
   test-windows:

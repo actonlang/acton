@@ -236,7 +236,6 @@ import qualified Pretty
 import Pretty hiding ((<>))
 import qualified InterfaceFiles
 
-import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
@@ -246,7 +245,7 @@ import Control.Exception (Exception, IOException, SomeAsyncException, SomeExcept
 import Control.Monad
 import Data.Binary (encode)
 import Data.Bits (shiftL, shiftR, (.|.))
-import Data.Char (isAlpha, isDigit, isHexDigit, isSpace, toLower)
+import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
 import Data.Graph
 import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub, partition)
@@ -258,17 +257,15 @@ import qualified Data.Map as M
 import Data.Ord (Down(..))
 import qualified Data.Set
 import Data.Time.Clock (UTCTime)
-import Data.Word (Word8, Word32, Word64)
+import Data.Word (Word32, Word64)
 import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
-import qualified Network.HTTP.Client as HTTP
-import Network.HTTP.Client.TLS (tlsManagerSettings)
-import Network.HTTP.Types.Header (hContentDisposition, hContentType)
-import Network.HTTP.Types.Status (statusCode)
+import Acton.ArchiveDownload (downloadArchive)
+import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
 import System.Clock
 import System.Directory
 import System.Directory.Recursive (getFilesRecursive)
-import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
+import System.Environment (getExecutablePath, lookupEnv)
 import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
 import System.FilePath ((</>))
 import System.FilePath.Posix
@@ -4985,132 +4982,6 @@ validateDepOverridePath depName depPath = do
                          ++ "Hint: Local dependency paths must point to an Acton project root\n"
                          ++ "(directory with src/ and Build.act).")
 
--- Proxy diagnostics -----------------------------------------------------------
--- Dependency archives are fetched over HTTPS with http-client, whose proxy
--- selection (proxyEnvironment) is protocol-specific: an https URL is proxied
--- only via https_proxy/HTTPS_PROXY, never via http_proxy. When a fetch fails we
--- report which proxy variable applies to the request and the proxy environment
--- acton actually saw, so a missing/unexported https_proxy (e.g. under sudo or a
--- non-interactive make/CI shell, where the interactive shell's proxy vars are
--- not inherited) is obvious instead of hidden behind a raw "proxy = Nothing"
--- request-record dump.
-
--- | Proxy-related environment variables, in the order we report them.
-proxyEnvVarNames :: [String]
-proxyEnvVarNames =
-  [ "http_proxy", "HTTP_PROXY"
-  , "https_proxy", "HTTPS_PROXY"
-  , "all_proxy", "ALL_PROXY"
-  , "no_proxy", "NO_PROXY"
-  ]
-
--- | Snapshot the proxy environment acton actually sees. Reads via
---   getEnvironment (the `environ` array), the SAME source http-client's
---   proxyEnvironment consults -- NOT lookupEnv/getenv. The two can disagree on
---   Linux binaries hit by the `environ` copy-relocation bug (getEnvironment
---   returns [] while getenv works); reading getEnvironment keeps this diagnostic
---   honest about what proxy selection actually saw.
-readProxyEnv :: IO [(String, Maybe String)]
-readProxyEnv = do
-  env <- getEnvironment
-  return [ (n, lookup n env) | n <- proxyEnvVarNames ]
-
--- | Render one proxy env var for display, masking any embedded credentials.
-formatProxyEnvVar :: (String, Maybe String) -> String
-formatProxyEnvVar (n, v) =
-  n ++ "=" ++ maybe "(unset)" (\x -> if null x then "(empty)" else maskProxyUrl x) v
-
--- | Indented "proxy environment acton sees" block for use in messages.
-proxyEnvReportLines :: String -> [(String, Maybe String)] -> [String]
-proxyEnvReportLines indent env =
-  (indent ++ "proxy environment acton sees:")
-  : [ indent ++ "  " ++ formatProxyEnvVar kv | kv <- env ]
-
--- | Mask user:password@ credentials embedded in a proxy URL.
-maskProxyUrl :: String -> String
-maskProxyUrl url =
-  let (scheme, afterScheme) = case findSubstring "://" url of
-                                Just i  -> (take (i + 3) url, drop (i + 3) url)
-                                Nothing -> ("", url)
-      (authority, rest)     = break (== '/') afterScheme
-  in case break (== '@') authority of
-       (_, '@':hostPort) -> scheme ++ "***@" ++ hostPort ++ rest
-       _                 -> url
-
-findSubstring :: String -> String -> Maybe Int
-findSubstring needle = go 0
-  where go _ []              = Nothing
-        go i hay@(_:t)
-          | needle `isPrefixOf` hay = Just i
-          | otherwise               = go (i + 1) t
-
--- | The proxy variable http-client consults for a request of this scheme, and
---   its value if set. Selection is protocol-specific (https_proxy for https,
---   http_proxy for http); ALL_PROXY is intentionally excluded because
---   http-client does not honor it. NB: we report from the environment rather
---   than the failed request's `proxy` field, which http-client leaves unset for
---   https CONNECT tunnels even when a proxy is used.
-applicableProxy :: Bool -> [(String, Maybe String)] -> Maybe (String, String)
-applicableProxy secure env =
-  listToMaybe [ (n, v) | n <- names, Just (Just v) <- [lookup n env], not (null v) ]
-  where names = if secure then ["https_proxy", "HTTPS_PROXY"] else ["http_proxy", "HTTP_PROXY"]
-
--- | Turn an http-client fetch exception into a clean, actionable message: the
---   underlying cause, the proxy variable that applies to the request, the proxy
---   environment acton saw, and a hint when no proxy is configured for the URL.
-describeFetchException :: [(String, Maybe String)] -> SomeException -> String
-describeFetchException env ex =
-  case fromException ex :: Maybe HTTP.HttpException of
-    Just (HTTP.HttpExceptionRequest req content) ->
-      let secure  = HTTP.secure req
-          scheme  = if secure then "https" else "http"
-          target  = B.unpack (HTTP.host req) ++ ":" ++ show (HTTP.port req)
-          vars    = if secure then "https_proxy/HTTPS_PROXY" else "http_proxy/HTTP_PROXY"
-          proxyLn = case applicableProxy secure env of
-                      Just (n, v) -> "  proxy for this " ++ scheme ++ " request: "
-                                     ++ maskProxyUrl v ++ " (from " ++ n ++ ")"
-                      Nothing     -> "  proxy for this " ++ scheme ++ " request: none ("
-                                     ++ vars ++ " unset)"
-      in intercalate "\n"
-           ( [ describeFetchContent content
-             , "  request: " ++ scheme ++ " to " ++ target
-             , proxyLn
-             ]
-             ++ proxyEnvReportLines "  " env
-             ++ proxyFailureHint secure env )
-    Just other -> displayException other
-    Nothing    -> displayException ex
-
--- | One-line summary of an http-client failure cause (no Request record dump).
-describeFetchContent :: HTTP.HttpExceptionContent -> String
-describeFetchContent c = case c of
-  HTTP.ConnectionTimeout            -> "connection timed out"
-  HTTP.ConnectionFailure e          -> "connection failed: " ++ show e
-  HTTP.ResponseTimeout              -> "response timed out"
-  HTTP.ProxyConnectException h p st -> "proxy CONNECT to " ++ B.unpack h ++ ":" ++ show p
-                                       ++ " failed (status " ++ show (statusCode st) ++ ")"
-  HTTP.StatusCodeException res _    -> "unexpected HTTP status "
-                                       ++ show (statusCode (HTTP.responseStatus res))
-  HTTP.InternalException e          -> "connection failed: " ++ show e
-  other                             -> show other
-
--- | Hint shown when a fetch failed and no proxy variable applies to its scheme:
---   the common real-world trap where proxy vars live in an interactive shell but
---   are absent from the build's environment (sudo/root, make, CI).
-proxyFailureHint :: Bool -> [(String, Maybe String)] -> [String]
-proxyFailureHint secure env
-  | isJust (applicableProxy secure env) = []
-  | otherwise =
-      [ "  hint: no " ++ vars ++ " is set in acton's environment, so this " ++ scheme
-      , "        download was attempted directly. If you use a proxy, make sure "
-        ++ varLower ++ " is"
-      , "        exported in the environment that runs the build. sudo/root shells and"
-      , "        many make/CI setups do not inherit the proxy variables from your"
-      , "        interactive shell." ]
-  where scheme   = if secure then "https" else "http"
-        vars     = if secure then "https_proxy/HTTPS_PROXY" else "http_proxy/HTTP_PROXY"
-        varLower = if secure then "https_proxy" else "http_proxy"
-
 fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
 fetchDependencies gopts paths depOverrides = do
     if isTmp paths
@@ -5301,19 +5172,14 @@ fetchDependencies gopts paths depOverrides = do
             throwProjectError ("Failed to extract cached dependency archive " ++ archive ++ ":\n" ++ out ++ err)
 
     fetchViaDownloadedArchive kind name depUrl mh cacheDir zigExe globalCache = do
-      dl <- downloadToLocalArchive kind name depUrl
+      -- depUrl is always http(s) here (runFetch's isHttpUrl guard), so
+      -- downloadArchive (proxy-aware http-client) is the right path. Do NOT fall
+      -- back to `zig fetch <depUrl>`: zig's network stack cannot traverse an HTTP
+      -- CONNECT proxy, so it would hang and bury the actionable proxy diagnostic.
+      dl <- downloadArchive depUrl
       case dl of
-        Left dlErr -> do
-          direct <- runZigFetch zigExe globalCache depUrl
-          case direct of
-            Left ex ->
-              return (Left ("Failed to fetch dependency " ++ name ++ ":\nDownload step failed: " ++ dlErr
-                            ++ "\nDirect zig fetch failed: " ++ displayException ex))
-            Right (ExitSuccess, out, _) ->
-              validateFetchOutput name mh cacheDir out
-            Right (ExitFailure _, _, err) ->
-              return (Left ("Failed to fetch dependency " ++ name ++ ":\nDownload step failed: " ++ dlErr
-                            ++ "\nDirect zig fetch failed:\n" ++ err))
+        Left dlErr ->
+          return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ dlErr))
         Right localArchive -> do
           fetched <- runZigFetch zigExe globalCache localArchive
           _ <- try (removeFile localArchive) :: IO (Either IOException ())
@@ -5324,155 +5190,6 @@ fetchDependencies gopts paths depOverrides = do
               validateFetchOutput name mh cacheDir out
             Right (ExitFailure _, _, err) ->
               return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
-
-    isHttpUrl :: String -> Bool
-    isHttpUrl depUrl =
-      let u = map toLower depUrl
-      in "http://" `isPrefixOf` u || "https://" `isPrefixOf` u
-
-    downloadToLocalArchive :: String -> String -> String -> IO (Either String FilePath)
-    downloadToLocalArchive _kind _name depUrl = do
-      parsedReq <- try (HTTP.parseRequest depUrl) :: IO (Either SomeException HTTP.Request)
-      case parsedReq of
-        Left ex -> return (Left ("Invalid dependency URL: " ++ displayException ex))
-        Right req -> do
-          let settings = HTTP.managerSetProxy (HTTP.proxyEnvironment Nothing) tlsManagerSettings
-          manager <- HTTP.newManager settings
-          opened <- try (HTTP.responseOpen req manager) :: IO (Either SomeException (HTTP.Response HTTP.BodyReader))
-          case opened of
-            Left ex -> do
-              env <- readProxyEnv
-              return (Left (describeFetchException env ex))
-            Right response -> do
-              let code = statusCode (HTTP.responseStatus response)
-              if code < 200 || code >= 300
-                then do
-                  _ <- try (HTTP.responseClose response) :: IO (Either SomeException ())
-                  return (Left ("HTTP error " ++ show code))
-                else do
-                  tmpDir <- getTemporaryDirectory
-                  (tmpPath, tmpHandle) <- openBinaryTempFile tmpDir "acton-fetch"
-                  let initialSuffix = archiveSuffixForRequestResponse req response
-                  streamRes <- try (streamDownloadToFile (HTTP.responseBody response) tmpHandle) :: IO (Either SomeException BS.ByteString)
-                  _ <- try (hClose tmpHandle) :: IO (Either IOException ())
-                  _ <- try (HTTP.responseClose response) :: IO (Either SomeException ())
-                  case streamRes of
-                    Left ex -> do
-                      _ <- try (removeFile tmpPath) :: IO (Either IOException ())
-                      return (Left ("Unable to save downloaded archive: " ++ displayException ex))
-                    Right sniffBytes ->
-                      case initialSuffix <|> detectArchiveSuffixFromBytes sniffBytes of
-                        Nothing -> do
-                          _ <- try (removeFile tmpPath) :: IO (Either IOException ())
-                          return (Left "Could not determine archive type from URL path, response headers, or file bytes")
-                        Just suffix -> do
-                          let finalPath = tmpPath ++ suffix
-                          moveRes <- try (renameFile tmpPath finalPath) :: IO (Either IOException ())
-                          case moveRes of
-                            Left ex -> do
-                              _ <- try (removeFile tmpPath) :: IO (Either IOException ())
-                              return (Left ("Unable to finalize downloaded archive path: " ++ displayException ex))
-                            Right _ ->
-                              return (Right finalPath)
-
-    streamDownloadToFile :: HTTP.BodyReader -> Handle -> IO BS.ByteString
-    streamDownloadToFile bodyReader outHandle =
-      loop BS.empty
-      where
-        sniffLimit = 600
-        loop sniff = do
-          chunk <- HTTP.brRead bodyReader
-          if BS.null chunk
-            then return sniff
-            else do
-              BS.hPut outHandle chunk
-              let sniff' =
-                    if BS.length sniff >= sniffLimit
-                      then sniff
-                      else BS.take sniffLimit (sniff <> chunk)
-              loop sniff'
-
-    archiveSuffixForRequestResponse :: HTTP.Request -> HTTP.Response HTTP.BodyReader -> Maybe String
-    archiveSuffixForRequestResponse req response =
-      case archiveSuffixFromPath (B.unpack (HTTP.path req)) of
-        Just suffix -> Just suffix
-        Nothing ->
-          case archiveSuffixFromContentDisposition (lookup hContentDisposition (HTTP.responseHeaders response)) of
-            Just suffix -> Just suffix
-            Nothing -> archiveSuffixFromContentType (lookup hContentType (HTTP.responseHeaders response))
-
-    archiveSuffixFromPath :: String -> Maybe String
-    archiveSuffixFromPath rawPath =
-      let p = map toLower rawPath
-      in if ".tar.gz" `isSuffixOf` p then Just ".tar.gz"
-         else if ".tgz" `isSuffixOf` p then Just ".tgz"
-         else if ".tar.xz" `isSuffixOf` p then Just ".tar.xz"
-         else if ".txz" `isSuffixOf` p then Just ".txz"
-         else if ".tar.zst" `isSuffixOf` p then Just ".tar.zst"
-         else if ".tzst" `isSuffixOf` p then Just ".tzst"
-         else if ".tar" `isSuffixOf` p then Just ".tar"
-         else if ".zip" `isSuffixOf` p then Just ".zip"
-         else if ".jar" `isSuffixOf` p then Just ".jar"
-         else Nothing
-
-    archiveSuffixFromContentType :: Maybe B.ByteString -> Maybe String
-    archiveSuffixFromContentType mType =
-      case map toLower . trim . takeWhile (/= ';') . B.unpack <$> mType of
-        Just "application/x-tar" -> Just ".tar"
-        Just "application/gzip" -> Just ".tar.gz"
-        Just "application/x-gzip" -> Just ".tar.gz"
-        Just "application/tar+gzip" -> Just ".tar.gz"
-        Just "application/x-tar-gz" -> Just ".tar.gz"
-        Just "application/x-gtar-compressed" -> Just ".tar.gz"
-        Just "application/x-xz" -> Just ".tar.xz"
-        Just "application/zstd" -> Just ".tar.zst"
-        Just "application/zip" -> Just ".zip"
-        Just "application/x-zip-compressed" -> Just ".zip"
-        Just "application/java-archive" -> Just ".zip"
-        _ -> Nothing
-
-    archiveSuffixFromContentDisposition :: Maybe B.ByteString -> Maybe String
-    archiveSuffixFromContentDisposition mVal = do
-      headerVal <- mVal
-      filenameVal <- extractField (B.pack "filename*=") headerVal <|> extractField (B.pack "filename=") headerVal
-      archiveSuffixFromPath (B.unpack filenameVal)
-      where
-        extractField key raw =
-          let lowerRaw = B.map toLower raw
-              (prefix, rest) = B.breakSubstring key lowerRaw
-          in if B.null rest
-               then Nothing
-               else
-                 let origRest = B.drop (B.length prefix) raw
-                     val0 = B.drop (B.length key) origRest
-                     val1 = B.takeWhile (/= ';') val0
-                     val2 = stripQuotes (B.dropWhile isSpace (trimBS val1))
-                     val3 =
-                       case B.breakSubstring (B.pack "''") val2 of
-                         (_, t) | B.null t -> val2
-                         (_, t) -> B.drop 2 t
-                 in if B.null val3 then Nothing else Just val3
-        trimBS = B.dropWhileEnd isSpace . B.dropWhile isSpace
-        stripQuotes s
-          | B.length s >= 2 && B.head s == '"' && B.last s == '"' = B.tail (B.init s)
-          | otherwise = s
-
-    detectArchiveSuffixFromBytes :: BS.ByteString -> Maybe String
-    detectArchiveSuffixFromBytes bytes
-      | startsWith [0x50, 0x4b, 0x03, 0x04] bytes = Just ".zip"
-      | startsWith [0x50, 0x4b, 0x05, 0x06] bytes = Just ".zip"
-      | startsWith [0x50, 0x4b, 0x07, 0x08] bytes = Just ".zip"
-      | startsWith [0x1f, 0x8b] bytes = Just ".tar.gz"
-      | startsWith [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00] bytes = Just ".tar.xz"
-      | startsWith [0x28, 0xb5, 0x2f, 0xfd] bytes = Just ".tar.zst"
-      | hasUstar bytes = Just ".tar"
-      | otherwise = Nothing
-      where
-        startsWith :: [Word8] -> BS.ByteString -> Bool
-        startsWith sig bs =
-          BS.length bs >= length sig && BS.take (length sig) bs == BS.pack sig
-        hasUstar bs =
-          BS.length bs >= 262 && BS.take 5 (BS.drop 257 bs) == BS.pack [0x75, 0x73, 0x74, 0x61, 0x72]
 
     copyTree :: FilePath -> FilePath -> IO ()
     copyTree src dst = do
