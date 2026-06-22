@@ -129,7 +129,7 @@ convertModules              :: (Name -> [Name]) -> (ModName -> (Name,NameInfo) -
 convertModules sources f env= env{ modules = Map.mapWithKey convMod (modules env) }
   where convMod m mi
           | m == mPrim      = mi
-          | otherwise       = mi{ moduleLookupHName = memoLookup lookupConverted }
+          | otherwise       = mi{ moduleLookupName = memoLookup lookupConverted }
           where lookupConverted n
                             = listToMaybe $ mapMaybe (lookupFrom n) (n : sources n)
                 lookupFrom n src
@@ -147,7 +147,7 @@ convertModules sources f env= env{ modules = Map.mapWithKey convMod (modules env
 data ModuleInfo             = ModuleInfo {
                                 moduleImports     :: [ModName],
                                 moduleDoc         :: Maybe String,
-                                moduleLookupHName :: Name -> Maybe NameInfo,
+                                moduleLookupName :: Name -> Maybe NameInfo,
                                 modulePublicNames :: [Name],
                                 moduleConstructors:: TEnv,
                                 moduleActors      :: [TCon],
@@ -162,9 +162,6 @@ data ModuleInfo             = ModuleInfo {
 instance Show ModuleInfo where
     show mi                 = "ModuleInfo {imports = " ++ show (moduleImports mi) ++ "}"
 
-moduleLookupName            :: ModuleInfo -> Name -> Maybe NameInfo
-moduleLookupName mi n       = moduleLookupHName mi n
-
 modulePublicTEnv            :: ModuleInfo -> TEnv
 modulePublicTEnv mi         = mapMaybe entry (modulePublicNames mi)
   where entry n             = fmap (\i -> (n,i)) (moduleLookupName mi n)
@@ -173,7 +170,7 @@ mkModuleInfo                :: ModName -> [ModName] -> TEnv -> Maybe String -> M
 mkModuleInfo m ms te mdoc   = ModuleInfo {
                                 moduleImports = ms,
                                 moduleDoc = mdoc,
-                                moduleLookupHName = \n -> M.lookup n hte,
+                                moduleLookupName = \n -> M.lookup n hte,
                                 modulePublicNames = map fst pte,
                                 moduleConstructors = [ ni | ni@(_,i) <- pte, isCons i ],
                                 moduleActors = [ moduleTCon m ni | ni@(_,NAct{}) <- pte ],
@@ -219,7 +216,7 @@ mkTyFileModuleInfo m ms mdoc db
                             = ModuleInfo {
                                 moduleImports = ms,
                                 moduleDoc = mdoc,
-                                moduleLookupHName = memoLookup lookupName,
+                                moduleLookupName = memoLookup lookupName,
                                 modulePublicNames = publicNames,
                                 moduleConstructors = constructors,
                                 moduleActors = actors,
@@ -336,7 +333,7 @@ instance Unalias ModName where
                                         _ -> noModule m
 instance Unalias QName where
     unalias env n0@(QName m n)      = case findModuleInfo m env of
-                                        Just mi -> case moduleLookupHName mi n of
+                                        Just mi -> case moduleLookupName mi n of
                                                       Just (NAlias qn) -> setLoc (loc n0) qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
@@ -460,10 +457,10 @@ withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}
 
 hnamesFrom                  :: TEnv -> HTEnv
-hnamesFrom te               = extendHNames te M.empty
+hnamesFrom te               = extendNames te M.empty
 
-extendHNames                :: TEnv -> HTEnv -> HTEnv
-extendHNames te hte         = foldr add hte te
+extendNames                :: TEnv -> HTEnv -> HTEnv
+extendNames te hte         = foldr add hte te
   where add (n,i) hte       = M.insert n i hte
 
 extendSigLocs               :: TEnv -> LocEnv -> LocEnv
@@ -484,7 +481,7 @@ typeVarsIn te               = [ (n, k, c) | (n, NTVar k c _) <- te ]
 
 setActiveNames              :: TEnv -> EnvF x -> EnvF x
 setActiveNames te env       = env{ activeNames = te,
-                                   hnames = extendHNames te (closedHNames env),
+                                   hnames = extendNames te (closedHNames env),
                                    sigLocs = extendSigLocs te (closedSigLocs env),
                                    defLocs = extendDefLocs te (closedDefLocs env),
                                    activeStateNames = stateNamesIn te,
@@ -492,7 +489,7 @@ setActiveNames te env       = env{ activeNames = te,
 
 addActiveNames              :: TEnv -> EnvF x -> EnvF x
 addActiveNames te env       = env{ activeNames = te ++ activeNames env,
-                                   hnames = extendHNames te (hnames env),
+                                   hnames = extendNames te (hnames env),
                                    sigLocs = extendSigLocs te (sigLocs env),
                                    defLocs = extendDefLocs te (defLocs env),
                                    activeStateNames = stateNamesIn te ++ activeStateNames env,
@@ -500,13 +497,13 @@ addActiveNames te env       = env{ activeNames = te ++ activeNames env,
 
 addClosedNames              :: TEnv -> EnvF x -> EnvF x
 addClosedNames te env       = env{ closedNames = te ++ closedNames env,
-                                   hnames = extendHNames (activeNames env) hte,
+                                   hnames = extendNames (activeNames env) hte,
                                    closedHNames = hte,
                                    sigLocs = extendSigLocs (activeNames env) slocs,
                                    closedSigLocs = slocs,
                                    defLocs = extendDefLocs (activeNames env) dlocs,
                                    closedDefLocs = dlocs }
-  where hte                 = extendHNames te (closedHNames env)
+  where hte                 = extendNames te (closedHNames env)
         slocs               = extendSigLocs te (closedSigLocs env)
         dlocs               = extendDefLocs te (closedDefLocs env)
 
@@ -621,7 +618,7 @@ findQName n env             = case tryQName n env of
 
 tryQName                    :: QName -> EnvF x -> Maybe NameInfo
 tryQName (QName m n) env    = case findModuleInfo m env of
-                                Just mi -> case moduleLookupHName mi n of
+                                Just mi -> case moduleLookupName mi n of
                                     Just (NAlias qn) -> tryQName qn env
                                     Just i -> Just i
                                     _ -> noItem m n
@@ -635,7 +632,7 @@ tryQName (GName m n) env
   | inBuiltin env,
     m==mBuiltin             = tryQName (NoQ n) env
   | otherwise               = case lookupModuleInfo m env of
-                                Just mi -> case moduleLookupHName mi n of
+                                Just mi -> case moduleLookupName mi n of
                                     Just i -> Just i
                                     Nothing -> noItem m n -- error ("## Failed lookup of " ++ prstr n ++ " in module " ++ prstr m)
                                 Nothing -> noModule m -- error ("## Failed lookup of module " ++ prstr m)
@@ -675,7 +672,7 @@ modulePrefix (ModName ns) env
 -- The builtin module is looked up through the active environment while it is
 -- itself being compiled.
 builtinModuleInfo           :: EnvF x -> ModuleInfo
-builtinModuleInfo env       = (mkModuleInfo mBuiltin [] (activeNames env ++ closedNames env) Nothing){ moduleLookupHName = \n -> lookupName n env }
+builtinModuleInfo env       = (mkModuleInfo mBuiltin [] (activeNames env ++ closedNames env) Nothing){ moduleLookupName = \n -> lookupName n env }
 
 isMod                       :: EnvF x -> [Name] -> Bool
 isMod env ns@(n:_)          = (maybe False (const True) (findModuleInfo (ModName ns) env) || modulePrefix (ModName ns) env) && rooted

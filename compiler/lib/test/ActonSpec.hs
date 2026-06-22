@@ -1921,7 +1921,7 @@ main = do
             mi = Acton.Env.ModuleInfo {
                     Acton.Env.moduleImports = [],
                     Acton.Env.moduleDoc = Nothing,
-                    Acton.Env.moduleLookupHName = \n -> System.IO.Unsafe.unsafePerformIO $ do
+                    Acton.Env.moduleLookupName = \n -> System.IO.Unsafe.unsafePerformIO $ do
                       modifyIORef' lookedUp (++ [S.nstr n])
                       if n == wanted
                         then return (Just (I.NVar S.tWild))

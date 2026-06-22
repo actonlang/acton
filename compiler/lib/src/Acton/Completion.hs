@@ -806,7 +806,7 @@ lookupQNameInfo env qn =
 lookupModuleItem :: Env.Env0 -> Maybe Env.ModuleInfo -> S.Name -> Maybe I.NameInfo
 lookupModuleItem env mmi n = do
   mi <- mmi
-  info <- Env.moduleLookupHName mi n
+  info <- Env.moduleLookupName mi n
   case info of
     I.NAlias qn -> lookupQNameInfo env qn
     _ -> Just info
