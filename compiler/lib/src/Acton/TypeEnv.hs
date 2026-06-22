@@ -262,8 +262,8 @@ tvarsInTids env tids            = [ TV k n | (n, k, c) <- activeTypeVars env,
                                             c == c' ]
   where x                       = envX env
 
--- All actor types in scope, in definition order (imports first). Mirrors what
--- allTypes/allActors produce, without scanning the name environment.
+-- All actor types in scope, in definition order (imports first), without
+-- scanning the name environment.
 tyactorsAll                     :: Env -> [TCon]
 tyactorsAll env                 = [ c | tid <- IntSet.toAscList (tyactors x), Just c <- [conById x tid] ]
   where x                       = envX env

@@ -930,39 +930,9 @@ transitiveImports env       = mBuiltin : reverse (foldl trav [] (getImports env)
           | otherwise       = m : foldl trav seen ms
           where ms          = case lookupModuleInfo m env of Just mi -> moduleImports mi
 
--- Enumerating every imported type forces each module's constructor records;
--- solver queries go through the narrow per-query indexes instead.
-allTypes                    :: (NameInfo -> Bool) -> EnvF x -> [TCon]
-allTypes select env         = concatMap impcons mods ++ localcons
-  where mods                = transitiveImports env
-        local te
-          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i) <- te, select i ]
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i) <- te, select i ]
-        localcons
-                            = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
-        impcons m           = [ TC (GName m n) (wildargs i) | (n,i) <- te, select i ]
-          where Just te     = moduleConstructors <$> lookupModuleInfo m env
-
-allCons                     :: EnvF x -> [TCon]
-allCons env                 = allTypes isCon env
-  where isCon NClass{}      = True
-        isCon NAct{}        = True
-        isCon _             = False
-
 -- Actors declared in imported modules, from the per-module actor index.
 importedActors              :: EnvF x -> [TCon]
 importedActors env          = concatMap moduleActors (importedModuleInfos env)
-
-allActors                   :: EnvF x -> [TCon]
-allActors env               = importedActors env ++ localactors
-  where local te
-          | inBuiltin env   = [ TC (GName mBuiltin n) (wildargs i) | (n,i@NAct{}) <- te ]
-          | otherwise       = [ TC (NoQ n) (wildargs i) | (n,i@NAct{}) <- te ]
-        localactors         = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
-
-allProtos env               = allTypes isProto env
-  where isProto NProto{}    = True
-        isProto _           = False
 
 -- The module indexes record attributes where they are declared, so imported
 -- owners are completed with the descendants of every declaring constructor
