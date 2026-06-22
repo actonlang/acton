@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## [0.28.2] - 2026-06-22
+
+Package and dependency operations now consistently use HTTP CONNECT proxies.
+Linux release artifacts also target glibc 2.28 for older distro compatibility.
 
 ### Compiler & Build
 - Avoid arm64 parser crashes in concurrent builds by compiling `Acton.Parser`
@@ -8,10 +11,11 @@
   parse while preserving parser and compiler concurrency. [#2964]
 
 ### Packages & Distribution
-- Use one proxy-aware HTTP path for dependency downloads, package metadata,
-  package index updates, and archive rehashing, so `acton install`,
+- Use a common proxy-aware HTTP path for dependency downloads, package
+  metadata, package index updates, and archive rehashing, so `acton install`,
   `acton pkg add`, `acton pkg upgrade`, and `acton zig pkg add` work behind
   HTTP CONNECT proxies. [#2963]
+  - Earlier proxy fixes were spot solutions and not universal.
   - Network failures use the same proxy diagnostic instead of leaking raw
     `http-client` request records, and connection-level proxy failures fail
     fast while server-side rate-limit and transient errors still retry.
@@ -4593,6 +4597,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.27.0]: https://github.com/actonlang/acton/compare/v0.26.0...v0.27.0
 [0.28.0]: https://github.com/actonlang/acton/compare/v0.27.0...v0.28.0
 [0.28.1]: https://github.com/actonlang/acton/compare/v0.28.0...v0.28.1
+[0.28.2]: https://github.com/actonlang/acton/compare/v0.28.1...v0.28.2
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
