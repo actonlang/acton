@@ -140,7 +140,7 @@ jobs:
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Cache downloaded source archives"
         uses: actions/cache@v5
         with:
@@ -299,7 +299,7 @@ jobs:
         run: |
           echo "BUILD_RELEASE=1" >> $GITHUB_ENV
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Cache downloaded source archives"
         uses: actions/cache@v5
         with:
@@ -456,7 +456,7 @@ jobs:
         run: |
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Cache downloaded source archives"
         uses: actions/cache@v5
         with:
@@ -566,7 +566,7 @@ jobs:
           dnf install -y findutils gnupg2 make rpm-build rpm-sign tar xz
           dnf clean all || true
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download Linux release artifact"
         uses: actions/download-artifact@v8
         with:
@@ -843,7 +843,7 @@ jobs:
       # Need the repo for the test/compiler/hello project we cross-compile.
       # Checkout cleans the workspace, so it must run before download-artifact.
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download .deb files"
         uses: actions/download-artifact@v8
         with:
@@ -926,7 +926,7 @@ jobs:
           docker version
           docker compose version
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download .deb files"
         uses: actions/download-artifact@v8
         with:
@@ -975,7 +975,7 @@ jobs:
     runs-on: [self-hosted, linux, X64]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Remove any currently install Acton to ensure clean slate"
         run: |
           sudo apt-get purge -qy acton
@@ -1107,7 +1107,7 @@ jobs:
       packages: write
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download deb artifacts"
         uses: actions/download-artifact@v8
         with:
@@ -1207,7 +1207,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download artifacts for Macos aarch64, built on macos-15"
         uses: actions/download-artifact@v8
         with:
@@ -1299,7 +1299,7 @@ jobs:
     needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms, build-container-image]
     steps:
       - name: "Check out repository code"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Download artifacts for Macos aarch64, built on macos-15"
         uses: actions/download-artifact@v8
         with:
@@ -1366,7 +1366,7 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of apt.acton-lang.io repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/apt.acton-lang.io
           path: apt
@@ -1417,7 +1417,7 @@ jobs:
           apt-get install -qy -t experimental reprepro
           apt-get install -qy git gnupg
       - name: Check out code of aptip.acton-lang.io repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/aptip.acton-lang.io
           path: apt
@@ -1468,7 +1468,7 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of rpm.acton.now repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/rpm.acton.now
           path: rpmrepo
@@ -1547,7 +1547,7 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
       - name: Check out code of rpmtip.acton.now repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/rpmtip.acton.now
           path: rpmrepo
@@ -1618,7 +1618,7 @@ jobs:
     needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs]
     steps:
       - name: "Check out code of main acton repo"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: "Get the version from version.mk"
         id: get_version
         run: |
@@ -1638,7 +1638,7 @@ jobs:
           echo "sum=$CHECKSUM" >> $GITHUB_OUTPUT
           echo "Checksum: $CHECKSUM"
       - name: "Check out code of our brew repo"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/homebrew-acton
           path: homebrew-acton

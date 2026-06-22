@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Check out Acton
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Check out Ask Acton indexer
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: actonlang/ask-acton
           path: ask-acton
