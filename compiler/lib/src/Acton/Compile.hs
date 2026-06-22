@@ -2805,7 +2805,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
       totalNames = dbjNameCount dbj
-  nameSelection <- selectDbpNames mn tyFile selectedSeeds
+  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds
   let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
@@ -2865,27 +2865,28 @@ dbpCodegenHash moduleImplHash selected =
       | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
       ]
 
-selectDbpNames :: A.ModName
+selectDbpNames :: Paths
+               -> A.ModName
                -> FilePath
                -> Data.Set.Set A.Name
                -> IO DbpNameSelection
-selectDbpNames mn tyFile seeds
+selectDbpNames paths mn tyFile seeds
   | Data.Set.null seeds =
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.empty
         , dnsNameHashes = []
         }
   | otherwise = do
-      roots <- traverse (dbpReadOwningName mn tyFile) (Data.Set.toList seeds)
-      selected <- dbpNameHashClosure mn tyFile M.empty roots
+      roots <- traverse (dbpReadOwningName paths mn tyFile) (Data.Set.toList seeds)
+      selected <- dbpNameHashClosure paths mn tyFile M.empty roots
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.fromList (M.keys selected)
         , dnsNameHashes = M.elems selected
         }
 
-dbpSelectionError :: A.ModName -> String -> IO a
-dbpSelectionError mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString mn ++ ": " ++ reason))
+dbpSelectionError :: Paths -> A.ModName -> String -> IO a
+dbpSelectionError paths mn reason =
+  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
 
 selectDbpModule :: Int
                 -> Int
@@ -2912,42 +2913,43 @@ selectDbpModule totalNames interestedCount nameSelection tmod@(A.Module loc imps
         , dbsFallbackReason = Just reason
         }
 
-dbpReadNameHash :: A.ModName -> FilePath -> A.Name -> IO InterfaceFiles.NameHashInfo
-dbpReadNameHash mn tyFile n = do
+dbpReadNameHash :: Paths -> A.ModName -> FilePath -> A.Name -> IO InterfaceFiles.NameHashInfo
+dbpReadNameHash paths mn tyFile n = do
   mnh <- InterfaceFiles.readNameHashMaybe tyFile n
   case mnh of
     Just nh -> return nh
-    Nothing -> dbpSelectionError mn ("hash info missing for " ++ nameToString n)
+    Nothing -> dbpSelectionError paths mn ("hash info missing for " ++ nameToString n)
 
-dbpReadOwningName :: A.ModName -> FilePath -> A.Name -> IO A.Name
-dbpReadOwningName mn tyFile n = do
+dbpReadOwningName :: Paths -> A.ModName -> FilePath -> A.Name -> IO A.Name
+dbpReadOwningName paths mn tyFile n = do
   mnh <- InterfaceFiles.readNameHashMaybe tyFile n
   case mnh of
     Just _ -> return n
     Nothing ->
       case n of
-        A.Derived base _ -> dbpReadOwningName mn tyFile base
-        _ | Names.isWitness n -> dbpSelectionError mn ("unresolved witness owner for " ++ nameToString n)
-        _ -> dbpSelectionError mn ("no top-level owner for " ++ nameToString n)
+        A.Derived base _ -> dbpReadOwningName paths mn tyFile base
+        _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ nameToString n)
+        _ -> dbpSelectionError paths mn ("no top-level owner for " ++ nameToString n)
 
-dbpNameHashClosure :: A.ModName
+dbpNameHashClosure :: Paths
+                   -> A.ModName
                    -> FilePath
                    -> M.Map A.Name InterfaceFiles.NameHashInfo
                    -> [A.Name]
                    -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
-dbpNameHashClosure _ _ selected [] = return selected
-dbpNameHashClosure mn tyFile selected (n:ns)
-  | M.member n selected = dbpNameHashClosure mn tyFile selected ns
+dbpNameHashClosure _ _ _ selected [] = return selected
+dbpNameHashClosure paths mn tyFile selected (n:ns)
+  | M.member n selected = dbpNameHashClosure paths mn tyFile selected ns
   | otherwise = do
-      nh <- dbpReadNameHash mn tyFile n
-      localDeps <- traverse (dbpReadOwningName mn tyFile)
+      nh <- dbpReadNameHash paths mn tyFile n
+      localDeps <- traverse (dbpReadOwningName paths mn tyFile)
                      (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
       exts <- dbpExtensionsForName tyFile n
-      extDeps <- traverse (dbpReadOwningName mn tyFile) exts
+      extDeps <- traverse (dbpReadOwningName paths mn tyFile) exts
       let deps = unionNames localDeps extDeps
           selected' = M.insert n nh selected
           new = filter (`M.notMember` selected') deps
-      dbpNameHashClosure mn tyFile selected' (new ++ ns)
+      dbpNameHashClosure paths mn tyFile selected' (new ++ ns)
   where
     unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
 
