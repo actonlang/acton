@@ -37,7 +37,6 @@ printStatsMaybe label (Just before) (Just after) = printStats label before after
 printStatsMaybe _ _ _                            = return ()
 
 forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () (NameInfo.HNModule _ te _) = forceHTEnv te
     forceHNameInfo () hni                        = hni `seq` ()
 
 main = do

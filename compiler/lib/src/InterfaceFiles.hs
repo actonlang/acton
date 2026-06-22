@@ -245,7 +245,7 @@ data TyDbWriteProgress = TyDbWriteProgress
 
 type TyFile =
   ( [A.ModName]
-  , I.NameInfo
+  , I.NModule
   , A.Module
   , Maybe SourceFileMeta
   , BS.ByteString
@@ -1082,11 +1082,9 @@ emptyExtensionIndex =
       , extByProtocol = Map.empty
       }
 
-extensionIndexFromNameInfo :: A.ModName -> I.NameInfo -> ExtensionIndex
-extensionIndexFromNameInfo mn nmod =
-    case nmod of
-      I.NModule _ te _ -> foldl addExt emptyExtensionIndex te
-      _ -> emptyExtensionIndex
+extensionIndexFromNameInfo :: A.ModName -> I.NModule -> ExtensionIndex
+extensionIndexFromNameInfo mn (I.NModule _ te _) =
+    foldl addExt emptyExtensionIndex te
   where
     addExt acc (ext, I.NExt _ c ps _ _ _) =
       let cls = localQName (A.tcname c)
@@ -1242,7 +1240,7 @@ data QueryIndexes = QueryIndexes
   , qiExtTypes :: Map.Map A.QName [A.Name]
   }
 
-queryIndexes :: I.NameInfo -> QueryIndexes
+queryIndexes :: I.NModule -> QueryIndexes
 queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattrs protoattrs descendants extprotos exttypes
   where pte                    = filter (isPublicName . fst) te
         cons                   = [ n | (n, i) <- pte, isCons i ]
@@ -1266,12 +1264,11 @@ queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattr
         ancestry (I.NClass _ us _ _) = us
         ancestry (I.NProto _ us _ _) = us
         ancestry _             = []
-queryIndexes _                  = QueryIndexes [] [] [] Map.empty Map.empty Map.empty Map.empty Map.empty
 
 indexMap :: Ord k => [(k, A.Name)] -> Map.Map k [A.Name]
 indexMap xs = Map.fromListWith (++) [ (k, [v]) | (k, v) <- reverse xs ]
 
-queryIndexEntries :: I.NameInfo -> [(BS.ByteString, BS.ByteString)]
+queryIndexEntries :: I.NModule -> [(BS.ByteString, BS.ByteString)]
 queryIndexEntries nmod =
     [ (keyPublicNames, encodeStrict (qiPublicNames ix))
     , (keyConstructors, encodeStrict (qiConstructors ix))
@@ -1306,7 +1303,7 @@ stmtTopNames stmt =
       A.VarAssign _ ps _   -> Data.List.nub (Names.bound ps)
       _                    -> []
 
-interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
 interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
     let header =
@@ -1355,14 +1352,14 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh))]
     stmtEntry (i, stmt) = [(keyStmt i, encodeStrict stmt)]
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
-writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
     writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
 
-writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NameInfo -> A.Module -> IO ()
+writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
     entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
     writeProgress 0

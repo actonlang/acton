@@ -45,7 +45,7 @@ docTEnv = foldr (uncurry Map.insert) Map.empty
 
 
 -- | Generate documentation from a module in Markdown format with types
-docModuleWithTypes :: NameInfo -> Module -> Doc
+docModuleWithTypes :: NModule -> Module -> Doc
 docModuleWithTypes (NModule _ tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
@@ -99,7 +99,6 @@ extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
 extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
-extractNameDocstring (NModule _ _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
 -- | Document a declaration in Markdown format with types
@@ -453,7 +452,7 @@ docMethodWithTypes tenv (Def _ n q p k a b _ _ ddoc) =
 docMethodWithTypes _ _ = empty
 
 -- | Print documentation as Markdown with type information
-printMdDoc :: NameInfo -> Module -> String
+printMdDoc :: NModule -> Module -> String
 printMdDoc nmod m = render (docModuleWithTypes nmod m)
 
 -- | Print documentation as ASCII with optional styling and type information
@@ -461,7 +460,7 @@ printMdDoc nmod m = render (docModuleWithTypes nmod m)
 --   useStyle: Enable ANSI control codes (bold + color)
 --   tenv: Type environment for enhanced type information
 --   module: The module to document
-printAsciiDoc :: Bool -> NameInfo -> Module -> String
+printAsciiDoc :: Bool -> NModule -> Module -> String
 printAsciiDoc useStyle nmod m =
     render (docModuleAsciiUnified useStyle nmod m) ++ "\n"
 
@@ -487,7 +486,7 @@ dim True = "\ESC[2m"
 dim False = ""
 
 -- | Generate ASCII documentation from a module with unified style and type handling
-docModuleAsciiUnified :: Bool -> NameInfo -> Module -> Doc
+docModuleAsciiUnified :: Bool -> NModule -> Module -> Doc
 docModuleAsciiUnified useStyle (NModule _ tenv mdocstring) (Module qn _ _ stmts) =
     -- Use module docstring from NModule
     let moduleDocstring = mdocstring
@@ -1171,7 +1170,7 @@ docRetTypeAscii (Just t) = text " -> " <> pretty (SimplifiedType t)
 
 
 -- | Print documentation as HTML with type information
-printHtmlDoc :: NameInfo -> Module -> String
+printHtmlDoc :: NModule -> Module -> String
 printHtmlDoc nmod m = unlines
         [ "<!DOCTYPE html>"
         , "<html lang=\"en\">"
@@ -1566,7 +1565,7 @@ htmlScript = unlines
 
 
 -- | Generate HTML documentation from a module with type information
-docModuleHtmlWithTypes :: NameInfo -> Module -> Doc
+docModuleHtmlWithTypes :: NModule -> Module -> Doc
 docModuleHtmlWithTypes (NModule _ tenv mdocstring) (Module modName _ _ stmts) =
     -- Use module docstring from NModule
     let tenvMap = docTEnv tenv

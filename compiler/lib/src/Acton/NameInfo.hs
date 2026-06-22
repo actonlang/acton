@@ -60,8 +60,10 @@ data NameInfo           = NVar      Type
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
                         | NMAlias   ModName
-                        | NModule   [ModName] TEnv (Maybe String)
                         | NReserved
+                        deriving (Eq,Show,Read,Generic,NFData)
+
+data NModule            = NModule [ModName] TEnv (Maybe String)
                         deriving (Eq,Show,Read,Generic,NFData)
 
 typeDecl (_,NDef{})     = False
@@ -80,15 +82,18 @@ data HNameInfo          = HNVar      Type
                         | HNTVar     Kind CCon [PCon]
                         | HNAlias    QName
                         | HNMAlias   ModName
-                        | HNModule   [ModName] HTEnv (Maybe String)
                         | HNReserved
                         deriving (Eq, Show, Read, Generic)
 
+data HNModule           = HNModule [ModName] HTEnv (Maybe String)
+                        deriving (Eq, Show, Read, Generic)
+
 instance Data.Binary.Binary NameInfo
+instance Data.Binary.Binary NModule
 instance Persist NameInfo
+instance Persist NModule
 
 convNameInfo2HNameInfo               :: NameInfo -> HNameInfo
-convNameInfo2HNameInfo (NModule ms te mdoc)   = HNModule ms (convTEnv2HTEnv te) mdoc
 convNameInfo2HNameInfo (NVar t)               = HNVar t
 convNameInfo2HNameInfo (NSVar t)              = HNSVar t
 convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
@@ -103,7 +108,6 @@ convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
 convNameInfo2HNameInfo (NReserved)            = HNReserved
 
 convHNameInfo2NameInfo               :: HNameInfo -> NameInfo
-convHNameInfo2NameInfo (HNModule ms te mdoc)   = NModule ms (convHTEnv2TEnv te) mdoc
 convHNameInfo2NameInfo (HNVar t)               = NVar t
 convHNameInfo2NameInfo (HNSVar t)              = NSVar t
 convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
@@ -116,6 +120,12 @@ convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
 convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
 convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
 convHNameInfo2NameInfo (HNReserved)            = NReserved
+
+convNModule2HNModule                 :: NModule -> HNModule
+convNModule2HNModule (NModule ms te mdoc) = HNModule ms (convTEnv2HTEnv te) mdoc
+
+convHNModule2NModule                 :: HNModule -> NModule
+convHNModule2NModule (HNModule ms te mdoc) = NModule ms (convHTEnv2TEnv te) mdoc
 
 convTEnv2HTEnv                       :: TEnv -> HTEnv
 convTEnv2HTEnv te                     = M.fromList (map convPair te)
@@ -132,7 +142,6 @@ convHTEnv2TEnv te                     = map convPair (M.toList te)
 -- documentation-only edits do not cause dependents to rebuild.
 stripDocsNI :: NameInfo -> NameInfo
 stripDocsNI ni = case ni of
-  NModule ms te _     -> NModule ms (map stripBind te) Nothing
   NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
@@ -140,6 +149,11 @@ stripDocsNI ni = case ni of
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other
+  where
+    stripBind (n, info) = (n, stripDocsNI info)
+
+stripDocsNModule :: NModule -> NModule
+stripDocsNModule (NModule ms te _) = NModule ms (map stripBind te) Nothing
   where
     stripBind (n, info) = (n, stripDocsNI info)
 
@@ -160,7 +174,6 @@ stripLocsNI ni = case ni of
   NTVar k c ps       -> NTVar k (stripLocsTCon c) (map stripLocsTCon ps)
   NAlias qn          -> NAlias (stripLocsQName qn)
   NMAlias mn         -> NMAlias (stripLocsModName mn)
-  NModule ms te doc  -> NModule ms (stripLocsTEnv te) doc
   NReserved          -> NReserved
   where
     stripLocsTEnv :: TEnv -> TEnv
@@ -218,6 +231,18 @@ stripLocsNI ni = case ni of
       Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
       Internal{}     -> n
 
+stripLocsNModule :: NModule -> NModule
+stripLocsNModule (NModule ms te doc) = NModule ms (stripLocsTEnv te) doc
+  where
+    stripLocsTEnv :: TEnv -> TEnv
+    stripLocsTEnv = map $ \(n, info) -> (stripLocsName n, stripLocsNI info)
+
+    stripLocsName :: Name -> Name
+    stripLocsName n = case n of
+      Name _ s       -> Name NoLoc s
+      Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
+      Internal{}     -> n
+
 instance Leaves NameInfo where
     leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
     leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
@@ -225,6 +250,9 @@ instance Leaves NameInfo where
     leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
     leaves (NDef sc dec _)    = leaves sc
     leaves _                  = []
+
+instance Leaves NModule where
+    leaves (NModule _ te _)    = leaves te
 
 instance Pretty TEnv where
     pretty tenv               = vcat (map pretty $ normTEnv tenv)
@@ -261,12 +289,14 @@ instance Pretty (Name,NameInfo) where
     pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
     pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
+    pretty (n, NReserved)       = pretty n <+> text "(reserved)"
+
+instance Pretty (Name,NModule) where
     pretty (n, NModule ms te doc)
-                                = text "module" <+> pretty n <> colon $+$ 
+                                = text "module" <+> pretty n <> colon $+$
                                   nest 4 (vcat [ text "import" <+> pretty m | m <- ms ]) $+$
                                   nest 4 (prettyDocstring doc) $+$
                                   nest 4 (pretty te)
-    pretty (n, NReserved)       = pretty n <+> text "(reserved)"
 
 prettyOrPass te
   | isEmpty doc                 = text "pass"
@@ -289,8 +319,10 @@ instance VFree NameInfo where
     vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
     vfree (NMAlias qn)          = []
-    vfree (NModule ms te doc)   = []        -- actually vfree te, but a module has no free variables on the top level
     vfree NReserved             = []
+
+instance VFree NModule where
+    vfree (NModule ms te doc)   = []        -- actually vfree te, but a module has no free variables on the top level
 
 instance VSubst NameInfo where
     vsubst s (NVar t)           = NVar (vsubst s t)
@@ -304,8 +336,10 @@ instance VSubst NameInfo where
     vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s (NMAlias m)        = NMAlias m
-    vsubst s (NModule ms te x)  = NModule ms te x        -- actually vsubst s te, but te has no free variables (top-level)
     vsubst s NReserved          = NReserved
+
+instance VSubst NModule where
+    vsubst s (NModule ms te x)  = NModule ms te x        -- actually vsubst s te, but te has no free variables (top-level)
 
 instance UFree NameInfo where
     ufree (NVar t)              = ufree t
@@ -319,8 +353,10 @@ instance UFree NameInfo where
     ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
     ufree (NMAlias qn)          = []
-    ufree (NModule ms te doc)   = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
+
+instance UFree NModule where
+    ufree (NModule ms te doc)   = []        -- actually ufree te, but a module has no free variables on the top level
 
 instance Polarity (Name,NameInfo) where
     polvars (n, i)              = polvars i
@@ -455,7 +491,6 @@ instance Vars NameInfo where
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
       NMAlias _ -> []
-      NModule ms te _ -> freeQTEnv te
       NReserved -> []
       where
         freeQTEnv :: TEnv -> [QName]
@@ -472,6 +507,9 @@ instance Vars NameInfo where
           where
             step (Left qn) = freeQ qn
             step (Right qn) = freeQ qn
+
+instance Vars NModule where
+    freeQ (NModule _ te _) = concatMap (freeQ . snd) te
 
 instance UWild WTCon where
     uwild (wpath, p)    = (wpath, uwild p)

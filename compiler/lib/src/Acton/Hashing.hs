@@ -710,7 +710,6 @@ feedNameInfo info sink = feedTag 249 sink >> case info of
   I.NTVar k c ps     -> feedTag 8 sink >> feedKind k sink >> feedTCon c sink >> feedList feedTCon ps sink
   I.NAlias qn        -> feedTag 9 sink >> feedQName qn sink
   I.NMAlias mn       -> feedTag 10 sink >> feedModName mn sink
-  I.NModule ms te _  -> feedTag 11 sink >> feedList feedModName ms sink >> feedTEnv te sink
   I.NReserved        -> feedTag 12 sink
 
 feedTEnv :: I.TEnv -> HashFeed
@@ -874,7 +873,6 @@ foldNameInfoDeps add info acc = case info of
   I.NTVar _ c ps       -> foldDepsList (foldDepsTCon add) ps (foldDepsTCon add c acc)
   I.NAlias qn          -> add qn acc
   I.NMAlias _          -> acc
-  I.NModule _ te _     -> foldDepsTEnv add te acc
   I.NReserved          -> acc
 
 foldDepsTEnv :: (A.QName -> acc -> acc) -> I.TEnv -> acc -> acc
@@ -1623,7 +1621,7 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
     ]
 
 -- | Hash module-level pub/impl summaries from the final per-name hash maps.
-moduleHashesFromHashMaps :: I.NameInfo
+moduleHashesFromHashMaps :: I.NModule
                          -> Data.Set.Set A.Name
                          -> M.Map A.Name B.ByteString
                          -> M.Map A.Name B.ByteString
@@ -1632,7 +1630,7 @@ moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes =
   (modulePubHashFromHashMap nmod pubHashes, moduleImplHashFromHashMap nameKeys implHashes)
 
 -- | Hash the module public interface entries.
-modulePubHashFromIface :: I.NameInfo -> [InterfaceFiles.NameHashInfo] -> B.ByteString
+modulePubHashFromIface :: I.NModule -> [InterfaceFiles.NameHashInfo] -> B.ByteString
 modulePubHashFromIface nmod nameHashes =
   modulePubHashFromHashMap nmod $
     M.fromList
@@ -1640,7 +1638,7 @@ modulePubHashFromIface nmod nameHashes =
         | nh <- nameHashes
         ]
 
-modulePubHashFromHashMap :: I.NameInfo -> M.Map A.Name B.ByteString -> B.ByteString
+modulePubHashFromHashMap :: I.NModule -> M.Map A.Name B.ByteString -> B.ByteString
 modulePubHashFromHashMap nmod pubHashes =
   let I.NModule _ iface _ = nmod
       pubNamesSorted =

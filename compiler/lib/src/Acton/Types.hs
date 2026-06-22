@@ -64,8 +64,8 @@ data TypeErrors = TypeErrors [TypeError]
 
 instance Control.Exception.Exception TypeErrors
 
--- | Type-check a module and return its NameInfo, typed module, env, and discovered tests.
-reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> Maybe String -> IO (NameInfo, Module, Env0, [String])
+-- | Type-check a module and return its module NameInfo, typed module, env, and discovered tests.
+reconstruct                             :: Maybe TypeProgressCallback -> Maybe TypeInferredCallback -> Env0 -> Module -> Maybe String -> IO (NModule, Module, Env0, [String])
 reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --traceM ("#################### original env0 for " ++ prstr m ++ ":")
                                              --traceM (render (pretty env0))
                                              (te,ss1) <- infTop progressCb inferredCb env1 ss

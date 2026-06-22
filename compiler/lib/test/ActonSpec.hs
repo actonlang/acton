@@ -552,22 +552,15 @@ main = do
             depCType = S.tCon (S.TC depC [S.tCon (S.TC localDep [])])
             depDType = S.TUnboxed NoLoc (S.tCon (S.TC depD []))
             info =
-              I.NModule
-                []
-                [ ( hashTestName
-                  , I.NExt
-                      [qbind]
-                      (S.TC depA [depBType])
-                      [([Left depB, Right depC], S.TC depC [depAType])]
-                      [ (S.name "alias", I.NAlias depB)
-                      , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
-                      , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
-                      ]
-                      []
-                      Nothing
-                  )
-                , (S.name "derived_alias", I.NAlias derived)
+              I.NExt
+                [qbind]
+                (S.TC depA [depBType])
+                [([Left depB, Right depC], S.TC depC [depAType])]
+                [ (S.name "alias", I.NAlias depB)
+                , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
+                , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
                 ]
+                []
                 Nothing
             infos = M.singleton hashTestName info
             expectedDeps = M.singleton hashTestName (Set.fromList [depA, depB, depC, depD, localDep])

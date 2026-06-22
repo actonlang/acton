@@ -1521,7 +1521,7 @@ data CompileTask        = ParseTask { name :: A.ModName, src :: String, srcBytes
                                     , tyRoots :: [A.Name]
                                     , tyTests :: [String]
                                     , tyDoc :: Maybe String
-                                    , iface :: I.NameInfo
+                                    , iface :: I.NModule
                                     , typed :: A.Module
                                     }
                         | ParseErrorTask { name :: A.ModName, parseDiagnostics :: [Diagnostic String] }
@@ -1548,10 +1548,9 @@ data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted Fron
 
 forceHTEnv :: I.HTEnv -> ()
 forceHTEnv hte                  = HM.foldl' forceHNameInfo () hte
-  where forceHNameInfo () (I.HNModule _ te _) = forceHTEnv te
-        forceHNameInfo () hni  = hni `seq` ()
+  where forceHNameInfo () hni  = hni `seq` ()
 
-forceTypeResult :: I.NameInfo -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
+forceTypeResult :: I.NModule -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
 forceTypeResult nmod tchecked typeEnv tests = do
   evaluate (rnf nmod)
   evaluate (rnf tchecked)

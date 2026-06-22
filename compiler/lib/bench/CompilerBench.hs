@@ -102,7 +102,6 @@ measureRepeated statsEnabled label reps action = do
       total' `seq` loop (n - 1) total'
 
 forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () (NameInfo.HNModule _ te _) = forceHTEnv te
     forceHNameInfo () hni                        = hni `seq` ()
 
 forceModuleInfos = Map.foldl' forceModuleInfo () where
@@ -202,7 +201,7 @@ data HashBenchState = HashBenchState
     , hbsEnv      :: Env.Env0
     , hbsParsed   :: Syntax.Module
     , hbsTChecked :: Syntax.Module
-    , hbsNMod     :: NameInfo.NameInfo
+    , hbsNMod     :: NameInfo.NModule
     , hbsExtMaps  :: Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
     }
 
@@ -262,7 +261,7 @@ prepareHashBench typesPath sourcePath = do
 
 hashBenchFromHashes :: Syntax.ModName
                     -> Env.Env0
-                    -> NameInfo.NameInfo
+                    -> NameInfo.NModule
                     -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
                     -> [Hashing.TopLevelItem]
                     -> Map.Map Syntax.Name B.ByteString
@@ -303,7 +302,7 @@ hashBenchOnce :: Syntax.ModName
               -> Env.Env0
               -> Syntax.Module
               -> Syntax.Module
-              -> NameInfo.NameInfo
+              -> NameInfo.NModule
               -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
               -> (B.ByteString, B.ByteString, [InterfaceFiles.NameHashInfo])
 hashBenchOnce mn env parsed tchecked nmod extMaps =
