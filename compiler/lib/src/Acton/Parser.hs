@@ -12,7 +12,9 @@
 --
 
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+-- GHC 9.8.4 on arm64 can segfault in RTS apply stubs when full laziness floats
+-- parser subexpressions into shared closures evaluated by concurrent parses.
+{-# OPTIONS_GHC -fno-warn-orphans -fno-full-laziness #-}
 module Acton.Parser
   ( module Acton.Parser
   , CustomParseError(..)
