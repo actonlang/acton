@@ -2,7 +2,21 @@
 
 ## Unreleased
 
+### Compiler & Build
+- Avoid arm64 parser crashes in concurrent builds by compiling `Acton.Parser`
+  without GHC full-laziness floating, keeping parser closures local to each
+  parse while preserving parser and compiler concurrency. [#2964]
+
 ### Packages & Distribution
+- Use one proxy-aware HTTP path for dependency downloads, package metadata,
+  package index updates, and archive rehashing, so `acton install`,
+  `acton pkg add`, `acton pkg upgrade`, and `acton zig pkg add` work behind
+  HTTP CONNECT proxies. [#2963]
+  - Network failures use the same proxy diagnostic instead of leaking raw
+    `http-client` request records, and connection-level proxy failures fail
+    fast while server-side rate-limit and transient errors still retry.
+  - The proxy regression harness covers package index updates and package
+    upgrades in addition to dependency archive downloads.
 - Target glibc 2.28 for Linux release builds on both x86_64 and aarch64,
   using the Makefile's pinned Zig glibc target instead of deriving it from the
   builder container. [#2959]
@@ -4435,6 +4449,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2956]: https://github.com/actonlang/acton/pull/2956
 [#2957]: https://github.com/actonlang/acton/pull/2957
 [#2959]: https://github.com/actonlang/acton/pull/2959
+[#2963]: https://github.com/actonlang/acton/pull/2963
+[#2964]: https://github.com/actonlang/acton/pull/2964
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
