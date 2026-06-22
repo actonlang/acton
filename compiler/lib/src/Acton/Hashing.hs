@@ -709,7 +709,6 @@ feedNameInfo info sink = feedTag 249 sink >> case info of
     feedTEnv te sink >> feedList feedName o sink
   I.NTVar k c ps     -> feedTag 8 sink >> feedKind k sink >> feedTCon c sink >> feedList feedTCon ps sink
   I.NAlias qn        -> feedTag 9 sink >> feedQName qn sink
-  I.NMAlias mn       -> feedTag 10 sink >> feedModName mn sink
   I.NReserved        -> feedTag 12 sink
 
 feedTEnv :: I.TEnv -> HashFeed
@@ -872,7 +871,6 @@ foldNameInfoDeps add info acc = case info of
   I.NExt q c ws te _ _ -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsTCon add c (foldDepsList (foldDepsQBind add) q acc)))
   I.NTVar _ c ps       -> foldDepsList (foldDepsTCon add) ps (foldDepsTCon add c acc)
   I.NAlias qn          -> add qn acc
-  I.NMAlias _          -> acc
   I.NReserved          -> acc
 
 foldDepsTEnv :: (A.QName -> acc -> acc) -> I.TEnv -> acc -> acc

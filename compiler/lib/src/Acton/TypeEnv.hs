@@ -971,7 +971,6 @@ instance USubst NameInfo where
     usubstWith s (NExt q c ps te opts doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts doc
     usubstWith s (NTVar k c ps)       = NTVar k (usubstWith s c) (usubstWith s ps)
     usubstWith s (NAlias qn)          = NAlias qn
-    usubstWith s (NMAlias m)          = NMAlias m
     usubstWith s NReserved            = NReserved
 
 instance USubst Witness where

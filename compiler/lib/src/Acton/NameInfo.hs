@@ -59,7 +59,6 @@ data NameInfo           = NVar      Type
                         | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
-                        | NMAlias   ModName
                         | NReserved
                         deriving (Eq,Show,Read,Generic,NFData)
 
@@ -110,7 +109,6 @@ stripLocsNI ni = case ni of
     NExt (stripLocsQBinds q) (stripLocsTCon c) (map stripLocsWTCon ps) (stripLocsTEnv te) (map stripLocsName o) doc
   NTVar k c ps       -> NTVar k (stripLocsTCon c) (map stripLocsTCon ps)
   NAlias qn          -> NAlias (stripLocsQName qn)
-  NMAlias mn         -> NMAlias (stripLocsModName mn)
   NReserved          -> NReserved
   where
     stripLocsTEnv :: TEnv -> TEnv
@@ -214,7 +212,6 @@ instance Pretty (Name,NameInfo) where
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
-    pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
 
 prettyOrPass te
@@ -237,7 +234,6 @@ instance VFree NameInfo where
     vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
-    vfree (NMAlias qn)          = []
     vfree NReserved             = []
 
 instance VSubst NameInfo where
@@ -251,7 +247,6 @@ instance VSubst NameInfo where
     vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
     vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
-    vsubst s (NMAlias m)        = NMAlias m
     vsubst s NReserved          = NReserved
 
 instance UFree NameInfo where
@@ -265,7 +260,6 @@ instance UFree NameInfo where
     ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
     ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
-    ufree (NMAlias qn)          = []
     ufree NReserved             = []
 
 instance Polarity (Name,NameInfo) where
@@ -391,7 +385,6 @@ instance Vars NameInfo where
       NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv te
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
-      NMAlias _ -> []
       NReserved -> []
       where
         freeQTEnv :: TEnv -> [QName]

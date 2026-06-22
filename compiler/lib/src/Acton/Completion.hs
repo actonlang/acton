@@ -603,10 +603,12 @@ shallowImport searchPath env imp =
 
 shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
-  shallowModule searchPath env m $ \_ env' ->
+  shallowModule searchPath env m $ \mi env' ->
     case as of
-      Nothing -> Env.addImport m env'
-      Just n -> Env.defineClosed [(n, I.NMAlias m)] env'
+      Nothing -> Env.addVisibleModule m (Env.addImport m env')
+      Just n ->
+        let a = S.ModName [n]
+        in Env.addVisibleModule a (Env.addModuleAlias a mi (Env.addImport m env'))
 
 shallowModule
   :: [FilePath]
@@ -791,7 +793,7 @@ lookupQNameInfo env qn =
     S.NoQ n ->
       lookupNoQ n
     S.QName m n ->
-      lookupModuleItem env (Env.findModuleInfo m env) n
+      lookupModuleItem env (Env.lookupModuleInfo m env) n
     S.GName m n
       | Just m == Env.thismod env ->
           lookupQNameInfo env (S.NoQ n)

@@ -1919,6 +1919,7 @@ main = do
             unused = S.name "unused"
             m = S.modName ["lazy_import"]
             mi = Acton.Env.ModuleInfo {
+                    Acton.Env.moduleName = m,
                     Acton.Env.moduleImports = [],
                     Acton.Env.moduleDoc = Nothing,
                     Acton.Env.moduleLookupName = \n -> System.IO.Unsafe.unsafePerformIO $ do
@@ -1942,6 +1943,56 @@ main = do
           Just (I.NAlias qn) -> qn `shouldBe` S.GName m wanted
           other -> expectationFailure $ "Expected selected import alias, got " ++ show other
         readIORef lookedUp `shouldReturn` ["wanted"]
+
+      it "qualifies selected imports with the module's canonical identity" $ do
+        let imported = S.modName ["dep"]
+            canonical = S.modName ["dep", "lib"]
+            wanted = S.name "wanted"
+            mi = Acton.Env.mkModuleInfo canonical [] [(wanted, I.NVar S.tWild)] Nothing
+            env = Acton.Env.importSome [S.ImportItem wanted Nothing] imported mi env0
+
+        case Acton.Env.lookupName wanted env of
+          Just (I.NAlias qn) -> qn `shouldBe` S.GName canonical wanted
+          other -> expectationFailure $ "Expected canonical selected import alias, got " ++ show other
+
+      it "unaliases qualified names with the module's canonical identity" $ do
+        let imported = S.modName ["dep"]
+            canonical = S.modName ["dep", "lib"]
+            wanted = S.name "wanted"
+            mi = Acton.Env.mkModuleInfo canonical [] [(wanted, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addVisibleModule imported (Acton.Env.addImport imported (Acton.Env.addModuleInfo imported mi env0))
+
+        (Acton.Env.unalias env imported :: S.ModName) `shouldBe` canonical
+        Acton.Env.unalias env (S.QName imported wanted) `shouldBe` S.GName canonical wanted
+
+      it "does not expand module aliases as prefixes" $ do
+        let alias = S.modName ["c"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            d = S.name "d"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(d, I.NVar S.tWild), (x, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addVisibleModule alias (Acton.Env.addModuleAlias alias mi env0)
+            expr = S.Dot NoLoc (S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) d) x
+            parsed = S.Module (S.modName ["alias_prefix"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe`
+          [S.Expr NoLoc (S.Dot NoLoc (S.Var NoLoc (S.QName alias d)) x)]
+
+      it "lets local bindings shadow module aliases in dotted expressions" $ do
+        let alias = S.modName ["c"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(x, I.NVar S.tWild)] Nothing
+            env =
+              Acton.Env.addActiveNames [(c, I.NVar S.tWild)] $
+              Acton.Env.addVisibleModule alias $
+              Acton.Env.addModuleAlias alias mi env0
+            expr = S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) x
+            parsed = S.Module (S.modName ["alias_shadow"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe` [S.Expr NoLoc expr]
 
       it "rejects selected imports of private names" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"

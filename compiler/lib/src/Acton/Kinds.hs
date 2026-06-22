@@ -393,10 +393,13 @@ instance KCheck Expr where
     kchk env (SetComp l e c)        = SetComp l <$> kchk env e <*> kchk env c
     kchk env (Paren l e)            = Paren l <$> kchk env e
 
-isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
-  where dotChain (Var _ (NoQ n))        = Just [n]
-        dotChain (Dot _ e n)            = fmap (n:) (dotChain e)
-        dotChain _                      = Nothing
+isModule env e                      = do ns@(n:_) <- fmap reverse (dotChain e)
+                                         let m = ModName ns
+                                         guard (lookupName n env == Nothing && isMod env ns)
+                                         return m
+  where dotChain (Var _ (NoQ n))    = Just [n]
+        dotChain (Dot _ e n)        = fmap (n:) (dotChain e)
+        dotChain _                  = Nothing
 
 instance KCheck Pattern where
     kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< maybeConvTWild env t)
