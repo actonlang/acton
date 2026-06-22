@@ -76,12 +76,6 @@ instance Data.Binary.Binary NModule
 instance Persist NameInfo
 instance Persist NModule
 
-convTEnv2HTEnv                       :: TEnv -> HTEnv
-convTEnv2HTEnv te                     = M.fromList te
-
-convHTEnv2TEnv                       :: HTEnv -> TEnv
-convHTEnv2TEnv te                     = M.toList te
-
 -- | Strip all docstrings from NameInfo (and nested environments).
 -- This is used when computing a public-interface hash so that
 -- documentation-only edits do not cause dependents to rebuild.

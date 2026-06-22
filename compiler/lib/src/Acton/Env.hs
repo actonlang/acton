@@ -182,7 +182,7 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
                                 moduleWitnessesByType = qkeyed wittypes
                               }
   where pte                 = publicTEnv te
-        hte                 = convTEnv2HTEnv pte
+        hte                 = M.fromList pte
         wits                = extWitnesses m [ ni | ni@(_,NExt{}) <- pte ]
         witprotos           = indexMap [ (tcname $ proto w, w) | w <- wits ]
         wittypes            = indexMap [ (qn, w) | w <- wits, Just qn <- [witnessTypeQName w] ]
