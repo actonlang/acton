@@ -1547,8 +1547,8 @@ data StageKey = ParseStage TaskKey | FrontStage TaskKey deriving (Eq, Ord, Show)
 data StageSuccess = StageParsed CompileTask (Maybe TimeSpec) | StageFronted FrontResult
 
 forceHTEnv :: I.HTEnv -> ()
-forceHTEnv hte                  = HM.foldl' forceHNameInfo () hte
-  where forceHNameInfo () hni  = hni `seq` ()
+forceHTEnv hte                  = HM.foldl' forceNameInfo () hte
+  where forceNameInfo () ni    = ni `seq` ()
 
 forceTypeResult :: I.NModule -> A.Module -> Acton.Env.EnvF x -> [String] -> IO ()
 forceTypeResult nmod tchecked typeEnv tests = do

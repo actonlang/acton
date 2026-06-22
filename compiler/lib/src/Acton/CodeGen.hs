@@ -783,7 +783,7 @@ derivedWitnessQName (QName m owner) field
                                     = GName m (Derived (noq field) owner)
 
 classQBinds env (NoQ n)             = case lookupName n env of
-                                        Just (HNClass q _ _ _) -> Just q
+                                        Just (NClass q _ _ _) -> Just q
                                         _                     -> Nothing
 classQBinds env (GName m n)         = case lookupModuleInfo m env >>= \mi -> moduleLookupName mi n of
                                         Just (NClass q _ _ _) -> Just q

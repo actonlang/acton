@@ -134,7 +134,7 @@ convertModules sources f env= env{ modules = Map.mapWithKey convMod (modules env
                             = listToMaybe $ mapMaybe (lookupFrom n) (n : sources n)
                 lookupFrom n src
                             = do i <- moduleLookupName mi src
-                                 lookup n (f m (src,i)) >>= return . convNameInfo2HNameInfo
+                                 lookup n (f m (src,i))
 
 
 -- Module interfaces -----------------------------------------------------------------------------
@@ -147,7 +147,7 @@ convertModules sources f env= env{ modules = Map.mapWithKey convMod (modules env
 data ModuleInfo             = ModuleInfo {
                                 moduleImports     :: [ModName],
                                 moduleDoc         :: Maybe String,
-                                moduleLookupHName :: Name -> Maybe HNameInfo,
+                                moduleLookupHName :: Name -> Maybe NameInfo,
                                 modulePublicNames :: [Name],
                                 moduleConstructors:: TEnv,
                                 moduleActors      :: [TCon],
@@ -163,7 +163,7 @@ instance Show ModuleInfo where
     show mi                 = "ModuleInfo {imports = " ++ show (moduleImports mi) ++ "}"
 
 moduleLookupName            :: ModuleInfo -> Name -> Maybe NameInfo
-moduleLookupName mi n       = convHNameInfo2NameInfo <$> moduleLookupHName mi n
+moduleLookupName mi n       = moduleLookupHName mi n
 
 modulePublicTEnv            :: ModuleInfo -> TEnv
 modulePublicTEnv mi         = mapMaybe entry (modulePublicNames mi)
@@ -234,7 +234,7 @@ mkTyFileModuleInfo m ms mdoc db
           | not (isPublicName n) = Nothing
           | otherwise        = unsafePerformIO $ do
                                   mi <- InterfaceFiles.readInterfaceDBNameInfoMaybe db n
-                                  return $ convNameInfo2HNameInfo . snd <$> mi
+                                  return $ snd <$> mi
         publicNames          = unsafePerformIO $ InterfaceFiles.readInterfaceDBPublicNames db
         constructors         = unsafePerformIO $ InterfaceFiles.readInterfaceDBConstructors db
         actors               = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBActors db
@@ -331,13 +331,13 @@ instance Unalias ModName where
     unalias env m@(ModName ns)
       | inBuiltin env               = m
       | otherwise                   = case lookupName (head ns) env of
-                                        Just (HNMAlias m') -> m'
+                                        Just (NMAlias m') -> m'
                                         Nothing | m `elem` (mPrim:mBuiltin:imports env) || modulePrefix m env -> m
                                         _ -> noModule m
 instance Unalias QName where
     unalias env n0@(QName m n)      = case findModuleInfo m env of
                                         Just mi -> case moduleLookupHName mi n of
-                                                      Just (HNAlias qn) -> setLoc (loc n0) qn
+                                                      Just (NAlias qn) -> setLoc (loc n0) qn
                                                       Just _ -> GName m' n
                                                       _ -> noItem m n
                                         Nothing -> error ("#### unalias fails for " ++ prstr (QName m n))
@@ -345,7 +345,7 @@ instance Unalias QName where
     unalias env (NoQ n)
       | inBuiltin env               = GName mBuiltin n
       | otherwise                   = case lookupName n env of
-                                        Just (HNAlias qn) -> setLoc (loc n) qn
+                                        Just (NAlias qn) -> setLoc (loc n) qn
                                         _ -> case thismod env of Just m -> GName m n; _ -> NoQ n
     unalias env (GName m n)
 --      | inBuiltin env, m==mBuiltin  = NoQ n
@@ -464,7 +464,7 @@ hnamesFrom te               = extendHNames te M.empty
 
 extendHNames                :: TEnv -> HTEnv -> HTEnv
 extendHNames te hte         = foldr add hte te
-  where add (n,i) hte       = M.insert n (convNameInfo2HNameInfo i) hte
+  where add (n,i) hte       = M.insert n i hte
 
 extendSigLocs               :: TEnv -> LocEnv -> LocEnv
 extendSigLocs te locs       = foldr add locs te
@@ -510,7 +510,7 @@ addClosedNames te env       = env{ closedNames = te ++ closedNames env,
         slocs               = extendSigLocs te (closedSigLocs env)
         dlocs               = extendDefLocs te (closedDefLocs env)
 
-lookupName                  :: Name -> EnvF x -> Maybe HNameInfo
+lookupName                  :: Name -> EnvF x -> Maybe NameInfo
 lookupName n env            = M.lookup n (hnames env)
 
 reserve                     :: [Name] -> EnvF x -> EnvF x
@@ -616,18 +616,18 @@ selfScopeSubst env          = [ (TV k n, tCon c) | (n, NTVar k c ps) <- activeNa
 
 findQName                   :: QName -> EnvF x -> NameInfo
 findQName n env             = case tryQName n env of
-                                 Just i -> convHNameInfo2NameInfo i
+                                 Just i -> i
                                  Nothing -> nameNotFound (noq n)
 
-tryQName                    :: QName -> EnvF x -> Maybe HNameInfo
+tryQName                    :: QName -> EnvF x -> Maybe NameInfo
 tryQName (QName m n) env    = case findModuleInfo m env of
                                 Just mi -> case moduleLookupHName mi n of
-                                    Just (HNAlias qn) -> tryQName qn env
+                                    Just (NAlias qn) -> tryQName qn env
                                     Just i -> Just i
                                     _ -> noItem m n
                                 _ -> noModule m
 tryQName (NoQ n) env        = case lookupName n env of
-                                Just (HNAlias qn) -> tryQName qn env
+                                Just (NAlias qn) -> tryQName qn env
                                 Just ni -> Just ni
                                 Nothing -> Nothing
 tryQName (GName m n) env
@@ -647,7 +647,7 @@ findDefLoc n env            = M.lookup n (defLocs env)
 findName n env              = findQName (NoQ n) env
 
 lookupVar n env             = case lookupName n env of
-                                Just (HNVar t) -> Just t
+                                Just (NVar t) -> Just t
                                 _ -> Nothing
 
 findModuleInfo              :: ModName -> EnvF x -> Maybe ModuleInfo  -- m is modname part of a QName, so we must check for aliasing
@@ -655,7 +655,7 @@ findModuleInfo m env | inBuiltin env, m==mBuiltin
                             = Just (builtinModuleInfo env)
 findModuleInfo m@(ModName ns) env
                             = case lookupName (head ns) env of
-                                Just (HNMAlias (ModName m')) -> lookupModuleInfo (ModName $ m'++tail ns) env
+                                Just (NMAlias (ModName m')) -> lookupModuleInfo (ModName $ m'++tail ns) env
                                 Nothing | m `elem` (mPrim:mBuiltin:imports env) -> lookupModuleInfo m env
                                 _ -> Nothing
 
@@ -683,12 +683,12 @@ isMod env ns@(n:_)          = (maybe False (const True) (findModuleInfo (ModName
 
 isMAlias                    :: Name -> EnvF x -> Bool
 isMAlias n env              = case lookupName n env of
-                                Just HNMAlias{} -> True
+                                Just NMAlias{} -> True
                                 _ -> False
 
 isAlias                     :: Name -> EnvF x -> Bool
 isAlias n env               = case lookupName n env of
-                                Just HNAlias{} -> True
+                                Just NAlias{} -> True
                                 _ -> False
 
 kindOf env (TVar _ tv)      = tvkind tv
@@ -716,33 +716,33 @@ tconKind n env              = case findQName n env of
         kind k q            = KFun [ tvkind v | QBind v _ <- q ] k
 
 actorSelf env               = case lookupName selfKW env of
-                                Just (HNVar (TCon _ tc)) | isActor env (tcname tc) -> True
+                                Just (NVar (TCon _ tc)) | isActor env (tcname tc) -> True
                                 _ -> False
 
 isDef                       :: EnvF x -> QName -> Bool
 isDef env n                 = case tryQName n env of
-                                Just HNDef{} -> True
+                                Just NDef{} -> True
                                 _ -> False
 
 isActor                     :: EnvF x -> QName -> Bool
 isActor env n               = case tryQName n env of
-                                Just HNAct{} -> True
+                                Just NAct{} -> True
                                 _ -> False
 
 isClass                     :: EnvF x -> QName -> Bool
 isClass env n               = case tryQName n env of
-                                Just HNClass{} -> True
+                                Just NClass{} -> True
                                 _ -> False
 
 isProto                     :: EnvF x -> QName -> Bool
 isProto env n               = case tryQName n env of
-                                Just HNProto{} -> True
+                                Just NProto{} -> True
                                 _ -> False
 
 isDefOrClass                :: EnvF x -> QName -> Bool
 isDefOrClass env n          = case tryQName n env of
-                                Just HNDef{} -> True
-                                Just HNClass{} -> True
+                                Just NDef{} -> True
+                                Just NClass{} -> True
                                 _ -> False
 
 
@@ -1626,10 +1626,10 @@ instance Simp QName where
       | Just n1 <- findAlias (closedNames env) = NoQ n1                                      -- Restore aliases
       | otherwise                   = n
       where findIndexedAlias qn@(GName _ n1) = case lookupName n1 env of
-                                                  Just (HNAlias n2) | n2 == qn -> Just n1
+                                                  Just (NAlias n2) | n2 == qn -> Just n1
                                                   _ -> Nothing
             findIndexedAlias qn@(QName _ n1) = case lookupName n1 env of
-                                                  Just (HNAlias n2) | n2 == qn -> Just n1
+                                                  Just (NAlias n2) | n2 == qn -> Just n1
                                                   _ -> Nothing
             findIndexedAlias _               = Nothing
             findAlias ((n1, NAlias n2):te)

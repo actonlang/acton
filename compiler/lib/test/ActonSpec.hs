@@ -1924,7 +1924,7 @@ main = do
                     Acton.Env.moduleLookupHName = \n -> System.IO.Unsafe.unsafePerformIO $ do
                       modifyIORef' lookedUp (++ [S.nstr n])
                       if n == wanted
-                        then return (Just (I.HNVar S.tWild))
+                        then return (Just (I.NVar S.tWild))
                         else error ("unexpected import lookup: " ++ S.nstr n),
                     Acton.Env.modulePublicNames = [unused, wanted],
                     Acton.Env.moduleConstructors = [],
@@ -1939,7 +1939,7 @@ main = do
             env = Acton.Env.importSome [S.ImportItem wanted Nothing] m mi env0
 
         case Acton.Env.lookupName wanted env of
-          Just (I.HNAlias qn) -> qn `shouldBe` S.GName m wanted
+          Just (I.NAlias qn) -> qn `shouldBe` S.GName m wanted
           other -> expectationFailure $ "Expected selected import alias, got " ++ show other
         readIORef lookedUp `shouldReturn` ["wanted"]
 
@@ -1974,7 +1974,7 @@ main = do
           Just _ -> expectationFailure "from import * should skip __foo"
 
         case Acton.Env.lookupName (S.name "public_value") envB of
-          Just (I.HNAlias _) -> pure ()
+          Just (I.NAlias _) -> pure ()
           _ -> expectationFailure "from import * should include public_value"
 
       it "blocks qualified access to private names" $ do

@@ -800,16 +800,16 @@ lookupQNameInfo env qn =
   where
     lookupNoQ n              = resolve =<< Env.lookupName n env
 
-    resolve (I.HNAlias qn')  = lookupQNameInfo env qn'
-    resolve info             = Just (I.convHNameInfo2NameInfo info)
+    resolve (I.NAlias qn')  = lookupQNameInfo env qn'
+    resolve info             = Just info
 
 lookupModuleItem :: Env.Env0 -> Maybe Env.ModuleInfo -> S.Name -> Maybe I.NameInfo
 lookupModuleItem env mmi n = do
   mi <- mmi
   info <- Env.moduleLookupHName mi n
   case info of
-    I.HNAlias qn -> lookupQNameInfo env qn
-    _ -> Just (I.convHNameInfo2NameInfo info)
+    I.NAlias qn -> lookupQNameInfo env qn
+    _ -> Just info
 
 functionReturnType :: Env.Env0 -> I.NameInfo -> Maybe S.Type
 functionReturnType env info = do

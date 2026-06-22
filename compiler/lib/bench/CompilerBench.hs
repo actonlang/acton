@@ -101,8 +101,8 @@ measureRepeated statsEnabled label reps action = do
       let total' = total + count
       total' `seq` loop (n - 1) total'
 
-forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () hni                        = hni `seq` ()
+forceHTEnv = HashMap.foldl' forceNameInfo () where
+    forceNameInfo () ni                          = ni `seq` ()
 
 forceModuleInfos = Map.foldl' forceModuleInfo () where
     forceModuleInfo () mi = rnf (Env.modulePublicTEnv mi)

@@ -36,8 +36,8 @@ getStats enabled =
 printStatsMaybe label (Just before) (Just after) = printStats label before after
 printStatsMaybe _ _ _                            = return ()
 
-forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () hni                        = hni `seq` ()
+forceHTEnv = HashMap.foldl' forceNameInfo () where
+    forceNameInfo () ni                          = ni `seq` ()
 
 main = do
     hSetBuffering stdout LineBuffering
