@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Packages & Distribution
+- Target glibc 2.28 for Linux release builds on both x86_64 and aarch64,
+  using the Makefile's pinned Zig glibc target instead of deriving it from the
+  builder container. [#2959]
+  - Compiler-linked static dependencies such as zlib, GMP, and tinfo must come
+    from Acton's `bdeps/out` tree, so missing build-time archives fail clearly
+    instead of falling back to host libraries built for a newer libc.
+
 ## [0.28.1] - 2026-06-20
 
 ### Compiler & Build
@@ -4424,6 +4434,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2952]: https://github.com/actonlang/acton/pull/2952
 [#2956]: https://github.com/actonlang/acton/pull/2956
 [#2957]: https://github.com/actonlang/acton/pull/2957
+[#2959]: https://github.com/actonlang/acton/pull/2959
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
