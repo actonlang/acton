@@ -1,0 +1,183 @@
+name: Debug Arm64 Segfaults
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Build, Test & Release run ID containing acton-debs-arm64. Leave empty to use the latest matching main run."
+        required: false
+        type: string
+      source_branch:
+        description: "Branch to search when source_run_id is empty."
+        required: false
+        default: "main"
+        type: string
+      plain_attempts:
+        description: "Plain rebuild attempts before the gdb loop."
+        required: false
+        default: "200"
+        type: string
+      gdb_attempts:
+        description: "Rebuild attempts run directly under gdb."
+        required: false
+        default: "25"
+        type: string
+      rts_flags:
+        description: "Optional GHC RTS flags to pass to acton, for example: +RTS -N1 -RTS"
+        required: false
+        default: ""
+        type: string
+      build_timeout_seconds:
+        description: "Timeout for each build/rebuild command. Use 0 to disable."
+        required: false
+        default: "180"
+        type: string
+  push:
+    branches:
+      - "debug/arm64-segfault"
+      - "debug/arm64-segfault-*"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  incremental-repro:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    container:
+      image: ubuntu:24.04
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
+    env:
+      ARTIFACT_NAME: acton-debs-arm64
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN_ID_INPUT: ${{ github.event.inputs.source_run_id || '' }}
+      SOURCE_BRANCH_INPUT: ${{ github.event.inputs.source_branch || 'main' }}
+      PLAIN_ATTEMPTS: ${{ github.event.inputs.plain_attempts || '200' }}
+      GDB_ATTEMPTS: ${{ github.event.inputs.gdb_attempts || '25' }}
+      ACTON_RTS_FLAGS: ${{ github.event.inputs.rts_flags || '' }}
+      BUILD_TIMEOUT_SECONDS: ${{ github.event.inputs.build_timeout_seconds || '180' }}
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: "Show platform and environment"
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -a
+          cat /etc/os-release
+          cat /proc/cpuinfo
+          df -h
+
+      - name: "Install debug prerequisites"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          retry() { n=1; until "$@"; do [ "$n" -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry apt-get update
+          retry apt-get install -qy binutils ca-certificates curl file gdb jq procps strace unzip
+          apt-get clean || true
+
+      - name: "Resolve and download arm64 Debian artifact"
+        id: debs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            curl -fsSL \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$1"
+          }
+
+          find_artifact_id() {
+            local run_id="$1"
+            api_get "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" |
+              jq -r --arg name "${ARTIFACT_NAME}" '.artifacts[] | select(.name == $name and .expired == false) | .id' |
+              head -n1
+          }
+
+          source_run_id="${SOURCE_RUN_ID_INPUT}"
+          artifact_id=""
+
+          if [ -n "${source_run_id}" ]; then
+            artifact_id="$(find_artifact_id "${source_run_id}")"
+            if [ -z "${artifact_id}" ]; then
+              echo "Run ${source_run_id} does not contain a non-expired ${ARTIFACT_NAME} artifact." >&2
+              exit 1
+            fi
+          else
+            branch_query="$(jq -rn --arg branch "${SOURCE_BRANCH_INPUT}" '$branch | @uri')"
+            runs_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/test.yml/runs?branch=${branch_query}&status=completed&per_page=50"
+            echo "No source_run_id supplied; scanning recent Build, Test & Release runs on ${SOURCE_BRANCH_INPUT}."
+            for run_id in $(api_get "${runs_url}" | jq -r '.workflow_runs[].id'); do
+              artifact_id="$(find_artifact_id "${run_id}")"
+              if [ -n "${artifact_id}" ]; then
+                source_run_id="${run_id}"
+                break
+              fi
+            done
+            if [ -z "${source_run_id}" ] || [ -z "${artifact_id}" ]; then
+              echo "Could not find a recent non-expired ${ARTIFACT_NAME} artifact on ${SOURCE_BRANCH_INPUT}." >&2
+              exit 1
+            fi
+          fi
+
+          echo "source_run_id=${source_run_id}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_id=${artifact_id}" >> "${GITHUB_OUTPUT}"
+          echo "Using ${ARTIFACT_NAME} from run ${source_run_id}, artifact ${artifact_id}."
+
+          curl -fL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            -o deb-artifact.zip
+          unzip -q deb-artifact.zip
+          find . -maxdepth 3 -type f -name 'acton_*.deb' -print
+
+      - name: "Install Acton package"
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -qy ./deb/acton_*.deb
+          acton version
+          readlink -f "$(command -v acton)"
+          file "$(readlink -f "$(command -v acton)")"
+          ldd "$(readlink -f "$(command -v acton)")" || true
+
+      - name: "Configure core dumps"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/debug-out"
+          cat /proc/sys/kernel/core_pattern
+          sysctl "kernel.core_pattern=${GITHUB_WORKSPACE}/debug-out/core.%e.%p.%t" || true
+          cat /proc/sys/kernel/core_pattern
+          ulimit -c unlimited
+
+      - name: "Check out repository code"
+        uses: actions/checkout@v6
+
+      - name: "Run focused incremental segfault repro"
+        shell: bash
+        env:
+          ACTON_BIN: /usr/bin/acton
+          OUT_DIR: ${{ github.workspace }}/debug-out
+        run: |
+          set -euo pipefail
+          ulimit -c unlimited
+          bash .github/scripts/repro-arm64-incremental-segfault.sh
+
+      - name: "Upload debug artifacts"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arm64-segfault-debug-${{ github.run_id }}
+          include-hidden-files: true
+          path: |
+            ${{ github.workspace }}/debug-out/**
