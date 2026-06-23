@@ -545,15 +545,15 @@ addImport m env
   | m `elem` imports env    = env
   | otherwise               = env{ imports = m : imports env }
 
-addQualifier                :: ModName -> ModuleInfo -> Maybe Name -> EnvF x -> EnvF x
+addQualifier                :: ModName -> ModuleInfo -> Maybe ModName -> EnvF x -> EnvF x
 addQualifier m _ Nothing env
   | m `elem` qualifiers env = env
   | otherwise               = env{ qualifiers = m : qualifiers env }
-addQualifier _ mi (Just n) env
-  | a `elem` qualifiers env = duplicateAlias n
+addQualifier _ mi (Just a) env
+  | a `elem` qualifiers env = duplicateAlias a
+  | a `elem` imports env    = illegalAlias a
   | otherwise               = env'{ qualifiers = a : qualifiers env }
   where env'                = env{ modules = Map.insert a mi (modules env) }
-        a                   = ModName [n]
 
 addImportAlias              :: ModName -> ModuleInfo -> EnvF x -> EnvF x
 addImportAlias m mi env     = env{ modules = Map.insert m mi (modules env) }
@@ -588,6 +588,11 @@ getImports env              = reverse (imports env)
 
 isQualifier                 :: EnvF x -> ModName -> Bool
 isQualifier env m           = m `elem` mBuiltin : qualifiers env
+
+isModuleAlias               :: EnvF x -> ModName -> Bool
+isModuleAlias env m         = case lookupModuleInfo m env of
+                                Just mi -> m /= moduleName mi
+                                Nothing -> isQualifier env m
 
 inBuiltin                   :: EnvF x -> Bool
 inBuiltin env               = Map.size (modules env) == 1     -- mPrim only
@@ -1336,10 +1341,6 @@ impModule spath env (FromImportAll _ (ModRef (0,Just m)))
 impModule _ _ i                 = illegalImport (loc i)
 
 
-subImp spath env []          = return env
-subImp spath env (m:ms)      = do (env',_) <- doImp spath env m
-                                  subImp spath env' ms
-
 findTyFile spaths mn = go spaths
   where
     go []     = return Nothing
@@ -1352,9 +1353,11 @@ findTyFile spaths mn = go spaths
         else go ps
 
 -- | Import a module, loading its .tydb and extending the environment.
-doImp                        :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, ModuleInfo)
-doImp spath env m            = do (env', mi, _) <- doImpSeen S.empty env m
-                                  return (addImport m env', mi)
+doImp                       :: [FilePath] -> EnvF x -> ModName -> IO (EnvF x, ModuleInfo)
+doImp spath env m
+  | isModuleAlias env m     = illegalAlias2 m
+  | otherwise               = do (env', mi, _) <- doImpSeen S.empty env m
+                                 return (addImport m env', mi)
   where
     -- A cached module still needs its recorded import closure available in the
     -- environment. If the module is already loaded, its ModuleInfo carries
@@ -1432,7 +1435,9 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | IllegalExtension QName
                                     | MissingSelf Name
                                     | IllegalImport SrcLoc
-                                    | DuplicateAlias Name
+                                    | DuplicateAlias ModName
+                                    | IllegalAlias ModName
+                                    | IllegalAlias2 ModName
                                     | NoItem ModName Name
                                     | NoModule ModName
                                     | NoClassOrProto QName
@@ -1459,7 +1464,9 @@ instance HasLoc CompilationError where
     loc (IllegalExtension n)        = loc n
     loc (MissingSelf n)             = loc n
     loc (IllegalImport l)           = l
-    loc (DuplicateAlias n)          = loc n
+    loc (DuplicateAlias m)          = loc m
+    loc (IllegalAlias m)            = loc m
+    loc (IllegalAlias2 m)           = loc m
     loc (NoModule m)                = loc m
     loc (NoItem m n)                = loc n
     loc (NoClassOrProto n)          = loc n
@@ -1486,7 +1493,9 @@ compilationError err                = [(loc err, render (expl err))]
     expl (IllegalExtension n)       = text "Illegal extension of" <+> pretty n
     expl (MissingSelf n)            = text "Missing 'self' parameter in definition of"
     expl (IllegalImport l)          = text "Relative import not yet supported"
-    expl (DuplicateAlias n)         = text "Duplicate import alias" <+> pretty n
+    expl (DuplicateAlias m)         = text "Duplicate import alias" <+> pretty m
+    expl (IllegalAlias m)           = text "Module alias clashes with an already imported module" <+> pretty m
+    expl (IllegalAlias2 m)          = text "Module name is an already declared alias" <+> pretty m
     expl (NoModule m)               = text "Module" <+> pretty m <+> text "does not exist"
     expl (NoItem m n)               = text "Module" <+> pretty m <+> text "does not export" <+> pretty n
     expl (NoClassOrProto n)         = text "Class or protocol name expected, got" <+> pretty n
@@ -1510,7 +1519,9 @@ illegalExtension n                  = Control.Exception.throw $ IllegalExtension
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
 illegalImport l                     = Control.Exception.throw $ IllegalImport l
-duplicateAlias n                    = Control.Exception.throw $ DuplicateAlias n
+duplicateAlias m                    = Control.Exception.throw $ DuplicateAlias m
+illegalAlias m                      = Control.Exception.throw $ IllegalAlias m
+illegalAlias2 m                     = Control.Exception.throw $ IllegalAlias2 m
 noItem m n                          = Control.Exception.throw $ NoItem m n
 noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n

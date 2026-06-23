@@ -187,7 +187,7 @@ qName ss s      = QName (modName ss) (name s)
 noQ s           = NoQ (name s)
 
 
-data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
+data ModuleItem = ModuleItem ModName (Maybe ModName) deriving (Show,Eq,Read,NFData,Generic)
 data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq,Read,NFData,Generic)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
 data Branch     = Branch Expr Suite deriving (Show,Eq,Read,NFData,Generic)

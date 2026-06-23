@@ -1850,7 +1850,7 @@ import_stmt = import_name <|> import_from <?> "import statement"
 
          module_item = do
                 dn <- module_name
-                S.ModuleItem dn <$> optional (rword "as" *> name)
+                S.ModuleItem dn <$> optional (rword "as" *> module_name)
 
          import_from = addLoc $ do
                 rword "from"

@@ -1966,29 +1966,42 @@ main = do
         Acton.Env.unalias env (S.QName imported wanted) `shouldBe` S.GName canonical wanted
 
       it "does not expand module aliases as prefixes" $ do
-        let qual = S.modName ["c"]
+        let alias = S.modName ["c"]
             canonical = S.modName ["a", "b"]
-            alias = Just c
             c = S.name "c"
             d = S.name "d"
             x = S.name "X"
             mi = Acton.Env.mkModuleInfo canonical [] [(d, I.NVar S.tWild), (x, I.NVar S.tWild)] Nothing
-            env = Acton.Env.addQualifier canonical mi alias env0
+            env = Acton.Env.addQualifier canonical mi (Just alias) env0
             expr = S.Dot NoLoc (S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) d) x
             parsed = S.Module (S.modName ["alias_prefix"]) [] Nothing [S.Expr NoLoc expr]
         checked <- liftIO $ Acton.Kinds.check env parsed
         S.mbody checked `shouldBe`
-          [S.Expr NoLoc (S.Dot NoLoc (S.Var NoLoc (S.QName qual d)) x)]
+          [S.Expr NoLoc (S.Dot NoLoc (S.Var NoLoc (S.QName alias d)) x)]
+
+      it "accepts nested module aliases" $ do
+        let alias = S.modName ["c","b"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            b = S.name "b"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(x, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addQualifier canonical mi (Just alias) env0
+            expr = S.Dot NoLoc (S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) b) x
+            parsed = S.Module (S.modName ["alias_nested"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe`
+          [S.Expr NoLoc (S.Var NoLoc (S.QName alias x))]
 
       it "lets local bindings shadow module aliases in dotted expressions" $ do
-        let canonical = S.modName ["a", "b"]
-            alias = Just c
+        let alias = S.modName ["c"]
+            canonical = S.modName ["a", "b"]
             c = S.name "c"
             x = S.name "X"
             mi = Acton.Env.mkModuleInfo canonical [] [(x, I.NVar S.tWild)] Nothing
             env =
               Acton.Env.addActiveNames [(c, I.NVar S.tWild)] $
-              Acton.Env.addQualifier canonical mi alias env0
+              Acton.Env.addQualifier canonical mi (Just alias) env0
             expr = S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) x
             parsed = S.Module (S.modName ["alias_shadow"]) [] Nothing [S.Expr NoLoc expr]
         checked <- liftIO $ Acton.Kinds.check env parsed

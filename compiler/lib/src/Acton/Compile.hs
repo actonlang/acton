@@ -2194,10 +2194,9 @@ adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) +
         adjust (A.FromImport l m i)  = A.FromImport l (adj' m) i
         adjust (A.FromImportAll l m) = A.FromImportAll l (adj' m)
         adj mi@(A.ModuleItem m mbn)
-          | Just m' <- adjusted m   = case (m, mbn) of
-                                         (A.ModName [n], Nothing) -> A.ModuleItem m' (Just n)
-                                         (_,             Just n)  -> A.ModuleItem m' (Just n)
-                                         _                        -> error ("Local multi-level import without alias not yet supported: " ++ prstr mi)
+          | Just m' <- adjusted m   = case mbn of
+                                         Nothing -> A.ModuleItem m' (Just m)
+                                         Just n  -> A.ModuleItem m' (Just n)
           | otherwise               = mi
         adj' mr@(A.ModRef (0, Just m))
           | Just m' <- adjusted m   = (A.ModRef (0, Just m'))
