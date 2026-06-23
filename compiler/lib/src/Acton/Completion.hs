@@ -604,11 +604,7 @@ shallowImport searchPath env imp =
 shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
   shallowModule searchPath env m $ \mi env' ->
-    case as of
-      Nothing -> Env.addVisibleModule m (Env.addImport m env')
-      Just n ->
-        let a = S.ModName [n]
-        in Env.addVisibleModule a (Env.addModuleAlias a mi (Env.addImport m env'))
+    Env.addQualifier m mi as (Env.addImport m env')
 
 shallowModule
   :: [FilePath]

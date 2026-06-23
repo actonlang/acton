@@ -53,23 +53,23 @@ mkEnv spath env m           = getImps spath env (imps m)
 -- Full environment -------------------------------------------------------------------------------
 
 data EnvF x                 = EnvF {
-                                activeNames:: TEnv,
-                                closedNames:: TEnv,
-                                hnames     :: HTEnv,
-                                closedHNames:: HTEnv,
-                                sigLocs    :: LocEnv,
-                                closedSigLocs:: LocEnv,
-                                defLocs    :: LocEnv,
-                                closedDefLocs:: LocEnv,
-                                activeStateNames:: [Name],
-                                activeTypeVars:: [(Name, Kind, CCon)],
-                                imports    :: [ModName],
-                                visibleModules :: [ModName],
-                                modules    :: Map ModName ModuleInfo,
-                                thismod    :: Maybe ModName,
-                                context    :: [EnvCtx],
-                                qlevel     :: Int,
-                                envX       :: x
+                                activeNames         :: TEnv,
+                                closedNames         :: TEnv,
+                                hnames              :: HTEnv,
+                                closedHNames        :: HTEnv,
+                                sigLocs             :: LocEnv,
+                                closedSigLocs       :: LocEnv,
+                                defLocs             :: LocEnv,
+                                closedDefLocs       :: LocEnv,
+                                activeStateNames    :: [Name],
+                                activeTypeVars      :: [(Name, Kind, CCon)],
+                                imports             :: [ModName],               -- The canoncal names m in 'import m', 'import m as _' or 'from m import _'
+                                qualifiers          :: [ModName],               -- The actual names m in 'import m' or 'import _ as m'
+                                modules             :: Map ModName ModuleInfo,
+                                thismod             :: Maybe ModName,
+                                context             :: [EnvCtx],
+                                qlevel              :: Int,
+                                envX                :: x
                               } deriving (Show)
 
 type Env0                   = EnvF ()
@@ -86,7 +86,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      defLocs = defLocs env, closedDefLocs = closedDefLocs env,
                                      activeStateNames = activeStateNames env,
                                      activeTypeVars = activeTypeVars env,
-                                     imports = imports env, visibleModules = visibleModules env,
+                                     imports = imports env, qualifiers = qualifiers env,
                                      modules = modules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
@@ -419,7 +419,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             activeStateNames = [],
                                             activeTypeVars = [],
                                             imports = [],
-                                            visibleModules = [],
+                                            qualifiers = [],
                                             modules = Map.singleton mPrim (mkModuleInfo mPrim [] primEnv Nothing),
                                             thismod = Nothing,
                                             context = [],
@@ -440,7 +440,7 @@ initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles
                                                  activeStateNames = [],
                                                  activeTypeVars = [],
                                                  imports = [],
-                                                 visibleModules = [],
+                                                 qualifiers = [],
                                                  modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
                                                  thismod = Nothing,
                                                  context = [],
@@ -540,22 +540,24 @@ defineClosed te env
   where badSelf             = if inAct env then dom te `intersect` [selfKW] else []
         te'                 = reverse te
 
-
 addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env
   | m `elem` imports env    = env
   | otherwise               = env{ imports = m : imports env }
 
-addVisibleModule            :: ModName -> EnvF x -> EnvF x
-addVisibleModule m env
-  | m `elem` visibleModules env
-                            = env
-  | otherwise               = env{ visibleModules = m : visibleModules env }
+addQualifier                :: ModName -> ModuleInfo -> Maybe Name -> EnvF x -> EnvF x
+addQualifier m _ Nothing env
+  | m `elem` qualifiers env = env
+  | otherwise               = env{ qualifiers = m : qualifiers env }
+addQualifier _ mi (Just n) env
+  | a `elem` qualifiers env = duplicateAlias n
+  | otherwise               = env'{ qualifiers = a : qualifiers env }
+  where env'                = env{ modules = Map.insert a mi (modules env) }
+        a                   = ModName [n]
 
-addModuleAlias              :: ModName -> ModuleInfo -> EnvF x -> EnvF x
-addModuleAlias m mi env     = env{ modules = Map.insert m mi (modules env) }
+addImportAlias              :: ModName -> ModuleInfo -> EnvF x -> EnvF x
+addImportAlias m mi env     = env{ modules = Map.insert m mi (modules env) }
 
-getImports env              = reverse (imports env)
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
 defineTVars q env           = foldr f env (unalias env q)
@@ -580,6 +582,12 @@ addModuleInfo m mi env      = env{ modules = Map.insert m mi (modules env) }
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
+
+getImports                  :: EnvF x -> [ModName]
+getImports env              = reverse (imports env)
+
+isQualifier                 :: EnvF x -> ModName -> Bool
+isQualifier env m           = m `elem` mBuiltin : qualifiers env
 
 inBuiltin                   :: EnvF x -> Bool
 inBuiltin env               = Map.size (modules env) == 1     -- mPrim only
@@ -660,15 +668,14 @@ lookupModuleInfo m env
 builtinModuleInfo           :: EnvF x -> ModuleInfo
 builtinModuleInfo env       = (mkModuleInfo mBuiltin [] (activeNames env ++ closedNames env) Nothing){ moduleLookupName = \n -> lookupName n env }
 
-isMod                       :: EnvF x -> [Name] -> Bool
-isMod env ns                = isVisibleModule env m && maybe False (const True) (lookupModuleInfo m env)
-  where m                   = ModName ns
-
-isVisibleModule             :: EnvF x -> ModName -> Bool
-isVisibleModule env m
-  | m == mPrim || m == mBuiltin
-                            = True
-  | otherwise               = m `elem` visibleModules env
+isModName                   :: EnvF x -> Expr -> Maybe ModName
+isModName env e             = do ns@(n:_) <- fmap reverse (dotChain e)
+                                 let m = ModName ns
+                                 guard (lookupName n env == Nothing && isQualifier env m)
+                                 return m
+  where dotChain (Var _ (NoQ n)) = Just [n]
+        dotChain (Dot _ e n)     = fmap (n:) (dotChain e)
+        dotChain _               = Nothing
 
 isAlias                     :: Name -> EnvF x -> Bool
 isAlias n env               = case lookupName n env of
@@ -1315,11 +1322,11 @@ impModule spath env (Import _ ms)
   where imp env []              = return env
         imp env (ModuleItem m as : is)
                                 = do (env1,mi) <- doImp spath env m
-                                     let env2 = case as of
-                                                  Nothing -> addVisibleModule m env1
-                                                  Just n  -> let a = ModName [n]
-                                                             in addVisibleModule a (addModuleAlias a mi env1)
-                                     imp env2 is
+--                                     let env2 = case as of
+--                                                  Nothing -> addVisibleImport m env1
+--                                                  Just n  -> let a = ModName [n]
+--                                                             in addVisibleImport a (addImportAlias a mi env1)
+                                     imp (addQualifier m mi as env1) is
 impModule spath env (FromImport _ (ModRef (0,Just m)) items)
                                 = do (env1,mi) <- doImp spath env m
                                      return $ importSome items m mi env1
@@ -1425,7 +1432,7 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | IllegalExtension QName
                                     | MissingSelf Name
                                     | IllegalImport SrcLoc
-                                    | DuplicateImport Name
+                                    | DuplicateAlias Name
                                     | NoItem ModName Name
                                     | NoModule ModName
                                     | NoClassOrProto QName
@@ -1452,7 +1459,7 @@ instance HasLoc CompilationError where
     loc (IllegalExtension n)        = loc n
     loc (MissingSelf n)             = loc n
     loc (IllegalImport l)           = l
-    loc (DuplicateImport n)         = loc n
+    loc (DuplicateAlias n)          = loc n
     loc (NoModule m)                = loc m
     loc (NoItem m n)                = loc n
     loc (NoClassOrProto n)          = loc n
@@ -1479,7 +1486,7 @@ compilationError err                = [(loc err, render (expl err))]
     expl (IllegalExtension n)       = text "Illegal extension of" <+> pretty n
     expl (MissingSelf n)            = text "Missing 'self' parameter in definition of"
     expl (IllegalImport l)          = text "Relative import not yet supported"
-    expl (DuplicateImport n)        = text "Duplicate import of name" <+> pretty n
+    expl (DuplicateAlias n)         = text "Duplicate import alias" <+> pretty n
     expl (NoModule m)               = text "Module" <+> pretty m <+> text "does not exist"
     expl (NoItem m n)               = text "Module" <+> pretty m <+> text "does not export" <+> pretty n
     expl (NoClassOrProto n)         = text "Class or protocol name expected, got" <+> pretty n
@@ -1503,7 +1510,7 @@ illegalExtension n                  = Control.Exception.throw $ IllegalExtension
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
 illegalImport l                     = Control.Exception.throw $ IllegalImport l
-duplicateImport n                   = Control.Exception.throw $ DuplicateImport n
+duplicateAlias n                    = Control.Exception.throw $ DuplicateAlias n
 noItem m n                          = Control.Exception.throw $ NoItem m n
 noModule m                          = Control.Exception.throw $ NoModule m
 notClassOrProto n                   = Control.Exception.throw $ NoClassOrProto n
