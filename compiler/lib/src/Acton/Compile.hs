@@ -262,6 +262,7 @@ import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
+import qualified Acton.Zon as Zon
 import System.Clock
 import System.Directory
 import System.Directory.Recursive (getFilesRecursive)
@@ -5001,12 +5002,15 @@ fetchDependencies gopts paths depOverrides = do
             cacheDir h  = joinPath [globalCache, "p", h]
         createDirectoryIfMissing True globalCache
         createDirectoryIfMissing True depsCache
+        -- Tracks zig package dirs / hashes already pre-seeded, so the transitive
+        -- walk over build.zig.zon files terminates on cycles and shared deps.
+        zigSeen <- newIORef Data.Set.empty
         let rootPins = BuildSpec.dependencies rootSpec
-        _ <- walkProject rootPins cacheDir zigExe globalCache depsCache
+        _ <- walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen
                          Data.Set.empty (projPath paths) rootSpec
         return ()
   where
-    walkProject rootPins cacheDir zigExe globalCache depsCache seen projDir spec = do
+    walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen seen projDir spec = do
       projAbs <- normalizePathSafe projDir
       if Data.Set.member projAbs seen
         then return seen
@@ -5023,8 +5027,26 @@ fetchDependencies gopts paths depOverrides = do
           let errs = [ e | Left e <- results ]
           unless (null errs) $ throwProjectError (unlines errs)
           forM_ selectedDeps $ \(name, dep) -> copyPkgDep cacheDir depsCache name dep
+          -- TODO: remove this transitive pre-seeding (this forM_ and
+          -- seedTransitiveZigDeps) once zig can fetch through an HTTP CONNECT
+          -- proxy. It exists only to work around zig writing an absolute-form
+          -- request URI into the tunnel, which the origin rejects; when zig is
+          -- fixed upstream / in our bundled toolchain, drop this and let zig
+          -- resolve transitive deps itself.
+          --
+          -- A zig dependency given as a local path may pull in transitive .url
+          -- dependencies via its build.zig.zon; seed those into zig's cache now
+          -- (through the proxy-aware HTTP client) so the build never lets zig
+          -- fetch them. A url+hash zig dependency is a self-contained archive,
+          -- already seeded above by mkZigFetch (see seedTransitiveZigDeps for why
+          -- url packages are not recursed into).
+          forM_ (M.toList (BuildSpec.zig_dependencies spec)) $ \(_, zdep) ->
+            case BuildSpec.zpath zdep of
+              Just p | not (null p) ->
+                seedTransitiveZigDeps zigSeen cacheDir zigExe globalCache (projAbs </> p)
+              _ -> return ()
           let seen' = Data.Set.insert projAbs seen
-          foldM (walkDependency rootPins cacheDir zigExe globalCache depsCache projAbs)
+          foldM (walkDependency rootPins cacheDir zigExe globalCache depsCache zigSeen projAbs)
                 seen' selectedDeps
 
     selectDependency rootPins base (depName, dep) = do
@@ -5041,7 +5063,7 @@ fetchDependencies gopts paths depOverrides = do
                     ++ " overridden by root pin")
       return (depName, chosenDep)
 
-    walkDependency rootPins cacheDir zigExe globalCache depsCache base seen (depName, dep) = do
+    walkDependency rootPins cacheDir zigExe globalCache depsCache zigSeen base seen (depName, dep) = do
       depBase <- resolveDepBase base depName dep
       depAbs <- normalizePathSafe depBase
       depExists <- doesDirectoryExist depAbs
@@ -5055,7 +5077,7 @@ fetchDependencies gopts paths depOverrides = do
         else do
           depSpec0 <- loadBuildSpec depAbs
           depSpec <- applyDepOverrides depAbs depOverrides depSpec0
-          walkProject rootPins cacheDir zigExe globalCache depsCache seen depAbs depSpec
+          walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen seen depAbs depSpec
 
     mkPkgFetch cacheDir zigExe globalCache name dep =
       case BuildSpec.path dep of
@@ -5097,6 +5119,58 @@ fetchDependencies gopts paths depOverrides = do
                    if srcOk
                      then copyTree src dst
                      else extractCachedArchive srcArchive dst
+
+    -- Pre-seed zig's package cache for the transitive dependencies reachable from
+    -- a zig package's build.zig.zon. Path deps are followed in place, recursing
+    -- into their own build.zig.zon; url+hash deps are downloaded through the
+    -- proxy-aware HTTP client (via fetchOne) so zig finds them cached. Lazy deps
+    -- are left for zig to fetch on demand: eagerly seeding them would download
+    -- archives a normal build never uses.
+    --
+    -- A url dependency is seeded but not recursed into: the package archives that
+    -- occur in practice (lmdb, libssh, zlib upstream) are leaf C sources with no
+    -- nested build.zig.zon, and reading a manifest back out of every seeded
+    -- tarball would cost a per-build extraction on the common path.
+    seedTransitiveZigDeps zigSeen cacheDir zigExe globalCache = goDir
+      where
+        goDir dir = do
+          dirAbs <- normalizePathSafe dir
+          fresh <- claimVisited zigSeen ("d:" ++ dirAbs)
+          when fresh $ do
+            let zonPath = dirAbs </> "build.zig.zon"
+            edeps <- Zon.readZonDependencies zonPath
+            case edeps of
+              Left err ->
+                when (C.verbose gopts) $
+                  putStrLn ("Note: could not parse " ++ zonPath
+                            ++ " to pre-seed transitive zig dependencies: " ++ err)
+              Right deps -> forM_ deps (goDep dirAbs)
+
+        goDep pkgDir (name, dep)
+          | Zon.zdLazy dep                          = return ()
+          | Just p <- Zon.zdPath dep, not (null p)  = goDir (pkgDir </> p)
+          | Just u <- Zon.zdUrl dep
+          , Just h <- Zon.zdHash dep                = do
+              fresh <- claimVisited zigSeen ("h:" ++ h)
+              when fresh $ do
+                present <- cacheEntryExists cacheDir h
+                unless present $ do
+                  res <- fetchOne "zig" name u (Just h) cacheDir zigExe globalCache
+                  case res of
+                    -- Non-fatal: if pre-seeding fails, let zig try to fetch it
+                    -- during the build (its pre-change behaviour). On a direct
+                    -- build that just works; behind a proxy zig fails with its own
+                    -- diagnostic -- either way a seeding hiccup never breaks a
+                    -- build the old code would have completed.
+                    Left e  -> unless (C.quiet gopts) $
+                                 putStrLn ("Warning: could not pre-fetch transitive zig dependency "
+                                           ++ name ++ ": " ++ e)
+                    Right _ -> return ()
+          | otherwise                               = return ()
+
+    -- Atomically record a key; returns True the first time it is seen.
+    claimVisited ref key = atomicModifyIORef' ref $ \s ->
+      if Data.Set.member key s then (s, False) else (Data.Set.insert key s, True)
 
     fetchOne kind name url mh cacheDir zigExe globalCache = do
       case mh of

@@ -93,6 +93,7 @@ library:
     - Acton.Types
     - Acton.TypeEnv
     - Acton.WitKnots
+    - Acton.Zon
     - Utils
     - Pretty
     - InterfaceFiles
