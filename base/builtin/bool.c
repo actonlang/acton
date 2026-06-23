@@ -17,7 +17,7 @@
 // Serialization ///////////////////////////////////////////////////////////////////////
 
 B_NoneType B_boolD___init__(B_bool self, B_value s){
-    self->val = s->$class->__bool__(s);
+    self->val = B_boolG_new(s);
     return B_None;
 }
 
@@ -48,7 +48,7 @@ B_bool B_boolD___deserialize__(B_bool self, $Serial$state state) {
 }
 
 bool B_boolG_new(B_value s) {
-    return $NEW(B_bool, s);
+    return  s->$class->__bool__(s);
 }
 
 B_bool toB_bool(bool b) {
@@ -66,8 +66,8 @@ B_bool B_True = &$t;
 B_bool B_False = &$f;
 
 
-B_bool $default__bool__(B_value self) {
-    return B_True;
+bool $default__bool__(B_value self) {
+    return true;
 }
 
 // B_HashableD_bool ///////////////////////////////////////////////////////////////////////////////////////////////////////

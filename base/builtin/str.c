@@ -1042,7 +1042,7 @@ bool B_strD_isalpha(B_str s) {
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
@@ -1162,7 +1162,7 @@ bool B_strD_isupper(B_str s) {
     int nbytes;
     int hascased = false;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
