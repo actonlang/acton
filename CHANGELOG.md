@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.28.3] - 2026-06-23
+
+This release is another proxy workaround release. Acton now keeps one more
+dependency path away from Zig's own fetcher because Zig still cannot reliably
+fetch HTTPS archives through an HTTP CONNECT proxy.
+
+### Packages & Distribution
+- Pre-seed Zig's package cache for transitive `.url` dependencies declared by
+  path-based Zig packages in `build.zig.zon`, using Acton's proxy-aware HTTP
+  downloader instead of letting Zig fetch those archives during final
+  compilation. [#2970]
+  - This covers Acton package dependencies such as `acton-zlib` that carry a
+    local Zig package whose own manifest pulls a source archive like
+    `zlib_upstream`; previously `acton fetch` could succeed through the proxy
+    and then `acton build` still failed later when Zig tried to resolve the
+    nested archive itself.
+  - The workaround is intentionally boring: parse enough ZON to find dependency
+    `url`, `hash`, `path`, and `lazy` fields, follow local path deps, seed
+    non-lazy remote archives into the same Zig cache, and avoid cycles or
+    duplicate downloads.
+  - We only need this because Zig's CONNECT proxy support is still broken for
+    this path: it sends an absolute-form request URI inside the tunnel and the
+    origin closes the connection, typically surfacing as `invalid HTTP response:
+    HttpConnectionClosing`.
+  - The proxy regression harness now builds a project that depends on a real
+    Acton package with a transitive Zig dependency, so proxy-only networks cover
+    the frustrating "fetch succeeded, final compile failed anyway" case.
+
 ## [0.28.2] - 2026-06-22
 
 Package and dependency operations now consistently use HTTP CONNECT proxies.
@@ -4455,6 +4483,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2959]: https://github.com/actonlang/acton/pull/2959
 [#2963]: https://github.com/actonlang/acton/pull/2963
 [#2964]: https://github.com/actonlang/acton/pull/2964
+[#2970]: https://github.com/actonlang/acton/pull/2970
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -4598,6 +4627,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.28.0]: https://github.com/actonlang/acton/compare/v0.27.0...v0.28.0
 [0.28.1]: https://github.com/actonlang/acton/compare/v0.28.0...v0.28.1
 [0.28.2]: https://github.com/actonlang/acton/compare/v0.28.1...v0.28.2
+[0.28.3]: https://github.com/actonlang/acton/compare/v0.28.2...v0.28.3
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
