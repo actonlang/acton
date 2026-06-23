@@ -1,0 +1,10 @@
+# Keep fixtures source-only: never copy local build artifacts into the image.
+# A pre-populated out/ or zig-pkg/ would let the container skip the very fetch
+# the test is meant to exercise (a false PASS); a host-generated build.zig is
+# tied to the host's acton version and breaks the container build.
+**/out/
+**/zig-pkg/
+**/build.zig
+**/build.zig.zon
+**/.acton/
+**/.acton.lock

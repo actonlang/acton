@@ -36,10 +36,12 @@ Two containers (`docker-compose.yml`):
 3. **control** — runs `curl` on the same internal-only network through the same
    proxy; it must reach GitHub (so a later failure is acton's fault, not the
    network/proxy);
-4. runs three scenarios with the proxy variables set, covering every HTTP path:
+4. runs four scenarios with the proxy variables set, covering every HTTP path:
    `acton fetch` (dependency archive download), `acton pkg update` (the package
-   index over http-client), and `acton pkg upgrade` (GitHub API ref resolution
-   plus archive re-hash).
+   index over http-client), `acton pkg upgrade` (GitHub API ref resolution plus
+   archive re-hash), and `acton build` (a dependency that itself carries a
+   *transitive* zig package dependency, which zig resolves during final
+   compilation).
 
 Because the acton box has no direct egress, a scenario can only succeed if acton
 routed that request through the proxy:
@@ -49,17 +51,35 @@ routed that request through the proxy:
 | **exit 0** | acton honoured `http(s)_proxy` — **PASS** |
 | **exit ≠ 0** | acton ignored the proxy and went direct — **FAIL** |
 
-## The bug this guards against
+## The bugs this guards against
 
-On Linux **x86_64** binaries linked `-no-pie` by `zig cc` (to target an older
-glibc), GHC's `getEnvironment` returns an empty list: an lld copy-relocation
-issue with the glibc `environ`/`__environ` alias. `http-client`'s
-`proxyEnvironment` reads `getEnvironment`, so it never sees the proxy variables
-and connects directly — which fails on a proxy-only network. (`getenv`/`lookupEnv`
-still work, so `curl` and `$HOME` are fine — which is exactly why this is so
-confusing in the field.) **aarch64 is unaffected**, so this test passes there
-regardless; on x86_64 it fails before the fix and passes after.
+**1. The `environ` bug (scenarios 1–3).** On Linux **x86_64** binaries linked
+`-no-pie` by `zig cc` (to target an older glibc), GHC's `getEnvironment` returns
+an empty list: an lld copy-relocation issue with the glibc `environ`/`__environ`
+alias. `http-client`'s `proxyEnvironment` reads `getEnvironment`, so it never
+sees the proxy variables and connects directly — which fails on a proxy-only
+network. (`getenv`/`lookupEnv` still work, so `curl` and `$HOME` are fine — which
+is exactly why this is so confusing in the field.) **aarch64 is unaffected**, so
+these scenarios pass there regardless; on x86_64 they fail before the fix and
+pass after.
 
-The fixture uses a `zig_dependency` (zlib v1.3.1) because `acton fetch` downloads
-and hashes it through the same HTTP path as a package dependency, without needing
-it to be a full Acton package.
+**2. The transitive zig-dependency bug (scenario 4).** A real Acton package can
+carry zig package dependencies, and those can have their own *transitive* `.url`
+dependencies (e.g. `actonlang/acton-zlib`'s `deps/zlib/build.zig.zon` pulls
+`zlib_upstream` from github). Acton fetches the Acton package itself through the
+proxy-aware http-client, but that nested `.url` is resolved by **zig** during
+final compilation — and zig's HTTPS-over-CONNECT-proxy support is broken (it
+writes an absolute-form request URI into the tunnel), so the fetch fails with
+`invalid HTTP response: HttpConnectionClosing`. This is the lmdb/libssh failure
+seen in the field, and it affects **all architectures**.
+
+> **Status:** scenario 4 currently **fails on purpose** — it reproduces the
+> still-unfixed transitive-dependency bug. The fix (Acton pre-seeding zig's cache
+> for transitive `.url` deps through the proxy-aware http-client) is a follow-up;
+> once it lands, this scenario passes too.
+
+The fixtures: `project/` (a `zig_dependency`) and `pkgproject/` (a github
+`dependency`) use zlib v1.3.1, downloaded + hashed through Acton's HTTP path
+without needing to be a full Acton package. `zigdepproject/` depends on the real
+`actonlang/acton-zlib` package and **builds** it, forcing zig to resolve the
+transitive `zlib_upstream` `.url` through the proxy.

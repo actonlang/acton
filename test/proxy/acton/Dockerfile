@@ -20,6 +20,10 @@ COPY project /work/proxytest
 # A second project with a github 'dependency' (repo_url set) for the `acton pkg`
 # command tests (pkg upgrade resolves a ref + re-hashes through the proxy).
 COPY pkgproject /work/pkgtest
+# A third project that depends on a real Acton package (acton-zlib) carrying a
+# *transitive* zig package dependency. `acton build` must drive zig's resolution
+# of that nested .url through the proxy (the lmdb/libssh field failure).
+COPY zigdepproject /work/zigdeptest
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

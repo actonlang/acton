@@ -1,0 +1,10 @@
+import zlib.lib as z
+
+# Using the dependency forces acton to link acton-zlib's zig artifact, which pulls
+# in deps/zlib and its transitive zlib_upstream .url -- exactly the fetch that must
+# go through the proxy during "Final compilation".
+actor main(env):
+    c = z.compress(b"hello world")
+    d = z.decompress(c)
+    print("roundtrip ok:", d == b"hello world")
+    env.exit(0)

@@ -47,7 +47,10 @@ docker compose version >/dev/null 2>&1 || { echo "ERROR: docker compose plugin n
 note "Packing $ACTON_DIST -> acton-dist.tar.xz"
 stage="$(mktemp -d)"
 ln -s "$(cd "$ACTON_DIST" && pwd)" "$stage/acton"
-tar -C "$stage" -ch acton | xz -z -0 --threads=0 > "$HERE/acton-dist.tar.xz"
+# COPYFILE_DISABLE=1 stops macOS bsdtar from emitting AppleDouble (._*) sidecar
+# files from xattrs; otherwise base/out/types/._*.c land in the Linux container
+# and zig tries to compile them as C. Ignored by GNU tar (Linux/CI).
+COPYFILE_DISABLE=1 tar -C "$stage" -ch acton | xz -z -0 --threads=0 > "$HERE/acton-dist.tar.xz"
 rm -rf "$stage"
 ls -lh "$HERE/acton-dist.tar.xz" | awk '{print "    tarball: " $5}'
 
@@ -58,7 +61,10 @@ note "docker compose up --build"
 note "Waiting for acton to install from the tarball"
 installed=
 for _ in $(seq 1 150); do
-    if "${COMPOSE[@]}" exec -T acton test -x /opt/acton/bin/acton >/dev/null 2>&1; then installed=1; break; fi
+    # Wait for the install-complete marker, not just bin/acton: the latter appears
+    # mid-untar, and exec'ing a scenario then can hit a still-being-written zig/zig
+    # (ETXTBSY). The marker is touched only after extraction fully finishes.
+    if "${COMPOSE[@]}" exec -T acton test -f /opt/acton/.install-complete >/dev/null 2>&1; then installed=1; break; fi
     sleep 2
 done
 [ -n "$installed" ] || { echo "ERROR: acton did not install" >&2; "${COMPOSE[@]}" logs acton >&2 || true; exit 2; }
@@ -105,17 +111,21 @@ check() {  # $1 = label, $2 = exit code, $3 = output, $4 = required success mark
 }
 
 set +e
-note "[1/3] acton fetch  (dependency archive download)"
+note "[1/4] acton fetch  (dependency archive download)"
 o="$(run_in_proxy /work/proxytest '/opt/acton/bin/acton fetch')"; c=$?
 check "acton fetch"       "$c" "$o" 'Dependencies fetched'
 
-note "[2/3] acton pkg update  (package index over http-client)"
+note "[2/4] acton pkg update  (package index over http-client)"
 o="$(run_in_proxy /work '/opt/acton/bin/acton pkg update')"; c=$?
 check "acton pkg update"  "$c" "$o" 'Updated package index'
 
-note "[3/3] acton pkg upgrade  (github ref resolve + archive re-hash)"
+note "[3/4] acton pkg upgrade  (github ref resolve + archive re-hash)"
 o="$(run_in_proxy /work/pkgtest '/opt/acton/bin/acton pkg upgrade')"; c=$?
 check "acton pkg upgrade" "$c" "$o" 'Wrote changes to Build.act'
+
+note "[4/4] acton build  (transitive zig dependency resolved by zig)"
+o="$(run_in_proxy /work/zigdeptest '/opt/acton/bin/acton build')"; c=$?
+check "acton build"       "$c" "$o" 'Final compilation done'
 set -e
 
 echo

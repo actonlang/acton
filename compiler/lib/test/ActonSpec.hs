@@ -25,6 +25,7 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Zon as Zon
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
@@ -146,6 +147,77 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Zon (build.zig.zon reader)" $ do
+      let deps src = case Zon.parseZon src of
+                       Left e  -> error ("parse failed: " ++ e)
+                       Right v -> Zon.zonDependencies v
+      it "extracts url/hash and defaults lazy to false" $ do
+        let src = unlines
+              [ ".{"
+              , "    .name = .demo,"
+              , "    .version = \"0.0.0\","
+              , "    .fingerprint = 0x1234abcd5678ef00,"
+              , "    .dependencies = .{"
+              , "        .zlib_upstream = .{"
+              , "            .url = \"https://example.com/zlib.tar.gz\","
+              , "            .hash = \"N-V-__deadbeef\","
+              , "            .lazy = false,"
+              , "        },"
+              , "    },"
+              , "    .paths = .{ \"\" },"
+              , "}"
+              ]
+        deps src `shouldBe`
+          [ ("zlib_upstream", Zon.ZonDep (Just "https://example.com/zlib.tar.gz") (Just "N-V-__deadbeef") Nothing False) ]
+      it "skips line comments and tolerates trailing commas" $ do
+        let src = unlines
+              [ ".{"
+              , "    // a comment"
+              , "    .dependencies = .{"
+              , "        .a = .{ .url = \"u1\", .hash = \"h1\" }, // trailing comment"
+              , "        .b = .{ .path = \"vendor/b\", },"
+              , "    },"
+              , "}"
+              ]
+        deps src `shouldBe`
+          [ ("a", Zon.ZonDep (Just "u1") (Just "h1") Nothing False)
+          , ("b", Zon.ZonDep Nothing Nothing (Just "vendor/b") False)
+          ]
+      it "records lazy = true" $ do
+        let src = ".{ .dependencies = .{ .x = .{ .url = \"u\", .hash = \"h\", .lazy = true } } }"
+        deps src `shouldBe` [ ("x", Zon.ZonDep (Just "u") (Just "h") Nothing True) ]
+      it "returns no dependencies when the field is absent or empty" $ do
+        deps ".{ .name = .demo, .version = \"1.0.0\" }" `shouldBe` []
+        deps ".{ .dependencies = .{} }" `shouldBe` []
+      it "is robust to field order (dependencies before metadata)" $ do
+        let src = ".{ .dependencies = .{ .a = .{ .url = \"u\", .hash = \"h\" } }, .name = .demo }"
+        deps src `shouldBe` [ ("a", Zon.ZonDep (Just "u") (Just "h") Nothing False) ]
+      it "strips a leading UTF-8 BOM (zig accepts it)" $ do
+        deps ("\xFEFF" ++ ".{ .dependencies = .{ .a = .{ .url = \"u\", .hash = \"h\" } } }")
+          `shouldBe` [ ("a", Zon.ZonDep (Just "u") (Just "h") Nothing False) ]
+      it "skips char, hex and multiline-string sibling fields before dependencies" $ do
+        let src = unlines
+              [ ".{"
+              , "    .name = .demo,"
+              , "    .fingerprint = 0xdead_beef_1234_5678,"
+              , "    .ch = 'z',"
+              , "    .note ="
+              , "        \\\\hello"
+              , "        \\\\world"
+              , "    ,"
+              , "    .dependencies = .{ .a = .{ .url = \"u\", .hash = \"h\", .lazy = true } },"
+              , "    .paths = .{ \"\", \"src\" },"
+              , "}"
+              ]
+        deps src `shouldBe` [ ("a", Zon.ZonDep (Just "u") (Just "h") Nothing True) ]
+      it "readZonDependencies: missing file -> no deps; real file parses" $
+        withSystemTempDirectory "zon" $ \dir -> do
+          missing <- Zon.readZonDependencies (dir </> "nope.zon")
+          missing `shouldBe` Right []
+          let p = dir </> "build.zig.zon"
+          Prelude.writeFile p ".{ .dependencies = .{ .a = .{ .url = \"u\", .hash = \"h\" } } }"
+          got <- Zon.readZonDependencies p
+          got `shouldBe` Right [ ("a", Zon.ZonDep (Just "u") (Just "h") Nothing False) ]
     sequential $ describe "InterfaceFiles" $ do
       it "round-trips payloads and preserves ordered name entries" $ do
         withSystemTempDirectory "acton-iface" $ \dir -> do
