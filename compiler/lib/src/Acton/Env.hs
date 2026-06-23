@@ -1332,13 +1332,12 @@ impModule spath env (Import _ ms)
 --                                                  Just n  -> let a = ModName [n]
 --                                                             in addVisibleImport a (addImportAlias a mi env1)
                                      imp (addQualifier m mi as env1) is
-impModule spath env (FromImport _ (ModRef (0,Just m)) items)
+impModule spath env (FromImport _ m items)
                                 = do (env1,mi) <- doImp spath env m
                                      return $ importSome items m mi env1
-impModule spath env (FromImportAll _ (ModRef (0,Just m)))
+impModule spath env (FromImportAll _ m)
                                 = do (env1,mi) <- doImp spath env m
                                      return $ importAll m mi env1
-impModule _ _ i                 = illegalImport (loc i)
 
 
 findTyFile spaths mn = go spaths
@@ -1434,7 +1433,6 @@ data CompilationError               = KindError SrcLoc Kind Kind
                                     | IllegalSigOverride Name
                                     | IllegalExtension QName
                                     | MissingSelf Name
-                                    | IllegalImport SrcLoc
                                     | DuplicateAlias ModName
                                     | IllegalAlias ModName
                                     | IllegalAlias2 ModName
@@ -1463,7 +1461,6 @@ instance HasLoc CompilationError where
     loc (IllegalSigOverride n)      = loc n
     loc (IllegalExtension n)        = loc n
     loc (MissingSelf n)             = loc n
-    loc (IllegalImport l)           = l
     loc (DuplicateAlias m)          = loc m
     loc (IllegalAlias m)            = loc m
     loc (IllegalAlias2 m)           = loc m
@@ -1492,7 +1489,6 @@ compilationError err                = [(loc err, render (expl err))]
     expl (IllegalSigOverride n)     = text "Illegal signature override:" <+> pretty n
     expl (IllegalExtension n)       = text "Illegal extension of" <+> pretty n
     expl (MissingSelf n)            = text "Missing 'self' parameter in definition of"
-    expl (IllegalImport l)          = text "Relative import not yet supported"
     expl (DuplicateAlias m)         = text "Duplicate import alias" <+> pretty m
     expl (IllegalAlias m)           = text "Module alias clashes with an already imported module" <+> pretty m
     expl (IllegalAlias2 m)          = text "Module name is an already declared alias" <+> pretty m
@@ -1518,7 +1514,6 @@ illegalSigOverride n                = Control.Exception.throw $ IllegalSigOverri
 illegalExtension n                  = Control.Exception.throw $ IllegalExtension n
 missingSelf n                       = Control.Exception.throw $ MissingSelf n
 fileNotFound n                      = Control.Exception.throw $ FileNotFound n
-illegalImport l                     = Control.Exception.throw $ IllegalImport l
 duplicateAlias m                    = Control.Exception.throw $ DuplicateAlias m
 illegalAlias m                      = Control.Exception.throw $ IllegalAlias m
 illegalAlias2 m                     = Control.Exception.throw $ IllegalAlias2 m

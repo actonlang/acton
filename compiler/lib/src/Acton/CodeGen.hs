@@ -164,10 +164,8 @@ include                             :: GenEnv -> String -> ModName -> Doc
 include env dir m                   = text "#include" <+> doubleQuotes (text (joinPath $ dir : modPath m) <> text ".h")
 
 modNames (Import _ ms : is)         = [ m | ModuleItem m _ <- ms ] ++ modNames is
-modNames (FromImport _ (ModRef (0,Just m)) _ : is)
-                                    = m : modNames is
-modNames (FromImportAll _ (ModRef (0,Just m)) : is)
-                                    = m : modNames is
+modNames (FromImport _ m _ : is)    = m : modNames is
+modNames (FromImportAll _ m : is)   = m : modNames is
 modNames []                         = []
 
 tnm env (Derived _ (Derived _ n))           

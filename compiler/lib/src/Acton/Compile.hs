@@ -2198,9 +2198,9 @@ adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) +
                                          Nothing -> A.ModuleItem m' (Just m)
                                          Just n  -> A.ModuleItem m' (Just n)
           | otherwise               = mi
-        adj' mr@(A.ModRef (0, Just m))
-          | Just m' <- adjusted m   = (A.ModRef (0, Just m'))
-          | otherwise               = mr
+        adj' m
+          | Just m' <- adjusted m   = m'
+          | otherwise               = m
         adjusted m = case M.lookup m providers of
                         Just tk | tkMod tk /= m -> Just (tkMod tk)
                         _                       -> Nothing
