@@ -1,0 +1,24 @@
+name = "zigdeptest"
+fingerprint = 0x0f2654ba77f95769
+
+# A real Acton package dependency (actonlang/acton-zlib) that itself carries a
+# *transitive* zig package dependency. acton-zlib wraps the C zlib via a
+# zig_dependency whose deps/zlib/build.zig.zon declares:
+#
+#   .zlib_upstream = .{ .url = "https://github.com/madler/zlib/.../v1.3.1.tar.gz",
+#                       .hash = "...", .lazy = false }
+#
+# Acton fetches acton-zlib itself through the proxy-aware http-client (fine), but
+# that nested zlib_upstream .url is never seen by acton -- it is resolved by *zig*
+# during "Final compilation". zig's HTTPS-over-CONNECT-proxy support is broken, so
+# the build fails fetching zlib_upstream. `acton build` (not just `acton fetch`)
+# is required to drive zig's transitive resolution.
+dependencies = {
+    "zlib": (
+        url="https://github.com/actonlang/acton-zlib/archive/aad0c3fd2dab64b3c4728ac96cd9362c793fb932.tar.gz",
+        hash="N-V-__8AAF8XAAAaNtxndtX1uIB1vN-tsG6h7ZIPoDoCQ226",
+        repo_url="https://github.com/actonlang/acton-zlib"
+    )
+}
+
+zig_dependencies = {}
