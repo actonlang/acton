@@ -56,7 +56,7 @@ struct deactQ_L_2ContG_class {
     B_NoneType (*__init__) (deactQ_L_2Cont, $Cont);
     void (*__serialize__) (deactQ_L_2Cont, $Serial$state);
     deactQ_L_2Cont (*__deserialize__) (deactQ_L_2Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_2Cont);
+    bool (*__bool__) (deactQ_L_2Cont);
     B_str (*__str__) (deactQ_L_2Cont);
     B_str (*__repr__) (deactQ_L_2Cont);
     $R (*__call__) (deactQ_L_2Cont, B_NoneType);
@@ -72,7 +72,7 @@ struct deactQ_L_4actionG_class {
     B_NoneType (*__init__) (deactQ_L_4action, deactQ_Apa);
     void (*__serialize__) (deactQ_L_4action, $Serial$state);
     deactQ_L_4action (*__deserialize__) (deactQ_L_4action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_4action);
+    bool (*__bool__) (deactQ_L_4action);
     B_str (*__str__) (deactQ_L_4action);
     B_str (*__repr__) (deactQ_L_4action);
     $R (*__call__) (deactQ_L_4action, $Cont, B_int);
@@ -91,7 +91,7 @@ struct deactQ_L_6ContG_class {
     B_NoneType (*__init__) (deactQ_L_6Cont, $action, $Cont);
     void (*__serialize__) (deactQ_L_6Cont, $Serial$state);
     deactQ_L_6Cont (*__deserialize__) (deactQ_L_6Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_6Cont);
+    bool (*__bool__) (deactQ_L_6Cont);
     B_str (*__str__) (deactQ_L_6Cont);
     B_str (*__repr__) (deactQ_L_6Cont);
     $R (*__call__) (deactQ_L_6Cont, B_int);
@@ -108,7 +108,7 @@ struct deactQ_L_7procG_class {
     B_NoneType (*__init__) (deactQ_L_7proc, deactQ_Apa, $action);
     void (*__serialize__) (deactQ_L_7proc, $Serial$state);
     deactQ_L_7proc (*__deserialize__) (deactQ_L_7proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_7proc);
+    bool (*__bool__) (deactQ_L_7proc);
     B_str (*__str__) (deactQ_L_7proc);
     B_str (*__repr__) (deactQ_L_7proc);
     $R (*__call__) (deactQ_L_7proc, $Cont);
@@ -126,7 +126,7 @@ struct deactQ_L_8procG_class {
     B_NoneType (*__init__) (deactQ_L_8proc, deactQ_Apa, $action);
     void (*__serialize__) (deactQ_L_8proc, $Serial$state);
     deactQ_L_8proc (*__deserialize__) (deactQ_L_8proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_8proc);
+    bool (*__bool__) (deactQ_L_8proc);
     B_str (*__str__) (deactQ_L_8proc);
     B_str (*__repr__) (deactQ_L_8proc);
     $R (*__call__) (deactQ_L_8proc, $Cont);
@@ -144,7 +144,7 @@ struct deactQ_L_9procG_class {
     B_NoneType (*__init__) (deactQ_L_9proc, deactQ_Apa, int64_t);
     void (*__serialize__) (deactQ_L_9proc, $Serial$state);
     deactQ_L_9proc (*__deserialize__) (deactQ_L_9proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_9proc);
+    bool (*__bool__) (deactQ_L_9proc);
     B_str (*__str__) (deactQ_L_9proc);
     B_str (*__repr__) (deactQ_L_9proc);
     $R (*__call__) (deactQ_L_9proc, $Cont);
@@ -162,7 +162,7 @@ struct deactQ_L_10procG_class {
     B_NoneType (*__init__) (deactQ_L_10proc, deactQ_Bepa, int64_t);
     void (*__serialize__) (deactQ_L_10proc, $Serial$state);
     deactQ_L_10proc (*__deserialize__) (deactQ_L_10proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_10proc);
+    bool (*__bool__) (deactQ_L_10proc);
     B_str (*__str__) (deactQ_L_10proc);
     B_str (*__repr__) (deactQ_L_10proc);
     $R (*__call__) (deactQ_L_10proc, $Cont);
@@ -180,7 +180,7 @@ struct deactQ_L_14actionG_class {
     B_NoneType (*__init__) (deactQ_L_14action, deactQ_Apa);
     void (*__serialize__) (deactQ_L_14action, $Serial$state);
     deactQ_L_14action (*__deserialize__) (deactQ_L_14action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_14action);
+    bool (*__bool__) (deactQ_L_14action);
     B_str (*__str__) (deactQ_L_14action);
     B_str (*__repr__) (deactQ_L_14action);
     $R (*__call__) (deactQ_L_14action, $Cont, B_int);
@@ -198,7 +198,7 @@ struct deactQ_L_16actionG_class {
     B_NoneType (*__init__) (deactQ_L_16action, deactQ_Bepa);
     void (*__serialize__) (deactQ_L_16action, $Serial$state);
     deactQ_L_16action (*__deserialize__) (deactQ_L_16action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_16action);
+    bool (*__bool__) (deactQ_L_16action);
     B_str (*__str__) (deactQ_L_16action);
     B_str (*__repr__) (deactQ_L_16action);
     $R (*__call__) (deactQ_L_16action, $Cont, B_int);
@@ -216,7 +216,7 @@ struct deactQ_L_19actionG_class {
     B_NoneType (*__init__) (deactQ_L_19action, deactQ_main);
     void (*__serialize__) (deactQ_L_19action, $Serial$state);
     deactQ_L_19action (*__deserialize__) (deactQ_L_19action, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_19action);
+    bool (*__bool__) (deactQ_L_19action);
     B_str (*__str__) (deactQ_L_19action);
     B_str (*__repr__) (deactQ_L_19action);
     $R (*__call__) (deactQ_L_19action, $Cont, B_int);
@@ -235,7 +235,7 @@ struct deactQ_L_20ContG_class {
     B_NoneType (*__init__) (deactQ_L_20Cont, deactQ_main, $Cont);
     void (*__serialize__) (deactQ_L_20Cont, $Serial$state);
     deactQ_L_20Cont (*__deserialize__) (deactQ_L_20Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_20Cont);
+    bool (*__bool__) (deactQ_L_20Cont);
     B_str (*__str__) (deactQ_L_20Cont);
     B_str (*__repr__) (deactQ_L_20Cont);
     $R (*__call__) (deactQ_L_20Cont, B_int);
@@ -253,7 +253,7 @@ struct deactQ_L_21ContG_class {
     B_NoneType (*__init__) (deactQ_L_21Cont, deactQ_main, $Cont);
     void (*__serialize__) (deactQ_L_21Cont, $Serial$state);
     deactQ_L_21Cont (*__deserialize__) (deactQ_L_21Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_21Cont);
+    bool (*__bool__) (deactQ_L_21Cont);
     B_str (*__str__) (deactQ_L_21Cont);
     B_str (*__repr__) (deactQ_L_21Cont);
     $R (*__call__) (deactQ_L_21Cont, deactQ_Bepa);
@@ -271,7 +271,7 @@ struct deactQ_L_22ContG_class {
     B_NoneType (*__init__) (deactQ_L_22Cont, deactQ_main, $Cont);
     void (*__serialize__) (deactQ_L_22Cont, $Serial$state);
     deactQ_L_22Cont (*__deserialize__) (deactQ_L_22Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_22Cont);
+    bool (*__bool__) (deactQ_L_22Cont);
     B_str (*__str__) (deactQ_L_22Cont);
     B_str (*__repr__) (deactQ_L_22Cont);
     $R (*__call__) (deactQ_L_22Cont, deactQ_Apa);
@@ -288,7 +288,7 @@ struct deactQ_L_23procG_class {
     B_NoneType (*__init__) (deactQ_L_23proc, deactQ_main, int64_t);
     void (*__serialize__) (deactQ_L_23proc, $Serial$state);
     deactQ_L_23proc (*__deserialize__) (deactQ_L_23proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_23proc);
+    bool (*__bool__) (deactQ_L_23proc);
     B_str (*__str__) (deactQ_L_23proc);
     B_str (*__repr__) (deactQ_L_23proc);
     $R (*__call__) (deactQ_L_23proc, $Cont);
@@ -307,7 +307,7 @@ struct deactQ_L_25ContG_class {
     B_NoneType (*__init__) (deactQ_L_25Cont, $Cont, deactQ_Apa);
     void (*__serialize__) (deactQ_L_25Cont, $Serial$state);
     deactQ_L_25Cont (*__deserialize__) (deactQ_L_25Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_25Cont);
+    bool (*__bool__) (deactQ_L_25Cont);
     B_str (*__str__) (deactQ_L_25Cont);
     B_str (*__repr__) (deactQ_L_25Cont);
     $R (*__call__) (deactQ_L_25Cont, B_NoneType);
@@ -324,7 +324,7 @@ struct deactQ_L_26procG_class {
     B_NoneType (*__init__) (deactQ_L_26proc, deactQ_Apa);
     void (*__serialize__) (deactQ_L_26proc, $Serial$state);
     deactQ_L_26proc (*__deserialize__) (deactQ_L_26proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_26proc);
+    bool (*__bool__) (deactQ_L_26proc);
     B_str (*__str__) (deactQ_L_26proc);
     B_str (*__repr__) (deactQ_L_26proc);
     $R (*__call__) (deactQ_L_26proc, $Cont);
@@ -342,7 +342,7 @@ struct deactQ_L_28ContG_class {
     B_NoneType (*__init__) (deactQ_L_28Cont, $Cont, deactQ_Bepa);
     void (*__serialize__) (deactQ_L_28Cont, $Serial$state);
     deactQ_L_28Cont (*__deserialize__) (deactQ_L_28Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_28Cont);
+    bool (*__bool__) (deactQ_L_28Cont);
     B_str (*__str__) (deactQ_L_28Cont);
     B_str (*__repr__) (deactQ_L_28Cont);
     $R (*__call__) (deactQ_L_28Cont, B_NoneType);
@@ -359,7 +359,7 @@ struct deactQ_L_29procG_class {
     B_NoneType (*__init__) (deactQ_L_29proc, deactQ_Bepa);
     void (*__serialize__) (deactQ_L_29proc, $Serial$state);
     deactQ_L_29proc (*__deserialize__) (deactQ_L_29proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_29proc);
+    bool (*__bool__) (deactQ_L_29proc);
     B_str (*__str__) (deactQ_L_29proc);
     B_str (*__repr__) (deactQ_L_29proc);
     $R (*__call__) (deactQ_L_29proc, $Cont);
@@ -377,7 +377,7 @@ struct deactQ_L_31ContG_class {
     B_NoneType (*__init__) (deactQ_L_31Cont, $Cont, deactQ_main);
     void (*__serialize__) (deactQ_L_31Cont, $Serial$state);
     deactQ_L_31Cont (*__deserialize__) (deactQ_L_31Cont, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_31Cont);
+    bool (*__bool__) (deactQ_L_31Cont);
     B_str (*__str__) (deactQ_L_31Cont);
     B_str (*__repr__) (deactQ_L_31Cont);
     $R (*__call__) (deactQ_L_31Cont, B_NoneType);
@@ -394,7 +394,7 @@ struct deactQ_L_32procG_class {
     B_NoneType (*__init__) (deactQ_L_32proc, deactQ_main, B_Env);
     void (*__serialize__) (deactQ_L_32proc, $Serial$state);
     deactQ_L_32proc (*__deserialize__) (deactQ_L_32proc, $Serial$state);
-    B_bool (*__bool__) (deactQ_L_32proc);
+    bool (*__bool__) (deactQ_L_32proc);
     B_str (*__str__) (deactQ_L_32proc);
     B_str (*__repr__) (deactQ_L_32proc);
     $R (*__call__) (deactQ_L_32proc, $Cont);
@@ -412,7 +412,7 @@ struct deactQ_ApaG_class {
     $R (*__init__) (deactQ_Apa, $Cont);
     void (*__serialize__) (deactQ_Apa, $Serial$state);
     deactQ_Apa (*__deserialize__) (deactQ_Apa, $Serial$state);
-    B_bool (*__bool__) (deactQ_Apa);
+    bool (*__bool__) (deactQ_Apa);
     B_str (*__str__) (deactQ_Apa);
     B_str (*__repr__) (deactQ_Apa);
     B_NoneType (*__resume__) (deactQ_Apa);
@@ -444,7 +444,7 @@ struct deactQ_BepaG_class {
     $R (*__init__) (deactQ_Bepa, $Cont);
     void (*__serialize__) (deactQ_Bepa, $Serial$state);
     deactQ_Bepa (*__deserialize__) (deactQ_Bepa, $Serial$state);
-    B_bool (*__bool__) (deactQ_Bepa);
+    bool (*__bool__) (deactQ_Bepa);
     B_str (*__str__) (deactQ_Bepa);
     B_str (*__repr__) (deactQ_Bepa);
     B_NoneType (*__resume__) (deactQ_Bepa);
@@ -472,7 +472,7 @@ struct deactQ_mainG_class {
     $R (*__init__) (deactQ_main, $Cont, B_Env);
     void (*__serialize__) (deactQ_main, $Serial$state);
     deactQ_main (*__deserialize__) (deactQ_main, $Serial$state);
-    B_bool (*__bool__) (deactQ_main);
+    bool (*__bool__) (deactQ_main);
     B_str (*__str__) (deactQ_main);
     B_str (*__repr__) (deactQ_main);
     B_NoneType (*__resume__) (deactQ_main);

@@ -42,10 +42,10 @@ B_NoneType deactQ_L_4actionD___init__ (deactQ_L_4action L_self, deactQ_Apa L_3ob
     return B_None;
 }
 $R deactQ_L_4actionD___call__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R deactQ_L_4actionD___exec__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg deactQ_L_4actionD___asyn__ (deactQ_L_4action L_self, B_int G_1) {
     deactQ_Apa L_3obj = ((deactQ_L_4action)(L_self))->L_3obj;
@@ -276,10 +276,10 @@ B_NoneType deactQ_L_14actionD___init__ (deactQ_L_14action L_self, deactQ_Apa L_1
     return B_None;
 }
 $R deactQ_L_14actionD___call__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R deactQ_L_14actionD___exec__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg deactQ_L_14actionD___asyn__ (deactQ_L_14action L_self, B_int G_1) {
     deactQ_Apa L_13obj = ((deactQ_L_14action)(L_self))->L_13obj;
@@ -313,10 +313,10 @@ B_NoneType deactQ_L_16actionD___init__ (deactQ_L_16action L_self, deactQ_Bepa L_
     return B_None;
 }
 $R deactQ_L_16actionD___call__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R deactQ_L_16actionD___exec__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg deactQ_L_16actionD___asyn__ (deactQ_L_16action L_self, B_int G_1) {
     deactQ_Bepa L_15obj = ((deactQ_L_16action)(L_self))->L_15obj;
@@ -350,10 +350,10 @@ B_NoneType deactQ_L_19actionD___init__ (deactQ_L_19action L_self, deactQ_main L_
     return B_None;
 }
 $R deactQ_L_19actionD___call__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R deactQ_L_19actionD___exec__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg deactQ_L_19actionD___asyn__ (deactQ_L_19action L_self, B_int G_1) {
     deactQ_main L_18obj = ((deactQ_L_19action)(L_self))->L_18obj;
@@ -950,7 +950,7 @@ void deactQ___init__ () {
     {
         deactQ_L_2ContG_methods.$GCINFO = "deactQ_L_2Cont";
         deactQ_L_2ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_2ContG_methods.__bool__ = (B_bool (*) (deactQ_L_2Cont))B_valueG_methods.__bool__;
+        deactQ_L_2ContG_methods.__bool__ = (bool (*) (deactQ_L_2Cont))B_valueG_methods.__bool__;
         deactQ_L_2ContG_methods.__str__ = (B_str (*) (deactQ_L_2Cont))B_valueG_methods.__str__;
         deactQ_L_2ContG_methods.__repr__ = (B_str (*) (deactQ_L_2Cont))B_valueG_methods.__repr__;
         deactQ_L_2ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_2Cont, $Cont))deactQ_L_2ContD___init__;
@@ -962,7 +962,7 @@ void deactQ___init__ () {
     {
         deactQ_L_4actionG_methods.$GCINFO = "deactQ_L_4action";
         deactQ_L_4actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        deactQ_L_4actionG_methods.__bool__ = (B_bool (*) (deactQ_L_4action))B_valueG_methods.__bool__;
+        deactQ_L_4actionG_methods.__bool__ = (bool (*) (deactQ_L_4action))B_valueG_methods.__bool__;
         deactQ_L_4actionG_methods.__str__ = (B_str (*) (deactQ_L_4action))B_valueG_methods.__str__;
         deactQ_L_4actionG_methods.__repr__ = (B_str (*) (deactQ_L_4action))B_valueG_methods.__repr__;
         deactQ_L_4actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_4action, deactQ_Apa))deactQ_L_4actionD___init__;
@@ -976,7 +976,7 @@ void deactQ___init__ () {
     {
         deactQ_L_6ContG_methods.$GCINFO = "deactQ_L_6Cont";
         deactQ_L_6ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_6ContG_methods.__bool__ = (B_bool (*) (deactQ_L_6Cont))B_valueG_methods.__bool__;
+        deactQ_L_6ContG_methods.__bool__ = (bool (*) (deactQ_L_6Cont))B_valueG_methods.__bool__;
         deactQ_L_6ContG_methods.__str__ = (B_str (*) (deactQ_L_6Cont))B_valueG_methods.__str__;
         deactQ_L_6ContG_methods.__repr__ = (B_str (*) (deactQ_L_6Cont))B_valueG_methods.__repr__;
         deactQ_L_6ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_6Cont, $action, $Cont))deactQ_L_6ContD___init__;
@@ -988,7 +988,7 @@ void deactQ___init__ () {
     {
         deactQ_L_7procG_methods.$GCINFO = "deactQ_L_7proc";
         deactQ_L_7procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_7procG_methods.__bool__ = (B_bool (*) (deactQ_L_7proc))B_valueG_methods.__bool__;
+        deactQ_L_7procG_methods.__bool__ = (bool (*) (deactQ_L_7proc))B_valueG_methods.__bool__;
         deactQ_L_7procG_methods.__str__ = (B_str (*) (deactQ_L_7proc))B_valueG_methods.__str__;
         deactQ_L_7procG_methods.__repr__ = (B_str (*) (deactQ_L_7proc))B_valueG_methods.__repr__;
         deactQ_L_7procG_methods.__init__ = (B_NoneType (*) (deactQ_L_7proc, deactQ_Apa, $action))deactQ_L_7procD___init__;
@@ -1001,7 +1001,7 @@ void deactQ___init__ () {
     {
         deactQ_L_8procG_methods.$GCINFO = "deactQ_L_8proc";
         deactQ_L_8procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_8procG_methods.__bool__ = (B_bool (*) (deactQ_L_8proc))B_valueG_methods.__bool__;
+        deactQ_L_8procG_methods.__bool__ = (bool (*) (deactQ_L_8proc))B_valueG_methods.__bool__;
         deactQ_L_8procG_methods.__str__ = (B_str (*) (deactQ_L_8proc))B_valueG_methods.__str__;
         deactQ_L_8procG_methods.__repr__ = (B_str (*) (deactQ_L_8proc))B_valueG_methods.__repr__;
         deactQ_L_8procG_methods.__init__ = (B_NoneType (*) (deactQ_L_8proc, deactQ_Apa, $action))deactQ_L_8procD___init__;
@@ -1014,7 +1014,7 @@ void deactQ___init__ () {
     {
         deactQ_L_9procG_methods.$GCINFO = "deactQ_L_9proc";
         deactQ_L_9procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_9procG_methods.__bool__ = (B_bool (*) (deactQ_L_9proc))B_valueG_methods.__bool__;
+        deactQ_L_9procG_methods.__bool__ = (bool (*) (deactQ_L_9proc))B_valueG_methods.__bool__;
         deactQ_L_9procG_methods.__str__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__str__;
         deactQ_L_9procG_methods.__repr__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__repr__;
         deactQ_L_9procG_methods.__init__ = (B_NoneType (*) (deactQ_L_9proc, deactQ_Apa, int64_t))deactQ_L_9procD___init__;
@@ -1027,7 +1027,7 @@ void deactQ___init__ () {
     {
         deactQ_L_10procG_methods.$GCINFO = "deactQ_L_10proc";
         deactQ_L_10procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_10procG_methods.__bool__ = (B_bool (*) (deactQ_L_10proc))B_valueG_methods.__bool__;
+        deactQ_L_10procG_methods.__bool__ = (bool (*) (deactQ_L_10proc))B_valueG_methods.__bool__;
         deactQ_L_10procG_methods.__str__ = (B_str (*) (deactQ_L_10proc))B_valueG_methods.__str__;
         deactQ_L_10procG_methods.__repr__ = (B_str (*) (deactQ_L_10proc))B_valueG_methods.__repr__;
         deactQ_L_10procG_methods.__init__ = (B_NoneType (*) (deactQ_L_10proc, deactQ_Bepa, int64_t))deactQ_L_10procD___init__;
@@ -1040,7 +1040,7 @@ void deactQ___init__ () {
     {
         deactQ_L_14actionG_methods.$GCINFO = "deactQ_L_14action";
         deactQ_L_14actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        deactQ_L_14actionG_methods.__bool__ = (B_bool (*) (deactQ_L_14action))B_valueG_methods.__bool__;
+        deactQ_L_14actionG_methods.__bool__ = (bool (*) (deactQ_L_14action))B_valueG_methods.__bool__;
         deactQ_L_14actionG_methods.__str__ = (B_str (*) (deactQ_L_14action))B_valueG_methods.__str__;
         deactQ_L_14actionG_methods.__repr__ = (B_str (*) (deactQ_L_14action))B_valueG_methods.__repr__;
         deactQ_L_14actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_14action, deactQ_Apa))deactQ_L_14actionD___init__;
@@ -1054,7 +1054,7 @@ void deactQ___init__ () {
     {
         deactQ_L_16actionG_methods.$GCINFO = "deactQ_L_16action";
         deactQ_L_16actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        deactQ_L_16actionG_methods.__bool__ = (B_bool (*) (deactQ_L_16action))B_valueG_methods.__bool__;
+        deactQ_L_16actionG_methods.__bool__ = (bool (*) (deactQ_L_16action))B_valueG_methods.__bool__;
         deactQ_L_16actionG_methods.__str__ = (B_str (*) (deactQ_L_16action))B_valueG_methods.__str__;
         deactQ_L_16actionG_methods.__repr__ = (B_str (*) (deactQ_L_16action))B_valueG_methods.__repr__;
         deactQ_L_16actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_16action, deactQ_Bepa))deactQ_L_16actionD___init__;
@@ -1068,7 +1068,7 @@ void deactQ___init__ () {
     {
         deactQ_L_19actionG_methods.$GCINFO = "deactQ_L_19action";
         deactQ_L_19actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        deactQ_L_19actionG_methods.__bool__ = (B_bool (*) (deactQ_L_19action))B_valueG_methods.__bool__;
+        deactQ_L_19actionG_methods.__bool__ = (bool (*) (deactQ_L_19action))B_valueG_methods.__bool__;
         deactQ_L_19actionG_methods.__str__ = (B_str (*) (deactQ_L_19action))B_valueG_methods.__str__;
         deactQ_L_19actionG_methods.__repr__ = (B_str (*) (deactQ_L_19action))B_valueG_methods.__repr__;
         deactQ_L_19actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_19action, deactQ_main))deactQ_L_19actionD___init__;
@@ -1082,7 +1082,7 @@ void deactQ___init__ () {
     {
         deactQ_L_20ContG_methods.$GCINFO = "deactQ_L_20Cont";
         deactQ_L_20ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_20ContG_methods.__bool__ = (B_bool (*) (deactQ_L_20Cont))B_valueG_methods.__bool__;
+        deactQ_L_20ContG_methods.__bool__ = (bool (*) (deactQ_L_20Cont))B_valueG_methods.__bool__;
         deactQ_L_20ContG_methods.__str__ = (B_str (*) (deactQ_L_20Cont))B_valueG_methods.__str__;
         deactQ_L_20ContG_methods.__repr__ = (B_str (*) (deactQ_L_20Cont))B_valueG_methods.__repr__;
         deactQ_L_20ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_20Cont, deactQ_main, $Cont))deactQ_L_20ContD___init__;
@@ -1094,7 +1094,7 @@ void deactQ___init__ () {
     {
         deactQ_L_21ContG_methods.$GCINFO = "deactQ_L_21Cont";
         deactQ_L_21ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_21ContG_methods.__bool__ = (B_bool (*) (deactQ_L_21Cont))B_valueG_methods.__bool__;
+        deactQ_L_21ContG_methods.__bool__ = (bool (*) (deactQ_L_21Cont))B_valueG_methods.__bool__;
         deactQ_L_21ContG_methods.__str__ = (B_str (*) (deactQ_L_21Cont))B_valueG_methods.__str__;
         deactQ_L_21ContG_methods.__repr__ = (B_str (*) (deactQ_L_21Cont))B_valueG_methods.__repr__;
         deactQ_L_21ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_21Cont, deactQ_main, $Cont))deactQ_L_21ContD___init__;
@@ -1106,7 +1106,7 @@ void deactQ___init__ () {
     {
         deactQ_L_22ContG_methods.$GCINFO = "deactQ_L_22Cont";
         deactQ_L_22ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_22ContG_methods.__bool__ = (B_bool (*) (deactQ_L_22Cont))B_valueG_methods.__bool__;
+        deactQ_L_22ContG_methods.__bool__ = (bool (*) (deactQ_L_22Cont))B_valueG_methods.__bool__;
         deactQ_L_22ContG_methods.__str__ = (B_str (*) (deactQ_L_22Cont))B_valueG_methods.__str__;
         deactQ_L_22ContG_methods.__repr__ = (B_str (*) (deactQ_L_22Cont))B_valueG_methods.__repr__;
         deactQ_L_22ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_22Cont, deactQ_main, $Cont))deactQ_L_22ContD___init__;
@@ -1118,7 +1118,7 @@ void deactQ___init__ () {
     {
         deactQ_L_23procG_methods.$GCINFO = "deactQ_L_23proc";
         deactQ_L_23procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_23procG_methods.__bool__ = (B_bool (*) (deactQ_L_23proc))B_valueG_methods.__bool__;
+        deactQ_L_23procG_methods.__bool__ = (bool (*) (deactQ_L_23proc))B_valueG_methods.__bool__;
         deactQ_L_23procG_methods.__str__ = (B_str (*) (deactQ_L_23proc))B_valueG_methods.__str__;
         deactQ_L_23procG_methods.__repr__ = (B_str (*) (deactQ_L_23proc))B_valueG_methods.__repr__;
         deactQ_L_23procG_methods.__init__ = (B_NoneType (*) (deactQ_L_23proc, deactQ_main, int64_t))deactQ_L_23procD___init__;
@@ -1131,7 +1131,7 @@ void deactQ___init__ () {
     {
         deactQ_L_25ContG_methods.$GCINFO = "deactQ_L_25Cont";
         deactQ_L_25ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_25ContG_methods.__bool__ = (B_bool (*) (deactQ_L_25Cont))B_valueG_methods.__bool__;
+        deactQ_L_25ContG_methods.__bool__ = (bool (*) (deactQ_L_25Cont))B_valueG_methods.__bool__;
         deactQ_L_25ContG_methods.__str__ = (B_str (*) (deactQ_L_25Cont))B_valueG_methods.__str__;
         deactQ_L_25ContG_methods.__repr__ = (B_str (*) (deactQ_L_25Cont))B_valueG_methods.__repr__;
         deactQ_L_25ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_25Cont, $Cont, deactQ_Apa))deactQ_L_25ContD___init__;
@@ -1143,7 +1143,7 @@ void deactQ___init__ () {
     {
         deactQ_L_26procG_methods.$GCINFO = "deactQ_L_26proc";
         deactQ_L_26procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_26procG_methods.__bool__ = (B_bool (*) (deactQ_L_26proc))B_valueG_methods.__bool__;
+        deactQ_L_26procG_methods.__bool__ = (bool (*) (deactQ_L_26proc))B_valueG_methods.__bool__;
         deactQ_L_26procG_methods.__str__ = (B_str (*) (deactQ_L_26proc))B_valueG_methods.__str__;
         deactQ_L_26procG_methods.__repr__ = (B_str (*) (deactQ_L_26proc))B_valueG_methods.__repr__;
         deactQ_L_26procG_methods.__init__ = (B_NoneType (*) (deactQ_L_26proc, deactQ_Apa))deactQ_L_26procD___init__;
@@ -1156,7 +1156,7 @@ void deactQ___init__ () {
     {
         deactQ_L_28ContG_methods.$GCINFO = "deactQ_L_28Cont";
         deactQ_L_28ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_28ContG_methods.__bool__ = (B_bool (*) (deactQ_L_28Cont))B_valueG_methods.__bool__;
+        deactQ_L_28ContG_methods.__bool__ = (bool (*) (deactQ_L_28Cont))B_valueG_methods.__bool__;
         deactQ_L_28ContG_methods.__str__ = (B_str (*) (deactQ_L_28Cont))B_valueG_methods.__str__;
         deactQ_L_28ContG_methods.__repr__ = (B_str (*) (deactQ_L_28Cont))B_valueG_methods.__repr__;
         deactQ_L_28ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_28Cont, $Cont, deactQ_Bepa))deactQ_L_28ContD___init__;
@@ -1168,7 +1168,7 @@ void deactQ___init__ () {
     {
         deactQ_L_29procG_methods.$GCINFO = "deactQ_L_29proc";
         deactQ_L_29procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_29procG_methods.__bool__ = (B_bool (*) (deactQ_L_29proc))B_valueG_methods.__bool__;
+        deactQ_L_29procG_methods.__bool__ = (bool (*) (deactQ_L_29proc))B_valueG_methods.__bool__;
         deactQ_L_29procG_methods.__str__ = (B_str (*) (deactQ_L_29proc))B_valueG_methods.__str__;
         deactQ_L_29procG_methods.__repr__ = (B_str (*) (deactQ_L_29proc))B_valueG_methods.__repr__;
         deactQ_L_29procG_methods.__init__ = (B_NoneType (*) (deactQ_L_29proc, deactQ_Bepa))deactQ_L_29procD___init__;
@@ -1181,7 +1181,7 @@ void deactQ___init__ () {
     {
         deactQ_L_31ContG_methods.$GCINFO = "deactQ_L_31Cont";
         deactQ_L_31ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_31ContG_methods.__bool__ = (B_bool (*) (deactQ_L_31Cont))B_valueG_methods.__bool__;
+        deactQ_L_31ContG_methods.__bool__ = (bool (*) (deactQ_L_31Cont))B_valueG_methods.__bool__;
         deactQ_L_31ContG_methods.__str__ = (B_str (*) (deactQ_L_31Cont))B_valueG_methods.__str__;
         deactQ_L_31ContG_methods.__repr__ = (B_str (*) (deactQ_L_31Cont))B_valueG_methods.__repr__;
         deactQ_L_31ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_31Cont, $Cont, deactQ_main))deactQ_L_31ContD___init__;
@@ -1193,7 +1193,7 @@ void deactQ___init__ () {
     {
         deactQ_L_32procG_methods.$GCINFO = "deactQ_L_32proc";
         deactQ_L_32procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_32procG_methods.__bool__ = (B_bool (*) (deactQ_L_32proc))B_valueG_methods.__bool__;
+        deactQ_L_32procG_methods.__bool__ = (bool (*) (deactQ_L_32proc))B_valueG_methods.__bool__;
         deactQ_L_32procG_methods.__str__ = (B_str (*) (deactQ_L_32proc))B_valueG_methods.__str__;
         deactQ_L_32procG_methods.__repr__ = (B_str (*) (deactQ_L_32proc))B_valueG_methods.__repr__;
         deactQ_L_32procG_methods.__init__ = (B_NoneType (*) (deactQ_L_32proc, deactQ_main, B_Env))deactQ_L_32procD___init__;
@@ -1206,7 +1206,7 @@ void deactQ___init__ () {
     {
         deactQ_ApaG_methods.$GCINFO = "deactQ_Apa";
         deactQ_ApaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_ApaG_methods.__bool__ = (B_bool (*) (deactQ_Apa))$ActorG_methods.__bool__;
+        deactQ_ApaG_methods.__bool__ = (bool (*) (deactQ_Apa))$ActorG_methods.__bool__;
         deactQ_ApaG_methods.__str__ = (B_str (*) (deactQ_Apa))$ActorG_methods.__str__;
         deactQ_ApaG_methods.__repr__ = (B_str (*) (deactQ_Apa))$ActorG_methods.__repr__;
         deactQ_ApaG_methods.__resume__ = (B_NoneType (*) (deactQ_Apa))$ActorG_methods.__resume__;
@@ -1225,7 +1225,7 @@ void deactQ___init__ () {
     {
         deactQ_BepaG_methods.$GCINFO = "deactQ_Bepa";
         deactQ_BepaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_BepaG_methods.__bool__ = (B_bool (*) (deactQ_Bepa))$ActorG_methods.__bool__;
+        deactQ_BepaG_methods.__bool__ = (bool (*) (deactQ_Bepa))$ActorG_methods.__bool__;
         deactQ_BepaG_methods.__str__ = (B_str (*) (deactQ_Bepa))$ActorG_methods.__str__;
         deactQ_BepaG_methods.__repr__ = (B_str (*) (deactQ_Bepa))$ActorG_methods.__repr__;
         deactQ_BepaG_methods.__resume__ = (B_NoneType (*) (deactQ_Bepa))$ActorG_methods.__resume__;
@@ -1240,7 +1240,7 @@ void deactQ___init__ () {
     {
         deactQ_mainG_methods.$GCINFO = "deactQ_main";
         deactQ_mainG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        deactQ_mainG_methods.__bool__ = (B_bool (*) (deactQ_main))$ActorG_methods.__bool__;
+        deactQ_mainG_methods.__bool__ = (bool (*) (deactQ_main))$ActorG_methods.__bool__;
         deactQ_mainG_methods.__str__ = (B_str (*) (deactQ_main))$ActorG_methods.__str__;
         deactQ_mainG_methods.__repr__ = (B_str (*) (deactQ_main))$ActorG_methods.__repr__;
         deactQ_mainG_methods.__resume__ = (B_NoneType (*) (deactQ_main))$ActorG_methods.__resume__;
