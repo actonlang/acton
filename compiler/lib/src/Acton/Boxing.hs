@@ -24,11 +24,21 @@ doBoxing env m                     = do (_,ss) <- boxing (boxEnv env) (mbody m)
 type BoxEnv                        = EnvF BoxX
 
 
-data BoxX                          = BoxX {inClassX :: Maybe (TCon, TEnv), inActionX :: Bool, returnTypeX :: Maybe Type}
+data StaticWitness                  = StaticWitness { swBaseClass :: TCon, swObjectName :: QName, swObjectPath :: [Name] }
+
+data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
+                                          , inActionX :: Bool
+                                          , returnTypeX :: Maybe Type
+                                          , staticWitnessesX :: M.HashMap Name StaticWitness
+                                          }
 
 
 boxEnv                             :: Env0 -> BoxEnv
-boxEnv env0                        = setX env0 BoxX{inClassX = Nothing, inActionX = False, returnTypeX = Nothing}
+boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
+                                                   , inActionX = False
+                                                   , returnTypeX = Nothing
+                                                   , staticWitnessesX = M.empty
+                                                   }
 
 
 setInClass mtc env                  = modX env $ \x -> x{ inClassX = mtc }
@@ -42,6 +52,124 @@ getInAction env                     = inActionX $ envX env
 setReturnType t env                 = modX env $ \x -> x{ returnTypeX = t }
 
 getReturnType env                   = returnTypeX $ envX env
+
+-- Static witness calls ---------------------------------------------------------------
+
+setStaticWitness n mbw env          = modX env $ \x -> x{ staticWitnessesX = upd (staticWitnessesX x) }
+  where upd                         = maybe (M.delete n) (M.insert n) mbw
+
+lookupStaticWitness env n           = M.lookup n (staticWitnessesX $ envX env)
+
+-- Recognize witness expressions whose runtime object has a static C name.  A
+-- dot path records selection of embedded super-witness fields from that root.
+staticWitnessOf                     :: BoxEnv -> Expr -> Maybe StaticWitness
+staticWitnessOf env (Dot _ e n)     = do w <- staticWitnessOf env e
+                                         return w{ swObjectPath = swObjectPath w ++ [n] }
+staticWitnessOf env (Call _ f p KwdNil)
+                                    = staticWitnessRoot env f p
+  where staticWitnessRoot env (TApp _ f ts) p
+                                    = staticWitnessRoot' env f ts p
+        staticWitnessRoot env f p   = staticWitnessRoot' env f [] p
+
+        staticWitnessRoot' env (Var _ qn) ts p
+                                    = do qn' <- builtinWitnessClass env qn
+                                         obj <- staticWitnessObject env qn' ts p
+                                         return StaticWitness{ swBaseClass = TC qn' ts, swObjectName = obj, swObjectPath = [] }
+        staticWitnessRoot' _ _ _ _  = Nothing
+
+        builtinWitnessClass env qn  = case unalias env qn of
+                                        qn'@(GName m _)
+                                          | m == mBuiltin,
+                                            isClass env qn'
+                                              -> Just qn'
+                                        _ -> Nothing
+
+        staticWitnessObject env qn@(GName m n) ts p
+          | Just key <- specialStaticKey env n ts
+                                    = Just (GName m (Derived n key))
+          | p == PosNil             = Just qn
+        staticWitnessObject _ _ _ _ = Nothing
+
+        specialStaticKey env (Derived n1 n2) [TCon _ (TC qn []), _]
+          | n1 == nMapping,
+            n2 == nDict             = builtinStaticKey env qn
+          | n1 == nSetP,
+            n2 == nSetT             = builtinStaticKey env qn
+        specialStaticKey _ _ _      = Nothing
+
+        builtinStaticKey env qn     = case unalias env qn of
+                                        GName m key
+                                          | m == mBuiltin,
+                                            key `elem` [nInt, nU64, nStr, nBytes]
+                                              -> Just key
+                                        _ -> Nothing
+staticWitnessOf _ _                 = Nothing
+
+-- Follow a super-witness path to the witness class whose method table is used.
+staticWitnessMethodClass env w attr
+                                    = do tc <- followWitnessPath env (swBaseClass w) (swObjectPath w)
+                                         if hasAttr env tc attr then Just tc else Nothing
+  where followWitnessPath _ tc []   = Just tc
+        followWitnessPath env (TC qn ts) (w:ws)
+                                    = do p <- witnessPathProtocol w
+                                         qn' <- builtinWitnessPathClass env qn p
+                                         followWitnessPath env (TC qn' ts) ws
+
+        witnessPathProtocol (Internal Witness s _)
+                                    = Just (name s)
+        witnessPathProtocol _       = Nothing
+
+        builtinWitnessPathClass env qn p
+                                    = case unalias env qn of
+                                        GName m n
+                                          | m == mBuiltin ->
+                                              let qn' = GName mBuiltin (Derived p n)
+                                              in if isClass env qn' then Just qn' else Nothing
+                                        _ -> Nothing
+
+staticWitnessExpr w                 = foldl (Dot NoLoc) (eCallP root PosNil) (swObjectPath w)
+  where root
+          | swObjectName w == tcname (swBaseClass w)
+                                    = tApp (eQVar (swObjectName w)) (tcargs (swBaseClass w))
+          | otherwise               = eQVar (swObjectName w)
+
+methodQName (TC (GName m c) _) n    = GName m (Derived c n)
+methodQName (TC (QName m c) _) n    = GName m (Derived c n)
+methodQName (TC (NoQ c) _) n        = NoQ (Derived c n)
+
+generatedMethodName (GName m (Derived c n))
+  | m == mBuiltin                  = Just (GName m c, n)
+generatedMethodName (QName m (Derived c n))
+  | m == mBuiltin                  = Just (GName m c, n)
+generatedMethodName _              = Nothing
+
+generatedMethodType env qn ts       = do (tc, n) <- generatedMethodClass env qn ts
+                                         return (rtypeOf env tc n)
+
+generatedCallableType env (TApp _ (Var _ n) ts)
+                                    = generatedMethodType env n ts
+generatedCallableType env (TApp _ f _)
+                                    = generatedCallableType env f
+generatedCallableType env (Var _ n)
+                                    = generatedMethodType env n []
+generatedCallableType _ _           = Nothing
+
+generatedMethodClass env qn ts      = do (c, n) <- generatedMethodName qn
+                                         generatedClass env c n ts
+
+generatedClass env qn n ts
+  | isClass env qn,
+    hasAttr env tc n                = Just (tc, n)
+  | otherwise                       = Nothing
+  where tc                          = TC qn ts
+
+directMethodImpl env qn n           = case findQName qn env of
+                                        NClass _ _ te _ -> direct te
+                                        NProto _ _ te _ -> direct te
+                                        _               -> False
+  where direct te                   = case findAttrInfoIn n te of
+                                        Just NDef{} -> True
+                                        _           -> False
 
 -- Unboxing helpers -------------------------------------
 
@@ -64,7 +192,7 @@ generalType env n                  = case getNI n of
                                            Just (NSig sc _ _) -> Just $ sctype sc
                                            ni -> Nothing 
     where getNI n                  = case contextIs env CtxClass of
-                                           True -> lookup n (gtypes env)
+                                           True -> Nothing
                                            False -> Just (findQName (NoQ n) env)
  
 -- matchTypes expects to be called with both arguments a function type; the specific one returned by typeOf for a name f and
@@ -146,14 +274,27 @@ callReturnsMsg env f                  = case rtypeOfFun env f of
                                           _               -> False
 
 callReturnsBoxed env f@(TApp _ f0 _)
+  | TApp _ (Var _ n) ts <- f,
+    Just _ <- generatedMethodType env n ts
+                                      = callableReturnsBoxed env f
+callReturnsBoxed env f@(TApp _ f0 _)
   | callIsClass env f0               = True
   | otherwise                        = callableReturnsBoxed env f
+callReturnsBoxed env f@(Var _ n)
+  | Just _ <- generatedMethodType env n []
+                                      = callableReturnsBoxed env f
 callReturnsBoxed env f@(Var _ n)
   | NClass{} <- findQName n env      = True
   | otherwise                        = callableReturnsBoxed env f
 callReturnsBoxed env f               = callableReturnsBoxed env f
 
+callIsClass env (TApp _ (Var _ n) ts)
+  | Just _ <- generatedMethodType env n ts
+                                      = False
 callIsClass env (TApp _ f _)         = callIsClass env f
+callIsClass env (Var _ n)
+  | Just _ <- generatedMethodType env n []
+                                      = False
 callIsClass env (Var _ n)            = case findQName n env of
                                          NClass{} -> True
                                          _        -> False
@@ -166,6 +307,28 @@ callableReturnsBoxed env f           = case rtypeOfFun env f of
 callableRawRep env f                  = case rtypeOfFun env f of
                                          TFun _ _ _ _ (TUnboxed _ t) -> Just t
                                          _                          -> Nothing
+
+generatedCallableRawRep env f         = case generatedCallableType env f of
+                                         Just (TFun _ _ _ _ (TUnboxed _ t)) -> Just t
+                                         _                                  -> Nothing
+
+generatedExprType env (Paren _ e)     = generatedExprType env e
+generatedExprType env (Let _ ss e)    = generatedExprType (define (envOf ss) env) e
+generatedExprType env (TApp _ e _)    = generatedExprType env e
+generatedExprType env (Async _ e)     = generatedExprType env e
+generatedExprType env (Box t _)       = Just t
+generatedExprType env (UnBox t _)     = Just t
+generatedExprType env (Call _ f _ KwdNil)
+                                      = case generatedCallableType env f of
+                                          Just (TFun _ fx _ _ t) -> Just (exposeMsg fx t)
+                                          _                     -> Nothing
+generatedExprType env (Dot _ e n)     = do t <- generatedExprType env e
+                                           generatedDotType env t n
+generatedExprType _ _                 = Nothing
+
+generatedDotType env (TCon _ tc) n     = Just $ sctype $ fst $ findAttr' env (snd $ splitTC env tc) n
+generatedDotType env (TVar _ tv) n     = Just $ sctype $ fst $ findAttr' env (snd $ splitTC env (findTVBound env tv)) n
+generatedDotType _ _ _                 = Nothing
 
 unboxedFieldType env e@(Var _ n) attr
   | isTypeRef (findQName n env)     = Nothing
@@ -248,9 +411,16 @@ exprUnboxedRep env e@DotI{}      = Nothing
 exprUnboxedRep env (BinOp _ _ op _)
   | op `elem` [And, Or]           = Nothing
 exprUnboxedRep env c@(Call _ f _ KwdNil)
+  | Just t <- generatedCallableRawRep env f
+                                  = Just t
+  | Just _ <- generatedCallableType env f
+                                  = Nothing
   | callReturnsMsg env f          = Nothing
   | rawClassConstructor env c f    = unboxedRepType (typeOf env c)
   | Just t <- callableRawRep env f = Just t
+exprUnboxedRep env e
+  | Just t <- generatedExprType env e
+                                  = unboxedRepType t
 exprUnboxedRep env e             = unboxedRepType (typeOf env e)
 
 fixreturn env rt e e1
@@ -294,9 +464,10 @@ fixarg env t e
 fixarg env _ e                   = e
 
 fixargs                         :: BoxEnv -> PosArg -> Type -> PosArg
-fixargs env (PosArg e p) r      = PosArg (fixarg env (rtype r) e) (fixargs env p (rtail r))
+fixargs env (PosArg e p) r@TRow{}= PosArg (fixarg env (rtype r) e) (fixargs env p (rtail r))
 -- fixargs(PosStar e) r       = PosStar (tryUnbox t e) 
 --    where t                      = rtype r
+fixargs env p@PosArg{} _          = p
 fixargs env PosNil _               = PosNil
 
 fixpars (PosPar n (Just t) mbe p) r
@@ -305,6 +476,9 @@ fixpars (PosPar n (Just t) mbe p) r
 fixpars PosNIL _            = PosNIL
 
 rtypeOfFun env f@(TApp _ (Var _ n) _)
+  | Just rt <- generatedMethodType env n (targs f)
+                                    = rt
+rtypeOfFun env f@(TApp _ (Var _ n) _)
   | boxedCPrim n                    = typeOf env f
 rtypeOfFun env (TApp _ f0 [])       = rtypeOfFun env f0
 rtypeOfFun env f@(TApp _ f0 ts)     = matchTypes (typeOf env f) (typeInstOf env (map (const tWild) ts) f0)
@@ -312,10 +486,17 @@ rtypeOfFun env (Async _ f)          = rtypeOfFun env f
 rtypeOfFun env f@(Dot _ (Var _ x) _)
   | NClass{} <- findQName x env
                                       = typeOf env f
-rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
-                                        TCon _ tc -> rtypeOf env tc n
-                                        TVar _ tv -> rtypeOf env (findTVBound env tv) n
-                                        _         -> typeOf env f
+rtypeOfFun env f@(Dot _ e n)        = case generatedExprType env e of
+                                        Just (TCon _ tc) -> rtypeOf env tc n
+                                        Just (TVar _ tv) -> rtypeOf env (findTVBound env tv) n
+                                        Just _           -> typeOf env f
+                                        Nothing          -> case typeOf env e of
+                                          TCon _ tc -> rtypeOf env tc n
+                                          TVar _ tv -> rtypeOf env (findTVBound env tv) n
+                                          _         -> typeOf env f
+rtypeOfFun env f@(Var _ n)
+  | Just rt <- generatedMethodType env n []
+                                    = rt
 rtypeOfFun env f@(Var _ n)
   | boxedCPrim n                    = typeOf env f
   | otherwise                       = case findQName n env of
@@ -363,13 +544,13 @@ instance (Boxing a) => Boxing ([a]) where
 
 instance {-# OVERLAPS #-} Boxing ([Stmt]) where
     boxing env []                     = return (HashSet.empty,[])
-    boxing env (x@(Assign _ [PVar _ w _] _) : xs)
+    boxing env (x@(Assign _ [PVar _ w _] rhs) : xs)
     --  if witness n is not used in xs, delete statement x defining n
        | isWitness w                  = do (ws1,x') <- boxing env x      
                                            (ws2,xs') <- boxing env1 xs
-                                           return $ if HashSet.member w  ws2 then (HashSet.union ws1 ws2,x':xs') else (ws2,xs')
+                                           return $ if HashSet.member w  ws2 then (HashSet.union ws1 (HashSet.delete w ws2),x':xs') else (ws2,xs')
       where te                        = envOf x
-            env1                      = define te env
+            env1                      = setStaticWitness w (staticWitnessOf env rhs) (define te env)
 
     boxing env (x : xs)              = do (ws1,x') <- boxing env x
                                           let env1 = define (envOf x') env
@@ -394,42 +575,58 @@ instance Boxing Expr where
                                          (ws2,e1) <- boxingWitness env w attr p1 pr rest
                                          return (HashSet.union ws1 ws2,e1)
      where
-      TFun _ _ pr _ rest            = rtypeOf' env w attr
+      rt@(TFun _ _ pr _ rest)       = rtypeOf' env w attr
       boxingWitness                 :: BoxEnv -> QName -> Name -> PosArg -> Type -> Type -> IO (HashSet.HashSet Name,Expr)
       boxingWitness env w attr p pr rest = case findQName w env of
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
-                                           | attr == fromatomKW      -> boxingFromAtom w ts es
-                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts pr rest  -- rest indicates "result type", not any form of remainder
-                                           | attr `elem` unopKWs     -> boxingUnop w attr es ts pr rest
-                                           | attr `elem` eqordKWs    -> boxingCompop w attr es ts pr rest
-                                        _                            -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
-                                                                           return (HashSet.singleton n, tryBox rest c)
+                                           | attr == fromatomKW      -> boxingFromAtom w es ts rt pr rest
+                                           | attr `elem` binopKWs    -> boxingBinop w attr es ts rt pr rest  -- rest indicates "result type", not any form of remainder
+                                           | attr `elem` unopKWs     -> boxingUnop w attr es ts rt pr rest
+                                           | attr `elem` eqordKWs    -> boxingCompop w attr es ts rt pr rest
+                                        _                            -> boxingDirectOrDynamic w attr p rt pr rest
        where es                     = posargs p
 --             vFree (TCon _ (TC _ _))= True
 --             vFree _                = False
-      boxingFromAtom w ts [i@Int{}]
-        | t == tBigint              = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) [i])
-        | t `elem` numericTypes     = return (HashSet.empty, Box (last ts) (unbox t i))
-        where t = head ts
-      boxingFromAtom w ts [x@Float{}]
+
+      boxingDirectOrDynamic w attr p rt pr rest
+                                    = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
+                                        Just (sw, tc)
+                                          | directMethodImpl env (tcname tc) attr
+                                            -> return (HashSet.empty, tryBox rest $ staticWitnessCall sw tc attr (fixargs env p pr))
+                                        Just _        -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
+                                                            return (HashSet.singleton n, tryBox rest c)
+                                        Nothing       -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
+                                                            return (HashSet.singleton n, tryBox rest c)
+
+      staticWitnessCall sw tc attr p= eCallP (tApp (eQVar (methodQName tc attr)) (tcargs tc)) (PosArg (staticWitnessExpr sw) p)
+
+      boxingFromAtom w [i@Int{}] ts _ _ _
+        | t `elem` numericTypes,
+          t /= tBigint              = return (HashSet.empty, Box (last ts) (unbox t i))
+        where t                     = head ts
+      boxingFromAtom w [x@Float{}] ts _ _ _
                                     = return (HashSet.empty, Box (last ts) (unbox (head ts) x))
-      boxingFromAtom w ts es        = return (HashSet.singleton n, eCall (eDot (eQVar w) fromatomKW) es)
-      boxingBinop w attr es@[x1, x2] ts _ _
+      boxingFromAtom w es ts rt pr rest
+                                    = boxingDirectOrDynamic w fromatomKW (posarg es) rt pr rest
+      boxingBinop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t            =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
               op                    = bin2Binary attr
-      boxingBinop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingUnop w attr es@[x1] ts _ _
+      boxingBinop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
+      boxingUnop w attr es@[x1] ts _ _ _
         | isUnboxable t             =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ UnOp NoLoc op (unbox t x1))
         where t                     = head ts
               op                    = un2Unary attr
-      boxingUnop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
-      boxingCompop w attr es@[x1, x2] ts _ _
+      boxingUnop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
+      boxingCompop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t             = return (HashSet.empty, Box tBool $ Paren NoLoc $ CompOp NoLoc (unbox t x1) [OpArg op (unbox t x2)])
         where t = head ts
               op = cmp2Comparison attr
-      boxingCompop w attr es _ pr rest= return (HashSet.singleton n, tryBox rest $ eCallP (eDot (eQVar w) attr) (fixargs env (posarg es) pr))
+      boxingCompop w attr es _ rt pr rest
+                                    = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))

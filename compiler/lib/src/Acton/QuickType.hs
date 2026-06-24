@@ -69,8 +69,41 @@ isUnboxedExpr (Var _ (NoQ (Internal BoxPass _ _)))
 isUnboxedExpr (BinOp _ l _ r)       = isUnboxedExpr l || isUnboxedExpr r
 isUnboxedExpr _                     = False
 
+qGeneratedMethodName (GName m (Derived c n))
+  | m == mBuiltin                  = Just (GName m c, n)
+qGeneratedMethodName (QName m (Derived c n))
+  | m == mBuiltin                  = Just (GName m c, n)
+qGeneratedMethodName _             = Nothing
+
+qGeneratedMethodType env qn ts      = do (c, n) <- qGeneratedMethodName qn
+                                         let tc = TC c ts
+                                         if isClass env c && hasAttr env tc n
+                                            then Just (addWitness tc $ sctype $ fst $ findAttr' env tc n)
+                                            else Nothing
+  where addWitness tc (TFun l fx p k t)
+                                    = TFun l fx (posRow (tCon tc) p) k t
+        addWitness _ t              = t
+
+qGeneratedCallableType env (TApp _ (Var _ n) ts)
+                                    = qGeneratedMethodType env n ts
+qGeneratedCallableType env (TApp _ e _)
+                                    = qGeneratedCallableType env e
+qGeneratedCallableType env (Var _ n)
+                                    = qGeneratedMethodType env n []
+qGeneratedCallableType _ _          = Nothing
+
+-- Generated direct protocol calls carry the selected witness as their first
+-- argument.  Some static witness objects only exist as C names, so keep that
+-- argument at the expected witness type instead of resolving it through Env.
+qTypeGeneratedPos env f (TRow _ _ _ t r) (PosArg e p)
+                                    = (posRow t r', fxp, PosArg e p')
+  where (r', fxp, p')               = qType env f p
+qTypeGeneratedPos env f _ p         = qType env f p
 
 qSchema                             :: EnvF x -> Checker -> Expr -> (TSchema, Type, Maybe Deco, Expr)
+qSchema env f e@(Var _ n)
+  | Just t <- qGeneratedMethodType env n []
+                                    = (monotype t, fxPure, Just NoDec, e)
 qSchema env f e@(Var _ n)           = case findQName n env of
                                         NVar t ->
                                             (monotype t, fxPure, Nothing, e)
@@ -114,6 +147,9 @@ qSchema env f e                     = (monotype t, fx, Nothing, e')
 
 qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (Type, Type, Expr)
 qInst env f [] (TApp _ e ts)        = qInst env f ts e
+qInst env f ts e@(Var _ n)
+  | Just t <- qGeneratedMethodType env n ts
+                                    = (t, fxPure, tApp e ts)
 qInst env f ts e                    = case qSchema env f e of
                                         (TSchema _ q t, fx, _, e') | length q == length ts -> (t', fx, tApp e' ts)
                                            where t' = vsubst (qbound q `zip` ts) t
@@ -132,6 +168,14 @@ instance QType Expr where
 --  qType env f (Imaginary _ i s)   = undefined
 --  qType env f (NotImplemented _)  = undefined
 --  qType env f (Ellipsis _)        = undefined
+    qType env f e0@(Call l e ps KwdNil)
+      | Just _ <- qGeneratedCallableType env e,
+        TFun{} <- t                 = (restype t, fx', Call l e' (qMatch f p (posrow t) ps') KwdNil)
+      | Just _ <- qGeneratedCallableType env e
+                                    = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
+      where (t, fx, e')             = qType env f e
+            (p, fxp, ps')           = qTypeGeneratedPos env f (posrow t) ps
+            fx'                     = upbound env [fx,fxp,effect t]
     qType env f e0@(Call l e ps ks)
       | TFun{} <- t                 = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
                                       (restype t, fx', Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
