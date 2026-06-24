@@ -69,8 +69,27 @@ isUnboxedExpr (Var _ (NoQ (Internal BoxPass _ _)))
 isUnboxedExpr (BinOp _ l _ r)       = isUnboxedExpr l || isUnboxedExpr r
 isUnboxedExpr _                     = False
 
+qGeneratedMethodName (GName m (Derived c n))
+                                    = Just (GName m c, n)
+qGeneratedMethodName (QName m (Derived c n))
+                                    = Just (GName m c, n)
+qGeneratedMethodName (NoQ (Derived c n))
+                                    = Just (NoQ c, n)
+qGeneratedMethodName _              = Nothing
+
+qGeneratedMethodType env qn ts      = do (c, n) <- qGeneratedMethodName qn
+                                         let tc = TC c ts
+                                         if isClass env c && hasAttr env tc n
+                                            then Just (addWitness tc $ sctype $ fst $ findAttr' env tc n)
+                                            else Nothing
+  where addWitness tc (TFun l fx p k t)
+                                    = TFun l fx (posRow (tCon tc) p) k t
+        addWitness _ t              = t
 
 qSchema                             :: EnvF x -> Checker -> Expr -> (TSchema, Type, Maybe Deco, Expr)
+qSchema env f e@(Var _ n)
+  | Just t <- qGeneratedMethodType env n []
+                                    = (monotype t, fxPure, Just NoDec, e)
 qSchema env f e@(Var _ n)           = case findQName n env of
                                         NVar t ->
                                             (monotype t, fxPure, Nothing, e)
@@ -114,6 +133,9 @@ qSchema env f e                     = (monotype t, fx, Nothing, e')
 
 qInst                               :: EnvF x -> Checker -> [Type] -> Expr -> (Type, Type, Expr)
 qInst env f [] (TApp _ e ts)        = qInst env f ts e
+qInst env f ts e@(Var _ n)
+  | Just t <- qGeneratedMethodType env n ts
+                                    = (t, fxPure, tApp e ts)
 qInst env f ts e                    = case qSchema env f e of
                                         (TSchema _ q t, fx, _, e') | length q == length ts -> (t', fx, tApp e' ts)
                                            where t' = vsubst (qbound q `zip` ts) t

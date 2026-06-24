@@ -76,15 +76,33 @@ staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin                 = (Just v, [])
-staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
-   | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnInt
-                                    = (Just (gBuiltin (Derived n nInt)),[])
-staticWitnessName (Call _ (TApp _ (Var _ (GName m n@(Derived n1 n2))) [TCon _ (TC gn1 []), _]) _ KwdNil)
-   | m == mBuiltin && n1 == nMapping && n2 == nDict && gn1 == qnStr
-                                    = (Just (gBuiltin (Derived n nStr)),[])
+staticWitnessName (Call _ (Var _ (QName m n)) PosNil KwdNil)
+    | m == mBuiltin                 = (Just (GName m n), [])
+staticWitnessName (Call _ (TApp _ (Var _ (GName m n)) ts) _ KwdNil)
+   | m == mBuiltin,
+     Just key <- specialStaticKey n ts
+                                    = (Just (gBuiltin (Derived n key)),[])
+staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) ts) _ KwdNil)
+   | m == mBuiltin,
+     Just key <- specialStaticKey n ts
+                                    = (Just (gBuiltin (Derived n key)),[])
 staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
     | m == mBuiltin                 = (Just v, [])
+staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) _) PosNil KwdNil)
+    | m == mBuiltin                 = (Just (GName m n), [])
 staticWitnessName _                 = (Nothing, [])
+
+specialStaticKey (Derived n1 n2) [TCon _ (TC gn1 []), _]
+   | n1 == nMapping && n2 == nDict  = builtinStaticKey gn1
+   | n1 == nSetP && n2 == nSetT     = builtinStaticKey gn1
+specialStaticKey _ _                = Nothing
+
+builtinStaticKey gn                 = case gn of
+                                        GName m key
+                                          | m == mBuiltin,
+                                            key `elem` [nInt, nU64, nStr, nBytes]
+                                              -> Just key
+                                        _ -> Nothing
 
 -- Environment --------------------------------------------------------------------------------------
 
@@ -239,14 +257,39 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      constub env t n r b
+                                      constub env t n r b $+$
+                                      vcat [ methodDefStub env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
+        b'                          = vsubst [(tvSelf, tCon c)] b
+        c                           = TC (NoQ n) (map tVar $ qbound q)
+        env1                        = setInClass (defineTVars q env)
+        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
 methstub env Def{}                  = empty
 
 constub env t n r b
   | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
   | otherwise                       = empty
   where ns                          = abstractAttrs env (NoQ n)
+
+methodDefStub env (Def _ n q p KwdNIL (Just t) _ d fx _)
+                                    = t3 <+> genTopName env n <> parens (genPosPar env n d t1 p) <> semi
+  where methnm n@(Derived c n0)
+          | n0 == suffixNewact      = n
+          | otherwise               = n0
+        methnm n0                   = n0
+        t1                          = case methodType n of
+                                         Just t' -> t'
+                                         Nothing -> error "Internal error: CodeGen.methodDefStub"
+        methodType n@(Derived c n0)
+          | contextIs env CtxClass,
+            NClass q _ _ _ <- findQName (NoQ c) env
+                                    = Just $ B.rtypeOf env (TC (NoQ c) (map tVar $ qbound q)) n0
+        methodType n                = B.generalType env (methnm n)
+        t2                          = exposeMsg fx t
+        t3                          = settype env (rawReturn (restype t1)) t2
+        rawReturn TUnboxed{}        = True
+        rawReturn _                 = False
+methodDefStub _ _                   = empty
 
 fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
   where te                          = fullAttrEnv env c
@@ -994,7 +1037,8 @@ instance Gen Stmt where
 
 genBranch env kw (Branch e b)       = ((text kw <+> parens(genBool env (B.unbox t e)) <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
    where (b',vs)                    = genSuite env b
-         t                          = typeOf env e
+         t | containsGeneratedMethodCall env e = tBool
+           | otherwise              = typeOf env e
 
 genElse env []                      = (empty, [])
 genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
@@ -1173,15 +1217,36 @@ rawClassConstructor env c f         = callIsClass env f && B.isUnboxable (boxedR
 -- Class calls normally return boxed objects.  Non-class calls are classified by
 -- their callable return type.
 callReturnsBoxed env f@(TApp _ f0 _)
+  | generatedMethodCallable env f   = False
+callReturnsBoxed env f@(TApp _ f0 _)
+  | Just _ <- directMethodCallableType env f
+                                    = callableReturnsBoxed env f
+callReturnsBoxed env f@(TApp _ f0 _)
   | callIsClass env f0              = True
   | otherwise                       = callableReturnsBoxed env f
+callReturnsBoxed env f@(Var _ n)
+  | generatedMethodCallable env f   = False
+callReturnsBoxed env f@(Var _ n)
+  | Just _ <- generatedMethodType env n []
+                                    = callableReturnsBoxed env f
 callReturnsBoxed env f@(Var _ n)
   | NClass{} <- findQName n env     = True
   | otherwise                       = callableReturnsBoxed env f
 callReturnsBoxed env f              = callableReturnsBoxed env f
 
 -- Identify class constructor calls, ignoring type application wrappers.
+callIsClass env f@(TApp _ _ _)
+  | generatedMethodCallable env f   = False
+callIsClass env f@(TApp _ _ _)
+  | Just _ <- directMethodCallableType env f
+                                    = False
 callIsClass env (TApp _ f _)        = callIsClass env f
+callIsClass env (Var _ n)
+  | generatedMethodCallable env (Var NoLoc n)
+                                    = False
+callIsClass env (Var _ n)
+  | Just _ <- generatedMethodType env n []
+                                    = False
 callIsClass env (Var _ n)           = case findQName n env of
                                         NClass{} -> True
                                         _        -> False
@@ -1189,19 +1254,255 @@ callIsClass env _                   = False
 
 -- A normal callable returning an unboxable Acton type returns the boxed object
 -- unless its type has already been changed to TUnboxed.
-callableReturnsBoxed env f          = case B.rtypeOfFun env f of
+callableReturnsBoxed env f
+  | generatedMethodCallable env f   = False
+callableReturnsBoxed env f
+  | Just rt <- directMethodCallableType env f
+                                    = callableTypeReturnsBoxed rt
+  | otherwise                       = callableTypeReturnsBoxed (B.rtypeOfFun env f)
+
+callableTypeReturnsBoxed rt         = case rt of
                                         TFun _ _ _ _ t -> B.isUnboxable t
                                         _              -> False
 
 -- A callable whose return type is explicitly TUnboxed returns raw C.
-callableReturnsRaw env f            = case B.rtypeOfFun env f of
+callableReturnsRaw env f
+  | generatedMethodCallable env f   = False
+callableReturnsRaw env f
+  | Just rt <- directMethodCallableType env f
+                                    = callableTypeReturnsRaw rt
+  | otherwise                       = callableTypeReturnsRaw (B.rtypeOfFun env f)
+
+callableTypeReturnsRaw rt           = case rt of
                                         TFun _ _ _ _ TUnboxed{} -> True
                                         _                       -> False
+
+generatedMethodName (GName m (Derived c n))
+                                    = Just (GName m c, n)
+generatedMethodName (QName m (Derived c n))
+                                    = Just (GName m c, n)
+generatedMethodName (NoQ (Derived c n))
+                                    = Just (NoQ c, n)
+generatedMethodName _               = Nothing
+
+generatedMethodQName qn@(GName _ (Derived _ _))
+                                    = qn
+generatedMethodQName (QName m n@(Derived _ _))
+                                    = GName m n
+generatedMethodQName qn             = qn
+
+generatedMethodCallable env (TApp _ (Var _ n) ts)
+                                    = maybe False (const True) (generatedMethodType env n ts)
+generatedMethodCallable env (TApp _ f _)
+                                    = generatedMethodCallable env f
+generatedMethodCallable env (Var _ n)
+                                    = maybe False (const True) (generatedMethodType env n [])
+generatedMethodCallable _ _         = False
+
+directMethodCallableType env (TApp _ (Var _ n) ts)
+                                    = generatedMethodType env n ts
+directMethodCallableType env (TApp _ f _)
+                                    = directMethodCallableType env f
+directMethodCallableType env (Var _ n)
+                                    = generatedMethodType env n []
+directMethodCallableType _ _        = Nothing
+
+generatedMethodType env qn ts       = do (tc, n) <- generatedMethodClass env qn ts
+                                         return (B.rtypeOf env tc n)
+
+generatedMethodClass env qn ts      = do (c, n) <- generatedMethodName qn
+                                         generatedClass env c n ts
+
+generatedClass env qn n ts
+  | isClass env qn,
+    hasAttr env tc n                = Just (tc, n)
+  | otherwise                       = Nothing
+  where tc                          = TC qn ts
+
+directMethodCallResult env (Call _ f _ KwdNil)
+                                    = case directMethodCallableType env f of
+                                        Just (TFun _ fx _ _ t) -> Just (exposeMsg fx t)
+                                        _                     -> Nothing
+directMethodCallResult _ _          = Nothing
+
+isGeneratedMethodCall env (Call _ f _ KwdNil)
+                                    = generatedMethodCallable env f
+isGeneratedMethodCall _ _           = False
+
+containsGeneratedMethodCall env (Call _ f p k)
+  | generatedMethodCallable env f   = True
+  | otherwise                       = containsGeneratedMethodCallPos env p || containsGeneratedMethodCallKwd env k
+containsGeneratedMethodCall env (Let _ _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (TApp _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Async _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Await _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Index _ e i)
+                                    = containsGeneratedMethodCall env e || containsGeneratedMethodCall env i
+containsGeneratedMethodCall env (Slice _ e (Sliz _ mb1 mb2 mb3))
+                                    = containsGeneratedMethodCall env e || any (containsGeneratedMethodCall env) [ x | Just x <- [mb1, mb2, mb3] ]
+containsGeneratedMethodCall env (Cond _ e1 e e2)
+                                    = any (containsGeneratedMethodCall env) [e1, e, e2]
+containsGeneratedMethodCall env (IsInstance _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (BinOp _ e1 _ e2)
+                                    = containsGeneratedMethodCall env e1 || containsGeneratedMethodCall env e2
+containsGeneratedMethodCall env (CompOp _ e ops)
+                                    = containsGeneratedMethodCall env e || any (containsGeneratedMethodCallOpArg env) ops
+containsGeneratedMethodCall env (UnOp _ _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Dot _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Rest _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (DotI _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (RestI _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Opt _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (OptChain _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Lambda _ _ _ e _)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Yield _ (Just e))
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (YieldFrom _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Tuple _ p k)
+                                    = containsGeneratedMethodCallPos env p || containsGeneratedMethodCallKwd env k
+containsGeneratedMethodCall env (List _ es)
+                                    = any (containsGeneratedMethodCallElem env) es
+containsGeneratedMethodCall env (ListComp _ e c)
+                                    = containsGeneratedMethodCallElem env e || containsGeneratedMethodCallComp env c
+containsGeneratedMethodCall env (Dict _ as)
+                                    = any (containsGeneratedMethodCallAssoc env) as
+containsGeneratedMethodCall env (DictComp _ a c)
+                                    = containsGeneratedMethodCallAssoc env a || containsGeneratedMethodCallComp env c
+containsGeneratedMethodCall env (Set _ es)
+                                    = any (containsGeneratedMethodCallElem env) es
+containsGeneratedMethodCall env (SetComp _ e c)
+                                    = containsGeneratedMethodCallElem env e || containsGeneratedMethodCallComp env c
+containsGeneratedMethodCall env (Paren _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (Box _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall env (UnBox _ e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCall _ _     = False
+
+containsGeneratedMethodCallPos env (PosArg e p)
+                                    = containsGeneratedMethodCall env e || containsGeneratedMethodCallPos env p
+containsGeneratedMethodCallPos env (PosStar e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCallPos _ PosNil
+                                    = False
+
+containsGeneratedMethodCallKwd env (KwdArg _ e k)
+                                    = containsGeneratedMethodCall env e || containsGeneratedMethodCallKwd env k
+containsGeneratedMethodCallKwd env (KwdStar e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCallKwd _ KwdNil
+                                    = False
+
+containsGeneratedMethodCallElem env (Elem e)
+                                    = containsGeneratedMethodCall env e
+containsGeneratedMethodCallElem env (Star e)
+                                    = containsGeneratedMethodCall env e
+
+containsGeneratedMethodCallAssoc env (Assoc k v)
+                                    = containsGeneratedMethodCall env k || containsGeneratedMethodCall env v
+containsGeneratedMethodCallAssoc env (StarStar e)
+                                    = containsGeneratedMethodCall env e
+
+containsGeneratedMethodCallOpArg env (OpArg _ e)
+                                    = containsGeneratedMethodCall env e
+
+containsGeneratedMethodCallComp env (CompFor _ _ e c)
+                                    = containsGeneratedMethodCall env e || containsGeneratedMethodCallComp env c
+containsGeneratedMethodCallComp env (CompIf _ e c)
+                                    = containsGeneratedMethodCall env e || containsGeneratedMethodCallComp env c
+containsGeneratedMethodCallComp _ NoComp
+                                    = False
+
+genDirectMethodCall env targetTc n rt (PosArg w p)
+                                    = callee <> parens (witness <> comma' (genCallPosArgs env r p))
+  where TFun _ _ r _ _              = rt
+        slot                        = staticWitnessSlotType env targetTc n rt
+        witness                     = staticWitnessObject env targetTc w
+        callee                      = case staticWitnessMethodImpl env [] targetTc n of
+                                        Just implTc -> staticWitnessDirectCallee env slot implTc n
+                                        Nothing     -> staticWitnessTableCallee env slot witness n
+genDirectMethodCall _ _ n _ p       = error ("Internal error: direct witness call for " ++ show n ++ " has arguments " ++ show p)
+
+staticWitnessObject env tc e        = case staticWitnessName e of
+                                        (Just obj, path) -> parens (gen env (tCon tc)) <> foldl field (staticwitness env (unalias env obj)) path
+                                        _                -> error ("Internal error: direct witness call with non-static witness " ++ show e)
+  where field d n                   = d <> text "->" <> gen env n
+
+genGeneratedMethodCall env n ts (PosArg w p)
+  | Just (tc, _) <- generatedMethodClass env n ts
+                                    = gen env (generatedMethodQName n) <> parens (witness <> comma' (gen env p))
+  where witness                     = parens (gen env (tCon tc')) <> staticWitnessValue env w
+        Just (tc', _)               = generatedMethodClass env n ts
+genGeneratedMethodCall env n _ p    = gen env (generatedMethodQName n) <> parens (gen env p)
+
+staticWitnessValue env e            = case staticWitnessName e of
+                                        (Just obj, path) -> foldl field (staticwitness env (unalias env obj)) path
+                                        _                -> gen env e
+  where field d n                   = d <> text "->" <> gen env n
+
+-- Direct witness calls name the target table slot.  Defaults may be supplied
+-- by an ancestor protocol class, so the concrete implementation is resolved
+-- here and cast back to the target slot ABI.
+staticWitnessSlotType env tc n rt
+  | Just slot <- slotType env tc n   = slot
+  | otherwise                       = addWitness rt
+  where addWitness (TFun l fx r k t)= TFun l fx (posRow (tCon tc) r) k t
+        addWitness t                = t
+
+staticWitnessDirectCallee env slot implTc n
+                                    = parens (parens (funsig2 env Nothing slot) <> staticWitnessMethodName env implTc n)
+
+staticWitnessTableCallee env slot witness n
+                                    = parens (parens (funsig2 env Nothing slot) <> parens witness <> text "->" <> gen env classKW <> text "->" <> gen env n)
+
+staticWitnessMethodName env (TC (GName m c) _) n
+                                    = gen env (GName m (methodname c n))
+staticWitnessMethodName env (TC (QName m c) _) n
+                                    = gen env (GName m (methodname c n))
+staticWitnessMethodName env (TC (NoQ c) _) n
+                                    = genTopName env (methodname c n)
+
+staticWitnessMethodImpl env seen tc n
+  | tcname tc `elem` seen           = Nothing
+  | directMethodImpl env (tcname tc) n
+                                    = Just tc
+  | otherwise                       = do provider <- first [ provider | (provider, n') <- inheritedAttrs env (tcname tc), n' == n ]
+                                         staticWitnessMethodImpl env (tcname tc : seen) (schematicClass env provider) n
+
+directMethodImpl env qn n           = case findQName qn env of
+                                        NClass _ _ te _ -> direct te
+                                        NProto _ _ te _ -> direct te
+                                        _               -> False
+  where direct te                   = case findAttrInfoIn n te of
+                                        Just NDef{} -> True
+                                        _           -> False
+
+schematicClass env qn               = case classQBinds env qn of
+                                        Just q  -> TC qn (map tVar $ qbound q)
+                                        Nothing -> TC qn []
 
 -- Compute the C-facing callable type used for argument rendering.  Public
 -- polymorphic callables are matched against a wildcard instantiation so
 -- polymorphic positions keep their boxed ABI; internal/generated functions and
 -- selected C primitives use the fully instantiated type directly.
+genCallableType env ts e@(Var _ n)
+  | Just rt <- generatedMethodType env n ts
+                                    = rt
 genCallableType env ts e@(Var _ n)
   | boxedCPrim n                    = typeInstOf env ts e
   | isInternalQName n               = B.matchTypes t t
@@ -1238,6 +1539,9 @@ genCall env ts (Var _ n) (PosArg e (PosArg ix PosNil))
 -- this line rather than inspect the method table at run time
 genCall env [TCon _ tc] (Var _ n) p
   | n == primInstallFinalizer       = text "if" <+> parens (text "(void*)" <> gen env p <> text "->" <> gen env classKW <> text "->" <> gen env cleanupKW <+> text "!= (void*)$ActorD___cleanup__") <+> gen env n <> parens (gen env p <> comma <+> genTopName env (methodname (noq $ tcname tc) attr_finalizer))
+genCall env ts (Var _ n) p
+  | Just _ <- generatedMethodClass env n ts
+                                    = genGeneratedMethodCall env n ts p
 genCall env ts e@(Var _ n) p
   | NClass{} <- info                = genNew env n p
   | NDef{} <- info                  = (instCast env ts e $ gen env e) <> parens (genCallPosArgs env r p)
@@ -1273,6 +1577,9 @@ unboxedField :: GenEnv -> Expr -> Name -> Bool
 unboxedField env e n                = maybe False (isUnboxedRep . sctype . fst) (fieldAttr env e n)
 
 unboxedVar :: GenEnv -> QName -> Bool
+unboxedVar env n
+  | Just _ <- generatedMethodType env n []
+                                    = False
 unboxedVar env n                    = case findQName n env of
                                         NVar t  -> isRawVar t
                                         NSVar t -> isRawVar t
@@ -1404,6 +1711,9 @@ genEnter env ts e n p               = dotCast env True ts e n (genReceiver env e
 dotCallRType env [] e n             = B.rtypeOfFun env (Dot NoLoc e n)
 dotCallRType env ts e n             = B.rtypeOfFun env (TApp NoLoc (Dot NoLoc e n) ts)
 
+genInst env ts e@(Var _ n)
+  | Just _ <- generatedMethodClass env n ts
+                                    = gen env (generatedMethodQName n)
 genInst env ts e@Var{}              = instCast env ts e $ gen env e
 genInst env ts (Dot _ e n)          = genDot env ts e n
 
@@ -1421,15 +1731,28 @@ adjust t t' e
    | B.isUnboxable t'               = e
    | otherwise                      = typecast t t' e
 
-genExp env t' e                     = gen env (adjust t t' e')
+genExp env t' e
+  | containsGeneratedMethodCall env e
+                                    = gen env e
+  | Just dt <- directMethodCallResult env e
+                                    = gen env (adjust dt t' e)
+  | otherwise                       = gen env (adjust t t' e')
   where (t, fx, e')                 = qType env adjust e
 
-genExp' env e                       = gen env e'
+genExp' env e
+  | containsGeneratedMethodCall env e
+                                    = gen env e
+  | Just _ <- directMethodCallResult env e
+                                    = gen env e
+  | otherwise                       = gen env e'
   where (t, fx, e')                 = qType env adjust e
 
 genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(tcon (boxedRepType t)))))) <> parens e
 
 instance Gen Expr where
+    gen env (Var _ n)
+      | Just _ <- generatedMethodClass env n []
+                                    = gen env (generatedMethodQName n)
     gen env (Var _ n)
       | NClass{} <- findQName n env = newcon' env n
       | otherwise                   = genQName env n
@@ -1464,9 +1787,11 @@ instance Gen Expr where
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
     gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
+      where t | containsGeneratedMethodCall env e1 = tBool
+              | otherwise          = typeOf env e1
     gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t                       = typeOf env e1
+      where t | containsGeneratedMethodCall env e1 = tBool
+              | otherwise          = typeOf env e1
     gen env (BinOp _ e1 op e2)
             | boxedRepType t == tU1,
               Just d <- genU1RawBinOp env op e1 e2
@@ -1607,6 +1932,9 @@ augPretty op                        = pretty op
 genStr env s                        = text $ head $ sval s
 
 genBool env (Paren _ e)             = genBool env e
+genBool env e
+  | containsGeneratedMethodCall env e
+                                    = genExp env tBool e
 genBool env e                       = genExp env tBool e
   where t                           = typeOf env e
 
