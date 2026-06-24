@@ -1176,7 +1176,8 @@ genRawExprAs env t e                = gen env (B.unbox t' e)
   where t'                          = boxedRepType t
 
 -- True when gen will already produce the raw C representation for this
--- expression.  Operations are raw only when their operands/branches are raw.
+-- expression.  Unboxable arithmetic is raw even when its operands are boxed,
+-- since the arithmetic generator unboxes its operands internally.
 rawExpr env UnBox{}                 = True
 rawExpr env (Var _ n)               = unboxedVar env n
 rawExpr env (Dot _ e n)             = unboxedField env e n
@@ -1186,10 +1187,13 @@ rawExpr env c@(Call _ f _ KwdNil)
   | callableReturnsRaw env f        = True
 rawExpr env (Call _ (Var _ n) _ KwdNil)
   | n == primUNext                  = True
-rawExpr env (BinOp _ e1 op e2)
-  | op `notElem` [And, Or]          = rawExpr env e1 && rawExpr env e2
-rawExpr env (UnOp _ op e)
-  | op /= Not                       = rawExpr env e
+rawExpr env e@(BinOp _ e1 op e2)
+  | op `notElem` [And, Or]          = B.isUnboxable (boxedRepType (typeOf env e)) ||
+                                      rawExpr env e1 && rawExpr env e2
+rawExpr env CompOp{}                = True
+rawExpr env e@(UnOp _ op e1)
+  | op /= Not                       = B.isUnboxable (boxedRepType (typeOf env e)) ||
+                                      rawExpr env e1
 rawExpr env (Cond _ e1 _ e2)        = rawExpr env e1 && rawExpr env e2
 rawExpr env _                       = False
 
@@ -1785,12 +1789,16 @@ instance Gen Expr where
        | otherwise                  = gen env primNEWTUPLE <> parens (text (show n) <> comma' (gen env p))
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
-    gen env (BinOp _ e1 And e2)     = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t | containsGeneratedMethodCall env e1 = tBool
-              | otherwise          = typeOf env e1
-    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
-      where t | containsGeneratedMethodCall env e1 = tBool
-              | otherwise          = typeOf env e1
+    gen env (BinOp _ e1 And e2)
+         | t == tBool               = parens (gen env e1 <> binPretty And <> gen env e2) 
+         | otherwise                = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
+    gen env (BinOp _ e1 Or e2)
+         | t == tBool               = parens (gen env e1 <> binPretty Or <> gen env e2)
+         | otherwise                = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+      where t                       = typeOf env e1
+--    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
+--      where t                       = typeOf env e1
     gen env (BinOp _ e1 op e2)
             | boxedRepType t == tU1,
               Just d <- genU1RawBinOp env op e1 e2
@@ -1808,7 +1816,12 @@ instance Gen Expr where
             opstr Mod               = "MOD"
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
-    gen env (UnOp _ Not e)          = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
+    gen env (UnOp _ Not e)
+        | t == tBool                = parens (text "!" <> gen env e)
+        | otherwise                 = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
+--      | B.isUnboxable (boxedRepType t)
+--                                    = genBoxed env tBool (parens (text "!" <> parens (genRawExpr env e)))
+--      | otherwise                   = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
       where t                       = typeOf env e
     gen env (UnOp _ op e)
       | t == tU1
@@ -1818,11 +1831,8 @@ instance Gen Expr where
     gen env (UnOp _ op e)           = parens (pretty op <+> gen env e)
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
-    gen env (Box t i@Int{})
-      | B.isUnboxable t'            = genBoxed env t' (gen env (UnBox t' i))
-      where t'                      = boxedRepType t
-    gen env (Box t f@Float{})
-      | B.isUnboxable t'            = genBoxed env t' (gen env (UnBox t' f))
+    gen env (Box t e)
+      | B.isUnboxable t'            = genBoxed env t' (genRawExprAs env t' e)
       where t'                      = boxedRepType t
     gen env (Box t e)
       | boxedExpr env e             = gen env e
