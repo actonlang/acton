@@ -1188,9 +1188,12 @@ rawExpr env c@(Call _ f _ KwdNil)
 rawExpr env (Call _ (Var _ n) _ KwdNil)
   | n == primUNext                  = True
 rawExpr env e@(BinOp _ e1 op e2)
+  | op `elem` [And, Or]             = boxedRepType (typeOf env e) == tBool
+rawExpr env e@(BinOp _ e1 op e2)
   | op `notElem` [And, Or]          = B.isUnboxable (boxedRepType (typeOf env e)) ||
                                       rawExpr env e1 && rawExpr env e2
 rawExpr env CompOp{}                = True
+rawExpr env e@(UnOp _ Not _)        = boxedRepType (typeOf env e) == tBool
 rawExpr env e@(UnOp _ op e1)
   | op /= Not                       = B.isUnboxable (boxedRepType (typeOf env e)) ||
                                       rawExpr env e1
@@ -1636,12 +1639,13 @@ needsPrimCallableCast (TCon _ (TC q _)) n
   | q == primPure                   = n `elem` [attr_call_, attr_exec_, attr_eval_]
 needsPrimCallableCast _ _           = False
                                         
-classCast env ts x q n              = parens . (parens (gen env t) <>)
+classCallableType env ts x q n      = vsubst fullsubst $ addSelf (B.rtypeOf env tc n) dec
   where (ts0,ts1)                   = splitAt (length q) ts
         tc                          = TC x ts0
         (sc, dec)                   = findAttr' env tc n
-        t                           = vsubst fullsubst $ addSelf (sctype sc) dec
         fullsubst                   = (tvSelf,tCon tc) : (qbound (scbind sc) `zip` ts1)
+
+classCast env ts x q n              = parens . (parens (gen env (classCallableType env ts x q n)) <>)
 
 genNew env n p                      = newcon' env n <> parens (genUCallPosArgs env r p)
   where TFun _ _ r _ _              = sctype $ fst $ schemaOf env (Var NoLoc n)
@@ -1680,7 +1684,9 @@ comma' x                            = if isEmpty x then empty else comma <+> x
 
 genDotCall env ts dec e@(Var _ x) n p
   | NClass q _ _ _ <- info,
-    Just _ <- dec                   = classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (gen env p)
+    Just _ <- dec                   =
+      let TFun _ _ r _ _            = classCallableType env ts x q n
+      in classCast env ts x q n (methodtable' env x <> text "." <> gen env n) <> parens (genCallPosArgs env r p)
   where info                        = findQName x env
 genDotCall env ts dec e n p
   | Just NoDec <- dec               = genEnter env ts e n p
@@ -1790,11 +1796,11 @@ instance Gen Expr where
        where n                      = nargs p
     gen env (List _ es)             = text "B_mk_list" <> parens (pretty (length es) <> hsep [comma <+> gen env e | e <- es])
     gen env (BinOp _ e1 And e2)
-         | t == tBool               = parens (gen env e1 <> binPretty And <> gen env e2) 
+         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty And <> genRawExprAs env tBool e2)
          | otherwise                = gen env primAND <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
       where t                       = typeOf env e1
     gen env (BinOp _ e1 Or e2)
-         | t == tBool               = parens (gen env e1 <> binPretty Or <> gen env e2)
+         | boxedRepType t == tBool  = parens (genRawExprAs env tBool e1 <> binPretty Or <> genRawExprAs env tBool e2)
          | otherwise                = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
       where t                       = typeOf env e1
 --    gen env (BinOp _ e1 Or e2)      = gen env primOR <> parens (gen env t <> comma <+> gen env e1 <> comma <+> gen env e2)
@@ -1817,7 +1823,7 @@ instance Gen Expr where
             opstr EuDiv             = "FLOORDIV"
     gen env (CompOp _ e [a])        = gen env e <+> gen env a
     gen env (UnOp _ Not e)
-        | t == tBool                = parens (text "!" <> gen env e)
+        | boxedRepType t == tBool   = parens (text "!" <> genRawExprAs env tBool e)
         | otherwise                 = gen env primNOT <> parens (gen env t <> comma <+> gen env e)
 --      | B.isUnboxable (boxedRepType t)
 --                                    = genBoxed env tBool (parens (text "!" <> parens (genRawExpr env e)))
