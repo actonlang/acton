@@ -14,29 +14,29 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool $procD___bool__($proc self) {
-  return B_True;
+bool $procD___bool__($proc self) {
+  return true;
 }
 B_str $procD___str__($proc self) {
   return $FORMAT("<proc closure at %p>", self);
 }
 
-B_bool $actionD___bool__($action self) {
-  return B_True;
+bool $actionD___bool__($action self) {
+  return true;
 }
 B_str $actionD___str__($action self) {
   return $FORMAT("<action closure at %p>", self);
 }
 
-B_bool $mutD___bool__($mut self) {
-  return B_True;
+bool $mutD___bool__($mut self) {
+  return true;
 }
 B_str $mutD___str__($mut self) {
   return $FORMAT("<mut closure at %p>", self);
 }
 
-B_bool $pureD___bool__($pure self) {
-  return B_True;
+bool $pureD___bool__($pure self) {
+  return true;
 }
 B_str $pureD___str__($pure self) {
   return $FORMAT("<pure closure at %p>", self);
@@ -45,8 +45,8 @@ B_str $pureD___str__($pure self) {
 void $ContD___init__($Cont $this) {
     // Empty
 }
-B_bool $ContD___bool__($Cont self) {
-  return B_True;
+bool $ContD___bool__($Cont self) {
+  return true;
 }
 B_str $ContD___str__($Cont self) {
   return $FORMAT("<$Cont closure at %p>", self);

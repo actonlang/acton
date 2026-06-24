@@ -228,7 +228,7 @@ rtypeOf' env w f                     = rtypeOf env tc f
 
 integralTypes                      = [tBigint, tInt, tI32, tI16, tI8, tU64, tU32, tU16, tU8, tU1]
 numericTypes                       = integralTypes ++ [tFloat]
-unboxableTypes                     = tail numericTypes
+unboxableTypes                     = tBool : tail numericTypes
 
 isUnboxable t                      = t `elem` unboxableTypes
 
@@ -408,8 +408,8 @@ exprUnboxedRep env e@DotI{}      = Nothing
 -- After boxing, an And/Or expression has boxed operands and yields a boxed
 -- value (its result IS one of the operands), so it must not be re-boxed by a
 -- use-site fallback, even though its static type is unboxable.
-exprUnboxedRep env (BinOp _ _ op _)
-  | op `elem` [And, Or]           = Nothing
+exprUnboxedRep env (BinOp _ _ op _)           -- MZ
+  | op `elem` [And, Or]           = Nothing   -- MZ
 exprUnboxedRep env c@(Call _ f _ KwdNil)
   | Just t <- generatedCallableRawRep env f
                                   = Just t
@@ -441,8 +441,8 @@ fixassign env (TOpt _ t) e
     exprUnboxedRep env e == Just t = Box t e
 fixassign env t e
   | Just t' <- unboxedRepType t    = forceUnbox env t' e
-  | Box{} <- e                     = e
-  | Just rt <- exprUnboxedRep env e = Box rt e
+  | Box{} <- e                     = e          -- MZ
+  | Just rt <- exprUnboxedRep env e = Box rt e  -- MZ
   | otherwise                      = e
 
 fixarg env (TUnboxed _ t) e     = forceUnbox env t e
@@ -563,7 +563,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
 instance Boxing Expr where
     boxing env e@(Var _ (NoQ n))
        | isWitness n                = return (HashSet.singleton n, e)
-       | isUnboxable t              = return (HashSet.empty, Box t e)
+       | isUnboxable t              = trace ("n = " ++nstr n) $ return (HashSet.empty, Box t e)
        where t                      = typeOf env e
     -- Qualified imported constants such as math.pi need the same boxed read
     -- as local unboxable variables, but typeOf is not safe for all Vars here.
@@ -664,9 +664,11 @@ instance Boxing Expr where
                                          (ws3,e3') <- boxing env e3
                                          case unboxedRepType (typeOf env e) of
                                              Just t -> return (HashSet.unions [ws1, ws2, ws3], Box t $ Cond l (forceUnbox env t e1') e2' (forceUnbox env t e3'))
-                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l (boxValueExpr env e1 e1') e2' (boxValueExpr env e3 e3'))
+                                    --         Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l e1' e2' e3')
+                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l (boxValueExpr env e1 e1') e2' (boxValueExpr env e3 e3'))  -- MZ
     boxing env (IsInstance l e qn)  = do (ws1,e1) <- boxing env e
-                                         return (ws1, IsInstance l (boxValueExpr env e e1) qn)
+                                    --     return (ws1, IsInstance l e1 qn)
+                                         return (ws1, IsInstance l (boxValueExpr env e e1) qn) -- MZ
     boxing env e@(BinOp l e1 op e2)
       | op `notElem` [And, Or],
         Just rt <- unboxedRepType t
@@ -675,10 +677,10 @@ instance Boxing Expr where
                                          return (HashSet.union ws1 ws2, Box rt $ Paren NoLoc $ BinOp l (unboxArg e1 e1') op (unboxArg e2 e2'))
       where t                       = typeOf env e
             unboxArg e0 e'          = maybe e' (\t -> forceUnbox env t e') (unboxedRepType (typeOf env e0))
-    boxing env e@(BinOp l e1 op e2)
-      | op `elem` [And, Or]         = do (ws1,e1') <- boxing env e1
-                                         (ws2,e2') <- boxing env e2
-                                         return (HashSet.union ws1 ws2, BinOp l (boxValueExpr env e1 e1') op (boxValueExpr env e2 e2'))
+    boxing env e@(BinOp l e1 op e2)                                         -- MZ
+      | op `elem` [And, Or]         = do (ws1,e1') <- boxing env e1         -- MZ
+                                         (ws2,e2') <- boxing env e2         -- MZ
+                                         return (HashSet.union ws1 ws2, BinOp l (boxValueExpr env e1 e1') op (boxValueExpr env e2 e2'))  -- MZ
     boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1
                                          (ws2,e2') <- boxing env e2
                                          return (HashSet.union ws1 ws2, BinOp l e1' op e2')

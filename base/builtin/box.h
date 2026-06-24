@@ -14,7 +14,7 @@ struct $BoxG_class {
     B_NoneType (*__init__) ($Box, $WORD);
     void (*__serialize__) ($Box, $Serial$state);
     $Box (*__deserialize__) ($Box, $Serial$state);
-    B_bool (*__bool__) ($Box);
+    bool (*__bool__) ($Box);
     B_str (*__str__) ($Box);
     B_str (*__repr__) ($Box);
 };

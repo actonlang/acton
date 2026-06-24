@@ -14,7 +14,7 @@ struct B_IteratorD_enumerateG_class {
   void (*__init__)(B_IteratorD_enumerate, B_Iterator,B_int);
   void (*__serialize__)(B_IteratorD_enumerate,$Serial$state);
   B_IteratorD_enumerate (*__deserialize__)(B_IteratorD_enumerate,$Serial$state);
-  B_bool (*__bool__)(B_IteratorD_enumerate);
+  bool (*__bool__)(B_IteratorD_enumerate);
   B_str (*__str__)(B_IteratorD_enumerate);
   B_str (*__repr__)(B_IteratorD_enumerate);
   $WORD(*__next__)(B_IteratorD_enumerate);
@@ -44,7 +44,7 @@ struct B_IteratorD_filterG_class {
   void (*__init__)(B_IteratorD_filter, B_Iterator, $pure);
   void (*__serialize__)(B_IteratorD_filter,$Serial$state);
   B_IteratorD_filter (*__deserialize__)(B_IteratorD_filter,$Serial$state);
-  B_bool (*__bool__)(B_IteratorD_filter);
+  bool (*__bool__)(B_IteratorD_filter);
   B_str (*__str__)(B_IteratorD_filter);
   B_str (*__repr__)(B_IteratorD_filter);
   $WORD(*__next__)(B_IteratorD_filter);
@@ -73,7 +73,7 @@ struct B_IteratorD_mapG_class {
   void (*__init__)(B_IteratorD_map, B_Iterator, $pure);
   void (*__serialize__)(B_IteratorD_map,$Serial$state);
   B_IteratorD_map (*__deserialize__)(B_IteratorD_map,$Serial$state);
-  B_bool (*__bool__)(B_IteratorD_map);
+  bool (*__bool__)(B_IteratorD_map);
   B_str (*__str__)(B_IteratorD_map);
   B_str (*__repr__)(B_IteratorD_map);
   $WORD(*__next__)(B_IteratorD_map);
@@ -100,7 +100,7 @@ struct B_IteratorD_zipG_class {
   void (*__init__)(B_IteratorD_zip, B_Iterator, B_Iterator);
   void (*__serialize__)(B_IteratorD_zip,$Serial$state);
   B_IteratorD_zip (*__deserialize__)(B_IteratorD_zip,$Serial$state);
-  B_bool (*__bool__)(B_IteratorD_zip);
+  bool (*__bool__)(B_IteratorD_zip);
   B_str (*__str__)(B_IteratorD_zip);
   B_str (*__repr__)(B_IteratorD_zip);
   $WORD(*__next__)(B_IteratorD_zip);
@@ -130,11 +130,11 @@ struct $EqOptG_class {
     void (*__init__)($EqOpt, B_Eq);
     void (*__serialize__)($EqOpt,$Serial$state);
     $EqOpt (*__deserialize__)($EqOpt,$Serial$state);
-    B_bool (*__bool__)($EqOpt);
+    bool (*__bool__)($EqOpt);
     B_str (*__str__)($EqOpt);
     B_str (*__repr__)($EqOpt);
-    B_bool (*__eq__)($EqOpt, $WORD, $WORD);
-    B_bool (*__ne__)($EqOpt, $WORD, $WORD);
+    bool (*__eq__)($EqOpt, $WORD, $WORD);
+    bool (*__ne__)($EqOpt, $WORD, $WORD);
 };
 
 struct $EqOpt {
@@ -157,11 +157,11 @@ struct $IdentityActorG_class {
     void (*__init__)($IdentityActor);
     void (*__serialize__)($IdentityActor,$Serial$state);
     $IdentityActor (*__deserialize__)($IdentityActor,$Serial$state);
-    B_bool (*__bool__)($IdentityActor);
+    bool (*__bool__)($IdentityActor);
     B_str (*__str__)($IdentityActor);
     B_str (*__repr__)($IdentityActor);
-    B_bool (*__is__)($IdentityActor, $WORD, $WORD);
-    B_bool (*__isnot__)($IdentityActor, $WORD, $WORD);
+    bool (*__is__)($IdentityActor, $WORD, $WORD);
+    bool (*__isnot__)($IdentityActor, $WORD, $WORD);
 };
 
 struct $IdentityActor {
@@ -196,4 +196,4 @@ $WORD B_round (B_Real, $WORD, B_int);
 $WORD B_sum(B_Plus, B_Iterable, $WORD, $WORD);
 */
 
-$WORD $ASSERT(B_bool, B_str);
+$WORD $ASSERT(bool, B_str);

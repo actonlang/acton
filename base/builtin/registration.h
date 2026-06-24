@@ -110,4 +110,4 @@ void $register_force(int classid, $WORD meths);
 
 extern B_list G_methods;
 
-B_bool issubtype(int sub_id, int ancestor_id); 
+bool issubtype(int sub_id, int ancestor_id); 

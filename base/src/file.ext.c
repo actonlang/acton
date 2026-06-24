@@ -21,52 +21,52 @@ $R fileQ_FSD__pin_affinityG_local (fileQ_FS self, $Cont c$cont) {
 }
 
 // def is_dir(self) -> bool:
-B_bool fileQ_FileStatD_is_dir (fileQ_FileStat self) {
-    return toB_bool(S_ISDIR(self->mode));
+bool fileQ_FileStatD_is_dir (fileQ_FileStat self) {
+    return S_ISDIR(self->mode);
 }
 
 // def is_file(self) -> bool:
-B_bool fileQ_FileStatD_is_file (fileQ_FileStat self) {
-    return toB_bool(S_ISREG(self->mode));
+bool fileQ_FileStatD_is_file (fileQ_FileStat self) {
+    return S_ISREG(self->mode);
 }
 
 // def is_symlink(self) -> bool:
-B_bool fileQ_FileStatD_is_symlink (fileQ_FileStat self) {
+bool fileQ_FileStatD_is_symlink (fileQ_FileStat self) {
 #if defined(_WIN32) || defined(_WIN64)
     // TODO: do better
-    return B_False;
+    return false;
 #else
-    return toB_bool(S_ISLNK(self->mode));
+    return S_ISLNK(self->mode);
 #endif
 }
 
 // def is_block_device(self) -> bool:
-B_bool fileQ_FileStatD_is_block_device (fileQ_FileStat self) {
-    return toB_bool(S_ISBLK(self->mode));
+bool fileQ_FileStatD_is_block_device (fileQ_FileStat self) {
+    return S_ISBLK(self->mode);
 }
 
 // def is_char_device(self) -> bool:
-B_bool fileQ_FileStatD_is_char_device (fileQ_FileStat self) {
-    return toB_bool(S_ISCHR(self->mode));
+bool fileQ_FileStatD_is_char_device (fileQ_FileStat self) {
+    return S_ISCHR(self->mode);
 }
 
 // def is_fifo(self) -> bool:
-B_bool fileQ_FileStatD_is_fifo (fileQ_FileStat self) {
+bool fileQ_FileStatD_is_fifo (fileQ_FileStat self) {
 #if defined(_WIN32) || defined(_WIN64)
     // TODO: do better
-    return B_False;
+    return false;
 #else
-    return toB_bool(S_ISFIFO(self->mode));
+    return S_ISFIFO(self->mode);
 #endif
 }
 
 // def is_socket(self) -> bool:
-B_bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
+bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
 #if defined(_WIN32) || defined(_WIN64)
     // TODO: do better
-    return B_False;
+    return false;
 #else
-    return toB_bool(S_ISSOCK(self->mode));
+    return S_ISSOCK(self->mode);
 #endif
 }
 

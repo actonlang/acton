@@ -95,8 +95,8 @@ void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_int
     self->nxt = fromB_int(n);
 }
 
-B_bool B_IteratorD_enumerate_bool(B_IteratorD_enumerate self) {
-    return B_True;
+bool B_IteratorD_enumerate_bool(B_IteratorD_enumerate self) {
+    return true;
 }
 
 B_str B_IteratorD_enumerate_str(B_IteratorD_enumerate self) {
@@ -144,8 +144,8 @@ void B_IteratorD_filter_init(B_IteratorD_filter self, B_Iterator it,  $pure f) {
     self->f = f;
 }
 
-B_bool B_IteratorD_filter_bool(B_IteratorD_filter self) {
-    return B_True;
+bool B_IteratorD_filter_bool(B_IteratorD_filter self) {
+    return true;
 }
 
 B_str B_IteratorD_filter_str(B_IteratorD_filter self) {
@@ -191,8 +191,8 @@ void B_IteratorD_map_init(B_IteratorD_map self, B_Iterator it, $pure f) {
     self->f = f;
 }
 
-B_bool B_IteratorD_map_bool(B_IteratorD_map self) {
-    return B_True;
+bool B_IteratorD_map_bool(B_IteratorD_map self) {
+    return true;
 }
 
 B_str B_IteratorD_map_str(B_IteratorD_map self) {
@@ -237,7 +237,7 @@ $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     while(1) {
         if ($PUSH()) {
             $WORD nxt = it->$class->__next__(it);
-            if (!res || fromB_bool(wit->$class->__lt__(wit,res,nxt)))
+            if (!res || wit->$class->__lt__(wit,res,nxt))
                 res = nxt;
             $DROP();
         } else {
@@ -267,7 +267,7 @@ $WORD B_max_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     while(1) {
         if ($PUSH()) {
             $WORD nxt = it->$class->__next__(it);
-            if (fromB_bool(wit->$class->__lt__(wit,res,nxt)))
+            if (wit->$class->__lt__(wit,res,nxt))
                 res = nxt;
             $DROP();
         } else {
@@ -287,7 +287,7 @@ $WORD B_min(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     while(1) {
         if ($PUSH()) {
             $WORD nxt = it->$class->__next__(it);
-            if (!res || fromB_bool(wit->$class->__gt__(wit,res,nxt)))
+            if (!res || wit->$class->__gt__(wit,res,nxt))
                 res = nxt;
             $DROP();
         } else {
@@ -317,7 +317,7 @@ $WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     while(1) {
         if ($PUSH()) {
             $WORD nxt = it->$class->__next__(it);
-            if (fromB_bool(wit->$class->__gt__(wit,res,nxt)))
+            if (wit->$class->__gt__(wit,res,nxt))
                 res = nxt;
             $DROP();
         } else {
@@ -371,8 +371,8 @@ void B_IteratorD_zip_init(B_IteratorD_zip self, B_Iterator it1, B_Iterator it2) 
     self->it2 = it2;
 }
 
-B_bool B_IteratorD_zip_bool(B_IteratorD_zip self) {
-    return B_True;
+bool B_IteratorD_zip_bool(B_IteratorD_zip self) {
+    return true;
 }
 
 B_str B_IteratorD_zip_str(B_IteratorD_zip self) {
@@ -421,8 +421,8 @@ void $EqOptD___init__($EqOpt wit, B_Eq W_Eq$A) {
     wit->W_Eq$A = W_Eq$A;
 }
 
-B_bool $EqOptD_bool($EqOpt self) {
-    return B_True;
+bool $EqOptD_bool($EqOpt self) {
+    return true;
 }
 
 B_str $EqOptD_str($EqOpt self) {
@@ -440,17 +440,17 @@ $EqOpt $EqOptD_deserialize($EqOpt res, $Serial$state state) {
     return res;
 }
 
-B_bool $EqOptD___eq__($EqOpt wit, $WORD a, $WORD b) {
+bool $EqOptD___eq__($EqOpt wit, $WORD a, $WORD b) {
     if (a && b) {
         return wit->W_Eq$A->$class->__eq__(wit->W_Eq$A, a, b);
     }
-    return (!a && !b) ? B_True : B_False;
+    return (!a && !b) ? true : false;
 }
 
-B_bool $EqOptD___ne__($EqOpt wit, $WORD a, $WORD b) {
+bool $EqOptD___ne__($EqOpt wit, $WORD a, $WORD b) {
     if (a && b)
         return wit->W_Eq$A->$class->__ne__(wit->W_Eq$A, a, b);
-    return (!a && !b) ? B_False : B_True;
+    return (!a && !b) ? false : true;
 }
 
 struct $EqOptG_class $EqOptG_methods = {"$EqOpt", UNASSIGNED, NULL, $EqOptD___init__, $EqOptD_serialize, $EqOptD_deserialize, 
@@ -468,8 +468,8 @@ extern struct $IdentityActorG_class $IdentityActorG_methods;
 
 void $IdentityActorD___init__($IdentityActor wit) { }
 
-B_bool $IdentityActorD_bool($IdentityActor self) {
-    return B_True;
+bool $IdentityActorD_bool($IdentityActor self) {
+    return true;
 }
 
 B_str $IdentityActorD_str($IdentityActor self) {
@@ -484,12 +484,12 @@ $IdentityActor $IdentityActorD_deserialize($IdentityActor res, $Serial$state sta
     return res;
 }
 
-B_bool $IdentityActorD___is__($IdentityActor wit, $WORD a, $WORD b) {
-    return (a == b) ? B_True : B_False;
+bool $IdentityActorD___is__($IdentityActor wit, $WORD a, $WORD b) {
+    return (a == b) ? true : false;
 }
 
-B_bool $IdentityActorD___isnot__($IdentityActor wit, $WORD a, $WORD b) {
-    return (a == b) ? B_False : B_True;
+bool $IdentityActorD___isnot__($IdentityActor wit, $WORD a, $WORD b) {
+    return (a == b) ? false : true;
 }
 
 struct $IdentityActorG_class $IdentityActorG_methods = {"$IdentityActor", UNASSIGNED, NULL, $IdentityActorD___init__, $IdentityActorD_serialize, $IdentityActorD_deserialize, 
@@ -560,8 +560,8 @@ $WORD B_round (B_Real W_395, $WORD x, B_int n) {
 }
 */
 
-$WORD $ASSERT(B_bool test, B_str msg) {
-    if (!test->val) {
+$WORD $ASSERT(bool test, B_str msg) {
+    if (!test) {
         $RAISE((B_BaseException)$NEW(B_AssertionError,msg));
         return NULL; // to avoid compiler warning
     }

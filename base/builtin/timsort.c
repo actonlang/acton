@@ -60,7 +60,7 @@
 #endif
 
 #ifndef SORT_CMP
-#define SORT_CMP(w, x, y)  (w->$class->__lt__(w, x, y)->val ? -1 : (w->$class->__eq__(w, x, y)->val ? 0 : 1))     //((x) < (y) ? -1 : ((x) == (y) ? 0 : 1))
+#define SORT_CMP(w, x, y)  (w->$class->__lt__(w, x, y)? -1 : (w->$class->__eq__(w, x, y)? 0 : 1))     //((x) < (y) ? -1 : ((x) == (y) ? 0 : 1))
 #endif
 
 #ifndef TIM_SORT_STACK_SIZE

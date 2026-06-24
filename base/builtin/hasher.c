@@ -13,8 +13,8 @@ uint64_t B_hasherD_finalize (B_hasher self) {
     return h;
 }
 
-B_bool B_hasherD___bool__(B_hasher h) {
-    return B_True;
+bool B_hasherD___bool__(B_hasher h) {
+    return true;
 }
 
 B_str B_hasherD___str__(B_hasher self) {

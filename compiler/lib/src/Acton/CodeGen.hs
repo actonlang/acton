@@ -520,6 +520,10 @@ declDecl env (Class _ n q as b ddoc)
   where b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = setInClass (defineTVars q env)
+<<<<<<< HEAD
+=======
+--        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
+>>>>>>> 7a02ed10 (first version properly unboxing bool)
         props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
@@ -1979,7 +1983,7 @@ unboxed_c_type t
     | t == tU8  = "uint8_t"
     | t == tU1  = "uint8_t"  -- ????
     | t == tFloat = "double"
---    | t == tBool  = "bool"
+    | t == tBool  = "bool"
     | otherwise = error ("Internal error: trying to find unboxed type for " ++ show t)
 
 class_id t
@@ -1993,4 +1997,5 @@ class_id t
     | t == tU8  = "U8_ID"
     | t == tU1  = "U1_ID"
     | t == tFloat = "FLOAT_ID"
+    | t == tBool = "BOOL_ID"
     | otherwise = error ("Internal error: trying to find class id for " ++ show t)

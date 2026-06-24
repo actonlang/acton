@@ -776,8 +776,8 @@ B_NoneType B_strD___init__(B_str self, B_value s) {
     return B_None;
 }
 
-B_bool B_strD___bool__(B_str s) {
-    return toB_bool(s->nchars > 0);
+bool B_strD___bool__(B_str s) {
+    return s->nchars > 0;
 };
 
 B_str B_strD___str__(B_str s) {
@@ -949,20 +949,20 @@ B_bytes B_strD_encode(B_str s) {
     return res;
 }
 
-B_bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
+bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
-    if (en->val-st->val < sub->nbytes) return B_False;
+    if (fix_start_end(s->nchars,&st,&en) < 0) return false;
+    if (en->val-st->val < sub->nbytes) return false;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str + s->nbytes,fromB_int(en) - s->nchars,isascii) - sub->nbytes;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 B_str B_strD_expandtabs(B_str s, B_int tabsize){
@@ -1021,23 +1021,23 @@ int64_t B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
     return n;
 }
 
-B_bool B_strD_isalnum(B_str s) {
+bool B_strD_isalnum(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if ((cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO) && cat != UTF8PROC_CATEGORY_ND)
-            return B_False;
+            return false;
         p += nbytes;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_isalpha(B_str s) {
+bool B_strD_isalpha(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
@@ -1047,132 +1047,132 @@ B_bool B_strD_isalpha(B_str s) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO)
-            return B_False;
+            return false;
         p += nbytes;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_isascii(B_str s) {
+bool B_strD_isascii(B_str s) {
     unsigned char *p = s->str;
     for (int i=0; i < s->nbytes; i++) {
         if (*p > 127)
-            return B_False;
+            return false;
         p++;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_isdecimal(B_str s) {
+bool B_strD_isdecimal(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat != UTF8PROC_CATEGORY_ND)
-            return B_False;
+            return false;
         p += nbytes;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_islower(B_str s) {
+bool B_strD_islower(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
-    int has_cased = 0;
+    bool has_cased = false;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LT|| cat == UTF8PROC_CATEGORY_LU)
-            return B_False;
+            return false;
         if (cat == UTF8PROC_CATEGORY_LL)
-            has_cased = 1;
+            has_cased = true;
         p += nbytes;
     }
-    return toB_bool(has_cased);
+    return has_cased;
 }
 
-B_bool B_strD_isprintable(B_str s) {
+bool B_strD_isprintable(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
-            return B_False;
+            return false;
         p += nbytes;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_isspace(B_str s) {
+bool B_strD_isspace(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         if (!isspace_codepoint(codepoint))
-            return B_False;
+            return false;
         p += nbytes;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_strD_istitle(B_str s) {
+bool B_strD_istitle(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
-    int hascased = 0;
-    int incasedrun = 0;
+    int hascased = false;
+    bool incasedrun = false;
     if (s->nchars == 0)
-        return B_False;
+        return false;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT ) {
-            hascased = 1;
+            hascased = true;
             if (incasedrun)
-                return B_False;
-            incasedrun = 1;
+                return false;
+            incasedrun = true;
         } else if (cat == UTF8PROC_CATEGORY_LL) {
-            hascased = 1;
+            hascased = true;
             if (!incasedrun)
-                return B_False;
+                return false;
         } else
-            incasedrun = 0;
+            incasedrun = false;
         p += nbytes;
     }
-    return toB_bool(hascased);
+    return hascased;
 }
 
-B_bool B_strD_isupper(B_str s) {
+bool B_strD_isupper(B_str s) {
     unsigned char *p = s->str;
     int codepoint;
     int nbytes;
-    int hascased = 0;
+    int hascased = false;
     if (s->nchars == 0)
         return B_False;
     for (int i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LL)
-            return B_False;
+            return false;
         if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT)
-            hascased = 1;
+            hascased = true;
         p += nbytes;
     }
-    return toB_bool(hascased);
+    return hascased;
 }
 
 B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
@@ -1512,19 +1512,19 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
     return res;
 }
 
-B_bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
+bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nchars,&st,&en) < 0) return B_False;
+    if (fix_start_end(s->nchars,&st,&en) < 0) return false;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 
@@ -1573,38 +1573,38 @@ B_str B_strD_zfill(B_str s, int64_t width) {
 // The comparisons below do lexicographic byte-wise comparisons.
 // Thus they do not in general reflect locale-dependent order conventions.
 
-B_bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
+bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) == 0;
 }
 
-B_bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
+bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) != 0;
 }
 
-B_bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) < 0);
+bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) < 0;
 }
 
-B_bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) <= 0);
+bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) <= 0;
 }
 
-B_bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) > 0);
+bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) > 0;
 }
 
-B_bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) >= 0);
+bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) >= 0;
 }
 
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) == 0);
+bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) == 0;
 }
 
-B_bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str) != 0);
+bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
+    return strcmp((char *)a->str,(char *)b->str) != 0;
 }
 
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
@@ -1652,52 +1652,52 @@ int64_t B_ContainerD_strD___len__ (B_ContainerD_str wit, B_str s){
 // B_Container ///////////////////////////////////////////////////////////////////////////
 
 
-B_bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str s, B_str sub) {
-    return toB_bool(bmh(s->str,sub->str,s->nbytes,sub->nbytes) >= 0);
+bool B_ContainerD_strD___contains__ (B_ContainerD_str wit, B_str s, B_str sub) {
+    return bmh(s->str,sub->str,s->nbytes,sub->nbytes) >= 0;
 }
 
-B_bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str s, B_str sub) {
-    return toB_bool(!B_ContainerD_strD___contains__(wit, s, sub)->val);
+bool B_ContainerD_strD___containsnot__ (B_ContainerD_str wit, B_str s, B_str sub) {
+    return !B_ContainerD_strD___contains__(wit, s, sub);
 }
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
 // first define Iterator class
 
-B_IteratorB_str B_IteratorB_strG_new(B_str str) {
-    return $NEW(B_IteratorB_str, str);
+B_IteratorD_str B_IteratorD_strG_new(B_str str) {
+    return $NEW(B_IteratorD_str, str);
 }
 
-B_NoneType B_IteratorB_strD_init(B_IteratorB_str self, B_str str) {
+B_NoneType B_IteratorD_strD_init(B_IteratorD_str self, B_str str) {
     self->src = str;
     self->nxt = 0;
     return B_None;
 }
 
-void B_IteratorB_strD_serialize(B_IteratorB_str self,$Serial$state state) {
+void B_IteratorD_strD_serialize(B_IteratorD_str self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
 
-B_IteratorB_str B_IteratorB_str$_deserialize(B_IteratorB_str res, $Serial$state state) {
+B_IteratorD_str B_IteratorD_str$_deserialize(B_IteratorD_str res, $Serial$state state) {
     if (!res)
-        res = $DNEW(B_IteratorB_str,state);
+        res = $DNEW(B_IteratorD_str,state);
     res->src = (B_str)$step_deserialize(state);
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
-B_bool B_IteratorB_strD_bool(B_IteratorB_str self) {
-    return B_True;
+bool B_IteratorD_strD_bool(B_IteratorD_str self) {
+    return true;
 }
 
-B_str B_IteratorB_strD_str(B_IteratorB_str self) {
+B_str B_IteratorD_strD_str(B_IteratorD_str self) {
     return $FORMAT("<str iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
-static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
+static B_str B_IteratorD_strD_next(B_IteratorD_str self) {
     unsigned char *p = &self->src->str[self->nxt];
     if (*p != 0) {
         self->nxt +=byte_length2(*p);
@@ -1708,14 +1708,14 @@ static B_str B_IteratorB_strD_next(B_IteratorB_str self) {
 }
 
 
-struct B_IteratorB_strG_class B_IteratorB_strG_methods = {"B_IteratorB_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_strD_init,
-                                                    B_IteratorB_strD_serialize, B_IteratorB_str$_deserialize,
-                                                    B_IteratorB_strD_bool, B_IteratorB_strD_str, B_IteratorB_strD_str, B_IteratorB_strD_next};
+struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_strD_init,
+                                                    B_IteratorD_strD_serialize, B_IteratorD_str$_deserialize,
+                                                    B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str, B_IteratorD_strD_next};
 
 // now, define __iter__
 
 B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str s) {
-    return (B_Iterator)$NEW(B_IteratorB_str,s);
+    return (B_Iterator)$NEW(B_IteratorD_str,s);
 }
 
 
@@ -1877,8 +1877,8 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     return B_None;
 }
 
-B_bool B_bytearrayD___bool__(B_bytearray s) {
-    return toB_bool(s->nbytes > 0);
+bool B_bytearrayD___bool__(B_bytearray s) {
+    return s->nbytes > 0;
 };
 
 B_str B_bytearrayD___str__(B_bytearray s) {
@@ -1992,19 +1992,19 @@ B_str B_bytearrayD_decode(B_bytearray s) {
     return to$str((char*)s->str);
 }
 
-B_bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
     int enval = fromB_int(en);
     unsigned char *p = &s->str[enval-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
@@ -2128,101 +2128,101 @@ int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int en
     return n;
 }
 
-B_bool B_bytearrayD_isalnum(B_bytearray s) {
+bool B_bytearrayD_isalnum(B_bytearray s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytearrayD_isalpha(B_bytearray s) {
+bool B_bytearrayD_isalpha(B_bytearray s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytearrayD_isascii(B_bytearray s) {
+bool B_bytearrayD_isascii(B_bytearray s) {
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytearrayD_isdigit(B_bytearray s) {
+bool B_bytearrayD_isdigit(B_bytearray s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
 
-B_bool B_bytearrayD_islower(B_bytearray s) {
-    int has_lower = 0;
+bool B_bytearrayD_islower(B_bytearray s) {
+    bool has_lower = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
-            return B_False;
+            return false;
         if (c >= 'a' && c <= 'z')
-            has_lower = 1;
+            has_lower = true;
     }
-    return toB_bool(has_lower);
+    return has_lower;
 }
 
-B_bool B_bytearrayD_isspace(B_bytearray s) {
+bool B_bytearrayD_isspace(B_bytearray s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytearrayD_istitle(B_bytearray s) {
+bool B_bytearrayD_istitle(B_bytearray s) {
     if (s->nbytes==0)
-        return B_False;
-    int incasedrun = 0;
+        return false;
+    bool incasedrun = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
-                return B_False;
-            incasedrun = 1;
+                return false;
+            incasedrun = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
-                return B_False;
+                return false;
         } else
-            incasedrun = 0;
+            incasedrun = false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytearrayD_isupper(B_bytearray s) {
-    int has_upper = 0;
+bool B_bytearrayD_isupper(B_bytearray s) {
+    bool has_upper = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
-            return B_False;
+            return false;
         if (c >= 'a' && c <= 'z')
-            has_upper = 1;
+            has_upper = true;
     }
-    return toB_bool(has_upper);
+    return has_upper;
 }
 
 B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
@@ -2542,19 +2542,19 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
     return res;
 }
 
-B_bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
     unsigned char *p = s->str + fromB_int(st);
-    if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return B_False;
+    if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 
@@ -2594,82 +2594,82 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
 // Ord
 
 
-B_bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)==0);
+bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
+    return strcmp((char *)a->str,(char *)b->str)==0;
 }
 
-B_bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return  toB_bool(strcmp((char *)a->str,(char *)b->str)!=0);
+bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
+    return strcmp((char *)a->str,(char *)b->str)!=0;
 }
 
-B_bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<0);
+bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
+    return strcmp((char *)a->str,(char *)b->str)<0;
 }
 
-B_bool B_OrdD_bytearrayD___le__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)<=0);
+bool B_OrdD_bytearrayD___le__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
+    return strcmp((char *)a->str,(char *)b->str)<=0;
 }
 
-B_bool B_OrdD_bytearrayD___gt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>0);
+bool B_OrdD_bytearrayD___gt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
+    return strcmp((char *)a->str,(char *)b->str)>0;
 }
 
-B_bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return toB_bool(strcmp((char *)a->str,(char *)b->str)>=0);
+bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
+    return strcmp((char *)a->str,(char *)b->str)>=0;
 }
 
 // Container
 
 // Iterable
 
-static B_int B_IteratorB_bytearrayD_next(B_IteratorB_bytearray self) {
+static B_int B_IteratorD_bytearrayD_next(B_IteratorD_bytearray self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
     return toB_int(self->src->str[self->nxt++]);
 }
 
-B_NoneType B_IteratorB_bytearrayD_init(B_IteratorB_bytearray self, B_bytearray b) {
+B_NoneType B_IteratorD_bytearrayD_init(B_IteratorD_bytearray self, B_bytearray b) {
     self->src = b;
     self->nxt = 0;
     return B_None;
 }
 
-B_bool B_IteratorB_bytearrayD_bool(B_IteratorB_bytearray self) {
-    return B_True;
+bool B_IteratorD_bytearrayD_bool(B_IteratorD_bytearray self) {
+    return true;
 }
 
-B_str B_IteratorB_bytearrayD_str(B_IteratorB_bytearray self) {
+B_str B_IteratorD_bytearrayD_str(B_IteratorD_bytearray self) {
     return $FORMAT("<bytearray iterator object at %p>", self);
 }
 
-void B_IteratorB_bytearrayD_serialize(B_IteratorB_bytearray self,$Serial$state state) {
+void B_IteratorD_bytearrayD_serialize(B_IteratorD_bytearray self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
-B_IteratorB_bytearray B_IteratorB_bytearray$_deserialize(B_IteratorB_bytearray res, $Serial$state state) {
+B_IteratorD_bytearray B_IteratorD_bytearray$_deserialize(B_IteratorD_bytearray res, $Serial$state state) {
     if(!res)
-        res = $DNEW(B_IteratorB_bytearray,state);
+        res = $DNEW(B_IteratorD_bytearray,state);
     res->src = (B_bytearray)$step_deserialize(state);
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
-struct B_IteratorB_bytearrayG_class B_IteratorB_bytearrayG_methods = {
+struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     "",
     UNASSIGNED,
     ($SuperG_class)&B_IteratorG_methods,
-    B_IteratorB_bytearrayD_init,
-    B_IteratorB_bytearrayD_serialize,
-    B_IteratorB_bytearray$_deserialize,
-    B_IteratorB_bytearrayD_bool,
-    B_IteratorB_bytearrayD_str,
-    B_IteratorB_bytearrayD_str,
-    B_IteratorB_bytearrayD_next
+    B_IteratorD_bytearrayD_init,
+    B_IteratorD_bytearrayD_serialize,
+    B_IteratorD_bytearray$_deserialize,
+    B_IteratorD_bytearrayD_bool,
+    B_IteratorD_bytearrayD_str,
+    B_IteratorD_bytearrayD_str,
+    B_IteratorD_bytearrayD_next
 };
 
 B_Iterator B_ContainerD_bytearrayD___iter__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return (B_Iterator)$NEW(B_IteratorB_bytearray,str);
+    return (B_Iterator)$NEW(B_IteratorD_bytearray,str);
 }
 
 B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_Iterable wit2, $WORD iter) {
@@ -2680,19 +2680,19 @@ int64_t B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray
     return (int64_t)str->nbytes;
 }
 
-B_bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    long res = 0;
+bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    bool res = false;
     for (int i=0; i < self->nbytes; i++) {
         if (self->str[i] == (unsigned char)n->val) {
-            res = 1;
+            res = true;
             break;
         }
     }
-    return toB_bool(res);
+    return res;
 }
 
-B_bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
-    return  toB_bool(!B_ContainerD_bytearrayD___contains__(wit,self,n)->val);
+bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    return !B_ContainerD_bytearrayD___contains__(wit,self,n);
 }
 
 // Sequence
@@ -2842,7 +2842,7 @@ B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_by
 
 
 B_Iterator B_CollectionD_SequenceD_bytearrayD___iter__ (B_CollectionD_SequenceD_bytearray wit, B_bytearray str) {
-    return (B_Iterator)$NEW(B_IteratorB_bytearray,str);
+    return (B_Iterator)$NEW(B_IteratorD_bytearray,str);
 }
 
 B_bytearray B_CollectionD_SequenceD_bytearrayD___fromiter__ (B_CollectionD_SequenceD_bytearray wit, B_Iterable wit2, $WORD iter) {
@@ -2976,8 +2976,8 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     return B_None;
 }
 
-B_bool B_bytesD___bool__(B_bytes s) {
-    return toB_bool(s->nbytes > 0);
+bool B_bytesD___bool__(B_bytes s) {
+    return s->nbytes > 0;
 };
 
 B_str B_bytesD___str__(B_bytes s) {
@@ -3086,18 +3086,18 @@ B_str B_bytesD_decode(B_bytes s) {
     return to$str((char*)s->str);
 }
 
-B_bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
+bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
     unsigned char *p = &s->str[fromB_int(en)-sub->nbytes];
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (*p == 0 || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
@@ -3224,101 +3224,100 @@ int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
     return n;
 }
 
-B_bool B_bytesD_isalnum(B_bytes s) {
+bool B_bytesD_isalnum(B_bytes s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytesD_isalpha(B_bytes s) {
+bool B_bytesD_isalpha(B_bytes s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytesD_isascii(B_bytes s) {
+bool B_bytesD_isascii(B_bytes s) {
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytesD_isdigit(B_bytes s) {
+bool B_bytesD_isdigit(B_bytes s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-
-B_bool B_bytesD_islower(B_bytes s) {
-    int has_lower = 0;
+bool B_bytesD_islower(B_bytes s) {
+    bool has_lower = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
-            return B_False;
+            return false;
         if (c >= 'a' && c <= 'z')
-            has_lower = 1;
+            has_lower = true;
     }
-    return toB_bool(has_lower);
+    return has_lower;
 }
 
-B_bool B_bytesD_isspace(B_bytes s) {
+bool B_bytesD_isspace(B_bytes s) {
     if (s->nbytes==0)
-        return B_False;
+        return false;
     for (int i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
-            return B_False;
+            return false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytesD_istitle(B_bytes s) {
+bool B_bytesD_istitle(B_bytes s) {
     if (s->nbytes==0)
-        return B_False;
-    int incasedrun = 0;
+        return false;
+    bool incasedrun = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
-                return B_False;
-            incasedrun = 1;
+                return false;
+            incasedrun = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
-                return B_False;
+                return false;
         } else
-            incasedrun = 0;
+            incasedrun = false;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_bytesD_isupper(B_bytes s) {
-    int has_upper = 0;
+bool B_bytesD_isupper(B_bytes s) {
+    bool has_upper = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
-            return B_False;
+            return false;
         if (c >= 'a' && c <= 'z')
-            has_upper = 1;
+            has_upper = true;
     }
-    return toB_bool(has_upper);
+    return has_upper;
 }
 
 B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
@@ -3663,19 +3662,19 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
     return res;
 }
 
-B_bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
+bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
-    if (fix_start_end(s->nbytes,&st,&en) < 0) return B_False;
+    if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
     unsigned char *p = s->str + fromB_int(st);
-    if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return B_False;
+    if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
     for (int i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
-            return B_False;
+            return false;
         }
     }
-    return B_True;
+    return true;
 }
 
 
@@ -3717,91 +3716,91 @@ B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
 // Ord
 
 
-B_bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
+bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
     if (a->nbytes != b->nbytes)
-        return B_False;
+        return false;
     for (int i=0; i < a->nbytes; i++)
         if (a->str[i] != b->str[i])
-            return B_False;
-    return B_True;
+            return false;
+    return true;
 }
 
-B_bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    return  toB_bool(!B_OrdD_bytesD___eq__(wit,a,b)->val);
+bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
+    return !B_OrdD_bytesD___eq__(wit,a,b);
 }
 
-B_bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
+bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
     int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
     int i=0;
     while (i<minl && a->str[i]==b->str[i]) i++;
     if (i==a->nbytes)
-        return toB_bool(i<b->nbytes);
+        return i<b->nbytes;
     if (i==b->nbytes)
-        return B_False;
-    return toB_bool(a->str[i]<b->str[i]);
+        return false;
+    return a->str[i]<b->str[i];
 }
 
-B_bool B_OrdD_bytesD___le__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(!B_OrdD_bytesD___lt__(wit,b,a)->val);
+bool B_OrdD_bytesD___le__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
+    return !B_OrdD_bytesD___lt__(wit,b,a);
 }
 
-B_bool B_OrdD_bytesD___gt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
+bool B_OrdD_bytesD___gt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
     return B_OrdD_bytesD___lt__(wit,b,a);
 }
 
-B_bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
-    return toB_bool(!B_OrdD_bytesD___lt__(wit,a,b)->val);
+bool B_OrdD_bytesD___ge__ (B_OrdD_bytes wit, B_bytes a, B_bytes b){
+    return !B_OrdD_bytesD___lt__(wit,a,b);
 }
 
 // Container
 
 // Iterable ///////////////////////////////////////////////////////////////////////////
 
-B_IteratorB_bytes B_IteratorB_bytesG_new(B_bytes str) {
-    return $NEW(B_IteratorB_bytes, str);
+B_IteratorD_bytes B_IteratorD_bytesG_new(B_bytes str) {
+    return $NEW(B_IteratorD_bytes, str);
 }
 
-B_NoneType B_IteratorB_bytesD_init(B_IteratorB_bytes self, B_bytes str) {
+B_NoneType B_IteratorD_bytesD_init(B_IteratorD_bytes self, B_bytes str) {
     self->src = str;
     self->nxt = 0;
     return B_None;
 }
 
-void B_IteratorB_bytesD_serialize(B_IteratorB_bytes self,$Serial$state state) {
+void B_IteratorD_bytesD_serialize(B_IteratorD_bytes self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
 }
 
 
-B_IteratorB_bytes B_IteratorB_bytes$_deserialize(B_IteratorB_bytes res, $Serial$state state) {
+B_IteratorD_bytes B_IteratorD_bytes$_deserialize(B_IteratorD_bytes res, $Serial$state state) {
     if (!res)
-        res = $DNEW(B_IteratorB_bytes,state);
+        res = $DNEW(B_IteratorD_bytes,state);
     res->src = (B_bytes)$step_deserialize(state);
     res->nxt = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
 
-B_bool B_IteratorB_bytesD_bool(B_IteratorB_bytes self) {
-    return B_True;
+bool B_IteratorD_bytesD_bool(B_IteratorD_bytes self) {
+    return true;
 }
 
-B_str B_IteratorB_bytesD_str(B_IteratorB_bytes self) {
+B_str B_IteratorD_bytesD_str(B_IteratorD_bytes self) {
     return $FORMAT("<bytes iterator object at %p>", self);
 }
 
 // this is next function for forward iteration
-static B_int B_IteratorB_bytesD_next(B_IteratorB_bytes self) {
+static B_int B_IteratorD_bytesD_next(B_IteratorD_bytes self) {
     if (self->nxt >= self->src->nbytes)
         $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
     return toB_int(self->src->str[self->nxt++]);
 }
 
-struct B_IteratorB_bytesG_class B_IteratorB_bytesG_methods = {"B_IteratorB_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorB_bytesD_init,
-                                                        B_IteratorB_bytesD_serialize, B_IteratorB_bytes$_deserialize,
-                                                        B_IteratorB_bytesD_bool, B_IteratorB_bytesD_str,  B_IteratorB_bytesD_str, B_IteratorB_bytesD_next};
+struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_bytesD_init,
+                                                        B_IteratorD_bytesD_serialize, B_IteratorD_bytes$_deserialize,
+                                                        B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str, B_IteratorD_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
-    return (B_Iterator)$NEW(B_IteratorB_bytes,str);
+    return (B_Iterator)$NEW(B_IteratorD_bytes,str);
 }
 
 B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
@@ -3812,19 +3811,19 @@ int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
     return (int64_t)str->nbytes;
 }
 
-B_bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
-    long res = 0;
+bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    bool res = false;
     for (int i=0; i < str->nbytes; i++) {
         if (str->str[i] == (unsigned char)n->val) {
-            res = 1;
+            res = true;
             break;
         }
     }
-    return toB_bool(res);
+    return res;
 }
 
-B_bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
-    return toB_bool(!B_ContainerD_bytesD___contains__(wit, str, n)->val);
+bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    return !B_ContainerD_bytesD___contains__(wit, str, n);
 }
 
 // Sliceable
@@ -3902,17 +3901,17 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 // Hashable
 
 
-B_bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
+bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
     if (a->nbytes != b->nbytes)
-        return B_False;
+        return false;
     for (int i=0; i < a->nbytes; i++)
         if (a->str[i] != b->str[i])
-            return B_False;
-    return B_True;
+            return false;
+    return true;
 }
 
-B_bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return  toB_bool(!B_HashableD_bytesD___eq__(wit,a,b)->val);
+bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
+    return  !B_HashableD_bytesD___eq__(wit,a,b);
 }
 
 B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
@@ -4083,326 +4082,7 @@ B_str $default__str__(B_value self) {
     return $FORMAT("<%s object at %p>", self->$class->$GCINFO, self);
 }
 
-
-
-// Static witnesses
-
-
-/*
-struct B_OrdD_strG_class  B_OrdD_strG_methods = {
-    "B_OrdD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_str))$default__init__,
-    B_OrdD_strD___serialize__,
-    B_OrdD_strD___deserialize__,
-    (B_bool (*)(B_OrdD_str))$default__bool__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    (B_str (*)(B_OrdD_str))$default__str__,
-    B_OrdD_strD___eq__,
-    B_OrdD_strD___ne__,
-    B_OrdD_strD___lt__,
-    B_OrdD_strD___le__,
-    B_OrdD_strD___gt__,
-    B_OrdD_strD___ge__
-};
-
-struct B_OrdD_str B_OrdD_str_instance = {&B_OrdD_strG_methods};
-B_OrdD_str B_OrdD_strG_witness = &B_OrdD_str_instance;
-
-struct B_ContainerD_strG_class  B_ContainerD_strG_methods = {
-    "B_ContainerD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    (B_NoneType (*)(B_ContainerD_str))$default__init__,
-    B_ContainerD_strD___serialize__,
-    B_ContainerD_strD___deserialize__,
-    (B_bool (*)(B_ContainerD_str))$default__bool__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    (B_str (*)(B_ContainerD_str))$default__str__,
-    B_ContainerD_strD___iter__,
-    NULL,
-    B_ContainerD_strD___len__,
-    B_ContainerD_strD___contains__,
-    B_ContainerD_strD___containsnot__
-};
-
-struct B_ContainerD_str B_ContainerD_str_instance = {&B_ContainerD_strG_methods};
-B_ContainerD_str B_ContainerD_strG_witness = &B_ContainerD_str_instance;
-
-
-struct B_SliceableD_strG_class  B_SliceableD_strG_methods = {
-    "B_SliceableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (B_NoneType (*)(B_SliceableD_str))$default__init__,
-    B_SliceableD_strD___serialize__,
-    B_SliceableD_strD___deserialize__,
-    (B_bool (*)(B_SliceableD_str))$default__bool__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    (B_str (*)(B_SliceableD_str))$default__str__,
-    B_SliceableD_strD___getitem__,
-    B_SliceableD_strD___setitem__,
-    B_SliceableD_strD___delitem__,
-    B_SliceableD_strD___getslice__,
-    B_SliceableD_strD___setslice__,
-    B_SliceableD_strD___delslice__
-};
-
-struct B_SliceableD_str B_SliceableD_str_instance = {&B_SliceableD_strG_methods};
-B_SliceableD_str B_SliceableD_strG_witness = &B_SliceableD_str_instance;
-
-struct B_TimesD_strG_class  B_TimesD_strG_methods = {
-    "B_TimesD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (B_NoneType (*)(B_TimesD_str))$default__init__,
-    B_TimesD_strD___serialize__,
-    B_TimesD_strD___deserialize__,
-    (B_bool (*)(B_TimesD_str))$default__bool__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    (B_str (*)(B_TimesD_str))$default__str__,
-    B_TimesD_strD___add__,
-    (B_str (*)(B_TimesD_str, B_str, B_str))B_PlusD___iadd__,
-    B_TimesD_strD___mul__,
-    (B_str (*)(B_TimesD_str, B_str, B_int))B_TimesD___imul__,
-
-};
-
-struct B_TimesD_str B_TimesD_str_instance = {&B_TimesD_strG_methods};
-B_TimesD_str B_TimesD_strG_witness = &B_TimesD_str_instance;
-
-struct B_HashableD_strG_class  B_HashableD_strG_methods = {
-    "B_HashableD_str",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (B_NoneType (*)(B_HashableD_str))$default__init__,
-    B_HashableD_strD___serialize__,
-    B_HashableD_strD___deserialize__,
-    (B_bool (*)(B_HashableD_str))$default__bool__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    (B_str (*)(B_HashableD_str))$default__str__,
-    B_HashableD_strD___eq__,
-    B_HashableD_strD___ne__
-};
-
-struct B_HashableD_str B_HashableD_str_instance = {&B_HashableD_strG_methods};
-B_HashableD_str B_HashableD_strG_witness = &B_HashableD_str_instance;
-
-struct B_SequenceD_bytearray  B_SequenceD_bytearray_instance;
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance;
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance;
-
-
-struct B_OrdD_bytearrayG_class  B_OrdD_bytearrayG_methods = {
-    "B_OrdD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_bytearray))$default__init__,
-    B_OrdD_bytearrayD___serialize__,
-    B_OrdD_bytearrayD___deserialize__,
-    (B_bool (*)(B_OrdD_bytearray))$default__bool__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    (B_str (*)(B_OrdD_bytearray))$default__str__,
-    B_OrdD_bytearrayD___eq__, B_OrdD_bytearrayD___ne__,
-    B_OrdD_bytearrayD___lt__, B_OrdD_bytearrayD___le__,
-    B_OrdD_bytearrayD___gt__, B_OrdD_bytearrayD___ge__
-};
-
-struct B_OrdD_bytearray B_OrdD_bytearray_instance = {&B_OrdD_bytearrayG_methods};
-B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearray_instance;
-
-struct B_SequenceD_bytearrayG_class B_SequenceD_bytearrayG_methods = {
-    "B_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_SequenceG_methods,
-    (B_NoneType (*)(B_SequenceD_bytearray))$default__init__,
-    B_SequenceD_bytearrayD___serialize__,
-    B_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_SequenceD_bytearray))$default__str__,
-    B_SequenceD_bytearrayD___getitem__,
-    B_SequenceD_bytearrayD___setitem__,
-    B_SequenceD_bytearrayD___delitem__,
-    B_SequenceD_bytearrayD___getslice__,
-    B_SequenceD_bytearrayD___setslice__,
-    B_SequenceD_bytearrayD___delslice__,
-    B_SequenceD_bytearrayD___reversed__,
-    B_SequenceD_bytearray$insert,
-    B_SequenceD_bytearray$append,
-    B_SequenceD_bytearray$reverse
-};
-
-struct B_SequenceD_bytearray B_SequenceD_bytearray_instance = {
-    &B_SequenceD_bytearrayG_methods,
-    (B_Eq)&B_OrdD_intG_methods,
-    (B_Collection)&B_CollectionD_SequenceD_bytearray_instance,
-    (B_Times)&B_TimesD_SequenceD_bytearray_instance
-};
-B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearray_instance;
-
-struct B_CollectionD_SequenceD_bytearrayG_class B_CollectionD_SequenceD_bytearrayG_methods = {
-    "B_CollectionD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_CollectionG_methods,
-    B_CollectionD_SequenceD_bytearrayD___init__,
-    B_CollectionD_SequenceD_bytearrayD___serialize__,
-    B_CollectionD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_CollectionD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_CollectionD_SequenceD_bytearray))$default__str__,
-    B_CollectionD_SequenceD_bytearrayD___iter__,
-    B_CollectionD_SequenceD_bytearrayD___fromiter__,
-    B_CollectionD_SequenceD_bytearrayD___len__
-};
-
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearray_instance = {&B_CollectionD_SequenceD_bytearrayG_methods,(B_Sequence)&B_SequenceD_bytearray_instance};
-B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_witness = &B_CollectionD_SequenceD_bytearray_instance;
-
-struct B_TimesD_SequenceD_bytearrayG_class  B_TimesD_SequenceD_bytearrayG_methods = {
-    "B_TimesD_SequenceD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    B_TimesD_SequenceD_bytearrayD___init__,
-    B_TimesD_SequenceD_bytearrayD___serialize__,
-    B_TimesD_SequenceD_bytearrayD___deserialize__,
-    (B_bool (*)(B_TimesD_SequenceD_bytearray))$default__bool__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    (B_str (*)(B_TimesD_SequenceD_bytearray))$default__str__,
-    B_TimesD_SequenceD_bytearrayD___add__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_bytearray))B_PlusD___iadd__,
-    B_TimesD_SequenceD_bytearrayD___mul__,
-    (B_bytearray (*)(B_TimesD_SequenceD_bytearray, B_bytearray, B_int))B_TimesD___imul__,
-};
-
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearray_instance = {&B_TimesD_SequenceD_bytearrayG_methods};
-B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearray_instance;
-
-struct B_ContainerD_bytearrayG_class B_ContainerD_bytearrayG_methods = {
-    "B_ContainerD_bytearray",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytearrayD___init__,
-    B_ContainerD_bytearrayD___serialize__,
-    B_ContainerD_bytearrayD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytearray))$default__bool__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    (B_str (*)(B_ContainerD_bytearray))$default__str__,
-    B_ContainerD_bytearrayD___iter__,
-    B_ContainerD_bytearrayD___fromiter__,
-    B_ContainerD_bytearrayD___len__,
-    B_ContainerD_bytearrayD___contains__,
-    B_ContainerD_bytearrayD___containsnot__
-};
-
-struct B_ContainerD_bytearray B_ContainerD_bytearray_instance = {&B_ContainerD_bytearrayG_methods};
-B_ContainerD_bytearray B_ContainerD_bytearrayG_witness = &B_ContainerD_bytearray_instance;
-
-
-
-struct B_OrdD_bytesG_class  B_OrdD_bytesG_methods = {
-    "B_OrdD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_OrdG_methods,
-    (B_NoneType (*)(B_OrdD_bytes))$default__init__,
-    B_OrdD_bytesD___serialize__,
-    B_OrdD_bytesD___deserialize__,
-    (B_bool (*)(B_OrdD_bytes))$default__bool__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    (B_str (*)(B_OrdD_bytes))$default__str__,
-    B_OrdD_bytesD___eq__,
-    B_OrdD_bytesD___ne__,
-    B_OrdD_bytesD___lt__,
-    B_OrdD_bytesD___le__,
-    B_OrdD_bytesD___gt__,
-    B_OrdD_bytesD___ge__
-};
-
-struct B_OrdD_bytes B_OrdD_bytes_instance = {&B_OrdD_bytesG_methods};
-B_OrdD_bytes B_OrdD_bytesG_witness = &B_OrdD_bytes_instance;
-
-struct B_ContainerD_bytesG_class  B_ContainerD_bytesG_methods = {
-    "B_ContainerD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_ContainerG_methods,
-    B_ContainerD_bytesD___init__,
-    B_ContainerD_bytesD___serialize__,
-    B_ContainerD_bytesD___deserialize__,
-    (B_bool (*)(B_ContainerD_bytes))$default__bool__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    (B_str (*)(B_ContainerD_bytes))$default__str__,
-    B_ContainerD_bytesD___iter__,
-    NULL,
-    B_ContainerD_bytesD___len__,
-    B_ContainerD_bytesD___contains__,
-    B_ContainerD_bytesD___containsnot__
-};
-
-struct B_ContainerD_bytes B_ContainerD_bytes_instance = {&B_ContainerD_bytesG_methods};
-B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytes_instance;
-
-
-struct B_SliceableD_bytesG_class  B_SliceableD_bytesG_methods = {
-    "B_SliceableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_SliceableG_methods,
-    (B_NoneType (*)(B_SliceableD_bytes))$default__init__,
-    B_SliceableD_bytesD___serialize__,
-    B_SliceableD_bytesD___deserialize__,
-    (B_bool (*)(B_SliceableD_bytes))$default__bool__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    (B_str (*)(B_SliceableD_bytes))$default__str__,
-    B_SliceableD_bytesD___getitem__,
-    B_SliceableD_bytesD___setitem__,
-    B_SliceableD_bytesD___delitem__,
-    B_SliceableD_bytesD___getslice__,
-    B_SliceableD_bytesD___setslice__,
-    B_SliceableD_bytesD___delslice__
-};
-
-struct B_SliceableD_bytes B_SliceableD_bytes_instance = {&B_SliceableD_bytesG_methods};
-B_SliceableD_bytes B_SliceableD_bytesG_witness = &B_SliceableD_bytes_instance;
-
-struct B_TimesD_bytesG_class  B_TimesD_bytesG_methods = {
-    "B_TimesD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_TimesG_methods,
-    (B_NoneType (*)(B_TimesD_bytes))$default__init__,
-    B_TimesD_bytesD___serialize__,
-    B_TimesD_bytesD___deserialize__,
-    (B_bool (*)(B_TimesD_bytes))$default__bool__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    (B_str (*)(B_TimesD_bytes))$default__str__,
-    B_TimesD_bytesD___add__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_bytes))B_PlusD___iadd__,
-    B_TimesD_bytesD___mul__,
-    (B_bytes (*)(B_TimesD_bytes, B_bytes, B_int))B_TimesD___imul__,
-
-};
-
-struct B_TimesD_bytes B_TimesD_bytes_instance = {&B_TimesD_bytesG_methods};
-B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytes_instance;
-
-struct B_HashableD_bytesG_class  B_HashableD_bytesG_methods = {
-    "B_HashableD_bytes",
-    UNASSIGNED,
-    ($SuperG_class)&B_HashableG_methods,
-    (B_NoneType (*)(B_HashableD_bytes))$default__init__,
-    B_HashableD_bytesD___serialize__,
-    B_HashableD_bytesD___deserialize__,
-    (B_bool (*)(B_HashableD_bytes))$default__bool__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    (B_str (*)(B_HashableD_bytes))$default__str__,
-    B_HashableD_bytesD___eq__,
-    B_HashableD_bytesD___ne__
-};
-
-struct B_HashableD_bytes B_HashableD_bytes_instance = {&B_HashableD_bytesG_methods};
-B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytes_instance;
-
-*/
-
+ 
 B_str $FORMAT(const char *format, ...) {
     va_list args;
     va_start(args, format);

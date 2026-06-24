@@ -117,7 +117,7 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
     }
 }
 
-static int B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long hash) {
+static bool B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long hash) {
     return B_set_lookkey(set, hashwit, elem, hash)->key != NULL;
 }
 
@@ -229,8 +229,8 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     return B_None;
 }
 
-B_bool B_setD___bool__(B_set self) {
-    return toB_bool(self->numelements>0);
+bool B_setD___bool__(B_set self) {
+    return self->numelements>0;
 }
 
 B_str B_setD___str__(B_set self) {
@@ -345,8 +345,8 @@ void B_IteratorD_set_init(B_IteratorD_set self, B_set set) {
     self->nxt = 0;
 }
 
-B_bool B_IteratorD_set_bool(B_IteratorD_set self) {
-    return B_True;
+bool B_IteratorD_set_bool(B_IteratorD_set self) {
+    return true;
 }
 
 B_str B_IteratorD_set_str(B_IteratorD_set self) {
@@ -403,31 +403,31 @@ int64_t B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
     return set->numelements;
 }
 
-B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
+bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    return toB_bool(B_set_contains_entry(set,hashwit,val,B_hash(hashwit, val)));
+    return B_set_contains_entry(set,hashwit,val,B_hash(hashwit, val));
 }
 
-B_bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
-    return  toB_bool(!B_SetD_setD___contains__(wit,set,v)->val);
+bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
+    return  !B_SetD_setD___contains__(wit,set,v);
 }
 
-B_bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
+bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
     if (set == other) 
-        return toB_bool(set->numelements == 0);
+        return set->numelements == 0;
     if (other->numelements > set->numelements)
         return B_SetD_setD_isdisjoint(wit,other,set);
     B_Iterator iter = B_set_iter_entry(other);
     $WORD w;
-    long res = 1;
+    long res = true;
     while((w = $next(iter))){
         if(B_set_contains_entry(set, hashwit,((B_setentry*)w)->key, ((B_setentry*)w)->hash)) {
-            res = 0;
+            res = false;
             break;
         }
     }
-    return toB_bool(res);
+    return res;
 }
 
 // TODO: ideally this could be defined in .act file instead of C since we just
@@ -484,66 +484,66 @@ $WORD B_SetD_setD_pop (B_SetD_set wit, B_set set) {
 
 // B_Ord
 
-B_bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     if (set == other) 
-        return B_True;
+        return true;
     if (set->numelements != other->numelements)
-        return B_False;
+        return false;
     B_Iterator iter = B_set_iter_entry(other);
     long n = 0;
     while(n < set->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
+            return false;
         n++;
     }
-    return B_True;
+    return true;
 }
   
-B_bool B_OrdD_SetD_setD___ne__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
-    return toB_bool(!B_OrdD_SetD_setD___eq__ (wit,set,other)->val);
+bool B_OrdD_SetD_setD___ne__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+    return !B_OrdD_SetD_setD___eq__ (wit,set,other);
 }
   
-B_bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     if (set == other) 
-        return B_False;    
+        return false;    
     if (set->numelements <= other->numelements)
-        return B_False;
+        return false;
     B_Iterator iter = B_set_iter_entry(other);
     long n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
+            return false;
         n++;
     }
-    return B_True;
+    return true;
 }
   
-B_bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     if (set == other) 
-        return B_False;    
+        return true;    
     if (set->numelements < other->numelements)
-        return B_False;
+        return false;
     B_Iterator iter = B_set_iter_entry(other);
     long n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
+            return false;
         n++;
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_OrdD_SetD_setD___lt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___lt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     return B_OrdD_SetD_setD___gt__(wit, other, set);
 }
   
-B_bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     return  B_OrdD_SetD_setD___ge__(wit, other, set);
 }
   
