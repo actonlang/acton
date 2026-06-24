@@ -192,7 +192,7 @@ generalType env n                  = case getNI n of
                                            Just (NSig sc _ _) -> Just $ sctype sc
                                            ni -> Nothing 
     where getNI n                  = case contextIs env CtxClass of
-                                           True -> lookup n (gtypes env)
+                                           True -> Nothing
                                            False -> Just (findQName (NoQ n) env)
  
 -- matchTypes expects to be called with both arguments a function type; the specific one returned by typeOf for a name f and

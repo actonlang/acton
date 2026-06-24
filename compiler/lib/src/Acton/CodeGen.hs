@@ -246,8 +246,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
                                       char '}' <> semi $+$
                                       inst_struct
   where tc                          = TC (NoQ n) [ tVar v | QBind v _ <- q ]
-        env1                        = setGtypes env (findAttrSchemas env1 (NoQ n))
-        initdef : meths             = fields (setInClass env1) tc
+        initdef : meths             = fields (setInClass env) tc
         properties                  = [ varsig env n (sctype sc) <> semi | (n, NSig sc Property _) <- fullAttrEnv env tc ]
         inst_struct | initNotImpl   = empty
                     | otherwise     = (text "struct" <+> genTopName env n <+> char '{') $+$
@@ -258,12 +257,11 @@ decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
-                                      vcat [ methodDefStub env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
+                                      vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
         b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = setInClass (defineTVars q env)
-        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
 methstub env Def{}                  = empty
 
 constub env t n r b
@@ -509,11 +507,11 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
         emit                        = getLineEmit env
 
 declDecl env (Class _ n q as b ddoc)
-    | cDefinedClass                 = vcat [ declDecl env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      forwardDecls env2 n q $+$
+    | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      forwardDecls env1 n q $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
-    | otherwise                     = vcat [ declDecl env2 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      forwardDecls env2 n q $+$
+    | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      forwardDecls env1 n q $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCleanup env1 n sup_c $+$
@@ -522,7 +520,6 @@ declDecl env (Class _ n q as b ddoc)
   where b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = setInClass (defineTVars q env)
-        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
         props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
