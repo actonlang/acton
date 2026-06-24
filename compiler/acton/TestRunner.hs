@@ -39,7 +39,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
-import Control.Exception (SomeException, AsyncException(..), displayException, evaluate, onException, try, fromException, throwIO)
+import Control.Exception (SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO)
 import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
@@ -306,10 +306,27 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                         then return Nothing
                         else do
                           callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs
-                          void $ async $ do
-                            res <- runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
-                                    (tpuEnabled ui) callbacks
-                            writeChan eventChan (TestEventDone res)
+                          void $ async $ mask $ \restore -> do
+                            resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
+                                                   (tpuEnabled ui) callbacks))
+                                      :: IO (Either SomeException TestResult)
+                            case resE of
+                              Right res ->
+                                writeChan eventChan (TestEventDone res)
+                              Left ex -> do
+                                let res = initRes
+                                      { trComplete = True
+                                      , trException = Just ("Test runner exception: " ++ displayException ex)
+                                      , trNumErrors = 1
+                                      }
+                                finishE <- try (restore (tpcOnDone callbacks res >> tpcOnFinal callbacks res))
+                                             :: IO (Either SomeException ())
+                                writeChan eventChan (TestEventDone res)
+                                case finishE of
+                                  Left finishEx | isJust (fromException finishEx :: Maybe SomeAsyncException) -> throwIO finishEx
+                                  _ -> return ()
+                                when (isJust (fromException ex :: Maybe SomeAsyncException)) $
+                                  throwIO ex
                           return (Just (running + 1, results))
             startAvailable pending running results = do
               case pending of
@@ -1337,21 +1354,24 @@ readProcessWithExitCodeStreaming cp onErrLine = do
     withCreateProcess cp' $ \_ mOut mErr ph -> do
       outVar <- newEmptyMVar
       errVar <- newEmptyMVar
-      let readStdout mH var =
+      let readPipe var action = mask $ \restore -> do
+            res <- try (restore action) :: IO (Either SomeException String)
+            putMVar var res
+          readStdout mH =
             case mH of
-              Nothing -> putMVar var ""
+              Nothing -> return ""
               Just h -> do
                 txt <- hGetContents h
                 _ <- evaluate (length txt)
                 hClose h
-                putMVar var txt
-          readStderr mH var =
+                return txt
+          readStderr mH =
             case mH of
-              Nothing -> putMVar var ""
+              Nothing -> return ""
               Just h -> do
                 txt <- readErrLines h
                 hClose h
-                putMVar var txt
+                return txt
           readErrLines h = go []
             where
               go acc = do
@@ -1362,13 +1382,15 @@ readProcessWithExitCodeStreaming cp onErrLine = do
                     line <- hGetLine h
                     onErrLine line
                     go (line : acc)
-      _ <- forkIO $ readStdout mOut outVar
-      _ <- forkIO $ readStderr mErr errVar
+      _ <- forkIO $ readPipe outVar (readStdout mOut)
+      _ <- forkIO $ readPipe errVar (readStderr mErr)
       code <- waitForProcess ph `onException` do
                 terminateProcess ph
                 void (waitForProcess ph)
-      out <- takeMVar outVar
-      err <- takeMVar errVar
+      outE <- takeMVar outVar
+      errE <- takeMVar errVar
+      out <- either throwIO return outE
+      err <- either throwIO return errE
       return (code, out, err)
 
 fmtTime :: TimeSpec -> String
