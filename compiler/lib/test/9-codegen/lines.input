@@ -217,14 +217,14 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
             break
         print@[(__builtin__.str, __builtin__.int)](("\"loop body\"", (BOX __builtin__.int self.i)), None, None, None, None)
     N_3iter: __builtin__.Iterator[?__builtin__.int] = __builtin__.CollectionD_SequenceD_listD___iter__@[?__builtin__.int](__builtin__.SequenceD_list@[?__builtin__.int]().W_Collection, [(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
-    if $PUSH():
+    if (BOX __builtin__.bool $PUSH()):
         while True:
             if True:
                 pass
             else:
                 break
             j: ?__builtin__.int = N_3iter.__next__()
-            if W_Apa_759.__eq__(j, (BOX __builtin__.int (UNBOX __builtin__.int 2))):
+            if (BOX __builtin__.bool W_Apa_759.__eq__(j, (BOX __builtin__.int (UNBOX __builtin__.int 2)))):
                 continue
             print@[(__builtin__.str, ?__builtin__.int)](("\"for j\"", j), None, None, None, None)
         $DROP()
@@ -234,9 +234,9 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
             pass
         else:
             $RAISE(N_5x)
-    if $PUSHF():
-        if $PUSH():
-            if W_Apa_785.__eq__((BOX __builtin__.int self.v), (BOX __builtin__.int (UNBOX __builtin__.int 0))):
+    if (BOX __builtin__.bool $PUSHF()):
+        if (BOX __builtin__.bool $PUSH()):
+            if (BOX __builtin__.bool W_Apa_785.__eq__((BOX __builtin__.int self.v), (BOX __builtin__.int (UNBOX __builtin__.int 0)))):
                 $RAISE(ValueError("\"boom\""))
             print@[(__builtin__.str,)](("\"unreached\"",), None, None, None, None)
             $DROP()
@@ -484,7 +484,7 @@ class main ($Actor, __builtin__.value):
         return ApaG_newact(L_23Cont(self, C_cont))
     proc def myprocG_local (self : main, C_cont : $Cont[__builtin__.int], i : UNBOXED __builtin__.int) -> $R:
         print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", (BOX __builtin__.int i)), None, None, None, None)
-        if W_Apa_331.__eq__((BOX __builtin__.int i), (BOX __builtin__.int (UNBOX __builtin__.int 2))):
+        if (BOX __builtin__.bool W_Apa_331.__eq__((BOX __builtin__.int i), (BOX __builtin__.int (UNBOX __builtin__.int 2)))):
             (async self.env.exit)((UNBOX __builtin__.int 0))
         return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int i))
     proc def nopG_local (self : main, C_cont : $Cont[None]) -> $R:

@@ -472,8 +472,8 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
 
 ////////////////////////////////////////////////////////////////////////
 
-B_bool B_MsgD___bool__(B_Msg self) {
-  return B_True;
+bool B_MsgD___bool__(B_Msg self) {
+  return true;
 }
 
 B_str B_MsgD___str__(B_Msg self) {
@@ -526,8 +526,8 @@ void $ActorD___init__($Actor a) {
     rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
 }
 
-B_bool $ActorD___bool__($Actor self) {
-  return B_True;
+bool $ActorD___bool__($Actor self) {
+  return true;
 }
 
 B_str $ActorD___str__($Actor self) {
@@ -577,8 +577,8 @@ void $CatcherD___init__($Catcher c, $Cont cont) {
     c->xval = NULL;
 }
 
-B_bool $CatcherD___bool__($Catcher self) {
-  return B_True;
+bool $CatcherD___bool__($Catcher self) {
+  return true;
 }
 
 B_str $CatcherD___str__($Catcher self) {
@@ -605,8 +605,8 @@ void $ConstContD___init__($ConstCont $this, $WORD val, $Cont cont) {
     $this->cont = cont;
 }
 
-B_bool $ConstContD___bool__($ConstCont self) {
-  return B_True;
+bool $ConstContD___bool__($ConstCont self) {
+  return true;
 }
 
 B_str $ConstContD___str__($ConstCont self) {
@@ -784,8 +784,8 @@ $R $DoneD___call__($Cont $this, $WORD val) {
     return $R_DONE(val);
 }
 
-B_bool $DoneD___bool__($Cont self) {
-  return B_True;
+bool $DoneD___bool__($Cont self) {
+  return true;
 }
 
 B_str $DoneD___str__($Cont self) {
@@ -822,8 +822,8 @@ $R $FailD___call__($Cont $this, $WORD ex) {
     return $R_FAIL(ex);
 }
 
-B_bool $FailD___bool__($Cont self) {
-  return B_True;
+bool $FailD___bool__($Cont self) {
+  return true;
 }
 
 B_str $FailD___str__($Cont self) {

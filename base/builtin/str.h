@@ -22,29 +22,29 @@ B_str $FORMAT(const char *format, ...);
 
 // Iterators over str's ///////////////////////////////////////////////////////
 
-typedef struct B_IteratorB_str *B_IteratorB_str; ;
+typedef struct B_IteratorD_str *B_IteratorD_str; ;
 
-struct B_IteratorB_strG_class {
+struct B_IteratorD_strG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__)(B_IteratorB_str, B_str);
-    void (*__serialize__)(B_IteratorB_str,$Serial$state);
-    B_IteratorB_str (*__deserialize__)(B_IteratorB_str,$Serial$state);
-    B_bool (*__bool__)(B_IteratorB_str);
-    B_str (*__str__)(B_IteratorB_str);
-    B_str (*__repr__)(B_IteratorB_str);
-    B_str (*__next__)(B_IteratorB_str);
+    B_NoneType (*__init__)(B_IteratorD_str, B_str);
+    void (*__serialize__)(B_IteratorD_str,$Serial$state);
+    B_IteratorD_str (*__deserialize__)(B_IteratorD_str,$Serial$state);
+    bool (*__bool__)(B_IteratorD_str);
+    B_str (*__str__)(B_IteratorD_str);
+    B_str (*__repr__)(B_IteratorD_str);
+    B_str (*__next__)(B_IteratorD_str);
 };
 
-struct B_IteratorB_str {
-    struct B_IteratorB_strG_class *$class;
+struct B_IteratorD_str {
+    struct B_IteratorD_strG_class *$class;
     B_str src;
     int nxt;
 };
 
-extern struct  B_IteratorB_strG_class  B_IteratorB_strG_methods;
-B_IteratorB_str B_IteratorB_strG_new(B_str);
+extern struct  B_IteratorD_strG_class  B_IteratorD_strG_methods;
+B_IteratorD_str B_IteratorD_strG_new(B_str);
 
 // bytearray /////////////////////////////////////////////////////////////////////////////////////
 
@@ -63,29 +63,29 @@ unsigned char *fromB_bytearray(B_bytearray b);
 
 // Iterators over bytearrays ///////////////////////////////////////////////////////
 
-typedef struct B_IteratorB_bytearray *B_IteratorB_bytearray; ;
+typedef struct B_IteratorD_bytearray *B_IteratorD_bytearray; ;
 
-struct B_IteratorB_bytearrayG_class {
+struct B_IteratorD_bytearrayG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__)(B_IteratorB_bytearray, B_bytearray);
-    void (*__serialize__)(B_IteratorB_bytearray,$Serial$state);
-    B_IteratorB_bytearray (*__deserialize__)(B_IteratorB_bytearray,$Serial$state);
-    B_bool (*__bool__)(B_IteratorB_bytearray);
-    B_str (*__str__)(B_IteratorB_bytearray);
-    B_str (*__repr__)(B_IteratorB_bytearray);
-    B_int (*__next__)(B_IteratorB_bytearray);
+    B_NoneType (*__init__)(B_IteratorD_bytearray, B_bytearray);
+    void (*__serialize__)(B_IteratorD_bytearray,$Serial$state);
+    B_IteratorD_bytearray (*__deserialize__)(B_IteratorD_bytearray,$Serial$state);
+    bool (*__bool__)(B_IteratorD_bytearray);
+    B_str (*__str__)(B_IteratorD_bytearray);
+    B_str (*__repr__)(B_IteratorD_bytearray);
+    B_int (*__next__)(B_IteratorD_bytearray);
 };
 
-struct B_IteratorB_bytearray {
-    struct B_IteratorB_bytearrayG_class *$class;
+struct B_IteratorD_bytearray {
+    struct B_IteratorD_bytearrayG_class *$class;
     B_bytearray src;
     int nxt;
 };
 
-extern struct  B_IteratorB_bytearrayG_class  B_IteratorB_bytearrayG_methods;
-B_IteratorB_bytearray B_IteratorB_bytearrayG_new(B_bytearray);
+extern struct  B_IteratorD_bytearrayG_class  B_IteratorD_bytearrayG_methods;
+B_IteratorD_bytearray B_IteratorD_bytearrayG_new(B_bytearray);
 
 // bytes /////////////////////////////////////////////////////////////////////////////////////
 
@@ -108,29 +108,29 @@ char *fromB_bytes(B_bytes b);
 // Iterators over bytes ///////////////////////////////////////////////////////
 
 
-typedef struct B_IteratorB_bytes *B_IteratorB_bytes; ;
+typedef struct B_IteratorD_bytes *B_IteratorD_bytes; ;
 
-struct B_IteratorB_bytesG_class {
+struct B_IteratorD_bytesG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    B_NoneType (*__init__)(B_IteratorB_bytes, B_bytes);
-    void (*__serialize__)(B_IteratorB_bytes,$Serial$state);
-    B_IteratorB_bytes (*__deserialize__)(B_IteratorB_bytes,$Serial$state);
-    B_bool (*__bool__)(B_IteratorB_bytes);
-    B_str (*__str__)(B_IteratorB_bytes);
-    B_str (*__repr__)(B_IteratorB_bytes);
-    B_int (*__next__)(B_IteratorB_bytes);
+    B_NoneType (*__init__)(B_IteratorD_bytes, B_bytes);
+    void (*__serialize__)(B_IteratorD_bytes,$Serial$state);
+    B_IteratorD_bytes (*__deserialize__)(B_IteratorD_bytes,$Serial$state);
+    bool (*__bool__)(B_IteratorD_bytes);
+    B_str (*__str__)(B_IteratorD_bytes);
+    B_str (*__repr__)(B_IteratorD_bytes);
+    B_int (*__next__)(B_IteratorD_bytes);
 };
 
-struct B_IteratorB_bytes {
-    struct B_IteratorB_bytesG_class *$class;
+struct B_IteratorD_bytes {
+    struct B_IteratorD_bytesG_class *$class;
     B_bytes src;
     int nxt;
 };
 
-extern struct  B_IteratorB_bytesG_class  B_IteratorB_bytesG_methods;
-B_IteratorB_bytes B_IteratorB_bytesG_new(B_bytes);
+extern struct  B_IteratorD_bytesG_class  B_IteratorD_bytesG_methods;
+B_IteratorD_bytes B_IteratorD_bytesG_new(B_bytes);
 
 // Internal auxiliary function /////////////////////////////////////////////
 

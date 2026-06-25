@@ -228,7 +228,7 @@ rtypeOf' env w f                     = rtypeOf env tc f
 
 integralTypes                      = [tBigint, tInt, tI32, tI16, tI8, tU64, tU32, tU16, tU8, tU1]
 numericTypes                       = integralTypes ++ [tFloat]
-unboxableTypes                     = tail numericTypes
+unboxableTypes                     = tBool : tail numericTypes
 
 isUnboxable t                      = t `elem` unboxableTypes
 
@@ -408,8 +408,8 @@ exprUnboxedRep env e@DotI{}      = Nothing
 -- After boxing, an And/Or expression has boxed operands and yields a boxed
 -- value (its result IS one of the operands), so it must not be re-boxed by a
 -- use-site fallback, even though its static type is unboxable.
-exprUnboxedRep env (BinOp _ _ op _)
-  | op `elem` [And, Or]           = Nothing
+exprUnboxedRep env (BinOp _ _ op _)           -- MZ
+  | op `elem` [And, Or]           = Nothing   -- MZ
 exprUnboxedRep env c@(Call _ f _ KwdNil)
   | Just t <- generatedCallableRawRep env f
                                   = Just t
@@ -441,8 +441,8 @@ fixassign env (TOpt _ t) e
     exprUnboxedRep env e == Just t = Box t e
 fixassign env t e
   | Just t' <- unboxedRepType t    = forceUnbox env t' e
-  | Box{} <- e                     = e
-  | Just rt <- exprUnboxedRep env e = Box rt e
+  | Box{} <- e                     = e          -- MZ
+  | Just rt <- exprUnboxedRep env e = Box rt e  -- MZ
   | otherwise                      = e
 
 fixarg env (TUnboxed _ t) e     = forceUnbox env t e
@@ -483,17 +483,14 @@ rtypeOfFun env f@(TApp _ (Var _ n) _)
 rtypeOfFun env (TApp _ f0 [])       = rtypeOfFun env f0
 rtypeOfFun env f@(TApp _ f0 ts)     = matchTypes (typeOf env f) (typeInstOf env (map (const tWild) ts) f0)
 rtypeOfFun env (Async _ f)          = rtypeOfFun env f
-rtypeOfFun env f@(Dot _ (Var _ x) _)
-  | NClass{} <- findQName x env
-                                      = typeOf env f
-rtypeOfFun env f@(Dot _ e n)        = case generatedExprType env e of
-                                        Just (TCon _ tc) -> rtypeOf env tc n
-                                        Just (TVar _ tv) -> rtypeOf env (findTVBound env tv) n
-                                        Just _           -> typeOf env f
-                                        Nothing          -> case typeOf env e of
-                                          TCon _ tc -> rtypeOf env tc n
-                                          TVar _ tv -> rtypeOf env (findTVBound env tv) n
-                                          _         -> typeOf env f
+rtypeOfFun env f@(Dot _ (Var _ x) n)
+  | NClass{} <- findQName x env      = case generalTypeC env x n of
+                                         Just t  -> matchTypes (typeOf env f) t
+                                         Nothing -> matchTypes (typeOf env f) (typeOf env f)
+rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
+                                        TCon _ tc -> rtypeOf env tc n
+                                        TVar _ tv -> rtypeOf env (findTVBound env tv) n
+                                        _         -> typeOf env f
 rtypeOfFun env f@(Var _ n)
   | Just rt <- generatedMethodType env n []
                                     = rt
@@ -664,30 +661,35 @@ instance Boxing Expr where
                                          (ws3,e3') <- boxing env e3
                                          case unboxedRepType (typeOf env e) of
                                              Just t -> return (HashSet.unions [ws1, ws2, ws3], Box t $ Cond l (forceUnbox env t e1') e2' (forceUnbox env t e3'))
-                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l (boxValueExpr env e1 e1') e2' (boxValueExpr env e3 e3'))
+                                    --         Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l e1' e2' e3')
+                                             Nothing -> return (HashSet.unions [ws1, ws2, ws3], Cond l (boxValueExpr env e1 e1') e2' (boxValueExpr env e3 e3'))  -- MZ
     boxing env (IsInstance l e qn)  = do (ws1,e1) <- boxing env e
-                                         return (ws1, IsInstance l (boxValueExpr env e e1) qn)
-    boxing env e@(BinOp l e1 op e2)
-      | op `notElem` [And, Or],
-        Just rt <- unboxedRepType t
-                                    = do (ws1,e1') <- boxing env e1
-                                         (ws2,e2') <- boxing env e2
-                                         return (HashSet.union ws1 ws2, Box rt $ Paren NoLoc $ BinOp l (unboxArg e1 e1') op (unboxArg e2 e2'))
-      where t                       = typeOf env e
-            unboxArg e0 e'          = maybe e' (\t -> forceUnbox env t e') (unboxedRepType (typeOf env e0))
-    boxing env e@(BinOp l e1 op e2)
-      | op `elem` [And, Or]         = do (ws1,e1') <- boxing env e1
-                                         (ws2,e2') <- boxing env e2
-                                         return (HashSet.union ws1 ws2, BinOp l (boxValueExpr env e1 e1') op (boxValueExpr env e2 e2'))
-    boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1
-                                         (ws2,e2') <- boxing env e2
-                                         return (HashSet.union ws1 ws2, BinOp l e1' op e2')
+                                    --     return (ws1, IsInstance l e1 qn)
+                                         return (ws1, IsInstance l (boxValueExpr env e e1) qn) -- MZ
+--    boxing env e@(BinOp l e1 op e2)
+--      | op `notElem` [And, Or],
+--        Just rt <- unboxedRepType t
+--                                    = do (ws1,e1') <- boxing env e1
+--                                         (ws2,e2') <- boxing env e2
+--                                         return (HashSet.union ws1 ws2, Box rt $ Paren NoLoc $ BinOp l (unboxArg e1 e1') op (unboxArg e2 e2'))
+--      where t                       = typeOf env e
+--            unboxArg e0 e'          = maybe e' (\t -> forceUnbox env t e') (unboxedRepType (typeOf env e0))
+    boxing env e@(BinOp l e1 op e2)                                         -- MZ
+      | op `elem` [And, Or]         = do (ws1,e1') <- boxing env e1         -- MZ
+                                         (ws2,e2') <- boxing env e2         -- MZ
+                                         return (HashSet.union ws1 ws2, if boxedRepType t == tBool then Box tBool (BinOp l (forceUnbox env tBool e1') op (forceUnbox env tBool e2')) else BinOp l (boxValueExpr env e1 e1') op (boxValueExpr env e2 e2'))  -- MZ
+        where t                       = typeOf env e1
+--    boxing env e@(BinOp l e1 op e2) = do (ws1,e1') <- boxing env e1
+--                                         (ws2,e2') <- boxing env e2
+--                                         return (HashSet.union ws1 ws2, BinOp l e1' op e2')
     boxing env (CompOp l e os)      = do (ws1,e1) <- boxing env e
                                          (ws2,e2) <- boxing env os
                                          return (HashSet.union ws1 ws2, CompOp l e1 e2)
+    boxing env (UnOp l Not e)       = do (ws1,e1) <- boxing env e
+                                         return (ws1, if boxedRepType t == tBool then Box tBool (UnOp l Not (forceUnbox env tBool e1)) else UnOp l Not (boxValueExpr env e e1))
+       where t                      = typeOf env e
     boxing env (UnOp l uop e)
-      | uop /= Not,
-        Just rt <- unboxedRepType (typeOf env e)
+      | Just rt <- unboxedRepType (typeOf env e)
                                     = do (ws1,e') <- boxing env e
                                          return (ws1, Box rt $ Paren NoLoc $ UnOp l uop (unbox rt e'))
     boxing env (UnOp l uop e)       = do (ws1,e') <- boxing env e
@@ -711,11 +713,6 @@ instance Boxing Expr where
                                          return (ws1, Set l es1)
     boxing env (Dict l es)          = do (ws1,es1) <- boxing env es
                                          return (ws1, Dict l es1)
-    boxing env (Box t e)  =           do (ws1,e1) <- boxing env e
-                                         case e1 of
-                                            UnBox _ e' -> return (ws1,e')
-                                            _ -> return (ws1,Box t e1)
-                                         return (ws1, e1)
     boxing env e                    = return (HashSet.empty,e)
 
 boxingTupleArgs env (PosArg e p)    = do (ws1,e1) <- boxing env e

@@ -180,8 +180,8 @@ B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
     }
 }
 
-B_bool B_bigintD___bool__(B_bigint n) {
-    return toB_bool(zz_cmpi(&n->val,0));
+bool B_bigintD___bool__(B_bigint n) {
+    return zz_cmpi(&n->val,0);
 }
 
 B_str B_bigintD___str__(B_bigint n) {
@@ -633,38 +633,38 @@ B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
 
 // B_OrdD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_OrdD_bigintD___eq__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_equal(&a->val,&b->val));
+bool B_OrdD_bigintD___eq__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_equal(&a->val,&b->val);
 }
 
-B_bool B_OrdD_bigintD___ne__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(1-zz_equal(&a->val,&b->val));
+bool B_OrdD_bigintD___ne__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return !zz_equal(&a->val,&b->val);
 }
 
-B_bool B_OrdD_bigintD___lt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_cmp(&a->val,&b->val) < 0);
+bool B_OrdD_bigintD___lt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_cmp(&a->val,&b->val) < 0;
 }
 
-B_bool B_OrdD_bigintD___le__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_cmp(&a->val,&b->val) <= 0);
+bool B_OrdD_bigintD___le__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_cmp(&a->val,&b->val) <= 0;
 }
 
-B_bool B_OrdD_bigintD___gt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_cmp(&a->val,&b->val) > 0);
+bool B_OrdD_bigintD___gt__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_cmp(&a->val,&b->val) > 0;
 }
 
-B_bool B_OrdD_bigintD___ge__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_cmp(&a->val,&b->val) >= 0);
+bool B_OrdD_bigintD___ge__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_cmp(&a->val,&b->val) >= 0;
 }
 
 // B_HashableD_bigint ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_HashableD_bigintD___eq__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(zz_equal(&a->val,&b->val));
+bool B_HashableD_bigintD___eq__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
+    return zz_equal(&a->val,&b->val);
 }
 
-B_bool B_HashableD_bigintD___ne__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
-    return toB_bool(1-zz_equal(&a->val,&b->val));
+bool B_HashableD_bigintD___ne__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
+    return !zz_equal(&a->val,&b->val);
 }
 
 B_NoneType B_HashableD_bigintD_hash(B_HashableD_bigint wit, B_bigint a, B_hasher h) {

@@ -57,7 +57,7 @@ void $register_builtin() {
   $register_force(RANGE_ID,&B_rangeG_methods);
   $register_force(TUPLE_ID,&B_tupleG_methods);
   $register_force(BYTEARRAY_ID,&B_bytearrayG_methods);
-  $register_force(STRITERATOR_ID,&B_IteratorB_strG_methods);
+  $register_force(STRITERATOR_ID,&B_IteratorD_strG_methods);
   $register_force(LISTITERATOR_ID,&B_IteratorD_listG_methods);
   $register_force(DICTITERATOR_ID,&B_IteratorD_dictG_methods);
   $register_force(VALUESITERATOR_ID,&B_IteratorD_dict_valuesG_methods);
@@ -98,14 +98,14 @@ void $register_builtin() {
 }
 
 
-B_bool issubtype(int sub_id, int ancestor_id) {
+bool issubtype(int sub_id, int ancestor_id) {
   if (sub_id == ancestor_id)
-    return B_True;
+    return true;
   $SuperG_class c =  ($SuperG_class)$GET_METHODS(sub_id)->$superclass;
   while(c)
     if(c->$class_id == ancestor_id)
-      return B_True;
+      return true;
     else
       c = c->$superclass;
-  return B_False;
+  return false;
 }

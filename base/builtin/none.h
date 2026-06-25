@@ -5,7 +5,7 @@ struct B_NoneTypeG_class {
     void (*__init__)(B_NoneType);
     void (*__serialize__)(B_NoneType,$Serial$state);
     B_NoneType (*__deserialize__)(B_NoneType,$Serial$state);
-    B_bool (*__bool__)(B_NoneType);
+    bool (*__bool__)(B_NoneType);
     B_str (*__str__)(B_NoneType);
     B_str (*__repr__)(B_NoneType);
 };

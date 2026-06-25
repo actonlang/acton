@@ -17,7 +17,7 @@ B_NoneType $BoxD___init__($Box self, $WORD val) {
     return B_None;
 }
 
-B_bool $BoxD___bool__($Box self) {
+bool $BoxD___bool__($Box self) {
     B_value it = (B_value)self->val;
     return it->$class->__bool__(it);
 }

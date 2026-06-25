@@ -41,12 +41,12 @@ B_HashableD_WORD B_HashableD_WORDD___deserialize__(B_HashableD_WORD self, $Seria
     return res;
 }
 
-B_bool B_HashableD_WORD_eq(B_HashableD_WORD wit, $WORD a, $WORD b) {
-    return toB_bool(a==b);
+bool B_HashableD_WORD_eq(B_HashableD_WORD wit, $WORD a, $WORD b) {
+    return a == b;
 }
 
-B_bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
-    return  toB_bool(a != b);
+bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
+    return  a != b;
 }
 
 B_NoneType B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a, B_hasher h) {
@@ -61,7 +61,7 @@ struct B_HashableD_WORDG_class B_HashableD_WORDG_methods = {
     (void (*)(B_HashableD_WORD))$default__init__,
     B_HashableD_WORDD___serialize__,
     B_HashableD_WORDD___deserialize__,
-    (B_bool (*)(B_HashableD_WORD))$default__bool__,
+    (bool (*)(B_HashableD_WORD))$default__bool__,
     (B_str (*)(B_HashableD_WORD))$default__str__,
     (B_str (*)(B_HashableD_WORD))$default__str__,
     B_HashableD_WORD_eq,

@@ -50,8 +50,8 @@ B_u32 B_u32D___deserialize__(B_u32 n, $Serial$state state) {
     return toB_u32((uint32_t)$val_deserialize(state));
 }
 
-B_bool B_u32D___bool__(B_u32 n) {
-    return toB_bool(n->val != 0);
+bool B_u32D___bool__(B_u32 n) {
+    return n->val != 0;
 }
 
 B_str B_u32D___str__(B_u32 n) {
@@ -233,38 +233,38 @@ B_float B_DivD_u32D___truediv__ (B_DivD_u32 wit, B_u32 a, B_u32 b) {
 
 // B_OrdD_u32  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_OrdD_u32D___eq__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val == b->val);
+bool B_OrdD_u32D___eq__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val == b->val;
 }
 
-B_bool B_OrdD_u32D___ne__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val != b->val);
+bool B_OrdD_u32D___ne__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val != b->val;
 }
 
-B_bool B_OrdD_u32D___lt__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val < b->val);
+bool B_OrdD_u32D___lt__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val < b->val;
 }
 
-B_bool B_OrdD_u32D___le__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val <= b->val);
+bool B_OrdD_u32D___le__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val <= b->val;
 }
 
-B_bool B_OrdD_u32D___gt__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val > b->val);
+bool B_OrdD_u32D___gt__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val > b->val;
 }
 
-B_bool B_OrdD_u32D___ge__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val >= b->val);
+bool B_OrdD_u32D___ge__ (B_OrdD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val >= b->val;
 }
 
 // B_HashableD_u32 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_HashableD_u32D___eq__(B_HashableD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val == b->val);
+bool B_HashableD_u32D___eq__(B_HashableD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val == b->val;
 }
 
-B_bool B_HashableD_u32D___ne__(B_HashableD_u32 wit, B_u32 a, B_u32 b) {
-    return toB_bool(a->val != b->val);
+bool B_HashableD_u32D___ne__(B_HashableD_u32 wit, B_u32 a, B_u32 b) {
+    return a->val != b->val;
 }
 
 B_NoneType B_HashableD_u32D_hash(B_HashableD_u32 wit, B_u32 a, B_hasher h) {

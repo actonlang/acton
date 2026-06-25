@@ -12,7 +12,7 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
- 
+
 #define DISCARD_NOTFOUND 0
 #define DISCARD_FOUND 1
 #define PERTURB_SHIFT 5
@@ -34,7 +34,7 @@ static void B_set_insert_clean(B_setentry *table, long mask, $WORD *key, long ha
         entry = &table[i];
         if (entry->key == NULL)
             goto found_null;
-        
+
         perturb >>= PERTURB_SHIFT;
         i = (i * 5 + 1 + perturb) & mask;
     }
@@ -66,7 +66,7 @@ static int B_set_table_resize(B_set so, int minsize) {
     so->mask = newsize - 1;
     so->table = newtable;
 
-    /* Copy the data over; 
+    /* Copy the data over;
        dummy entries aren't copied over, of course */
     newmask = (long)so->mask;
     if (so->fill == so->numelements) {
@@ -103,9 +103,9 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
     while (1) {
         if (entry->hash == hash) {
             $WORD *startkey = entry->key;
-            // startkey cannot be a dummy because the dummy hash field is -1 
+            // startkey cannot be a dummy because the dummy hash field is -1
             // assert(startkey != dummy);
-            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key)) 
+            if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
                 return entry;
         }
         perturb >>= PERTURB_SHIFT;
@@ -117,7 +117,7 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
     }
 }
 
-static int B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long hash) {
+static bool B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long hash) {
     return B_set_lookkey(set, hashwit, elem, hash)->key != NULL;
 }
 
@@ -126,7 +126,7 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     B_setentry *entry;
     long perturb;
     long mask;
-    long i;  
+    long i;
     mask = set->mask;
     i = hash & mask;
 
@@ -140,7 +140,7 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     while (1) {
         if (entry->hash == hash) {
             $WORD startkey = entry->key;
-            // startkey cannot be a dummy because the dummy hash field is -1 
+            // startkey cannot be a dummy because the dummy hash field is -1
             if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
                 goto found_active;
         }
@@ -229,8 +229,8 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     return B_None;
 }
 
-B_bool B_setD___bool__(B_set self) {
-    return toB_bool(self->numelements>0);
+bool B_setD___bool__(B_set self) {
+    return self->numelements>0;
 }
 
 B_str B_setD___str__(B_set self) {
@@ -268,7 +268,7 @@ void B_setD___serialize__(B_set self, $Serial$state state) {
         $step_serialize(entry->key,state);
     }
 }
- 
+
 B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
@@ -300,7 +300,7 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
 
 // B_Set
 
-// Iterable ///////////////////////////////////////////////////////////////////////////////////////  Leif 
+// Iterable ///////////////////////////////////////////////////////////////////////////////////////  Leif
 
 static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
     B_setentry *table = self->src->table;
@@ -327,12 +327,12 @@ static B_Iterator B_set_iter_entry(B_set set) {
     iter->nxt = 0;
     return (B_Iterator)iter;
 }
-                                            
+
 static $WORD B_IteratorD_set_next(B_IteratorD_set self) {
     $WORD res;
     if((res = B_IteratorD_set_next_entry(self))) {
         return ((B_setentry*)res)->key;
-    } 
+    }
     return NULL;
 }
 
@@ -345,8 +345,8 @@ void B_IteratorD_set_init(B_IteratorD_set self, B_set set) {
     self->nxt = 0;
 }
 
-B_bool B_IteratorD_set_bool(B_IteratorD_set self) {
-    return B_True;
+bool B_IteratorD_set_bool(B_IteratorD_set self) {
+    return true;
 }
 
 B_str B_IteratorD_set_str(B_IteratorD_set self) {
@@ -403,31 +403,31 @@ int64_t B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
     return set->numelements;
 }
 
-B_bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
+bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    return toB_bool(B_set_contains_entry(set,hashwit,val,B_hash(hashwit, val)));
+    return B_set_contains_entry(set,hashwit,val,B_hash(hashwit, val));
 }
 
-B_bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
-    return  toB_bool(!B_SetD_setD___contains__(wit,set,v)->val);
+bool B_SetD_setD___containsnot__ (B_SetD_set wit, B_set set, $WORD v) {
+    return  !B_SetD_setD___contains__(wit,set,v);
 }
 
-B_bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
+bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = wit->W_HashableD_AD_SetD_set;
-    if (set == other) 
-        return toB_bool(set->numelements == 0);
+    if (set == other)
+        return set->numelements == 0;
     if (other->numelements > set->numelements)
         return B_SetD_setD_isdisjoint(wit,other,set);
     B_Iterator iter = B_set_iter_entry(other);
     $WORD w;
-    long res = 1;
+    long res = true;
     while((w = $next(iter))){
         if(B_set_contains_entry(set, hashwit,((B_setentry*)w)->key, ((B_setentry*)w)->hash)) {
-            res = 0;
+            res = false;
             break;
         }
     }
-    return toB_bool(res);
+    return res;
 }
 
 // TODO: ideally this could be defined in .act file instead of C since we just
@@ -464,7 +464,7 @@ $WORD B_SetD_setD_pop (B_SetD_set wit, B_set set) {
         $RAISE((B_BaseException)$NEW(B_ValueError, to$str("pop from an empty set")));
 
     $WORD res;
-    // Make sure the search finger is in bounds 
+    // Make sure the search finger is in bounds
     B_setentry *entry = set->table + (set->finger & set->mask);
     B_setentry *limit = set->table + set->mask;
 
@@ -477,79 +477,79 @@ $WORD B_SetD_setD_pop (B_SetD_set wit, B_set set) {
     entry->key = dummy;
     entry->hash = -1;
     set->numelements--;
-    set->finger = entry - set->table + 1;   // next place to start 
+    set->finger = entry - set->table + 1;   // next place to start
     return res;
 }
 
 
 // B_Ord
 
-B_bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
-    if (set == other) 
-        return B_True;
+    if (set == other)
+        return true;
     if (set->numelements != other->numelements)
-        return B_False;
+        return false;
     B_Iterator iter = B_set_iter_entry(other);
     long n = 0;
     while(n < set->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
+            return false;
         n++;
     }
-    return B_True;
-}
-  
-B_bool B_OrdD_SetD_setD___ne__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
-    return toB_bool(!B_OrdD_SetD_setD___eq__ (wit,set,other)->val);
-}
-  
-B_bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
-    B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
-    if (set == other) 
-        return B_False;    
-    if (set->numelements <= other->numelements)
-        return B_False;
-    B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
-    while(n < other->numelements) {
-        $WORD w = $next(iter);
-        if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
-        n++;
-    }
-    return B_True;
-}
-  
-B_bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
-    B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
-    if (set == other) 
-        return B_False;    
-    if (set->numelements < other->numelements)
-        return B_False;
-    B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
-    while(n < other->numelements) {
-        $WORD w = $next(iter);
-        if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
-            return B_False;
-        n++;
-    }
-    return B_True;
+    return true;
 }
 
-B_bool B_OrdD_SetD_setD___lt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+bool B_OrdD_SetD_setD___ne__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+    return !B_OrdD_SetD_setD___eq__ (wit,set,other);
+}
+
+bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+    B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
+    if (set == other)
+        return false;
+    if (set->numelements <= other->numelements)
+        return false;
+    B_Iterator iter = B_set_iter_entry(other);
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
+        if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
+            return false;
+        n++;
+    }
+    return true;
+}
+
+bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+    B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
+    if (set == other)
+        return true;
+    if (set->numelements < other->numelements)
+        return false;
+    B_Iterator iter = B_set_iter_entry(other);
+    long n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
+        if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
+            return false;
+        n++;
+    }
+    return true;
+}
+
+bool B_OrdD_SetD_setD___lt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     return B_OrdD_SetD_setD___gt__(wit, other, set);
 }
-  
-B_bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
+
+bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     return  B_OrdD_SetD_setD___ge__(wit, other, set);
 }
-  
+
 // B_Minus
 
- 
+
 B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     B_set res = B_set_copy(set,hashwit);
@@ -567,7 +567,7 @@ B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set set, B_set other)
 
 // B_Logical
 
- 
+
 B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     if (other->numelements > set->numelements)
