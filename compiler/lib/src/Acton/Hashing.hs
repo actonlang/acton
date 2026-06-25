@@ -16,6 +16,10 @@ module Acton.Hashing
   , pubSigSplitDepsFromNameInfoMap
   , implDepsFromItems
   , implSplitDepsFromItems
+  , codeLocalDepsFromItems
+  , codeMethodDepsFromItems
+  , frontSplitDepsFromItems
+  , frontSplitDepsFromItemsWithProgress
   , splitDeps
   , externalModules
   , computeHashes
@@ -1053,24 +1057,48 @@ depsNameSet ns = depsNameSetInto ns Data.Set.empty
 depsNameSetInto :: [A.Name] -> NameSet -> NameSet
 depsNameSetInto ns acc = foldl' (\acc' n -> Data.Set.insert n acc') acc ns
 
-type DepSplit = (HashSet.HashSet A.Name, HashSet.HashSet A.QName)
+-- (local-name deps, external-qname deps, called method names).
+-- A split walk accumulates local references bucketed BY POSITION so that a
+-- single descent yields both views downstream needs:
+--   1. codeLocals : locals from code positions (calls/constructions) -> the
+--                   deferred-back "base" deps (type-only refs must not cascade)
+--   2. typeLocals : locals from type positions (annotations/returns/used types)
+--   3. externals  : external qualified-name deps (from either position)
+--   4. called     : attribute names from Dot nodes (method calls / accesses),
+--                   so DBP can follow per-method deps only for called methods
+-- The impl/hash view is codeLocals ∪ typeLocals (what the old includeTypes=True
+-- walk produced); the code-only view is codeLocals (old includeTypes=False).
+type DepSplit = (HashSet.HashSet A.Name, HashSet.HashSet A.Name, HashSet.HashSet A.QName, HashSet.HashSet A.Name)
 
 emptyDepSplitDirect :: DepSplit
-emptyDepSplitDirect = (HashSet.empty, HashSet.empty)
+emptyDepSplitDirect = (HashSet.empty, HashSet.empty, HashSet.empty, HashSet.empty)
 
 depSplitSize :: DepSplit -> Int
-depSplitSize (ls, es) = HashSet.size ls + HashSet.size es
+depSplitSize (cl, tl, es, _) = HashSet.size cl + HashSet.size tl + HashSet.size es
 
 unionDepSplit :: DepSplit -> DepSplit -> DepSplit
-unionDepSplit (ls, es) (ls', es') =
-  (HashSet.union ls ls', HashSet.union es es')
+unionDepSplit (cl, tl, es, cs) (cl', tl', es', cs') =
+  (HashSet.union cl cl', HashSet.union tl tl', HashSet.union es es', HashSet.union cs cs')
 
+addCalledMethod :: A.Name -> DepSplit -> DepSplit
+addCalledMethod n (cl, tl, es, cs) = (cl, tl, es, HashSet.insert n cs)
+
+-- Code-position reference: a local dep lands in codeLocals.
 insertQNameDep :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> NameSet -> A.QName -> DepSplit -> DepSplit
 insertQNameDep mn env localNames bound qn@(A.NoQ n) acc
   | Data.Set.member n bound = acc
   | otherwise = addSplitDepHash mn env localNames acc qn
 insertQNameDep mn env localNames _ qn acc =
   addSplitDepHash mn env localNames acc qn
+
+-- Type-position reference: a local dep lands in typeLocals instead, so the
+-- code-only view can exclude it (keeping ?Child container fields from cascading).
+insertQNameDepType :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> NameSet -> A.QName -> DepSplit -> DepSplit
+insertQNameDepType mn env localNames bound qn@(A.NoQ n) acc
+  | Data.Set.member n bound = acc
+  | otherwise = addSplitDepHashType mn env localNames acc qn
+insertQNameDepType mn env localNames _ qn acc =
+  addSplitDepHashType mn env localNames acc qn
 
 splitMaybeInto :: (a -> DepSplit -> DepSplit) -> Maybe a -> DepSplit -> DepSplit
 splitMaybeInto _ Nothing  acc = acc
@@ -1089,6 +1117,172 @@ implSplitDepsFromItems mn env localNames items =
   where
     addDeps acc (n, deps) = M.insertWith unionDepSplit n deps acc
 
+-- | Local deps from code positions only (calls/constructions), excluding type
+-- annotations. Same walk as the impl deps but reading only the codeLocals bucket.
+codeLocalDepsFromItems :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopLevelItem] -> M.Map A.Name [A.Name]
+codeLocalDepsFromItems mn env localNames items =
+  finishCodeSplitDeps (foldl' addDeps M.empty (map (implItemSplitDeps mn env localNames) items))
+  where
+    addDeps acc (n, deps) = M.insertWith unionDepSplit n deps acc
+
+-- Class body, method defs, and the method-stripped item: shared by the front
+-- dep walk and its progress variant.
+classBodyOf :: A.Decl -> Maybe A.Suite
+classBodyOf (A.Class _ _ _ _ body _) = Just body
+classBodyOf _                        = Nothing
+
+classMethodDefs :: A.Decl -> [A.Decl]
+classMethodDefs decl = case classBodyOf decl of
+  Just body -> [ d | A.Decl _ ds <- body, d@A.Def{} <- ds ]
+  Nothing   -> []
+
+-- The local names the whole-class walk binds for the class body: the class name
+-- plus everything assigned in the body (fields, method names, nested decls).
+-- Walking class fields and methods separately loses these bindings, so a method
+-- referencing its own class/sibling/field by bare name (e.g. a self-constructing
+-- factory or clone) would record a spurious local dep. Subtracting this set from
+-- each separately-walked split restores a single-whole-class-walk result. (qbind
+-- type vars never appear in local deps, so they are omitted.)
+classBoundFor :: A.Decl -> Data.Set.Set A.Name
+classBoundFor decl = case classBodyOf decl of
+  Just body -> Data.Set.insert (A.dname decl) (assignedSuite body Data.Set.empty)
+  Nothing   -> Data.Set.empty
+
+isExtDecl, isClassDecl :: TopLevelItem -> Bool
+isExtDecl (TLDecl _ (A.Extension{})) = True
+isExtDecl _                          = False
+isClassDecl (TLDecl _ d)             = case classBodyOf d of { Just _ -> True; _ -> False }
+isClassDecl _                        = False
+
+stripClassMethods :: TopLevelItem -> TopLevelItem
+stripClassMethods (TLDecl n (A.Class l cn q cs body kd)) =
+    TLDecl n (A.Class l cn q cs (mapMaybe dropDefs body) kd)
+  where dropDefs (A.Decl l' ds) = case filter (not . isDef) ds of
+                                    []  -> Nothing
+                                    ds' -> Just (A.Decl l' ds')
+        dropDefs s              = Just s
+        isDef A.Def{}           = True
+        isDef _                 = False
+stripClassMethods item = item
+
+-- | The five dep views the front pass needs, assembled from per-group split maps
+-- produced by a SINGLE position-tagged descent (each method body walked once):
+--
+--   * impl local / impl ext : full (code ∪ type) deps per top-level name, used
+--                             for the impl hash — identical to implSplitDepsFromItems
+--   * base map  : code-only deps with class methods removed (extensions keep
+--                 type deps too, since the pruner emits them verbatim); always
+--                 followed by the deferred-back closure
+--   * method map: className -> [(methodName, that method's full deps)], followed
+--                 only when the method is called somewhere in the program
+--   * called map: name -> method names (Dot attributes) used in its body
+frontSplitDepsFromItems :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopLevelItem]
+                        -> ( M.Map A.Name [A.Name]
+                           , M.Map A.Name [A.QName]
+                           , M.Map A.Name [A.Name]
+                           , M.Map A.Name [(A.Name, [A.Name])]
+                           , M.Map A.Name [A.Name] )
+frontSplitDepsFromItems mn env localNames items =
+    assembleFrontDeps fieldsSplit classWalks plainSplit extSplit
+  where
+    (extItems, nonExtItems)  = Data.List.partition isExtDecl items
+    (classItems, plainItems) = Data.List.partition isClassDecl nonExtItems
+    walk1 its = foldl' (\acc item -> let (n, deps) = implItemSplitDeps mn env localNames item
+                                     in M.insertWith unionDepSplit n deps acc) M.empty its
+    plainSplit  = walk1 plainItems
+    extSplit    = walk1 extItems
+    -- Walk class fields and methods separately but pre-seed the class-level bound,
+    -- so the result matches a single whole-class walk: a member referencing its
+    -- own class/sibling/field by bare name is dropped before classification (and
+    -- so never lands in any bucket, including externals when the name shadows an
+    -- import alias).
+    fieldsSplit = M.fromList
+      [ (cn, snd (implItemSplitDepsBound (classBoundFor decl) mn env localNames
+                    (stripClassMethods (TLDecl cn decl))))
+      | TLDecl cn decl <- classItems ]
+    classWalks  =
+      [ (cn, mds, foldl' (\acc d -> let (n, dp) = implItemSplitDepsBound (classBoundFor decl) mn env localNames
+                                                    (TLDecl (A.dname d) d)
+                                    in M.insertWith unionDepSplit n dp acc) M.empty mds)
+      | TLDecl cn decl <- classItems, let mds = classMethodDefs decl ]
+
+-- IO variant that reports one progress tick per top-level item (the same
+-- granularity the old impl-deps walk used), while doing the single descent.
+frontSplitDepsFromItemsWithProgress
+  :: (Int -> IO ()) -> A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopLevelItem]
+  -> IO ( M.Map A.Name [A.Name]
+        , M.Map A.Name [A.QName]
+        , M.Map A.Name [A.Name]
+        , M.Map A.Name [(A.Name, [A.Name])]
+        , M.Map A.Name [A.Name] )
+frontSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
+    let (extItems, nonExtItems)  = Data.List.partition isExtDecl items
+        (classItems, plainItems) = Data.List.partition isClassDecl nonExtItems
+        walk1 its = foldl' (\acc item -> let (n, deps) = implItemSplitDeps mn env localNames item
+                                         in M.insertWith unionDepSplit n deps acc) M.empty its
+        tickItem (mp, done) item = do
+          let (n, deps) = implItemSplitDeps mn env localNames item
+              done'     = done + 1
+          depSplitSize deps `seq` onProgress done'
+          pure (M.insertWith unionDepSplit n deps mp, done')
+        tickClass (fs, cws, done) item@(TLDecl cn decl) = do
+          let cb         = classBoundFor decl
+              fieldsDeps = snd (implItemSplitDepsBound cb mn env localNames (stripClassMethods item))
+              mds        = classMethodDefs decl
+              msplit     = foldl' (\acc d -> let (n, dp) = implItemSplitDepsBound cb mn env localNames (TLDecl (A.dname d) d)
+                                             in M.insertWith unionDepSplit n dp acc) M.empty mds
+              done'      = done + 1
+          (depSplitSize fieldsDeps + sum (map depSplitSize (M.elems msplit))) `seq` onProgress done'
+          pure (M.insert cn fieldsDeps fs, (cn, mds, msplit) : cws, done')
+        tickClass acc _ = pure acc
+    (plainSplit, d1)            <- foldM tickItem (M.empty, 0) plainItems
+    (extSplit, d2)             <- foldM tickItem (M.empty, d1) extItems
+    (fieldsSplit, classWalks, _) <- foldM tickClass (M.empty, [], d2) classItems
+    pure (assembleFrontDeps fieldsSplit classWalks plainSplit extSplit)
+
+-- Pure combination of the per-group split maps into the five views. Class fields
+-- ⊎ class methods reconstructs each class's full impl deps (so they need not be
+-- re-walked); base deps read codeLocals for classes/functions and code∪type for
+-- extensions; method deps are the per-method full deps; called is read straight
+-- off the full split.
+assembleFrontDeps :: M.Map A.Name DepSplit
+                  -> [(A.Name, [A.Decl], M.Map A.Name DepSplit)]
+                  -> M.Map A.Name DepSplit
+                  -> M.Map A.Name DepSplit
+                  -> ( M.Map A.Name [A.Name]
+                     , M.Map A.Name [A.QName]
+                     , M.Map A.Name [A.Name]
+                     , M.Map A.Name [(A.Name, [A.Name])]
+                     , M.Map A.Name [A.Name] )
+assembleFrontDeps fieldsSplit classWalks plainSplit extSplit =
+    (implLocal, implExt, baseDeps, methodDeps, called)
+  where
+    mergeNub a b = Data.List.sort (Data.List.nub (a ++ b))
+    classMethodsAgg = M.fromList
+      [ (cn, foldl' unionDepSplit emptyDepSplitDirect (M.elems msplit))
+      | (cn, _mds, msplit) <- classWalks ]
+    classFullSplit = M.unionWith unionDepSplit fieldsSplit classMethodsAgg
+    allFullSplit   = foldl' (M.unionWith unionDepSplit) classFullSplit [plainSplit, extSplit]
+    (implLocal, implExt) = finishHashSplitDeps allFullSplit
+    baseDeps = foldl' (M.unionWith mergeNub) (finishCodeSplitDeps fieldsSplit)
+                 [ finishCodeSplitDeps plainSplit
+                 , fst (finishHashSplitDeps extSplit) ]
+    methodDeps = M.fromList
+      [ (cn, [ (A.dname d, M.findWithDefault [] (A.dname d) mmap) | d <- mds ])
+      | (cn, mds, msplit) <- classWalks, not (null mds)
+      , let mmap = fst (finishHashSplitDeps msplit) ]
+    called = calledMethodsFromSplit allFullSplit
+
+-- Backwards-compatible 3-tuple (base, method, called) for callers that don't
+-- need the impl deps.
+codeMethodDepsFromItems :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopLevelItem]
+                        -> ( M.Map A.Name [A.Name]
+                           , M.Map A.Name [(A.Name, [A.Name])]
+                           , M.Map A.Name [A.Name] )
+codeMethodDepsFromItems mn env localNames items =
+  let (_, _, baseDeps, methodDeps, called) = frontSplitDepsFromItems mn env localNames items
+  in (baseDeps, methodDeps, called)
+
 implSplitDepsFromItemsWithProgress :: (Int -> IO ())
                                    -> A.ModName
                                    -> Env.Env0
@@ -1105,13 +1299,26 @@ implSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
       depSplitSize deps `seq` onProgress done'
       pure (acc', done')
 
+-- A single position-tagged descent over a top-level item: code-position refs go
+-- to codeLocals, type-position refs to typeLocals (see DepSplit). Both the
+-- impl-hash view and the code-only view are derived from this one walk.
 implItemSplitDeps :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> TopLevelItem -> (A.Name, DepSplit)
-implItemSplitDeps mn env localNames item =
+implItemSplitDeps = implItemSplitDepsBound Data.Set.empty
+
+-- As implItemSplitDeps but with an initial bound set. Used to walk a class's
+-- fields and methods separately while matching the whole-class walk: that walk
+-- threads the class-level bound into every member body, so a member referencing
+-- a class name/field/sibling by bare name is dropped BEFORE classification (and
+-- thus never lands in any bucket, including externals when the name shadows an
+-- import alias). Pre-seeding here reproduces that exactly.
+implItemSplitDepsBound :: NameSet -> A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> TopLevelItem -> (A.Name, DepSplit)
+implItemSplitDepsBound bound0 mn env localNames item =
   case item of
-    TLDecl name decl -> (name, splitDeclDirect Data.Set.empty decl emptyDepSplitDirect)
-    TLStmt name stmt -> (name, splitStmtDirect Data.Set.empty stmt emptyDepSplitDirect)
+    TLDecl name decl -> (name, splitDeclDirect bound0 decl emptyDepSplitDirect)
+    TLStmt name stmt -> (name, splitStmtDirect bound0 stmt emptyDepSplitDirect)
   where
     splitQName = insertQNameDep mn env localNames
+    splitQNameType = insertQNameDepType mn env localNames
 
     splitStmtDirect bound stmt acc = case stmt of
       A.Expr _ e             -> splitExprDirect bound e acc
@@ -1196,7 +1403,7 @@ implItemSplitDeps mn env localNames item =
       A.BinOp _ e _ e'      -> splitExprDirect bound e' (splitExprDirect bound e acc)
       A.CompOp _ e ops      -> splitListInto (splitOpArgDirect bound) ops (splitExprDirect bound e acc)
       A.UnOp _ _ e          -> splitExprDirect bound e acc
-      A.Dot _ e _           -> splitExprDirect bound e acc
+      A.Dot _ e n           -> splitExprDirect bound e (addCalledMethod n acc)
       A.Rest _ e _          -> splitExprDirect bound e acc
       A.DotI _ e _          -> splitExprDirect bound e acc
       A.RestI _ e _         -> splitExprDirect bound e acc
@@ -1294,9 +1501,11 @@ implItemSplitDeps mn env localNames item =
     splitQBindDirect bound (A.QBind _ cs) acc =
       splitListInto (splitTConDirect bound) cs acc
 
+    -- All type-name references flow through here, routed to typeLocals (the
+    -- type-position bucket) so the code-only view can exclude them.
     splitTConDirect bound tc acc =
-      case tc of
-        A.TC qn ts -> splitListInto (splitTypeDirect bound) ts (splitQName bound qn acc)
+          case tc of
+            A.TC qn ts -> splitListInto (splitTypeDirect bound) ts (splitQNameType bound qn acc)
 
     splitTypeDirect bound t acc = case t of
       A.TVar{}           -> acc
@@ -1344,24 +1553,41 @@ addSplitDep mn env localNames (locals, externals) qn =
       | Data.Set.member n localNames -> (Data.Set.insert n locals, externals)
       | otherwise -> (locals, externals)
 
-addSplitDepHash :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> DepSplit -> A.QName -> DepSplit
-addSplitDepHash mn env localNames (locals, externals) (A.NoQ n)
-  | Data.Set.member n localNames = (HashSet.insert n locals, externals)
-addSplitDepHash mn env localNames (locals, externals) qn =
+-- Classify a qualified name as a local dep (Left), an external dep (Right), or
+-- neither (prim / non-local same-module). Shared by the code- and type-position
+-- inserters so they agree on locality and differ only in which local bucket.
+classifyQNameDep :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> A.QName -> Maybe (Either A.Name A.QName)
+classifyQNameDep _ _ localNames (A.NoQ n)
+  | Data.Set.member n localNames = Just (Left n)
+classifyQNameDep mn env localNames qn =
   case Env.unalias env qn of
-    A.GName m _ | m == mPrim -> (locals, externals)
-    A.QName m _ | m == mPrim -> (locals, externals)
+    A.GName m _ | m == mPrim -> Nothing
+    A.QName m _ | m == mPrim -> Nothing
     A.GName m n
-      | m == mn && Data.Set.member n localNames -> (HashSet.insert n locals, externals)
-      | m == mn -> (locals, externals)
-      | otherwise -> (locals, HashSet.insert (A.GName m n) externals)
+      | m == mn && Data.Set.member n localNames -> Just (Left n)
+      | m == mn -> Nothing
+      | otherwise -> Just (Right (A.GName m n))
     A.QName m n
-      | m == mn && Data.Set.member n localNames -> (HashSet.insert n locals, externals)
-      | m == mn -> (locals, externals)
-      | otherwise -> (locals, HashSet.insert (A.GName m n) externals)
+      | m == mn && Data.Set.member n localNames -> Just (Left n)
+      | m == mn -> Nothing
+      | otherwise -> Just (Right (A.GName m n))
     A.NoQ n
-      | Data.Set.member n localNames -> (HashSet.insert n locals, externals)
-      | otherwise -> (locals, externals)
+      | Data.Set.member n localNames -> Just (Left n)
+      | otherwise -> Nothing
+
+addSplitDepHash :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> DepSplit -> A.QName -> DepSplit
+addSplitDepHash mn env localNames acc@(cl, tl, es, called) qn =
+  case classifyQNameDep mn env localNames qn of
+    Just (Left n)  -> (HashSet.insert n cl, tl, es, called)
+    Just (Right q) -> (cl, tl, HashSet.insert q es, called)
+    Nothing        -> acc
+
+addSplitDepHashType :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> DepSplit -> A.QName -> DepSplit
+addSplitDepHashType mn env localNames acc@(cl, tl, es, called) qn =
+  case classifyQNameDep mn env localNames qn of
+    Just (Left n)  -> (cl, HashSet.insert n tl, es, called)
+    Just (Right q) -> (cl, tl, HashSet.insert q es, called)
+    Nothing        -> acc
 
 finishSplitDeps :: M.Map A.Name (NameSet, QNameSet) -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 finishSplitDeps pairs =
@@ -1369,11 +1595,22 @@ finishSplitDeps pairs =
   , M.map (Data.Set.toList . snd) pairs
   )
 
+-- | Impl/hash view: full local deps (code ∪ type positions) plus externals.
+-- This reproduces exactly what the old includeTypes=True walk produced.
 finishHashSplitDeps :: M.Map A.Name DepSplit -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 finishHashSplitDeps pairs =
-  ( M.map (Data.List.sort . HashSet.toList . fst) pairs
-  , M.map (Data.List.sort . HashSet.toList . snd) pairs
+  ( M.map (\(cl, tl, _, _) -> Data.List.sort (HashSet.toList (HashSet.union cl tl))) pairs
+  , M.map (\(_, _, es, _) -> Data.List.sort (HashSet.toList es)) pairs
   )
+
+-- | Code-only view: just code-position local deps (the old includeTypes=False
+-- locals), for deferred-back base deps that must not cascade through type refs.
+finishCodeSplitDeps :: M.Map A.Name DepSplit -> M.Map A.Name [A.Name]
+finishCodeSplitDeps = M.map (\(cl, _, _, _) -> Data.List.sort (HashSet.toList cl))
+
+-- | Extract the called-method names (Dot attributes) collected during a split walk.
+calledMethodsFromSplit :: M.Map A.Name DepSplit -> M.Map A.Name [A.Name]
+calledMethodsFromSplit = M.map (\(_, _, _, cs) -> Data.List.sort (HashSet.toList cs))
 
 -- | Collect referenced external modules from dependency lists.
 externalModules :: M.Map A.Name [A.QName] -> Data.Set.Set A.ModName
@@ -1562,8 +1799,11 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name [A.Name]
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> M.Map A.Name [(A.QName, B.ByteString)]
+                   -> Maybe (M.Map A.Name [A.Name])
+                   -> Maybe (M.Map A.Name [(A.Name, [A.Name])])
+                   -> Maybe (M.Map A.Name [A.Name])
                    -> [InterfaceFiles.NameHashInfo]
-assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
+assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes mCodeLocalDeps mMethodCodeDeps mCalledMethods =
   let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
       localDeps m n = Data.List.sortOn nameKey (M.findWithDefault [] n m)
   in
@@ -1574,6 +1814,9 @@ assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps impl
         , InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
         , InterfaceFiles.nhPubLocalDeps = localDeps pubLocalDeps n
         , InterfaceFiles.nhImplLocalDeps = localDeps implLocalDeps n
+        , InterfaceFiles.nhCodeLocalDeps = fmap (\m -> localDeps m n) mCodeLocalDeps
+        , InterfaceFiles.nhMethodCodeDeps = fmap (\m -> M.findWithDefault [] n m) mMethodCodeDeps
+        , InterfaceFiles.nhCalledMethods = fmap (\m -> localDeps m n) mCalledMethods
         , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
         , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
         , InterfaceFiles.nhStmtIndices = []
@@ -1597,7 +1840,7 @@ buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDep
       selfImplHashes = nameImplHashes
       pubHashes = computeHashes selfPubHashes pubSigLocalDeps pubSigExtHashes
       implHashes = computeHashes selfImplHashes implLocalDeps implExtHashes
-  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes
+  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes Nothing Nothing Nothing
 
 -- | Refresh impl hashes and impl deps for existing name hashes.
 refreshImplHashes :: [InterfaceFiles.NameHashInfo]
@@ -1611,6 +1854,11 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
       namesSorted = Data.List.sortOn nameKey (M.keys nameImplHashes)
   in
     [ let nh = infoMap M.! n
+      -- Impl refresh runs only when this module's own source is unchanged (a
+      -- dependency's hash moved), so the code-position deps, per-method deps and
+      -- called-method names read from the cached .tydb are still valid and MUST
+      -- be preserved — otherwise this module contributes nothing to the
+      -- program-wide called-method set and deferred-back consumers under-select.
       in nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
             , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (M.findWithDefault [] n implLocalDeps)
             , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes

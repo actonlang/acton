@@ -1907,7 +1907,7 @@ p35_dbp_changed_path_includes_provider =
       , "    print(a.fa() + b.fb())"
       , "    env.exit(0)"
       ]
-    _ <- buildOutInArgs proj ["--skip-build", "--dbp", "provider"]
+    _ <- buildOutInArgs proj ["--dbp", "provider"]
     writeFileUtf8 actA $ T.unlines
       [ "import provider"
       , ""
@@ -2751,6 +2751,11 @@ p55_dbp_reads_selected_statements =
       , "    print(use_one())"
       , "    env.exit(0)"
       ]
+    -- The trace build keeps --skip-build: it asserts the selective .tydb read
+    -- pattern during DBP selection, and a full build's doc-index step broadly
+    -- reads big.tydb's public names, which the read-selectivity assertion below
+    -- deliberately forbids. Codegen of the selected subset is exercised by the
+    -- separate full build further down.
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build", "--dbp", "big:Node000A"]
     assertExitSuccess "selective DBP .tydb trace build" res
     let traceLines = tydbTraceLines out
@@ -2765,6 +2770,14 @@ p55_dbp_reads_selected_statements =
       (not (null bigStmtLines))
     assertEqual ("did not expect broad incremental_cases/big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
+    -- Full build (no --skip-build) so the DBP-selected subset is actually
+    -- C-compiled and linked, catching codegen regressions in the pruned module
+    -- that a --skip-build selection trace cannot see, then run it.
+    buildRes <- runActonIn proj ["build", "--color", "never", "--dbp", "big:Node000A"]
+    assertExitSuccess "DBP-selected subset compiles and links" buildRes
+    runOut <- runBinaryIn proj "small"
+    assertBool ("expected DBP-selected binary to produce output\n" ++ T.unpack runOut)
+      (not (T.null (T.strip runOut)))
 
 p54_unused_import_reads_no_names :: TestTree
 p54_unused_import_reads_no_names =

@@ -76,6 +76,9 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplHash = impl
     , InterfaceFiles.nhPubLocalDeps = []
     , InterfaceFiles.nhImplLocalDeps = []
+    , InterfaceFiles.nhCodeLocalDeps = Nothing
+    , InterfaceFiles.nhMethodCodeDeps = Nothing
+    , InterfaceFiles.nhCalledMethods = Nothing
     , InterfaceFiles.nhPubDeps = []
     , InterfaceFiles.nhImplDeps = []
     , InterfaceFiles.nhStmtIndices = []
@@ -874,6 +877,81 @@ main = do
           implSplitDepSetMapsSlow env mn localNames items
         snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
           M.singleton value []
+
+      it "single-walk impl deps match the whole-class walk for self-referencing methods" $ do
+        -- A method that references its own class by bare name (here quad calls
+        -- MathUtil.square). The single-descent frontSplitDepsFromItems walks each
+        -- method separately, so without subtracting the class-level bound it would
+        -- record a spurious MathUtil -> [MathUtil] self-edge that the whole-class
+        -- implSplitDepsFromItems walk does not. The two must agree exactly.
+        let cName = S.name "MathUtil"
+            square = S.name "square"
+            quad = S.name "quad"
+            xN = S.name "x"
+            extDep = S.GName (S.modName ["dep"]) (S.name "ext")
+            mn = S.modName ["hash_static_div"]
+            env = Acton.Env.setMod mn env0
+            -- def square(x): ext   (uses an external so the method is non-trivial)
+            defSquare =
+              S.Def NoLoc square []
+                (S.PosPar xN (Just (S.tCon (S.TC (S.NoQ (S.name "int")) []))) Nothing S.PosNIL) S.KwdNIL Nothing
+                [S.Expr NoLoc (S.Var NoLoc extDep)]
+                (S.NoDec) S.fxPure Nothing
+            -- def quad(x): MathUtil.square(x)   (typed AST: Dot (Var (NoQ MathUtil)) square)
+            defQuad =
+              S.Def NoLoc quad []
+                (S.PosPar xN (Just (S.tCon (S.TC (S.NoQ (S.name "int")) []))) Nothing S.PosNIL) S.KwdNIL Nothing
+                [S.Expr NoLoc
+                   (S.Call NoLoc
+                      (S.Dot NoLoc (S.Var NoLoc (S.NoQ cName)) square)
+                      (S.PosArg (S.Var NoLoc (S.NoQ xN)) S.PosNil) S.KwdNil)]
+                (S.NoDec) S.fxPure Nothing
+            classDecl =
+              S.Class NoLoc cName [] []
+                [S.Decl NoLoc [defSquare], S.Decl NoLoc [defQuad]]
+                Nothing
+            items = [Hashing.TLDecl cName classDecl]
+            localNames = Set.fromList [cName, square, quad]
+            (implLocalWhole, implExtWhole) = Hashing.implSplitDepsFromItems mn env localNames items
+            (implLocalFront, implExtFront, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
+        (M.map sort implLocalWhole, M.map sort implExtWhole)
+          `shouldBe` (M.map sort implLocalFront, M.map sort implExtFront)
+        -- and explicitly: no spurious self-edge from walking quad on its own
+        M.lookup cName implLocalFront `shouldBe` Just []
+
+      it "single-walk externals match the whole-class walk when a class member shadows an import alias" $ do
+        -- A class member (`shadowed = 0`) shadows an import alias
+        -- (shadowed -> dep.dep_value) and a method references it bare. The
+        -- whole-class walk binds `shadowed` and drops the reference before
+        -- resolving the alias, so it never becomes an external dep. Walking the
+        -- method separately must do the same: pre-seeding the class bound drops it
+        -- before classification, where subtracting a local-name set afterwards
+        -- could not (the leak lands in the EXTERNALS bucket).
+        let coll = S.name "Coll"
+            meth = S.name "meth"
+            self = S.name "self"
+            shadowed = S.name "shadowed"
+            dep = S.name "dep_value"
+            mn = S.modName ["hash_member_shadow"]
+            env =
+              Acton.Env.addActiveNames
+                [(shadowed, I.NAlias (S.GName (S.modName ["dep"]) dep))]
+                (Acton.Env.setMod mn env0)
+            fieldAssign = S.Assign NoLoc [S.PVar NoLoc shadowed Nothing] (S.Int NoLoc 0 "0")
+            methDef =
+              S.Def NoLoc meth []
+                (S.PosPar self Nothing Nothing S.PosNIL) S.KwdNIL Nothing
+                [S.Expr NoLoc (S.Var NoLoc (S.NoQ shadowed))]
+                S.NoDec S.fxPure Nothing
+            classDecl = S.Class NoLoc coll [] [] [fieldAssign, S.Decl NoLoc [methDef]] Nothing
+            items = [Hashing.TLDecl coll classDecl]
+            localNames = Set.singleton coll
+            (implLocalWhole, implExtWhole) = Hashing.implSplitDepsFromItems mn env localNames items
+            (implLocalFront, implExtFront, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
+        (M.map sort implLocalWhole, M.map sort implExtWhole)
+          `shouldBe` (M.map sort implLocalFront, M.map sort implExtFront)
+        -- explicitly: the shadowed alias must not leak into externals
+        M.lookup coll implExtFront `shouldBe` Just []
 
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do

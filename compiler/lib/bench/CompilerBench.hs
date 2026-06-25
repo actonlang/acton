@@ -294,6 +294,9 @@ hashBenchFromHashes mn env nmod extMaps implItems nameSrcHashes nameImplHashes s
             implLocalDeps
             pubExtHashes
             implExtHashes
+            Nothing
+            Nothing
+            Nothing
         modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
         moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
     in (modulePubHash, moduleImplHash, nameHashes)
@@ -493,6 +496,9 @@ runHashBreakdown reps typesPath sourcePath = do
             implLocalDeps
             pubExtHashes
             implExtHashes
+            Nothing
+            Nothing
+            Nothing
         localDepSetMap = Map.map Set.fromList
         extDepSetMap = Map.map Set.fromList
         (implLocalDepsDirect, implExtDepsDirect) =
@@ -624,6 +630,9 @@ runHashBreakdown reps typesPath sourcePath = do
               implLocalDeps'
               pubExtHashes'
               implExtHashes'
+              Nothing
+              Nothing
+              Nothing
       E.evaluate (rnf hashes)
       return (length hashes)
 
