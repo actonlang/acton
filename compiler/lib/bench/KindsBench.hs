@@ -35,9 +35,8 @@ getStats enabled =
 printStatsMaybe label (Just before) (Just after) = printStats label before after
 printStatsMaybe _ _ _                            = return ()
 
-forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () (NameInfo.HNModule _ te _) = forceHTEnv te
-    forceHNameInfo () hni                        = hni `seq` ()
+forceHTEnv = HashMap.foldl' forceNameInfo () where
+    forceNameInfo () ni                          = ni `seq` ()
 
 main = do
     hSetBuffering stdout LineBuffering
@@ -60,7 +59,6 @@ main = do
 
         env <- Env.mkEnv [typesPath] env0 parsed
         E.evaluate (forceHTEnv (Env.hnames env))
-        E.evaluate (forceHTEnv (Env.hmodules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
         elapsed "env" t1 t2

@@ -1,0 +1,4 @@
+from import_private_a import __foo
+
+actor main(env):
+    print(__foo)

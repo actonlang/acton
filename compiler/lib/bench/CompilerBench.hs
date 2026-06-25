@@ -101,9 +101,11 @@ measureRepeated statsEnabled label reps action = do
       let total' = total + count
       total' `seq` loop (n - 1) total'
 
-forceHTEnv = HashMap.foldl' forceHNameInfo () where
-    forceHNameInfo () (NameInfo.HNModule _ te _) = forceHTEnv te
-    forceHNameInfo () hni                        = hni `seq` ()
+forceHTEnv = HashMap.foldl' forceNameInfo () where
+    forceNameInfo () ni                          = ni `seq` ()
+
+forceModuleInfos = Map.foldl' forceModuleInfo () where
+    forceModuleInfo () mi = rnf (Env.modulePublicTEnv mi)
 
 fmtTime :: TimeSpec -> String
 fmtTime t = show seconds ++ "s"
@@ -168,6 +170,13 @@ resolveNameHashMap paths mn = do
           Just (_, _, _, _, _, _, nameHashes, _, _, _) -> Just (nameHashMapFromHeader nameHashes)
           Nothing -> Nothing
 
+resolveNameHash :: Compile.Paths -> Syntax.ModName -> Syntax.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
+resolveNameHash paths mn n = do
+    mty <- Env.findTyFile (Compile.searchPath paths) mn
+    case mty of
+      Nothing -> return Nothing
+      Just ty -> InterfaceFiles.readNameHashMaybe ty n
+
 resolveDepHashMap :: String
                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)
                   -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
@@ -192,7 +201,7 @@ data HashBenchState = HashBenchState
     , hbsEnv      :: Env.Env0
     , hbsParsed   :: Syntax.Module
     , hbsTChecked :: Syntax.Module
-    , hbsNMod     :: NameInfo.NameInfo
+    , hbsNMod     :: NameInfo.NModule
     , hbsExtMaps  :: Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
     }
 
@@ -214,14 +223,14 @@ prepareHashBench typesPath sourcePath = do
     E.evaluate (rnf parsed)
     env <- Env.mkEnv (Compile.searchPath paths) env0 parsed
     E.evaluate (forceHTEnv (Env.hnames env))
-    E.evaluate (forceHTEnv (Env.hmodules env))
+    E.evaluate (forceModuleInfos (Env.modules env))
     kchecked <- Kinds.check env parsed
     E.evaluate (rnf kchecked)
     (nmod, tchecked, typeEnv, tests) <- Types.reconstruct Nothing Nothing env kchecked Nothing
     E.evaluate (rnf nmod)
     E.evaluate (rnf tchecked)
     E.evaluate (forceHTEnv (Env.hnames typeEnv))
-    E.evaluate (forceHTEnv (Env.hmodules typeEnv))
+    E.evaluate (forceModuleInfos (Env.modules typeEnv))
     E.evaluate (length tests)
 
     let NameInfo.NModule _ fullIface _ = nmod
@@ -252,7 +261,7 @@ prepareHashBench typesPath sourcePath = do
 
 hashBenchFromHashes :: Syntax.ModName
                     -> Env.Env0
-                    -> NameInfo.NameInfo
+                    -> NameInfo.NModule
                     -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
                     -> [Hashing.TopLevelItem]
                     -> Map.Map Syntax.Name B.ByteString
@@ -293,7 +302,7 @@ hashBenchOnce :: Syntax.ModName
               -> Env.Env0
               -> Syntax.Module
               -> Syntax.Module
-              -> NameInfo.NameInfo
+              -> NameInfo.NModule
               -> Map.Map Syntax.ModName (Map.Map Syntax.Name InterfaceFiles.NameHashInfo)
               -> (B.ByteString, B.ByteString, [InterfaceFiles.NameHashInfo])
 hashBenchOnce mn env parsed tchecked nmod extMaps =
@@ -706,7 +715,7 @@ runDirect mode typesPath sourcePath = do
       _ -> do
         env <- Env.mkEnv [typesPath] env0 parsed
         E.evaluate (forceHTEnv (Env.hnames env))
-        E.evaluate (forceHTEnv (Env.hmodules env))
+        E.evaluate (forceModuleInfos (Env.modules env))
         t2 <- getCurrentTime
         s2 <- getStats statsEnabled
         elapsed "env" t1 t2
@@ -726,7 +735,7 @@ runDirect mode typesPath sourcePath = do
             E.evaluate (rnf nmod)
             E.evaluate (rnf tchecked)
             E.evaluate (forceHTEnv (Env.hnames typeEnv))
-            E.evaluate (forceHTEnv (Env.hmodules typeEnv))
+            E.evaluate (forceModuleInfos (Env.modules typeEnv))
             E.evaluate (length tests)
             t4 <- getCurrentTime
             s4 <- getStats statsEnabled
@@ -764,7 +773,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       Nothing
       (Compile.getPubHashCached paths)
       (Compile.getImplHashCached paths)
-      (resolveNameHashMap paths)
+      (resolveNameHash paths)
       (\_ -> return ())
       (\_ _ -> return ())
       (\_ _ _ -> return ())

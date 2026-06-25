@@ -283,9 +283,6 @@ instance Pretty QName where
       | ModName [Name _ "$"] <- m   = text ("$" ++ rawstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
-instance Pretty ModRef where
-    pretty (ModRef (i,n))           = hcat (replicate i dot) <> pretty n
-
 instance Pretty Handler where
     pretty (Handler ex b)           = pretty ex <> colon $+$ prettySuite b
 

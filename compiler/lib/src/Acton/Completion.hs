@@ -29,7 +29,6 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.List (find, findIndex, intercalate, isPrefixOf, nubBy)
 import Data.Maybe (listToMaybe, mapMaybe)
-import qualified Data.HashMap.Strict as HM
 import qualified InterfaceFiles as IF
 import Text.Megaparsec (eof, runParser)
 
@@ -586,45 +585,40 @@ completionEnv searchPath baseEnv modName imps =
 -- fallback, which is enough for generated base classes and typed constructors.
 shallowCompletionEnv :: [FilePath] -> Env.Env0 -> [S.Import] -> IO Env.Env0
 shallowCompletionEnv searchPath baseEnv imps =
-  refreshHModules <$> foldM (shallowImport searchPath) baseEnv imps
-
-refreshHModules :: Env.Env0 -> Env.Env0
-refreshHModules env =
-  env { Env.hmodules = I.convTEnv2HTEnv (Env.modules env) }
+  foldM (shallowImport searchPath) baseEnv imps
 
 shallowImport :: [FilePath] -> Env.Env0 -> S.Import -> IO Env.Env0
 shallowImport searchPath env imp =
   case imp of
     S.Import _ items ->
       foldM (shallowModuleItem searchPath) env items
-    S.FromImport _ (S.ModRef (0, Just m)) items ->
-      shallowModule searchPath env m $ \te env' ->
-        Env.importSome items m te env'
-    S.FromImportAll _ (S.ModRef (0, Just m)) ->
-      shallowModule searchPath env m $ \te env' ->
-        Env.importAll m te env'
-    _ ->
-      return env
+    S.FromImport _ m items ->
+      shallowModule searchPath env m $ \mi env' ->
+        Env.importSome items m mi env'
+    S.FromImportAll _ m ->
+      shallowModule searchPath env m $ \mi env' ->
+        Env.importAll m mi env'
 
 shallowModuleItem :: [FilePath] -> Env.Env0 -> S.ModuleItem -> IO Env.Env0
 shallowModuleItem searchPath env (S.ModuleItem m as) =
-  shallowModule searchPath env m $ \te env' ->
-    case as of
-      Nothing -> Env.addImport m env'
-      Just n -> Env.defineClosed [(n, I.NMAlias m)] env'
+  shallowModule searchPath env m $ \mi env' ->
+    Env.addQualifier m mi as (Env.addImport m env')
 
 shallowModule
   :: [FilePath]
   -> Env.Env0
   -> S.ModName
-  -> (I.TEnv -> Env.Env0 -> Env.Env0)
+  -> (Env.ModuleInfo -> Env.Env0 -> Env.Env0)
   -> IO Env.Env0
 shallowModule searchPath env m applyImport = do
   loaded <- readModuleInterface searchPath m
   case loaded of
     Nothing -> return env
     Just (ms, te, mdoc) ->
-      return $ applyImport te (Env.addMod m ms te mdoc env)
+      let env' = Env.addMod m ms te mdoc env
+      in case Env.lookupModuleInfo m env' of
+           Just mi -> return $ applyImport mi env'
+           Nothing -> return env'
 
 readModuleInterface :: [FilePath] -> S.ModName -> IO (Maybe ([S.ModName], I.TEnv, Maybe String))
 readModuleInterface searchPath m = do
@@ -793,25 +787,25 @@ lookupQNameInfo env qn =
     S.NoQ n ->
       lookupNoQ n
     S.QName m n ->
-      lookupModuleItem env (Env.findHMod m env) n
+      lookupModuleItem env (Env.lookupModuleInfo m env) n
     S.GName m n
       | Just m == Env.thismod env ->
           lookupQNameInfo env (S.NoQ n)
       | otherwise ->
-          lookupModuleItem env (Env.lookupHMod m env) n
+          lookupModuleItem env (Env.lookupModuleInfo m env) n
   where
     lookupNoQ n              = resolve =<< Env.lookupName n env
 
-    resolve (I.HNAlias qn')  = lookupQNameInfo env qn'
-    resolve info             = Just (I.convHNameInfo2NameInfo info)
+    resolve (I.NAlias qn')  = lookupQNameInfo env qn'
+    resolve info             = Just info
 
-lookupModuleItem :: Env.Env0 -> Maybe I.HTEnv -> S.Name -> Maybe I.NameInfo
-lookupModuleItem env mtenv n = do
-  tenv <- mtenv
-  info <- HM.lookup n tenv
+lookupModuleItem :: Env.Env0 -> Maybe Env.ModuleInfo -> S.Name -> Maybe I.NameInfo
+lookupModuleItem env mmi n = do
+  mi <- mmi
+  info <- Env.moduleLookupName mi n
   case info of
-    I.HNAlias qn -> lookupQNameInfo env qn
-    _ -> Just (I.convHNameInfo2NameInfo info)
+    I.NAlias qn -> lookupQNameInfo env qn
+    _ -> Just info
 
 functionReturnType :: Env.Env0 -> I.NameInfo -> Maybe S.Type
 functionReturnType env info = do
@@ -852,7 +846,6 @@ docOfInfo info =
       I.NClass _ _ _ doc -> doc
       I.NProto _ _ _ doc -> doc
       I.NExt _ _ _ _ _ doc -> doc
-      I.NModule _ _ doc -> doc
       _ -> Nothing
 
 typeDoc :: Env.Env0 -> S.Type -> Maybe String

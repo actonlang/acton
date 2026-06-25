@@ -80,8 +80,11 @@ type Env                        = EnvF TypeX
 type WitMap                     = Map QName (Seq.Seq Witness)
 type TyAttrMap                  = Map Name IntSet
 
+-- Imported modules are not preloaded here: witsByPName/witsByTName merge in
+-- imported witnesses per query, and the tyids/tyinfos lattice only covers
+-- local definitions.
 initTypeEnv                     :: Env0 -> Env
-initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
+initTypeEnv env0                = setX env0 x0
   where x0                      = TypeX {
                                     activeWits  = [],
                                     closedWits  = primWits,
@@ -101,10 +104,6 @@ initTypeEnv env0                = setX env0 $ foldl' importInfo x0 imps
                                     tyconAttrs  = Map.empty,
                                     typrotoAttrs= Map.empty
                                   }
-        importInfo x (m,te)     = setupCons f te $ setupWits addClosedWit f te x
-          where f               = GName m
-        imps | inBuiltin env0   = []
-             | otherwise        = [ (m, fromJust $ lookupMod m env0) | m <- transitiveImports env0 ]
 
 
 tyinfos0                        = IntMap.fromDistinctAscList pairs
@@ -176,13 +175,18 @@ addconinfo f x (n,i)
                                      typrotoAttrs = addTyAttrs tid (tyattrs info) (typrotoAttrs x) }
         addactor tid info x     = addclass tid info x{ tyactors = IntSet.insert tid (tyactors x) }
 
+        -- Local definitions populate the type-id lattice (used for solver
+        -- candidate enumeration of local types). Imported ancestors are not
+        -- registered in tyids, so the ancestor lookup is guarded and they
+        -- contribute no ids or attrs here; imported candidates come from the
+        -- per-module indexes instead.
         addcon n q us te index x
                                   = index tid info x{ tyids = Map.insert qn tid (tyids x),
                                                       tyidHash = HashMap.insert qn tid (tyidHash x),
                                                       tyinfos = IntMap.insert tid info tyinfos' }
           where tid             = nextid x
                 qn              = f n
-                ui              = [ typeId x (tcname c) | (_,c) <- us ]
+                ui              = [ u | (_,c) <- us, Just u <- [Map.lookup (tcname c) (tyids x)] ]
                 info            = TyInfo {
                                     tywild = tCon $ TC qn [ tWild | _ <- q ],
                                     tyabove = IntSet.fromList ui,
@@ -258,41 +262,41 @@ tvarsInTids env tids            = [ TV k n | (n, k, c) <- activeTypeVars env,
                                             c == c' ]
   where x                       = envX env
 
--- All actor types in scope, in definition order (imports first). Mirrors what
--- allTypes/allActors produce, without scanning the name environment.
+-- All actor types in scope, in definition order (imports first), without
+-- scanning the name environment.
 tyactorsAll                     :: Env -> [TCon]
 tyactorsAll env                 = [ c | tid <- IntSet.toAscList (tyactors x), Just c <- [conById x tid] ]
   where x                       = envX env
 
 
 tydefine                        :: TEnv -> Env -> Env
-tydefine te env                 = modX (define te env) (setupCons f te . setupWits addActiveWit NoQ te)
+tydefine te env                 = modX (define te env) (setupCons f te . setupWits addActiveWit te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
 tydefineClosed                  :: TEnv -> Env -> Env
-tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits addClosedWit NoQ te)
+tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits addClosedWit te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
 setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
 setupCons f te x                = foldl' (addconinfo f) x te
  
-setupWits                       :: (TypeX -> Witness -> TypeX) -> (Name -> QName) -> TEnv -> TypeX -> TypeX
-setupWits add f te x            = foldl' add x wits
-  where wits                    = [ WClass q (tCon c) p (f n) ws (length opts) | (n, NExt q c ps te' opts _) <- te, (ws,p) <- ps ]
+setupWits                       :: (TypeX -> Witness -> TypeX) -> TEnv -> TypeX -> TypeX
+setupWits add te x              = foldl' add x wits
+  where wits                    = [ WClass q (tCon c) p (NoQ n) ws (length opts) | (n, NExt q c ps _ opts _) <- te, (ws,p) <- ps ]
 
 addvarinfo x (tv, c, _)         = x{ tyids = Map.insert qn tid (tyids x),
                                      tyidHash = HashMap.insert qn tid (tyidHash x),
                                      tyinfos = IntMap.insert tid info tyinfos' }
   where tid                     = nextid x
         qn                      = NoQ $ tvname tv
-        ci                      = tyinfos x IntMap.! typeId x (tcname c)
+        ci                      = Map.lookup (tcname c) (tyids x) >>= \i -> IntMap.lookup i (tyinfos x)
         info                    = TyInfo {
                                     tywild = tVar tv,
-                                    tyabove = IntSet.insert tid $ tyabove ci,
+                                    tyabove = maybe (IntSet.singleton tid) (IntSet.insert tid . tyabove) ci,
                                     tybelow = IntSet.singleton tid,
-                                    tyattrs = tyattrs ci
+                                    tyattrs = maybe Set.empty tyattrs ci
                                   }
-        tyinfos'                = IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove ci)
+        tyinfos'                = maybe (tyinfos x) (\i -> IntSet.foldr' (IntMap.adjust addbelow) (tyinfos x) (tyabove i)) ci
         addbelow info           = info{ tybelow = IntSet.insert tid (tybelow info) }
 
 tydefineVars                    :: QBinds -> Env -> Env
@@ -340,20 +344,49 @@ wtypeKey (TCon _ c)             = Just (tcname c)
 wtypeKey (TVar _ v)             = Just (NoQ $ tvname v)
 wtypeKey _                      = Nothing
 
--- Closed witnesses precede active ones: combined with oldest-first buckets this
--- equals the reverse of the old newest-first active++closed enumeration, which
--- is the order the (previously reversing) consumers rely on.
+-- Buckets are stored oldest-first (Seq append) and enumerated lazily,
+-- closed-then-active, so consumers can stop early without forcing the whole
+-- ever-growing bucket. This is exactly the order the old code produced by
+-- storing newest-first and reversing both halves, but without the forcing.
 witsByPNameX x pn               = Data.Foldable.toList (Map.findWithDefault Seq.empty pn (closedWitMap x)) ++
                                   Data.Foldable.toList (Map.findWithDefault Seq.empty pn (activeWitMap x))
 
 witsByTNameX x tn               = Data.Foldable.toList (Map.findWithDefault Seq.empty tn (closedWitTypeMap x)) ++
                                   Data.Foldable.toList (Map.findWithDefault Seq.empty tn (activeWitTypeMap x))
 
+-- Local witnesses are already unique (deduped on insertion via hasWit), so they
+-- are presented as-is and kept lazy -- re-deduping the ever-growing local bucket
+-- with uniqueWits is the O(n^2) cost that previously stalled large modules. Only
+-- the small imported set, possibly read via aliased and unaliased queries, needs
+-- deduping. Imported witnesses take the leading (closed) position the preloaded
+-- environment used to give them, so enumeration order matches the in-memory case.
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = witsByPNameX (envX env) pn
+witsByPName env pn              = importedUnique env imported ++ witsByPNameX (envX env) pn
+  where imported                = concat [ moduleWitnessesByProto mi qn | mi <- importedModuleInfos env, qn <- queryQNames env pn ]
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = witsByTNameX (envX env) tn
+witsByTName env tn              = importedUnique env imported ++ witsByTNameX (envX env) tn
+  where imported                = concat [ moduleWitnessesByType mi qn | mi <- importedModuleInfos env, qn <- queryQNames env tn ]
+
+-- Deduplicate the imported witnesses, preserving the leading position the legacy
+-- (newest-first, reversed) enumeration gave them.
+importedUnique                  :: Env -> [Witness] -> [Witness]
+importedUnique env              = reverse . uniqueWits env
+
+-- Witnesses read from interfaces may name the same protocol or type in
+-- aliased and unaliased form, so queries try both forms.
+queryQNames                     :: Env -> QName -> [QName]
+queryQNames env qn
+  | qn' == qn                   = [qn]
+  | otherwise                   = [qn, qn']
+  where qn'                     = unalias env qn
+
+uniqueWits                      :: Env -> [Witness] -> [Witness]
+uniqueWits env                  = reverse . foldl' add []
+  where add ws w
+          | any (same w) ws     = ws
+          | otherwise           = w : ws
+        same w w'               = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 limitQuant                      :: TUni -> Env -> Env
 limitQuant (UV _ l _) env
@@ -938,8 +971,6 @@ instance USubst NameInfo where
     usubstWith s (NExt q c ps te opts doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts doc
     usubstWith s (NTVar k c ps)       = NTVar k (usubstWith s c) (usubstWith s ps)
     usubstWith s (NAlias qn)          = NAlias qn
-    usubstWith s (NMAlias m)          = NMAlias m
-    usubstWith s (NModule ms te doc)  = NModule ms te doc       -- actually usubstWith s te, but te has no free variables (top-level)
     usubstWith s NReserved            = NReserved
 
 instance USubst Witness where

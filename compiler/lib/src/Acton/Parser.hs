@@ -1850,21 +1850,17 @@ import_stmt = import_name <|> import_from <?> "import statement"
 
          module_item = do
                 dn <- module_name
-                S.ModuleItem dn <$> optional (rword "as" *> name)
+                S.ModuleItem dn <$> optional (rword "as" *> module_name)
 
          import_from = addLoc $ do
                 rword "from"
-                mr <- import_module
+                mn <- module_name
                 rword "import"
                 is <- import_items
                 case is of
-                   [] -> return $ S.FromImportAll NoLoc mr
-                   _  -> return $ S.FromImport NoLoc mr is
+                   [] -> return $ S.FromImportAll NoLoc mn
+                   _  -> return $ S.FromImport NoLoc mn is
 
-         import_module = do
-                ds <- many dot
-                mbn <- optional module_name
-                return $ S.ModRef (length ds, mbn)
          import_items = ([] <$ star)   -- Note: [] means all...
                      <|> parens import_as_names
                      <|> import_as_names

@@ -427,10 +427,6 @@ instance Vars ImportItem where
     bound (ImportItem n Nothing)    = free n
     bound (ImportItem n (Just as))  = free as
 
-instance Vars ModRef where
-    bound (ModRef (0, n))           = free n
-    bound _                         = []
-
 instance Vars TSchema where
     freeQ (TSchema _ q t)           = freeQ q ++ freeQ t
 

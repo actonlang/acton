@@ -355,7 +355,7 @@ varType (NVar t)                    = Just t
 varType (NSVar t)                   = Just t
 varType _                           = Nothing
 
-qvarType env n                      = tryQName n env >>= varType . convHNameInfo2NameInfo
+qvarType env n                      = tryQName n env >>= varType
 
 envVarType n te                     = case lookup n te of
                                         Just (NVar t)  -> Just t

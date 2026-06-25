@@ -17,6 +17,7 @@ module Acton.CodeGen where
 import qualified Data.Set
 import qualified Data.HashSet as HashSet
 import qualified Data.List
+import qualified Data.Map.Strict as Map
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -163,10 +164,8 @@ include                             :: GenEnv -> String -> ModName -> Doc
 include env dir m                   = text "#include" <+> doubleQuotes (text (joinPath $ dir : modPath m) <> text ".h")
 
 modNames (Import _ ms : is)         = [ m | ModuleItem m _ <- ms ] ++ modNames is
-modNames (FromImport _ (ModRef (0,Just m)) _ : is)
-                                    = m : modNames is
-modNames (FromImportAll _ (ModRef (0,Just m)) : is)
-                                    = m : modNames is
+modNames (FromImport _ m _ : is)    = m : modNames is
+modNames (FromImportAll _ m : is)   = m : modNames is
 modNames []                         = []
 
 tnm env (Derived _ (Derived _ n))           
@@ -729,15 +728,10 @@ providerObjects env                 = concat [ providerRoot qn q | (qn, q) <- al
 allClasses env                      = active ++ closed ++ mods
   where active                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- activeNames env ]
         closed                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- closedNames env ]
-        mods                        = moduleClasses [] (modules env)
-        moduleClasses path ((n, NModule _ te _) : xs)
-                                    = moduleClasses (path ++ [n]) te ++ moduleClasses path xs
-        moduleClasses path ((n, NClass q _ _ _) : xs)
-                                    = (qual path n, q) : moduleClasses path xs
-        moduleClasses path (_ : xs) = moduleClasses path xs
-        moduleClasses _ []          = []
-        qual [] n                   = NoQ n
-        qual path n                 = GName (ModName path) n
+        -- modulePublicTEnv resolves through each module's lookup function, so
+        -- entries rewritten by earlier passes are seen in converted form.
+        mods                        = [ (GName m n, q) | (m, mi) <- Map.toList (modules env),
+                                                         (n, NClass q _ _ _) <- modulePublicTEnv mi ]
 
 nullConArgs env qn                  = case findQName qn env of
                                         NClass _ _ te _ -> case lookup initKW te of
@@ -787,13 +781,11 @@ derivedWitnessQName (QName m owner) field
                                     = GName m (Derived (noq field) owner)
 
 classQBinds env (NoQ n)             = case lookupName n env of
-                                        Just (HNClass q _ _ _) -> Just q
+                                        Just (NClass q _ _ _) -> Just q
                                         _                     -> Nothing
-classQBinds env (GName m n)         = case lookupMod m env of
-                                        Just te -> case lookup n te of
-                                                     Just (NClass q _ _ _) -> Just q
-                                                     _                    -> Nothing
-                                        Nothing -> Nothing
+classQBinds env (GName m n)         = case lookupModuleInfo m env >>= \mi -> moduleLookupName mi n of
+                                        Just (NClass q _ _ _) -> Just q
+                                        _                     -> Nothing
 classQBinds env (QName m n)         = classQBinds env (GName m n)
 
 concreteProvider env tc n           = case lookup n (fullAttrEnv env tc) of

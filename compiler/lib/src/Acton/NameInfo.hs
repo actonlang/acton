@@ -59,80 +59,25 @@ data NameInfo           = NVar      Type
                         | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
-                        | NMAlias   ModName
-                        | NModule   [ModName] TEnv (Maybe String)
                         | NReserved
+                        deriving (Eq,Show,Read,Generic,NFData)
+
+data NModule            = NModule [ModName] TEnv (Maybe String)
                         deriving (Eq,Show,Read,Generic,NFData)
 
 typeDecl (_,NDef{})     = False
 typeDecl _              = True
 
-type HTEnv            =  M.HashMap Name HNameInfo
-
-data HNameInfo          = HNVar      Type
-                        | HNSVar     Type
-                        | HNDef      TSchema Deco (Maybe String)
-                        | HNSig      TSchema Deco (Maybe String)
-                        | HNAct      QBinds PosRow KwdRow TEnv (Maybe String)
-                        | HNClass    QBinds [WTCon] TEnv (Maybe String)
-                        | HNProto    QBinds [WTCon] TEnv (Maybe String)
-                        | HNExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
-                        | HNTVar     Kind CCon [PCon]
-                        | HNAlias    QName
-                        | HNMAlias   ModName
-                        | HNModule   [ModName] HTEnv (Maybe String)
-                        | HNReserved
-                        deriving (Eq, Show, Read, Generic)
+type HTEnv            =  M.HashMap Name NameInfo
 
 instance Data.Binary.Binary NameInfo
 instance Persist NameInfo
-
-convNameInfo2HNameInfo               :: NameInfo -> HNameInfo
-convNameInfo2HNameInfo (NModule ms te mdoc)   = HNModule ms (convTEnv2HTEnv te) mdoc
-convNameInfo2HNameInfo (NVar t)               = HNVar t
-convNameInfo2HNameInfo (NSVar t)              = HNSVar t
-convNameInfo2HNameInfo (NDef sc dec mdoc)     = HNDef sc dec mdoc
-convNameInfo2HNameInfo (NSig sc dec mdoc)     = HNSig sc dec mdoc
-convNameInfo2HNameInfo (NAct q p k te mdoc)   = HNAct q p k te mdoc
-convNameInfo2HNameInfo (NClass q ws te mdoc)  = HNClass q ws te mdoc
-convNameInfo2HNameInfo (NProto q ws te mdoc)  = HNProto q ws te mdoc
-convNameInfo2HNameInfo (NExt q tc ws te ns mdoc) = HNExt q tc ws te ns mdoc
-convNameInfo2HNameInfo (NTVar k c ps)         = HNTVar k c ps
-convNameInfo2HNameInfo (NAlias qn)            = HNAlias qn
-convNameInfo2HNameInfo (NMAlias mn)           = HNMAlias mn
-convNameInfo2HNameInfo (NReserved)            = HNReserved
-
-convHNameInfo2NameInfo               :: HNameInfo -> NameInfo
-convHNameInfo2NameInfo (HNModule ms te mdoc)   = NModule ms (convHTEnv2TEnv te) mdoc
-convHNameInfo2NameInfo (HNVar t)               = NVar t
-convHNameInfo2NameInfo (HNSVar t)              = NSVar t
-convHNameInfo2NameInfo (HNDef sc dec mdoc)     = NDef sc dec mdoc
-convHNameInfo2NameInfo (HNSig sc dec mdoc)     = NSig sc dec mdoc
-convHNameInfo2NameInfo (HNAct q p k te mdoc)   = NAct q p k te mdoc
-convHNameInfo2NameInfo (HNClass q ws te mdoc)  = NClass q ws te mdoc
-convHNameInfo2NameInfo (HNProto q ws te mdoc)  = NProto q ws te mdoc
-convHNameInfo2NameInfo (HNExt q tc ws te ns mdoc) = NExt q tc ws te ns mdoc
-convHNameInfo2NameInfo (HNTVar k c ps)         = NTVar k c ps
-convHNameInfo2NameInfo (HNAlias qn)            = NAlias qn
-convHNameInfo2NameInfo (HNMAlias mn)           = NMAlias mn
-convHNameInfo2NameInfo (HNReserved)            = NReserved
-
-convTEnv2HTEnv                       :: TEnv -> HTEnv
-convTEnv2HTEnv te                     = M.fromList (map convPair te)
-  where
-     convPair (n, ni)      = (n, convNameInfo2HNameInfo ni)
-
-convHTEnv2TEnv                       :: HTEnv -> TEnv
-convHTEnv2TEnv te                     = map convPair (M.toList te)
-  where
-     convPair (n, hni)      = (n, convHNameInfo2NameInfo hni)
 
 -- | Strip all docstrings from NameInfo (and nested environments).
 -- This is used when computing a public-interface hash so that
 -- documentation-only edits do not cause dependents to rebuild.
 stripDocsNI :: NameInfo -> NameInfo
 stripDocsNI ni = case ni of
-  NModule ms te _     -> NModule ms (map stripBind te) Nothing
   NAct q p k te _     -> NAct q p k (map stripBind te) Nothing
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
@@ -140,6 +85,11 @@ stripDocsNI ni = case ni of
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other
+  where
+    stripBind (n, info) = (n, stripDocsNI info)
+
+stripDocsNModule :: NModule -> NModule
+stripDocsNModule (NModule ms te _) = NModule ms (map stripBind te) Nothing
   where
     stripBind (n, info) = (n, stripDocsNI info)
 
@@ -159,8 +109,6 @@ stripLocsNI ni = case ni of
     NExt (stripLocsQBinds q) (stripLocsTCon c) (map stripLocsWTCon ps) (stripLocsTEnv te) (map stripLocsName o) doc
   NTVar k c ps       -> NTVar k (stripLocsTCon c) (map stripLocsTCon ps)
   NAlias qn          -> NAlias (stripLocsQName qn)
-  NMAlias mn         -> NMAlias (stripLocsModName mn)
-  NModule ms te doc  -> NModule ms (stripLocsTEnv te) doc
   NReserved          -> NReserved
   where
     stripLocsTEnv :: TEnv -> TEnv
@@ -218,13 +166,17 @@ stripLocsNI ni = case ni of
       Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
       Internal{}     -> n
 
-instance Leaves NameInfo where
-    leaves (NClass q cs te _) = leaves q ++ leaves cs ++ leaves te
-    leaves (NProto q ps te _) = leaves q ++ leaves ps ++ leaves te
-    leaves (NAct q p k te _)  = leaves q ++ leaves [p,k] ++ leaves te
-    leaves (NExt q c ps te _ _) = leaves q ++ leaves c ++ leaves ps ++ leaves te
-    leaves (NDef sc dec _)    = leaves sc
-    leaves _                  = []
+stripLocsNModule :: NModule -> NModule
+stripLocsNModule (NModule ms te doc) = NModule ms (stripLocsTEnv te) doc
+  where
+    stripLocsTEnv :: TEnv -> TEnv
+    stripLocsTEnv = map $ \(n, info) -> (stripLocsName n, stripLocsNI info)
+
+    stripLocsName :: Name -> Name
+    stripLocsName n = case n of
+      Name _ s       -> Name NoLoc s
+      Derived n1 n2  -> Derived (stripLocsName n1) (stripLocsName n2)
+      Internal{}     -> n
 
 instance Pretty TEnv where
     pretty tenv               = vcat (map pretty $ normTEnv tenv)
@@ -260,12 +212,6 @@ instance Pretty (Name,NameInfo) where
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NTVar k c ps)    = pretty n <> parens (commaList (c:ps))
     pretty (n, NAlias qn)       = text "alias" <+> pretty n <+> equals <+> pretty qn
-    pretty (n, NMAlias m)       = text "module" <+> pretty n <+> equals <+> pretty m
-    pretty (n, NModule ms te doc)
-                                = text "module" <+> pretty n <> colon $+$ 
-                                  nest 4 (vcat [ text "import" <+> pretty m | m <- ms ]) $+$
-                                  nest 4 (prettyDocstring doc) $+$
-                                  nest 4 (pretty te)
     pretty (n, NReserved)       = pretty n <+> text "(reserved)"
 
 prettyOrPass te
@@ -288,8 +234,6 @@ instance VFree NameInfo where
     vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
-    vfree (NMAlias qn)          = []
-    vfree (NModule ms te doc)   = []        -- actually vfree te, but a module has no free variables on the top level
     vfree NReserved             = []
 
 instance VSubst NameInfo where
@@ -303,8 +247,6 @@ instance VSubst NameInfo where
     vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
     vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
-    vsubst s (NMAlias m)        = NMAlias m
-    vsubst s (NModule ms te x)  = NModule ms te x        -- actually vsubst s te, but te has no free variables (top-level)
     vsubst s NReserved          = NReserved
 
 instance UFree NameInfo where
@@ -318,8 +260,6 @@ instance UFree NameInfo where
     ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
     ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
-    ufree (NMAlias qn)          = []
-    ufree (NModule ms te doc)   = []        -- actually ufree te, but a module has no free variables on the top level
     ufree NReserved             = []
 
 instance Polarity (Name,NameInfo) where
@@ -424,23 +364,14 @@ instance UFree Witness where
     ufree w@WInst{}     = ufree (wtype w) ++ ufree (proto w)
 
 
-instance Leaves WTCon where
-    leaves (wp,p)       = leaves p
-
 instance VFree WTCon where
     vfree (wpath, p)    = vfree p
 
 instance UFree WTCon where
     ufree (wpath, p)    = ufree p
 
-instance Tailvars WTCon where
-    tailvars (wpath, p) = tailvars p
-
 instance VSubst WTCon where
     vsubst s (w,u)      = (w, vsubst s u)
-
-instance Vars WTCon where
-    freeQ (wpath, p)    = freeQ p
 
 instance Vars NameInfo where
     freeQ ni = case ni of
@@ -454,8 +385,6 @@ instance Vars NameInfo where
       NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv te
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
-      NMAlias _ -> []
-      NModule ms te _ -> freeQTEnv te
       NReserved -> []
       where
         freeQTEnv :: TEnv -> [QName]
@@ -472,9 +401,6 @@ instance Vars NameInfo where
           where
             step (Left qn) = freeQ qn
             step (Right qn) = freeQ qn
-
-instance UWild WTCon where
-    uwild (wpath, p)    = (wpath, uwild p)
 
 instance Pretty WTCon where
     pretty (wpath, p)   = pretty p

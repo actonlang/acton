@@ -373,7 +373,7 @@ instance KCheck Expr where
     kchk env (CompOp l e ops)       = CompOp l <$> kchk env e <*> kchk env ops
     kchk env (UnOp l op e)          = UnOp l op <$> kchk env e
     kchk env (Dot l e n)
-      | Just m <- isModule env e    = return $ Var l (QName m n)
+      | Just m <- isModName env e   = return $ Var l (QName m n)
       | otherwise                   = Dot l <$> kchk env e <*> return n
     kchk env (Rest l e n)           = Rest l <$> kchk env e <*> return n
     kchk env (DotI l e i)           = DotI l <$> kchk env e <*> return i
@@ -392,11 +392,6 @@ instance KCheck Expr where
     kchk env (Set l es)             = Set l <$> kchk env es
     kchk env (SetComp l e c)        = SetComp l <$> kchk env e <*> kchk env c
     kchk env (Paren l e)            = Paren l <$> kchk env e
-
-isModule env e                          = fmap ModName $ mfilter (isMod env) $ fmap reverse $ dotChain e
-  where dotChain (Var _ (NoQ n))        = Just [n]
-        dotChain (Dot _ e n)            = fmap (n:) (dotChain e)
-        dotChain _                      = Nothing
 
 instance KCheck Pattern where
     kchk env (PWild l t)            = PWild l <$> (kexp KType env =<< maybeConvTWild env t)

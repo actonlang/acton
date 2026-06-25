@@ -54,6 +54,7 @@ import Prettyprinter.Render.Text (renderStrict)
 import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
+import qualified System.IO.Unsafe
 import System.Timeout (timeout)
 import Control.Monad (forM_, when, foldM)
 import qualified Control.Exception as E
@@ -77,6 +78,7 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplLocalDeps = []
     , InterfaceFiles.nhPubDeps = []
     , InterfaceFiles.nhImplDeps = []
+    , InterfaceFiles.nhStmtIndices = []
     }
 
 hashTestName :: S.Name
@@ -279,6 +281,92 @@ main = do
           testsH `shouldBe` tests
           docH `shouldBe` Just "module docs"
 
+      it "reads module query indexes independently" $ do
+        withSystemTempDirectory "acton-iface-indexes" $ \dir -> do
+          let mn = S.modName ["iface_indexes"]
+              tyPath = dir </> "iface_indexes.tydb"
+              clsName = S.name "Cls"
+              parentName = S.name "Parent"
+              childName = S.name "Child"
+              actorName = S.name "Worker"
+              protoName = S.name "Proto"
+              subProtoName = S.name "SubProto"
+              extName = S.name "Ext"
+              classAttr = S.name "class_attr"
+              actorAttr = S.name "actor_attr"
+              protoAttr = S.name "proto_attr"
+              clsTC = S.TC (S.NoQ clsName) []
+              parentTC = S.TC (S.NoQ parentName) []
+              protoTC = S.TC (S.NoQ protoName) []
+              iface =
+                [ (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
+                , (parentName, I.NClass [] [] [] Nothing)
+                , (childName, I.NClass [] [([], parentTC)] [] Nothing)
+                , (actorName, I.NAct [] S.posNil S.kwdNil [(actorAttr, I.NVar S.tWild)] Nothing)
+                , (protoName, I.NProto [] [] [(protoAttr, I.NVar S.tWild)] Nothing)
+                , (subProtoName, I.NProto [] [([], protoTC)] [] Nothing)
+                , (extName, I.NExt [] clsTC [([], protoTC)] [] [] Nothing)
+                ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+              names = sort . map fst
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
+              InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
+              InterfaceFiles.readInterfaceDBPublicNames db `shouldReturn` map fst iface
+              names <$> InterfaceFiles.readInterfaceDBConstructors db `shouldReturn` sort [actorName, childName, clsName, parentName, protoName, subProtoName]
+              names <$> InterfaceFiles.readInterfaceDBActors db `shouldReturn` [actorName]
+              names <$> InterfaceFiles.readInterfaceDBConAttr db classAttr `shouldReturn` [clsName]
+              names <$> InterfaceFiles.readInterfaceDBConAttr db actorAttr `shouldReturn` [actorName]
+              names <$> InterfaceFiles.readInterfaceDBProtoAttr db protoAttr `shouldReturn` [protoName]
+              names <$> InterfaceFiles.readInterfaceDBDescendants db (S.NoQ parentName) `shouldReturn` [childName]
+              names <$> InterfaceFiles.readInterfaceDBDescendants db (S.NoQ protoName) `shouldReturn` [subProtoName]
+              names <$> InterfaceFiles.readInterfaceDBExtByProto db (S.NoQ protoName) `shouldReturn` [extName]
+              names <$> InterfaceFiles.readInterfaceDBExtByType db (S.NoQ clsName) `shouldReturn` [extName]
+              fst <$> InterfaceFiles.readInterfaceDBModuleInfo db `shouldReturn` [])
+
+      it "serves fresh data through a handle across rewrites" $ do
+        withSystemTempDirectory "acton-iface-rewrite" $ \dir -> do
+          let mn = S.modName ["iface_rewrite"]
+              tyPath = dir </> "iface_rewrite.tydb"
+              vName = S.name "v"
+              wName = S.name "w"
+              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+          write [(vName, I.NVar S.tWild)]
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
+          -- Rewriting the same path retires the shared environment; reads
+          -- through the existing handle must observe the new contents.
+          write [(wName, I.NVar S.tWild)]
+          InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Nothing
+          fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db wName `shouldReturn` Just wName
+
+      it "reads selected statements by ownership" $ do
+        withSystemTempDirectory "acton-iface-stmts" $ \dir -> do
+          let mn = S.modName ["iface_stmts"]
+              tyPath = dir </> "iface_stmts.tydb"
+              aName = S.name "a"
+              bName = S.name "b"
+              cName = S.name "c"
+              stmtFor n v = S.Assign NoLoc [S.pVar' n] (S.eInt v)
+              body = [stmtFor aName 1, stmtFor bName 2, stmtFor cName 3]
+              iface = [ (n, I.NVar S.tWild) | n <- [aName, bName, cName] ]
+              nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing body
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] Nothing nmod tmod
+          (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
+            InterfaceFiles.readHeader tyPath
+          [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
+            `shouldBe` [[1]]
+          selected <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [aName, cName])
+          case selected of
+            Just (S.Module _ _ _ stmts) -> stmts `shouldBe` [stmtFor aName 1, stmtFor cName 3]
+            Nothing -> expectationFailure "expected selected statements"
+          missing <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [S.name "nope"])
+          missing `shouldBe` Nothing
+
       it "supports concurrent read-only access to one interface" $ do
         withSystemTempDirectory "acton-iface-concurrent" $ \dir -> do
           let mn = S.modName ["iface"]
@@ -464,22 +552,15 @@ main = do
             depCType = S.tCon (S.TC depC [S.tCon (S.TC localDep [])])
             depDType = S.TUnboxed NoLoc (S.tCon (S.TC depD []))
             info =
-              I.NModule
-                []
-                [ ( hashTestName
-                  , I.NExt
-                      [qbind]
-                      (S.TC depA [depBType])
-                      [([Left depB, Right depC], S.TC depC [depAType])]
-                      [ (S.name "alias", I.NAlias depB)
-                      , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
-                      , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
-                      ]
-                      []
-                      Nothing
-                  )
-                , (S.name "derived_alias", I.NAlias derived)
+              I.NExt
+                [qbind]
+                (S.TC depA [depBType])
+                [([Left depB, Right depC], S.TC depC [depAType])]
+                [ (S.name "alias", I.NAlias depB)
+                , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
+                , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
                 ]
+                []
                 Nothing
             infos = M.singleton hashTestName info
             expectedDeps = M.singleton hashTestName (Set.fromList [depA, depB, depC, depD, localDep])
@@ -866,8 +947,8 @@ main = do
             mdoc
             nmod
             tmod
-          (_env2, te) <- Acton.Env.doImp [dir] env1 directMod
-          map fst te `shouldBe` [valueName]
+          (_env2, mi) <- Acton.Env.doImp [dir] env1 directMod
+          map fst (Acton.Env.modulePublicTEnv mi) `shouldBe` [valueName]
 
     describe "Pass 1: Parser" $ do
 
@@ -1832,6 +1913,118 @@ main = do
           Right _ -> expectationFailure "Expected multiple type errors but type checking succeeded"
 
     describe "Import Semantics" $ do
+      it "selected imports only look up requested names" $ do
+        lookedUp <- newIORef []
+        let wanted = S.name "wanted"
+            unused = S.name "unused"
+            m = S.modName ["lazy_import"]
+            mi = Acton.Env.ModuleInfo {
+                    Acton.Env.moduleName = m,
+                    Acton.Env.moduleImports = [],
+                    Acton.Env.moduleDoc = Nothing,
+                    Acton.Env.moduleLookupName = \n -> System.IO.Unsafe.unsafePerformIO $ do
+                      modifyIORef' lookedUp (++ [S.nstr n])
+                      if n == wanted
+                        then return (Just (I.NVar S.tWild))
+                        else error ("unexpected import lookup: " ++ S.nstr n),
+                    Acton.Env.modulePublicNames = [unused, wanted],
+                    Acton.Env.moduleConstructors = [],
+                    Acton.Env.moduleActors = [],
+                    Acton.Env.moduleConAttr = const [],
+                    Acton.Env.moduleProtoAttr = const [],
+                    Acton.Env.moduleDescendants = const [],
+                    Acton.Env.moduleProtoDescendants = const [],
+                    Acton.Env.moduleWitnessesByProto = const [],
+                    Acton.Env.moduleWitnessesByType = const []
+                  }
+            env = Acton.Env.importSome [S.ImportItem wanted Nothing] m mi env0
+
+        case Acton.Env.lookupName wanted env of
+          Just (I.NAlias qn) -> qn `shouldBe` S.GName m wanted
+          other -> expectationFailure $ "Expected selected import alias, got " ++ show other
+        readIORef lookedUp `shouldReturn` ["wanted"]
+
+      it "qualifies selected imports with the module's canonical identity" $ do
+        let imported = S.modName ["dep"]
+            canonical = S.modName ["dep", "lib"]
+            wanted = S.name "wanted"
+            mi = Acton.Env.mkModuleInfo canonical [] [(wanted, I.NVar S.tWild)] Nothing
+            env = Acton.Env.importSome [S.ImportItem wanted Nothing] imported mi env0
+
+        case Acton.Env.lookupName wanted env of
+          Just (I.NAlias qn) -> qn `shouldBe` S.GName canonical wanted
+          other -> expectationFailure $ "Expected canonical selected import alias, got " ++ show other
+
+      it "unaliases qualified names with the module's canonical identity" $ do
+        let imported = S.modName ["dep"]
+            canonical = S.modName ["dep", "lib"]
+            wanted = S.name "wanted"
+            mi = Acton.Env.mkModuleInfo canonical [] [(wanted, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addQualifier imported mi Nothing (Acton.Env.addImport imported (Acton.Env.addModuleInfo imported mi env0))
+
+        (Acton.Env.unalias env imported :: S.ModName) `shouldBe` canonical
+        Acton.Env.unalias env (S.QName imported wanted) `shouldBe` S.GName canonical wanted
+
+      it "does not expand module aliases as prefixes" $ do
+        let alias = S.modName ["c"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            d = S.name "d"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(d, I.NVar S.tWild), (x, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addQualifier canonical mi (Just alias) env0
+            expr = S.Dot NoLoc (S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) d) x
+            parsed = S.Module (S.modName ["alias_prefix"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe`
+          [S.Expr NoLoc (S.Dot NoLoc (S.Var NoLoc (S.QName alias d)) x)]
+
+      it "accepts nested module aliases" $ do
+        let alias = S.modName ["c","b"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            b = S.name "b"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(x, I.NVar S.tWild)] Nothing
+            env = Acton.Env.addQualifier canonical mi (Just alias) env0
+            expr = S.Dot NoLoc (S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) b) x
+            parsed = S.Module (S.modName ["alias_nested"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe`
+          [S.Expr NoLoc (S.Var NoLoc (S.QName alias x))]
+
+      it "lets local bindings shadow module aliases in dotted expressions" $ do
+        let alias = S.modName ["c"]
+            canonical = S.modName ["a", "b"]
+            c = S.name "c"
+            x = S.name "X"
+            mi = Acton.Env.mkModuleInfo canonical [] [(x, I.NVar S.tWild)] Nothing
+            env =
+              Acton.Env.addActiveNames [(c, I.NVar S.tWild)] $
+              Acton.Env.addQualifier canonical mi (Just alias) env0
+            expr = S.Dot NoLoc (S.Var NoLoc (S.NoQ c)) x
+            parsed = S.Module (S.modName ["alias_shadow"]) [] Nothing [S.Expr NoLoc expr]
+        checked <- liftIO $ Acton.Kinds.check env parsed
+        S.mbody checked `shouldBe` [S.Expr NoLoc expr]
+
+      it "rejects selected imports of private names" $ do
+        (envA, parsedA) <- parseAct env0 "import_private_a"
+        kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
+        (nmodA, _, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing envA kcheckedA Nothing
+        let I.NModule impsA tenvA mdocA = nmodA
+            env1 = Acton.Env.addMod (S.modname parsedA) impsA tenvA mdocA env0
+
+        result <- liftIO $ (E.try (do
+          (envB, _) <- parseAct env1 "import_private_selected"
+          _ <- E.evaluate (Acton.Env.lookupName (S.name "__foo") envB)
+          pure ()
+          ) :: IO (Either CompilationError ()))
+
+        case result of
+          Left NoItem{} -> pure ()
+          Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
+          Right _ -> expectationFailure "Expected selected private import to fail"
+
       it "omits private names from the public interface" $ do
         (envA, parsedA) <- parseAct env0 "import_private_a"
         kcheckedA <- liftIO $ Acton.Kinds.check envA parsedA
@@ -1845,7 +2038,7 @@ main = do
           Just _ -> expectationFailure "from import * should skip __foo"
 
         case Acton.Env.lookupName (S.name "public_value") envB of
-          Just (I.HNAlias _) -> pure ()
+          Just (I.NAlias _) -> pure ()
           _ -> expectationFailure "from import * should include public_value"
 
       it "blocks qualified access to private names" $ do

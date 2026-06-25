@@ -26,13 +26,13 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,28]
+version = [0,30]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
 data Import     = Import        { iloc::SrcLoc, moduls::[ModuleItem] }
-                | FromImport    { iloc::SrcLoc, modul::ModRef, items::[ImportItem] }
-                | FromImportAll { iloc::SrcLoc, modul::ModRef }
+                | FromImport    { iloc::SrcLoc, modul::ModName, items::[ImportItem] }
+                | FromImportAll { iloc::SrcLoc, modul::ModName }
                 deriving (Show,Read,NFData,Generic)
 
 type Suite      = [Stmt]
@@ -187,8 +187,7 @@ qName ss s      = QName (modName ss) (name s)
 noQ s           = NoQ (name s)
 
 
-data ModuleItem = ModuleItem ModName (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
-data ModRef     = ModRef (Int, Maybe ModName) deriving (Show,Eq,Read,NFData,Generic)
+data ModuleItem = ModuleItem ModName (Maybe ModName) deriving (Show,Eq,Read,NFData,Generic)
 data ImportItem = ImportItem Name (Maybe Name) deriving (Show,Eq,Read,NFData,Generic)
 data Branch     = Branch Expr Suite deriving (Show,Eq,Read,NFData,Generic)
 data Handler    = Handler Except Suite deriving (Show,Eq,Read,NFData,Generic)
@@ -566,8 +565,6 @@ instance Data.Binary.Binary ModuleItem
 instance Persist ModuleItem
 instance Data.Binary.Binary ImportItem
 instance Persist ImportItem
-instance Data.Binary.Binary ModRef
-instance Persist ModRef
 
 
 -- Locations ----------------
@@ -814,13 +811,10 @@ importsOf (Module _ imps _ _)       = impsOf imps
   where
     impsOf []                       = []
     impsOf (Import _ mis : i)       = map mName mis ++ impsOf i
-    impsOf (FromImport _ mr _ : i)  = mRef mr : impsOf i
-    impsOf (FromImportAll _ mr : i) = mRef mr : impsOf i
+    impsOf (FromImport _ mn _ : i)  = mn : impsOf i
+    impsOf (FromImportAll _ mn : i) = mn : impsOf i
 
     mName (ModuleItem qn _)         = qn
-
-    mRef (ModRef (0,Just qn))       = qn
-    mRef _                          = error "dot prefix in name of import modules not supported"
 
 unop op e                           = UnOp l0 op e
 binop e1 op e2                      = BinOp l0 e1 op e2

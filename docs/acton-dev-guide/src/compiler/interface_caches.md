@@ -11,23 +11,34 @@ The compiler code should not construct these paths directly. Use the
 
 ## Compatibility Boundary
 
-`InterfaceFiles` deliberately preserves the old interface-cache API:
+`InterfaceFiles` preserves the full-cache API and also exposes a selective
+read API for imported-module lookup:
 
 - `writeFile` writes the cache for one module.
-- `readHeader` reads only metadata, imports, roots, tests, docstring, and
-  per-name hash records.
+- `readHeaderSummary` reads metadata, imports, the stored name count, roots,
+  tests, and docstring; `readHeader` additionally decodes every per-name hash
+  record.
 - `readExtensionsByClass` and `readExtensionsByProtocol` read exact extension
   index entries without decoding `NameInfo` entries or typed
   statements.
 - `readFile` reconstructs the full cached payload: imports, `NameInfo`, typed
   module, metadata, module hashes, per-name hashes, roots, tests, and docstring.
-- `readHeaderMaybe` and `readFileMaybe` turn missing, corrupt, unreadable, or
-  version-mismatched caches into cache misses.
+- `readHeaderMaybe`, `readHeaderSummaryMaybe`, and `readFileMaybe` turn
+  missing, corrupt, unreadable, or version-mismatched caches into cache misses.
+- `openInterfaceDB` validates a `.tydb` for selective reads on the shared
+  per-path environment; `openInterfaceDBMaybe` is its cache-miss form.
+- `readInterfaceDBModuleInfo` reads only import/doc metadata.
+- `readInterfaceDBNameInfoMaybe` reads exactly one `name-info` entry by `Name`.
+- `readInterfaceDBPublicNames`, `readInterfaceDBConstructors`,
+  `readInterfaceDBActors`, `readInterfaceDBConAttr`,
+  `readInterfaceDBProtoAttr`, `readInterfaceDBDescendants`,
+  `readInterfaceDBExtByProto`, and `readInterfaceDBExtByType` read narrow
+  query indexes.
 
 That boundary lets the rest of the compiler keep treating cache access as a
 plain lookup while the on-disk representation moves from one binary blob to a
-keyed store. Current full reads still rebuild the same payload as before.
-More selective lookup by imported name is future work.
+keyed store. Full reads still rebuild the same payload as before, but normal
+imported-module lookup no longer decodes every `NameInfo` entry.
 
 ## LMDB Key Layout
 
@@ -49,7 +60,11 @@ Metadata and module-level keys:
 | `doc` | `Maybe String` |
 | `module-header` | `(ModName, [Import], Maybe String)` |
 | `name-count` | `Int` |
+| `public-names` | `[Name]` |
+| `constructors` | `[Name]` |
+| `actors` | `[Name]` |
 | `stmt-count` | `Int` |
+| `stmt-has-not-impl` | `Bool` |
 
 The three `ByteString` hashes in `meta` are the module source-bytes hash, module
 public hash, and module implementation hash. The `ByteString` stored with each
@@ -91,7 +106,8 @@ Per-name keys:
 
 Each `NameHashInfo` value contains the local name, `srcHash`, `pubHash`,
 `implHash`, local public/implementation dependency names
-(`pubLocalDeps` / `implLocalDeps`). External dependency snapshots are stored in
+(`pubLocalDeps` / `implLocalDeps`), and the indexes of the typed top-level
+statements owned by that name. External dependency snapshots are stored in
 dependency rows instead of being repeated inside every `NameHashInfo`.
 
 Dependency rows:
@@ -124,6 +140,23 @@ Typed statements are stored by module order:
 
 Statement order is preserved for full typed-module reconstruction.
 
+Narrow query indexes are stored as separate keys, so solver and environment
+queries do not need to decode one combined module metadata value:
+
+| Key | Value type |
+| --- | --- |
+| `con-attr/<name>` | `[Name]` of public classes/actors declaring that attribute |
+| `proto-attr/<name>` | `[Name]` of public protocols declaring that attribute |
+| `descendants/<hash>` | `[Name]` of public classes/protocols below that constructor |
+| `ext-proto/<hash>` | `[Name]` of public extensions implementing that protocol |
+| `ext-type/<hash>` | `[Name]` of public extensions for that type/class |
+
+The `<hash>` suffix is a SHA-256 key for a source-location-free `QName`.
+Attribute keys reuse the normal name-key suffix scheme. Readers resolve the
+stored names through the matching `name-info/<suffix>` entries, so the query
+index itself stays small. The attribute indexes record attributes where they
+are declared; readers complete inherited owners through the descendants index.
+
 For example, `base/src/base64.act` contains top-level `encode` and `decode`
 definitions. Its `.tydb` uses these keys:
 
@@ -149,12 +182,17 @@ stmt/000000000001                 -> typed Stmt for decode
 
 ## Read And Write Behavior
 
-`readHeader` opens a read-only LMDB transaction and reads the header keys plus
-the `deps` row and `name-hash` entries. It does not decode `NameInfo` entries
-or typed statements. Stale checks first compare the dependency module hashes in
-`deps`; DBP uses the header path to get per-name hashes, local dependency
-edges, and root actor names before deciding whether the full typed module must
-be decoded.
+`readHeaderSummary` opens a read-only LMDB transaction and reads the header
+keys plus the `deps` row and the stored name count. It does not decode
+`NameInfo` entries, per-name hash rows, or typed statements. Stale checks
+first compare the dependency module hashes in `deps`; if that gate changes,
+they use per-name dependency rows to decide which local names are affected.
+DBP reads `roots` and exact `name-hash/<suffix>` entries while expanding the
+selected local dependency closure. When the selected codegen hash is stale,
+`readSelectedModule` reconstructs a pruned typed module from only the selected
+`stmt/<index>` records; it falls back to `readFile` when statement ownership
+is missing or the module contains NotImplemented hooks, whose
+native-extension pairing needs the whole module.
 
 `readExtensionsByClass` and `readExtensionsByProtocol` read one class or
 protocol key directly. DBP uses these exact lookups while expanding the selected
@@ -164,8 +202,26 @@ extension names that the typed module can actually retain.
 `readFile` opens a read-only transaction and reconstructs the full payload by
 following the explicit order keys for ordered sections. It does not depend on
 LMDB cursor order for `TEnv` or typed statement reconstruction. DBP calls this
-only when its selection-sensitive codegen hash says the existing `.c`/`.h`
-output is missing or stale.
+only when selected statement reconstruction cannot serve a stale
+selection-sensitive codegen output.
+
+All readers share one cached read-only LMDB environment per `.tydb` path,
+opened with the normal reader lock table so concurrent writers in other
+processes cannot recycle pages under an active read transaction. Writers keep
+their exclusive per-path lock and retire the cached environment, waiting for
+active readers to drain, before opening their own, so the process never holds
+two environments for one path. `openInterfaceDB` validates the version once
+and hands `Acton.Env` a handle it installs in a `ModuleInfo`; later
+exact-name lookups call `readInterfaceDBNameInfoMaybe`, which runs a short
+read transaction on the shared environment and decodes only the demanded
+`name-info/<suffix>` value. Those reads sit behind Env's pure-looking lookup
+functions and are memoized per module.
+
+The same handle exposes the narrow query readers for non-name solver
+questions: actor lookup reads `actors`; attribute lookup reads
+`con-attr/<name>` or `proto-attr/<name>`; descendant lookup reads one
+`descendants/<hash>` record; and witness lookup reads `ext-proto/<hash>` or
+`ext-type/<hash>`. Plain imports do not read these records.
 
 `writeFile` writes the full environment in one write transaction. The compiler
 has one writer for a module cache, while multiple readers may run in parallel.
@@ -197,8 +253,7 @@ write:             .ty 1.68 s/write, .tydb 1.12 s/write (-33%)
 ```
 
 The current `.tydb` format is larger because LMDB stores page-structured data
-and we keep values uncompressed. Header and full reads are still close to the
-old binary blob path because the compiler still reads all per-name hash records
-for cache decisions. The useful change is the storage boundary: names and typed
-statements now have explicit keys, so future work can load only the imported
-names a dependent module actually needs.
+and we keep values uncompressed. The useful property is the storage boundary:
+normal imported-module lookup loads only the names and index rows a dependent
+module actually uses, while full reconstruction remains available for explicit
+broad paths.
