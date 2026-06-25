@@ -1049,6 +1049,18 @@ jobs:
     with:
       repo_url: "actonlang/acton-snappy"
 
+  test-app-ssh:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/acton-ssh"
+
+  test-app-grpc:
+    needs: build-debs
+    uses: "./.github/workflows/test-app.yml"
+    with:
+      repo_url: "actonlang/acton-grpc"
+
   test-app-yang:
     needs: build-debs
     uses: "./.github/workflows/test-app.yml"
@@ -1060,12 +1072,6 @@ jobs:
     uses: "./.github/workflows/test-app.yml"
     with:
       repo_url: "orchestron-orchestrator/actmf"
-
-  test-app-ncurl:
-    needs: build-debs
-    uses: "./.github/workflows/test-app.yml"
-    with:
-      repo_url: "orchestron-orchestrator/ncurl"
 
   test-app-gnmi:
     needs: build-debs
