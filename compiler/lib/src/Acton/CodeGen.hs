@@ -520,10 +520,6 @@ declDecl env (Class _ n q as b ddoc)
   where b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = setInClass (defineTVars q env)
-<<<<<<< HEAD
-=======
---        env2                        = setGtypes env1 (findAttrSchemas env1 (NoQ n))
->>>>>>> 7a02ed10 (first version properly unboxing bool)
         props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
@@ -1274,8 +1270,6 @@ callableTypeReturnsBoxed rt         = case rt of
                                         _              -> False
 
 -- A callable whose return type is explicitly TUnboxed returns raw C.
-callableReturnsRaw env f
-  | generatedMethodCallable env f   = False
 callableReturnsRaw env f
   | Just rt <- directMethodCallableType env f
                                     = callableTypeReturnsRaw rt

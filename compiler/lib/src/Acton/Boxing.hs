@@ -483,7 +483,7 @@ rtypeOfFun env f@(TApp _ (Var _ n) _)
 rtypeOfFun env (TApp _ f0 [])       = rtypeOfFun env f0
 rtypeOfFun env f@(TApp _ f0 ts)     = matchTypes (typeOf env f) (typeInstOf env (map (const tWild) ts) f0)
 rtypeOfFun env (Async _ f)          = rtypeOfFun env f
-typeOfFun env f@(Dot _ (Var _ x) n)
+rtypeOfFun env f@(Dot _ (Var _ x) n)
   | NClass{} <- findQName x env      = case generalTypeC env x n of
                                          Just t  -> matchTypes (typeOf env f) t
                                          Nothing -> matchTypes (typeOf env f) (typeOf env f)
@@ -491,6 +491,9 @@ rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
                                         TCon _ tc -> rtypeOf env tc n
                                         TVar _ tv -> rtypeOf env (findTVBound env tv) n
                                         _         -> typeOf env f
+rtypeOfFun env f@(Var _ n)
+  | Just rt <- generatedMethodType env n []
+                                    = rt
 rtypeOfFun env f@(Var _ n)
   | boxedCPrim n                    = typeOf env f
   | otherwise                       = case findQName n env of
