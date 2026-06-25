@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Compiler & Build
+- Generate direct C calls for statically known builtin protocol methods on
+  builtin types, avoiding witness-table dispatch for those calls while keeping
+  the existing builtin witness values available to the generated code. [#2935]
+
+### CLI & Project Workflow
+- Prevent parallel `acton test` runs from hanging when a worker or output
+  reader fails, reporting the runner failure or captured output error instead
+  of waiting forever for a missing completion event. [#2972]
+
 ## [0.28.3] - 2026-06-23
 
 This release is another proxy workaround release. Acton now keeps one more
@@ -4467,6 +4479,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2929]: https://github.com/actonlang/acton/pull/2929
 [#2931]: https://github.com/actonlang/acton/pull/2931
 [#2932]: https://github.com/actonlang/acton/pull/2932
+[#2935]: https://github.com/actonlang/acton/pull/2935
 [#2937]: https://github.com/actonlang/acton/pull/2937
 [#2938]: https://github.com/actonlang/acton/pull/2938
 [#2939]: https://github.com/actonlang/acton/pull/2939
@@ -4484,6 +4497,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2963]: https://github.com/actonlang/acton/pull/2963
 [#2964]: https://github.com/actonlang/acton/pull/2964
 [#2970]: https://github.com/actonlang/acton/pull/2970
+[#2972]: https://github.com/actonlang/acton/pull/2972
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
