@@ -25,8 +25,8 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     return B_None;
 }
 
-B_bool B_tupleD___bool__(B_tuple self) {
-    return toB_bool(self->size>0);
+bool B_tupleD___bool__(B_tuple self) {
+    return self->size>0;
 }
 
 B_str B_tupleD___str__(B_tuple self) {
@@ -100,8 +100,8 @@ B_NoneType B_IteratorD_tupleD_init(B_IteratorD_tuple self, B_tuple lst) {
     return B_None;
 }
 
-B_bool B_IteratorD_tupleD_bool(B_IteratorD_tuple self) {
-    return B_True;
+bool B_IteratorD_tupleD_bool(B_IteratorD_tuple self) {
+    return true;
 }
 
 B_str B_IteratorD_tupleD_str(B_IteratorD_tuple self) {
@@ -148,7 +148,7 @@ struct B_IterableD_tupleG_class B_IterableD_tupleG_methods = {
     B_IterableD_tupleD___init__,
     B_IterableD_tupleD___serialize__,
     B_IterableD_tupleD___deserialize__,
-    (B_bool (*)(B_IterableD_tuple))$default__bool__,
+    (bool (*)(B_IterableD_tuple))$default__bool__,
     (B_str (*)(B_IterableD_tuple))$default__str__,
     (B_str (*)(B_IterableD_tuple))$default__str__,
     B_IterableD_tupleD___iter__
@@ -227,7 +227,7 @@ struct B_SliceableD_tupleG_class B_SliceableD_tupleG_methods = {
     B_SliceableD_tupleD___init__,
     B_SliceableD_tupleD___serialize__,
     B_SliceableD_tupleD___deserialize__,
-    (B_bool (*)(B_SliceableD_tuple))$default__bool__,
+    (bool (*)(B_SliceableD_tuple))$default__bool__,
     (B_str (*)(B_SliceableD_tuple))$default__str__,
     (B_str (*)(B_SliceableD_tuple))$default__str__,
     B_SliceableD_tupleD___getitem__,
@@ -258,16 +258,16 @@ B_HashableD_tuple B_HashableD_tupleD___deserialize__(B_HashableD_tuple self, $Se
     return res;
 }
 
-B_bool B_HashableD_tupleD___eq__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple tup2) {
+bool B_HashableD_tupleD___eq__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple tup2) {
     //type-checking guarantees that sizes are equal
     for (int i=0; i<tup1->size; i++)
         if (!wit->W_Hashable[i]->$class->__eq__(wit->W_Hashable[i],tup1->components[i],tup2->components[i]))
-            return B_False;
-    return B_True;
+            return false;
+    return true;
 }
 
-B_bool B_HashableD_tupleD___ne__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple tup2) {
-    return toB_bool(!fromB_bool(B_HashableD_tupleD___eq__(wit,tup1,tup2)));
+bool B_HashableD_tupleD___ne__ (B_HashableD_tuple wit, B_tuple tup1, B_tuple tup2) {
+    return !B_HashableD_tupleD___eq__(wit,tup1,tup2);
 }
     
   
@@ -282,7 +282,7 @@ struct B_HashableD_tupleG_class B_HashableD_tupleG_methods = {
     B_HashableD_tupleD___init__,
     B_HashableD_tupleD___serialize__,
     B_HashableD_tupleD___deserialize__,
-    (B_bool (*)(B_HashableD_tuple))$default__bool__,
+    (bool (*)(B_HashableD_tuple))$default__bool__,
     (B_str (*)(B_HashableD_tuple))$default__str__,
     (B_str (*)(B_HashableD_tuple))$default__str__,
     B_HashableD_tupleD___eq__,

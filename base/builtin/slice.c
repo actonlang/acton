@@ -98,8 +98,8 @@ B_slice B_sliceD___deserialize__ (B_slice self, $Serial$state state) {
     return res;
 }
 
-B_bool B_sliceD___bool__(B_slice s) {
-    return B_True;
+bool B_sliceD___bool__(B_slice s) {
+    return true;
 }
 
 B_str B_sliceD___str__(B_slice s) {

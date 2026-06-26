@@ -48,11 +48,11 @@ B_str B_objectD___str__(B_object self) {
     return $FORMAT("<%s object at %p>", unmangle_name(self->$class->$GCINFO), self);
 }
 
-B_bool B_valueD___bool__(B_value self) {
-    return B_True;
+bool B_valueD___bool__(B_value self) {
+    return true;
 }
-B_bool B_objectD___bool__(B_object self) {
-    return B_True;
+bool B_objectD___bool__(B_object self) {
+    return true;
 }
 
 struct $SerializableG_class $SerializableG_methods = {"$Serializable",UNASSIGNED,NULL, $SerializableD___init__,NULL,NULL};

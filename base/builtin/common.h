@@ -25,11 +25,11 @@ void $default__init__($WORD);
                                B_dictD_setitem($state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint($state->row_no-1),$t); \
                                $t; })
 
-#define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? (b) : $a; })
+#define $AND(T, a, b)       ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? (b) : $a; })
 
-#define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? $a : (b); })
+#define $OR(T, a, b)        ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? $a : (b); })
 
-#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)->val) ? B_False : B_True; })
+#define $NOT(T, a)          ({ T $a = (a); ($a && ((B_value)$a)->$class->__bool__((B_value)$a)) ? B_False : B_True; })
 
 #define $ISINSTANCE($x,$T)  ({ \
                                /* If object is NULL (None), return False */ \

@@ -72,8 +72,8 @@ B_float B_floatD___deserialize__(B_float self, $Serial$state state) {
     return to$float(x);
 }
 
-B_bool B_floatD___bool__(B_float x) {
-    return toB_bool(x->val != 0.0);
+bool B_floatD___bool__(B_float x) {
+    return x->val != 0.0;
 }
 
 B_str B_floatD___str__(B_float x) {
@@ -194,39 +194,39 @@ B_float B_DivD_floatD___truediv__(B_DivD_float wit, B_float a, B_float b) {
 
 // B_OrdD_float  ////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_OrdD_floatD___eq__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val == b->val);
+bool B_OrdD_floatD___eq__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val == b->val;
 }
 
-B_bool B_OrdD_floatD___ne__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val != b->val);
+bool B_OrdD_floatD___ne__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val != b->val;
 }
 
-B_bool B_OrdD_floatD___lt__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val < b->val);
+bool B_OrdD_floatD___lt__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val < b->val;
 }
 
-B_bool B_OrdD_floatD___le__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val <= b->val);
+bool B_OrdD_floatD___le__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val <= b->val;
 }
 
-B_bool B_OrdD_floatD___gt__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val > b->val);
+bool B_OrdD_floatD___gt__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val > b->val;
 }
 
-B_bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val >= b->val);
+bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
+    return a->val >= b->val;
 }
 
 
 // B_HashableD_float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_HashableD_floatD___eq__(B_HashableD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val == b->val);
+bool B_HashableD_floatD___eq__(B_HashableD_float wit, B_float a, B_float b) {
+    return a->val == b->val;
 }
 
-B_bool B_HashableD_floatD___neq__(B_HashableD_float wit, B_float a, B_float b) {
-    return toB_bool(a->val != b->val);
+bool B_HashableD_floatD___ne__(B_HashableD_float wit, B_float a, B_float b) {
+    return a->val != b->val;
 }
 
 B_NoneType B_HashableD_floatD_hash(B_HashableD_float wit, B_float a, B_hasher h) {

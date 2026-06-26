@@ -52,10 +52,10 @@ B_NoneType linesQ_L_4actionD___init__ (linesQ_L_4action L_self, linesQ_Apa L_3ob
     return B_None;
 }
 $R linesQ_L_4actionD___call__ (linesQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R linesQ_L_4actionD___exec__ (linesQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg linesQ_L_4actionD___asyn__ (linesQ_L_4action L_self, B_int G_1) {
     linesQ_Apa L_3obj = ((linesQ_L_4action)(L_self))->L_3obj;
@@ -286,10 +286,10 @@ B_NoneType linesQ_L_14actionD___init__ (linesQ_L_14action L_self, linesQ_Apa L_1
     return B_None;
 }
 $R linesQ_L_14actionD___call__ (linesQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R linesQ_L_14actionD___exec__ (linesQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg linesQ_L_14actionD___asyn__ (linesQ_L_14action L_self, B_int G_1) {
     linesQ_Apa L_13obj = ((linesQ_L_14action)(L_self))->L_13obj;
@@ -323,10 +323,10 @@ B_NoneType linesQ_L_16actionD___init__ (linesQ_L_16action L_self, linesQ_Bepa L_
     return B_None;
 }
 $R linesQ_L_16actionD___call__ (linesQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R linesQ_L_16actionD___exec__ (linesQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg linesQ_L_16actionD___asyn__ (linesQ_L_16action L_self, B_int G_1) {
     linesQ_Bepa L_15obj = ((linesQ_L_16action)(L_self))->L_15obj;
@@ -360,10 +360,10 @@ B_NoneType linesQ_L_19actionD___init__ (linesQ_L_19action L_self, linesQ_main L_
     return B_None;
 }
 $R linesQ_L_19actionD___call__ (linesQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((linesQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 $R linesQ_L_19actionD___exec__ (linesQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((linesQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
 }
 B_Msg linesQ_L_19actionD___asyn__ (linesQ_L_19action L_self, B_int G_1) {
     linesQ_main L_18obj = ((linesQ_L_19action)(L_self))->L_18obj;
@@ -499,7 +499,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         while (true) {
             B_int j = ((B_int (*) ($WORD))((B_Iterator)(N_3iter))->$class->__next__)(N_3iter);
             #line 74 "test/src/lines.act"
-            if (((B_bool)((B_bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, j, toB_int(2LL)))->val) {
+            if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, j, toB_int(2LL))) {
                 #line 75 "test/src/lines.act"
                 continue;
             }
@@ -521,7 +521,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
     if ($PUSHF()) {
         if ($PUSH()) {
             #line 80 "test/src/lines.act"
-            if (((B_bool)((B_bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL)))->val) {
+            if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
                 #line 81 "test/src/lines.act"
                 $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("boom"))));
                 __builtin_unreachable();
@@ -1102,7 +1102,7 @@ $R linesQ_mainD_myprocG_local (linesQ_main self, $Cont C_cont, int64_t i) {
     #line 29 "test/src/lines.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("myproc"), toB_int(i)), B_None, B_None, B_None, B_None);
     #line 30 "test/src/lines.act"
-    if (((B_bool)((B_bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_331))->$class->__eq__)(linesQ_W_Apa_331, toB_int(i), toB_int(2LL)))->val) {
+    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_331))->$class->__eq__)(linesQ_W_Apa_331, toB_int(i), toB_int(2LL))) {
         #line 31 "test/src/lines.act"
         ((B_Msg (*) ($WORD, int64_t))((B_Env)(((linesQ_main)(self))->env))->$class->exit)(((linesQ_main)(self))->env, 0LL);
     }
@@ -1184,7 +1184,7 @@ void linesQ___init__ () {
     {
         linesQ_L_2ContG_methods.$GCINFO = "linesQ_L_2Cont";
         linesQ_L_2ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_2ContG_methods.__bool__ = (B_bool (*) (linesQ_L_2Cont))B_valueG_methods.__bool__;
+        linesQ_L_2ContG_methods.__bool__ = (bool (*) (linesQ_L_2Cont))B_valueG_methods.__bool__;
         linesQ_L_2ContG_methods.__str__ = (B_str (*) (linesQ_L_2Cont))B_valueG_methods.__str__;
         linesQ_L_2ContG_methods.__repr__ = (B_str (*) (linesQ_L_2Cont))B_valueG_methods.__repr__;
         linesQ_L_2ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_2Cont, linesQ_Apa, $Cont))linesQ_L_2ContD___init__;
@@ -1196,7 +1196,7 @@ void linesQ___init__ () {
     {
         linesQ_L_4actionG_methods.$GCINFO = "linesQ_L_4action";
         linesQ_L_4actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_4actionG_methods.__bool__ = (B_bool (*) (linesQ_L_4action))B_valueG_methods.__bool__;
+        linesQ_L_4actionG_methods.__bool__ = (bool (*) (linesQ_L_4action))B_valueG_methods.__bool__;
         linesQ_L_4actionG_methods.__str__ = (B_str (*) (linesQ_L_4action))B_valueG_methods.__str__;
         linesQ_L_4actionG_methods.__repr__ = (B_str (*) (linesQ_L_4action))B_valueG_methods.__repr__;
         linesQ_L_4actionG_methods.__init__ = (B_NoneType (*) (linesQ_L_4action, linesQ_Apa))linesQ_L_4actionD___init__;
@@ -1210,7 +1210,7 @@ void linesQ___init__ () {
     {
         linesQ_L_6ContG_methods.$GCINFO = "linesQ_L_6Cont";
         linesQ_L_6ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_6ContG_methods.__bool__ = (B_bool (*) (linesQ_L_6Cont))B_valueG_methods.__bool__;
+        linesQ_L_6ContG_methods.__bool__ = (bool (*) (linesQ_L_6Cont))B_valueG_methods.__bool__;
         linesQ_L_6ContG_methods.__str__ = (B_str (*) (linesQ_L_6Cont))B_valueG_methods.__str__;
         linesQ_L_6ContG_methods.__repr__ = (B_str (*) (linesQ_L_6Cont))B_valueG_methods.__repr__;
         linesQ_L_6ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_6Cont, $action, $Cont))linesQ_L_6ContD___init__;
@@ -1222,7 +1222,7 @@ void linesQ___init__ () {
     {
         linesQ_L_7procG_methods.$GCINFO = "linesQ_L_7proc";
         linesQ_L_7procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_7procG_methods.__bool__ = (B_bool (*) (linesQ_L_7proc))B_valueG_methods.__bool__;
+        linesQ_L_7procG_methods.__bool__ = (bool (*) (linesQ_L_7proc))B_valueG_methods.__bool__;
         linesQ_L_7procG_methods.__str__ = (B_str (*) (linesQ_L_7proc))B_valueG_methods.__str__;
         linesQ_L_7procG_methods.__repr__ = (B_str (*) (linesQ_L_7proc))B_valueG_methods.__repr__;
         linesQ_L_7procG_methods.__init__ = (B_NoneType (*) (linesQ_L_7proc, linesQ_Apa, $action))linesQ_L_7procD___init__;
@@ -1235,7 +1235,7 @@ void linesQ___init__ () {
     {
         linesQ_L_8procG_methods.$GCINFO = "linesQ_L_8proc";
         linesQ_L_8procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_8procG_methods.__bool__ = (B_bool (*) (linesQ_L_8proc))B_valueG_methods.__bool__;
+        linesQ_L_8procG_methods.__bool__ = (bool (*) (linesQ_L_8proc))B_valueG_methods.__bool__;
         linesQ_L_8procG_methods.__str__ = (B_str (*) (linesQ_L_8proc))B_valueG_methods.__str__;
         linesQ_L_8procG_methods.__repr__ = (B_str (*) (linesQ_L_8proc))B_valueG_methods.__repr__;
         linesQ_L_8procG_methods.__init__ = (B_NoneType (*) (linesQ_L_8proc, linesQ_Apa, $action))linesQ_L_8procD___init__;
@@ -1248,7 +1248,7 @@ void linesQ___init__ () {
     {
         linesQ_L_9procG_methods.$GCINFO = "linesQ_L_9proc";
         linesQ_L_9procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_9procG_methods.__bool__ = (B_bool (*) (linesQ_L_9proc))B_valueG_methods.__bool__;
+        linesQ_L_9procG_methods.__bool__ = (bool (*) (linesQ_L_9proc))B_valueG_methods.__bool__;
         linesQ_L_9procG_methods.__str__ = (B_str (*) (linesQ_L_9proc))B_valueG_methods.__str__;
         linesQ_L_9procG_methods.__repr__ = (B_str (*) (linesQ_L_9proc))B_valueG_methods.__repr__;
         linesQ_L_9procG_methods.__init__ = (B_NoneType (*) (linesQ_L_9proc, linesQ_Apa, int64_t))linesQ_L_9procD___init__;
@@ -1261,7 +1261,7 @@ void linesQ___init__ () {
     {
         linesQ_L_10procG_methods.$GCINFO = "linesQ_L_10proc";
         linesQ_L_10procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_10procG_methods.__bool__ = (B_bool (*) (linesQ_L_10proc))B_valueG_methods.__bool__;
+        linesQ_L_10procG_methods.__bool__ = (bool (*) (linesQ_L_10proc))B_valueG_methods.__bool__;
         linesQ_L_10procG_methods.__str__ = (B_str (*) (linesQ_L_10proc))B_valueG_methods.__str__;
         linesQ_L_10procG_methods.__repr__ = (B_str (*) (linesQ_L_10proc))B_valueG_methods.__repr__;
         linesQ_L_10procG_methods.__init__ = (B_NoneType (*) (linesQ_L_10proc, linesQ_Bepa, int64_t))linesQ_L_10procD___init__;
@@ -1274,7 +1274,7 @@ void linesQ___init__ () {
     {
         linesQ_L_14actionG_methods.$GCINFO = "linesQ_L_14action";
         linesQ_L_14actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_14actionG_methods.__bool__ = (B_bool (*) (linesQ_L_14action))B_valueG_methods.__bool__;
+        linesQ_L_14actionG_methods.__bool__ = (bool (*) (linesQ_L_14action))B_valueG_methods.__bool__;
         linesQ_L_14actionG_methods.__str__ = (B_str (*) (linesQ_L_14action))B_valueG_methods.__str__;
         linesQ_L_14actionG_methods.__repr__ = (B_str (*) (linesQ_L_14action))B_valueG_methods.__repr__;
         linesQ_L_14actionG_methods.__init__ = (B_NoneType (*) (linesQ_L_14action, linesQ_Apa))linesQ_L_14actionD___init__;
@@ -1288,7 +1288,7 @@ void linesQ___init__ () {
     {
         linesQ_L_16actionG_methods.$GCINFO = "linesQ_L_16action";
         linesQ_L_16actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_16actionG_methods.__bool__ = (B_bool (*) (linesQ_L_16action))B_valueG_methods.__bool__;
+        linesQ_L_16actionG_methods.__bool__ = (bool (*) (linesQ_L_16action))B_valueG_methods.__bool__;
         linesQ_L_16actionG_methods.__str__ = (B_str (*) (linesQ_L_16action))B_valueG_methods.__str__;
         linesQ_L_16actionG_methods.__repr__ = (B_str (*) (linesQ_L_16action))B_valueG_methods.__repr__;
         linesQ_L_16actionG_methods.__init__ = (B_NoneType (*) (linesQ_L_16action, linesQ_Bepa))linesQ_L_16actionD___init__;
@@ -1302,7 +1302,7 @@ void linesQ___init__ () {
     {
         linesQ_L_19actionG_methods.$GCINFO = "linesQ_L_19action";
         linesQ_L_19actionG_methods.$superclass = ($SuperG_class)&$actionG_methods;
-        linesQ_L_19actionG_methods.__bool__ = (B_bool (*) (linesQ_L_19action))B_valueG_methods.__bool__;
+        linesQ_L_19actionG_methods.__bool__ = (bool (*) (linesQ_L_19action))B_valueG_methods.__bool__;
         linesQ_L_19actionG_methods.__str__ = (B_str (*) (linesQ_L_19action))B_valueG_methods.__str__;
         linesQ_L_19actionG_methods.__repr__ = (B_str (*) (linesQ_L_19action))B_valueG_methods.__repr__;
         linesQ_L_19actionG_methods.__init__ = (B_NoneType (*) (linesQ_L_19action, linesQ_main))linesQ_L_19actionD___init__;
@@ -1316,7 +1316,7 @@ void linesQ___init__ () {
     {
         linesQ_L_20procG_methods.$GCINFO = "linesQ_L_20proc";
         linesQ_L_20procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_20procG_methods.__bool__ = (B_bool (*) (linesQ_L_20proc))B_valueG_methods.__bool__;
+        linesQ_L_20procG_methods.__bool__ = (bool (*) (linesQ_L_20proc))B_valueG_methods.__bool__;
         linesQ_L_20procG_methods.__str__ = (B_str (*) (linesQ_L_20proc))B_valueG_methods.__str__;
         linesQ_L_20procG_methods.__repr__ = (B_str (*) (linesQ_L_20proc))B_valueG_methods.__repr__;
         linesQ_L_20procG_methods.__init__ = (B_NoneType (*) (linesQ_L_20proc, linesQ_main))linesQ_L_20procD___init__;
@@ -1329,7 +1329,7 @@ void linesQ___init__ () {
     {
         linesQ_L_21ContG_methods.$GCINFO = "linesQ_L_21Cont";
         linesQ_L_21ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_21ContG_methods.__bool__ = (B_bool (*) (linesQ_L_21Cont))B_valueG_methods.__bool__;
+        linesQ_L_21ContG_methods.__bool__ = (bool (*) (linesQ_L_21Cont))B_valueG_methods.__bool__;
         linesQ_L_21ContG_methods.__str__ = (B_str (*) (linesQ_L_21Cont))B_valueG_methods.__str__;
         linesQ_L_21ContG_methods.__repr__ = (B_str (*) (linesQ_L_21Cont))B_valueG_methods.__repr__;
         linesQ_L_21ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_21Cont, linesQ_main, $Cont))linesQ_L_21ContD___init__;
@@ -1341,7 +1341,7 @@ void linesQ___init__ () {
     {
         linesQ_L_22ContG_methods.$GCINFO = "linesQ_L_22Cont";
         linesQ_L_22ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_22ContG_methods.__bool__ = (B_bool (*) (linesQ_L_22Cont))B_valueG_methods.__bool__;
+        linesQ_L_22ContG_methods.__bool__ = (bool (*) (linesQ_L_22Cont))B_valueG_methods.__bool__;
         linesQ_L_22ContG_methods.__str__ = (B_str (*) (linesQ_L_22Cont))B_valueG_methods.__str__;
         linesQ_L_22ContG_methods.__repr__ = (B_str (*) (linesQ_L_22Cont))B_valueG_methods.__repr__;
         linesQ_L_22ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_22Cont, linesQ_main, $Cont))linesQ_L_22ContD___init__;
@@ -1353,7 +1353,7 @@ void linesQ___init__ () {
     {
         linesQ_L_23ContG_methods.$GCINFO = "linesQ_L_23Cont";
         linesQ_L_23ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_23ContG_methods.__bool__ = (B_bool (*) (linesQ_L_23Cont))B_valueG_methods.__bool__;
+        linesQ_L_23ContG_methods.__bool__ = (bool (*) (linesQ_L_23Cont))B_valueG_methods.__bool__;
         linesQ_L_23ContG_methods.__str__ = (B_str (*) (linesQ_L_23Cont))B_valueG_methods.__str__;
         linesQ_L_23ContG_methods.__repr__ = (B_str (*) (linesQ_L_23Cont))B_valueG_methods.__repr__;
         linesQ_L_23ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_23Cont, linesQ_main, $Cont))linesQ_L_23ContD___init__;
@@ -1365,7 +1365,7 @@ void linesQ___init__ () {
     {
         linesQ_L_24procG_methods.$GCINFO = "linesQ_L_24proc";
         linesQ_L_24procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_24procG_methods.__bool__ = (B_bool (*) (linesQ_L_24proc))B_valueG_methods.__bool__;
+        linesQ_L_24procG_methods.__bool__ = (bool (*) (linesQ_L_24proc))B_valueG_methods.__bool__;
         linesQ_L_24procG_methods.__str__ = (B_str (*) (linesQ_L_24proc))B_valueG_methods.__str__;
         linesQ_L_24procG_methods.__repr__ = (B_str (*) (linesQ_L_24proc))B_valueG_methods.__repr__;
         linesQ_L_24procG_methods.__init__ = (B_NoneType (*) (linesQ_L_24proc, linesQ_main, int64_t))linesQ_L_24procD___init__;
@@ -1378,7 +1378,7 @@ void linesQ___init__ () {
     {
         linesQ_L_25procG_methods.$GCINFO = "linesQ_L_25proc";
         linesQ_L_25procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_25procG_methods.__bool__ = (B_bool (*) (linesQ_L_25proc))B_valueG_methods.__bool__;
+        linesQ_L_25procG_methods.__bool__ = (bool (*) (linesQ_L_25proc))B_valueG_methods.__bool__;
         linesQ_L_25procG_methods.__str__ = (B_str (*) (linesQ_L_25proc))B_valueG_methods.__str__;
         linesQ_L_25procG_methods.__repr__ = (B_str (*) (linesQ_L_25proc))B_valueG_methods.__repr__;
         linesQ_L_25procG_methods.__init__ = (B_NoneType (*) (linesQ_L_25proc, linesQ_main))linesQ_L_25procD___init__;
@@ -1391,7 +1391,7 @@ void linesQ___init__ () {
     {
         linesQ_L_27ContG_methods.$GCINFO = "linesQ_L_27Cont";
         linesQ_L_27ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_27ContG_methods.__bool__ = (B_bool (*) (linesQ_L_27Cont))B_valueG_methods.__bool__;
+        linesQ_L_27ContG_methods.__bool__ = (bool (*) (linesQ_L_27Cont))B_valueG_methods.__bool__;
         linesQ_L_27ContG_methods.__str__ = (B_str (*) (linesQ_L_27Cont))B_valueG_methods.__str__;
         linesQ_L_27ContG_methods.__repr__ = (B_str (*) (linesQ_L_27Cont))B_valueG_methods.__repr__;
         linesQ_L_27ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_27Cont, $Cont, linesQ_Apa))linesQ_L_27ContD___init__;
@@ -1403,7 +1403,7 @@ void linesQ___init__ () {
     {
         linesQ_L_28procG_methods.$GCINFO = "linesQ_L_28proc";
         linesQ_L_28procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_28procG_methods.__bool__ = (B_bool (*) (linesQ_L_28proc))B_valueG_methods.__bool__;
+        linesQ_L_28procG_methods.__bool__ = (bool (*) (linesQ_L_28proc))B_valueG_methods.__bool__;
         linesQ_L_28procG_methods.__str__ = (B_str (*) (linesQ_L_28proc))B_valueG_methods.__str__;
         linesQ_L_28procG_methods.__repr__ = (B_str (*) (linesQ_L_28proc))B_valueG_methods.__repr__;
         linesQ_L_28procG_methods.__init__ = (B_NoneType (*) (linesQ_L_28proc, linesQ_Apa))linesQ_L_28procD___init__;
@@ -1416,7 +1416,7 @@ void linesQ___init__ () {
     {
         linesQ_L_30ContG_methods.$GCINFO = "linesQ_L_30Cont";
         linesQ_L_30ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_30ContG_methods.__bool__ = (B_bool (*) (linesQ_L_30Cont))B_valueG_methods.__bool__;
+        linesQ_L_30ContG_methods.__bool__ = (bool (*) (linesQ_L_30Cont))B_valueG_methods.__bool__;
         linesQ_L_30ContG_methods.__str__ = (B_str (*) (linesQ_L_30Cont))B_valueG_methods.__str__;
         linesQ_L_30ContG_methods.__repr__ = (B_str (*) (linesQ_L_30Cont))B_valueG_methods.__repr__;
         linesQ_L_30ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_30Cont, $Cont, linesQ_Bepa))linesQ_L_30ContD___init__;
@@ -1428,7 +1428,7 @@ void linesQ___init__ () {
     {
         linesQ_L_31procG_methods.$GCINFO = "linesQ_L_31proc";
         linesQ_L_31procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_31procG_methods.__bool__ = (B_bool (*) (linesQ_L_31proc))B_valueG_methods.__bool__;
+        linesQ_L_31procG_methods.__bool__ = (bool (*) (linesQ_L_31proc))B_valueG_methods.__bool__;
         linesQ_L_31procG_methods.__str__ = (B_str (*) (linesQ_L_31proc))B_valueG_methods.__str__;
         linesQ_L_31procG_methods.__repr__ = (B_str (*) (linesQ_L_31proc))B_valueG_methods.__repr__;
         linesQ_L_31procG_methods.__init__ = (B_NoneType (*) (linesQ_L_31proc, linesQ_Bepa))linesQ_L_31procD___init__;
@@ -1441,7 +1441,7 @@ void linesQ___init__ () {
     {
         linesQ_L_33ContG_methods.$GCINFO = "linesQ_L_33Cont";
         linesQ_L_33ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        linesQ_L_33ContG_methods.__bool__ = (B_bool (*) (linesQ_L_33Cont))B_valueG_methods.__bool__;
+        linesQ_L_33ContG_methods.__bool__ = (bool (*) (linesQ_L_33Cont))B_valueG_methods.__bool__;
         linesQ_L_33ContG_methods.__str__ = (B_str (*) (linesQ_L_33Cont))B_valueG_methods.__str__;
         linesQ_L_33ContG_methods.__repr__ = (B_str (*) (linesQ_L_33Cont))B_valueG_methods.__repr__;
         linesQ_L_33ContG_methods.__init__ = (B_NoneType (*) (linesQ_L_33Cont, $Cont, linesQ_main))linesQ_L_33ContD___init__;
@@ -1453,7 +1453,7 @@ void linesQ___init__ () {
     {
         linesQ_L_34procG_methods.$GCINFO = "linesQ_L_34proc";
         linesQ_L_34procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        linesQ_L_34procG_methods.__bool__ = (B_bool (*) (linesQ_L_34proc))B_valueG_methods.__bool__;
+        linesQ_L_34procG_methods.__bool__ = (bool (*) (linesQ_L_34proc))B_valueG_methods.__bool__;
         linesQ_L_34procG_methods.__str__ = (B_str (*) (linesQ_L_34proc))B_valueG_methods.__str__;
         linesQ_L_34procG_methods.__repr__ = (B_str (*) (linesQ_L_34proc))B_valueG_methods.__repr__;
         linesQ_L_34procG_methods.__init__ = (B_NoneType (*) (linesQ_L_34proc, linesQ_main, B_Env))linesQ_L_34procD___init__;
@@ -1466,7 +1466,7 @@ void linesQ___init__ () {
     {
         linesQ_ApaG_methods.$GCINFO = "linesQ_Apa";
         linesQ_ApaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_ApaG_methods.__bool__ = (B_bool (*) (linesQ_Apa))$ActorG_methods.__bool__;
+        linesQ_ApaG_methods.__bool__ = (bool (*) (linesQ_Apa))$ActorG_methods.__bool__;
         linesQ_ApaG_methods.__str__ = (B_str (*) (linesQ_Apa))$ActorG_methods.__str__;
         linesQ_ApaG_methods.__repr__ = (B_str (*) (linesQ_Apa))$ActorG_methods.__repr__;
         linesQ_ApaG_methods.__resume__ = (B_NoneType (*) (linesQ_Apa))$ActorG_methods.__resume__;
@@ -1485,7 +1485,7 @@ void linesQ___init__ () {
     {
         linesQ_BepaG_methods.$GCINFO = "linesQ_Bepa";
         linesQ_BepaG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_BepaG_methods.__bool__ = (B_bool (*) (linesQ_Bepa))$ActorG_methods.__bool__;
+        linesQ_BepaG_methods.__bool__ = (bool (*) (linesQ_Bepa))$ActorG_methods.__bool__;
         linesQ_BepaG_methods.__str__ = (B_str (*) (linesQ_Bepa))$ActorG_methods.__str__;
         linesQ_BepaG_methods.__repr__ = (B_str (*) (linesQ_Bepa))$ActorG_methods.__repr__;
         linesQ_BepaG_methods.__resume__ = (B_NoneType (*) (linesQ_Bepa))$ActorG_methods.__resume__;
@@ -1500,7 +1500,7 @@ void linesQ___init__ () {
     {
         linesQ_mainG_methods.$GCINFO = "linesQ_main";
         linesQ_mainG_methods.$superclass = ($SuperG_class)&$ActorG_methods;
-        linesQ_mainG_methods.__bool__ = (B_bool (*) (linesQ_main))$ActorG_methods.__bool__;
+        linesQ_mainG_methods.__bool__ = (bool (*) (linesQ_main))$ActorG_methods.__bool__;
         linesQ_mainG_methods.__str__ = (B_str (*) (linesQ_main))$ActorG_methods.__str__;
         linesQ_mainG_methods.__repr__ = (B_str (*) (linesQ_main))$ActorG_methods.__repr__;
         linesQ_mainG_methods.__resume__ = (B_NoneType (*) (linesQ_main))$ActorG_methods.__resume__;

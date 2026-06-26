@@ -107,6 +107,12 @@ compilerTests =
   , testCase "module lookup exact imports" $ do
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/module_lookup/out") ""
         testBuild "--skip-build" ExitSuccess False "../../test/compiler/module_lookup/"
+  , testCase "unboxed bool inherited method slot" $ do
+        let proj = "../../test/compiler/unbox_bool_method_slot"
+        cleanOut proj
+        testBuild "" ExitSuccess False proj
+        (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc "./out/bin/main" []){ cwd = Just proj } ""
+        assertEqual ("unboxed bool method slot binary should run: " ++ cmdErr) ExitSuccess returnCode
   , testCase "dynamic module library build" $ do
         withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

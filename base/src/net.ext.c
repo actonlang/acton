@@ -24,21 +24,21 @@ void netQ___ext_init__() {
 }
 
 
-B_bool netQ_is_ipv4 (B_str address) {
+bool netQ_is_ipv4 (B_str address) {
     struct sockaddr_in sa;
     if (inet_pton(AF_INET, (const char *)fromB_str(address), &(sa.sin_addr)) == 0) {
-        return B_False;
+        return false;
     } else {
-        return B_True;
+        return true;
     }
 }
 
-B_bool netQ_is_ipv6 (B_str address) {
+bool netQ_is_ipv6 (B_str address) {
     struct sockaddr_in6 sa;
     if (inet_pton(AF_INET6, (const char *)fromB_str(address), &(sa.sin6_addr)) == 0) {
-        return B_False;
+        return false;
     } else {
-        return B_True;
+        return true;
     }
 }
 
@@ -1830,7 +1830,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     }
 
     // Default is to verify TLS certificate. Should we disable verification?
-    if (fromB_bool(self->verify_tls) == false) {
+    if (self->verify_tls == false) {
         log_debug("TLS certificate verification disabled");
         stream->authmode = 0; // 0=none, 2=require (mbedtls specific)
     }

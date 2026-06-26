@@ -97,8 +97,8 @@ void B_IteratorD_rangeD_init(B_IteratorD_range self, B_range rng) {
 */
 
 
-B_bool B_rangeD___bool__(B_range self) {
-    return B_True;
+bool B_rangeD___bool__(B_range self) {
+    return true;
 }
 
 B_str B_rangeD___repr__(B_range self) {

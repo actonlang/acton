@@ -27,8 +27,8 @@ B_NoneType B_NoneTypeD__deserialize__(B_NoneType self, $Serial$state state) {
   return NULL;
 }
 
-B_bool B_NoneTypeD__bool__(B_NoneType self) {
-  return B_False;
+bool B_NoneTypeD__bool__(B_NoneType self) {
+  return false;
 }
 
 B_str B_NoneTypeD__str__(B_NoneType self) {

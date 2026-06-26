@@ -17,12 +17,12 @@
 // Serialization ///////////////////////////////////////////////////////////////////////
 
 B_NoneType B_boolD___init__(B_bool self, B_value s){
-    self->val = (s->$class->__bool__(s))->val;
+    self->val = B_boolG_new(s);
     return B_None;
 }
 
-B_bool B_boolD___bool__(B_bool self) {
-    return self;
+bool B_boolD___bool__(B_bool self) {
+    return self->val;
 }
 
 B_str B_boolD___str__(B_bool self) {
@@ -47,37 +47,37 @@ B_bool B_boolD___deserialize__(B_bool self, $Serial$state state) {
     return toB_bool((long)$val_deserialize(state));
 }
 
-B_bool B_boolG_new(B_value s) {
-    return $NEW(B_bool, s);
+bool B_boolG_new(B_value s) {
+    return  s->$class->__bool__(s);
 }
 
-B_bool toB_bool(long b) {
+B_bool toB_bool(bool b) {
     return b ? B_True : B_False;
 }
     
-long fromB_bool(B_bool b) {
+bool fromB_bool(B_bool b) {
     return b->val;
 }
 
-struct B_bool $t = {&B_boolG_methods,1L};
-struct B_bool $f = {&B_boolG_methods,0L};
+struct B_bool $t = {&B_boolG_methods,true};
+struct B_bool $f = {&B_boolG_methods,false};
 
 B_bool B_True = &$t;
 B_bool B_False = &$f;
 
 
-B_bool $default__bool__(B_value self) {
-    return B_True;
+bool $default__bool__(B_value self) {
+    return true;
 }
 
 // B_HashableD_bool ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-B_bool B_HashableD_boolD___eq__(B_HashableD_bool wit, B_bool a, B_bool b) {
-    return toB_bool(a->val == b->val);
+bool B_HashableD_boolD___eq__(B_HashableD_bool wit, B_bool a, B_bool b) {
+    return a->val == b->val;
 }
 
-B_bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
-    return toB_bool(a->val != b->val);
+bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
+    return a->val != b->val;
 }
 
 B_NoneType B_HashableD_boolD_hash(B_HashableD_bool wit, B_bool a, B_hasher h) {

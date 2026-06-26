@@ -140,7 +140,7 @@ int $lookdict(B_dict dict, B_Hashable hashwit, uint64_t hash, $WORD key, $WORD *
         // Ignore hash and do linear search
         for (int ix = 0; ix < (int)table->tb_nentries; ix++) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
-            if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
+            if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)))) {
                 // found an entry with the same or equal key
                 *res = entry->value; 
                 return ix;
@@ -162,7 +162,7 @@ int $lookdict(B_dict dict, B_Hashable hashwit, uint64_t hash, $WORD key, $WORD *
             }
             if (ix >= 0) {
                 $entry_t entry = &TB_ENTRIES(table)[ix];
-                if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)->val))) {
+                if (entry->value != DELETED && (entry->key == key || (entry->hash == hash && hashwit->$class->__eq__(hashwit,key,entry->key)))) {
                     // found an entry with the same or equal key
                     *res = entry->value;
                     return ix;
@@ -249,8 +249,8 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     return B_None;
 }
 
-B_bool B_dictD___bool__(B_dict self) {
-    return toB_bool(self->numelements>0);
+bool B_dictD___bool__(B_dict self) {
+    return self->numelements>0;
 }
 
 B_str B_dictD___str__(B_dict self) {
@@ -335,28 +335,28 @@ B_dict B_dictD___deserialize__(B_dict res, $Serial$state state) {
 
 // B_OrdD_dict ////////////////////////////////////////////////////////////////////////
 
-B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
+bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
     if (directfalse) {
-        return B_False;
+        return false;
     };
     if (a->numelements == 0)
-        return B_True;
+        return true;
     B_Hashable wH = w->W_HashableD_AD_OrdD_dict;
     B_Eq wB = w->W_EqD_BD_OrdD_dict;
     B_MappingD_dict m = B_MappingD_dictG_new(wH);
     B_Iterator it = m->$class->keys(m,a);
     $WORD x,resa,resb;
     if ($PUSH()) {
-        while(1) {
+        while(true) {
             x = it->$class->__next__(it);
             long h = 0;
             if (a->table->tb_size > INIT_SIZE)
                 h = B_hash(wH, x);
             int ixa = $lookdict(a, wH, h, x, &resa);
             int ixb = $lookdict(b, wH, h, x ,&resb);
-            if (ixb<0 || wB->$class->__ne__(wB,resa,resb)->val) {
+            if (ixb<0 || wB->$class->__ne__(wB,resa,resb)) {
                 $DROP();
-                return B_False;
+                return false;
             }
         }
         $DROP();
@@ -365,31 +365,31 @@ B_bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
         if (! $ISINSTANCE0(ex, B_StopIteration))
            $RAISE(ex);
     }
-    return B_True;
+    return true;
 }
 
-B_bool B_OrdD_dictD___eq__ (B_OrdD_dict w, B_dict a, B_dict b) {
+bool B_OrdD_dictD___eq__ (B_OrdD_dict w, B_dict a, B_dict b) {
     return B_dictrel(a->numelements != b->numelements,w,a,b);
 }
 
-B_bool B_OrdD_dictD___ne__ (B_OrdD_dict w, B_dict a, B_dict b) {
-    return toB_bool(!(w->$class->__eq__(w,a,b)->val));
+bool B_OrdD_dictD___ne__ (B_OrdD_dict w, B_dict a, B_dict b) {
+    return !w->$class->__eq__(w,a,b);
 }
 
-B_bool B_OrdD_dictD___lt__ (B_OrdD_dict w, B_dict a, B_dict b) {
+bool B_OrdD_dictD___lt__ (B_OrdD_dict w, B_dict a, B_dict b) {
     return B_dictrel(a->numelements >= b->numelements,w,a,b);
 }
 
-B_bool B_OrdD_dictD___le__ (B_OrdD_dict w, B_dict a, B_dict b) {
+bool B_OrdD_dictD___le__ (B_OrdD_dict w, B_dict a, B_dict b) {
     return B_dictrel(a->numelements > b->numelements,w,a,b);
 }
 
-B_bool B_OrdD_dictD___gt__ (B_OrdD_dict w, B_dict a, B_dict b) {
-    return toB_bool(!(w->$class->__lt__(w,b,a)->val));
+bool B_OrdD_dictD___gt__ (B_OrdD_dict w, B_dict a, B_dict b) {
+    return !w->$class->__lt__(w,b,a);
 }
 
-B_bool B_OrdD_dictD___ge__ (B_OrdD_dict w, B_dict a, B_dict b) {
-    return toB_bool(!(w->$class->__le__(w,b,a)->val));
+bool B_OrdD_dictD___ge__ (B_OrdD_dict w, B_dict a, B_dict b) {
+    return !w->$class->__le__(w,b,a);
 }
 
 // B_MappingD_dict ///////////////////////////////////////////////////////////////
@@ -424,8 +424,8 @@ void B_IteratorD_dictD_init(B_IteratorD_dict self, B_dict dict) {
 }
 
 
-B_bool B_IteratorD_dictD_bool(B_IteratorD_dict self) {
-    return B_True;
+bool B_IteratorD_dictD_bool(B_IteratorD_dict self) {
+    return true;
 }
 
 B_str B_IteratorD_dictD_str(B_IteratorD_dict self) {
@@ -473,19 +473,19 @@ int64_t B_MappingD_dictD___len__ (B_MappingD_dict wit, B_dict dict) {
     return dict->numelements;
 }
   
-B_bool B_MappingD_dictD___contains__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
+bool B_MappingD_dictD___contains__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
     if (dict->numelements == 0)
-        return B_False;
+        return false;
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     $WORD res;
     long h = 0;
     if (dict->table->tb_size > INIT_SIZE)
         h = B_hash(hashwit, key);
-    return toB_bool($lookdict(dict,hashwit,h,key,&res) >= 0);
+    return $lookdict(dict,hashwit,h,key,&res) >= 0;
 }
 
-B_bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
-    return toB_bool(!B_MappingD_dictD___contains__(wit, dict, key)->val);
+bool B_MappingD_dictD___containsnot__ (B_MappingD_dict wit, B_dict dict, $WORD key) {
+    return !B_MappingD_dictD___contains__(wit, dict, key);
 }
 
 $WORD B_MappingD_dictD_get (B_MappingD_dict wit, B_dict dict, $WORD key) {
@@ -606,8 +606,8 @@ void B_IteratorD_dict_values_init(B_IteratorD_dict_values self, B_dict dict) {
 }
 
 
-B_bool B_IteratorD_dict_values_bool(B_IteratorD_dict_values self) {
-    return B_True;
+bool B_IteratorD_dict_values_bool(B_IteratorD_dict_values self) {
+    return true;
 }
 
 B_str B_IteratorD_dict_values_str(B_IteratorD_dict_values self) {
@@ -661,8 +661,8 @@ void B_IteratorD_dict_items_init(B_IteratorD_dict_items self, B_dict dict) {
 }
 
 
-B_bool B_IteratorD_dict_items_bool(B_IteratorD_dict_items self) {
-    return B_True;
+bool B_IteratorD_dict_items_bool(B_IteratorD_dict_items self) {
+    return true;
 }
 
 B_str B_IteratorD_dict_items_str(B_IteratorD_dict_items self) {

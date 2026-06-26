@@ -1,0 +1,18 @@
+class Base(object):
+    def __init__(self):
+        pass
+
+    def flag(self) -> bool:
+        raise NotImplementedError()
+
+class Child(Base):
+    def flag(self) -> bool:
+        return True
+
+def through_base(obj: Base) -> bool:
+    return obj.flag()
+
+actor main(env: Env):
+    if through_base(Child()):
+        env.exit(0)
+    env.exit(1)

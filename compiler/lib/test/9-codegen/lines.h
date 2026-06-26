@@ -60,7 +60,7 @@ struct linesQ_L_2ContG_class {
     B_NoneType (*__init__) (linesQ_L_2Cont, linesQ_Apa, $Cont);
     void (*__serialize__) (linesQ_L_2Cont, $Serial$state);
     linesQ_L_2Cont (*__deserialize__) (linesQ_L_2Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_2Cont);
+    bool (*__bool__) (linesQ_L_2Cont);
     B_str (*__str__) (linesQ_L_2Cont);
     B_str (*__repr__) (linesQ_L_2Cont);
     $R (*__call__) (linesQ_L_2Cont, B_NoneType);
@@ -77,7 +77,7 @@ struct linesQ_L_4actionG_class {
     B_NoneType (*__init__) (linesQ_L_4action, linesQ_Apa);
     void (*__serialize__) (linesQ_L_4action, $Serial$state);
     linesQ_L_4action (*__deserialize__) (linesQ_L_4action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_4action);
+    bool (*__bool__) (linesQ_L_4action);
     B_str (*__str__) (linesQ_L_4action);
     B_str (*__repr__) (linesQ_L_4action);
     $R (*__call__) (linesQ_L_4action, $Cont, B_int);
@@ -96,7 +96,7 @@ struct linesQ_L_6ContG_class {
     B_NoneType (*__init__) (linesQ_L_6Cont, $action, $Cont);
     void (*__serialize__) (linesQ_L_6Cont, $Serial$state);
     linesQ_L_6Cont (*__deserialize__) (linesQ_L_6Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_6Cont);
+    bool (*__bool__) (linesQ_L_6Cont);
     B_str (*__str__) (linesQ_L_6Cont);
     B_str (*__repr__) (linesQ_L_6Cont);
     $R (*__call__) (linesQ_L_6Cont, B_int);
@@ -113,7 +113,7 @@ struct linesQ_L_7procG_class {
     B_NoneType (*__init__) (linesQ_L_7proc, linesQ_Apa, $action);
     void (*__serialize__) (linesQ_L_7proc, $Serial$state);
     linesQ_L_7proc (*__deserialize__) (linesQ_L_7proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_7proc);
+    bool (*__bool__) (linesQ_L_7proc);
     B_str (*__str__) (linesQ_L_7proc);
     B_str (*__repr__) (linesQ_L_7proc);
     $R (*__call__) (linesQ_L_7proc, $Cont);
@@ -131,7 +131,7 @@ struct linesQ_L_8procG_class {
     B_NoneType (*__init__) (linesQ_L_8proc, linesQ_Apa, $action);
     void (*__serialize__) (linesQ_L_8proc, $Serial$state);
     linesQ_L_8proc (*__deserialize__) (linesQ_L_8proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_8proc);
+    bool (*__bool__) (linesQ_L_8proc);
     B_str (*__str__) (linesQ_L_8proc);
     B_str (*__repr__) (linesQ_L_8proc);
     $R (*__call__) (linesQ_L_8proc, $Cont);
@@ -149,7 +149,7 @@ struct linesQ_L_9procG_class {
     B_NoneType (*__init__) (linesQ_L_9proc, linesQ_Apa, int64_t);
     void (*__serialize__) (linesQ_L_9proc, $Serial$state);
     linesQ_L_9proc (*__deserialize__) (linesQ_L_9proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_9proc);
+    bool (*__bool__) (linesQ_L_9proc);
     B_str (*__str__) (linesQ_L_9proc);
     B_str (*__repr__) (linesQ_L_9proc);
     $R (*__call__) (linesQ_L_9proc, $Cont);
@@ -167,7 +167,7 @@ struct linesQ_L_10procG_class {
     B_NoneType (*__init__) (linesQ_L_10proc, linesQ_Bepa, int64_t);
     void (*__serialize__) (linesQ_L_10proc, $Serial$state);
     linesQ_L_10proc (*__deserialize__) (linesQ_L_10proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_10proc);
+    bool (*__bool__) (linesQ_L_10proc);
     B_str (*__str__) (linesQ_L_10proc);
     B_str (*__repr__) (linesQ_L_10proc);
     $R (*__call__) (linesQ_L_10proc, $Cont);
@@ -185,7 +185,7 @@ struct linesQ_L_14actionG_class {
     B_NoneType (*__init__) (linesQ_L_14action, linesQ_Apa);
     void (*__serialize__) (linesQ_L_14action, $Serial$state);
     linesQ_L_14action (*__deserialize__) (linesQ_L_14action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_14action);
+    bool (*__bool__) (linesQ_L_14action);
     B_str (*__str__) (linesQ_L_14action);
     B_str (*__repr__) (linesQ_L_14action);
     $R (*__call__) (linesQ_L_14action, $Cont, B_int);
@@ -203,7 +203,7 @@ struct linesQ_L_16actionG_class {
     B_NoneType (*__init__) (linesQ_L_16action, linesQ_Bepa);
     void (*__serialize__) (linesQ_L_16action, $Serial$state);
     linesQ_L_16action (*__deserialize__) (linesQ_L_16action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_16action);
+    bool (*__bool__) (linesQ_L_16action);
     B_str (*__str__) (linesQ_L_16action);
     B_str (*__repr__) (linesQ_L_16action);
     $R (*__call__) (linesQ_L_16action, $Cont, B_int);
@@ -221,7 +221,7 @@ struct linesQ_L_19actionG_class {
     B_NoneType (*__init__) (linesQ_L_19action, linesQ_main);
     void (*__serialize__) (linesQ_L_19action, $Serial$state);
     linesQ_L_19action (*__deserialize__) (linesQ_L_19action, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_19action);
+    bool (*__bool__) (linesQ_L_19action);
     B_str (*__str__) (linesQ_L_19action);
     B_str (*__repr__) (linesQ_L_19action);
     $R (*__call__) (linesQ_L_19action, $Cont, B_int);
@@ -239,7 +239,7 @@ struct linesQ_L_20procG_class {
     B_NoneType (*__init__) (linesQ_L_20proc, linesQ_main);
     void (*__serialize__) (linesQ_L_20proc, $Serial$state);
     linesQ_L_20proc (*__deserialize__) (linesQ_L_20proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_20proc);
+    bool (*__bool__) (linesQ_L_20proc);
     B_str (*__str__) (linesQ_L_20proc);
     B_str (*__repr__) (linesQ_L_20proc);
     $R (*__call__) (linesQ_L_20proc, $Cont);
@@ -257,7 +257,7 @@ struct linesQ_L_21ContG_class {
     B_NoneType (*__init__) (linesQ_L_21Cont, linesQ_main, $Cont);
     void (*__serialize__) (linesQ_L_21Cont, $Serial$state);
     linesQ_L_21Cont (*__deserialize__) (linesQ_L_21Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_21Cont);
+    bool (*__bool__) (linesQ_L_21Cont);
     B_str (*__str__) (linesQ_L_21Cont);
     B_str (*__repr__) (linesQ_L_21Cont);
     $R (*__call__) (linesQ_L_21Cont, B_int);
@@ -275,7 +275,7 @@ struct linesQ_L_22ContG_class {
     B_NoneType (*__init__) (linesQ_L_22Cont, linesQ_main, $Cont);
     void (*__serialize__) (linesQ_L_22Cont, $Serial$state);
     linesQ_L_22Cont (*__deserialize__) (linesQ_L_22Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_22Cont);
+    bool (*__bool__) (linesQ_L_22Cont);
     B_str (*__str__) (linesQ_L_22Cont);
     B_str (*__repr__) (linesQ_L_22Cont);
     $R (*__call__) (linesQ_L_22Cont, linesQ_Bepa);
@@ -293,7 +293,7 @@ struct linesQ_L_23ContG_class {
     B_NoneType (*__init__) (linesQ_L_23Cont, linesQ_main, $Cont);
     void (*__serialize__) (linesQ_L_23Cont, $Serial$state);
     linesQ_L_23Cont (*__deserialize__) (linesQ_L_23Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_23Cont);
+    bool (*__bool__) (linesQ_L_23Cont);
     B_str (*__str__) (linesQ_L_23Cont);
     B_str (*__repr__) (linesQ_L_23Cont);
     $R (*__call__) (linesQ_L_23Cont, linesQ_Apa);
@@ -310,7 +310,7 @@ struct linesQ_L_24procG_class {
     B_NoneType (*__init__) (linesQ_L_24proc, linesQ_main, int64_t);
     void (*__serialize__) (linesQ_L_24proc, $Serial$state);
     linesQ_L_24proc (*__deserialize__) (linesQ_L_24proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_24proc);
+    bool (*__bool__) (linesQ_L_24proc);
     B_str (*__str__) (linesQ_L_24proc);
     B_str (*__repr__) (linesQ_L_24proc);
     $R (*__call__) (linesQ_L_24proc, $Cont);
@@ -328,7 +328,7 @@ struct linesQ_L_25procG_class {
     B_NoneType (*__init__) (linesQ_L_25proc, linesQ_main);
     void (*__serialize__) (linesQ_L_25proc, $Serial$state);
     linesQ_L_25proc (*__deserialize__) (linesQ_L_25proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_25proc);
+    bool (*__bool__) (linesQ_L_25proc);
     B_str (*__str__) (linesQ_L_25proc);
     B_str (*__repr__) (linesQ_L_25proc);
     $R (*__call__) (linesQ_L_25proc, $Cont);
@@ -346,7 +346,7 @@ struct linesQ_L_27ContG_class {
     B_NoneType (*__init__) (linesQ_L_27Cont, $Cont, linesQ_Apa);
     void (*__serialize__) (linesQ_L_27Cont, $Serial$state);
     linesQ_L_27Cont (*__deserialize__) (linesQ_L_27Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_27Cont);
+    bool (*__bool__) (linesQ_L_27Cont);
     B_str (*__str__) (linesQ_L_27Cont);
     B_str (*__repr__) (linesQ_L_27Cont);
     $R (*__call__) (linesQ_L_27Cont, B_NoneType);
@@ -363,7 +363,7 @@ struct linesQ_L_28procG_class {
     B_NoneType (*__init__) (linesQ_L_28proc, linesQ_Apa);
     void (*__serialize__) (linesQ_L_28proc, $Serial$state);
     linesQ_L_28proc (*__deserialize__) (linesQ_L_28proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_28proc);
+    bool (*__bool__) (linesQ_L_28proc);
     B_str (*__str__) (linesQ_L_28proc);
     B_str (*__repr__) (linesQ_L_28proc);
     $R (*__call__) (linesQ_L_28proc, $Cont);
@@ -381,7 +381,7 @@ struct linesQ_L_30ContG_class {
     B_NoneType (*__init__) (linesQ_L_30Cont, $Cont, linesQ_Bepa);
     void (*__serialize__) (linesQ_L_30Cont, $Serial$state);
     linesQ_L_30Cont (*__deserialize__) (linesQ_L_30Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_30Cont);
+    bool (*__bool__) (linesQ_L_30Cont);
     B_str (*__str__) (linesQ_L_30Cont);
     B_str (*__repr__) (linesQ_L_30Cont);
     $R (*__call__) (linesQ_L_30Cont, B_NoneType);
@@ -398,7 +398,7 @@ struct linesQ_L_31procG_class {
     B_NoneType (*__init__) (linesQ_L_31proc, linesQ_Bepa);
     void (*__serialize__) (linesQ_L_31proc, $Serial$state);
     linesQ_L_31proc (*__deserialize__) (linesQ_L_31proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_31proc);
+    bool (*__bool__) (linesQ_L_31proc);
     B_str (*__str__) (linesQ_L_31proc);
     B_str (*__repr__) (linesQ_L_31proc);
     $R (*__call__) (linesQ_L_31proc, $Cont);
@@ -416,7 +416,7 @@ struct linesQ_L_33ContG_class {
     B_NoneType (*__init__) (linesQ_L_33Cont, $Cont, linesQ_main);
     void (*__serialize__) (linesQ_L_33Cont, $Serial$state);
     linesQ_L_33Cont (*__deserialize__) (linesQ_L_33Cont, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_33Cont);
+    bool (*__bool__) (linesQ_L_33Cont);
     B_str (*__str__) (linesQ_L_33Cont);
     B_str (*__repr__) (linesQ_L_33Cont);
     $R (*__call__) (linesQ_L_33Cont, B_NoneType);
@@ -433,7 +433,7 @@ struct linesQ_L_34procG_class {
     B_NoneType (*__init__) (linesQ_L_34proc, linesQ_main, B_Env);
     void (*__serialize__) (linesQ_L_34proc, $Serial$state);
     linesQ_L_34proc (*__deserialize__) (linesQ_L_34proc, $Serial$state);
-    B_bool (*__bool__) (linesQ_L_34proc);
+    bool (*__bool__) (linesQ_L_34proc);
     B_str (*__str__) (linesQ_L_34proc);
     B_str (*__repr__) (linesQ_L_34proc);
     $R (*__call__) (linesQ_L_34proc, $Cont);
@@ -451,7 +451,7 @@ struct linesQ_ApaG_class {
     $R (*__init__) (linesQ_Apa, $Cont);
     void (*__serialize__) (linesQ_Apa, $Serial$state);
     linesQ_Apa (*__deserialize__) (linesQ_Apa, $Serial$state);
-    B_bool (*__bool__) (linesQ_Apa);
+    bool (*__bool__) (linesQ_Apa);
     B_str (*__str__) (linesQ_Apa);
     B_str (*__repr__) (linesQ_Apa);
     B_NoneType (*__resume__) (linesQ_Apa);
@@ -487,7 +487,7 @@ struct linesQ_BepaG_class {
     $R (*__init__) (linesQ_Bepa, $Cont);
     void (*__serialize__) (linesQ_Bepa, $Serial$state);
     linesQ_Bepa (*__deserialize__) (linesQ_Bepa, $Serial$state);
-    B_bool (*__bool__) (linesQ_Bepa);
+    bool (*__bool__) (linesQ_Bepa);
     B_str (*__str__) (linesQ_Bepa);
     B_str (*__repr__) (linesQ_Bepa);
     B_NoneType (*__resume__) (linesQ_Bepa);
@@ -515,7 +515,7 @@ struct linesQ_mainG_class {
     $R (*__init__) (linesQ_main, $Cont, B_Env);
     void (*__serialize__) (linesQ_main, $Serial$state);
     linesQ_main (*__deserialize__) (linesQ_main, $Serial$state);
-    B_bool (*__bool__) (linesQ_main);
+    bool (*__bool__) (linesQ_main);
     B_str (*__str__) (linesQ_main);
     B_str (*__repr__) (linesQ_main);
     B_NoneType (*__resume__) (linesQ_main);
