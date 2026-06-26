@@ -205,7 +205,8 @@ matchTypes (TFun _ fx p _ r) (TFun _ fx' p' _ r')
                                     = tFun fx (matchTypes p p') kwdNil (matchTypes r r')
 matchTypes (TRow _ _ _ t r) (TRow _ _ _ t' r')
                                     = posRow (matchTypes t t') (matchTypes r r')
-matchTypes TNil{} TNil{}            = posNil                                    
+matchTypes TNil{} TNil{}            = posNil
+matchTypes t (TUnboxed _ t')        = matchTypes t t'
 matchTypes t _                      = t    -- ignore possibilities for unboxing 
 
 
