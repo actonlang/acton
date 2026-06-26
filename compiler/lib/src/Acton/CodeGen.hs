@@ -978,6 +978,8 @@ genTypeDecl env n t                 = genVolatile env n <+> storageType env t
 genVolatile env n                   = if isVolVar n env then text "volatile" else empty
 
 genStmt env (Decl _ ds)             = (empty, [])
+genStmt env (Assign _ [PVar _ n _] e)
+  | isIgnoredBinding n              = (discardIgnoredExpr env e, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env)
                                     = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
@@ -991,6 +993,26 @@ genStmt env s                       = (vcat [ genTypeDecl env n t <+> gen env n 
   where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env
         (s', vs)                    = genV env1 s
+
+isIgnoredBinding (Internal NormPass "ignore" _) = True
+isIgnoredBinding _                              = False
+
+discardIgnoredExpr env e
+  | discardableIgnoredExpr e       = empty
+  | otherwise                      = genExp' env e <> semi
+
+discardableIgnoredExpr (Var _ _)   = True
+discardableIgnoredExpr (Dot _ e _) = discardableIgnoredExpr e
+discardableIgnoredExpr (DotI _ e _)
+                                    = discardableIgnoredExpr e
+discardableIgnoredExpr (Rest _ e _)
+                                    = discardableIgnoredExpr e
+discardableIgnoredExpr (RestI _ e _)
+                                    = discardableIgnoredExpr e
+discardableIgnoredExpr (Paren _ e) = discardableIgnoredExpr e
+discardableIgnoredExpr (Box _ e)   = discardableIgnoredExpr e
+discardableIgnoredExpr (UnBox _ e) = discardableIgnoredExpr e
+discardableIgnoredExpr _           = False
 
 genStmt1 env s                      = fst $ genStmt env s
 
