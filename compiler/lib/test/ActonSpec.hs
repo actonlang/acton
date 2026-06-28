@@ -2083,6 +2083,9 @@ main = do
       testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
+      -- A local that is live across a for-loop must be emitted as `volatile` so it
+      -- survives the loop's StopIteration setjmp/longjmp under optimization.
+      testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
@@ -3186,6 +3189,31 @@ testCodeGen env0 modulePaths = do
         goldenTextFile h_golden $ return $ T.pack $ Pretty.print h
       it ("Check " ++ pass_name ++ " .c output") $ do
         goldenTextFile c_golden $ return $ T.pack $ Pretty.print c
+
+
+-- pass 9 CodeGen, targeted: run the full pipeline (through Boxing) and assert that
+-- specific substrings appear in the generated C, without a brittle full-file golden.
+testCodeGenContains :: Acton.Env.Env0 -> String -> [String] -> Spec
+testCodeGenContains env0 modulePath expected = do
+  c <- runIO $ do
+    (env, parsed) <- parseAct env0 modulePath
+    kchecked <- Acton.Kinds.check env parsed
+    (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+    (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
+    (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+    (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+    (lifted, liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+    boxed <- Acton.Boxing.doBoxing liftEnv lifted
+    let act_file = "test" </> "src" </> modulePath ++ ".act"
+    srcText <- readFile act_file
+    let srcbase = "test" </> "src" </> modulePath
+    (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+    return c
+
+  describe modulePath $
+    forM_ expected $ \sub ->
+      it ("generated C contains " ++ show sub) $
+        c `shouldContain` sub
 
 
 testDocstrings :: Acton.Env.Env0 -> String -> Spec

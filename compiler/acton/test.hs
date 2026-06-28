@@ -113,6 +113,12 @@ compilerTests =
         testBuild "" ExitSuccess False proj
         (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc "./out/bin/main" []){ cwd = Just proj } ""
         assertEqual ("unboxed bool method slot binary should run: " ++ cmdErr) ExitSuccess returnCode
+  , testCase "release-mode loop-carried local survives setjmp" $ do
+        -- A local assigned inside a for-loop and read afterwards must be emitted
+        -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.
+        -- An optimized (--release=fast) build used to roll it back to its
+        -- pre-loop value, which dropped explicitly-provided argparse options.
+        testBuildAndRun "--release=fast" "" ExitSuccess False "../../test/compiler/release_loop_volatile.act"
   , testCase "dynamic module library build" $ do
         withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

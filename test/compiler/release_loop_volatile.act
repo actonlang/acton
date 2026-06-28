@@ -1,0 +1,52 @@
+# Regression test for a --release=fast (optimized) codegen bug.
+#
+# A `for` loop is compiled with setjmp/longjmp-based StopIteration handling
+# (if ($PUSH()) { while (true) { ... } $DROP(); } else { ... }). A local that
+# is declared before the loop, assigned inside the loop body and read after the
+# loop must therefore be emitted as C `volatile`; otherwise C11 leaves its value
+# indeterminate after the longjmp and an optimizing build rolls it back to its
+# pre-loop value. The Boxing pass wraps the loop's $PUSH() condition in a Box
+# node, which used to hide it from the codegen volatile analysis.
+#
+# This reproduced as argparse dropping explicitly-provided sub-command options:
+# Args.get_int() raised "Option '<name>' not found" only under --release=fast.
+
+import argparse
+
+# Bare codegen pattern: `marker` is set inside the loop and read afterwards.
+def loop_carried(items: list[str], needle: str) -> ?str:
+    marker: ?str = None
+    for x in items:
+        if x == needle:
+            marker = x
+    return marker
+
+proc def run(args: argparse.Args) -> None:
+    pass
+
+actor main(env):
+    # 1. bare loop-carried local must survive the loop
+    if loop_carried(["a", "Z", "b"], "Z") is None:
+        print("FAIL: loop-carried local rolled back to None", err=True)
+        env.exit(1)
+
+    # 2. argparse: an explicitly provided sub-command option must round-trip
+    p = argparse.Parser()
+    tp = p.add_cmd("test", "Run tests", run)
+    tp.add_arg("name", "Name of the test")
+    tp.add_option("min-iter", "int", default=3, help="")
+    try:
+        args = p.parse(["prog", "test", "simple", "--min-iter", "1"])
+        if args.get_int("min-iter") != 1:
+            print("FAIL: explicit option value lost", err=True)
+            env.exit(1)
+        # 3. the default path must still work too
+        args2 = p.parse(["prog", "test", "simple"])
+        if args2.get_int("min-iter") != 3:
+            print("FAIL: default option value lost", err=True)
+            env.exit(1)
+    except Exception as e:
+        print("FAIL: unexpected exception:", e, err=True)
+        env.exit(1)
+
+    env.exit(0)
