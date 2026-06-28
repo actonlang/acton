@@ -4,6 +4,7 @@ const print = @import("std").debug.print;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
 
     const libcrypto = b.addLibrary(.{
         .name = "mbedcrypto",
@@ -13,6 +14,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libcrypto.lto = .full;
 
     const libx509 = b.addLibrary(.{
         .name = "mbedx509",
@@ -22,6 +24,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libx509.lto = .full;
 
     const libtls = b.addLibrary(.{
         .name = "mbedtls",
@@ -31,6 +34,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libtls.lto = .full;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);

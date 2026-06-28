@@ -4,6 +4,7 @@ const print = @import("std").debug.print;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
 
     const build_shared_libs = b.option(bool, "BUILD_SHARED_LIBS",
                 "Build shared libraries (otherwise static ones)") orelse true;
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) lib.lto = .full;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);

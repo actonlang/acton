@@ -36,6 +36,7 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.join(b.allocator, &.{}) catch @panic("ASD");
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
@@ -173,6 +174,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libActonProject.lto = .full;
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
 
@@ -250,6 +252,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
+        if (enable_lto) libActonExplicit.lto = .full;
         if (lib_dynamic) {
             libActonExplicit.linker_allow_shlib_undefined = true;
         }
@@ -376,6 +379,7 @@ pub fn build(b: *std.Build) void {
                     .optimize = optimize,
                 }),
             });
+            if (enable_lto) executable.lto = .full;
             // Build relative path for the executable source file
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
             @memcpy(exe_rel_path[0..9], "out/types");

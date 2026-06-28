@@ -1492,6 +1492,12 @@ actonProjTests =
             ("const actdep_lmdb = b.dependency(\"lmdb\"" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should namespace the zig dep lookup"
             ("const dep_lmdb = b.dependency(\"acton_zig_lmdb\"" `isInfixOf` rootBuildZig)
+          assertBool "root build.zig should skip LTO for macOS targets"
+            ("const enable_lto = optimize != .Debug and target.result.os.tag != .macos;" `isInfixOf` rootBuildZig)
+          assertBool "root build.zig should enable LTO for the project library"
+            ("if (enable_lto) libActonProject.lto = .full;" `isInfixOf` rootBuildZig)
+          assertBool "root build.zig should enable LTO for executables"
+            ("if (enable_lto) executable.lto = .full;" `isInfixOf` rootBuildZig)
   , testCase "transitive zig deps deduplicate by identity and split on collision" $ do
         withSystemTempDirectory "acton-zig-transitive-dedup" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"

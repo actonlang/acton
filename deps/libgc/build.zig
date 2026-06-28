@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const t = target.result;
+    const enable_lto = optimize != .Debug and t.os.tag != .macos;
 
     const default_enable_threads = !t.cpu.arch.isWasm(); // emscripten/wasi
 
@@ -472,6 +473,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) gc.lto = .full;
     gc.root_module.addCSourceFiles(.{
         .files = source_files.items,
         .flags = flags.items,
@@ -490,6 +492,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
+        if (enable_lto) gccpp.lto = .full;
         gccpp.root_module.addCSourceFiles(.{
             .files = &.{
                 "gc_badalc.cc",
@@ -510,6 +513,7 @@ pub fn build(b: *std.Build) void {
                     .optimize = optimize,
                 }),
             });
+            if (enable_lto) gctba.lto = .full;
             gctba.root_module.addCSourceFiles(.{
                 .files = &.{
                     "gc_badalc.cc",
@@ -532,6 +536,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             })
         });
+        if (enable_lto) cord.lto = .full;
         cord.root_module.addCSourceFiles(.{
             .files = &.{
                 "cord/cordbscs.c",
@@ -670,6 +675,7 @@ fn addTestExt(b: *std.Build, gc: *std.Build.Step.Compile,
             .target = gc.root_module.resolved_target.?,
         }),
     });
+    if (gc.root_module.optimize.? != .Debug and gc.root_module.resolved_target.?.result.os.tag != .macos) test_exe.lto = .full;
     test_exe.root_module.addCSourceFile(.{
         .file = b.path(filename),
         .flags = flags.items

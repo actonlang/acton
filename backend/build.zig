@@ -5,6 +5,7 @@ const ArrayList = std.ArrayList;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
 
@@ -93,6 +94,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libactondb.lto = .full;
     libactondb.root_module.addCSourceFiles(.{
         .files = &libactondb_sources,
         .flags = flags.items
@@ -116,6 +118,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) actondb.lto = .full;
     actondb.root_module.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
     }});
