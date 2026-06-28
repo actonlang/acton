@@ -146,6 +146,14 @@ setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
 isVolVar a env                      = a `elem` volVarsX (envX env)
 
+-- The Boxing pass wraps a condition's value in a single Box/UnBox node; its
+-- combinators collapse adjacent ones, so they never nest. Strip that one layer
+-- so structural checks like isPUSH can still recognize the underlying primitive call
+-- (e.g. a for-loop's $PUSH() reaches CodeGen as `Box tBool (PUSH())`).
+stripBoxing (Box _ e)               = e
+stripBoxing (UnBox _ e)             = e
+stripBoxing e                       = e
+
 localDefined env                    = localX (envX env)
 
 -- Line emission helpers
@@ -1013,7 +1021,7 @@ instance Gen Stmt where
     genV _ (If _ (Branch (Bool _ True) [Pass _] : _) _)
                                     = (empty, [])
     genV env (If  _ [b@(Branch e ss)] fin)
-      | isPUSH e                    = (b' $+$ fin', v1 ++ v2 ++ volatiles)
+      | isPUSH (stripBoxing e)      = (b' $+$ fin', v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
             (fin',v2)               = genElse env fin
             volatiles               = filterDefined env (bound ss)

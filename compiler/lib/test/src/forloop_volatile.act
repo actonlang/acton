@@ -1,0 +1,17 @@
+# CodeGen regression fixture.
+#
+# A `for` loop is compiled with setjmp/longjmp-based StopIteration handling
+# (if ($PUSH()) { while (true) { ... } $DROP(); } else { ... }). A local that is
+# declared before the loop, assigned inside the loop body and read after the loop
+# must therefore be emitted as C `volatile`; otherwise C11 leaves its value
+# indeterminate after the longjmp and an optimizing build rolls it back.
+#
+# The Boxing pass wraps the loop's $PUSH() condition in a `Box tBool (...)`
+# coercion, which used to hide it from CodeGen's isPUSH-guarded volatile analysis,
+# so `volatile` was never emitted. The codegen test asserts it now is.
+def loop_marker(items: list[str], needle: str) -> ?str:
+    marker: ?str = None
+    for x in items:
+        if x == needle:
+            marker = x
+    return marker
