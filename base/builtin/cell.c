@@ -12,57 +12,57 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-B_NoneType $BoxD___init__($Box self, $WORD val) {
-    self->val = val;
+B_NoneType $CellD___init__($Cell self, $WORD cell) {
+    self->cell = cell;
     return B_None;
 }
 
-bool $BoxD___bool__($Box self) {
-    B_value it = (B_value)self->val;
+bool $CellD___bool__($Cell self) {
+    B_value it = (B_value)self->cell;
     return it->$class->__bool__(it);
 }
 
-B_str $BoxD___str__($Box self) {
-    B_value it = (B_value)self->val;
+B_str $CellD___str__($Cell self) {
+    B_value it = (B_value)self->cell;
     return it->$class->__str__(it);
 }
 
-B_str $BoxD___repr__($Box self) {
-    B_value it = (B_value)self->val;
+B_str $CellD___repr__($Cell self) {
+    B_value it = (B_value)self->cell;
     return it->$class->__repr__(it);
 }
 
-void $BoxD___serialize__ ($Box self, $Serial$state state) {
-    $step_serialize(self->val, state);
+void $CellD___serialize__ ($Cell self, $Serial$state state) {
+    $step_serialize(self->cell, state);
 }
 
-$Box $BoxD___deserialize__ ($Box self, $Serial$state state) {
+$Cell $CellD___deserialize__ ($Cell self, $Serial$state state) {
     if (!self) {
         if (!state) {
-            self = acton_malloc(sizeof(struct $Box));
-            self->$class = &$BoxG_methods;
+            self = acton_malloc(sizeof(struct $Cell));
+            self->$class = &$CellG_methods;
             return self;
         }
-        self = $DNEW($Box, state);
+        self = $DNEW($Cell, state);
     }
-    self->val = $step_deserialize(state);
+    self->cell = $step_deserialize(state);
     return self;
 }
 
-$Box $BoxG_new($WORD G_1) {
-    $Box $tmp = acton_malloc(sizeof(struct $Box));
-    $tmp->$class = &$BoxG_methods;
-    $BoxG_methods.__init__($tmp, G_1);
+$Cell $CellG_new($WORD G_1) {
+    $Cell $tmp = acton_malloc(sizeof(struct $Cell));
+    $tmp->$class = &$CellG_methods;
+    $CellG_methods.__init__($tmp, G_1);
     return $tmp;
 }
 
-struct $BoxG_class $BoxG_methods = {
-    .$GCINFO            = "$Box",
+struct $CellG_class $CellG_methods = {
+    .$GCINFO            = "$Cell",
     .$superclass        = ($SuperG_class)&B_ExceptionG_methods,
-    .__init__           = $BoxD___init__,
-    .__bool__           = $BoxD___bool__,
-    .__str__            = $BoxD___str__,
-    .__repr__           = $BoxD___repr__,
-    .__serialize__      = $BoxD___serialize__,
-    .__deserialize__    = $BoxD___deserialize__
+    .__init__           = $CellD___init__,
+    .__bool__           = $CellD___bool__,
+    .__str__            = $CellD___str__,
+    .__repr__           = $CellD___repr__,
+    .__serialize__      = $CellD___serialize__,
+    .__deserialize__    = $CellD___deserialize__
 };

@@ -117,10 +117,10 @@ primISNONE0         = gPrim "ISNONE0"
 primSKIPRESc        = gPrim "SKIPRESc"
 primSKIPRES         = gPrim "SKIPRES"
 
-primBox             = gPrim "Box"
-tBox t              = tCon $ TC primBox [t]
+primCell            = gPrim "Cell"
+tCell t             = tCon $ TC primCell [t]
 
-valKW               = name "val"
+cellKW              = name "cell"
 
 cActor              = TC primActor []
 tActor              = tCon cActor
@@ -207,7 +207,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primR,             clR),
                             (noq primCont,          clCont),
 
-                            (noq primBox,           clBox),
+                            (noq primCell,          clCell),
 
                             (noq primRContc,        NDef scRContc NoDec Nothing),
                             (noq primRCont,         NDef scRCont NoDec Nothing),
@@ -279,11 +279,11 @@ clPure              = NClass [qbind r, qbind t] (leftpath [ cMut (tVar r) (tVar 
         r           = TV PRow (name "R")
         t           = TV KType (name "T")
 
---  class $Box[A] (object, value):
---      ref         : A
+--  class $Cell[A] (object, value):
+--      cell        : A
 --      __init__    : (A) -> None
-clBox               = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
-  where te          = [ (valKW,  NSig (monotype $ tVar a) Property Nothing),
+clCell              = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
+  where te          = [ (cellKW, NSig (monotype $ tVar a) Property Nothing),
                         (initKW, NDef (monotype $ tFun fxPure (posRow (tVar a) posNil) kwdNil tNone) NoDec Nothing) ]
         a           = TV KType (name "A")
 
