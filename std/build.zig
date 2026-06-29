@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
 
@@ -176,6 +177,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) libActonProject.lto = .full;
 
     for (c_files.items) |entry| {
         libActonProject.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });

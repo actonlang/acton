@@ -4,6 +4,7 @@ const print = @import("std").debug.print;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const t = target.result;
 
     var flags = std.ArrayList([]const u8).empty;
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) lib.lto = .full;
     lib.root_module.addIncludePath(b.path("include"));
 
     const libxml_version = "2.12.0";

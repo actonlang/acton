@@ -6,6 +6,7 @@ const tgt = @import("builtin").target;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const t = target.result;
     const want_assert = b.option(bool, "want_assert", "Enable asserts") orelse false;
     const want_redzones = b.option(bool, "want_redzones", "Enable redzones") orelse true;
@@ -60,6 +61,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) lib.lto = .full;
 
     lib.root_module.addConfigHeader(config_header);
 

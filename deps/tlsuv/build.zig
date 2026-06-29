@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const t = target.result;
     const optimize = b.standardOptimizeOption(.{});
+    const enable_lto = optimize != .Debug and t.os.tag != .macos;
 
     const enable_http = b.option(bool, "http", "enable HTTP/websocket support") orelse true;
     const enable_keychain = b.option(bool, "keychain", "enable keychain support on platforms that support it") orelse true;
@@ -44,6 +45,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) lib.lto = .full;
 
     var cflags = std.ArrayList([]const u8).empty;
     defer cflags.deinit(b.allocator);

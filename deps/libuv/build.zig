@@ -25,6 +25,7 @@ fn targetIsBSD(t: std.Target) bool {
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const t = target.result;
 
     const lib = b.addLibrary(.{
@@ -35,6 +36,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    if (enable_lto) lib.lto = .full;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);

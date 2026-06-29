@@ -9,6 +9,7 @@ pub const CodeUnitWidth = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const linkage = b.option(std.builtin.LinkMode, "linkage", "whether to statically or dynamically link the library") orelse @as(std.builtin.LinkMode, if (target.result.isGnuLibC()) .dynamic else .static);
     const codeUnitWidth = b.option(CodeUnitWidth, "code-unit-width", "Sets the code unit width") orelse .@"8";
 
@@ -25,6 +26,7 @@ pub fn build(b: *std.Build) !void {
             .link_libc = true,
         }),
     });
+    if (enable_lto) lib.lto = .full;
 
     if (linkage == .static) {
         try lib.root_module.c_macros.append(b.allocator, "-DPCRE2_STATIC");
