@@ -4,13 +4,7 @@ Priority: optional
 Maintainer: Kristian Larsson <kristian@spritelink.net>
 Build-Depends:
  bash-completion,
- debhelper-compat (= 13),
- g++,
- haskell-stack,
- libgmp-dev,
- libncurses-dev,
- make,
- zlib1g-dev
+ debhelper-compat (= 13)
 Standards-Version: 4.6.0
 Homepage: https://acton.now/
 Rules-Requires-Root: no
@@ -18,9 +12,8 @@ Rules-Requires-Root: no
 Package: acton
 Architecture: any
 Depends:
- libc6 (>= 2.27),
+ libc6 (>= 2.28),
  ca-certificates,
- ${shlibs:Depends},
  ${misc:Depends}
 Description: Acton Programming Language
  An awesome programming language.

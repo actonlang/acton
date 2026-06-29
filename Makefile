@@ -761,16 +761,36 @@ dist/lldb/acton.py: utils/lldb/acton.py
 debian/changelog: debian/changelog.in CHANGELOG.md
 	cat $< | sed -e 's/VERSION/$(VERSION_INFO)/' -e 's/DEB_DIST/$(DEB_DIST)/' > $@
 
+PACKAGE_VERSION_INFO := $(shell test -x dist/bin/acton && dist/bin/acton version || true)
+
+.PHONY: package-dist-validate
+package-dist-validate: VERSION_INFO := $(if $(PACKAGE_VERSION_INFO),$(PACKAGE_VERSION_INFO),$(VERSION_INFO))
+package-dist-validate:
+	@for path in bin/acton bin/actonc bin/actondb bin/runacton bin/lsp-server-acton zig/zig; do \
+		test -x "dist/$$path" || { echo "ERROR: dist/$$path is missing; run make or extract a Linux release tarball first" >&2; exit 1; }; \
+	done
+	@for path in base std; do \
+		test -d "dist/$$path" || { echo "ERROR: dist/$$path is missing; run make or extract a Linux release tarball first" >&2; exit 1; }; \
+	done
+	@dist_version="$$(dist/bin/acton version)"; \
+	if [ "$$dist_version" != "$(VERSION_INFO)" ]; then \
+		echo "ERROR: dist/bin/acton version ($$dist_version) does not match package version ($(VERSION_INFO))" >&2; \
+		exit 1; \
+	fi
+
 .PHONY: debs
-debs: debian/changelog
-	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH --preserve-envvar STACK_ROOT --preserve-envvar ZIG_DOWNLOAD_BASE_URL --preserve-envvar ACTON_ZIG_GLIBC_VERSION -i -us -uc -nc -b
+debs: VERSION_INFO := $(if $(PACKAGE_VERSION_INFO),$(PACKAGE_VERSION_INFO),$(VERSION_INFO))
+debs: debian/changelog package-dist-validate
+	debuild --preserve-envvar VERSION_INFO --preserve-envvar PATH -i -us -uc -nc -b
 
 RPM_RELEASE ?= 1
 .PHONY: rpms rpm-validate
 
-rpms: rpm/acton.spec.in LICENSE README.md
+rpms: VERSION_INFO := $(if $(PACKAGE_VERSION_INFO),$(PACKAGE_VERSION_INFO),$(VERSION_INFO))
+rpms: package-dist-validate rpm/acton.spec.in LICENSE README.md
 	command -v rpmbuild >/dev/null 2>&1 || { echo "ERROR: rpmbuild is required to build RPM packages"; exit 1; }
-	test -x dist/bin/acton || { echo "ERROR: dist/ is not built; run make first"; exit 1; }
+	command -v tar >/dev/null 2>&1 || { echo "ERROR: tar is required to build RPM packages"; exit 1; }
+	command -v xz >/dev/null 2>&1 || { echo "ERROR: xz is required to build RPM packages"; exit 1; }
 	rm -rf rpmbuild/payload
 	mkdir -p rpmbuild/payload rpmbuild/SOURCES
 	$(MAKE) install DESTDIR="$(TD)/rpmbuild/payload"
@@ -780,7 +800,8 @@ rpms: rpm/acton.spec.in LICENSE README.md
 	sed -e 's,@VERSION@,$(VERSION_INFO),g' -e 's,@RELEASE@,$(RPM_RELEASE),g' "rpm/acton.spec.in" > rpmbuild/SPECS/acton.spec
 	cp LICENSE README.md rpmbuild/SOURCES/
 	mkdir -p rpmbuild/BUILD rpmbuild/BUILDROOT rpmbuild/RPMS rpmbuild/SRPMS
-	rpmbuild --define "_topdir $(TD)/rpmbuild" -bb rpmbuild/SPECS/acton.spec
+	# BuildRequires are checked against the RPM DB, but CI also builds this on Ubuntu.
+	rpmbuild --nodeps --define "_topdir $(TD)/rpmbuild" -bb rpmbuild/SPECS/acton.spec
 	@find rpmbuild/RPMS -name '*.rpm' -print
 
 rpm-validate:

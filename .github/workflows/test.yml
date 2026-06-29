@@ -418,14 +418,18 @@ jobs:
 
 
   build-debs:
-    needs: build-version
+    needs: [build-version, evict-stale-caches]
     strategy:
       fail-fast: false
       matrix:
-        arch: [amd64, arm64]
-    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
-    container:
-      image: debian:11
+        include:
+          - arch: amd64
+            rpm_arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            rpm_arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     env:
       LANG: en_US.UTF-8
       LC_ALL: en_US.UTF-8
@@ -448,10 +452,10 @@ jobs:
           # Retry network-bound installs so a transient mirror/CDN blip doesn't
           # fail the whole job.
           retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
-          retry apt-get update
-          retry apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
-          retry apt-get install -qy bash-completion build-essential debhelper devscripts
-          apt-get clean || true
+          retry sudo apt-get update
+          retry sudo apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
+          retry sudo apt-get install -qy bash-completion build-essential debhelper devscripts gnupg2 locales rpm xz-utils
+          sudo apt-get clean || true
       - name: "Prepare stack directories"
         run: |
           mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
@@ -461,7 +465,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: deps-download
-          key: deps-download-build-debs-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
+          key: deps-download-build-packages-${{ matrix.arch }}-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
       - name: "Cache Haskell deps (~/.stack)"
         uses: actions/cache@v5
         with:
@@ -469,15 +473,24 @@ jobs:
             ${{ env.STACK_ROOT }}
           # No restore-keys fallback (see test-macos): a miss starts from an empty
           # stack root rather than inheriting an old cache with a stale GHC.
-          key: build-debs-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'debian/control') }}
+          key: build-packages-${{ matrix.arch }}-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'debian/control') }}
+      # Build packages now performs a full dist build, so restore the same
+      # Acton/zig cache surface as the Linux test jobs. The nightly/manual
+      # producer skips restore and saves a fresh snapshot after cache eviction.
+      - name: "Restore Acton compile cache (~/.cache/acton)"
+        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ${{ env.HOME }}/.cache/acton/
+          key: acton-zig-packages-${{ matrix.arch }}
       - name: "locale en_US.UTF-8"
         run: |
-          apt-get install -qy locales
-          locale-gen en_US.UTF-8
-          echo "locales locales/default_environment_locale select en_US.UTF-8" | debconf-set-selections
-          echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | debconf-set-selections
-          rm "/etc/locale.gen"
-          dpkg-reconfigure --frontend noninteractive locales
+          sudo locale-gen en_US.UTF-8
+          echo "locales locales/default_environment_locale select en_US.UTF-8" | sudo debconf-set-selections
+          echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | sudo debconf-set-selections
+          sudo rm -f "/etc/locale.gen"
+          sudo dpkg-reconfigure --frontend noninteractive locales
       - name: "Install newer stack"
         run: |
           STACK_VERSION=3.9.3
@@ -494,11 +507,32 @@ jobs:
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
           "${HOME}/.local/bin/stack" --version
+      - name: "Build Acton"
+        id: build_acton
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -j2 -C "${GITHUB_WORKSPACE}" BUILD_RELEASE="${BUILD_RELEASE:-}" BUILD_TIME="${BUILD_TIME}"
       - name: "Build Debian packages"
         shell: bash
         run: |
           set -euo pipefail
-          make -C "${GITHUB_WORKSPACE}" debs BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
+          make -C "${GITHUB_WORKSPACE}" debs BUILD_RELEASE="${BUILD_RELEASE:-}" BUILD_TIME="${BUILD_TIME}"
+      - name: "Build RPM packages"
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f rpm/*.rpm
+          make -C "${GITHUB_WORKSPACE}" rpms BUILD_RELEASE="${BUILD_RELEASE:-}" BUILD_TIME="${BUILD_TIME}"
+          mkdir -p rpm
+          find rpmbuild/RPMS -name 'acton-*.rpm' -exec cp -v {} rpm/ \;
+      - name: "Save Acton compile cache (~/.cache/acton)"
+        if: ${{ !cancelled() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && steps.build_acton.outcome == 'success' }}
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ${{ env.HOME }}/.cache/acton/
+          key: acton-zig-packages-${{ matrix.arch }}
       - name: "Show packaged Acton linkage"
         shell: bash
         run: |
@@ -512,76 +546,6 @@ jobs:
           bins="$bins $tmp/usr/lib/acton/bin/lsp-server-acton"
           bins="$bins $tmp/usr/lib/acton/bin/actondb"
           make -C "${GITHUB_WORKSPACE}" ldd ACTON_LINKAGE_BINS="$bins"
-      - name: "Compute variables"
-        id: vars
-        run: |
-          echo "debdir=$(realpath ${GITHUB_WORKSPACE}/../deb)" >> $GITHUB_OUTPUT
-          echo "artifact_dir=$(dirname ${{ github.workspace }})" >> $GITHUB_OUTPUT
-      - name: "Move deb files into place for easy artifact extraction"
-        run: |
-          mkdir -p ${{ steps.vars.outputs.debdir }}
-          ls ${{ steps.vars.outputs.debdir }}/../
-          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
-      - name: "Upload artifact"
-        uses: actions/upload-artifact@v7
-        with:
-          name: acton-debs-${{ matrix.arch }}
-          # Using a wildcard and then deb here to force the entire directory to
-          # be part of resulting artifact.
-          path: ${{ steps.vars.outputs.artifact_dir }}/*deb/
-          if-no-files-found: error
-
-
-  build-rpms:
-    needs: [build-version, test-linux]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rpm_arch: x86_64
-            tar_arch: x86_64
-            artifact: acton-debian-11-x86_64
-            runner: ubuntu-24.04
-          - rpm_arch: aarch64
-            tar_arch: aarch64
-            artifact: acton-ubuntu-24.04-arm64v8
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    container:
-      image: fedora:latest
-    env:
-      BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
-    steps:
-      - name: "Show platform and environment"
-        run: |
-          uname -a
-          cat /etc/os-release
-          rpm --version
-      - name: "Set BUILD_RELEASE when we are building for a version tag"
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          echo "BUILD_RELEASE=1" >> $GITHUB_ENV
-      - name: "Install RPM build prerequisites"
-        run: |
-          dnf install -y findutils gnupg2 make rpm-build rpm-sign tar xz
-          dnf clean all || true
-      - name: "Check out repository code"
-        uses: actions/checkout@v7
-      - name: "Download Linux release artifact"
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ matrix.artifact }}
-      - name: "Build RPM from release artifact"
-        run: |
-          set -euo pipefail
-          tarball="$(ls acton-linux-${{ matrix.tar_arch }}-*.tar.xz | tail -n1)"
-          rm -rf dist acton
-          rm -f rpm/*.rpm
-          tar -xJf "$tarball"
-          mv acton dist
-          make -C "${GITHUB_WORKSPACE}" rpms BUILD_RELEASE=${{ env.BUILD_RELEASE }} BUILD_TIME=${BUILD_TIME}
-          mkdir -p rpm
-          find rpmbuild/RPMS -name 'acton-*.rpm' -exec cp -v {} rpm/ \;
       - name: Import RPM signing key
         id: import_rpm_gpg
         if: github.event_name != 'pull_request'
@@ -599,7 +563,25 @@ jobs:
         run: |
           rpm -qip rpm/acton-*.rpm
           rpm -qlp rpm/acton-*.rpm | sed -n '1,120p'
-      - name: "Upload artifact"
+      - name: "Compute variables"
+        id: vars
+        run: |
+          echo "debdir=$(realpath ${GITHUB_WORKSPACE}/../deb)" >> $GITHUB_OUTPUT
+          echo "artifact_dir=$(dirname ${{ github.workspace }})" >> $GITHUB_OUTPUT
+      - name: "Move deb files into place for easy artifact extraction"
+        run: |
+          mkdir -p ${{ steps.vars.outputs.debdir }}
+          ls ${{ steps.vars.outputs.debdir }}/../
+          mv ${{ steps.vars.outputs.debdir }}/../acton_* ${{ steps.vars.outputs.debdir }}/
+      - name: "Upload Debian artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-debs-${{ matrix.arch }}
+          # Using a wildcard and then deb here to force the entire directory to
+          # be part of resulting artifact.
+          path: ${{ steps.vars.outputs.artifact_dir }}/*deb/
+          if-no-files-found: error
+      - name: "Upload RPM artifact"
         uses: actions/upload-artifact@v7
         with:
           name: acton-rpms-${{ matrix.rpm_arch }}
@@ -608,7 +590,7 @@ jobs:
 
 
   test-rpms:
-    needs: build-rpms
+    needs: build-debs
     strategy:
       fail-fast: false
       matrix:
