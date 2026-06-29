@@ -243,7 +243,7 @@ instance CPS Decl where
       where env2                        = setVolatiles volvs $ Meth contKW t' +: env1
             env1                        = define (envOf p) $ defineTVars q $ clearCtxt $ setInDef env
             volvs                       = volatileVars env2 b
-            volinits                    = [ sAssign (pVar v (tBox t)) (eCall (tApp (eQVar primBox) [t]) [eVar v])
+            volinits                    = [ sAssign (pVar v (tCell t)) (eCall (tApp (eQVar primCell) [t]) [eVar v])
                                           | (v,NVar t) <- envOf p, v `elem` volvs ]
             q'                          = conv env q
             p'                          = conv env p
@@ -554,9 +554,9 @@ instance Conv PosPar where
 instance Conv Stmt where
     conv env (Expr l e)                 = Expr l (conv env e)
     conv env (Assign l [PVar _ n Nothing] e)
-      | n `elem` volatiles env          = MutAssign l (eDot (eVar n) valKW) (conv env e)
+      | n `elem` volatiles env          = MutAssign l (eDot (eVar n) cellKW) (conv env e)
     conv env (Assign l [PVar _ n (Just t)] e)
-      | n `elem` volatiles env          = Assign l [pVar n (tBox t)] (eCall (tApp (eQVar primBox) [t]) [conv env e])
+      | n `elem` volatiles env          = Assign l [pVar n (tCell t)] (eCall (tApp (eQVar primCell) [t]) [conv env e])
     conv env (Assign l ps e)            = Assign l (conv env ps) (conv env e)
     conv env (MutAssign l tg e)         = MutAssign l (conv env tg) (conv env e)
     conv env (Return l e)               = Return l (conv env e)
@@ -574,7 +574,7 @@ instance Conv Pattern where
 
 instance Conv Expr where
     conv env (Var l (NoQ n))
-      | n `elem` volatiles env          = Dot l (Var l (NoQ n)) valKW
+      | n `elem` volatiles env          = Dot l (Var l (NoQ n)) cellKW
     conv env (Var l n)
       | n == primASYNCf                 = Var l primASYNCc
       | n == primAFTERf                 = Var l primAFTERc

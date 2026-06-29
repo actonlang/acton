@@ -23,7 +23,7 @@
 #include "common.c"
 #include "class_hierarchy.c"
 #include "none.c"
-#include "box.c"
+#include "cell.c"
 // #include "atom.c"
 #include "int.c"
 #include "i32.c"

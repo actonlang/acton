@@ -87,7 +87,7 @@ typedef struct $Catcher *$Catcher;
 #include "exceptions.h"
 #include "Iterator.h"
 #include "complx.h"
-#include "box.h"
+#include "cell.h"
 #include "none.h"
 #include "slice.h"
 #include "float.h"
