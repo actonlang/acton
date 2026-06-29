@@ -12,6 +12,11 @@
   reader fails, reporting the runner failure or captured output error instead
   of waiting forever for a missing completion event. [#2972]
 
+### Standard Library
+- Report missing or empty `process.Process` and `process.RunProcess` commands
+  through `on_error`, and mark failed spawns as not running so follow-up
+  process operations are safely ignored. [#2910]
+
 ## [0.28.3] - 2026-06-23
 
 This release is another proxy workaround release. Acton now keeps one more

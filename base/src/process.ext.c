@@ -83,6 +83,15 @@ $R processQ_ProcessD_aidG_local(processQ_Process self, $Cont c$cont) {
 
 $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont) {
     pin_actor_affinity();
+
+    if (self->cmd->length == 0) {
+        char errmsg[1024] = "Failed to spawn process '<empty command>': empty command";
+        log_warn("%s", errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
     struct process_data *process_data = acton_calloc(1, sizeof(struct process_data));
     process_data->process = self;
     process_data->on_stdout = self->on_stdout;
@@ -153,11 +162,27 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
 
     int r = uv_spawn(get_uv_loop(), req, options);
     if (r != 0) {
-        char errmsg[1024] = "Failed to spawn process: ";
+        self->_p = 0;
+        uv_handle_t *process_handle = (uv_handle_t *)req;
+        uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
+        uv_handle_t *stdout_handle = (uv_handle_t *)&process_data->stdout_pipe;
+        uv_handle_t *stderr_handle = (uv_handle_t *)&process_data->stderr_pipe;
+        if (uv_handle_get_type(process_handle) != UV_UNKNOWN_HANDLE &&
+            uv_is_closing(process_handle) == 0)
+            uv_close(process_handle, NULL);
+        if (uv_is_closing(stdin_handle) == 0)
+            uv_close(stdin_handle, NULL);
+        if (uv_is_closing(stdout_handle) == 0)
+            uv_close(stdout_handle, NULL);
+        if (uv_is_closing(stderr_handle) == 0)
+            uv_close(stderr_handle, NULL);
+
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Failed to spawn process '%s': ", args[0]);
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
-        log_warn(errmsg);
+        log_warn("%s", errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, process_data->process, to$str(errmsg));
+        f->$class->__asyn__(f, self, to$str(errmsg));
         return $R_CONT(c$cont, B_None);
     }
     // TODO: do we need to do some magic to read any data produced before this
@@ -175,6 +200,11 @@ void close_cb(uv_handle_t *handle) {
 
 $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
+    if (p == 0) {
+        log_warn("Process is not running, ignoring done_writing request");
+        return $R_CONT(c$cont, B_None);
+    }
+
     struct process_data *process_data = (struct process_data *)p->data;
     uv_handle_t *stdin_handle = (uv_handle_t *)&process_data->stdin_pipe;
     // Ensure stdin is closed properly. stdin might be closed already from
@@ -187,18 +217,20 @@ $R processQ_ProcessD_done_writingG_local(processQ_Process self, $Cont c$cont) {
 $R processQ_ProcessD_pidG_local(processQ_Process self, $Cont c$cont) {
     uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
-        log_warn("Process has exited, ignoring PID request");
+        log_warn("Process is not running, ignoring PID request");
         return $R_CONT(c$cont, B_None);
     }
+
     return $R_CONT(c$cont, (B_atom)toB_int(p->pid));
 }
 
 $R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, int64_t signal) {
     uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
-        log_warn("Process has exited, ignoring signal request");
+        log_warn("Process is not running, ignoring signal request");
         return $R_CONT(c$cont, B_None);
     }
+
     uv_process_kill(p, (int)signal);
     return $R_CONT(c$cont, B_None);
 }
@@ -206,7 +238,7 @@ $R processQ_ProcessD_signalG_local(processQ_Process self, $Cont c$cont, int64_t 
 $R processQ_ProcessD_writeG_local(processQ_Process self, $Cont c$cont, B_bytes data) {
     uv_process_t *p = (uv_process_t *)(intptr_t)self->_p;
     if (p == 0) {
-        log_warn("Process has exited, ignoring write request");
+        log_warn("Process is not running, ignoring write request");
         return $R_CONT(c$cont, B_None);
     }
 

@@ -1,0 +1,219 @@
+import process
+import testing
+
+
+PROCESS_MISSING_CMD = "acton-stdlib-process-missing-binary-for-test"
+RUNPROCESS_MISSING_CMD = "acton-stdlib-runprocess-missing-binary-for-test"
+EMPTY_CMD_ERROR = "Failed to spawn process '<empty command>': empty command"
+
+
+actor _test_ProcessMissingBinary(t: testing.EnvT):
+    """Missing process binaries must report on_error"""
+    var done = False
+    var process_refs: list[process.Process] = []
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _on_stdout(p, data):
+        if data is not None:
+            _finish_failure("Process unexpectedly produced stdout: " + str(data))
+
+    def _on_stderr(p, data):
+        if data is not None:
+            _finish_failure("Process unexpectedly produced stderr: " + str(data))
+
+    def _on_exit(p, exit_code, term_signal):
+        _finish_failure("Process unexpectedly exited instead of reporting spawn error")
+
+    def _on_error(p, error):
+        expected = "Failed to spawn process '" + PROCESS_MISSING_CMD + "': "
+        if not error.startswith(expected):
+            _finish_failure("Unexpected process error: " + error)
+            return
+        if p.pid() is not None:
+            _finish_failure("Failed process unexpectedly has a PID")
+            return
+        p.done_writing()
+        _finish_success()
+
+    def _start():
+        pc = process.ProcessCap(t.env.cap)
+        process_refs.append(process.Process(pc, [PROCESS_MISSING_CMD],
+                                            _on_stdout, _on_stderr, _on_exit,
+                                            _on_error))
+
+    def _watchdog():
+        if not done:
+            _finish_error("timeout waiting for missing process binary error")
+
+    after 0: _start()
+    after 5.0: _watchdog()
+
+
+actor _test_RunProcessMissingBinary(t: testing.EnvT):
+    """RunProcess must report spawn errors instead of waiting forever"""
+    var done = False
+    var process_refs: list[process.RunProcess] = []
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        _finish_failure("RunProcess unexpectedly exited instead of reporting spawn error")
+
+    def _on_error(p, error):
+        expected = "Failed to spawn process '" + RUNPROCESS_MISSING_CMD + "': "
+        if not error.startswith(expected):
+            _finish_failure("Unexpected RunProcess error: " + error)
+            return
+        if p.pid() is not None:
+            _finish_failure("Failed RunProcess child unexpectedly has a PID")
+            return
+        _finish_success()
+
+    def _start():
+        pc = process.ProcessCap(t.env.cap)
+        process_refs.append(process.RunProcess(pc, [RUNPROCESS_MISSING_CMD],
+                                               _on_exit, _on_error))
+
+    def _watchdog():
+        if not done:
+            _finish_error("timeout waiting for missing RunProcess binary error")
+
+    after 0: _start()
+    after 5.0: _watchdog()
+
+
+actor _test_ProcessEmptyCommand(t: testing.EnvT):
+    """Empty process command lists must report on_error"""
+    var done = False
+    var process_refs: list[process.Process] = []
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _on_stdout(p, data):
+        if data is not None:
+            _finish_failure("Process unexpectedly produced stdout: " + str(data))
+
+    def _on_stderr(p, data):
+        if data is not None:
+            _finish_failure("Process unexpectedly produced stderr: " + str(data))
+
+    def _on_exit(p, exit_code, term_signal):
+        _finish_failure("Process unexpectedly exited instead of reporting empty command")
+
+    def _on_error(p, error):
+        if error != EMPTY_CMD_ERROR:
+            _finish_failure("Unexpected empty command error: " + error)
+            return
+        if p.pid() is not None:
+            _finish_failure("Empty-command process unexpectedly has a PID")
+            return
+        _finish_success()
+
+    def _start():
+        pc = process.ProcessCap(t.env.cap)
+        process_refs.append(process.Process(pc, [],
+                                            _on_stdout, _on_stderr, _on_exit,
+                                            _on_error))
+
+    def _watchdog():
+        if not done:
+            _finish_error("timeout waiting for empty process command error")
+
+    after 0: _start()
+    after 5.0: _watchdog()
+
+
+actor _test_RunProcessEmptyCommand(t: testing.EnvT):
+    """RunProcess empty commands must report on_error"""
+    var done = False
+    var process_refs: list[process.RunProcess] = []
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        t.error(Exception(msg))
+
+    def _on_exit(p, exit_code, term_signal, stdout_buf, stderr_buf):
+        _finish_failure("RunProcess unexpectedly exited instead of reporting empty command")
+
+    def _on_error(p, error):
+        if error != EMPTY_CMD_ERROR:
+            _finish_failure("Unexpected empty RunProcess command error: " + error)
+            return
+        if p.pid() is not None:
+            _finish_failure("Empty-command RunProcess child unexpectedly has a PID")
+            return
+        _finish_success()
+
+    def _start():
+        pc = process.ProcessCap(t.env.cap)
+        process_refs.append(process.RunProcess(pc, [], _on_exit, _on_error))
+
+    def _watchdog():
+        if not done:
+            _finish_error("timeout waiting for empty RunProcess command error")
+
+    after 0: _start()
+    after 5.0: _watchdog()
