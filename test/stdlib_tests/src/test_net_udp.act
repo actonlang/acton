@@ -1,0 +1,161 @@
+import logging
+import net
+import random
+import testing
+
+
+actor udp_roundtrip(report_result, env, log_handler: logging.Handler, address: str, optional: bool=False):
+    log = logging.Logger(log_handler)
+    request_payload = b"PING"
+    response_payload = b"PONG"
+    var retries = 10
+    var port = random.randint(10000, 40000)
+    udp_cap = net.UDPCap(net.NetCap(env.cap))
+
+    var done = False
+    var listener: ?net.UDPListener = None
+    var client: ?net.UDPConnection = None
+    var server_received = False
+
+    def _close_handles():
+        if client is not None:
+            client.close()
+        if listener is not None:
+            listener.close()
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        _close_handles()
+        report_result(True, None)
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        _close_handles()
+        report_result(False, AssertionError(msg))
+
+    def _finish_error(msg: str):
+        if done:
+            return
+        done = True
+        _close_handles()
+        report_result(None, Exception(msg))
+
+    def _is_addr_in_use(error: str) -> bool:
+        return error.find("address already in use") != -1
+
+    def _is_optional_ipv6_unsupported(error: str) -> bool:
+        return optional and (error.find("address family not supported") != -1 or error.find("protocol family unavailable") != -1)
+
+    def _timeout():
+        _finish_error("UDP roundtrip timed out")
+
+    def on_server_receive(l: net.UDPListener, data: bytes, peer_address: str, peer_port: int):
+        if done:
+            return
+        if data != request_payload:
+            _finish_failure("Unexpected UDP server payload: " + str(data))
+            return
+        if peer_address == "":
+            _finish_failure("UDP server did not receive peer address")
+            return
+        if peer_port <= 0:
+            _finish_failure("UDP server did not receive peer port")
+            return
+        server_received = True
+        l.send(response_payload, peer_address, peer_port)
+
+    def on_server_error(l: net.UDPListener, errmsg: str):
+        _finish_error("UDP listener error: " + errmsg)
+
+    def on_listen(l: net.UDPListener, error: ?str):
+        if done:
+            return
+        if error is not None:
+            if _is_addr_in_use(error) and retries > 0:
+                log.debug("UDP address already in use (%d), retrying..." % port)
+                _start()
+                return
+            if _is_optional_ipv6_unsupported(error):
+                log.info("IPv6 UDP loopback unavailable, accepting optional test")
+                _finish_success()
+                return
+            _finish_error("UDP listen error: " + error)
+            return
+        listener = l
+        if l.local_port() <= 0:
+            _finish_failure("UDP listener did not report a local port")
+            return
+        _connect_client()
+
+    def on_client_connect(c: net.UDPConnection):
+        if done:
+            return
+        client = c
+        if c.local_port() <= 0:
+            _finish_failure("UDP client did not report a local port")
+            return
+        if c.remote_address() == "":
+            _finish_failure("UDP client did not report a remote address")
+            return
+        c.write(request_payload)
+
+    def on_client_receive(c: net.UDPConnection, data: bytes, peer_address: str, peer_port: int):
+        if done:
+            return
+        if data != response_payload:
+            _finish_failure("Unexpected UDP client payload: " + str(data))
+            return
+        if peer_address == "":
+            _finish_failure("UDP client did not receive peer address")
+            return
+        if peer_port != port:
+            _finish_failure("UDP client received reply from unexpected port: " + str(peer_port))
+            return
+        if not server_received:
+            _finish_failure("UDP client received reply before server receive was recorded")
+            return
+        _finish_success()
+
+    def on_client_error(c: net.UDPConnection, errmsg: str):
+        _finish_error("UDP client error: " + errmsg)
+
+    def _connect_client():
+        client = net.UDPConnection(net.UDPConnectCap(udp_cap), address, port, on_client_connect, on_client_receive, on_client_error)
+
+    def _start():
+        retries -= 1
+        port = random.randint(10000, 40000)
+        listener = net.UDPListener(net.UDPListenCap(udp_cap), address, port, on_listen, on_server_receive, on_server_error)
+
+    after 5: _timeout()
+    _start()
+
+
+actor UDPTestResultAdapter(t: testing.EnvT, address: str, optional: bool=False):
+    def _report_result(success: ?bool, exception: ?Exception):
+        if success == True:
+            t.success()
+        elif success == False:
+            if exception is not None:
+                t.failure(exception)
+            else:
+                t.failure(AssertionError("UDP test failed"))
+        else:
+            if exception is not None:
+                t.error(exception)
+            else:
+                t.error(Exception("UDP test errored"))
+
+    udp_roundtrip(_report_result, t.env, t.log_handler, address, optional)
+
+
+actor _test_UDPIpv4Roundtrip(t: testing.EnvT):
+    UDPTestResultAdapter(t, "127.0.0.1")
+
+
+actor _test_UDPIpv6Roundtrip(t: testing.EnvT):
+    UDPTestResultAdapter(t, "::1", True)

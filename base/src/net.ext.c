@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <unistd.h>
 #endif
 #include "../rts/io.h"
@@ -52,6 +54,57 @@ struct dns_cb_data {
     $action2 on_error;
 };
 
+static B_NoneType net_lookup_address(B_str name,
+                                     $action on_resolve,
+                                     $action on_error,
+                                     int family,
+                                     int socktype,
+                                     int protocol,
+                                     uv_getaddrinfo_cb cb) {
+    // libuv copies node/service/hints synchronously into its own request
+    // buffer, so hints can live on the stack.
+    struct addrinfo hints = {0};
+    hints.ai_family = family;
+    hints.ai_socktype = socktype;
+    hints.ai_protocol = protocol;
+
+    struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
+    if (cb_data == NULL) {
+        $action2 f = ($action2)on_error;
+        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
+        return B_None;
+    }
+    cb_data->hostname = (char *)fromB_str(name);
+    cb_data->on_resolve = on_resolve;
+    cb_data->on_error = ($action2)on_error;
+
+    // The request enters libuv's threadpool work queue, whose intrusive links
+    // pass through libc-allocated nodes (tlsuv connects); a GC-allocated
+    // request would be invisible to the collector while queued behind one.
+    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
+    if (req == NULL) {
+        GC_free(cb_data);
+        $action2 f = ($action2)on_error;
+        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
+        return B_None;
+    }
+    req->data = cb_data;
+
+    int r = uv_getaddrinfo(get_uv_loop(), req, cb, (const char *)fromB_str(name), NULL, &hints);
+    if (r != 0) {
+        char errmsg[1024] = "Unable to run DNS query: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)cb_data->on_error;
+        f->$class->__asyn__(f, name, to$str(errmsg));
+        GC_free(cb_data);
+        free(req);
+        return B_None;
+    }
+
+    return B_None;
+}
+
 static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
     struct dns_cb_data *cb_data = req->data;
     B_list $res = B_listG_new(NULL, NULL);
@@ -84,48 +137,7 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
 }
 
 B_NoneType netQ__lookup_a (B_str name, $action on_resolve, $action on_error) {
-    // libuv copies node/service/hints synchronously into its own request
-    // buffer, so hints can live on the stack.
-    struct addrinfo hints = {0};
-    hints.ai_family = PF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
-    struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
-    if (cb_data == NULL) {
-        $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
-        return B_None;
-    }
-    cb_data->hostname = (char *)fromB_str(name);
-    cb_data->on_resolve = on_resolve;
-    cb_data->on_error = ($action2) on_error;
-
-    // The request enters libuv's threadpool work queue, whose intrusive links
-    // pass through libc-allocated nodes (tlsuv connects); a GC-allocated
-    // request would be invisible to the collector while queued behind one.
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
-    if (req == NULL) {
-        GC_free(cb_data);
-        $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
-        return B_None;
-    }
-    req->data = cb_data;
-
-    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_a__on_resolve, (const char *)fromB_str(name), NULL, &hints);
-    if (r != 0) {
-        char errmsg[1024] = "Unable to run DNS query: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        $action2 f = ($action2)cb_data->on_error;
-        f->$class->__asyn__(f, name, to$str(errmsg));
-        GC_free(cb_data);
-        free(req);
-        return B_None;
-    }
-
-    return B_None;
+    return net_lookup_address(name, on_resolve, on_error, PF_INET, SOCK_STREAM, IPPROTO_TCP, _lookup_a__on_resolve);
 }
 
 static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct addrinfo *dns_res) {
@@ -160,43 +172,516 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
 }
 
 B_NoneType netQ__lookup_aaaa (B_str name, $action on_resolve, $action on_error) {
-    struct addrinfo hints = {0};
-    hints.ai_family = PF_INET6;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
+    return net_lookup_address(name, on_resolve, on_error, PF_INET6, SOCK_STREAM, IPPROTO_TCP, _lookup_aaaa__on_resolve);
+}
 
-    struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
-    if (cb_data == NULL) {
-        $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
-        return B_None;
+B_NoneType netQ__lookup_udp_a (B_str name, $action on_resolve, $action on_error) {
+    return net_lookup_address(name, on_resolve, on_error, PF_INET, SOCK_DGRAM, IPPROTO_UDP, _lookup_a__on_resolve);
+}
+
+B_NoneType netQ__lookup_udp_aaaa (B_str name, $action on_resolve, $action on_error) {
+    return net_lookup_address(name, on_resolve, on_error, PF_INET6, SOCK_DGRAM, IPPROTO_UDP, _lookup_aaaa__on_resolve);
+}
+
+struct udp_send_req_state {
+    char *buf;
+    size_t len;
+    $WORD actor;
+    bool listener;
+};
+
+static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address, B_int port) {
+    ((B_Msg (*)($WORD, $WORD, $WORD, $WORD, $WORD))(($action)cb)->$class->__asyn__)(cb, actor, data, address, port);
+}
+
+static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, size_t addrbuf_len, int *port) {
+    if (addr == NULL) {
+        return UV_EINVAL;
     }
-    cb_data->hostname = (char *)fromB_str(name);
-    cb_data->on_resolve = on_resolve;
-    cb_data->on_error = ($action2)on_error;
-
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
-    if (req == NULL) {
-        GC_free(cb_data);
-        $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
-        return B_None;
+    if (addr->sa_family == AF_INET) {
+        const struct sockaddr_in *addr4 = (const struct sockaddr_in *)addr;
+        int r = uv_ip4_name(addr4, addrbuf, addrbuf_len);
+        if (r != 0) {
+            return r;
+        }
+        *port = (int)ntohs(addr4->sin_port);
+        return 0;
+    } else if (addr->sa_family == AF_INET6) {
+        const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)addr;
+        int r = uv_ip6_name(addr6, addrbuf, addrbuf_len);
+        if (r != 0) {
+            return r;
+        }
+        *port = (int)ntohs(addr6->sin6_port);
+        return 0;
     }
-    req->data = cb_data;
+    return UV_EINVAL;
+}
 
-    int r = uv_getaddrinfo(get_uv_loop(), req, _lookup_aaaa__on_resolve, (const char *)fromB_str(name), NULL, &hints);
+static int make_sockaddr(B_str address, int64_t port, struct sockaddr_storage *dest) {
+    // TODO: port should be uint16 at the Acton API boundary.
+    struct sockaddr_in addr4;
+    struct sockaddr_in6 addr6;
+    if (inet_pton(AF_INET, (const char *)fromB_str(address), &(addr4.sin_addr)) == 1) {
+        int r = uv_ip4_addr((const char *)fromB_str(address), (int)port, &addr4);
+        if (r == 0) {
+            memcpy(dest, &addr4, sizeof(addr4));
+        }
+        return r;
+    } else if (inet_pton(AF_INET6, (const char *)fromB_str(address), &(addr6.sin6_addr)) == 1) {
+        int r = uv_ip6_addr((const char *)fromB_str(address), (int)port, &addr6);
+        if (r == 0) {
+            memcpy(dest, &addr6, sizeof(addr6));
+        }
+        return r;
+    }
+    return UV_EINVAL;
+}
+
+static int make_udp_bind_addr(int family, struct sockaddr_storage *dest) {
+    if (family == AF_INET) {
+        struct sockaddr_in addr4;
+        int r = uv_ip4_addr("0.0.0.0", 0, &addr4);
+        if (r == 0) {
+            memcpy(dest, &addr4, sizeof(addr4));
+        }
+        return r;
+    } else if (family == AF_INET6) {
+        struct sockaddr_in6 addr6;
+        int r = uv_ip6_addr("::", 0, &addr6);
+        if (r == 0) {
+            memcpy(dest, &addr6, sizeof(addr6));
+        }
+        return r;
+    }
+    return UV_EINVAL;
+}
+
+static struct udp_send_req_state *udp_send_req_state_new(B_bytes data, $WORD actor, bool listener) {
+    struct udp_send_req_state *state = (struct udp_send_req_state *)malloc(sizeof(*state));
+    if (state == NULL) {
+        return NULL;
+    }
+
+    state->len = data->nbytes;
+    state->buf = (char *)malloc(state->len > 0 ? state->len : 1);
+    if (state->buf == NULL) {
+        free(state);
+        return NULL;
+    }
+    if (state->len > 0) {
+        memcpy(state->buf, data->str, state->len);
+    }
+    state->actor = actor;
+    state->listener = listener;
+    return state;
+}
+
+static void udp_send_req_state_free(struct udp_send_req_state *state) {
+    if (state != NULL) {
+        free(state->buf);
+        free(state);
+    }
+}
+
+static void udp_send_cb(uv_udp_send_t *req, int status) {
+    struct udp_send_req_state *state = (struct udp_send_req_state *)req->data;
+    if (status < 0 && status != UV_ECANCELED && state != NULL && state->actor != NULL) {
+        char errmsg[1024] = "Failed to send UDP datagram: ";
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        if (state->listener) {
+            netQ_UDPListener self = (netQ_UDPListener)state->actor;
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, to$str(errmsg));
+        } else {
+            netQ_UDPConnection self = (netQ_UDPConnection)state->actor;
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, to$str(errmsg));
+        }
+    }
+    udp_send_req_state_free(state);
+    free(req);
+}
+
+static void udp_connection_on_receive(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags) {
+    (void)flags;
+    netQ_UDPConnection self = (netQ_UDPConnection)handle->data;
+    if (self == NULL) {
+        return;
+    }
+
+    if (nread >= 0 && addr != NULL) {
+        char addrbuf[INET6_ADDRSTRLEN] = { '\0' };
+        int port = 0;
+        int r = sockaddr_to_addr_port(addr, addrbuf, sizeof(addrbuf), &port);
+        if (r != 0) {
+            char errmsg[1024] = "Failed to format UDP source address: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, to$str(errmsg));
+            return;
+        }
+        B_bytes data = to$bytesD_len(buf->base, nread);
+        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, to$str(addrbuf), toB_int(port));
+        self->_bytes_in += nread;
+        self->_datagrams_in += 1;
+    } else if (nread < 0) {
+        char errmsg[1024] = "UDP receive error: ";
+        uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+    }
+}
+
+static void udp_listener_on_receive(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags) {
+    (void)flags;
+    netQ_UDPListener self = (netQ_UDPListener)handle->data;
+    if (self == NULL) {
+        return;
+    }
+
+    if (nread >= 0 && addr != NULL) {
+        char addrbuf[INET6_ADDRSTRLEN] = { '\0' };
+        int port = 0;
+        int r = sockaddr_to_addr_port(addr, addrbuf, sizeof(addrbuf), &port);
+        if (r != 0) {
+            char errmsg[1024] = "Failed to format UDP source address: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, to$str(errmsg));
+            return;
+        }
+        B_bytes data = to$bytesD_len(buf->base, nread);
+        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, to$str(addrbuf), toB_int(port));
+        self->_bytes_in += nread;
+        self->_datagrams_in += 1;
+    } else if (nread < 0) {
+        char errmsg[1024] = "UDP receive error: ";
+        uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+    }
+}
+
+static void udp_close_handle(int64_t *sock_ptr) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)*sock_ptr;
+    if ((intptr_t)udp == -1) {
+        return;
+    }
+
+    uv_udp_recv_stop(udp);
+    if (uv_is_closing((uv_handle_t *)udp) == 0) {
+        uv_close((uv_handle_t *)udp, NULL);
+    }
+    *sock_ptr = -1LL;
+}
+
+static void udp_close_initialized_handle(uv_udp_t *udp) {
+    if (udp != NULL && uv_is_closing((uv_handle_t *)udp) == 0) {
+        uv_close((uv_handle_t *)udp, NULL);
+    }
+}
+
+static int udp_connection_start(netQ_UDPConnection self, B_str ip_address, int family) {
+    uv_udp_t *udp = (uv_udp_t *)acton_malloc(sizeof(uv_udp_t));
+    int r = uv_udp_init(get_uv_loop(), udp);
     if (r != 0) {
-        char errmsg[1024] = "Unable to run DNS query: ";
+        return r;
+    }
+
+    struct sockaddr_storage bind_addr;
+    r = make_udp_bind_addr(family, &bind_addr);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        return r;
+    }
+
+    r = uv_udp_bind(udp, (const struct sockaddr *)&bind_addr, 0);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        return r;
+    }
+
+    struct sockaddr_storage remote_addr;
+    r = make_sockaddr(ip_address, self->port, &remote_addr);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        return r;
+    }
+
+    r = uv_udp_connect(udp, (const struct sockaddr *)&remote_addr);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        return r;
+    }
+
+    udp->data = self;
+    r = uv_udp_recv_start(udp, alloc_buffer, udp_connection_on_receive);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        return r;
+    }
+
+    self->_sock = (int64_t)(intptr_t)udp;
+    self->_ip_version = family == AF_INET ? 4LL : 6LL;
+    self->_remote_address = ip_address;
+    self->$class->_on_udp_ready(self);
+    return 0;
+}
+
+$R netQ_UDPConnectionD__pin_affinityG_local (netQ_UDPConnection self, $Cont c$cont) {
+    pin_actor_affinity();
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPConnectionD__connect4G_local (netQ_UDPConnection self, $Cont c$cont, B_str ip_address) {
+    log_debug("UDP connecting over IPv4 to %s", fromB_str(ip_address));
+    int r = udp_connection_start(self, ip_address, AF_INET);
+    if (r != 0) {
+        char errmsg[1024] = "Error in UDP setup over IPv4: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $action2 f = ($action2)cb_data->on_error;
-        f->$class->__asyn__(f, name, to$str(errmsg));
-        GC_free(cb_data);
-        free(req);
-        return B_None;
+        self->$class->_on_udp_error(self, (int64_t)r, to$str(errmsg));
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPConnectionD__connect6G_local (netQ_UDPConnection self, $Cont c$cont, B_str ip_address) {
+    log_debug("UDP connecting over IPv6 to %s", fromB_str(ip_address));
+    int r = udp_connection_start(self, ip_address, AF_INET6);
+    if (r != 0) {
+        char errmsg[1024] = "Error in UDP setup over IPv6: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        self->$class->_on_udp_error(self, (int64_t)r, to$str(errmsg));
+    }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_bytes data) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, B_None);
     }
 
+    uv_udp_send_t *req = (uv_udp_send_t *)malloc(sizeof(uv_udp_send_t));
+    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, false);
+    if (req == NULL || state == NULL) {
+        free(req);
+        udp_send_req_state_free(state);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str("Failed to allocate UDP send request"));
+        return $R_CONT(c$cont, B_None);
+    }
+    req->data = state;
+    uv_buf_t buf = uv_buf_init(state->buf, state->len);
+    int r = uv_udp_send(req, udp, &buf, 1, NULL, udp_send_cb);
+    if (r != 0) {
+        char errmsg[1024] = "Failed to send UDP datagram: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        udp_send_req_state_free(state);
+        free(req);
+        return $R_CONT(c$cont, B_None);
+    }
+    self->_bytes_out += data->nbytes;
+    self->_datagrams_out += 1;
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPConnectionD_closeG_local (netQ_UDPConnection self, $Cont c$cont) {
+    self->_state = self->STATE_CLOSED;
+    udp_close_handle(&self->_sock);
+    return $R_CONT(c$cont, B_None);
+}
+
+B_NoneType netQ_UDPConnectionD___resume__ (netQ_UDPConnection self) {
+    self->_sock = -1LL;
+    self->_state = self->STATE_CLOSED;
+    $action2 f = ($action2)self->on_error;
+    f->$class->__asyn__(f, self, to$str("resume"));
     return B_None;
+}
+
+$R netQ_UDPConnectionD_local_addressG_local (netQ_UDPConnection self, $Cont c$cont) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, to$str(""));
+    }
+    struct sockaddr_storage sockname;
+    int namelen = sizeof(sockname);
+    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
+        int port = 0;
+        if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
+            addr[0] = '\0';
+        }
+    }
+    return $R_CONT(c$cont, to$str(addr));
+}
+
+$R netQ_UDPConnectionD_local_portG_local (netQ_UDPConnection self, $Cont c$cont) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, toB_int(0));
+    }
+    struct sockaddr_storage sockname;
+    int namelen = sizeof(sockname);
+    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    int port = 0;
+    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
+    }
+    return $R_CONT(c$cont, toB_int(port));
+}
+
+$R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
+    pin_actor_affinity();
+
+    uv_udp_t *udp = (uv_udp_t *)acton_malloc(sizeof(uv_udp_t));
+    int r = uv_udp_init(get_uv_loop(), udp);
+    if (r != 0) {
+        char errmsg[1024] = "Failed to initialize UDP listener: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    struct sockaddr_storage bind_addr;
+    r = make_sockaddr(self->address, self->port, &bind_addr);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        B_str errmsg = $FORMAT("Address is not an IPv4 or IPv6 address: %s", fromB_str(self->address));
+        log_warn((const char *)fromB_str(errmsg));
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, errmsg);
+        return $R_CONT(c$cont, B_None);
+    }
+
+    r = uv_udp_bind(udp, (const struct sockaddr *)&bind_addr, 0);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        char errmsg[1024] = "Error in UDP bind: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    udp->data = self;
+    r = uv_udp_recv_start(udp, alloc_buffer, udp_listener_on_receive);
+    if (r != 0) {
+        udp_close_initialized_handle(udp);
+        char errmsg[1024] = "Failed to start reading from UDP listener: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_listen;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    self->_sock = (int64_t)(intptr_t)udp;
+    $action2 f = ($action2)self->on_listen;
+    f->$class->__asyn__(f, self, B_None);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes data, B_str address, int64_t port) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, B_None);
+    }
+
+    struct sockaddr_storage dest;
+    int r = make_sockaddr(address, port, &dest);
+    if (r != 0) {
+        char errmsg[1024] = "Unable to parse UDP send address: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        return $R_CONT(c$cont, B_None);
+    }
+
+    uv_udp_send_t *req = (uv_udp_send_t *)malloc(sizeof(uv_udp_send_t));
+    struct udp_send_req_state *state = udp_send_req_state_new(data, ($WORD)self, true);
+    if (req == NULL || state == NULL) {
+        free(req);
+        udp_send_req_state_free(state);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str("Failed to allocate UDP send request"));
+        return $R_CONT(c$cont, B_None);
+    }
+    req->data = state;
+    uv_buf_t buf = uv_buf_init(state->buf, state->len);
+    r = uv_udp_send(req, udp, &buf, 1, (const struct sockaddr *)&dest, udp_send_cb);
+    if (r != 0) {
+        char errmsg[1024] = "Failed to send UDP datagram: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        $action2 f = ($action2)self->on_error;
+        f->$class->__asyn__(f, self, to$str(errmsg));
+        udp_send_req_state_free(state);
+        free(req);
+        return $R_CONT(c$cont, B_None);
+    }
+    self->_bytes_out += data->nbytes;
+    self->_datagrams_out += 1;
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_UDPListenerD_closeG_local (netQ_UDPListener self, $Cont c$cont) {
+    udp_close_handle(&self->_sock);
+    return $R_CONT(c$cont, B_None);
+}
+
+B_NoneType netQ_UDPListenerD___resume__ (netQ_UDPListener self) {
+    self->_sock = -1LL;
+    $action2 f = ($action2)self->on_listen;
+    f->$class->__asyn__(f, self, to$str("resume"));
+    return B_None;
+}
+
+$R netQ_UDPListenerD_local_addressG_local (netQ_UDPListener self, $Cont c$cont) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, to$str(""));
+    }
+    struct sockaddr_storage sockname;
+    int namelen = sizeof(sockname);
+    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
+        int port = 0;
+        if (sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port) != 0) {
+            addr[0] = '\0';
+        }
+    }
+    return $R_CONT(c$cont, to$str(addr));
+}
+
+$R netQ_UDPListenerD_local_portG_local (netQ_UDPListener self, $Cont c$cont) {
+    uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
+    if ((intptr_t)udp == -1) {
+        return $R_CONT(c$cont, toB_int(0));
+    }
+    struct sockaddr_storage sockname;
+    int namelen = sizeof(sockname);
+    char addr[INET6_ADDRSTRLEN] = { '\0' };
+    int port = 0;
+    if (uv_udp_getsockname((const uv_udp_t *)udp, (struct sockaddr *)&sockname, &namelen) == 0) {
+        sockaddr_to_addr_port((struct sockaddr *)&sockname, addr, sizeof(addr), &port);
+    }
+    return $R_CONT(c$cont, toB_int(port));
 }
 
 void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
