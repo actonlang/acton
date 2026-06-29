@@ -16,12 +16,25 @@ export DH_VERBOSE = 1
 %:
 	dh $@ --parallel --with bash-completion
 
+override_dh_auto_clean:
+	@echo "Skipping clean; Debian packaging consumes a prebuilt dist/ payload"
+
+override_dh_auto_build:
+	$(MAKE) package-dist-validate
+	@echo "Using prebuilt dist/ payload"
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/acton
+
 override_dh_auto_test:
 	@echo "Skipping tests"
 
 # Do not strip
 override_dh_strip:
 	@echo "Skipping strip"
+
+override_dh_shlibdeps:
+	@echo "Skipping dh_shlibdeps; make ldd verifies the hermetic dist/ libc floor"
 
 # dwz in our CI package builder does not support DWARF v5 emitted by Zig 0.15.
 override_dh_dwz:
