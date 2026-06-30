@@ -3006,7 +3006,7 @@ B_str B_bytesD___repr__(B_bytes s) {
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
-    $ROW row = $add_header(STR_ID,1+nWords,state);
+    $ROW row = $add_header(BYTES_ID,1+nWords,state);
     long nbytes = (long)str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
     memcpy(row->blob+1,str->str,nbytes+1);
@@ -3022,7 +3022,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     res->$class = &B_bytesG_methods;
     res->nbytes = (long)nbytes;
     res->str = acton_malloc_atomic(nbytes+1);
-    memcpy(res->str,this->blob+2,nbytes+1);
+    memcpy(res->str,this->blob+1,nbytes+1);
     return res;
 }
 

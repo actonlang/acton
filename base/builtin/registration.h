@@ -24,63 +24,64 @@
 #define RANGE_ID 10
 #define TUPLE_ID 11
 #define BYTEARRAY_ID 12
-#define ITEM_ID 13
-#define MSG_ID 14
-#define ACTOR_ID 15
-#define CATCHER_ID 16
-#define SLICE_ID 17   // Adding SLICE_ID by using a gap in the numbering...
-#define CONT_ID 18
-#define DONE_ID 19
-#define CONSTCONT_ID 20
-#define STRITERATOR_ID 21
-#define LISTITERATOR_ID 22
-#define DICTITERATOR_ID 23
-#define VALUESITERATOR_ID 24
-#define ITEMSITERATOR_ID 25
-#define SETITERATOR_ID 26
-#define RANGEITERATOR_ID 27
-#define ENUMERATEITERATOR_ID 28
-#define FILTERITERATOR_ID 29
-#define MAPITERATOR_ID 30
-#define ZIPITERATOR_ID 31
+#define BYTES_ID 13
+#define ITEM_ID 14
+#define MSG_ID 15
+#define ACTOR_ID 16
+#define CATCHER_ID 17
+#define SLICE_ID 18   // Adding SLICE_ID by using a gap in the numbering...
+#define CONT_ID 19
+#define DONE_ID 20
+#define CONSTCONT_ID 21
+#define STRITERATOR_ID 22
+#define LISTITERATOR_ID 23
+#define DICTITERATOR_ID 24
+#define VALUESITERATOR_ID 25
+#define ITEMSITERATOR_ID 26
+#define SETITERATOR_ID 27
+#define RANGEITERATOR_ID 28
+#define ENUMERATEITERATOR_ID 29
+#define FILTERITERATOR_ID 30
+#define MAPITERATOR_ID 31
+#define ZIPITERATOR_ID 32
 
-#define BASEEXCEPTION_ID                        32
-#define     SYSTEMEXIT_ID                       33
-#define     KEYBOARDINTERRUPT_ID                34
-#define     EXCEPTION_ID                        35
-#define         ASSERTIONERROR_ID               36
-#define         LOOKUPERROR_ID                  37
-#define             INDEXERROR_ID               38
-#define             KEYERROR_ID                 39
-#define         MEMORYERROR_ID                  40
-#define         OSERROR_ID                      41
-#define         RUNTIMEERROR_ID                 42
-#define             NOTIMPLEMENTEDERROR_ID      43
-#define         VALUEERROR_ID                   44
+#define BASEEXCEPTION_ID                        33
+#define     SYSTEMEXIT_ID                       34
+#define     KEYBOARDINTERRUPT_ID                35
+#define     EXCEPTION_ID                        36
+#define         ASSERTIONERROR_ID               37
+#define         LOOKUPERROR_ID                  38
+#define             INDEXERROR_ID               39
+#define             KEYERROR_ID                 40
+#define         MEMORYERROR_ID                  41
+#define         OSERROR_ID                      42
+#define         RUNTIMEERROR_ID                 43
+#define             NOTIMPLEMENTEDERROR_ID      44
+#define         VALUEERROR_ID                   45
 
-#define PROC_ID 45
-#define ACTION_ID 46
-#define MUT_ID 47
-#define PURE_ID 48
+#define PROC_ID 46
+#define ACTION_ID 47
+#define MUT_ID 48
+#define PURE_ID 49
 
-#define SEQ_ID 49
-#define BRK_ID 50
-#define CNT_ID 51
-#define RET_ID 52
+#define SEQ_ID 50
+#define BRK_ID 51
+#define CNT_ID 52
+#define RET_ID 53
 
-#define I8_ID 53
-#define I16_ID 54
-#define I32_ID 55
-#define I64_ID 56
-#define U1_ID 57
-#define U8_ID 58
-#define U16_ID 59
-#define U32_ID 60
-#define U64_ID 61
+#define I8_ID 54
+#define I16_ID 55
+#define I32_ID 56
+#define I64_ID 57
+#define U1_ID 58
+#define U8_ID 59
+#define U16_ID 60
+#define U32_ID 61
+#define U64_ID 62
 
-#define BIGINT_ID 62
+#define BIGINT_ID 63
 
-#define PREASSIGNED 63
+#define PREASSIGNED 64
 
 
 /*
