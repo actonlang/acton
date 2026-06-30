@@ -503,7 +503,16 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
             NClass q _ _ _ <- findQName (NoQ c) env
                                     = Just $ B.rtypeOf env (TC (NoQ c) (map tVar $ qbound q)) n0
         methodType n                = B.generalType env (methnm n)
-        (ss',vs)                    = genSuite env1 b
+        -- The synthesized reflective getter carries an empty body (return None)
+        -- through type checking and hashing so it pins no fields; here we ignore
+        -- that body and emit the real field-reflecting if-chain from the class
+        -- property set (see genGetAttr). __get_attr__ is a reserved name (a user
+        -- definition is rejected in Types), so the only method reaching this guard
+        -- is the compiler-synthesized placeholder.
+        (ss',vs)
+          | Derived c n0 <- n, n0 == getAttrKW
+                                    = (genGetAttr env1 c, [])
+          | otherwise               = genSuite env1 b
         decl                        = emit dloc $+$
                                       t3 <+> genTopName env n <+> parens (genPosPar (setVolVars vs env) n d t1 p) <+> char '{' $+$
                                       nest 4 ss' $+$ 
@@ -583,6 +592,31 @@ declDeserialize env n c props sup_c = (gen env (tCon c) <+> genTopName env (meth
                                       text "memcpy" <> parens (text "&" <> gen env self <> text "->" <> gen env i <> comma <+> text "&" <> gen env tmpV <> comma <+> text "sizeof" <> parens (gen env self <> text "->" <> gen env i)) <> semi
            | otherwise              = gen env self <> text "->" <> gen env i <+> text "=" <+> gen env primStepDeserialize <> parens (gen env st) <> semi
         ret                         = text "return" <+> gen env self <> semi
+
+
+-- Emit the body of the synthesized reflective getter __get_attr__(self, name).
+-- One branch per instance property: `if name == "attr": return self.attr`,
+-- keyed by the Acton attribute name, then `return None`. Object/list/value
+-- fields are returned by a plain pointer cast to B_value (valid even when the
+-- field's class was pruned to an opaque forward declaration); unboxable scalar
+-- fields are boxed with the builtin toB_* helpers. Reading an un-vivified
+-- optional field yields B_None, which the caller treats as absent.
+genGetAttr env cname                = case findQName (NoQ cname) env of
+                                        NClass q _ _ _ -> body (TC (NoQ cname) (map tVar $ qbound q))
+                                        _              -> retNone
+  where body c                      = vcat [ branch n t | (n, NSig sc Property _) <- fullAttrEnv env c, let t = sctype sc ] $+$ retNone
+        retNone                     = text "return" <+> gen env eNone <> semi
+        self                        = name "self"
+        branch n t                  = (text "if" <+> parens (nameEq n) <+> char '{') $+$
+                                      nest 4 (text "return" <+> parens (text "B_value") <> retval n t <> semi) $+$
+                                      char '}'
+        nameEq n                    = text "B_OrdD_strD___eq__" <>
+                                      parens (text "B_OrdD_strG_witness" <> comma <+> gen env nameKW <> comma <+>
+                                              gen env primToStr <> parens (doubleQuotes (text (nstr n))))
+        retval n t
+          | B.isUnboxable t         = genBoxed env t (field n)
+          | otherwise               = parens (field n)
+        field n                     = gen env self <> text "->" <> gen env n
 
 
 initTables env []                   = empty

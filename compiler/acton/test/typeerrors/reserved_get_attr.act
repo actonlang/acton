@@ -1,0 +1,6 @@
+class Foo(object):
+    x: int
+    def __init__(self):
+        self.x = 1
+    def __get_attr__(self, name: str) -> ?value:
+        return self.x
