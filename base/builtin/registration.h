@@ -78,7 +78,9 @@
 #define U32_ID 60
 #define U64_ID 61
 
-#define PREASSIGNED 62
+#define BIGINT_ID 62
+
+#define PREASSIGNED 63
 
 
 /*
