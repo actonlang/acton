@@ -95,6 +95,7 @@ void $register_builtin() {
   $register_force(U16_ID,&B_u16G_methods);
   $register_force(U32_ID,&B_u32G_methods);
   $register_force(U64_ID,&B_u64G_methods);
+  $register_force(BIGINT_ID,&B_bigintG_methods);
 }
 
 

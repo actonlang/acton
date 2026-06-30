@@ -148,36 +148,25 @@ B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_int base){
 }
 
 void B_bigintD___serialize__(B_bigint self,$Serial$state state) {
-    B_bigint prevkey = (B_bigint)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
-    if (prevkey) {
-        long pk = fromB_bigint(prevkey);
-        $val_serialize(-INT_ID,&pk,state);
-        return;
-    }
-    B_dictD_setitem(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,toB_bigint(state->row_no));
     int blobsize = 1 + labs(self->val.size);
-    $ROW row = $add_header(INT_ID,blobsize,state);
+    $ROW row = $add_header(BIGINT_ID,blobsize,state);
     row->blob[0] = ($WORD)self->val.size;
     memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
 }
 
 B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
+    if (!res) {
+        res = malloc_bigint();
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+    }
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    if (this->class_id < 0) {
-        return (B_bigint)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint((long)this->blob[0]),NULL);
-    } else {
-        if (!res)
-            res = malloc_bigint();
-        res->val.size = (long)this->blob[0];
-        res->val.alloc = labs(res->val.size);
-        res->val.n = acton_malloc(res->val.alloc*sizeof(long));
-        memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
-        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_bigint(state->row_no-1),res);
-        res->$class = &B_bigintG_methods;
-        return res;
-    }
+    res->val.size = (long)this->blob[0];
+    res->val.alloc = labs(res->val.size);
+    res->val.n = acton_malloc(res->val.alloc*sizeof(long));
+    memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
+    return res;
 }
 
 bool B_bigintD___bool__(B_bigint n) {
