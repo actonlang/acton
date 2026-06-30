@@ -75,6 +75,9 @@ endif
 # -- Apple Mac OS X ------------------------------------------------------------
 ifeq ($(shell uname -s),Darwin)
 OS:=macos
+MACOSX_DEPLOYMENT_TARGET ?= 15.0
+export MACOSX_DEPLOYMENT_TARGET
+ACTON_ZIG_TARGET := $(ARCH)-macos.$(MACOSX_DEPLOYMENT_TARGET)-none
 endif
 
 # -- Linux ---------------------------------------------------------------------
