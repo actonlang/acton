@@ -346,6 +346,20 @@ unboxedFieldType' env e n           = case typeOf env e of
         boxedType (TUnboxed _ t)     = t
         boxedType t                  = t
 
+-- True when an assignment target physically stores an unboxed (raw) value, so
+-- an in-place raw augmented assignment ('+=' etc.) is sound.  A field of a
+-- generic cell such as $Cell.cell keeps the boxed representation even when its
+-- element type is unboxable (the field type stays a type variable), so a raw
+-- in-place update there would corrupt the stored boxed pointer.  This reuses
+-- unboxedFieldType, the same field-representation decision the read side relies
+-- on, so reads and writes agree on whether a slot is raw or boxed.  Every target
+-- that actually reaches the augmented-assignment rewrite is a Dot (a volatile
+-- cell slot or a class/actor field); the catch-all keeps the prior raw behavior.
+unboxedAugTarget env (Dot _ e n)    = case unboxedFieldType env e n of
+                                        Just _  -> True
+                                        Nothing -> False
+unboxedAugTarget env _              = True
+
 isTypeRef NAct{}                    = True
 isTypeRef NClass{}                  = True
 isTypeRef NProto{}                  = True
@@ -762,13 +776,22 @@ instance Boxing Stmt where
              where t               = assignTargetType env s n e
 
 
-    boxing env (MutAssign l _  e@(Call _ (Dot _ (Var _ (NoQ w)) attr) p KwdNil))  -- (re)introduce augmented arithmetic operator for unboxable types; MutAssign case
+    boxing env (MutAssign l tg e@(Call _ (Dot _ (Var _ (NoQ w)) attr) p KwdNil))  -- (re)introduce augmented arithmetic operator for unboxable types; MutAssign case
       | isWitness w && attr `elem` augopKWs  && isUnboxable t
                                     = do let [x1,x2] = posargs p
                                          (ws, x2') <- boxing env x2
-                                         return (ws, AugAssign l x1 op (unbox t x2'))
+                                         if unboxedAugTarget env tg
+                                           -- target physically stores an unboxed value: do a raw
+                                           -- in-place augmented assignment.
+                                           then return (ws, AugAssign l x1 op (unbox t x2'))
+                                           -- target physically stores a boxed value (e.g. a generic
+                                           -- $Cell cell holding an unboxable element): keep the
+                                           -- arithmetic unboxed but box the result for the store,
+                                           -- rather than doing raw arithmetic on the boxed slot.
+                                           else return (ws, MutAssign l tg (Box t (Paren NoLoc (BinOp NoLoc (unbox t x1) binop (unbox t x2')))))
           where t                   = typeOf env e
                 op                  = bin2Aug attr
+                binop               = bin2Binary (incr2bin attr)
     boxing env (MutAssign l tg e)   = do (ws0,tg1) <- boxingTarget env tg
                                          (ws1,e1) <- boxing env e
                                          return (HashSet.union ws0 ws1, MutAssign l tg1 (fixassign env t e1))
@@ -904,3 +927,22 @@ bin2Aug kw
    | kw == iorKW                   = BOrA
    | kw == ixorKW                  = BXorA
    | kw == iandKW                  = BAndA
+
+-- Map an augmented-assignment witness keyword to its plain binary counterpart.
+-- imatmulKW is deliberately omitted: it has no unboxable operand type (matmul is
+-- matrix-only), so it never reaches the only caller (which is guarded by
+-- isUnboxable), and bin2Binary has no matmul case either. Keeping the range a
+-- subset of bin2Binary's domain avoids a non-exhaustive crash on future changes.
+incr2bin kw
+   | kw == iaddKW                  = addKW
+   | kw == isubKW                  = subKW
+   | kw == imulKW                  = mulKW
+   | kw == ipowKW                  = powKW
+   | kw == itruedivKW              = truedivKW
+   | kw == imodKW                  = modKW
+   | kw == ifloordivKW             = floordivKW
+   | kw == ilshiftKW               = lshiftKW
+   | kw == irshiftKW               = rshiftKW
+   | kw == iorKW                   = orKW
+   | kw == ixorKW                  = xorKW
+   | kw == iandKW                  = andKW

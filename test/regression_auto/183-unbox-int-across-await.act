@@ -1,0 +1,54 @@
+# Regression: an unboxable primitive local (int/float) that is updated across an
+# awaited actor call lives in a volatile $Cell cell. That cell is a generic cell,
+# so its `.cell` slot physically holds a boxed pointer. The augmented-assignment
+# rewrite used to emit a raw in-place `+=` on that slot, doing integer arithmetic
+# directly on the boxed pointer; the corrupted (misaligned) pointer then crashed
+# when the value was read after the await with
+#   "member access within misaligned address ... for type 'struct B_int'".
+# The accumulator must keep its value across the await boundary.
+#
+# NOTE: the value MUST be forced through a use that dereferences the boxed slot
+# (here, `print`) for the regression to bite. A bare `==` comparison does not
+# reliably trap on the misaligned pointer, so it would let the buggy compiler
+# pass this test silently. Print each accumulator before the value check.
+
+actor Counter():
+    def get() -> int:
+        return 1
+    def getf() -> float:
+        return 1.5
+
+actor main(env):
+    c = Counter()
+
+    def run():
+        # accumulate an int across an awaited actor call, in a loop
+        n = 0
+        for _i in range(3):
+            n += c.get()
+
+        # single await (no loop) is enough to exercise the same path
+        s = 0
+        s += c.get()
+
+        # a different augmented operator across the await
+        m = 100
+        for _i in range(3):
+            m -= c.get()
+
+        # float accumulator across the await
+        x = 0.0
+        for _i in range(4):
+            x += c.getf()
+
+        # Force a dereference of each accumulator's boxed slot. Under the bug the
+        # slot holds a misaligned pointer and this traps ("misaligned address ...
+        # struct B_int"); under the fix it prints the values below.
+        print("n=", n, " s=", s, " m=", m, " x=", x)
+
+        if n == 3 and s == 1 and m == 97 and x == 6.0:
+            env.exit(0)
+        else:
+            env.exit(1)
+
+    run()
