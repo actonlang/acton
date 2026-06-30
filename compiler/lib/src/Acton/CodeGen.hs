@@ -138,6 +138,8 @@ isDefined env n                     = n `HashSet.member` globalX x || n `HashSet
 
 excludeDefined env te               = filter (not . isDefined env . fst) te
 
+excludeLocalDefined env te          = filter (not . (`HashSet.member` localDefined env) . fst) te
+
 filterDefined env ns                = filter (isDefined env) ns
 
 ret env                             = retX $ envX env
@@ -988,7 +990,7 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
                                            _  -> genExp env t e
                                       else genExp env t e
 genStmt env s                       = (vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$ s', vs)
-  where te                          = excludeDefined env (envOf s)
+  where te                          = excludeLocalDefined env (envOf s)
         env1                        = ldefine te env
         (s', vs)                    = genV env1 s
 

@@ -1,0 +1,6 @@
+def boom(flag: bool) -> str:
+    if flag:
+        boom = "here"
+    else:
+        boom = "there"
+    return boom

@@ -2086,6 +2086,7 @@ main = do
       -- A local that is live across a for-loop must be emitted as `volatile` so it
       -- survives the loop's StopIteration setjmp/longjmp under optimization.
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
+      testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
