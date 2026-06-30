@@ -16,6 +16,11 @@ class TCPCap():
     def __init__(self, cap: NetCap):
         pass
 
+class UDPCap():
+    """Capability to connect or listen with UDP"""
+    def __init__(self, cap: NetCap):
+        pass
+
 class TCPConnectCap():
     """Capability to connect using TCP to a remote host"""
     def __init__(self, cap: TCPCap):
@@ -24,6 +29,16 @@ class TCPConnectCap():
 class TCPListenCap():
     """Capability to listen with TCP"""
     def __init__(self, cap: TCPCap):
+        pass
+
+class UDPConnectCap():
+    """Capability to connect using UDP to a remote host"""
+    def __init__(self, cap: UDPCap):
+        pass
+
+class UDPListenCap():
+    """Capability to listen with UDP"""
+    def __init__(self, cap: UDPCap):
         pass
 
 class _TCPListenConnectCap():
@@ -46,6 +61,16 @@ def _lookup_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: act
     """
     NotImplemented
 
+def _lookup_udp_a(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform UDP DNS lookup for name of record type A
+    """
+    NotImplemented
+
+def _lookup_udp_aaaa(name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
+    """Perform UDP DNS lookup for name of record type AAAA
+    """
+    NotImplemented
+
 
 def lookup_a(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, on_error: action(str, str) -> None) -> None:
     """Perform DNS lookup for name of record type A
@@ -56,6 +81,174 @@ def lookup_aaaa(cap: DNSCap, name: str, on_resolve: action(list[str]) -> None, o
     """Perform DNS lookup for name of record type AAAA
     """
     _lookup_aaaa(name, on_resolve, on_error)
+
+
+actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: action(UDPConnection) -> None, on_receive: action(UDPConnection, bytes, str, int) -> None, on_error: action(UDPConnection, str) -> None, connect_timeout: float=10.0):
+    """UDP IP connection to a fixed remote address"""
+    var _sock = -1
+    var _state = 0
+    var _dns_errors = 0
+    var _dns_error = ""
+    var _remote_address = ""
+    var _ip_version = 0
+
+    STATE_NONE = 0
+    STATE_RESOLVING = 1
+    STATE_CONNECTING = 2
+    STATE_CONNECTED = 3
+    STATE_CLOSED = 4
+
+    var _connections = 0
+    var _consecutive_connect_errors = 0
+    var _bytes_in: u64 = 0
+    var _bytes_out: u64 = 0
+    var _datagrams_in: u64 = 0
+    var _datagrams_out: u64 = 0
+
+    proc def _pin_affinity() -> None:
+        NotImplemented
+    _pin_affinity()
+
+    def _on_dns_resolve(ip_version: int, result: list[str]):
+        if _state != STATE_RESOLVING:
+            return
+        if len(result) == 0:
+            _on_dns_error(address, "DNS lookup returned no UDP addresses")
+            return
+        _state = STATE_CONNECTING
+        if ip_version == 4:
+            _connect4(result[0])
+        else:
+            _connect6(result[0])
+
+    def _on_dns_a_resolve(result: list[str]):
+        _on_dns_resolve(4, result)
+
+    def _on_dns_aaaa_resolve(result: list[str]):
+        _on_dns_resolve(6, result)
+
+    def _on_dns_error(name: str, msg: str):
+        if _state != STATE_RESOLVING:
+            return
+        _dns_errors += 1
+        if _dns_error == "":
+            _dns_error = msg
+        else:
+            _dns_error = _dns_error + "  " + msg
+        if _dns_errors >= 2:
+            _state = STATE_CLOSED
+            _consecutive_connect_errors += 1
+            on_error(self, _dns_error)
+
+    action def _on_udp_ready():
+        if _state == STATE_CONNECTING:
+            _state = STATE_CONNECTED
+            _connections += 1
+            _consecutive_connect_errors = 0
+            on_connect(self)
+
+    action def _on_udp_error(err: int, errmsg: str):
+        _state = STATE_CLOSED
+        _consecutive_connect_errors += 1
+        on_error(self, errmsg)
+
+    proc def _connect4(ip_address: str) -> None:
+        NotImplemented
+
+    proc def _connect6(ip_address: str) -> None:
+        NotImplemented
+
+    action def write(data: bytes) -> None:
+        """Write a datagram to the configured remote"""
+        NotImplemented
+
+    action def close() -> None:
+        """Close the UDP socket"""
+        NotImplemented
+
+    def _connect_timeout():
+        if _state == STATE_RESOLVING or _state == STATE_CONNECTING:
+            _state = STATE_CLOSED
+            _consecutive_connect_errors += 1
+            close()
+            on_error(self, "UDP setup failed due to timeout")
+
+    def _connect(c):
+        after connect_timeout: _connect_timeout()
+        if is_ipv4(address):
+            _state = STATE_CONNECTING
+            _connect4(address)
+        elif is_ipv6(address):
+            _state = STATE_CONNECTING
+            _connect6(address)
+        else:
+            _state = STATE_RESOLVING
+            _lookup_udp_aaaa(address, _on_dns_aaaa_resolve, _on_dns_error)
+            _lookup_udp_a(address, _on_dns_a_resolve, _on_dns_error)
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    action def ip_version() -> ?int:
+        if _ip_version == 0:
+            return None
+        return _ip_version
+
+    action def local_address() -> str:
+        NotImplemented
+
+    action def local_port() -> int:
+        NotImplemented
+
+    action def remote_address() -> str:
+        return _remote_address
+
+    action def metrics():
+        return (connections=_connections,
+                consecutive_connect_errors=_consecutive_connect_errors,
+                bytes_in=_bytes_in,
+                bytes_out=_bytes_out,
+                datagrams_in=_datagrams_in,
+                datagrams_out=_datagrams_out)
+
+    _connect(self)
+
+
+actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(UDPListener, ?str) -> None, on_receive: action(UDPListener, bytes, str, int) -> None, on_error: action(UDPListener, str) -> None):
+    """UDP Listener"""
+    var _sock = -1
+    var _bytes_in: u64 = 0
+    var _bytes_out: u64 = 0
+    var _datagrams_in: u64 = 0
+    var _datagrams_out: u64 = 0
+
+    action def send(data: bytes, address: str, port: int) -> None:
+        """Send a datagram to a remote address"""
+        NotImplemented
+
+    action def close() -> None:
+        """Close listener"""
+        NotImplemented
+
+    action def local_address() -> str:
+        NotImplemented
+
+    action def local_port() -> int:
+        NotImplemented
+
+    action def metrics():
+        return (bytes_in=_bytes_in,
+                bytes_out=_bytes_out,
+                datagrams_in=_datagrams_in,
+                datagrams_out=_datagrams_out)
+
+    mut def __resume__() -> None:
+        NotImplemented
+
+    proc def _init() -> None:
+        """Implementation internal"""
+        NotImplemented
+    _init()
 
 
 actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None, connect_timeout: float=10.0):
