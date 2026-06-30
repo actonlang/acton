@@ -1,0 +1,167 @@
+# Round-trip tests for the serialize() / deserialize() builtins.
+#
+# serialize() returns a flat byte string and deserialize() rebuilds the object
+# graph, handing it back as `value` (the root type). To compare a restored
+# scalar against its expected value we first narrow it with isinstance. Richer
+# graphs are checked by re-serializing the restored value and comparing the
+# bytes, which does not require the value itself to be Eq.
+
+import testing
+
+class Point(object):
+    x: int
+    y: int
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
+
+class Child(object):
+    val: int
+    def __init__(self, val: int):
+        self.val = val
+
+
+class Pair(object):
+    left: Child
+    right: Child
+    def __init__(self, left: Child, right: Child):
+        self.left = left
+        self.right = right
+
+
+class Node(object):
+    next: ?Node
+    def __init__(self):
+        self.next = None
+
+
+actor SampleActor():
+    def ping() -> int:
+        return 1
+
+
+def roundtrips(obj: value) -> bool:
+    payload = serialize(obj)
+    return serialize(deserialize(payload)) == payload
+
+
+def raises_value_error(data: bytes) -> bool:
+    try:
+        deserialize(data)
+        return False
+    except ValueError:
+        return True
+
+
+def assert_deserializes_to_int(payload: bytes, expected: int, msg: str) -> None:
+    restored = deserialize(payload)
+    testing.assertTrue(isinstance(restored, int), msg)
+    if isinstance(restored, int):
+        testing.assertEqual(restored, expected)
+
+
+def assert_deserializes_to_bigint(payload: bytes, expected: bigint, msg: str) -> None:
+    restored = deserialize(payload)
+    testing.assertTrue(isinstance(restored, bigint), msg)
+    if isinstance(restored, bigint):
+        testing.assertEqual(restored, expected)
+
+
+def _test_int():
+    assert_deserializes_to_int(serialize(123456789), 123456789, "int roundtrips")
+
+
+def _test_str():
+    restored = deserialize(serialize("héllo wörld"))
+    testing.assertTrue(isinstance(restored, str), "restored is a str")
+    if isinstance(restored, str):
+        testing.assertEqual(restored, "héllo wörld")
+
+
+def _test_bytes():
+    obj = b"\x00\x01hello\xff"
+    restored = deserialize(serialize(obj))
+    testing.assertTrue(isinstance(restored, bytes), "restored is bytes")
+    if isinstance(restored, bytes):
+        testing.assertEqual(restored, obj)
+
+
+def _test_scalars():
+    testing.assertTrue(roundtrips(0), "int zero")
+    testing.assertTrue(roundtrips(-42), "negative int")
+    testing.assertTrue(roundtrips(3.14159), "float")
+    testing.assertTrue(roundtrips(True), "True")
+    testing.assertTrue(roundtrips(False), "False")
+    testing.assertTrue(roundtrips(""), "empty str")
+
+
+def _test_bigint():
+    big = 123456789012345678901234567890123456789
+    neg = -98765432109876543210987654321098765432
+    zero = big - big
+    assert_deserializes_to_bigint(serialize(big), big, "big bigint")
+    assert_deserializes_to_bigint(serialize(neg), neg, "negative bigint")
+    assert_deserializes_to_bigint(serialize(zero), zero, "zero bigint")
+    testing.assertTrue(roundtrips([big, big]), "shared bigint back references")
+
+
+def _test_list():
+    testing.assertTrue(roundtrips([1, 2, 3, 4, 5]), "flat list")
+    testing.assertTrue(roundtrips([[1, 2], [3], []]), "nested list")
+
+
+def _test_dict():
+    testing.assertTrue(roundtrips({"nums": [1, 2, 3], "more": [4, 5, 6]}), "dict")
+
+
+def _test_set():
+    testing.assertTrue(roundtrips({1, 2, 3}), "set")
+
+
+def _test_tuple():
+    # A bare tuple is not a `value` subtype, but it can be wrapped
+    testing.assertTrue(roundtrips([([1, 2, 3], "hello", 42, True, b"raw")]), "tuple")
+
+
+def _test_optional():
+    testing.assertTrue(roundtrips([1, None, 3]), "list with None")
+
+
+def _test_object():
+    restored = deserialize(serialize(Point(3, 4)))
+    testing.assertTrue(isinstance(restored, Point), "restored is a Point")
+    if isinstance(restored, Point):
+        testing.assertEqual(restored.x, 3)
+        testing.assertEqual(restored.y, 4)
+
+
+def _test_shared_user_object():
+    child = Child(9)
+    testing.assertTrue(roundtrips(Pair(child, child)), "shared user object")
+
+
+def _test_user_object_cycle():
+    node = Node()
+    node.next = node
+    testing.assertTrue(roundtrips(node), "self-referential cycle")
+
+
+def _test_invalid_payload():
+    bad = serialize(7)[:-1]
+    testing.assertTrue(raises_value_error(bad), "truncated payload raises")
+
+
+def _test_empty_payload():
+    testing.assertTrue(raises_value_error(b""), "empty payload raises")
+
+
+def _test_rejects_actor() -> None:
+    # deserializing an actor without a globmap makes no sense, let's ensure it
+    # can't even be serialized
+    a = SampleActor()
+    try:
+        serialize([a])
+        testing.assertTrue(False, "serialize() of an actor should raise ValueError")
+    except ValueError:
+        pass

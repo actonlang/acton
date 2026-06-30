@@ -88,6 +88,9 @@ void $step_serialize($WORD self, $Serial$state state) {
     if (self) {
         int class_id = $GET_CLASSID((($Serializable)self)->$class);
         if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
+            if (!state->globmap && issubtype(class_id, ACTOR_ID))
+                // This also catches Msg or Cont because they reference the target actor transitively
+                $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: cannot serialize actors")));
             if (state->globmap) {
                 long key = (long)state->globmap(self);
                 if (key < 0) {
@@ -163,7 +166,7 @@ void $write_serialized($ROW row, char *file) {
         }
         memcpy(p,start,chunk_size);
         p+=chunk_size;
-    
+
         chunk_size = (row->blob_size)*sizeof($WORD);
         start =  (char*)row->blob;
         while (p+chunk_size > bufend) {
@@ -176,13 +179,13 @@ void $write_serialized($ROW row, char *file) {
         }
         memcpy(p,start,chunk_size);
         p+=chunk_size;
-    
+
         row = row->next;
     }
     fwrite(buf,1,p-buf,fileptr); // TODO:  handle file write error
     fclose(fileptr);
 }
- 
+
 $ROW $serialize($Serializable s, $WORD (*globmap)($WORD)) {
     $Serial$state state = acton_malloc(sizeof(struct $Serial$state));
     state->done = $NEW(B_dict,(B_Hashable)B_HashableD_WORDG_witness,NULL,NULL);
@@ -243,7 +246,7 @@ $ROW $read_serialized(char *file) {
     bufend = buf + fread(buf,1,sizeof(buf),fileptr);
     while(p < bufend || !feof(fileptr)) {
         int init[2];//4
-        chunk_size = 2*sizeof(int); 
+        chunk_size = 2*sizeof(int);
         start = (char*)init;
         if (p + chunk_size > bufend) {
             int fits = bufend - p;
@@ -274,7 +277,70 @@ $ROW $read_serialized(char *file) {
     }
     return header.fst;
 }
-       
+
 $Serializable $deserialize_file(char *file) {
     return $deserialize($read_serialized(file), NULL);
+}
+
+// Conversion between the $ROW list and a flat byte buffer ////////////////////////////////
+
+// Each row is written as its class_id (int) and blob_size (int) followed by
+// blob_size words of blob data. The in-memory `next` pointer is never written.
+
+static B_bytes $rows_to_bytes($ROW row) {
+    long size = 0;
+    for ($ROW r = row; r; r = r->next)
+        size += 2 * sizeof(int) + (long)r->blob_size * sizeof($WORD);
+    if (size > INT_MAX)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: object graph too large")));
+    B_bytes res;
+    NEW_UNFILLED_BYTES(res, (int)size);
+    unsigned char *p = res->str;
+    for ($ROW r = row; r; r = r->next) {
+        memcpy(p, &r->class_id, sizeof(int));  p += sizeof(int);
+        memcpy(p, &r->blob_size, sizeof(int)); p += sizeof(int);
+        long blob_bytes = (long)r->blob_size * sizeof($WORD);
+        memcpy(p, r->blob, blob_bytes);        p += blob_bytes;
+    }
+    return res;
+}
+
+static $ROW $bytes_to_rows(B_bytes data) {
+    unsigned char *p = data->str;
+    long remaining = data->nbytes;
+    struct $ROWLISTHEADER header = {NULL, NULL};
+    while (remaining > 0) {
+        if (remaining < (long)(2 * sizeof(int)))
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: truncated row header")));
+        int class_id, blob_size;
+        memcpy(&class_id, p, sizeof(int));  p += sizeof(int);
+        memcpy(&blob_size, p, sizeof(int)); p += sizeof(int);
+        remaining -= 2 * sizeof(int);
+        if (blob_size < 0)
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: invalid blob size")));
+        long blob_bytes = (long)blob_size * sizeof($WORD);
+        if (remaining < blob_bytes)
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: truncated row data")));
+        $ROW r = acton_malloc(2 * sizeof(int) + ((long)blob_size + 1) * sizeof($WORD));
+        r->next = NULL;
+        r->class_id = class_id;
+        r->blob_size = blob_size;
+        memcpy(r->blob, p, blob_bytes);
+        p += blob_bytes;
+        remaining -= blob_bytes;
+        $enqueue2(&header, r);
+    }
+    if (!header.fst)
+        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: empty input")));
+    return header.fst;
+}
+
+// Acton builtins: serialize() and deserialize() //////////////////////////////////////////
+
+B_bytes B_serialize(B_value obj) {
+    return $rows_to_bytes($serialize(($Serializable)obj, NULL));
+}
+
+B_value B_deserialize(B_bytes data) {
+    return (B_value)$deserialize($bytes_to_rows(data), NULL);
 }
