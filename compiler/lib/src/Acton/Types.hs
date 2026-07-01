@@ -1035,6 +1035,8 @@ instance InfEnv Decl where
       | otherwise                       = case findName n env of
                                              NReserved -> do
                                                  --traceM ("\n## infEnv class " ++ prstr n)
+                                                 when (not (inBuiltin env) && getAttrKW `elem` userMethods) $
+                                                     err2 (filter (== getAttrKW) userMethods) "Cannot define reserved compiler-synthesized method"
                                                  pushFX fxPure tNone
                                                  te0 <- infProperties env1 as' b
                                                  (cs,te,b1) <- infEnv env1 b0
@@ -1054,7 +1056,23 @@ instance InfEnv Decl where
             q'                          = selfQuant (NoQ n) q
             props te0                   = [ Signature l0 [n] sc Property | (n,NSig sc Property _) <- te0 ]
             tc                          = TC (NoQ n) (map tVar $ qbound q)
-            b0                          = initComplement env n as' b
+            b0                          = addGetAttr (initComplement env n as' b)
+            -- Synthesize an empty-bodied reflective attribute getter
+            --   pure def __get_attr__(self, name: str) -> ?value: return None
+            -- on every user class. The body stays empty through type checking and
+            -- hashing, so it references no fields and pins nothing in the
+            -- dependency graph; CodeGen fills it from the class property set.
+            -- __get_attr__ is a reserved name: a user definition is rejected above,
+            -- which keeps CodeGen's unconditional replacement of the body sound.
+            -- Skipped for builtins (C-defined structs); the userMethods guard only
+            -- avoids synthesizing a duplicate on the rejected path.
+            addGetAttr body
+              | inBuiltin env           = body
+              | getAttrKW `elem` userMethods
+                                        = body
+              | otherwise               = getAttrDef : body
+            userMethods                 = [ dname d | Decl _ ds <- b, d@Def{} <- ds ]
+            getAttrDef                  = sDef getAttrKW (pospar [(selfKW,tSelf),(nameKW,tStr)]) (tOpt tValue) [sReturn eNone] fxPure
             relayInit te b              = --trace ("####### Creating relayInit for class " ++ prstr n) $
                                           case lookup initKW te' of
                                             Just ni@(NDef sc _ _) ->

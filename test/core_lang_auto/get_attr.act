@@ -1,0 +1,61 @@
+# The compiler synthesizes a reflective attribute getter
+#   pure def __get_attr__(self, name: str) -> ?value
+# on every class. It returns the named instance attribute (boxed to value), or
+# None for an unset optional attribute or an unknown name.
+
+class Inner(object):
+    x: int
+    def __init__(self):
+        self.x = 42
+
+class Outer(object):
+    a: int
+    flag: u64
+    inner: ?Inner
+    def __init__(self):
+        self.a = 7
+        self.flag = 99
+        self.inner = None
+
+actor main(env):
+    o = Outer()
+    ok = True
+
+    # boxed-int attribute
+    va = o.__get_attr__("a")
+    if isinstance(va, int):
+        if va != 7:
+            print("FAIL: a ==", va); ok = False
+    else:
+        print("FAIL: a not int"); ok = False
+
+    # unboxable scalar (u64) attribute
+    vf = o.__get_attr__("flag")
+    if isinstance(vf, u64):
+        if vf != 99:
+            print("FAIL: flag ==", vf); ok = False
+    else:
+        print("FAIL: flag not u64"); ok = False
+
+    # unset optional object attribute -> None
+    if o.__get_attr__("inner") is not None:
+        print("FAIL: inner should be None"); ok = False
+
+    # set it, reflect again -> the object
+    o.inner = Inner()
+    vi = o.__get_attr__("inner")
+    if isinstance(vi, Inner):
+        if vi.x != 42:
+            print("FAIL: inner.x ==", vi.x); ok = False
+    else:
+        print("FAIL: inner not Inner"); ok = False
+
+    # unknown attribute name -> None
+    if o.__get_attr__("nope") is not None:
+        print("FAIL: nope should be None"); ok = False
+
+    if ok:
+        print("get_attr ok")
+        env.exit(0)
+    else:
+        env.exit(1)

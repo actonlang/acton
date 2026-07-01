@@ -42,6 +42,8 @@ serializeKW                         = name "__serialize__"
 deserializeKW                       = name "__deserialize__"
 cleanupKW                           = name "__cleanup__"
 resumeKW                            = name "__resume__"
+getAttrKW                           = name "__get_attr__"
+nameKW                              = name "name"
 
 valueKWs                            = [boolKW, strKW, reprKW]
 indexedKWs                          = [getitemKW, setitemKW, delitemKW]

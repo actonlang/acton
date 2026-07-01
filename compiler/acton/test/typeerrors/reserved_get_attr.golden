@@ -1,0 +1,9 @@
+Building file test/typeerrors/reserved_get_attr.act using temporary scratch directory
+   reserved_get_attr  Parse done                                                               0.000 s
+[error Compilation error]: Cannot define reserved compiler-synthesized method __get_attr__
+     +--> reserved_get_attr.act@5:9-5:21
+     |
+   5 |     def __get_attr__(self, name: str) -> ?value:
+     :         ^----------- 
+     :         `- Cannot define reserved compiler-synthesized method __get_attr__
+-----+

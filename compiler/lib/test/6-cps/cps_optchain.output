@@ -1,4 +1,6 @@
 class Cls (__builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
     pure def G_init (self : Self) -> None:
         pass
         return None
