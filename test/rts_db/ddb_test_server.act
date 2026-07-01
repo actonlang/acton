@@ -1,8 +1,16 @@
 import net
 
+# Byte vectors kept in actor state and checked before and after DB resume.
+VECTORS: list[bytes] = [
+    b"", # not a str
+    b"acton-bytes-regression-\xff\xfe\x80\x00\x11\x22", # longer than 8 bytes, with an embedded NUL character to ensure it can't be str
+]
+
 actor Tester(env, port):
     var _lsock = None
     var i = 0
+    # Bytes values carried in actor state and persisted through DB resume.
+    var payloads: list[bytes] = []
 
     def _on_listen(l, error):
         if error is not None:
@@ -17,6 +25,19 @@ actor Tester(env, port):
     def _on_server_accept(c):
         c.cb_install(_on_server_receive, _on_server_error)
 
+    def _verify_payloads() -> bytes:
+        # Verify every payload has correct runtime type and exact contents.
+        if len(payloads) != len(VECTORS):
+            return ("FAIL nvectors got=%d want=%d" % (len(payloads), len(VECTORS))).encode()
+        for idx in range(len(VECTORS)):
+            v = payloads[idx]
+            exp = VECTORS[idx]
+            if not isinstance(v, bytes):
+                return ("FAIL i=%d not-bytes (type confusion with str)" % idx).encode()
+            if v != exp:
+                return ("FAIL i=%d content got=%s want=%s" % (idx, v.hex(), exp.hex())).encode()
+        return b"OK"
+
     def _on_server_receive(c, data):
         print("RECV", c, data.decode())
         if data == b"GET":
@@ -25,8 +46,16 @@ actor Tester(env, port):
             c.write(str(i).encode())
         if data == b"INC":
             i += 1
-            print("RECV", c, data.decode(), "RESPONSE:", b"OK")
-            c.write(b"OK")
+            # Store bytes vectors in actor state and validate the baseline.
+            # The driver also rechecks them before restart and after resume.
+            payloads = VECTORS
+            result = _verify_payloads()
+            print("RECV", c, data.decode(), "RESPONSE:", result)
+            c.write(result)
+        if data == b"CHECK":
+            result = _verify_payloads()
+            print("RECV", c, data.decode(), "RESPONSE:", result)
+            c.write(result)
 
     def _on_server_error(c, error):
         print("There was an error:", error, " from:", c)

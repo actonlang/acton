@@ -163,10 +163,20 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                     error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
             elif state == 3:
                 if data == b"OK":
+                    log("Bytes vectors stored cleanly; rechecking before restart")
+                    state = 11
+                    c.write(b"CHECK")
+                else:
+                    error("Bytes serialization regression before restart: %s" % data.decode())
+            elif state == 11:
+                # Verify the pre-restart baseline through the same command path
+                # used after resume, so failures identify whether corruption
+                # happened before or during DB serialization.
+                if data == b"OK":
                     state = 4
                     c.write(b"GET")
                 else:
-                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
+                    error("Bytes serialization regression before restart: %s" % data.decode())
             elif state == 4:
                 if int(data.decode()) == tcp_expect:
                     state = 5
@@ -177,12 +187,21 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                     error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
             elif state == 8:
                 if int(data.decode()) == tcp_expect:
-                    log("YAY, got the right response after server restart, test success!!!!")
+                    log("Counter persisted across restart; verifying bytes vectors")
+                    state = 10
+                    c.write(b"CHECK")
+                else:
+                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
+            elif state == 10:
+                # The resumed server re-verifies every persisted bytes vector for
+                # both runtime type and exact content, and replies OK or FAIL...
+                if data == b"OK":
+                    log("YAY, all bytes vectors survived restart intact, test success!!!!")
                     state = 9
                     if p is not None:
                         p.terminate()
                 else:
-                    error("Got unexpected data from server in state %d: %s" % (state, data.decode()))
+                    error("Bytes serialization regression after resume: %s" % data.decode())
 
 
         def tcpc_on_error(c, msg):
