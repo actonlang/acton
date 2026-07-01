@@ -267,11 +267,18 @@ moduleQNameKeys m qn@(QName m' n)
 moduleQNameKeys _ qn        = [qn]
 
 extWitnesses                :: ModName -> TEnv -> [Witness]
-extWitnesses m exts         = foldl' add [] wits
+extWitnesses m exts         = fst (foldl' add ([], Map.empty) wits)
   where wits                = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps _ opts _) <- exts, (ws,p) <- ps ]
-        add ws w
-          | any (same w) ws = ws
-          | otherwise       = w : ws
+        -- Duplicate checking scans only the (proto name, type name) bucket instead
+        -- of every accumulated witness: `same` implies equal proto names and equal
+        -- wtypes (hence equal type-name keys), so bucketing loses no duplicates,
+        -- while a linear `any (same w)` scan is quadratic in the witness count --
+        -- a 65k-extension generated module would spend hours in eqString here.
+        add (ws, seen) w
+          | any (same w) bucket = (ws, seen)
+          | otherwise           = (w : ws, Map.insertWith (++) k [w] seen)
+          where k               = (tcname (proto w), witnessTypeQName w)
+                bucket          = Map.findWithDefault [] k seen
         same w w'           = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 witnessTypeQName            :: Witness -> Maybe QName
