@@ -1,0 +1,21 @@
+# In C a \xHH escape is greedy: it keeps consuming hex-digit characters
+# (0-9a-fA-F), so "\x00b" would be read as the single byte 0x0b rather than
+# NUL followed by 'b'. To prevent that, when a hex escape is immediately
+# followed by a hex digit the compiler splits the literal into adjacent C
+# string fragments ("\x00" "b"), and the codegen length decodes each fragment
+# separately. This used to crash codegen with "Prelude.read: no parse".
+# bytes([...]) builds the expected value without going through the literal codegen.
+
+def check() -> bool:
+    return (b"a\x00b\x00c\x00d" == bytes([97, 0, 98, 0, 99, 0, 100]) and
+            b"\x41B" == bytes([65, 66]) and          # escape then hex digit -> split
+            b"\x00" == bytes([0]) and
+            b"\x009" == bytes([0, 57]) and           # escape then hex digit -> split
+            b"\xff\xfe\xfd\x80\x7f\x00\x11\x22" == bytes([255, 254, 253, 128, 127, 0, 17, 34]))
+
+actor main(env):
+    if check():
+        await async env.exit(0)
+    else:
+        print("bytes hex-escape split produced wrong value")
+        await async env.exit(1)
