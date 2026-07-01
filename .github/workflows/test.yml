@@ -90,29 +90,15 @@ jobs:
     outputs:
       matrix: ${{ steps.setmatrix.outputs.matrix }}
     steps:
-      - name: "Set Matrix for PR or push"
-        # Keep PR matrix minimal; extra entries increase cache pressure and slow PR workflows.
-        if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
-        id: setmatrix_pr
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set Matrix for nightly run"
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-        id: setmatrix_cron
-        run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"aarch64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"15\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"macos\",\"version\":\"26\",\"arch\":\"aarch64\",\"cache\":true}]}'
-          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
-
-      - name: "Set final matrix output"
+      - name: "Set Matrix"
         id: setmatrix
         run: |
-          if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "matrix=${{ steps.setmatrix_cron.outputs.matrix }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true}]}'
           else
-            echo "matrix=${{ steps.setmatrix_pr.outputs.matrix }}" >> $GITHUB_OUTPUT
+            MATRIX_JSON='{"include":[{"os":"macos","version":"26","arch":"aarch64","cache":true},{"os":"macos","version":"26","arch":"x86_64","cache":true}]}'
           fi
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Debug: Print matrix JSON"
         run: |
@@ -125,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix_maker_macos.outputs.matrix) }}
-    runs-on: ${{ (matrix.version == '15' && matrix.arch == 'x86_64') && 'macos-15-intel' || format('{0}-{1}', matrix.os, matrix.version) }}
+    runs-on: ${{ matrix.arch == 'x86_64' && format('{0}-{1}-intel', matrix.os, matrix.version) || format('{0}-{1}', matrix.os, matrix.version) }}
     env:
       BUILD_TIME: ${{ needs.build-version.outputs.build_time }}
     steps:
@@ -169,7 +155,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile') }}
       - name: "Install build prerequisites"
         run: |
           # Retry network-bound installs so a transient mirror/CDN blip doesn't
@@ -209,7 +195,7 @@ jobs:
         with:
           path: |
             ~/.cache/acton/
-          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}
+          key: acton-zig-${{ matrix.os }}-${{ matrix.version }}-${{ matrix.arch }}-${{ hashFiles('Makefile') }}
       - name: "Upload whole test dir as artifact on test failure"
         if: failure()
         uses: actions/upload-artifact@v7
@@ -665,28 +651,43 @@ jobs:
             ${{ github.workspace }}/out/**
 
 
+  matrix_maker_run_macos:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.setmatrix.outputs.matrix }}
+    steps:
+      - name: "Set Matrix"
+        id: setmatrix
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"}]}'
+          else
+            MATRIX_JSON='{"include":[{"runner":"macos-15","artifact":"acton-macos-26-aarch64"},{"runner":"macos-15-intel","artifact":"acton-macos-26-x86_64"},{"runner":"macos-26","artifact":"acton-macos-26-aarch64"},{"runner":"macos-26-intel","artifact":"acton-macos-26-x86_64"}]}'
+          fi
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+
+      - name: "Debug: Print matrix JSON"
+        run: |
+          echo "Matrix JSON:"
+          echo '${{ toJson(fromJson(steps.setmatrix.outputs.matrix)) }}'
+          echo "Event name: ${{ github.event_name }}"
+
+
   run-macos:
-    needs: test-macos
+    needs: [test-macos, matrix_maker_run_macos]
     strategy:
       fail-fast: false
-      matrix:
-        os: [macos-15, macos-15-intel, macos-26]
-    runs-on: ${{ matrix.os }}
+      matrix: ${{ fromJson(needs.matrix_maker_run_macos.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: "Machine info"
         run: |
           uname -a
           system_profiler SPHardwareDataType
-      - name: "Download artifacts for Macos arm64, built on macos-15"
-        if: ${{ matrix.os == 'macos-15' || matrix.os == 'macos-26' }}
+      - name: "Download artifacts"
         uses: actions/download-artifact@v8
         with:
-          name: acton-macos-15-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-15"
-        if: ${{ matrix.os == 'macos-15-intel' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-macos-15-x86_64
+          name: ${{ matrix.artifact }}
       - name: "Extract acton"
         run: |
           tar Jxf $(ls acton-macos-*.tar.xz | tail -n1)
@@ -1189,7 +1190,7 @@ jobs:
     # Only run on the main branch
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms, build-container-image]
+    needs: [test-macos, run-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms, build-container-image]
     steps:
       - name: "Delete current tip release & tag"
         uses: dev-drprasad/delete-tag-and-release@v1.1
@@ -1200,14 +1201,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-15"
+      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
         uses: actions/download-artifact@v8
         with:
-          name: acton-macos-15-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-15"
+          name: acton-macos-26-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
         uses: actions/download-artifact@v8
         with:
-          name: acton-macos-15-x86_64
+          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:11"
         uses: actions/download-artifact@v8
         with:
@@ -1288,18 +1289,18 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [test-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms, build-container-image]
+    needs: [test-macos, run-macos, test-linux, test-cross-compile, test-windows, test-proxy, build-debs, test-rpms, build-container-image]
     steps:
       - name: "Check out repository code"
         uses: actions/checkout@v7
-      - name: "Download artifacts for Macos aarch64, built on macos-15"
+      - name: "Download artifacts for Macos aarch64, built on macos-26 targeting macos-15"
         uses: actions/download-artifact@v8
         with:
-          name: acton-macos-15-aarch64
-      - name: "Download artifacts for Macos x86_64, built on macos-15"
+          name: acton-macos-26-aarch64
+      - name: "Download artifacts for Macos x86_64, built on macos-26 targeting macos-15"
         uses: actions/download-artifact@v8
         with:
-          name: acton-macos-15-x86_64
+          name: acton-macos-26-x86_64
       - name: "Download artifacts for Linux x86_64, built on Debian:11"
         uses: actions/download-artifact@v8
         with:
