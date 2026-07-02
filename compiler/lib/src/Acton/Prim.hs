@@ -101,6 +101,7 @@ primRCont           = gPrim "R_CONT"
 primRFail           = gPrim "R_FAIL"
 
 primEqOpt           = gPrim "EqOpt"
+primEqTuple         = gPrim "EqTuple"
 
 primIdentityActor   = gPrim "IdentityActor"
 
@@ -214,6 +215,7 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primRFail,         NDef scRFail NoDec Nothing),
 
                             (noq primEqOpt,         clEqOpt),
+                            (noq primEqTuple,       clEqTuple),
                             (noq primIdentityActor, clIdentityActor),
 
                             (noq primWEqNone,       NVar tEqNone),
@@ -500,6 +502,15 @@ clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTE
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
+
+--  class $EqTuple[W,P,K] (Eq[(*P,**K)]): pass
+--  W is the row of Eq witnesses for the components of (*P,**K), passed to __init__ as one tuple
+clEqTuple           = NClass [qbind w, qbind p, qbind k] (leftpath [TC qnEq [tTuple (tVar p) (tVar k)]]) clTEnv Nothing
+  where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
+        scInit      = tSchema [] $ tFun fxPure (posRow (tTuple (tVar w) kwdNil) posNil) kwdNil tNone
+        w           = TV PRow (name "W")
+        p           = TV PRow (name "P")
+        k           = TV KRow (name "K")
 
 --  class $IdentityActor (Identity[$Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
