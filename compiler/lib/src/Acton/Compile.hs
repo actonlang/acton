@@ -2042,13 +2042,17 @@ readModuleHeader sp gopts opts paths actFile = do
                 Left _ -> return False
                 Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
 
+    -- Surgical single-row update: a full readFile+writeFile here would re-derive
+    -- the dependency index rows from the stripped per-name hashes and silently
+    -- lose their users and hashes (degrading later per-name change detection),
+    -- besides rewriting a possibly multi-GB file for a pure mtime drift.
     refreshCachedSourceMeta currentSourceMeta = do
       let tyFilePath = tyDbPath paths (modName paths)
-      tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFilePath
-      case tyRes of
-        Left _ -> return ()
-        Right (_ms, nmod, tmod, _oldSourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) ->
-          InterfaceFiles.writeFile tyFilePath srcHash pubHash implHash currentSourceMeta imps depModules nameHashes roots tests mdoc nmod tmod
+      res <- (try :: IO a -> IO (Either SomeException a)) $
+        InterfaceFiles.updateSourceMeta tyFilePath currentSourceMeta
+      case res of
+        Left _  -> return ()
+        Right _ -> return ()
 
     verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps depModules nameCount roots tests mdoc = do
       let curHash = SHA256.hash (Source.ssBytes snap)
@@ -3642,10 +3646,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             TyTask{ tyDepModules = depModules } -> interestDepsFromDepRows depModules
             _ -> return Data.Set.empty
 
+          -- Restore BOTH the pub and the impl per-name external deps from the
+          -- module-level dep rows (the per-name rows on disk are stripped, see
+          -- InterfaceFiles.stripExternalDeps). The impl half matters: a header
+          -- rewrite (impl-hash refresh) re-derives the dep rows from these name
+          -- hashes, and losing the impl users would erase the per-name impl
+          -- change tracking for every dependency of this module.
           restorePubDepsFromRows depModules nameHashes = do
-            byOwner <- foldM addModule M.empty depModules
+            (pubByOwner, implByOwner) <- foldM addModule (M.empty, M.empty) depModules
             return
-              [ nh { InterfaceFiles.nhPubDeps = M.findWithDefault [] (InterfaceFiles.nhName nh) byOwner }
+              [ nh { InterfaceFiles.nhPubDeps = M.findWithDefault [] (InterfaceFiles.nhName nh) pubByOwner
+                   , InterfaceFiles.nhImplDeps = M.findWithDefault [] (InterfaceFiles.nhName nh) implByOwner
+                   }
               | nh <- nameHashes
               ]
             where
@@ -3654,17 +3666,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 depNames <- InterfaceFiles.readDepNames tyFile depMn
                 foldM (addName depMn) acc depNames
 
-              addName depMn acc depInfo = do
+              addName depMn (pubAcc, implAcc) depInfo = do
                 users <- InterfaceFiles.readDepUsers tyFile depMn (InterfaceFiles.dniName depInfo)
-                let dep =
+                let mkDep h =
                       ( A.GName depMn (InterfaceFiles.dniName depInfo)
-                      , InterfaceFiles.dniPubHash depInfo
+                      , h
                       )
-                    addUser m user =
+                    addUser dep m user =
                       M.insertWith (++) user [dep] m
-                if B.null (InterfaceFiles.dniPubHash depInfo)
-                  then return acc
-                  else return (foldl' addUser acc (InterfaceFiles.duPubUsers users))
+                    pubAcc'
+                      | B.null (InterfaceFiles.dniPubHash depInfo) = pubAcc
+                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniPubHash depInfo))) pubAcc (InterfaceFiles.duPubUsers users)
+                    implAcc'
+                      | B.null (InterfaceFiles.dniImplHash depInfo) = implAcc
+                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniImplHash depInfo))) implAcc (InterfaceFiles.duImplUsers users)
+                return (pubAcc', implAcc')
 
           depModulesFromNameHashes nameHashes = do
             let depMods =

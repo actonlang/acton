@@ -1973,6 +1973,16 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
     depDir <- ensureDepProject proj "libfoo"
     let depSrc = depDir </> "src" </> "lib.act"
         tyMain = proj </> "out" </> "types" </> "incremental_cases" </> "main.tydb"
+    let mainV1 = T.unlines
+          [ "import libfoo.lib"
+          , ""
+          , "def value() -> int:"
+          , "    return libfoo.lib.foo() + libfoo.lib.bar()"
+          , ""
+          , "actor main(env: Env):"
+          , "    print(value())"
+          , "    env.exit(0)"
+          ]
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 1"
@@ -1980,33 +1990,25 @@ p37_impl_refresh_missing_dep_hashes_reruns_front =
       , "def bar() -> int:"
       , "    return 2"
       ]
-    writeFileUtf8 (src </> "main.act") $ T.unlines
-      [ "import libfoo.lib"
-      , ""
-      , "def value() -> int:"
-      , "    return libfoo.lib.foo() + libfoo.lib.bar()"
-      , ""
-      , "actor main(env: Env):"
-      , "    print(value())"
-      , "    env.exit(0)"
-      ]
+    writeFileUtf8 (src </> "main.act") mainV1
     res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
     assertExitSuccess "initial build" res1
-    let mainV2 = T.unlines
-          [ "import libfoo.lib"
-          , ""
-          , "def value() -> int:"
-          , "    return libfoo.lib.foo()"
-          , ""
-          , "actor main(env: Env):"
-          , "    print(value())"
-          , "    env.exit(0)"
-          ]
-    writeFileUtf8 (src </> "main.act") mainV2
-    rewriteTySrcHashAndNameHashes tyMain (SHA256.hash (TE.encodeUtf8 mainV2)) (dropTyDepByLabel "libfoo.lib.bar")
+    -- Drop ALL of main's per-name dep rows for libfoo.lib while keeping main's
+    -- source (and stored source hash) unchanged. When the dep's impl then
+    -- changes, the staleness scan finds the module-level hash drifted but no
+    -- per-name rows to break the change down by -- exactly the missing-dep-row
+    -- condition that must fall back to rerunning the front passes. (The old
+    -- scenario dropped a single, no-longer-used name's row and only passed
+    -- because the source-meta refresh rewrote -- and thereby emptied -- ALL the
+    -- dep rows; the refresh no longer touches them.)
+    rewriteTySrcHashAndNameHashes tyMain (SHA256.hash (TE.encodeUtf8 mainV1))
+      (dropTyDepByLabel "libfoo.lib.foo" . dropTyDepByLabel "libfoo.lib.bar")
     writeFileUtf8 depSrc $ T.unlines
       [ "def foo() -> int:"
       , "    return 10"
+      , ""
+      , "def bar() -> int:"
+      , "    return 2"
       ]
     res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitSuccess "rebuild after impl refresh dep hash miss" res2

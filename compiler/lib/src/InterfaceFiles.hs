@@ -137,6 +137,7 @@ module InterfaceFiles
   , writeFile
   , writeFileWithProgress
   , writeFileWithVersion
+  , updateSourceMeta
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -1354,6 +1355,21 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
 
 writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
+
+-- | Update only the cached source-file metadata in the header, leaving every
+-- other row (name hashes, dep index rows, statements) untouched. Rewriting the
+-- whole file for a pure metadata drift would be both wasteful (the module
+-- content is unchanged; the file can be gigabytes) and LOSSY: a full write
+-- re-derives the dependency index rows from the per-name hashes, whose external
+-- deps are stripped on disk, so the rewritten rows would silently lose their
+-- users and hashes -- degrading later per-name change detection.
+updateSourceMeta :: FilePath -> Maybe SourceFileMeta -> IO ()
+updateSourceMeta f sourceMeta = do
+    size <- readMapSize f
+    withWriteTxn f size $ \txn dbi -> do
+      validateVersion txn dbi
+      (_oldMeta, srcH, pubH, implH) <- readMeta txn dbi
+      putValue txn dbi keyMeta (encodeStrict (sourceMeta, srcH, pubH, implH))
 
 writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
