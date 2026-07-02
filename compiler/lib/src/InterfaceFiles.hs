@@ -112,6 +112,8 @@ module InterfaceFiles
   , readNameHashMaybe
   , readModuleHashesMaybe
   , readFile
+  , readModuleIface
+  , readNameHashes
   , readStmtHasNotImpl
   , readHeader
   , readHeaderSummary
@@ -139,6 +141,7 @@ module InterfaceFiles
   , writeFileWithProgress
   , writeFileWithVersion
   , updateSourceMeta
+  , updateImplRefresh
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -185,6 +188,11 @@ data NameHashInfo = NameHashInfo
   , nhSrcHash  :: BS.ByteString
   , nhPubHash  :: BS.ByteString
   , nhImplHash :: BS.ByteString
+  -- The name's OWN contribution to nhImplHash, before combining with the
+  -- hashes of its local and external deps. Storing it lets an impl-hash
+  -- refresh recombine hashes from rows alone -- no re-read of the typed
+  -- module, no re-parse and no dependency re-walk.
+  , nhOwnImplHash :: BS.ByteString
   , nhPubLocalDeps  :: [A.Name]
   , nhImplLocalDeps :: [A.Name]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
@@ -1372,6 +1380,44 @@ updateSourceMeta f sourceMeta = do
       (_oldMeta, srcH, pubH, implH) <- readMeta txn dbi
       putValue txn dbi keyMeta (encodeStrict (sourceMeta, srcH, pubH, implH))
 
+-- | Apply an impl-hash refresh surgically: update the meta row, upsert the
+-- dependency index rows and rewrite only the per-name rows whose stored
+-- encoding actually changed. Everything else (module header, statements,
+-- imports, roots, tests, doc) is left untouched. An impl refresh changes
+-- hashes, never content, so rewriting the whole file -- gigabytes for large
+-- generated modules -- is pure waste. The dep index row KEYS are stable here
+-- (the module's own source is unchanged, so it depends on the same names);
+-- only hash values inside the rows move, hence upserting is complete.
+updateImplRefresh :: FilePath -> BS.ByteString -> [DepModuleInfo] -> [NameHashInfo] -> IO ()
+updateImplRefresh f moduleImplHash depModules nameHashes = do
+    extra <- entryMapSize (depEntries ++ nameEntries)
+    existing <- readMapSize f
+    go (existing + extra)
+  where
+    depEntries = depIndexEntries depModules nameHashes
+    nameEntries = [ (keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh)) | nh <- nameHashes ]
+    go size = do
+      res <- E.try $ withWriteTxn f size $ \txn dbi -> do
+        validateVersion txn dbi
+        (oldMeta, srcH, pubH, _oldImplH) <- readMeta txn dbi
+        putValue txn dbi keyMeta (encodeStrict (oldMeta :: Maybe SourceFileMeta, srcH, pubH, moduleImplHash))
+        mapM_ (uncurry (putValueIfChanged txn dbi)) depEntries
+        mapM_ (uncurry (putValueIfChanged txn dbi)) nameEntries
+      case res of
+        Right () -> return ()
+        Left err | isMapFull err -> go (size * 2)
+        Left (err :: E.SomeException) -> E.throwIO err
+
+-- | Write a row only when its bytes differ from what is stored, keeping
+-- surgical updates from touching (and growing) unchanged pages.
+putValueIfChanged :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> BS.ByteString -> IO ()
+putValueIfChanged txn dbi k v = do
+    mOld <- withVal k (LMDB.mdb_get txn dbi)
+    changed <- case mOld of
+      Nothing -> return True
+      Just old -> (/= v) <$> copyVal old
+    when changed (putValue txn dbi k v)
+
 writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
     writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
@@ -1416,6 +1462,30 @@ readStmtHasNotImpl f =
       mv <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
       traceTydbRead "stmt-has-not-impl" f (show mv)
       return (maybe False id mv)
+
+-- | Read every per-name hash row of a module (its own rows, not a
+-- dependency's) without touching the interface or statement rows.
+readNameHashes :: FilePath -> IO [NameHashInfo]
+readNameHashes f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      nameHashes <- readNameHashEntries txn dbi
+      traceTydbRead "name-hash-all" f (show (length nameHashes))
+      return nameHashes
+
+-- | Read a module's interface (imports and name infos) without decoding the
+-- typed statement rows -- for consumers that only need the NModule, an eager
+-- readFile pays for deserializing the entire typed module.
+readModuleIface :: FilePath -> IO ([A.ModName], I.NModule)
+readModuleIface f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mdoc <- getValue "doc" txn dbi keyDoc
+      (te, _nameHashes) <- readNameEntries txn dbi
+      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      traceTydbRead "iface" f ("names " ++ show (length te))
+      let sourceImps = A.importsOf (A.Module tmn timps tdoc [])
+      return (sourceImps, I.NModule sourceImps te mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile

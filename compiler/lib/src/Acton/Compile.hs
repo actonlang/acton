@@ -2605,6 +2605,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           nameSrcHashes
                           pubHashes
                           implHashes
+                          nameImplHashes
                           pubLocalDeps
                           implLocalDeps
                           pubExtHashes
@@ -2759,11 +2760,12 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       return Nothing
     else do
       selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
+      -- Same-version .tydb files always carry statement indices, so a failed
+      -- selective read means a corrupt or hand-doctored file -- an eager
+      -- whole-module fallback would mask that (and read gigabytes doing it).
       selection <- case selectedTmod of
         Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
-        Nothing -> do
-          (_ms, _nmod, tmod, _sourceMetaFull, _moduleSrcBytesHashFull, _modulePubHashFull, _moduleImplHashStoredFull, _impsFull, _depModulesFull, _nameHashesFull, _rootsFull, _testsFull, _mdocFull) <- InterfaceFiles.readFile tyFile
-          return $ selectDbpModule totalNames nameSelection tmod
+        Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
       snap <- Source.readSource sp actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
@@ -3578,9 +3580,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           -- change tracking for every dependency of this module.
           restorePubDepsFromRows depModules nameHashes = do
             (pubByOwner, implByOwner) <- foldM addModule (M.empty, M.empty) depModules
+            -- Canonical order: the hash combinators (computeHashesSortedDeps)
+            -- require dep lists sorted by name, exactly as the front pass
+            -- stores them -- row iteration order must not leak into hashes.
             return
-              [ nh { InterfaceFiles.nhPubDeps = M.findWithDefault [] (InterfaceFiles.nhName nh) pubByOwner
-                   , InterfaceFiles.nhImplDeps = M.findWithDefault [] (InterfaceFiles.nhName nh) implByOwner
+              [ nh { InterfaceFiles.nhPubDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) pubByOwner)
+                   , InterfaceFiles.nhImplDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) implByOwner)
                    }
               | nh <- nameHashes
               ]
@@ -3927,98 +3932,106 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       when (C.verbose gopts) $ do
                         let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
                         ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
-                      tyRes <- readTyFile
-                      case tyRes of
-                        Left diags -> return (key, Left diags)
-                        Right (_ms, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, _moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc) -> do
-                          parsedRes <- parseActFile optsT sp mn actFile Nothing
-                          case parsedRes of
-                            Left diags -> return (key, Left diags)
-                            Right (snap, parsedMod) -> do
-                              let nameSrcHashes =
-                                    M.fromList [ (InterfaceFiles.nhName nh, InterfaceFiles.nhSrcHash nh)
-                                               | nh <- nameHashes
-                                               ]
-                                  nameKeys = M.keysSet nameSrcHashes
-                                  implItems0 = Hashing.topLevelItems tmod
-                                  localNames = nameKeys
-                              let nameImplHashes0 = Hashing.nameHashesFromItems implItems0
-                                  nameImplHashes = M.filterWithKey (\k _ -> Data.Set.member k nameKeys) nameImplHashes0
-                              envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
-                                Acton.Env.mkEnv (searchPath paths) envSnap (adjustImports providers parsedMod)
-                              case envRes of
+                      -- The refresh is pure row math: every input is already stored.
+                      -- Own impl-hash components (nhOwnImplHash) and local deps come
+                      -- from the per-name rows, the external dep NAMES from the dep
+                      -- index rows (only their hashes changed -- the module's source
+                      -- is unchanged), and the new dep hashes are resolved fresh.
+                      -- No re-read of the typed module, no re-parse, no dep re-walk;
+                      -- the .tydb is updated surgically. The typed module is read
+                      -- only when the refresh must feed an EAGER back job -- then it
+                      -- is the compilation input.
+                      case taskCurrent of
+                        TyTask{ tyDepModules = depModules, tyPubHash = storedPubHash } -> do
+                          -- The task header carries only the name COUNT (selective
+                          -- reads); the refresh needs the module's own hash rows.
+                          storedNameHashes <- InterfaceFiles.readNameHashes tyFile
+                          moduleHasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
+                          restored <- restorePubDepsFromRows depModules storedNameHashes
+                          -- Only names with an impl item participate in the refresh --
+                          -- exactly the names the front pass gave a (non-empty) own
+                          -- impl-hash component. A signature-only name's impl hash is
+                          -- invariant under dependency changes.
+                          let refreshables =
+                                [ nh | nh <- restored
+                                     , not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
+                              ownImplHashes = M.fromList
+                                [ (InterfaceFiles.nhName nh, InterfaceFiles.nhOwnImplHash nh) | nh <- refreshables ]
+                              implLocalDeps = M.fromList
+                                [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplLocalDeps nh) | nh <- refreshables ]
+                              implExtDeps = M.fromList
+                                [ (InterfaceFiles.nhName nh, map fst (InterfaceFiles.nhImplDeps nh)) | nh <- refreshables ]
+                          do
+                              implExtRes <- (try :: IO a -> IO (Either SomeException a)) $
+                                resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
+                              case implExtRes of
                                 Left err -> handleSyncFailure err
-                                Right env1 -> do
-                                  depRes <- (try :: IO a -> IO (Either SomeException a)) $ do
-                                    let hashEnv = setMod mn env1
-                                    let (implLocalDeps0, implExtDeps0) = Hashing.implSplitDepsFromItems mn hashEnv localNames implItems0
-                                        implLocalDeps = M.fromList
-                                          [ (n, M.findWithDefault [] n implLocalDeps0)
-                                          | n <- M.keys nameSrcHashes
-                                          ]
-                                        implExtDeps = M.fromList
-                                          [ (n, M.findWithDefault [] n implExtDeps0)
-                                          | n <- M.keys nameSrcHashes
-                                          ]
-                                        depCount = sum (map length (M.elems implLocalDeps))
-                                                 + sum (map length (M.elems implExtDeps))
-                                    -- Force dep maps now so stale aliases/missing names
-                                    -- are handled via the front-pass fallback path.
-                                    _ <- evaluate depCount
-                                    implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
-                                    return (implLocalDeps, implExtRes)
-                                  case depRes of
-                                    Left err -> handleSyncFailure err
-                                    Right (_, Left _) -> rerunFront
-                                    Right (implLocalDeps, Right implExtHashes) -> do
-                                      nameHashesWithPubDeps <- restorePubDepsFromRows depModules nameHashes
-                                      let updatedNameHashes =
-                                            Hashing.refreshImplHashes nameHashesWithPubDeps nameImplHashes implLocalDeps implExtHashes
-                                          moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                      depModulesRes <- depModulesFromNameHashes updatedNameHashes
-                                      case depModulesRes of
-                                        Left _ -> rerunFront
-                                        Right updatedDepModules -> mask_ $ do
-                                          evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, imps))
-                                          evaluate (rnf (updatedDepModules, updatedNameHashes, roots, tests, mdoc))
-                                          evaluate (rnf nmod)
-                                          evaluate (rnf tmod)
-                                          let outputKey = TaskKey (projPath paths) mn
-                                              tyDbProgress p =
-                                                ccOnFrontOutputProgress callbacks outputKey FrontOutputTydb (frontOutputTyDbProgress p)
-                                          outputJob <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                           (ccOnFrontOutputDone callbacks)
-                                                                           (ccShouldWriteFrontOutput callbacks)
-                                                                           outputKey
-                                                                           FrontOutputTydb $ do
-                                            InterfaceFiles.writeFileWithProgress
-                                              tyDbProgress
-                                              A.version
-                                              tyFile
-                                              moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps updatedDepModules updatedNameHashes roots tests mdoc nmod tmod
-                                          tyJobs <-
-                                            if C.tydb optsT
-                                              then (:[]) <$> startDependentFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                                         (ccOnFrontOutputDone callbacks)
-                                                                                         (ccShouldWriteFrontOutput callbacks)
-                                                                                         outputJob
-                                                                                         outputKey
-                                                                                         FrontOutputTydbCopy
-                                                                                         (copyTydbInterface optsT paths mn)
-                                              else return []
-                                          let outputJobs = outputJob : tyJobs
-                                          rememberFrontOutputJobList frontOutputRef outputJobs
-                                          let I.NModule imps ifaceFull _mdoc = nmod
-                                              ifaceTE = publicIfaceTE ifaceFull
-                                              deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn moduleImplHash (length updatedNameHashes)
-                                              deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
-                                              backJob =
-                                                case deferredBackJob of
-                                                  Just _ -> Nothing
-                                                  Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                              fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob deferredBackJob)
-                                                { frOutputJobs = outputJobs }
-                                          cacheFrontResult fr
+                                Right (Left _) -> rerunFront
+                                Right (Right implExtHashes) -> do
+                                  let updatedNameHashes =
+                                        Hashing.refreshImplHashes restored ownImplHashes implLocalDeps implExtHashes
+                                      moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
+                                  depModulesRes <- depModulesFromNameHashes updatedNameHashes
+                                  case depModulesRes of
+                                    Left _ -> rerunFront
+                                    Right updatedDepModules -> do
+                                      evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
+                                      let outputKey = TaskKey (projPath paths) mn
+                                          mkOutputJobs = do
+                                            outputJob <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                                                             (ccOnFrontOutputDone callbacks)
+                                                                             (ccShouldWriteFrontOutput callbacks)
+                                                                             outputKey
+                                                                             FrontOutputTydb $
+                                              InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes
+                                            tyJobs <-
+                                              if C.tydb optsT
+                                                then (:[]) <$> startDependentFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                                                                           (ccOnFrontOutputDone callbacks)
+                                                                                           (ccShouldWriteFrontOutput callbacks)
+                                                                                           outputJob
+                                                                                           outputKey
+                                                                                           FrontOutputTydbCopy
+                                                                                           (copyTydbInterface optsT paths mn)
+                                                else return []
+                                            return (outputJob, outputJob : tyJobs)
+                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
+                                      case deferredBackJob0 of
+                                        Just _ -> do
+                                          ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
+                                          case ifaceRes of
+                                            Left diags -> return (key, Left diags)
+                                            Right (imps, ifaceTE, mdocI, storedPubH, _storedImplH, mModuleInfo) -> mask_ $ do
+                                              (outputJob, outputJobs) <- mkOutputJobs
+                                              rememberFrontOutputJobList frontOutputRef outputJobs
+                                              let deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
+                                                  fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
+                                                    { frOutputJobs = outputJobs
+                                                    , frModuleInfo = mModuleInfo
+                                                    }
+                                              cacheFrontResult fr
+                                        Nothing -> do
+                                          tyRes <- readTyFile
+                                          case tyRes of
+                                            Left diags -> return (key, Left diags)
+                                            Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
+                                              snap <- Source.readSource sp actFile
+                                              envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
+                                                Acton.Env.mkEnv (searchPath paths) envSnap tmod
+                                              case envRes of
+                                                Left err -> handleSyncFailure err
+                                                Right env1 -> mask_ $ do
+                                                  evaluate (rnf nmod)
+                                                  evaluate (rnf tmod)
+                                                  (_outputJob, outputJobs) <- mkOutputJobs
+                                                  rememberFrontOutputJobList frontOutputRef outputJobs
+                                                  let I.NModule imps ifaceFull _mdoc = nmod
+                                                      ifaceTE = publicIfaceTE ifaceFull
+                                                      backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                                      fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                        { frOutputJobs = outputJobs }
+                                                  cacheFrontResult fr
+                        _ -> rerunFront
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
                     --traceM ("\n## runCodegenRefresh " ++ prstr mn ++ "\n")

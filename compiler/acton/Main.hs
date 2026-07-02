@@ -1121,11 +1121,11 @@ printSigInterface paths mn mName tyFile = do
     exists <- InterfaceFiles.interfaceExists tyFile
     unless exists $
       printErrorAndExit ("Type interface not found for " ++ modNameToString mn)
-    tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readFile tyFile
+    tyRes <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readModuleIface tyFile
     case tyRes of
       Left err ->
         printErrorAndExit ("Could not read type interface for " ++ modNameToString mn ++ ": " ++ show err)
-      Right (ms, nmod, _, _, _, _, _, _, _, _, _, _, _) -> do
+      Right (ms, nmod) -> do
         env0 <- Acton.Env.initEnv (sysTypes paths) False
         let I.NModule imps te _ = nmod
             envImports = foldr Acton.Env.addImport env0 ms
