@@ -432,7 +432,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             context = [],
                                             qlevel = 0,
                                             envX = () }
-initEnv path False         = do (_,nmod,_,_,_,_,_,_,_,_,_,_,_) <- InterfaceFiles.readFile (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
+initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     initialNames = []

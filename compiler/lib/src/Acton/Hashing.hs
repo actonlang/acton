@@ -1558,12 +1558,13 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name B.ByteString
                    -> M.Map A.Name B.ByteString
                    -> M.Map A.Name B.ByteString
+                   -> M.Map A.Name B.ByteString
                    -> M.Map A.Name [A.Name]
                    -> M.Map A.Name [A.Name]
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> [InterfaceFiles.NameHashInfo]
-assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
+assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
   let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
       localDeps m n = Data.List.sortOn nameKey (M.findWithDefault [] n m)
   in
@@ -1572,6 +1573,7 @@ assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps impl
         , InterfaceFiles.nhSrcHash = M.findWithDefault B.empty n nameSrcHashes
         , InterfaceFiles.nhPubHash = M.findWithDefault B.empty n pubHashes
         , InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
+        , InterfaceFiles.nhOwnImplHash = M.findWithDefault B.empty n ownImplHashes
         , InterfaceFiles.nhPubLocalDeps = localDeps pubLocalDeps n
         , InterfaceFiles.nhImplLocalDeps = localDeps implLocalDeps n
         , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
@@ -1597,7 +1599,7 @@ buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDep
       selfImplHashes = nameImplHashes
       pubHashes = computeHashes selfPubHashes pubSigLocalDeps pubSigExtHashes
       implHashes = computeHashes selfImplHashes implLocalDeps implExtHashes
-  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes
+  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes selfImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes
 
 -- | Refresh impl hashes and impl deps for existing name hashes.
 refreshImplHashes :: [InterfaceFiles.NameHashInfo]
@@ -1607,15 +1609,21 @@ refreshImplHashes :: [InterfaceFiles.NameHashInfo]
                   -> [InterfaceFiles.NameHashInfo]
 refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
   let implHashes = computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes
-      infoMap = M.fromList [ (InterfaceFiles.nhName nh, nh) | nh <- nameHashes ]
-      namesSorted = Data.List.sortOn nameKey (M.keys nameImplHashes)
   in
-    [ let nh = infoMap M.! n
-      in nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
-            , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (M.findWithDefault [] n implLocalDeps)
-            , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
-            }
-    | n <- namesSorted
+    -- Return EVERY input name, refreshed or not: the result feeds the module
+    -- impl hash, the dependency index rows and the dependency module list,
+    -- all of which must cover the whole module. A name outside the refresh
+    -- domain (no impl item, empty own hash) passes through unchanged -- its
+    -- stored (empty) impl hash is exactly what the front pass would produce,
+    -- and its pub/impl deps must keep their places in the regenerated rows.
+    [ if M.member n nameImplHashes
+        then nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
+                , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (M.findWithDefault [] n implLocalDeps)
+                , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
+                }
+        else nh
+    | nh <- nameHashes
+    , let n = InterfaceFiles.nhName nh
     ]
 
 -- | Hash module-level pub/impl summaries from the final per-name hash maps.

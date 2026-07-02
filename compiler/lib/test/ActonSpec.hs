@@ -74,6 +74,7 @@ nameHash n src pub impl =
     , InterfaceFiles.nhSrcHash = src
     , InterfaceFiles.nhPubHash = pub
     , InterfaceFiles.nhImplHash = impl
+    , InterfaceFiles.nhOwnImplHash = impl
     , InterfaceFiles.nhPubLocalDeps = []
     , InterfaceFiles.nhImplLocalDeps = []
     , InterfaceFiles.nhPubDeps = []

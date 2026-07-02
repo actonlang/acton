@@ -290,6 +290,7 @@ hashBenchFromHashes mn env nmod extMaps implItems nameSrcHashes nameImplHashes s
             nameSrcHashes
             pubHashes
             implHashes
+            nameImplHashes
             pubLocalDeps
             implLocalDeps
             pubExtHashes
@@ -489,6 +490,7 @@ runHashBreakdown reps typesPath sourcePath = do
             nameSrcHashes
             pubHashes
             implHashes
+            nameImplHashes
             pubLocalDeps
             implLocalDeps
             pubExtHashes
@@ -610,6 +612,7 @@ runHashBreakdown reps typesPath sourcePath = do
       nameSrcHashes' <- readIORef nameSrcHashesRef
       pubHashes' <- readIORef pubHashesRef
       implHashes' <- readIORef implHashesRef
+      nameImplHashes' <- readIORef nameImplHashesRef
       pubLocalDeps' <- readIORef pubLocalDepsRef
       implLocalDeps' <- readIORef implLocalDepsRef
       pubExtHashes' <- readIORef pubExtHashesRef
@@ -620,6 +623,7 @@ runHashBreakdown reps typesPath sourcePath = do
               nameSrcHashes'
               pubHashes'
               implHashes'
+              nameImplHashes'
               pubLocalDeps'
               implLocalDeps'
               pubExtHashes'
