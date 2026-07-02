@@ -431,6 +431,19 @@ kPar kw (TRow _ KRow n t r)
 kPar kw (TNil _ KRow)   = KwdNIL
 kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
 
+-- The runtime components of a tuple with rows p and k: one component per row entry,
+-- with a star tail bundled as one nested tuple, or Nothing if a row tail is still open.
+-- Must mirror the component layout Normalizer.joinRow establishes in generated code.
+tupleComponents p k     = (++) <$> comps p <*> comps k
+  where comps (TRow _ _ _ t r)
+                        = (t :) <$> comps r
+        comps (TStar _ PRow r)
+                        = Just [tTupleP r]
+        comps (TStar _ KRow r)
+                        = Just [tTupleK r]
+        comps (TNil _ _)= Just []
+        comps _         = Nothing
+
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVW" ]
