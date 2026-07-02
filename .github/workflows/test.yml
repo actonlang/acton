@@ -440,7 +440,7 @@ jobs:
           retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
           retry sudo apt-get update
           retry sudo apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
-          retry sudo apt-get install -qy bash-completion build-essential debhelper devscripts gnupg2 locales rpm xz-utils
+          retry sudo apt-get install -qy bash-completion build-essential debhelper devscripts gnupg2 locales rpm xz-utils zstd
           sudo apt-get clean || true
       - name: "Prepare stack directories"
         run: |

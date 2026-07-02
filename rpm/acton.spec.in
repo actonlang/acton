@@ -5,6 +5,7 @@
 %global __brp_strip %{nil}
 %global __brp_strip_static_archive %{nil}
 %global __brp_strip_comment_note %{nil}
+%global _binary_payload w19.zstdio
 
 Name:           acton
 Version:        @VERSION@
@@ -18,6 +19,7 @@ Source2:        README.md
 
 BuildRequires:  tar
 BuildRequires:  xz
+BuildRequires:  zstd
 
 %description
 Acton is a general purpose programming language designed for desktop,

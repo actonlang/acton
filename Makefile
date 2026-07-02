@@ -794,6 +794,7 @@ rpms: package-dist-validate rpm/acton.spec.in LICENSE README.md
 	command -v rpmbuild >/dev/null 2>&1 || { echo "ERROR: rpmbuild is required to build RPM packages"; exit 1; }
 	command -v tar >/dev/null 2>&1 || { echo "ERROR: tar is required to build RPM packages"; exit 1; }
 	command -v xz >/dev/null 2>&1 || { echo "ERROR: xz is required to build RPM packages"; exit 1; }
+	command -v zstd >/dev/null 2>&1 || { echo "ERROR: zstd is required to build RPM packages"; exit 1; }
 	rm -rf rpmbuild/payload
 	mkdir -p rpmbuild/payload rpmbuild/SOURCES
 	$(MAKE) install DESTDIR="$(TD)/rpmbuild/payload"
