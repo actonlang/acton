@@ -452,7 +452,7 @@ compilerTests =
             ]
           firstLog <- assertOk "initial dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "initial build should report DBP selection" ("DBP provider: default on" `isInfixOf` firstLog)
+          assertBool "initial build should report DBP selection" ("DBP provider: total names" `isInfixOf` firstLog)
           assertBool "initial build should select a subset" ("selected closure" `isInfixOf` firstLog)
           providerC <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
@@ -466,7 +466,7 @@ compilerTests =
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "changed consumer should rerun provider DBP" ("DBP provider: default on" `isInfixOf` changedConsumerLog)
+          assertBool "changed consumer should rerun provider DBP" ("DBP provider: total names" `isInfixOf` changedConsumerLog)
           assertBool "changed consumer should make DBP codegen stale" ("generated code out of date" `isInfixOf` changedConsumerLog)
           providerC1b <- readFile (typesDir </> "provider.c")
           assertBool "changed consumer C should include newly interested root" ("unused_0" `isInfixOf` providerC1b)
@@ -524,7 +524,7 @@ compilerTests =
           removeIfExists (typesDir </> "main.root.c")
           sixthLog <- assertOk "dbp keeps executable root actor" =<<
             runBuild ["build", "--verbose", "--color", "never"]
-          assertBool "root module should report root seed" ("DBP main: default on" `isInfixOf` sixthLog)
+          assertBool "root module should report root seed" ("DBP main: total names" `isInfixOf` sixthLog)
           assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
           mainC <- readFile (typesDir </> "main.c")
           assertBool "selected main C should keep root actor" ("mainQ_main" `isInfixOf` mainC)
@@ -584,7 +584,7 @@ compilerTests =
             runBuild ["build", "--skip-build", "--verbose", "--color", "never", "src/c.act"]
           writeFile (proj </> "log.txt") logTxt
           assertBool "internal library module should still run DBP"
-            ("DBP a: default on" `isInfixOf` logTxt)
+            ("DBP a: total names" `isInfixOf` logTxt)
           assertBool "boundary library module should not run DBP"
             (not ("DBP b:" `isInfixOf` logTxt))
           aC <- readFile (typesDir </> "a.c")

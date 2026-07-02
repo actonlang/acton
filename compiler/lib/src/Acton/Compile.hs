@@ -1227,7 +1227,6 @@ data DeferredBackJob = DeferredBackJob
   , dbjMod :: A.ModName
   , dbjImplHash :: B.ByteString
   , dbjNameCount :: Int
-  , dbjReason :: String
   , dbjOutputJobs :: [FrontOutputJob]
   }
 
@@ -1292,7 +1291,6 @@ dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
         , dbjMod = mn
         , dbjImplHash = moduleImplHash
         , dbjNameCount = nameCount
-        , dbjReason = "default on"
         , dbjOutputJobs = []
         }
 
@@ -2725,7 +2723,6 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
-  , dbsInterestedCount :: Int
   , dbsSelectedCount :: Int
   , dbsFallbackReason :: Maybe String
   }
@@ -2763,10 +2760,10 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
     else do
       selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
       selection <- case selectedTmod of
-        Just tmod -> return $ selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
+        Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
         Nothing -> do
           (_ms, _nmod, tmod, _sourceMetaFull, _moduleSrcBytesHashFull, _modulePubHashFull, _moduleImplHashStoredFull, _impsFull, _depModulesFull, _nameHashesFull, _rootsFull, _testsFull, _mdocFull) <- InterfaceFiles.readFile tyFile
-          return $ selectDbpModule totalNames (Data.Set.size interested) nameSelection tmod
+          return $ selectDbpModule totalNames nameSelection tmod
       snap <- Source.readSource sp actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
@@ -2796,8 +2793,7 @@ logDbpSelection gopts callbacks mn dbj totalNames interestedCount rootCount sele
   when (C.verbose gopts) $
     ccOnInfo callbacks $
       "  DBP " ++ modNameToString (dropProjPrefix (dbjPaths dbj) mn)
-      ++ ": " ++ dbjReason dbj
-      ++ ", total names " ++ show totalNames
+      ++ ": total names " ++ show totalNames
       ++ ", interested names " ++ show interestedCount
       ++ ", root names " ++ show rootCount
       ++ ", selected closure " ++ show selectedCount
@@ -2837,18 +2833,16 @@ dbpSelectionError paths mn reason =
   throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
 
 selectDbpModule :: Int
-                -> Int
                 -> DbpNameSelection
                 -> A.Module
                 -> DbpSelection
-selectDbpModule totalNames interestedCount nameSelection tmod@(A.Module loc imps mdoc suite)
+selectDbpModule totalNames nameSelection tmod@(A.Module loc imps mdoc suite)
   | A.hasNotImpl suite = fallback "module contains NotImplemented/native extension hooks"
   | otherwise =
       let selected = dnsSelectedNames nameSelection
           suite' = mapMaybe (dbpPruneTopStmt selected) suite
       in DbpSelection
            { dbsModule = A.Module loc imps mdoc suite'
-           , dbsInterestedCount = interestedCount
            , dbsSelectedCount = Data.Set.size selected
            , dbsFallbackReason = Nothing
            }
@@ -2856,7 +2850,6 @@ selectDbpModule totalNames interestedCount nameSelection tmod@(A.Module loc imps
     fallback reason =
       DbpSelection
         { dbsModule = tmod
-        , dbsInterestedCount = interestedCount
         , dbsSelectedCount = totalNames
         , dbsFallbackReason = Just reason
         }
