@@ -92,6 +92,7 @@ import System.IO.Unsafe (unsafePerformIO)
 import System.Info
 import System.Posix.Files
 import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
+import System.Posix.Resource
 import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
@@ -107,7 +108,27 @@ import TerminalProgress
 import TerminalSize
 import ZigProgress
 
+raiseOpenFileLimit :: IO ()
+raiseOpenFileLimit =
+    void (try go :: IO (Either IOException ()))
+  where
+    go = do
+        lim <- getResourceLimit ResourceOpenFiles
+#if defined(darwin_HOST_OS)
+        case (softLimit lim, hardLimit lim) of
+          (ResourceLimit soft, ResourceLimit hard) -> raise lim soft (min hard 10240)
+          (ResourceLimit soft, ResourceLimitInfinity) -> raise lim soft 10240
+          _ -> return ()
+#else
+        setResourceLimit ResourceOpenFiles lim{ softLimit = hardLimit lim }
+#endif
+
+    raise lim soft target =
+        when (soft < target) $
+            setResourceLimit ResourceOpenFiles lim{ softLimit = ResourceLimit target }
+
 main = do
+    raiseOpenFileLimit
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
     let gopts = case arg of
