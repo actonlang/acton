@@ -2,20 +2,79 @@
 
 ## Unreleased
 
+This release drastically improves compile times for modules that import very
+large modules. The compiler tracks what specific names are used from each
+import and selectively loads exactly those names, avoiding reading full
+imported modules.
+
+### Language
+- Add a compiler-synthesized `__get_attr__(name: str) -> ?value` reflection
+  getter on every class, returning boxed instance attributes by their Acton
+  names while reserving `__get_attr__` against user definitions. This lets
+  serializers reflect over attributes without forcing every attribute subtree
+  to stay reachable in large generated data models. [#2993]
+- Compute bytes literal lengths correctly when a hex escape is immediately
+  followed by another hex digit, matching the generated split C string
+  fragments instead of letting the escape consume too much of the following
+  text. [#2996]
+
 ### Compiler & Build
+- Track what specific names are used from each import and selectively load
+  exactly those names, avoiding full imported-module reads during type
+  checking, back passes, and final C compilation. Tested large-module cases see
+  10,000x improvements. [#2930]
 - Generate direct C calls for statically known builtin protocol methods on
   builtin types, avoiding witness-table dispatch for those calls while keeping
   the existing builtin witness values available to the generated code. [#2935]
+- Continue primitive unboxing with `bool`, one of the most common value types
+  in Acton programs, representing it as an unboxed C `bool` through generated
+  code and builtin/runtime method tables while preserving inherited method
+  calls that return `bool`. [#2976]
+- Preserve loop-carried locals assigned inside `for` loops in optimized release
+  builds, fixing cases such as explicitly provided `argparse` sub-command
+  options being lost under `--release=fast`. [#2981]
+- Enable link-time optimization for non-debug Linux builds, including generated
+  projects, base, std, backend, and bundled runtime dependencies, while keeping
+  Debug builds fast. [#2982]
+- Compile local bindings that shadow functions, including assignments inside
+  branches, without letting the global function name suppress the generated C
+  local variable declaration. [#2988]
+- Preserve boxed values for primitives stored across awaited actor calls, so
+  augmented assignments update `int` and `float` locals safely after an
+  `await` instead of corrupting the boxed cell slot. [#2998]
 
 ### CLI & Project Workflow
 - Prevent parallel `acton test` runs from hanging when a worker or output
   reader fails, reporting the runner failure or captured output error instead
   of waiting forever for a missing completion event. [#2972]
 
-### Standard Library
+### Runtime & Standard Library
+- Add UDP support to `net`, with `UDPCap`, fixed-remote `UDPConnection`
+  sockets, bound `UDPListener` sockets, peer address and port reporting, and
+  listener replies to arbitrary peers. [#2989]
 - Report missing or empty `process.Process` and `process.RunProcess` commands
   through `on_error`, and mark failed spawns as not running so follow-up
-  process operations are safely ignored. [#2910]
+  process operations are safely ignored. [#2986]
+- Serialize `bigint` values with their own class id so multi-word integers
+  round-trip through Acton serialization instead of being decoded as normal
+  `int` rows. [#2994]
+- Serialize `bytes` values with their own class id so they round-trip as
+  `bytes` instead of deserializing as `str`. [#2995]
+
+### Packages & Distribution
+- Speed up macOS CI by reducing the PR test matrix to faster macOS 26 runners,
+  while release artifacts still target macOS 15 for both the Zig target and
+  Haskell binary deployment floor and publication stays gated on macOS 15 smoke
+  tests. [#2992]
+- Speed up package CI by building Debian and RPM packages from the same
+  prebuilt `dist/` tree, avoiding the slow, hard-to-cache Debian package
+  rebuild while sharing installed-payload validation and package version checks
+  across both package formats. [#2987]
+
+### Documentation
+- Document the type checker's witness environment invariants, active and closed
+  witness lifetimes, enumeration order, and possible exact-lookup split in the
+  compiler developer guide. [#2978]
 
 ## [0.28.3] - 2026-06-23
 
@@ -4482,6 +4541,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2927]: https://github.com/actonlang/acton/pull/2927
 [#2928]: https://github.com/actonlang/acton/pull/2928
 [#2929]: https://github.com/actonlang/acton/pull/2929
+[#2930]: https://github.com/actonlang/acton/pull/2930
 [#2931]: https://github.com/actonlang/acton/pull/2931
 [#2932]: https://github.com/actonlang/acton/pull/2932
 [#2935]: https://github.com/actonlang/acton/pull/2935
@@ -4503,6 +4563,20 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2964]: https://github.com/actonlang/acton/pull/2964
 [#2970]: https://github.com/actonlang/acton/pull/2970
 [#2972]: https://github.com/actonlang/acton/pull/2972
+[#2976]: https://github.com/actonlang/acton/pull/2976
+[#2978]: https://github.com/actonlang/acton/pull/2978
+[#2981]: https://github.com/actonlang/acton/pull/2981
+[#2982]: https://github.com/actonlang/acton/pull/2982
+[#2986]: https://github.com/actonlang/acton/pull/2986
+[#2987]: https://github.com/actonlang/acton/pull/2987
+[#2988]: https://github.com/actonlang/acton/pull/2988
+[#2989]: https://github.com/actonlang/acton/pull/2989
+[#2992]: https://github.com/actonlang/acton/pull/2992
+[#2993]: https://github.com/actonlang/acton/pull/2993
+[#2994]: https://github.com/actonlang/acton/pull/2994
+[#2995]: https://github.com/actonlang/acton/pull/2995
+[#2996]: https://github.com/actonlang/acton/pull/2996
+[#2998]: https://github.com/actonlang/acton/pull/2998
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
