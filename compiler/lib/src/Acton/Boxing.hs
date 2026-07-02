@@ -505,6 +505,7 @@ rtypeOfFun env f@(Dot _ (Var _ x) n)
 rtypeOfFun env f@(Dot _ e n)        = case typeOf env e of
                                         TCon _ tc -> rtypeOf env tc n
                                         TVar _ tv -> rtypeOf env (findTVBound env tv) n
+                                        TTuple{}  -> rtypeOf env cValue n     -- tuple value attrs (e.g. __bool__) use the value class slot ABI (cf. CodeGen.dotCast)
                                         _         -> typeOf env f
 rtypeOfFun env f@(Var _ n)
   | Just rt <- generatedMethodType env n []
