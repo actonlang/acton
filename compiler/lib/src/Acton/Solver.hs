@@ -617,6 +617,10 @@ reduce eq (c:cs)                            = do c <- usubst c
                                                  eq1 <- reduce' eq c
                                                  reduce eq1 cs
 
+-- The protocols the solver can derive for a closed tuple type, by structural
+-- induction over its components, and the prim witness classes implementing them.
+derivableTupleProtos                        = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple) ]
+
 reduce'                                     :: Equations -> Constraint -> TypeM Equations
 reduce' eq c@(Cast i env t1 t2)             = do cast' env i t1 t2
                                                  return eq
@@ -656,10 +660,10 @@ reduce' eq c@(Proto _ env w t@(TNone _) p)
   | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
 
 reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
-  | tcname p == qnEq,
+  | Just con <- lookup (tcname p) derivableTupleProtos,
     Just ts <- tupleComponents prow krow    = do ws <- mapM (const newWitness) ts
                                                  let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
-                                                     e = eCall (tApp (eQVar primEqTuple) [wrow, prow, krow]) [eTuple (map eVar ws)]
+                                                     e = eCall (tApp (eQVar con) [wrow, prow, krow]) [eTuple (map eVar ws)]
                                                  reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
 
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
@@ -806,7 +810,7 @@ hasWitness env (TCon _ c) p
     tcname p == qnIdentity  = True
 hasWitness env (TTuple _ prow krow) p
   | Just _ <- tupleComponents prow krow
-                            = tcname p == qnEq
+                            = tcname p `elem` map fst derivableTupleProtos
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 
@@ -1801,7 +1805,7 @@ implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps
 implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps (TTuple _ p k)
-  | Just _ <- tupleComponents p k       = all ((== qnEq) . tcname . snd) ps
+  | Just _ <- tupleComponents p k       = all ((`elem` map fst derivableTupleProtos) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
