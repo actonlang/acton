@@ -326,6 +326,22 @@ main = do
               names <$> InterfaceFiles.readInterfaceDBExtByType db (S.NoQ clsName) `shouldReturn` [extName]
               fst <$> InterfaceFiles.readInterfaceDBModuleInfo db `shouldReturn` [])
 
+      it "keeps lock files free of named-semaphore state" $ do
+        withSystemTempDirectory "acton-iface-lockfmt" $ \dir -> do
+          let tyPath = dir </> "lockfmt.tydb"
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module (S.modName ["lockfmt"]) [] Nothing []
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          -- liblmdb's lock table must use process-shared mutexes, which live
+          -- inside lock.mdb, on every platform. Its POSIX-semaphore variant
+          -- (upstream's default on macOS) stores "/MDB[rw]..." names here
+          -- instead and registers them in a global kernel table capped at
+          -- kern.posix.sem.max, where entries stranded by killed processes
+          -- and deleted caches survive until reboot - eventually failing
+          -- every locking mdb_env_open on the machine with ENOSPC.
+          lockBytes <- B8.readFile (tyPath </> "lock.mdb")
+          B8.isInfixOf "/MDBr" lockBytes `shouldBe` False
+
       it "serves fresh data through a handle across rewrites" $ do
         withSystemTempDirectory "acton-iface-rewrite" $ \dir -> do
           let mn = S.modName ["iface_rewrite"]
