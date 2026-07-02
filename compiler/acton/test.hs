@@ -382,7 +382,7 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
 
-  , testCase "dbp force selects provider subset and cached header interest" $ do
+  , testCase "dbp selects provider subset and cached header interest" $ do
         withSystemTempDirectory "acton-dbp" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
           let name = "dbp_fixture"
@@ -451,16 +451,12 @@ compilerTests =
             , "    env.exit(0)"
             ]
           firstLog <- assertOk "initial dbp build" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:make_box", "--color", "never"]
-          assertBool "initial build should report DBP selection" ("DBP provider: forced by --dbp" `isInfixOf` firstLog)
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
+          assertBool "initial build should report DBP selection" ("DBP provider: default on" `isInfixOf` firstLog)
           assertBool "initial build should select a subset" ("selected closure" `isInfixOf` firstLog)
           providerC <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
           assertBool "selected provider C should omit unused definitions" (not ("unused_1" `isInfixOf` providerC))
-          badSeedLog <- assertFails "bad dbp seed reports selection failure" =<<
-            runBuild ["build", "--skip-build", "--dbp", "provider:not_a_name", "--color", "never"]
-          assertBool "bad dbp seed should report selection failure"
-            ("DBP selection failed for provider" `isInfixOf` badSeedLog)
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -469,38 +465,47 @@ compilerTests =
             , "    env.exit(0)"
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
-          assertBool "changed consumer should rerun provider DBP" ("DBP provider: forced by --dbp" `isInfixOf` changedConsumerLog)
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
+          assertBool "changed consumer should rerun provider DBP" ("DBP provider: default on" `isInfixOf` changedConsumerLog)
           assertBool "changed consumer should make DBP codegen stale" ("generated code out of date" `isInfixOf` changedConsumerLog)
           providerC1b <- readFile (typesDir </> "provider.c")
           assertBool "changed consumer C should include newly interested root" ("unused_0" `isInfixOf` providerC1b)
           assertBool "changed consumer C should omit previously selected root" (not ("make_box" `isInfixOf` providerC1b))
           sameSelectionLog <- assertOk "cached dbp selection is up to date" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .tydb" `isInfixOf` sameSelectionLog)
           assertBool "same selection should skip provider back passes" ("generated code up to date" `isInfixOf` sameSelectionLog)
           removeFile (typesDir </> "provider.c")
           removeFile (typesDir </> "provider.h")
           secondLog <- assertOk "cached dbp build" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "cached consumer should be reused" ("Fresh main: using cached .tydb" `isInfixOf` secondLog)
           assertBool "cached build should collect provider interest from headers" ("interested names 1" `isInfixOf` secondLog)
           assertBool "cached build should still select the dependency closure" ("selected closure" `isInfixOf` secondLog)
-          removeFile (typesDir </> "provider.c")
-          removeFile (typesDir </> "provider.h")
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    f = provider.local_container_name"
+            , "    print(\"ok\")"
+            , "    env.exit(0)"
+            ]
           _thirdLog <- assertOk "dbp local name shadows builtin" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:make_box,local_container_name", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           providerC2 <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should keep local Container dependency" ("providerQ_Container" `isInfixOf` providerC2)
-          removeFile (typesDir </> "provider.c")
-          removeFile (typesDir </> "provider.h")
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.render_box())"
+            , "    env.exit(0)"
+            ]
           fourthLog <- assertOk "dbp keeps extension" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider:render_box", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "extension selection should not fall back" (not ("fallback:" `isInfixOf` fourthLog))
           providerC3 <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should keep extension" ("providerQ_RenderableD_Box" `isInfixOf` providerC3)
-          removeFile (typesDir </> "provider.c")
-          removeFile (typesDir </> "provider.h")
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -508,7 +513,7 @@ compilerTests =
             , "    env.exit(0)"
             ]
           fifthLog <- assertOk "dbp empty interest" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--color", "never"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "empty interest should not fall back" (not ("fallback:" `isInfixOf` fifthLog))
           assertBool "empty interest should be reported" ("interested names 0" `isInfixOf` fifthLog)
           assertBool "empty interest should select empty closure" ("selected closure 0" `isInfixOf` fifthLog)
@@ -518,13 +523,13 @@ compilerTests =
           removeIfExists (typesDir </> "main.h")
           removeIfExists (typesDir </> "main.root.c")
           sixthLog <- assertOk "dbp keeps executable root actor" =<<
-            runBuild ["build", "--verbose", "--dbp", "main", "--dbp", "provider", "--color", "never"]
-          assertBool "root module should report root seed" ("DBP main: forced by --dbp" `isInfixOf` sixthLog)
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "root module should report root seed" ("DBP main: default on" `isInfixOf` sixthLog)
           assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
           mainC <- readFile (typesDir </> "main.c")
           assertBool "selected main C should keep root actor" ("mainQ_main" `isInfixOf` mainC)
-          seventhLog <- assertOk "no-dbp disables forced dbp" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "provider", "--no-dbp", "--color", "never"]
+          seventhLog <- assertOk "no-dbp disables dbp" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--no-dbp", "--color", "never"]
           assertBool "no-dbp should suppress provider DBP" (not ("DBP provider:" `isInfixOf` seventhLog))
           providerC5 <- readFile (typesDir </> "provider.c")
           assertBool "no-dbp provider C should include full module definitions" ("unused_1" `isInfixOf` providerC5)
@@ -576,14 +581,10 @@ compilerTests =
             , "    env.exit(0)"
             ]
           logTxt <- assertOk "dbp skips library boundary" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--dbp", "a", "--dbp", "b", "--color", "never", "src/c.act"]
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never", "src/c.act"]
           writeFile (proj </> "log.txt") logTxt
-          let hasBoundaryInfo = "DBP disabled for " `isInfixOf` logTxt && "b: explicit library boundary" `isInfixOf` logTxt
-          unless hasBoundaryInfo $
-            putStrLn ("\nDBP library boundary log:\n" ++ logTxt)
-          assertBool "library boundary should explain forced DBP exclusion" hasBoundaryInfo
           assertBool "internal library module should still run DBP"
-            ("DBP a: forced by --dbp" `isInfixOf` logTxt)
+            ("DBP a: default on" `isInfixOf` logTxt)
           assertBool "boundary library module should not run DBP"
             (not ("DBP b:" `isInfixOf` logTxt))
           aC <- readFile (typesDir </> "a.c")
@@ -997,15 +998,11 @@ parseFlagTests =
           assertBool "serial parser flag should be set" (C.parse_serial (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
-  , testCase "build parser accepts repeatable --dbp module selection" $ do
-      parsed <- parseArgs ["build", "--dbp", "huge.provider:used,Helper", "--dbp", "other.provider", "--no-dbp"]
+  , testCase "build parser accepts --no-dbp" $ do
+      parsed <- parseArgs ["build", "--no-dbp"]
       case parsed of
         C.CmdOpt _ (C.Build buildOpts) ->
-          do
-            assertEqual "dbp option should keep module and seed specs"
-              ["huge.provider:used,Helper", "other.provider"]
-              (C.dbp (C.buildCompile buildOpts))
-            assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
+          assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
   , testCase "build parser help includes --release alias" $ do

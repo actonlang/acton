@@ -86,7 +86,6 @@ data CompileOptions   = CompileOptions {
                          tydb        :: Bool,
                          cpedantic   :: Bool,
                          dbg_no_lines:: Bool,
-                         dbp         :: [String],
                          no_dbp      :: Bool,
                          optimize    :: OptimizeMode,
                          only_build  :: Bool,
@@ -333,7 +332,6 @@ sigCompileOptions = mkSigCompileOptions
         , tydb = False
         , cpedantic = False
         , dbg_no_lines = False
-        , dbp = []
         , no_dbp = False
         , optimize = Debug
         , only_build = False
@@ -371,7 +369,6 @@ compileOptions = CompileOptions
         <*> switch (long "tydb"         <> help "Write .tydb directory to src file directory")
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
-        <*> many (strOption (long "dbp" <> metavar "MOD[:NAME,...]" <> help "Force deferred back passes for a module, optionally selecting root names"))
         <*> switch (long "no-dbp"      <> help "Disable deferred back passes")
         <*> optimizeOption
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
