@@ -516,6 +516,37 @@ $EqTuple $EqTupleG_new(B_tuple W_Eq) {
 }
 
 
+// wEqNone //////////////////////////////////////////////////////
+
+// The Eq witness for None: None is the only value of its type.
+
+static bool $wEqNoneD___eq__(B_Eq wit, $WORD a, $WORD b) {
+    return true;
+}
+
+static bool $wEqNoneD___ne__(B_Eq wit, $WORD a, $WORD b) {
+    return false;
+}
+
+static void $wEqNoneD_serialize(B_Eq self, $Serial$state state) {
+}
+
+static struct B_Eq $wEqNone_instance;
+
+static B_Eq $wEqNoneD_deserialize(B_Eq res, $Serial$state state) {
+    return &$wEqNone_instance;
+}
+
+static struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
+    (B_NoneType (*)(B_Eq))$default__init__, $wEqNoneD_serialize, $wEqNoneD_deserialize,
+    (bool (*)(B_Eq))$default__bool__, (B_str (*)(B_Eq))$default__str__, (B_str (*)(B_Eq))$default__str__,
+    $wEqNoneD___eq__, $wEqNoneD___ne__};
+
+static struct B_Eq $wEqNone_instance = {&$wEqNoneG_class};
+
+B_Eq $wEqNone = &$wEqNone_instance;
+
+
 // IdentityActor //////////////////////////////////////////////////////
 
 extern struct $IdentityActorG_class $IdentityActorG_methods;
