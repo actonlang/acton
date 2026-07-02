@@ -655,6 +655,13 @@ reduce' eq c@(Proto info env w t@(TOpt _ t') p)
 reduce' eq c@(Proto _ env w t@(TNone _) p)
   | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
 
+reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
+  | tcname p == qnEq,
+    Just ts <- tupleComponents prow krow    = do ws <- mapM (const newWitness) ts
+                                                 let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
+                                                     e = eCall (tApp (eQVar primEqTuple) [wrow, prow, krow]) [eTuple (map eVar ws)]
+                                                 reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
+
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
 
 reduce' eq c@(Sel _ env w (TVar _ tv) n _)
@@ -797,6 +804,9 @@ hasWitness env TUni{} p     = True
 hasWitness env (TCon _ c) p
   | isActor env (tcname c),
     tcname p == qnIdentity  = True
+hasWitness env (TTuple _ prow krow) p
+  | Just _ <- tupleComponents prow krow
+                            = tcname p == qnEq
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 
@@ -1790,6 +1800,8 @@ implAll env [] t                        = True
 implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
+implAll env ps (TTuple _ p k)
+  | Just _ <- tupleComponents p k       = all ((== qnEq) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)
