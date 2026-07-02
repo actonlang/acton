@@ -81,7 +81,16 @@
 
 #define BIGINT_ID 63
 
-#define PREASSIGNED 64
+// Prim witness classes and witness singletons; 70-71 are headroom for future
+// witnesses, so adding one does not shift the dynamically assigned ids below.
+#define EQOPT_ID 64
+#define EQTUPLE_ID 65
+#define ORDTUPLE_ID 66
+#define HASHABLETUPLE_ID 67
+#define WEQNONE_ID 68
+#define IDENTITYACTOR_ID 69
+
+#define PREASSIGNED 72
 
 
 /*

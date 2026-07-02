@@ -142,6 +142,7 @@ struct $EqOpt {
     B_Eq W_Eq$A;
 };
 
+extern struct $EqOptG_class $EqOptG_methods;
 $EqOpt $EqOptG_new(B_Eq);
 
 
@@ -169,6 +170,7 @@ struct $EqTuple {
     B_tuple W_Eq;
 };
 
+extern struct $EqTupleG_class $EqTupleG_methods;
 $EqTuple $EqTupleG_new(B_tuple);
 
 
@@ -200,6 +202,7 @@ struct $OrdTuple {
     B_tuple W_Ord;
 };
 
+extern struct $OrdTupleG_class $OrdTupleG_methods;
 $OrdTuple $OrdTupleG_new(B_tuple);
 
 
@@ -228,11 +231,13 @@ struct $HashableTuple {
     B_tuple W_Hashable;
 };
 
+extern struct $HashableTupleG_class $HashableTupleG_methods;
 $HashableTuple $HashableTupleG_new(B_tuple);
 
 
 // wEqNone //////////////////////////////////////////////////////
 
+extern struct B_EqG_class $wEqNoneG_class;
 extern B_Eq $wEqNone;
 
 
@@ -259,6 +264,7 @@ struct $IdentityActor {
     struct $IdentityActorG_class *$class;
 };
 
+extern struct $IdentityActorG_class $IdentityActorG_methods;
 $IdentityActor $IdentityActorG_new();
 
 

@@ -679,10 +679,14 @@ static void $wEqNoneD_serialize(B_Eq self, $Serial$state state) {
 static struct B_Eq $wEqNone_instance;
 
 static B_Eq $wEqNoneD_deserialize(B_Eq res, $Serial$state state) {
-    return &$wEqNone_instance;
+    if (!res) {
+        res = &$wEqNone_instance;
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+    }
+    return res;
 }
 
-static struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
+struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
     (B_NoneType (*)(B_Eq))$default__init__, $wEqNoneD_serialize, $wEqNoneD_deserialize,
     (bool (*)(B_Eq))$default__bool__, (B_str (*)(B_Eq))$default__str__, (B_str (*)(B_Eq))$default__str__,
     $wEqNoneD___eq__, $wEqNoneD___ne__};
