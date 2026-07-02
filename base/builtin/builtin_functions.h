@@ -172,6 +172,65 @@ struct $EqTuple {
 $EqTuple $EqTupleG_new(B_tuple);
 
 
+// OrdTuple //////////////////////////////////////////////////////
+
+struct $OrdTuple;
+typedef struct $OrdTuple *$OrdTuple;
+
+struct $OrdTupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($OrdTuple, B_tuple);
+    void (*__serialize__)($OrdTuple,$Serial$state);
+    $OrdTuple (*__deserialize__)($OrdTuple,$Serial$state);
+    bool (*__bool__)($OrdTuple);
+    B_str (*__str__)($OrdTuple);
+    B_str (*__repr__)($OrdTuple);
+    bool (*__eq__)($OrdTuple, $WORD, $WORD);
+    bool (*__ne__)($OrdTuple, $WORD, $WORD);
+    bool (*__lt__)($OrdTuple, $WORD, $WORD);
+    bool (*__le__)($OrdTuple, $WORD, $WORD);
+    bool (*__gt__)($OrdTuple, $WORD, $WORD);
+    bool (*__ge__)($OrdTuple, $WORD, $WORD);
+};
+
+struct $OrdTuple {
+    struct $OrdTupleG_class *$class;
+    B_tuple W_Ord;
+};
+
+$OrdTuple $OrdTupleG_new(B_tuple);
+
+
+// HashableTuple //////////////////////////////////////////////////////
+
+struct $HashableTuple;
+typedef struct $HashableTuple *$HashableTuple;
+
+struct $HashableTupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($HashableTuple, B_tuple);
+    void (*__serialize__)($HashableTuple,$Serial$state);
+    $HashableTuple (*__deserialize__)($HashableTuple,$Serial$state);
+    bool (*__bool__)($HashableTuple);
+    B_str (*__str__)($HashableTuple);
+    B_str (*__repr__)($HashableTuple);
+    bool (*__eq__)($HashableTuple, $WORD, $WORD);
+    bool (*__ne__)($HashableTuple, $WORD, $WORD);
+    B_NoneType (*hash)($HashableTuple, $WORD, B_hasher);
+};
+
+struct $HashableTuple {
+    struct $HashableTupleG_class *$class;
+    B_tuple W_Hashable;
+};
+
+$HashableTuple $HashableTupleG_new(B_tuple);
+
+
 // wEqNone //////////////////////////////////////////////////////
 
 extern B_Eq $wEqNone;
