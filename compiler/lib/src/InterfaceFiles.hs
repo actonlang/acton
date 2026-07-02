@@ -112,6 +112,7 @@ module InterfaceFiles
   , readNameHashMaybe
   , readModuleHashesMaybe
   , readFile
+  , readStmtHasNotImpl
   , readHeader
   , readHeaderSummary
   , readRoots
@@ -1405,6 +1406,16 @@ readFile f =
           sourceImps = A.importsOf tmod
           nmod = I.NModule sourceImps te mdoc
       return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc)
+
+-- | Read whether the module contains NotImplemented statements (implemented
+-- by a hand-written .ext.c); such modules are rendered whole, never DBP'd.
+readStmtHasNotImpl :: FilePath -> IO Bool
+readStmtHasNotImpl f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      mv <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+      traceTydbRead "stmt-has-not-impl" f (show mv)
+      return (maybe False id mv)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile

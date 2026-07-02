@@ -885,7 +885,6 @@ defaultCompileOptions =
     , C.tydb = False
     , C.cpedantic = False
     , C.dbg_no_lines = False
-    , C.dbp = []
     , C.no_dbp = False
     , C.optimize = C.Debug
     , C.only_build = False
@@ -1228,7 +1227,6 @@ data DeferredBackJob = DeferredBackJob
   , dbjMod :: A.ModName
   , dbjImplHash :: B.ByteString
   , dbjNameCount :: Int
-  , dbjSeeds :: Data.Set.Set A.Name
   , dbjReason :: String
   , dbjOutputJobs :: [FrontOutputJob]
   }
@@ -1260,16 +1258,7 @@ frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
 frontResultModuleInfo mn fr =
     fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
 
-data DbpRequest = DbpRequest
-  { drMod :: A.ModName
-  , drSeeds :: Data.Set.Set A.Name
-  }
-
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
-
-dbpNameCountThreshold :: Int
--- Conservative heuristic; --dbp can force smaller modules.
-dbpNameCountThreshold = 1000
 
 docNameCountThreshold :: Int
 docNameCountThreshold = 10000
@@ -1278,73 +1267,34 @@ shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts tmp nameCount =
   not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
-parseDbpSpec :: String -> String -> Maybe DbpRequest
-parseDbpSpec proj raw = do
-  let (modPart0, seedPart0) = break (== ':') raw
-      modPart = map (\c -> if c == '/' then '.' else c) modPart0
-      modPieces = filter (not . null) (splitChar '.' modPart)
-  guard (not (null modPieces))
-  let seedPart = case seedPart0 of
-        ':' : rest -> rest
-        _ -> ""
-      seeds = Data.Set.fromList
-        [ A.Name NoLoc s
-        | s <- splitChar ',' seedPart
-        , not (null s)
-        ]
-      mn = A.modName  $ if null proj then modPieces else proj:modPieces
-  return DbpRequest { drMod = mn, drSeeds = seeds }
-
-parseDbpRequests :: String -> C.CompileOptions -> M.Map A.ModName (Data.Set.Set A.Name)
-parseDbpRequests proj opts =
-  M.fromListWith Data.Set.union
-    [ (drMod req, drSeeds req)
-    | raw <- C.dbp opts
-    , Just req <- [parseDbpSpec proj raw]
-    ]
-
-splitChar :: Char -> String -> [String]
-splitChar sep = go
-  where
-    go "" = [""]
-    go s =
-      let (x, rest) = break (== sep) s
-      in case rest of
-           [] -> [x]
-           _ : ys -> x : go ys
-
 dbpDeferredBackJob :: Bool
+                   -> Bool
                    -> C.CompileOptions
                    -> Paths
                    -> A.ModName
                    -> B.ByteString
                    -> Int
                    -> Maybe DeferredBackJob
-dbpDeferredBackJob blocked opts paths mn moduleImplHash nameCount
+dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
   | C.no_dbp opts = Nothing
   | C.only_build opts = Nothing
   | altOutput opts = Nothing
   | mn == A.modName ["__builtin__"] = Nothing
   | blocked = Nothing
-  | forced || nameCount >= dbpNameCountThreshold =
+  -- A module with NotImplemented bodies is implemented by a hand-written
+  -- .ext.c and must be rendered whole, like __builtin__ -- its statement
+  -- rows deliberately opt out of selective reads.
+  | hasNotImpl = Nothing
+  | otherwise =
       Just DeferredBackJob
         { dbjPaths = paths
         , dbjOpts = opts
         , dbjMod = mn
         , dbjImplHash = moduleImplHash
         , dbjNameCount = nameCount
-        , dbjSeeds = seeds
-        , dbjReason = reason
+        , dbjReason = "default on"
         , dbjOutputJobs = []
         }
-  | otherwise = Nothing
-  where
-    reqs = parseDbpRequests (projName paths) opts
-    forced = M.member mn reqs
-    seeds = M.findWithDefault Data.Set.empty mn reqs
-    reason
-      | forced = "forced by --dbp"
-      | otherwise = "name count " ++ show nameCount ++ " >= " ++ show dbpNameCountThreshold
 
 interestDepsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
 interestDepsFromNameHashes nameHashes =
@@ -1798,7 +1748,7 @@ dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affect
         Just t ->
           case gtTask t of
             TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
-              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) (optsFor k) (gtPaths t) (tkMod k) implHash nameCount)
+              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) (tkMod k) implHash nameCount)
             _ -> False
         Nothing -> False
 
@@ -2725,7 +2675,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked opts paths mn moduleImplHash (length nameHashes)
+                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
                       backJob =
                         case deferredBackJob of
                           Just _ -> Nothing
@@ -2799,11 +2749,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       tyFile = tyDbPath paths mn
       actFile = srcFile paths mn
   roots <- InterfaceFiles.readRoots tyFile
-  let explicitSeeds = dbjSeeds dbj
-      interested =
-        if Data.Set.null explicitSeeds
-          then M.findWithDefault Data.Set.empty mn interestMap
-          else explicitSeeds
+  let interested = M.findWithDefault Data.Set.empty mn interestMap
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
       totalNames = dbjNameCount dbj
@@ -3229,7 +3175,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      logForcedDbpBoundaryExclusions
       loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
@@ -3258,21 +3203,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
 
-    forcedDbpMods = M.keysSet (parseDbpRequests (projName rootPaths) opts)
-
     formatTaskKey k = modNameToString (dropProjPrefix rootPaths (tkMod k))
-
-    logForcedDbpBoundaryExclusions =
-      unless (C.no_dbp opts) $
-        forM_ forcedDbpBoundaryKeys $ \k ->
-          ccOnInfo callbacks ("  DBP disabled for " ++ formatTaskKey k ++ ": explicit library boundary")
-      where
-        forcedDbpBoundaryKeys =
-          [ k
-          | k <- Data.Set.toList dbpBlocked
-          , M.member k taskMap
-          , Data.Set.member (tkMod k) forcedDbpMods
-          ]
 
     needsParseStage t =
       case gtTask t of
@@ -3908,10 +3839,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   mModuleImplHash = case taskCurrent of
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
-                  cachedDeferredBackJob = case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> dbpDeferredBackJob (isDbpBlocked key) optsT paths mn implHash nameCount
-                    _ -> Nothing
-                  isCachedDbp =
+              cachedDeferredBackJob <- case taskCurrent of
+                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
+                      hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
+                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn implHash nameCount)
+                    _ -> return Nothing
+              let isCachedDbp =
                     case cachedDeferredBackJob of
                       Just _ -> True
                       Nothing -> False
@@ -4084,7 +4017,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           rememberFrontOutputJobList frontOutputRef outputJobs
                                           let I.NModule imps ifaceFull _mdoc = nmod
                                               ifaceTE = publicIfaceTE ifaceFull
-                                              deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHash (length updatedNameHashes)
+                                              deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn moduleImplHash (length updatedNameHashes)
                                               deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
                                               backJob =
                                                 case deferredBackJob of
@@ -4108,7 +4041,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
-                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) optsT paths mn moduleImplHashStored (length nameHashes)
+                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn moduleImplHashStored (length nameHashes)
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing
