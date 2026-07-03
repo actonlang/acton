@@ -421,6 +421,7 @@ cModule env srcbase srcText emitLines (Module m imps _ stmts)
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
                                       declModule envWithLine stmts $+$
+                                      globalChunkDefs $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
@@ -428,9 +429,10 @@ cModule env srcbase srcText emitLines (Module m imps _ stmts)
                                               ext_init $+$
                                               initImports $+$
                                               initTables env1 stmts $+$
-                                              initGlobals env1 stmts) $+$
+                                              globalChunkCalls) $+$
                                       char '}'
   where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+        (globalChunkDefs, globalChunkCalls) = initGlobalChunks env1 stmts
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
         ext_init                    = if notImpl then genTopName env (name "__ext_init__") <+> parens empty <> semi else empty
@@ -628,26 +630,42 @@ initTables env (Decl _ ds : ss)     = vcat [ char '{' $+$ nest 4 (initClassBase 
 initTables env (s : ss)             = initTables env ss
 
 
-initGlobals env []                  = empty
-initGlobals env (Decl _ ds : ss)    = initGlobals env1 ss
-  where env1                        = gdefine (envOf ds) env
-initGlobals env (Signature{} : ss)  = initGlobals env ss
--- Assign a typed module-level variable straight to its global. The generic case
--- below would first bind a C local and then copy it to the global, but every
--- later reference resolves to the global (the name is gdefine'd), so that local
--- is dead on the next line. Emitting the assignment directly drops the pointless
--- local (and, at -O0 where slots are never reused, its needless stack slot).
-initGlobals env (s@(Assign _ [PVar _ n (Just t)] e) : ss)
+-- Emit module-global init as helpers of <= globalsPerChunk statements, returning
+-- (definitions, in-order calls). At -O0 each temporary gets its own never-reused
+-- stack slot, so one function over a generated module's tens of thousands of
+-- globals (e.g. YANG) builds a multi-MB frame that overflows the startup stack.
+-- Sound because each statement is self-contained: it writes a global, and later
+-- statements read that global, not a C local (see initGlobalDocs).
+globalsPerChunk                     = 250 :: Int
+
+initGlobalChunks env stmts          = (vcat defs, vcat calls)
+  where chunks                      = chunksOf globalsPerChunk (initGlobalDocs env stmts)
+        chunkName k                 = genTopName env initKW <> text "$g" <> pretty k
+        defs                        = [ (text "static void" <+> chunkName k <+> parens empty <+> char '{') $+$
+                                        nest 4 (vcat chunk) $+$
+                                        char '}'
+                                      | (k,chunk) <- zip [0 :: Int ..] chunks ]
+        calls                       = [ chunkName k <> parens empty <> semi | k <- [0 .. length chunks - 1] ]
+
+-- Thread env across the module's top-level statements, one Doc per global init
+-- in source order (decls/signatures only advance env). Each statement sees the
+-- globals defined before it, so cross-statement references resolve to a global,
+-- not a C local -- which is what makes the list safe to split into chunks.
+initGlobalDocs env []               = []
+initGlobalDocs env (Decl _ ds : ss) = initGlobalDocs (gdefine (envOf ds) env) ss
+initGlobalDocs env (Signature{} : ss) = initGlobalDocs env ss
+initGlobalDocs env (s : ss)         = initGlobalDoc env s
+                                      : initGlobalDocs (gdefine (excludeDefined env (envOf s)) env) ss
+
+-- Render one module-global init, independent of chunking: a typed single-name
+-- target writes straight to its global; anything else is emitted generically,
+-- then each global it defines is copied from the C local genStmt1 bound (dead
+-- at once, since later refs use the global).
+initGlobalDoc env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env)
-                                    = genTopName env n <+> equals <+> assignRHS env n t e <> semi $+$
-                                      initGlobals env1 ss
-  where te                          = excludeDefined env (envOf s)
-        env1                        = gdefine te env
-initGlobals env (s : ss)            = genStmt1 env s $+$
-                                      vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
-                                      initGlobals env1 ss
-  where te                          = excludeDefined env (envOf s)
-        env1                        = gdefine te env
+                                    = genTopName env n <+> equals <+> assignRHS env n t e <> semi
+initGlobalDoc env s                 = genStmt1 env s $+$
+                                      vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- excludeDefined env (envOf s) ]
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
