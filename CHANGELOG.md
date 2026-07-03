@@ -8,6 +8,13 @@ import and selectively loads exactly those names, avoiding reading full
 imported modules.
 
 ### Language
+- Derive `Eq`, `Ord` and `Hashable` for tuples whose components implement
+  them: tuples now support `==`, the comparison operators and `sorted()`, and
+  work as dictionary and set keys. Equality and ordering are componentwise at
+  a single common type, so comparing tuples of different shapes (positional
+  vs named, or reordered field names) is a type error. Witness classes are
+  registered for serialization with preassigned class ids, shifting all
+  dynamically assigned class ids once.
 - Add a compiler-synthesized `__get_attr__(name: str) -> ?value` reflection
   getter on every class, returning boxed instance attributes by their Acton
   names while reserving `__get_attr__` against user definitions. This lets

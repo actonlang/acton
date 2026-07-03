@@ -46,6 +46,40 @@ def parse_result():
 
 Acton can infer the tuple shape here from the returned value.
 
+## Comparing tuples and using them as keys
+
+Tuples whose components support it can be compared and hashed, so they
+work as dictionary and set keys and can be sorted.
+
+```python
+actor main(env):
+    print((1, "x") == (1, "x"))          # True
+    print((1, 2) < (1, 3))               # True: comparison is lexicographic
+
+    d = {(1, 2): "a", (3, 4): "b"}       # tuples as dict keys
+    print(d[(1, 2)])
+
+    positions = [(2, "b"), (1, "c")]
+    print(sorted(positions))             # [(1, 'c'), (2, 'b')]
+
+    env.exit(0)
+```
+
+Equality, ordering and hashing apply componentwise, so they require each
+component to support the operation in turn: `(int, str)` can be compared
+because `int` and `str` can, but a tuple containing a function cannot.
+
+Both sides of a comparison must have the same shape: the same number of
+components, and for named tuples the same field names in the same order.
+Comparing a positional tuple with a named one is a type error. Named
+tuples with reordered fields can be compared after converting to a
+common annotated type:
+
+```python
+a : (x: int, y: int) = (y=2, x=1)        # reorders the fields
+print((x=1, y=2) == a)                   # True
+```
+
 <div class="advanced-content">
 <p>Named tuples are the bridge between raw tuple positions and classes.
 They keep the value lightweight while making the shape self-documenting.
