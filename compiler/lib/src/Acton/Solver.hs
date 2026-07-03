@@ -861,6 +861,9 @@ cast' env info t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
                                                  reduce [] (cs1 ++ cs2)
                                                  return ()
 
+cast' env info TTuple{} (TCon _ tc)
+  | tcname tc == qnValue                    = return ()
+
 cast' env info (TOpt _ t1@TOpt{}) t2        = cast env info t1 t2
 cast' env info t1 (TOpt _ t2@TOpt{})        = cast env info t1 t2
 cast' env info (TOpt _ t1) (TOpt _ t2)      = cast env info t1 t2

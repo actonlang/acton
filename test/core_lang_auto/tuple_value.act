@@ -1,0 +1,43 @@
+
+def test_str():
+    return str((1, "x")) == "(1, 'x')"
+
+def test_str_nested():
+    return str((1, (2, "y"))) == "(1, (2, 'y'))"
+
+def test_str_none_component():
+    return str((None, "foo")) == "(None, 'foo')"
+
+def test_value_var():
+    v : ?value = (1, 2)
+    return v is not None
+
+def test_value_param():
+    def describe(x: ?value) -> str:
+        return str(x)
+    return describe((1, 2)) == "(1, 2)" and describe("plain") == "plain"
+
+tests = {
+    "test_str": test_str,
+    "test_str_nested": test_str_nested,
+    "test_str_none_component": test_str_none_component,
+    "test_value_var": test_value_var,
+    "test_value_param": test_value_param,
+}
+
+actor main(env):
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+        env.exit(0)
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+        env.exit(1)
