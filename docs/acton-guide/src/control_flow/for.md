@@ -1,11 +1,11 @@
 # for
 
 Use `for ... in ...` to go through each value in something like a
-string, tuple, or `range(...)`.
+string, list, or `range(...)`.
 
 ```python
 actor main(env):
-    names = ("Ada", "Grace", "Linus")
+    names = ["Ada", "Grace", "Linus"]
 
     for name in names:
         print("Hello", name)
@@ -15,6 +15,11 @@ actor main(env):
 
     env.exit(0)
 ```
+
+Tuples are not iterable: a tuple's components can have different types,
+so there is no single element type for a loop variable. Use a list for a
+sequence you want to loop over, or select tuple components directly
+(`t.0`, `t.1`).
 
 <div class="beginner-content">
 <p>A <code>for</code> loop is the usual choice when you want to go
