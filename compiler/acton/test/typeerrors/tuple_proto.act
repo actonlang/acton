@@ -1,0 +1,7 @@
+def f() -> str:
+    d = {(1, [2]): "a"}
+    return d[(1, [2])]
+
+actor main(env):
+    print(f())
+    env.exit(0)
