@@ -2100,6 +2100,9 @@ main = do
       testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
+      -- >250 module-level constants: global init is split into $g0/$g1 helper
+      -- functions so __init__ does not accumulate one huge stack frame.
+      testCodeGen env0 ["chunking"]
       -- A local that is live across a for-loop must be emitted as `volatile` so it
       -- survives the loop's StopIteration setjmp/longjmp under optimization.
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]

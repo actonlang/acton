@@ -1177,6 +1177,12 @@ $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
     return $AWAIT((($Cont)linesQ_L_33ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_34procG_new(G_act, env))));
 }
+static void linesQ___init__$g0 () {
+    linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
+    linesQ_W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+}
 int linesQ_done$ = 0;
 void linesQ___init__ () {
     if (linesQ_done$) return;
@@ -1514,8 +1520,5 @@ void linesQ___init__ () {
         linesQ_mainG_methods.__deserialize__ = linesQ_mainD___deserialize__;
         $register(&linesQ_mainG_methods);
     }
-    linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
-    linesQ_W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ___init__$g0();
 }

@@ -26,10 +26,7 @@ B_bigint intsQ_bigint_u64_edge;
 B_bigint intsQ_bigint_u64_edge_minus1;
 B_bigint intsQ_bigint_u64_overflow;
 B_bigint intsQ_xint_i64_min_minus1;
-int intsQ_done$ = 0;
-void intsQ___init__ () {
-    if (intsQ_done$) return;
-    intsQ_done$ = 1;
+static void intsQ___init__$g0 () {
     intsQ_int64_min = (-9223372036854775807LL - 1LL);
     intsQ_int64_max = 9223372036854775807LL;
     intsQ_int32_min = -2147483648;
@@ -55,4 +52,10 @@ void intsQ___init__ () {
     intsQ_bigint_u64_edge_minus1 = B_bigintG_new(((B_atom)toB_u64(18446744073709551614UL)), B_None);
     intsQ_bigint_u64_overflow = ((B_bigint)toB_bigint2("18446744073709551616"));
     intsQ_xint_i64_min_minus1 = ((B_bigint)toB_bigint2("-9223372036854775809"));
+}
+int intsQ_done$ = 0;
+void intsQ___init__ () {
+    if (intsQ_done$) return;
+    intsQ_done$ = 1;
+    intsQ___init__$g0();
 }
