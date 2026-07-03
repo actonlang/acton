@@ -1,0 +1,9 @@
+Building file test/typeerrors/tuple_open_row.act using temporary scratch directory
+   tuple_open_row  Parse done                                                               0.000 s
+[error]: Constraint violation
+     +--> @0:0-0:0
+     |
+   0 | <no line>
+     : 
+     : `- (_, _, +, ++) must implement __builtin__.Hashable (cannot be derived for a tuple with an open row)
+-----+

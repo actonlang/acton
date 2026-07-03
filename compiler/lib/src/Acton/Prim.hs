@@ -520,6 +520,10 @@ clTupleWit qn       = NClass [qbind w, qbind p, qbind k] (leftpath [TC qn [tTupl
         p           = TV PRow (name "P")
         k           = TV KRow (name "K")
 
+-- The protocols the solver can derive for a closed tuple type, by structural
+-- induction over its components, and the prim witness classes implementing them.
+derivableTupleProtos = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple) ]
+
 --  class $IdentityActor (Identity[$Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled
 

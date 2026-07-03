@@ -617,10 +617,6 @@ reduce eq (c:cs)                            = do c <- usubst c
                                                  eq1 <- reduce' eq c
                                                  reduce eq1 cs
 
--- The protocols the solver can derive for a closed tuple type, by structural
--- induction over its components, and the prim witness classes implementing them.
-derivableTupleProtos                        = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple) ]
-
 reduce'                                     :: Equations -> Constraint -> TypeM Equations
 reduce' eq c@(Cast i env t1 t2)             = do cast' env i t1 t2
                                                  return eq
