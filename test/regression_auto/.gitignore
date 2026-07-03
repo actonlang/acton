@@ -1,4 +1,5 @@
 *
 !*.act
+!*.ext.c
 !.gitignore
 !Makefile
