@@ -97,6 +97,12 @@ void $register_builtin() {
   $register_force(U32_ID,&B_u32G_methods);
   $register_force(U64_ID,&B_u64G_methods);
   $register_force(BIGINT_ID,&B_bigintG_methods);
+  $register_force(EQOPT_ID,&$EqOptG_methods);
+  $register_force(EQTUPLE_ID,&$EqTupleG_methods);
+  $register_force(ORDTUPLE_ID,&$OrdTupleG_methods);
+  $register_force(HASHABLETUPLE_ID,&$HashableTupleG_methods);
+  $register_force(WEQNONE_ID,&$wEqNoneG_class);
+  $register_force(IDENTITYACTOR_ID,&$IdentityActorG_methods);
 }
 
 
