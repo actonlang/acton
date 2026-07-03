@@ -52,18 +52,23 @@ Tuples whose components support it can be compared and hashed, so they
 work as dictionary and set keys and can be sorted.
 
 ```python
-actor main(env):
+def demo() -> str:
+    d = {(1, 2): "a", (3, 4): "b"}       # tuples as dict keys
+    positions = [(2, "b"), (1, "c")]
     print((1, "x") == (1, "x"))          # True
     print((1, 2) < (1, 3))               # True: comparison is lexicographic
-
-    d = {(1, 2): "a", (3, 4): "b"}       # tuples as dict keys
-    print(d[(1, 2)])
-
-    positions = [(2, "b"), (1, "c")]
     print(sorted(positions))             # [(1, 'c'), (2, 'b')]
+    return d[(1, 2)]
 
+actor main(env):
+    print(demo())
     env.exit(0)
 ```
+
+Directly in an actor's body, type inference currently needs a little
+help pinning the tuple type for `<` and for dictionary keys: give the
+dictionary an annotation such as `d : dict[(int, int), str]`, or put the
+code in a function as above. Equality needs no such help.
 
 Equality, ordering and hashing apply componentwise, so they require each
 component to support the operation in turn: `(int, str)` can be compared
