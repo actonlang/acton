@@ -1,0 +1,29 @@
+# Regression: $DNEW registered deserialized objects in the backref dict keyed
+# by toB_bigint, but $step_deserialize probes it with toB_int (both under the
+# int Hashable witness, which reads the B_int val slot). A bigint key can never
+# hash/compare equal to the probe, so any serialized graph referencing the same
+# object twice got NULL for the second reference after deserialization.
+
+class Node(object):
+    val: int
+    def __init__(self, val: int):
+        self.val = val
+
+def round_trip(x: list[Node]) -> list[Node]:
+    """Round-trip through the RTS C serializer ($serialize / $deserialize)"""
+    NotImplemented
+
+actor main(env):
+    n = Node(42)
+    r = round_trip([n, n])
+    if len(r) != 2 or r[0].val != 42:
+        print("bad round-trip result")
+        env.exit(1)
+    # Both elements must be the same object, as in the input; prove it by
+    # writing through one reference and reading through the other.
+    r[0].val = 99
+    if r[1].val == 99:
+        env.exit(0)
+    else:
+        print("shared reference lost in serialization round-trip")
+        env.exit(1)
