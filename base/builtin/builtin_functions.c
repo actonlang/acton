@@ -464,9 +464,20 @@ $EqOpt $EqOptG_new(B_Eq W_Eq$A) {
 
 // EqTuple //////////////////////////////////////////////////////
 
-extern struct $EqTupleG_class $EqTupleG_methods;
+// The tuple witnesses hold one witness per tuple component, in component
+// order. Component-wise equality is shared by all three: the Eq slots sit at
+// the same offsets in the Eq, Ord and Hashable witness class structs.
 
-// W_Eq holds one Eq witness per tuple component, in component order.
+static bool $tupleWitD___eq__(B_tuple wits, $WORD a, $WORD b) {
+    B_tuple ta = (B_tuple)a;
+    B_tuple tb = (B_tuple)b;
+    for (int i = 0; i < wits->size; i++) {
+        B_Eq w = (B_Eq)wits->components[i];
+        if (!w->$class->__eq__(w, ta->components[i], tb->components[i]))
+            return false;
+    }
+    return true;
+}
 
 void $EqTupleD___init__($EqTuple wit, B_tuple W_Eq) {
     wit->W_Eq = W_Eq;
@@ -492,19 +503,11 @@ $EqTuple $EqTupleD_deserialize($EqTuple res, $Serial$state state) {
 }
 
 bool $EqTupleD___eq__($EqTuple wit, $WORD a, $WORD b) {
-    B_tuple wits = wit->W_Eq;
-    B_tuple ta = (B_tuple)a;
-    B_tuple tb = (B_tuple)b;
-    for (int i = 0; i < wits->size; i++) {
-        B_Eq w = (B_Eq)wits->components[i];
-        if (!w->$class->__eq__(w, ta->components[i], tb->components[i]))
-            return false;
-    }
-    return true;
+    return $tupleWitD___eq__(wit->W_Eq, a, b);
 }
 
 bool $EqTupleD___ne__($EqTuple wit, $WORD a, $WORD b) {
-    return !$EqTupleD___eq__(wit, a, b);
+    return !$tupleWitD___eq__(wit->W_Eq, a, b);
 }
 
 struct $EqTupleG_class $EqTupleG_methods = {"$EqTuple", UNASSIGNED, NULL, $EqTupleD___init__, $EqTupleD_serialize, $EqTupleD_deserialize,
@@ -513,6 +516,148 @@ struct $EqTupleG_class $EqTupleG_methods = {"$EqTuple", UNASSIGNED, NULL, $EqTup
 
 $EqTuple $EqTupleG_new(B_tuple W_Eq) {
     return $NEW($EqTuple, W_Eq);
+}
+
+
+// OrdTuple //////////////////////////////////////////////////////
+
+extern struct $OrdTupleG_class $OrdTupleG_methods;
+
+// W_Ord holds one Ord witness per tuple component, in component order.
+// Comparison is lexicographic; operands always share one type, so sizes agree.
+
+void $OrdTupleD___init__($OrdTuple wit, B_tuple W_Ord) {
+    wit->W_Ord = W_Ord;
+}
+
+bool $OrdTupleD_bool($OrdTuple self) {
+    return true;
+}
+
+B_str $OrdTupleD_str($OrdTuple self) {
+    return $FORMAT("<OrdTuple witness at %p>", self);
+}
+
+void $OrdTupleD_serialize($OrdTuple self,$Serial$state state) {
+    $step_serialize(self->W_Ord,state);
+}
+
+$OrdTuple $OrdTupleD_deserialize($OrdTuple res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($OrdTuple,state);
+    res->W_Ord = $step_deserialize(state);
+    return res;
+}
+
+bool $OrdTupleD___eq__($OrdTuple wit, $WORD a, $WORD b) {
+    return $tupleWitD___eq__(wit->W_Ord, a, b);
+}
+
+bool $OrdTupleD___ne__($OrdTuple wit, $WORD a, $WORD b) {
+    return !$tupleWitD___eq__(wit->W_Ord, a, b);
+}
+
+// Lexicographic comparison: the first component that is not equal decides;
+// all-equal tuples satisfy only the non-strict comparisons.
+static bool $tupleWitD_lex(B_tuple wits, $WORD a, $WORD b, bool strict) {
+    B_tuple ta = (B_tuple)a;
+    B_tuple tb = (B_tuple)b;
+    for (int i = 0; i < wits->size; i++) {
+        B_Ord w = (B_Ord)wits->components[i];
+        if (w->$class->__lt__(w, ta->components[i], tb->components[i]))
+            return true;
+        if (w->$class->__ne__(w, ta->components[i], tb->components[i]))
+            return false;
+    }
+    return !strict;
+}
+
+bool $OrdTupleD___lt__($OrdTuple wit, $WORD a, $WORD b) {
+    return $tupleWitD_lex(wit->W_Ord, a, b, true);
+}
+
+bool $OrdTupleD___le__($OrdTuple wit, $WORD a, $WORD b) {
+    return $tupleWitD_lex(wit->W_Ord, a, b, false);
+}
+
+bool $OrdTupleD___gt__($OrdTuple wit, $WORD a, $WORD b) {
+    return $OrdTupleD___lt__(wit, b, a);
+}
+
+bool $OrdTupleD___ge__($OrdTuple wit, $WORD a, $WORD b) {
+    return $OrdTupleD___le__(wit, b, a);
+}
+
+struct $OrdTupleG_class $OrdTupleG_methods = {"$OrdTuple", UNASSIGNED, NULL, $OrdTupleD___init__, $OrdTupleD_serialize, $OrdTupleD_deserialize,
+                                               $OrdTupleD_bool, $OrdTupleD_str, $OrdTupleD_str, $OrdTupleD___eq__, $OrdTupleD___ne__,
+                                               $OrdTupleD___lt__, $OrdTupleD___le__, $OrdTupleD___gt__, $OrdTupleD___ge__};
+
+
+$OrdTuple $OrdTupleG_new(B_tuple W_Ord) {
+    return $NEW($OrdTuple, W_Ord);
+}
+
+
+// HashableTuple //////////////////////////////////////////////////////
+
+extern struct $HashableTupleG_class $HashableTupleG_methods;
+
+// W_Hashable holds one Hashable witness per tuple component, in component order.
+
+void $HashableTupleD___init__($HashableTuple wit, B_tuple W_Hashable) {
+    wit->W_Hashable = W_Hashable;
+}
+
+bool $HashableTupleD_bool($HashableTuple self) {
+    return true;
+}
+
+B_str $HashableTupleD_str($HashableTuple self) {
+    return $FORMAT("<HashableTuple witness at %p>", self);
+}
+
+void $HashableTupleD_serialize($HashableTuple self,$Serial$state state) {
+    $step_serialize(self->W_Hashable,state);
+}
+
+$HashableTuple $HashableTupleD_deserialize($HashableTuple res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($HashableTuple,state);
+    res->W_Hashable = $step_deserialize(state);
+    return res;
+}
+
+bool $HashableTupleD___eq__($HashableTuple wit, $WORD a, $WORD b) {
+    return $tupleWitD___eq__(wit->W_Hashable, a, b);
+}
+
+bool $HashableTupleD___ne__($HashableTuple wit, $WORD a, $WORD b) {
+    return !$tupleWitD___eq__(wit->W_Hashable, a, b);
+}
+
+B_NoneType $HashableTupleD_hash($HashableTuple wit, $WORD a, B_hasher h) {
+    B_tuple wits = wit->W_Hashable;
+    B_tuple ta = (B_tuple)a;
+    for (int i = 0; i < wits->size; i++) {
+        // Each component hashes into its own hasher and only the digest enters
+        // the outer stream, so component boundaries cannot shift: without this,
+        // ("ab", "c") and ("a", "bc") would hash equal.
+        B_Hashable w = (B_Hashable)wits->components[i];
+        B_hasher hi = B_hasherG_new(NULL);
+        w->$class->hash(w, ta->components[i], hi);
+        uint64_t d = B_hasherD_finalize(hi);
+        zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&d, 8));
+    }
+    return B_None;
+}
+
+struct $HashableTupleG_class $HashableTupleG_methods = {"$HashableTuple", UNASSIGNED, NULL, $HashableTupleD___init__, $HashableTupleD_serialize,
+                                                         $HashableTupleD_deserialize, $HashableTupleD_bool, $HashableTupleD_str, $HashableTupleD_str,
+                                                         $HashableTupleD___eq__, $HashableTupleD___ne__, $HashableTupleD_hash};
+
+
+$HashableTuple $HashableTupleG_new(B_tuple W_Hashable) {
+    return $NEW($HashableTuple, W_Hashable);
 }
 
 
@@ -534,10 +679,14 @@ static void $wEqNoneD_serialize(B_Eq self, $Serial$state state) {
 static struct B_Eq $wEqNone_instance;
 
 static B_Eq $wEqNoneD_deserialize(B_Eq res, $Serial$state state) {
-    return &$wEqNone_instance;
+    if (!res) {
+        res = &$wEqNone_instance;
+        B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
+    }
+    return res;
 }
 
-static struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
+struct B_EqG_class $wEqNoneG_class = {"$wEqNone", UNASSIGNED, NULL,
     (B_NoneType (*)(B_Eq))$default__init__, $wEqNoneD_serialize, $wEqNoneD_deserialize,
     (bool (*)(B_Eq))$default__bool__, (B_str (*)(B_Eq))$default__str__, (B_str (*)(B_Eq))$default__str__,
     $wEqNoneD___eq__, $wEqNoneD___ne__};
