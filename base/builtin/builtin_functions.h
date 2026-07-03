@@ -145,6 +145,33 @@ struct $EqOpt {
 $EqOpt $EqOptG_new(B_Eq);
 
 
+// EqTuple //////////////////////////////////////////////////////
+
+struct $EqTuple;
+typedef struct $EqTuple *$EqTuple;
+
+struct $EqTupleG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)($EqTuple, B_tuple);
+    void (*__serialize__)($EqTuple,$Serial$state);
+    $EqTuple (*__deserialize__)($EqTuple,$Serial$state);
+    bool (*__bool__)($EqTuple);
+    B_str (*__str__)($EqTuple);
+    B_str (*__repr__)($EqTuple);
+    bool (*__eq__)($EqTuple, $WORD, $WORD);
+    bool (*__ne__)($EqTuple, $WORD, $WORD);
+};
+
+struct $EqTuple {
+    struct $EqTupleG_class *$class;
+    B_tuple W_Eq;
+};
+
+$EqTuple $EqTupleG_new(B_tuple);
+
+
 // wEqNone //////////////////////////////////////////////////////
 
 extern B_Eq $wEqNone;

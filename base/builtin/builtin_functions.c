@@ -462,6 +462,60 @@ $EqOpt $EqOptG_new(B_Eq W_Eq$A) {
 }
 
 
+// EqTuple //////////////////////////////////////////////////////
+
+extern struct $EqTupleG_class $EqTupleG_methods;
+
+// W_Eq holds one Eq witness per tuple component, in component order.
+
+void $EqTupleD___init__($EqTuple wit, B_tuple W_Eq) {
+    wit->W_Eq = W_Eq;
+}
+
+bool $EqTupleD_bool($EqTuple self) {
+    return true;
+}
+
+B_str $EqTupleD_str($EqTuple self) {
+    return $FORMAT("<EqTuple witness at %p>", self);
+}
+
+void $EqTupleD_serialize($EqTuple self,$Serial$state state) {
+    $step_serialize(self->W_Eq,state);
+}
+
+$EqTuple $EqTupleD_deserialize($EqTuple res, $Serial$state state) {
+    if (!res)
+        res = $DNEW($EqTuple,state);
+    res->W_Eq = $step_deserialize(state);
+    return res;
+}
+
+bool $EqTupleD___eq__($EqTuple wit, $WORD a, $WORD b) {
+    B_tuple wits = wit->W_Eq;
+    B_tuple ta = (B_tuple)a;
+    B_tuple tb = (B_tuple)b;
+    for (int i = 0; i < wits->size; i++) {
+        B_Eq w = (B_Eq)wits->components[i];
+        if (!w->$class->__eq__(w, ta->components[i], tb->components[i]))
+            return false;
+    }
+    return true;
+}
+
+bool $EqTupleD___ne__($EqTuple wit, $WORD a, $WORD b) {
+    return !$EqTupleD___eq__(wit, a, b);
+}
+
+struct $EqTupleG_class $EqTupleG_methods = {"$EqTuple", UNASSIGNED, NULL, $EqTupleD___init__, $EqTupleD_serialize, $EqTupleD_deserialize,
+                                             $EqTupleD_bool, $EqTupleD_str, $EqTupleD_str, $EqTupleD___eq__, $EqTupleD___ne__};
+
+
+$EqTuple $EqTupleG_new(B_tuple W_Eq) {
+    return $NEW($EqTuple, W_Eq);
+}
+
+
 // wEqNone //////////////////////////////////////////////////////
 
 // The Eq witness for None: None is the only value of its type.
