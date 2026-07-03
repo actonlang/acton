@@ -632,6 +632,17 @@ initGlobals env []                  = empty
 initGlobals env (Decl _ ds : ss)    = initGlobals env1 ss
   where env1                        = gdefine (envOf ds) env
 initGlobals env (Signature{} : ss)  = initGlobals env ss
+-- Assign a typed module-level variable straight to its global. The generic case
+-- below would first bind a C local and then copy it to the global, but every
+-- later reference resolves to the global (the name is gdefine'd), so that local
+-- is dead on the next line. Emitting the assignment directly drops the pointless
+-- local (and, at -O0 where slots are never reused, its needless stack slot).
+initGlobals env (s@(Assign _ [PVar _ n (Just t)] e) : ss)
+  | not (n `HashSet.member` localDefined env)
+                                    = genTopName env n <+> equals <+> assignRHS env n t e <> semi $+$
+                                      initGlobals env1 ss
+  where te                          = excludeDefined env (envOf s)
+        env1                        = gdefine te env
 initGlobals env (s : ss)            = genStmt1 env s $+$
                                       vcat [ genTopName env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
                                       initGlobals env1 ss
@@ -1016,19 +1027,21 @@ genVolatile env n                   = if isVolVar n env then text "volatile" els
 genStmt env (Decl _ ds)             = (empty, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env)
-                                    = (genTypeDecl env n t <+> gen env n <+> equals <+> rhs <> semi, [])
-  where rhs                         = if isWitness n
-                                      then case staticWitnessName e of
-                                           (Just nm,as) ->
-                                               foldr (\x y -> y <> text "->" <> myPretty x) (parens (myPretty ( tcname (tcon t))) <> myPretty (witName nm)) as
-                                           _  -> genExp env t e
-                                      else genExp env t e
+                                    = (genTypeDecl env n t <+> gen env n <+> equals <+> assignRHS env n t e <> semi, [])
 genStmt env s                       = (vcat [ genTypeDecl env n t <+> gen env n <> semi | (n,NVar t) <- te ] $+$ s', vs)
   where te                          = excludeLocalDefined env (envOf s)
         env1                        = ldefine te env
         (s', vs)                    = genV env1 s
 
 genStmt1 env s                      = fst $ genStmt env s
+
+-- RHS of a typed single-name assignment: a witness becomes a cast of its static
+-- instance pointer, everything else a normal boxed expression.
+assignRHS env n t e
+  | isWitness n                     = case staticWitnessName e of
+                                        (Just nm,as) -> foldr (\x y -> y <> text "->" <> myPretty x) (parens (myPretty (tcname (tcon t))) <> myPretty (witName nm)) as
+                                        _            -> genExp env t e
+  | otherwise                       = genExp env t e
 
 instance Gen Stmt where
     genV env s | isNotImpl s        = (text "//" <+> text "NotImplemented", [])

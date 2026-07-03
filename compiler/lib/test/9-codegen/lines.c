@@ -1514,12 +1514,8 @@ void linesQ___init__ () {
         linesQ_mainG_methods.__deserialize__ = linesQ_mainD___deserialize__;
         $register(&linesQ_mainG_methods);
     }
-    B_Eq W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
-    linesQ_W_Apa_1097 = W_Apa_1097;
-    B_Eq W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_759 = W_Apa_759;
-    B_Eq W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_331 = W_Apa_331;
-    B_Eq W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
-    linesQ_W_Apa_785 = W_Apa_785;
+    linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;
+    linesQ_W_Apa_759 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_Apa_331 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
+    linesQ_W_Apa_785 = ((B_Eq)$EqOptG_new(linesQ_W_Apa_1097));
 }
