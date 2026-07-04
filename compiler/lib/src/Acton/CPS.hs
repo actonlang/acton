@@ -89,10 +89,13 @@ setVolatiles ns env                     = modX env $ \x -> x{ volatileX = ns }
 
 volatiles env                           = volatileX (envX env)
 
+-- t must be CPS-converted already: it lands in a type application, and an
+-- unconverted proc/action row there fails closure conversion (see kRef).
+-- Current callers satisfy this via the Meth context, built with conv env t.
 eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [c, e]
 
-eCallCont0 (c, ns)                      = eCallCont eNone (c',tNone)
-  where c'                              = kRef c ns g_skip tNone
+eCallCont0 env (c, ns)                  = eCallCont eNone (c',tNone)
+  where c'                              = kRef env c ns g_skip tNone
 
 cntcont (Seq _ _ : ctx)                 = cntcont ctx       -- 'continue'       followed by some cmd:   ignore it
 cntcont (Loop c ns : ctx)               = (c, ns)           --                  inside a loop:          jump to its top
@@ -114,11 +117,11 @@ class CPS a where
 
 instance CPS [Stmt] where
     cps env []
-      | inCont env                      = return [sReturn $ eCallCont0 $ seqcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 env $ seqcont $ ctxt env]
     cps env (Continue _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ cntcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 env $ cntcont $ ctxt env]
     cps env (Break _ : _)
-      | inCont env                      = return [sReturn $ eCallCont0 $ brkcont $ ctxt env]
+      | inCont env                      = return [sReturn $ eCallCont0 env $ brkcont $ ctxt env]
     cps env (Return _ Nothing : _)
       | inCont env                      = return [sReturn $ eCallCont eNone $ retcont $ ctxt env]
     cps env (Return _ (Just e) : _)
@@ -132,8 +135,8 @@ instance CPS [Stmt] where
     cps env [Expr _ e]
       | contCall env e                  = return [sReturn $ addContArg env (conv env e) $ cont $ seqcont $ ctxt env]
       where t                           = typeOf env e
-            cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [t]) [c']
-              where c'                  = kRef c ns g_skip t
+            cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [conv env t]) [c']
+              where c'                  = kRef env c ns g_skip t
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
@@ -141,7 +144,7 @@ instance CPS [Stmt] where
                                              ss' <- cps env ss
                                              --traceM ("## kDef Expr " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
+                                                      sReturn (addContArg env (conv env e) (kRef env k (dom nts) x t)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
@@ -151,7 +154,7 @@ instance CPS [Stmt] where
                                              ss' <- cps (define [(x,NVar t)] env) (Assign l [p] (eVar x) : ss)
                                              --traceM ("## kDef Assign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
+                                                      sReturn (addContArg env (conv env e) (kRef env k (dom nts) x t)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss0
 
@@ -161,7 +164,7 @@ instance CPS [Stmt] where
                                              ss' <- cps env (MutAssign l tg (eVar x) : ss)
                                              --traceM ("## kDef MutAssign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv env e) (kRef k (dom nts) x t)) : []
+                                                      sReturn (addContArg env (conv env e) (kRef env k (dom nts) x t)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
@@ -184,7 +187,7 @@ instance CPS [Stmt] where
                                              let body = sIf1 (eVar x) ss1 ss2 : []
                                              --traceM ("## kDef PUSH " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tBool body :
-                                                      sReturn (convPUSH e $ kRef k (dom nts) x tBool) : []
+                                                      sReturn (convPUSH e $ kRef env k (dom nts) x tBool) : []
       where nts                         = extraBinds env s
 
     cps env [If _ bs els]               = do bs' <- mapM (cps env) bs
@@ -273,8 +276,13 @@ tCont1 fx t                             = tFun fx (posRow t posNil) kwdNil tR
 
 kDef env k nts x t b                    = sDef k (conv env $ pospar $ (x,t):nts) tR b fxProc
 
-kRef k [] x t                           = eVar k
-kRef k ns x t                           = eLambda' [(x,t)] $ eCall (eVar k) (map eVar (x:ns))
+-- The eta-lambda forwards x into the continuation k, whose own parameter is
+-- CPS-converted (kDef applies conv to the same t). Annotate x identically:
+-- the raw source type would embed an unconverted proc/action row in the CPS
+-- output, and closure conversion of that annotation later demands a leading
+-- continuation the row does not have.
+kRef env k [] x t                       = eVar k
+kRef env k ns x t                       = eLambda' [(x, conv env t)] $ eCall (eVar k) (map eVar (x:ns))
 
 fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx
