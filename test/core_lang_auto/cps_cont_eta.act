@@ -1,0 +1,34 @@
+# A proc call whose RESULT is itself a proc value, assigned to a variable that
+# an earlier statement already bound: CPS must thread the earlier binding
+# through a continuation, and the eta-lambda it builds (kRef) must annotate
+# its parameter with the CPS-converted type. With the raw source type, the
+# annotation embeds a continuation-less proc row and closure conversion of
+# that type fails with "### BAD contArg".
+
+def h(s: str) -> None:
+    pass
+
+def g() -> proc(str) -> None:
+    return h
+
+def f(m: proc() -> proc(str) -> None) -> str:
+    d = lambda x: None
+    d = m()
+    d("x")
+    return "ok"
+
+# The wrapper around a discarded proc-valued cont call must agree with the
+# eta: a cont call ending a nested suite (the if branch) is wrapped in
+# $SKIPRESc specialized on the call's result type, and that type application
+# must carry the CPS-converted type for the same reason as kRef's annotation.
+
+def f2(m: proc() -> proc(str) -> None, flag: bool) -> str:
+    x = 1
+    if flag:
+        m()
+    return "ok2"
+
+actor main(env: Env):
+    print(f(g))
+    print(f2(g, True))
+    env.exit(0)
