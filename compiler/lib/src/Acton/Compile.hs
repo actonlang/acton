@@ -1074,8 +1074,14 @@ getNameHashCached paths mn n = do
 -- carry no name hashes; their entries must not shadow targeted reads.
 updateNameHashCache :: A.ModName -> [InterfaceFiles.NameHashInfo] -> IO ()
 updateNameHashCache mn infos =
-  when (not (null infos)) $
+  when (not (null infos)) $ do
     modifyMVar_ nameHashCache $ \m -> return (M.insert mn (nameHashMapFromList infos) m)
+    -- Purge the module's per-name row cache: entries read before a re-front
+    -- hold the module's OLD rows, and the fall-through for names absent from
+    -- the (public) module map would keep serving them -- a deleted name would
+    -- look unchanged for the rest of the build.
+    modifyMVar_ nameHashOneCache $ \c ->
+      return (M.filterWithKey (\(m, _) _ -> m /= mn) c)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
@@ -3862,6 +3868,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   }
               }
 
+          -- A module reached without a provider entry (cross-project path deps)
+          -- resolves from its .tydb; if it was re-fronted THIS build its rewrite
+          -- may still be in flight, so wait out its pending front-output jobs or
+          -- the old rows misreport changed/deleted names as unchanged.
+          awaitModuleOutputs m = do
+            jobs <- readIORef frontOutputRef
+            mapM_ (\j -> waitCatch (fojAsync j) >> return ())
+                  [ j | j <- jobs, tkMod (fojKey j) == m ]
           resolveImportHash m =
             case M.lookup m providers of
               Just depKey ->
@@ -3870,8 +3884,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   Nothing
                     | isBuiltinKey depKey -> getPubHashCached paths m
                     | M.member depKey taskMap -> error ("Internal error: missing pub hash for dep " ++ modNameToString m)
-                    | otherwise -> getPubHashCached paths m
-              Nothing -> getPubHashCached paths m
+                    | otherwise -> awaitModuleOutputs m >> getPubHashCached paths m
+              Nothing -> awaitModuleOutputs m >> getPubHashCached paths m
           resolveImportImplHash m =
             case M.lookup m providers of
               Just depKey ->
@@ -3880,8 +3894,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   Nothing
                     | isBuiltinKey depKey -> getImplHashCached paths m
                     | M.member depKey taskMap -> error ("Internal error: missing impl hash for dep " ++ modNameToString m)
-                    | otherwise -> getImplHashCached paths m
-              Nothing -> getImplHashCached paths m
+                    | otherwise -> awaitModuleOutputs m >> getImplHashCached paths m
+              Nothing -> awaitModuleOutputs m >> getImplHashCached paths m
           resolveNameHash' m n =
             case M.lookup m providers of
               Just depKey ->
@@ -3890,13 +3904,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case M.lookup n hm of
                       Just info -> return (Just info)
                       Nothing
+                        -- A freshly front-passed provider's in-memory list is
+                        -- complete, so a missing name means DELETED. Only a
+                        -- cached provider (empty in-memory list, quiescent
+                        -- .tydb) may answer from its rows -- falling through
+                        -- for a fresh one would read the old row of a module
+                        -- whose rewrite is still in flight and misreport a
+                        -- deleted name as unchanged.
+                        | not (M.null hm) -> return Nothing
                         | providerIsCachedTy depKey -> getNameHashCached paths m n
                         | otherwise -> return Nothing
                   Nothing
                     | isBuiltinKey depKey -> getNameHashCached paths m n
                     | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
-                    | otherwise -> getNameHashCached paths m n
-              Nothing -> getNameHashCached paths m n
+                    | otherwise -> awaitModuleOutputs m >> getNameHashCached paths m n
+              Nothing -> awaitModuleOutputs m >> getNameHashCached paths m n
           providerIsCachedTy depKey =
             case M.lookup depKey taskMap of
               Just GlobalTask{ gtTask = TyTask{} } -> True
@@ -4122,14 +4144,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 let depMn = InterfaceFiles.dmiModule depInfo
                 mpub <- resolveImportHash depMn
                 mimpl <- resolveImportImplHash depMn
-                dbg <- lookupEnv "ACTON_STALE_TRACE"
-                case dbg of
-                  Just pf -> appendFile pf ("dep-check " ++ modNameToString mn ++ " -> " ++ modNameToString depMn
-                               ++ " storedPub=" ++ take 8 (show (Base16.encode (InterfaceFiles.dmiPubHash depInfo)))
-                               ++ " curPub=" ++ maybe "MISSING" (take 8 . show . Base16.encode) mpub
-                               ++ " storedImpl=" ++ take 8 (show (Base16.encode (InterfaceFiles.dmiImplHash depInfo)))
-                               ++ " curImpl=" ++ maybe "MISSING" (take 8 . show . Base16.encode) mimpl ++ "\n")
-                  Nothing -> return ()
                 return $ case (mpub, mimpl) of
                   (Just pubH, Just implH) ->
                     Right ( depMn
@@ -4671,6 +4685,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 StageFronted fr -> do
                   ccOnFrontDone callbacks tDone optsDone
                   ccOnFrontResult callbacks tDone optsDone fr
+                  -- Keep the global module-hash caches coherent for readers that
+                  -- resolve without a provider entry (cross-project path deps):
+                  -- values cached before this module re-fronted would otherwise
+                  -- serve its OLD hashes for the rest of the build.
+                  updatePubHashCache (tkMod keyDone) (frPubHash fr)
+                  updateImplHashCache (tkMod keyDone) (frImplHash fr)
+                  updateNameHashCache (tkMod keyDone) (frNameHashes fr)
                   forM_ (frBackJob fr) $ ccOnBackJob callbacks
                   let res2  = M.insert keyDone (frPubHash fr) res
                       implRes2 = M.insert keyDone (frImplHash fr) implRes
