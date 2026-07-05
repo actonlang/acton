@@ -1405,7 +1405,14 @@ implItemSplitDepsBound bound0 mn env localNames item =
     -- initializer (`self.x = ...`) would mark x used and the per-attribute
     -- __init__ dead-code elimination could never drop it. The receiver e is a
     -- genuine read and is split normally.
-    splitWriteTargetDirect bound (A.Dot _ e _) acc = splitExprDirect bound e acc
+    -- A write target `e.attr` records attr in the called/read set just like a
+    -- read: a kept method may store into ANOTHER object's field (e.g.
+    -- `self.state.errors = ...`), and if the written attr were unrecorded the
+    -- owner's field could be pruned while the store survives -> findAttr fails
+    -- in the back pass. This does NOT defeat per-attribute __init__ pruning:
+    -- an __init__ group's own `self.x = ...` lands in the group's per-method
+    -- entry KEYED BY x, which only folds into CN when x is already reached --
+    -- so an unread attribute still prunes.
     splitWriteTargetDirect bound t acc             = splitExprDirect bound t acc
 
     splitStmtDirect bound stmt acc = case stmt of

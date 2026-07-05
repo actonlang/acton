@@ -1355,10 +1355,17 @@ reachedCalledMethods cn nameHashes =
         -- otherwise a kept witness method (e.g. `mega` calling self.base()/self.extra())
         -- references a concrete method the closure pruned. Fold them all, not just the
         -- called ones.
-        Just mcs -> [ m | (meth, ms) <- mcs
+        Just mcs | not (null mcs)
+                 -> [ m | (meth, ms) <- mcs
                         , dbpIsWitnessClass (InterfaceFiles.nhName nh) || dbpMethodReached cn meth
                         , m <- ms ]
-        Nothing  -> fromMaybe [] (InterfaceFiles.nhCalledMethods nh)
+        -- A plain top-level function has an EMPTY per-method map (only class methods
+        -- get entries), not a missing one -- when it is selected, ALL of its calls are
+        -- live and must fold in via the whole-name nhCalledMethods, exactly as
+        -- reachabilityCN treats reached functions. Otherwise a selected function's
+        -- callee (e.g. compile_modules calling NameRevMap.pop_any) is per-method
+        -- pruned from its class and codegen fails findAttr. Nothing covers old caches.
+        _ -> fromMaybe [] (InterfaceFiles.nhCalledMethods nh)
     | nh <- nameHashes ]
 
 -- Program-wide called-method set (CN) computed by reachability from the root
