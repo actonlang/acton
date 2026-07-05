@@ -109,6 +109,7 @@ module InterfaceFiles
   , keyNameHash
   , readDepNames
   , readDepUsers
+  , readImplDepEdges
   , readNameHashMaybe
   , readModuleHashesMaybe
   , readFile
@@ -211,6 +212,13 @@ data NameHashInfo = NameHashInfo
   -- Method names (Dot attributes) called anywhere in this name's body. Unioned
   -- across all modules to form CN. Nothing when not computed.
   , nhCalledMethods :: Maybe [A.Name]
+  -- Per-method called-method breakdown for a class: each method mapped to the
+  -- Dot attributes/methods its body calls. Deferred-back selection grows CN only
+  -- from the methods that are actually reached (dbpMethodReached), so an unreached
+  -- method (e.g. a serializer reading every field) does not pull every attribute
+  -- into CN and defeat per-attribute __init__ pruning. Nothing for old caches /
+  -- non-classes (consumers fall back to the coarse nhCalledMethods).
+  , nhMethodCalledMethods :: Maybe [(A.Name, [A.Name])]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   , nhStmtIndices :: [Int]
@@ -1579,6 +1587,28 @@ readDepUsers f mn n =
       mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
       traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr n)
       return (maybe emptyDepUsers id mUsers)
+
+-- | Forward cross-module impl edges of this module's names, inverted from its
+-- dep index: local user name -> (dep module, dep name) for every impl-level
+-- use. The per-name hash rows strip external deps on disk, so the reachability
+-- walk cannot cross module boundaries through a cached module's rows -- this
+-- reader recovers those edges from the dep index the module already stores,
+-- reading only the (pending) module's own .tydb.
+readImplDepEdges :: FilePath -> IO (Map.Map A.Name [(A.ModName, A.Name)])
+readImplDepEdges f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      depModules <- getValue "deps" txn dbi keyDeps
+      edges <- forM (depModules :: [DepModuleInfo]) $ \dmi -> do
+        let mn = dmiModule dmi
+        mInfos <- getMaybeValue "dep-name-infos" txn dbi (keyDepModule mn)
+        case mInfos :: Maybe [DepNameInfo] of
+          Nothing -> return []
+          Just infos -> forM infos $ \dni -> do
+            mUsers <- getMaybeValue "dep-users" txn dbi (keyDepName mn (dniName dni))
+            return [ (u, [(mn, dniName dni)]) | u <- maybe [] duImplUsers mUsers ]
+      traceTydbRead "dep-edges" f (show (length depModules) ++ " dep modules")
+      return (Map.fromListWith (++) (concat (concat edges)))
 
 readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHash f n =

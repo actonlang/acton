@@ -129,19 +129,16 @@ prints docs for the requested file.
 ## Deferred Back Passes
 
 DBP is selected after type checking, when the full `NameHashInfo` list is
-available. A module becomes a DBP candidate when its top-level name count is at
-least the internal threshold (`1000` today), or when it is forced with
-`--dbp MOD[:name,...]`. The option can be repeated, and explicit seed names are
-unioned per module. DBP is disabled for `__builtin__`, `--only-build`,
-alternate-output modes such as `--cgen`/`--hgen`, and whenever `--no-dbp` is
-set. `--no-dbp` is a hard kill switch: it disables both the name-count
-heuristic and explicit `--dbp` module requests.
+available. DBP is on by default: every module is a candidate except
+`__builtin__`, `--only-build`, alternate-output modes such as
+`--cgen`/`--hgen`, and modules at an explicit `Build.act` library boundary.
+`--no-dbp` is a hard kill switch that disables DBP for the whole build.
 
-Modules at an explicit `Build.act` library boundary are also excluded from DBP.
+Modules at an explicit `Build.act` library boundary are excluded from DBP.
 A boundary module is a member of a declared library that is imported by any
 module outside that same library. The library boundary needs the full generated
-C/H surface, so even an explicit `--dbp` request compiles that module normally
-and emits an info message. Internal library modules remain DBP-eligible.
+C/H surface, so a boundary module is compiled whole. Internal library modules
+remain DBP-eligible.
 
 When a fresh front pass produces a DBP candidate, the scheduler stores a
 `DeferredBackJob` instead of queueing a normal `BackJob`. Cached `TyTask`
@@ -163,8 +160,7 @@ When a deferred job is ready, DBP first reads the candidate's `.tydb` header.
 It uses the header's `NameHashInfo` list and cached root actor names without
 decoding the typed module. The initial selection seeds are:
 
-- explicit `--dbp MOD:name,...` names, when present; otherwise the collected
-  `InterestMap` names for the module
+- the collected `InterestMap` names for the module
 - cached root actor names from the `.tydb` header
 
 An empty interested-name set is valid; if the module has no root actors, DBP can

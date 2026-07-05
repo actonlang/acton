@@ -2737,6 +2737,8 @@ p55_dbp_reads_selected_statements =
     let proj = casesProjDir
         src = casesSrcDir
         modSmall = modLabel proj "small"
+    -- DBP only applies to root-project modules; library-boundary modules are
+    -- excluded, so big must be a local module here, not a searchpath dependency.
     ensureCasesProject
     let bigSrc = src </> "big.act"
     writeHeavyClassModule bigSrc 40
@@ -2752,6 +2754,11 @@ p55_dbp_reads_selected_statements =
       , "    print(use_one())"
       , "    env.exit(0)"
       ]
+    -- The trace build keeps --skip-build: it asserts the selective .tydb read
+    -- pattern during DBP selection, and a full build's doc-index step broadly
+    -- reads big.tydb's public names, which the read-selectivity assertion below
+    -- deliberately forbids. Codegen of the selected subset is exercised by the
+    -- separate full build further down.
     res@(_ec, out) <- runActonInEnv [("ACTON_TYDB_TRACE_READS", "1")] proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitSuccess "selective DBP .tydb trace build" res
     let traceLines = tydbTraceLines out
@@ -2769,7 +2776,7 @@ p55_dbp_reads_selected_statements =
     -- Full build (no --skip-build) so the DBP-selected subset is actually
     -- C-compiled and linked, catching codegen regressions in the pruned module
     -- that a --skip-build selection trace cannot see, then run it.
-    buildRes <- runActonIn proj ["build", "--color", "never", "--dbp", "big:Node000A"]
+    buildRes <- runActonIn proj ["build", "--color", "never"]
     assertExitSuccess "DBP-selected subset compiles and links" buildRes
     runOut <- runBinaryIn proj "small"
     assertBool ("expected DBP-selected binary to produce output\n" ++ T.unpack runOut)
