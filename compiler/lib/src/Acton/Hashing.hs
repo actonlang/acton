@@ -1451,10 +1451,10 @@ implItemSplitDepsBound bound0 mn env localNames item =
         in splitSuiteDirect bound' b (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc))
       A.Class _ n q cs b _ ->
         let bound' = Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
-        in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') cs acc)
+        in splitSuiteDirect bound' b (splitListInto (splitBaseTConDirect bound') cs acc)
       A.Protocol _ n q ps b _ ->
         let bound' = Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
-        in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps acc)
+        in splitSuiteDirect bound' b (splitListInto (splitBaseTConDirect bound') ps acc)
       A.Extension _ q c ps b _ ->
         let bound' = assignedSuite b (boundList boundQBind q bound)
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps (splitTConDirect bound' c acc))
@@ -1594,6 +1594,15 @@ implItemSplitDepsBound bound0 mn env localNames item =
     splitTConDirect bound tc acc =
           case tc of
             A.TC qn ts -> splitListInto (splitTypeDirect bound) ts (splitQNameType bound qn acc)
+
+    -- A base class / super-protocol is STRUCTURAL, not a plain type reference: the
+    -- subclass's C struct and witness table embed the base, so codegen fails with
+    -- NameNotFound if the base is pruned. Record the base head as a CODE dep (via
+    -- splitQName) so the deferred-back code-only closure always follows it; the type
+    -- arguments stay ordinary type-position deps.
+    splitBaseTConDirect bound tc acc =
+          case tc of
+            A.TC qn ts -> splitListInto (splitTypeDirect bound) ts (splitQName bound qn acc)
 
     splitTypeDirect bound t acc = case t of
       A.TVar{}           -> acc
