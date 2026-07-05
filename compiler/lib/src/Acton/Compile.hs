@@ -4057,6 +4057,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 let depMn = InterfaceFiles.dmiModule depInfo
                 mpub <- resolveImportHash depMn
                 mimpl <- resolveImportImplHash depMn
+                dbg <- lookupEnv "ACTON_STALE_TRACE"
+                case dbg of
+                  Just pf -> appendFile pf ("dep-check " ++ modNameToString mn ++ " -> " ++ modNameToString depMn
+                               ++ " storedPub=" ++ take 8 (show (Base16.encode (InterfaceFiles.dmiPubHash depInfo)))
+                               ++ " curPub=" ++ maybe "MISSING" (take 8 . show . Base16.encode) mpub
+                               ++ " storedImpl=" ++ take 8 (show (Base16.encode (InterfaceFiles.dmiImplHash depInfo)))
+                               ++ " curImpl=" ++ maybe "MISSING" (take 8 . show . Base16.encode) mimpl ++ "\n")
+                  Nothing -> return ()
                 return $ case (mpub, mimpl) of
                   (Just pubH, Just implH) ->
                     Right ( depMn
@@ -4615,57 +4623,113 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           Just dbj -> M.insert keyDone (dbj, dependentClosure keyDone) deferredBacks
                   -- The program-wide CN is the methods reachable from the root actors
                   -- (see reachabilityCN). Freshly front-passed modules' name hashes are
-                  -- in nameRes2, authoritative including external deps. The walk visits
-                  -- cached modules only while they still have a PENDING deferred back
-                  -- job: their rows are read by exact task paths (searchPath does not
-                  -- cover transitive package deps), their cross-module edges recovered
-                  -- from their own dep index (rows strip external deps on disk), and
-                  -- reads wait out in-flight rewrites. A module with no pending job has
-                  -- fixed generated code whose whole call surface is coarse-folded into
-                  -- the CN below, so its rows -- an unchanged dependency's -- stay unread.
+                  -- in nameRes2, authoritative including external deps; a PENDING cached
+                  -- module's rows are read selectively by exact task paths, with its
+                  -- cross-module edges recovered from its dep index. A module with no
+                  -- pending job is never visited -- its whole call surface is coarse-
+                  -- folded below, so an unchanged dependency's rows stay unread.
+                  -- The CN walk is seeded from the root actors AND from every
+                  -- cross-module interested name: an interested name WILL be
+                  -- compiled (interest seeds each provider's selection), so the
+                  -- calls its reachable code makes must be in the CN or another
+                  -- module prunes the callee -- e.g. yang.lib's compile_modules
+                  -- (kept via interest, reachable from no actor) calling
+                  -- yang.schema Module.get_modrev, which schema's selection
+                  -- would otherwise drop. Names referenced by nobody (a root-less
+                  -- library's own functions) still contribute nothing, so a big
+                  -- provider's closure stays minimal.
+                  -- Only seed interest for modules with a PENDING deferred back
+                  -- job: those are the modules whose selection will read the
+                  -- seeded names anyway. A dependency compiled by its own build
+                  -- (no pending job here) has fixed, unpruned generated code, so
+                  -- its callees need no CN protection -- and skipping it keeps an
+                  -- unchanged rebuild from reading any of its per-name rows.
+                  let pendingMods = Data.Set.fromList
+                                      [ tkMod k | k <- M.keys deferredBacks1 ]
+                      interestSeeds = [ (m, n) | (m, ns) <- M.toList interestMap2
+                                               , Data.Set.member m pendingMods
+                                               , n <- Data.Set.toList ns ]
+                  -- With no deferred back job pending the CN is never consumed, so
+                  -- skip the walk entirely -- an unchanged rebuild must not read any
+                  -- per-name rows of its (cached) dependencies.
                   modifyIORef' coarseCalledRef (M.insert keyDone (frCalledMethods fr))
-                  let walkPending = Data.Set.fromList [ tkMod k | k <- M.keys deferredBacks1 ]
-                      lookupNH mn n = do
-                        case M.lookup mn nameResByMod >>= M.lookup n of
-                          Just nh -> return (Just nh)
-                          Nothing | not (Data.Set.member mn walkPending) ->
-                            return Nothing
-                          Nothing -> do
-                            jobs <- readIORef frontOutputRef
-                            mapM_ (\j -> waitCatch (fojAsync j) >> return ())
-                                  [ j | j <- jobs, tkMod (fojKey j) == mn ]
-                            mnh <- case M.lookup mn modTyFiles of
-                                     Just ty -> InterfaceFiles.readNameHashMaybe ty n
-                                     Nothing -> getNameHashCached rootPaths mn n
-                            case mnh of
-                              Just nh -> do
-                                em <- readIORef depEdgesRef
-                                edges <- case M.lookup mn em of
-                                  Just e -> return e
-                                  Nothing -> do
-                                    mty <- case M.lookup mn modTyFiles of
-                                             Just ty -> return (Just ty)
-                                             Nothing -> getTyFileCached (searchPath rootPaths) mn
-                                    case mty of
-                                      Nothing -> return M.empty
-                                      Just ty -> do
-                                        e <- InterfaceFiles.readImplDepEdges ty
-                                        modifyIORef' depEdgesRef (M.insert mn e)
-                                        return e
-                                let ext = [ (A.GName dm dn, B.empty)
-                                          | (dm, dn) <- M.findWithDefault [] n edges ]
-                                return (Just nh { InterfaceFiles.nhImplDeps = ext })
-                              Nothing -> return Nothing
-                  -- Modules without a pending job have fixed generated code whose
-                  -- call surface must SEED the fixpoint: unioned in afterwards it
-                  -- would be invisible to per-method gating during the walk and
-                  -- reachability truncates once such modules flush out.
-                  coarse0 <- readIORef coarseCalledRef
-                  let coarseCN = Data.Set.unions
-                        [ cs | (k, cs) <- M.toList coarse0
-                             , not (M.member k deferredBacks1) ]
-                  walkCN <- reachabilityCN lookupNH (Data.Set.toList accRoots2) coarseCN
-                  let calledMethods2 = walkCN
+                  calledMethods2 <-
+                    if M.null deferredBacks1
+                      then return calledMethods
+                      else do
+                        dbgProbe0 <- lookupEnv "ACTON_DBP_PROBE"
+                        let lookupNH mn n = do
+                              case dbgProbe0 of
+                                Just pf -> appendFile pf ("visit: " ++ modNameToString mn ++ " " ++ A.nstr n ++ "\n")
+                                Nothing -> return ()
+                              case M.lookup mn nameResByMod >>= M.lookup n of
+                                -- Freshly front-passed module: the in-memory hash is
+                                -- authoritative, including its external deps.
+                                Just nh -> return (Just nh)
+                                -- A module with no pending deferred back job has
+                                -- fixed generated code whose whole call surface is
+                                -- coarse-folded into the CN (see coarseCalledRef);
+                                -- visiting it would only re-derive a subset of that
+                                -- while reading .tydb rows of unchanged dependencies.
+                                Nothing | not (Data.Set.member mn pendingMods) ->
+                                  return Nothing
+                                Nothing -> do
+                                  -- A cached module's .tydb may still be rewritten by
+                                  -- an async front-output job (interface copy / impl
+                                  -- refresh); reading mid-rewrite yields a miss that
+                                  -- the per-name cache would pin for the whole build.
+                                  -- Wait out this module's pending output jobs first.
+                                  jobs <- readIORef frontOutputRef
+                                  mapM_ (\j -> waitCatch (fojAsync j) >> return ())
+                                        [ j | j <- jobs, tkMod (fojKey j) == mn ]
+                                  mnh <- case M.lookup mn modTyFiles of
+                                           Just ty -> InterfaceFiles.readNameHashMaybe ty n
+                                           Nothing -> getNameHashCached rootPaths mn n
+                                  case mnh of
+                                    -- Row-stored hashes have their external deps
+                                    -- stripped; recover this module's cross-module
+                                    -- edges from its dep index so the walk can leave
+                                    -- it. Loaded once per module.
+                                    Just nh -> do
+                                      em <- readIORef depEdgesRef
+                                      edges <- case M.lookup mn em of
+                                        Just e -> return e
+                                        Nothing -> do
+                                          mty <- case M.lookup mn modTyFiles of
+                                                   Just ty -> return (Just ty)
+                                                   Nothing -> getTyFileCached (searchPath rootPaths) mn
+                                          case mty of
+                                            Nothing -> return M.empty
+                                            Just ty -> do
+                                              e <- InterfaceFiles.readImplDepEdges ty
+                                              modifyIORef' depEdgesRef (M.insert mn e)
+                                              return e
+                                      let ext = [ (A.GName dm dn, B.empty)
+                                                | (dm, dn) <- M.findWithDefault [] n edges ]
+                                      return (Just nh { InterfaceFiles.nhImplDeps = ext })
+                                    Nothing -> return Nothing
+                        -- The coarse call surfaces of modules with no pending job
+                        -- must SEED the fixpoint, not be unioned in afterwards: a
+                        -- flushed module is skipped by the visit gate, and if its
+                        -- calls arrive only after the walk, a still-pending module's
+                        -- per-method gating never sees them and reachability
+                        -- truncates mid-chain (observed as rounds LOSING names once
+                        -- leaf modules flush out of the pending set).
+                        coarse0 <- readIORef coarseCalledRef
+                        let coarseCN = Data.Set.unions
+                              [ cs | (k, cs) <- M.toList coarse0
+                                   , not (M.member k deferredBacks1) ]
+                        walkCN <- reachabilityCN lookupNH
+                                    (Data.Set.toList accRoots2 ++ interestSeeds)
+                                    coarseCN
+                        case dbgProbe0 of
+                          Just probeFile -> appendFile probeFile
+                            (unlines ([ "== walk after " ++ modNameToString (tkMod keyDone)
+                                     , "seeds-roots: " ++ show [ (modNameToString m, A.nstr n) | (m,n) <- Data.Set.toList accRoots2 ]
+                                     , "seeds-interest: " ++ show [ (modNameToString m, A.nstr n) | (m,n) <- interestSeeds ]
+                                     ] ++ [ "cn: " ++ A.nstr n | n <- Data.Set.toList walkCN ]))
+                          Nothing -> return ()
+                        return walkCN
                   flushRes <- flushReadyDeferredBacks envAcc' interestMap2 calledMethods2 frontDone2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)
