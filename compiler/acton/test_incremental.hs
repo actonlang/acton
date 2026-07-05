@@ -1959,7 +1959,7 @@ p36_removed_dep_name_triggers_front_refresh =
       ]
     res2@(_ec2, out2) <- runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
     assertExitFailure "rebuild after removing imported dep name" 1 res2
-    assertBool "expected stale-cache log for missing dep hash"
+    assertBool ("expected stale-cache log for missing dep hash\n" ++ T.unpack out2)
       (T.isInfixOf "missing dep hashes in" out2 && T.isInfixOf "libfoo.lib.foo" out2)
     assertBool "did not expect internal hash-missing diagnostic"
       (not (T.isInfixOf "Hash info missing for libfoo.lib.foo" out2))
