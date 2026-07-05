@@ -1051,8 +1051,13 @@ getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
 getNameHashCached :: Paths -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
 getNameHashCached paths mn n = do
   m <- readMVar nameHashCache
-  case M.lookup mn m of
-    Just hm -> return (M.lookup n hm)
+  -- The module-level cache holds PUBLIC name hashes only, so a miss there says
+  -- nothing about a private name -- fall through to the targeted row read (the
+  -- CN reachability walk follows private helpers, e.g. a module's root actor
+  -- calling its own _test functions, and dead-ending here would silently drop
+  -- their callees from the CN so a provider prunes methods they invoke).
+  case M.lookup mn m >>= M.lookup n of
+    Just nh -> return (Just nh)
     Nothing -> modifyMVar nameHashOneCache $ \c ->
       case M.lookup (mn, n) c of
         Just r -> return (c, r)
@@ -1061,7 +1066,9 @@ getNameHashCached paths mn n = do
           r <- case mty of
                  Just ty -> InterfaceFiles.readNameHashMaybe ty n
                  Nothing -> return Nothing
-          return (M.insert (mn, n) r c, r)
+          -- Cache only hits: a miss can be transient (row read racing a
+          -- rewrite) and pinning it would blind every later lookup.
+          return (maybe c (const (M.insert (mn, n) r c)) r, r)
 
 -- | Update the name-hash cache after a successful compile. Cached modules
 -- carry no name hashes; their entries must not shadow targeted reads.
@@ -1252,11 +1259,21 @@ data FrontResult = FrontResult
   , frPubHash :: B.ByteString
   , frImplHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
+  -- The FULL per-name hash list (private names included). The CN reachability
+  -- walk follows private helpers of freshly front-passed modules, and must find
+  -- them in memory: their .tydb write is asynchronous, so a targeted row read
+  -- can race it (and the per-name read cache would memoize the miss).
+  , frNameHashesFull :: [InterfaceFiles.NameHashInfo]
   , frInterestDeps :: Data.Set.Set (A.ModName, A.Name)
   -- Method names called anywhere in this module (union of nhCalledMethods),
   -- accumulated across modules into the program-wide called-method set used by
   -- deferred-back per-method selection.
   , frCalledMethods :: Data.Set.Set A.Name
+  -- Root (executable entry) names of this module. A module with roots is an entry
+  -- whose code runs as a whole, so it seeds the program-wide CN even when deferred;
+  -- a root-less deferred provider only contributes the reachable subset its own
+  -- selection fixpoint derives.
+  , frRoots :: [A.Name]
   , frFrontTime :: Maybe TimeSpec
   , frFrontTiming :: Maybe FrontTiming
   , frInferredSigs :: [InferredSignature]
@@ -1329,6 +1346,84 @@ calledMethodsFromNameHashes nameHashes =
     , Just ms <- [InterfaceFiles.nhCalledMethods nh]
     , m <- ms
     ]
+
+-- Grow CN only from the methods that are actually reached. A class whose
+-- nhMethodCalledMethods is available contributes the called methods of each
+-- method that is dbpMethodReached against the current CN; an unreached method
+-- (e.g. to_gdata reading every field) contributes nothing, so per-attribute
+-- __init__ pruning is not defeated. Functions / old caches with no per-method
+-- breakdown fall back to the coarse whole-name nhCalledMethods (always live).
+reachedCalledMethods :: Data.Set.Set A.Name -> [InterfaceFiles.NameHashInfo] -> Data.Set.Set A.Name
+reachedCalledMethods cn nameHashes =
+  Data.Set.fromList $ concat
+    [ case InterfaceFiles.nhMethodCalledMethods nh of
+        -- A witness dictionary keeps ALL its methods (dbpIsWitnessClass exemption),
+        -- so every method it calls on the concrete self type must be in CN too --
+        -- otherwise a kept witness method (e.g. `mega` calling self.base()/self.extra())
+        -- references a concrete method the closure pruned. Fold them all, not just the
+        -- called ones.
+        Just mcs -> [ m | (meth, ms) <- mcs
+                        , dbpIsWitnessClass (InterfaceFiles.nhName nh) || dbpMethodReached cn meth
+                        , m <- ms ]
+        Nothing  -> fromMaybe [] (InterfaceFiles.nhCalledMethods nh)
+    | nh <- nameHashes ]
+
+-- Program-wide called-method set (CN) computed by reachability from the root
+-- actors, rather than by a coarse per-module union. The CN is the set of method
+-- names invoked by code that is actually reachable from the roots: starting at
+-- the roots we follow code-position deps (local names + cross-module nhImplDeps)
+-- and collect called methods; for a CLASS only its REACHED methods contribute
+-- (a method is reached when its name is in the CN, or it is always-kept, or the
+-- name is a witness dictionary), so an unreached method -- e.g. a serializer that
+-- reads every field, or the child construction of an unread attribute (each
+-- __init__ attribute-group is keyed by its attribute in nhMethodCodeDeps/
+-- nhMethodCalledMethods) -- never pulls its reads/children into the CN. A plain
+-- function (no per-method breakdown) contributes all of its calls when reached.
+-- This is precise AND visits only the reachable subset, so it stays cheap even
+-- for a 288k-name data model, and needs no seed, module exclusion or size gate.
+-- The name-hash lookup is on demand (IO): a reached name in a freshly front-passed
+-- module is served from memory, one in a cached module is read selectively from its
+-- .tydb, and an unreached module (an unused import, or a big provider's unnavigated
+-- subtree) is never touched -- preserving DBP's selective reads.
+reachabilityCN :: (A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo))
+               -> [(A.ModName, A.Name)]
+               -> Data.Set.Set A.Name
+               -> IO (Data.Set.Set A.Name)
+reachabilityCN lookupNH roots cn0 = fixCN cn0
+  where
+    fixCN cn = do
+      cn' <- walk roots Data.Set.empty cn
+      if Data.Set.size cn' == Data.Set.size cn then return cn' else fixCN cn'
+    -- One reachability walk with a fixed cn for method gating; returns cn grown
+    -- with the calls of everything reached this pass.
+    walk []        _       cn = return cn
+    walk (qn:work) reached cn
+      | Data.Set.member qn reached = walk work reached cn
+      | otherwise = do
+          let reached' = Data.Set.insert qn reached
+          mnh <- lookupNH (fst qn) (snd qn)
+          case mnh of
+            Nothing -> walk work reached' cn
+            Just nh ->
+              let m0        = fst qn
+                  isWit     = dbpIsWitnessClass (snd qn)
+                  keptM x   = isWit || Data.Set.member x cn || dbpMethodAlwaysKept x
+                  baseDeps  = fromMaybe (InterfaceFiles.nhImplLocalDeps nh)
+                                        (InterfaceFiles.nhCodeLocalDeps nh)
+                  methDeps  = [ d | (meth, ds) <- fromMaybe [] (InterfaceFiles.nhMethodCodeDeps nh)
+                                  , keptM meth, d <- ds ]
+                  extDeps   = [ qnameKey m0 q | (q, _) <- InterfaceFiles.nhImplDeps nh ]
+                  newNames  = [ (m0, d) | d <- baseDeps ++ methDeps ] ++ extDeps
+                  perMethod = fromMaybe [] (InterfaceFiles.nhMethodCalledMethods nh)
+                  methCalls = [ c | (meth, cs) <- perMethod, keptM meth, c <- cs ]
+                  funcCalls = if null perMethod
+                                then fromMaybe [] (InterfaceFiles.nhCalledMethods nh)
+                                else []
+              in walk (newNames ++ work) reached'
+                      (foldr Data.Set.insert cn (methCalls ++ funcCalls))
+    qnameKey _  (A.GName m n) = (m, n)
+    qnameKey _  (A.QName m n) = (m, n)
+    qnameKey m0 (A.NoQ n)     = (m0, n)
 
 addInterestDeps :: Data.Set.Set (A.ModName, A.Name) -> InterestMap -> InterestMap
 addInterestDeps deps im =
@@ -2588,12 +2683,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           -- references don't force regeneration), split per class-method so an
           -- auto-vivifying accessor's child is followed only when the accessor is
           -- actually called, with calledMethods feeding the program-wide call set.
-          (implLocalDeps, implExtDeps, codeLocalDeps, codeMethodDeps, calledMethods) <-
+          (implLocalDeps, implExtDeps, codeLocalDeps, codeMethodDeps, codeMethodCalled, calledMethods) <-
             Hashing.frontSplitDepsFromItemsWithProgress
               (hashProgress afterIfaceDeps)
               mn hashEnv nameKeys implItems
           evaluate (rnf (implLocalDeps, implExtDeps))
-          evaluate (rnf (codeLocalDeps, codeMethodDeps, calledMethods))
+          evaluate (rnf (codeLocalDeps, codeMethodDeps, codeMethodCalled, calledMethods))
           -- pubDeps include signature deps plus term-level deps for reuse
           -- in pubHash. Derived names are internal and should never require
           -- a pub hash.
@@ -2632,6 +2727,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           implExtHashes
                           (Just codeLocalDeps)
                           (Just codeMethodDeps)
+                          (Just codeMethodCalled)
                           (Just calledMethods)
                   evaluate (rnf nameHashes)
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
@@ -2742,8 +2838,10 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                                    , frPubHash = modulePubHash
                                                    , frImplHash = moduleImplHash
                                                    , frNameHashes = publicNameHashes nameHashes
+                                                   , frNameHashesFull = nameHashes
                                                    , frInterestDeps = interestDepsFromNameHashes nameHashes
                                                    , frCalledMethods = calledMethodsFromNameHashes nameHashes
+                                                   , frRoots = roots
                                                    , frFrontTime = frontTimeMaybe
                                                    , frFrontTiming = frontTimingMaybe
                                                    , frInferredSigs = inferredSigs
@@ -2795,7 +2893,8 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
         [ m | nh <- dnsNameHashes nameSelection
             , Just mds <- [InterfaceFiles.nhMethodCodeDeps nh]
             , (m, _) <- mds
-            , dbpMethodReached (dnsCalledMethods nameSelection) m ]
+            , dbpIsWitnessClass (InterfaceFiles.nhName nh)
+                || dbpMethodReached (dnsCalledMethods nameSelection) m ]
       codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) keptMethods
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
@@ -2902,7 +3001,7 @@ dbpClosureFixpoint :: Paths
                    -> IO (M.Map A.Name InterfaceFiles.NameHashInfo, Data.Set.Set A.Name)
 dbpClosureFixpoint paths mn tyFile cn roots = do
   selected <- dbpNameHashClosure paths mn tyFile cn M.empty roots
-  let cn' = Data.Set.union cn (calledMethodsFromNameHashes (M.elems selected))
+  let cn' = Data.Set.union cn (reachedCalledMethods cn (M.elems selected))
   if Data.Set.size cn' == Data.Set.size cn
     then return (selected, cn')
     else dbpClosureFixpoint paths mn tyFile cn' roots
@@ -2964,6 +3063,16 @@ dbpMethodReached :: Data.Set.Set A.Name -> A.Name -> Bool
 dbpMethodReached calledMethods n =
   dbpMethodAlwaysKept n || Data.Set.member n calledMethods
 
+-- A protocol-witness / extension dictionary is a Derived-named class. Per-method
+-- pruning must not touch it: its "methods" are the dictionary slots, and CodeGen
+-- emits the dict's `_new` only when it is concrete (has all its methods). Dropping
+-- an uncalled slot makes the dict look abstract (no `_new` -> undeclared witness
+-- constructor) or leaves the attribute env unable to resolve the slot. So a
+-- witness class keeps ALL its methods, slots and an unsliced __init__, and the
+-- selection closure follows all of its method deps.
+dbpIsWitnessClass :: A.Name -> Bool
+dbpIsWitnessClass n = Names.isWitness n || case n of { A.Derived{} -> True; _ -> False }
+
 dbpNameHashClosure :: Paths
                    -> A.ModName
                    -> FilePath
@@ -2992,7 +3101,8 @@ dbpNameHashClosure paths mn tyFile calledMethods selected (n:ns)
           methodDeps = case InterfaceFiles.nhMethodCodeDeps nh of
                          Nothing  -> []
                          Just mds -> concat [ ds | (m, ds) <- mds
-                                                 , dbpMethodReached calledMethods m ]
+                                                 , dbpIsWitnessClass n
+                                                     || dbpMethodReached calledMethods m ]
           depNames = baseDeps ++ methodDeps
       localDeps <- traverse (dbpReadOwningName paths mn tyFile) depNames
       exts <- dbpExtensionsForName tyFile n
@@ -3038,56 +3148,90 @@ dbpPruneTopStmt calledMethods selected stmt =
     -- Drop a selected class's methods that are neither __init__ nor called
     -- anywhere in the program. Their bodies would otherwise reference children
     -- that the per-method closure deliberately left unselected.
+    -- A protocol whose witness/extension is selected must keep ALL its methods:
+    -- the witness's method table dispatches every protocol method, so a pruned
+    -- default impl (e.g. `bonus` that is never called) leaves an abstract slot and
+    -- CodeGen suppresses the witness's `_new` constructor. Selected witnesses are
+    -- Derived-named (`Derived P C`); P is the protocol they must keep whole.
+    witnessProtocols =
+      Data.Set.fromList [ p | n <- Data.Set.toList selected, A.Derived p _ <- [n] ]
     pruneClassBody (A.Class l n q cs body kd) =
-      A.Class l n q cs (mapMaybe pruneMethodStmt body) kd
+      A.Class l n q cs (mapMaybe (pruneMethodStmt keepWhole (classStoredAttrs body)) body) kd
+      where keepWhole = dbpIsWitnessClass n || Data.Set.member n witnessProtocols
     pruneClassBody d = d
+
+    -- Names a class actually stores as instance attributes: the targets of
+    -- `self.x = ...` in its __init__ (via the same split the selection uses). Only
+    -- these are eligible for field-declaration pruning; a plain `x : T` signature
+    -- that is NOT a stored attribute is a protocol/abstract method declaration and
+    -- must never be dropped or the protocol/witness interface is corrupted.
+    classStoredAttrs body =
+      Data.Set.fromList
+        [ attr | A.Decl _ inner <- body
+               , d <- inner
+               , A.dname d == initKW
+               , Just selfp <- [selfParName d]
+               , (attr, _) <- fst (Hashing.splitInitByAttr selfp (A.dbody d)) ]
 
     -- A pruned method keeps its Def -- and thereby its class-struct slot and
     -- method-table assignment -- with the body replaced by a raising stub.
     -- Removing the Def entirely would shift every later member's offset, and a
     -- SUBCLASS rendered elsewhere (another module, or unpruned via the
     -- NotImplemented/no-dbp fallbacks) still lays out the full interface, so
-    -- dispatch through a parent-typed reference would land on the wrong slot.
-    -- The stub also turns any residual under-selection into a named error
-    -- instead of silent misdispatch.
-    pruneMethodStmt (A.Decl l' inner) =
-      Just (A.Decl l' [ if keepMethod d then sliceInit d else stubDef d | d <- inner ])
+    -- dispatch through a parent-typed reference would land on the wrong slot
+    -- (observed: _get_attr resolving to copy). The stub also turns any residual
+    -- under-selection into a named error instead of silent misdispatch.
+    pruneMethodStmt isWit _ (A.Decl l' inner)
+      | isWit     = Just (A.Decl l' inner)
+      | otherwise = Just (A.Decl l' [ if keepMethod d then sliceInit d else stubDef d | d <- inner ])
       where stubDef d = d { A.dbody = [ A.Raise NoLoc
                               (A.Call NoLoc (A.Var NoLoc (A.GName (A.ModName [A.name "__builtin__"]) (A.name "ValueError")))
                                  (A.PosArg (A.Strings NoLoc ["\"dead code eliminated: " ++ A.nstr (A.dname d) ++ "\""]) A.PosNil)
                                  A.KwdNil) ] }
-    pruneMethodStmt s = Just s
+    -- Drop a stored attribute's declaration when it is never read (not in CN):
+    -- sliceInit already removed its `self.x =` init, and dropping the declaration
+    -- removes the struct field + serialize/deserialize/GC slot too, so the class
+    -- looks as if x never existed. Only genuine stored attributes are eligible
+    -- (storedAttrs); protocol/abstract method signatures and witness dictionaries
+    -- are kept whole.
+    pruneMethodStmt isWit storedAttrs s@(A.Signature l' names sc dec)
+      | isWit     = Just s
+      | otherwise = case filter keepSig names of
+                      []     -> Nothing
+                      names' -> Just (A.Signature l' names' sc dec)
+      where keepSig nm = Data.Set.member nm calledMethods
+                           || not (Data.Set.member nm storedAttrs)
+    pruneMethodStmt _ _ s = Just s
 
     keepMethod d@A.Def{} = dbpMethodReached calledMethods (A.dname d)
     keepMethod _         = True
 
     -- __init__ stays kept (it runs on construction), but its declarative
-    -- attribute initializations are sliced: `self.x = e` is dropped when x is
-    -- never read anywhere (x not in the called-attribute set CN), since the
-    -- per-method closure deliberately pruned the child types such an init would
+    -- attribute initializations are sliced: the statements that build `self.x`
+    -- (the `self.x = rhs` write plus the single-use local that builds rhs, which
+    -- the type checker hoists out of `self.x = v if v is not None else T()`) are
+    -- dropped when x is never read anywhere (x not in the called-attribute set
+    -- CN), since the per-method closure deliberately pruned the child types they
     -- construct. A kept init that reads self.a keeps a automatically -- self.a is
-    -- itself a Dot, so a is in CN. Slicing stops at the first statement that is
-    -- not a self-attribute init (the constructor boundary), leaving any later
-    -- imperative code untouched.
+    -- itself a Dot, so a is in CN. acton_malloc zero-fills the object, so an
+    -- unwritten, never-read field stays NULL and is safe. splitInitByAttr does the
+    -- exact same grouping the selection used, so codegen and selection agree.
     sliceInit d@A.Def{}
       | A.dname d == initKW
-      , Just selfp <- selfParName d = d { A.dbody = sliceInitBody selfp (A.dbody d) }
+      , Just selfp <- selfParName d =
+          let body               = A.dbody d
+              (groups, _tailIxs) = Hashing.splitInitByAttr selfp body
+              prunedIxs          = Data.Set.fromList
+                                     [ i | (attr, ixs) <- groups
+                                         , not (Data.Set.member attr calledMethods)
+                                         , i <- ixs ]
+          in d { A.dbody = [ s | (i, s) <- zip [0 ..] body
+                               , not (Data.Set.member i prunedIxs) ] }
     sliceInit d = d
 
     selfParName d = case A.pos d of
                       A.PosPar n _ _ _ -> Just n
                       _                -> Nothing
-
-    sliceInitBody selfp (s : ss)
-      | Just attr <- selfAttrInit selfp s =
-          if Data.Set.member attr calledMethods
-            then s : sliceInitBody selfp ss
-            else sliceInitBody selfp ss
-    sliceInitBody _ ss = ss
-
-    selfAttrInit selfp (A.MutAssign _ (A.Dot _ (A.Var _ (A.NoQ x)) attr) _)
-      | x == selfp = Just attr
-    selfAttrInit _ _ = Nothing
 
 
 -- | Run the back passes for a single module.
@@ -3332,10 +3476,30 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      -- Coarse (whole-module) called-method sets, accumulated per front result.
+      -- A module with NO pending deferred back job has fixed generated code this
+      -- build -- eagerly compiled, verified up to date, or already flushed -- and
+      -- the CN must cover its call surface verbatim, or a pending provider could
+      -- prune a method that fixed code still calls. The coarse union is a safe
+      -- over-approximation of that surface, and precision only matters for
+      -- modules being re-selected, which the reachability walk covers exactly.
+      coarseCalledRef <- newIORef M.empty
+      -- Per-module forward cross-module edges, recovered lazily from each
+      -- module's own dep-index rows (see InterfaceFiles.readImplDepEdges): the
+      -- per-name hash rows strip external deps on disk, so without this the
+      -- reachability walk dead-ends at every module boundary of a CACHED
+      -- module and the CN shrinks on incremental runs, re-rendering providers
+      -- narrower than already-compiled consumers.
+      depEdgesRef <- newIORef M.empty
+
+      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty Data.Set.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap coarseCalledRef depEdgesRef
 
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
+    -- Exact .tydb path for every module in the build graph. The reachability
+    -- walk must read rows of TRANSITIVE dependency modules too, which the root
+    -- project's searchPath does not cover.
+    modTyFiles = M.fromList [ (tkMod (gtKey t), tyDbPath (gtPaths t) (tkMod (gtKey t))) | t <- tasks ]
     isDbpBlocked k = Data.Set.member k dbpBlocked
     isBuiltinKey k = tkMod k == A.modName ["__builtin__"]
     builtinOrder = [ t | t <- tasks, isBuiltinKey (gtKey t) ]
@@ -3535,6 +3699,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
              Just x -> return x
              Nothing -> error ("Internal error: missing task for key " ++ show key)
       let taskCurrent = M.findWithDefault (gtTask t) key parsedTasks
+          tcRoots = case taskCurrent of { TyTask{ tyRoots = rs } -> rs; _ -> [] }
           paths = gtPaths t
           mn    = name (gtTask t)
           optsT = optsFor key
@@ -3551,8 +3716,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frPubHash = pubHash
               , frImplHash = implHash
               , frNameHashes = nameHashes
+              , frNameHashesFull = interestNameHashes
               , frInterestDeps = interestDepsFromNameHashes interestNameHashes
               , frCalledMethods = calledMethodsFromNameHashes interestNameHashes
+              , frRoots = tcRoots
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -3569,8 +3736,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frPubHash = B.empty
               , frImplHash = B.empty
               , frNameHashes = []
+              , frNameHashesFull = []
               , frInterestDeps = Data.Set.empty
               , frCalledMethods = Data.Set.empty
+              , frRoots = []
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -4369,6 +4538,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> M.Map TaskKey CompileTask
          -> InterestMap
          -> Data.Set.Set A.Name
+         -> Data.Set.Set (A.ModName, A.Name)
          -> Data.Set.Set TaskKey
          -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
          -> M.Map StageKey Int
@@ -4377,8 +4547,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> Bool
          -> Int
          -> M.Map TaskKey Integer
+         -> IORef (M.Map TaskKey (Data.Set.Set A.Name))
+         -> IORef (M.Map A.ModName (M.Map A.Name [(A.ModName, A.Name)]))
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap calledMethods frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap calledMethods accRoots frontDone deferredBacks ind pend envAcc hadErrors maxPar cw coarseCalledRef depEdgesRef = do
       (rdy1, running1) <- mask_ $ do
         res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running frontOutputRef res implRes nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
@@ -4418,7 +4590,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap calledMethods frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap calledMethods accRoots frontDone deferredBacks ind pend2 envAcc True maxPar cw coarseCalledRef depEdgesRef
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = case M.lookup stageDone stageRevMap of
@@ -4435,28 +4607,83 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 StageParsed parsed mParseTime -> do
                   ccOnParseDone callbacks tDone optsDone mParseTime
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap calledMethods frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap calledMethods accRoots frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw coarseCalledRef depEdgesRef
                 StageFronted fr -> do
                   ccOnFrontDone callbacks tDone optsDone
                   ccOnFrontResult callbacks tDone optsDone fr
                   forM_ (frBackJob fr) $ ccOnBackJob callbacks
                   let res2  = M.insert keyDone (frPubHash fr) res
                       implRes2 = M.insert keyDone (frImplHash fr) implRes
-                      nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
+                      nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashesFull fr)) nameRes
                       parsedTasks2 = M.delete keyDone parsedTasks
                       envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
                       interestMap2 = addInterestDeps (frInterestDeps fr) interestMap
-                      calledMethods2 = Data.Set.union (frCalledMethods fr) calledMethods
+                      accRoots2 = Data.Set.union accRoots
+                                    (Data.Set.fromList [ (tkMod keyDone, r) | r <- frRoots fr ])
+                      nameResByMod = M.fromList [ (tkMod tk, nm) | (tk, nm) <- M.toList nameRes2 ]
                       frontDone2 = Data.Set.insert keyDone frontDone
                       deferredBacks1 =
                         case frDeferredBackJob fr of
                           Nothing -> deferredBacks
                           Just dbj -> M.insert keyDone (dbj, dependentClosure keyDone) deferredBacks
+                  -- The program-wide CN is the methods reachable from the root actors
+                  -- (see reachabilityCN). Freshly front-passed modules' name hashes are
+                  -- in nameRes2, authoritative including external deps. The walk visits
+                  -- cached modules only while they still have a PENDING deferred back
+                  -- job: their rows are read by exact task paths (searchPath does not
+                  -- cover transitive package deps), their cross-module edges recovered
+                  -- from their own dep index (rows strip external deps on disk), and
+                  -- reads wait out in-flight rewrites. A module with no pending job has
+                  -- fixed generated code whose whole call surface is coarse-folded into
+                  -- the CN below, so its rows -- an unchanged dependency's -- stay unread.
+                  modifyIORef' coarseCalledRef (M.insert keyDone (frCalledMethods fr))
+                  let walkPending = Data.Set.fromList [ tkMod k | k <- M.keys deferredBacks1 ]
+                      lookupNH mn n = do
+                        case M.lookup mn nameResByMod >>= M.lookup n of
+                          Just nh -> return (Just nh)
+                          Nothing | not (Data.Set.member mn walkPending) ->
+                            return Nothing
+                          Nothing -> do
+                            jobs <- readIORef frontOutputRef
+                            mapM_ (\j -> waitCatch (fojAsync j) >> return ())
+                                  [ j | j <- jobs, tkMod (fojKey j) == mn ]
+                            mnh <- case M.lookup mn modTyFiles of
+                                     Just ty -> InterfaceFiles.readNameHashMaybe ty n
+                                     Nothing -> getNameHashCached rootPaths mn n
+                            case mnh of
+                              Just nh -> do
+                                em <- readIORef depEdgesRef
+                                edges <- case M.lookup mn em of
+                                  Just e -> return e
+                                  Nothing -> do
+                                    mty <- case M.lookup mn modTyFiles of
+                                             Just ty -> return (Just ty)
+                                             Nothing -> getTyFileCached (searchPath rootPaths) mn
+                                    case mty of
+                                      Nothing -> return M.empty
+                                      Just ty -> do
+                                        e <- InterfaceFiles.readImplDepEdges ty
+                                        modifyIORef' depEdgesRef (M.insert mn e)
+                                        return e
+                                let ext = [ (A.GName dm dn, B.empty)
+                                          | (dm, dn) <- M.findWithDefault [] n edges ]
+                                return (Just nh { InterfaceFiles.nhImplDeps = ext })
+                              Nothing -> return Nothing
+                  -- Modules without a pending job have fixed generated code whose
+                  -- call surface must SEED the fixpoint: unioned in afterwards it
+                  -- would be invisible to per-method gating during the walk and
+                  -- reachability truncates once such modules flush out.
+                  coarse0 <- readIORef coarseCalledRef
+                  let coarseCN = Data.Set.unions
+                        [ cs | (k, cs) <- M.toList coarse0
+                             , not (M.member k deferredBacks1) ]
+                  walkCN <- reachabilityCN lookupNH (Data.Set.toList accRoots2) coarseCN
+                  let calledMethods2 = walkCN
                   flushRes <- flushReadyDeferredBacks envAcc' interestMap2 calledMethods2 frontDone2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)
                     Right deferredBacks2 ->
-                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 calledMethods2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 calledMethods2 accRoots2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw coarseCalledRef depEdgesRef
 
 
 -- | Execute back-pass jobs in parallel while keeping output order stable.

@@ -20,6 +20,7 @@ module Acton.Hashing
   , codeMethodDepsFromItems
   , frontSplitDepsFromItems
   , frontSplitDepsFromItemsWithProgress
+  , splitInitByAttr
   , splitDeps
   , externalModules
   , computeHashes
@@ -1180,6 +1181,7 @@ frontSplitDepsFromItems :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopL
                            , M.Map A.Name [A.QName]
                            , M.Map A.Name [A.Name]
                            , M.Map A.Name [(A.Name, [A.Name])]
+                           , M.Map A.Name [(A.Name, [A.Name])]
                            , M.Map A.Name [A.Name] )
 frontSplitDepsFromItems mn env localNames items =
     assembleFrontDeps fieldsSplit classWalks plainSplit extSplit
@@ -1205,31 +1207,76 @@ frontSplitDepsFromItems mn env localNames items =
       | TLDecl cn decl <- classItems
       , let entries = concatMap (methodWalkEntries mn env localNames decl) (classMethodDefs decl) ]
 
--- One method walk, keyed by method name -- except __init__, whose leading
--- declarative attribute initializers (`self.x = e`) are each walked as a
--- synthetic single-statement Def keyed by the assigned attribute x, so the
--- deferred-back closure follows a `self.x = X()` only when x is read (x in CN).
--- The imperative tail keeps initKW (always followed). Aggregated over all entries
--- this equals the whole-method walk (union is the same), so impl deps and the
--- impl hash are unchanged; only the per-method breakdown gets finer.
+-- | Partition an __init__ body into per-attribute construction groups and an
+-- imperative tail, as statement-index lists. The type checker hoists
+-- `self.x = (v if v is not None else T())` into `$tmp = (...T()); self.x = $tmp`,
+-- so an attribute's construction may sit in a single-use local that precedes the
+-- write. Each `self.attr = rhs` -- together with the local that builds rhs, when
+-- that local is read only there -- forms one group keyed by attr; every other
+-- statement is the tail. Groups and tail together partition the body, so the
+-- union of their deps equals the whole-__init__ deps and the impl hash is
+-- unchanged. Deferred-back selection follows a group only when attr is read
+-- (attr in CN); codegen drops a whole group when attr is unread -- sound because
+-- acton_malloc zero-fills, leaving an unwritten, never-read field as NULL.
+splitInitByAttr :: A.Name -> [A.Stmt] -> ([(A.Name, [Int])], [Int])
+splitInitByAttr selfp body = (groups, tailIxs)
+  where
+    idxBody = zip [0 ..] body
+    defIx   = M.fromList [ (v, i) | (i, A.Assign _ [A.PVar _ v _] _) <- idxBody ]
+    wInfo   = [ (attr, i, owned)
+              | (i, s) <- idxBody, Just attr <- [selfAttr s]
+              , let owned = ownedTemp i s ]
+    ownedTemp wi (A.MutAssign _ _ (A.Var _ (A.NoQ v)))
+      | Just di <- M.lookup v defIx
+      , and [ v `notElem` Names.free s | (j, s) <- idxBody, j /= wi, j /= di ]
+                            = Just di
+    ownedTemp _ _           = Nothing
+    consumed = Data.Set.fromList ([ i | (_, i, _) <- wInfo ] ++ [ di | (_, _, Just di) <- wInfo ])
+    groups   = [ (attr, maybe [] (: []) owned ++ [i]) | (attr, i, owned) <- wInfo ]
+    tailIxs  = [ i | (i, _) <- idxBody, not (i `Data.Set.member` consumed) ]
+    selfAttr (A.MutAssign _ (A.Dot _ (A.Var _ (A.NoQ x)) attr) _) | x == selfp = Just attr
+    selfAttr _ = Nothing
+
+-- One method walk, keyed by method name -- except __init__, whose declarative
+-- attribute initializers are split per assigned attribute (see splitInitByAttr),
+-- so the deferred-back closure follows a `self.x = X()` only when x is read (x in
+-- CN). The imperative tail keeps initKW (always followed). Aggregated over all
+-- entries this equals the whole-method walk (union is the same), so impl deps and
+-- the impl hash are unchanged; only the per-method breakdown gets finer.
 methodWalkEntries :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> A.Decl -> A.Decl -> [(A.Decl, DepSplit)]
 methodWalkEntries mn env localNames decl d
+  -- Only user classes: a compiler-generated protocol witness has an __init__ that
+  -- constructs its inherited sub-witnesses, some of which the dep walk records in
+  -- type position; splitting/zeroing those would drop a sub-witness and leave its
+  -- constructor undeclared. Witnesses are small, so keep them whole. A witness /
+  -- extension class is Derived-named (e.g. `BarProtoD_Widget`); `Names.isWitness`
+  -- only catches `Internal Witness`, so exclude Derived names too or the sub-witness
+  -- construction in the witness __init__ is dropped.
   | A.dname d == initKW
   , Just selfp <- selfParName d
-  = let isInit s          = selfAttrAttr selfp s
-        (declRegion, tl)  = span (isJust . isInit) (A.dbody d)
+  , not (Names.isWitness (A.dname decl) || isDerivedName (A.dname decl))
+  = let body              = A.dbody d
+        (groups, tailIxs) = splitInitByAttr selfp body
+        pick ixs          = [ body !! i | i <- ixs ]
         walk dd           = (dd, snd (implItemSplitDepsBound (classBoundFor decl) mn env localNames
                                         (TLDecl (A.dname dd) dd)))
-    in [ walk (d { A.dname = attr, A.dbody = [s] }) | s <- declRegion, Just attr <- [isInit s] ]
-       ++ [ walk (d { A.dbody = tl }) ]
+        -- __init__ is constructor code: its only real code-view deps are the
+        -- values it constructs. Writes (`self.x = ...`) and the param-default
+        -- temps the type checker hoists also drag in self's whole type and every
+        -- field/param type, which would defeat per-attribute pruning. Drop the
+        -- type-locals from every __init__ entry -- those types are already
+        -- recorded by the class field declarations (fieldsSplit), so the impl
+        -- deps/hash are unchanged; only the per-attribute code view gets sharpened.
+        walkCode dd       = let (dd', (cl, _tl, es, cs)) = walk dd
+                            in (dd', (cl, HashSet.empty, es, cs))
+    in [ walkCode (d { A.dname = attr, A.dbody = pick ixs }) | (attr, ixs) <- groups ]
+       ++ [ walkCode (d { A.dbody = pick tailIxs }) ]
   | otherwise
   = [ (d, snd (implItemSplitDepsBound (classBoundFor decl) mn env localNames (TLDecl (A.dname d) d))) ]
   where
     selfParName dd = case A.pos dd of
                        A.PosPar n _ _ _ -> Just n
                        _                -> Nothing
-    selfAttrAttr sp (A.MutAssign _ (A.Dot _ (A.Var _ (A.NoQ x)) attr) _) | x == sp = Just attr
-    selfAttrAttr _ _ = Nothing
 
 -- IO variant that reports one progress tick per top-level item (the same
 -- granularity the old impl-deps walk used), while doing the single descent.
@@ -1238,6 +1285,7 @@ frontSplitDepsFromItemsWithProgress
   -> IO ( M.Map A.Name [A.Name]
         , M.Map A.Name [A.QName]
         , M.Map A.Name [A.Name]
+        , M.Map A.Name [(A.Name, [A.Name])]
         , M.Map A.Name [(A.Name, [A.Name])]
         , M.Map A.Name [A.Name] )
 frontSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
@@ -1278,9 +1326,10 @@ assembleFrontDeps :: M.Map A.Name DepSplit
                      , M.Map A.Name [A.QName]
                      , M.Map A.Name [A.Name]
                      , M.Map A.Name [(A.Name, [A.Name])]
+                     , M.Map A.Name [(A.Name, [A.Name])]
                      , M.Map A.Name [A.Name] )
 assembleFrontDeps fieldsSplit classWalks plainSplit extSplit =
-    (implLocal, implExt, baseDeps, methodDeps, called)
+    (implLocal, implExt, baseDeps, methodDeps, methodCalled, called)
   where
     mergeNub a b = Data.List.sort (Data.List.nub (a ++ b))
     classMethodsAgg = M.fromList
@@ -1296,6 +1345,12 @@ assembleFrontDeps fieldsSplit classWalks plainSplit extSplit =
       [ (cn, [ (A.dname d, M.findWithDefault [] (A.dname d) mmap) | d <- mds ])
       | (cn, mds, msplit) <- classWalks, not (null mds)
       , let mmap = fst (finishHashSplitDeps msplit) ]
+    -- Per-method called-method breakdown (4th DepSplit element), keyed exactly
+    -- like methodDeps. Lets deferred-back CN growth follow only reached methods.
+    methodCalled = M.fromList
+      [ (cn, [ (A.dname d, M.findWithDefault [] (A.dname d) cmap) | d <- mds ])
+      | (cn, mds, msplit) <- classWalks, not (null mds)
+      , let cmap = calledMethodsFromSplit msplit ]
     called = calledMethodsFromSplit allFullSplit
 
 -- Backwards-compatible 3-tuple (base, method, called) for callers that don't
@@ -1305,7 +1360,7 @@ codeMethodDepsFromItems :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> [TopL
                            , M.Map A.Name [(A.Name, [A.Name])]
                            , M.Map A.Name [A.Name] )
 codeMethodDepsFromItems mn env localNames items =
-  let (_, _, baseDeps, methodDeps, called) = frontSplitDepsFromItems mn env localNames items
+  let (_, _, baseDeps, methodDeps, _, called) = frontSplitDepsFromItems mn env localNames items
   in (baseDeps, methodDeps, called)
 
 implSplitDepsFromItemsWithProgress :: (Int -> IO ())
@@ -1832,9 +1887,10 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> Maybe (M.Map A.Name [A.Name])
                    -> Maybe (M.Map A.Name [(A.Name, [A.Name])])
+                   -> Maybe (M.Map A.Name [(A.Name, [A.Name])])
                    -> Maybe (M.Map A.Name [A.Name])
                    -> [InterfaceFiles.NameHashInfo]
-assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes mCodeLocalDeps mMethodCodeDeps mCalledMethods =
+assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes mCodeLocalDeps mMethodCodeDeps mMethodCalled mCalledMethods =
   let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
       localDeps m n = Data.List.sortOn nameKey (M.findWithDefault [] n m)
   in
@@ -1849,6 +1905,7 @@ assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pub
         , InterfaceFiles.nhCodeLocalDeps = fmap (\m -> localDeps m n) mCodeLocalDeps
         , InterfaceFiles.nhMethodCodeDeps = fmap (\m -> M.findWithDefault [] n m) mMethodCodeDeps
         , InterfaceFiles.nhCalledMethods = fmap (\m -> localDeps m n) mCalledMethods
+        , InterfaceFiles.nhMethodCalledMethods = fmap (\m -> M.findWithDefault [] n m) mMethodCalled
         , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
         , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
         , InterfaceFiles.nhStmtIndices = []
@@ -1872,7 +1929,7 @@ buildNameHashes nameKeys nameSrcHashes nameImplHashes nameInfoMap pubSigLocalDep
       selfImplHashes = nameImplHashes
       pubHashes = computeHashes selfPubHashes pubSigLocalDeps pubSigExtHashes
       implHashes = computeHashes selfImplHashes implLocalDeps implExtHashes
-  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes selfImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes Nothing Nothing Nothing
+  in assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes selfImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes Nothing Nothing Nothing Nothing
 
 -- | Refresh impl hashes and impl deps for existing name hashes.
 refreshImplHashes :: [InterfaceFiles.NameHashInfo]

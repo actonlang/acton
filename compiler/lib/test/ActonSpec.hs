@@ -79,6 +79,7 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplLocalDeps = []
     , InterfaceFiles.nhCodeLocalDeps = Nothing
     , InterfaceFiles.nhMethodCodeDeps = Nothing
+    , InterfaceFiles.nhMethodCalledMethods = Nothing
     , InterfaceFiles.nhCalledMethods = Nothing
     , InterfaceFiles.nhPubDeps = []
     , InterfaceFiles.nhImplDeps = []
@@ -930,7 +931,7 @@ main = do
             items = [Hashing.TLDecl cName classDecl]
             localNames = Set.fromList [cName, square, quad]
             (implLocalWhole, implExtWhole) = Hashing.implSplitDepsFromItems mn env localNames items
-            (implLocalFront, implExtFront, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
+            (implLocalFront, implExtFront, _, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
         (M.map sort implLocalWhole, M.map sort implExtWhole)
           `shouldBe` (M.map sort implLocalFront, M.map sort implExtFront)
         -- and explicitly: no spurious self-edge from walking quad on its own
@@ -964,7 +965,7 @@ main = do
             items = [Hashing.TLDecl coll classDecl]
             localNames = Set.singleton coll
             (implLocalWhole, implExtWhole) = Hashing.implSplitDepsFromItems mn env localNames items
-            (implLocalFront, implExtFront, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
+            (implLocalFront, implExtFront, _, _, _, _) = Hashing.frontSplitDepsFromItems mn env localNames items
         (M.map sort implLocalWhole, M.map sort implExtWhole)
           `shouldBe` (M.map sort implLocalFront, M.map sort implExtFront)
         -- explicitly: the shadowed alias must not leak into externals
