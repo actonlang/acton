@@ -1412,7 +1412,7 @@ reachabilityCN lookupNH roots cn0 = fixCN cn0
             Just nh ->
               let m0        = fst qn
                   isWit     = dbpIsWitnessClass (snd qn)
-                  keptM x   = isWit || Data.Set.member x cn || dbpMethodAlwaysKept x
+                  keptM x   = isWit || dbpMethodReached cn x
                   baseDeps  = fromMaybe (InterfaceFiles.nhImplLocalDeps nh)
                                         (InterfaceFiles.nhCodeLocalDeps nh)
                   methDeps  = [ d | (meth, ds) <- fromMaybe [] (InterfaceFiles.nhMethodCodeDeps nh)
@@ -3231,7 +3231,7 @@ dbpPruneTopStmt calledMethods selected stmt =
       | otherwise = case filter keepSig names of
                       []     -> Nothing
                       names' -> Just (A.Signature l' names' sc dec)
-      where keepSig nm = Data.Set.member nm calledMethods
+      where keepSig nm = dbpMethodReached calledMethods nm
                            || not (Data.Set.member nm storedAttrs)
     pruneMethodStmt _ _ s = Just s
 
@@ -3255,7 +3255,12 @@ dbpPruneTopStmt calledMethods selected stmt =
               (groups, _tailIxs) = Hashing.splitInitByAttr selfp body
               prunedIxs          = Data.Set.fromList
                                      [ i | (attr, ixs) <- groups
-                                         , not (Data.Set.member attr calledMethods)
+                                         -- Through dbpMethodReached, not raw membership:
+                                         -- under the __get_attr__ reflection escape every
+                                         -- attribute counts as reached, and slicing the
+                                         -- construction while selection keeps the field
+                                         -- would make a reflective read observe None.
+                                         , not (dbpMethodReached calledMethods attr)
                                          , i <- ixs ]
           in d { A.dbody = [ s | (i, s) <- zip [0 ..] body
                                , not (Data.Set.member i prunedIxs) ] }
