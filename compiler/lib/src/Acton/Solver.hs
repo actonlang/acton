@@ -592,7 +592,8 @@ allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
-  | p == pEq                        = ts ++ [tOpt tWild]
+  | p == pEq                        = ts ++ [tTuple tWild tWild, tOpt tWild]
+  | p `elem` tupleProtos            = ts ++ [tTuple tWild tWild]
   | otherwise                       = ts
   where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first, lazy
 
@@ -664,7 +665,7 @@ reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
                                                     reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
                                                 Nothing ->
                                                     do defer [c]; return eq
-  where witSearch                           = lookup (tcname p) derivableTupleProtos
+  where witSearch                           = lookup (tcname p) tupleWits
 
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
 
@@ -810,7 +811,7 @@ hasWitness env (TCon _ c) p
     tcname p == qnIdentity  = True
 hasWitness env (TTuple _ prow krow) p
   | Just _ <- tupleComponents prow krow
-                            = tcname p `elem` map fst derivableTupleProtos
+                            = tcname p `elem` map fst tupleWits
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 
@@ -1805,7 +1806,7 @@ implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps
 implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
 implAll env ps (TTuple _ p k)
-  | Just _ <- tupleComponents p k       = all ((`elem` map fst derivableTupleProtos) . tcname . snd) ps
+  | Just _ <- tupleComponents p k       = all ((`elem` map fst tupleWits) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)

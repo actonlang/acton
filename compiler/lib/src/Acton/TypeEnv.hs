@@ -1275,9 +1275,9 @@ explainRequirement c                = case info c of
                                           DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
 -- A trailing hint for protocol requirements on tuple types, which are solved
--- by derivation (Solver.reduce' over derivableTupleProtos), not witness search.
+-- by derivation (Solver.reduce' over tupleWits), not witness search.
 protoHint (TTuple _ prow krow) p
-  | tcname p `notElem` map fst derivableTupleProtos
+  | tcname p `notElem` map fst tupleWits
                                        = text " (tuples can only implement Eq, Ord and Hashable)"
   | Nothing <- tupleComponents prow krow
                                        = text " (cannot be derived for a tuple with an open row)"
