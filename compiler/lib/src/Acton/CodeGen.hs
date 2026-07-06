@@ -38,14 +38,14 @@ import Numeric
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
 
-generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
-generate env srcbase srcText emitLines m hash = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Maybe (Data.Set.Set Name) -> Module -> String -> IO (String,String,String)
+generate env srcbase srcText emitLines mDbpCN m hash = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
         c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
-        env0                        = genEnv $ setMod (modname m) env
+        env0                        = genEnvCN mDbpCN $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -107,9 +107,12 @@ builtinStaticKey gn                 = case gn of
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
+genEnv env0                         = genEnvCN Nothing env0
+
+genEnvCN mcn env0                   = setX env0 GenX{ globalX = HashSet.empty,
                                                       localX = HashSet.empty,
-                                                      retX = tNone, volVarsX = [], lineEmitX = Nothing }
+                                                      retX = tNone, volVarsX = [], lineEmitX = Nothing,
+                                                      dbpCNX = mcn }
 
 type GenEnv                         = EnvF GenX
 
@@ -118,6 +121,10 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , retX :: Type
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
+                                           -- Program-wide called-method set when rendering a
+                                           -- DBP-pruned module (see Compile biDbpCN); Nothing
+                                           -- for eager renders.
+                                           , dbpCNX :: Maybe (Data.Set.Set Name)
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -714,9 +721,33 @@ initGlobalDoc env s                 = genStmt1 env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c), keptSlot n ] $+$
                                       vcat [ forward n | ForwardSlot n _ _ _ _ <- forwardSlots env c q ]
   where tc                          = TC (NoQ c) [ tVar v | QBind v _ <- q ]
+        -- Under DBP, an ancestor's pruned method table only has slots for kept
+        -- methods (same predicate as the pruning in Acton.Compile), so copy an
+        -- inherited slot only when it is kept -- the subclass's own slot for a
+        -- pruned method stays NULL, which is safe because the CN says no
+        -- reachable code calls it. Witness tables are never pruned; class-level
+        -- variables (NVar) are not methods and are always present.
+        --
+        -- INVARIANT (cross-module): this filter uses the program-wide CN
+        -- (biDbpCN), while the provider prunes with its module-closed superset.
+        -- The asymmetry is sound because any inherited method a consumer can
+        -- dispatch is a Dot call recorded in some reachable module and folded
+        -- into the program CN, and the provider keeps at least that; a slot
+        -- skipped here therefore has no reachable dispatch. Since pruned
+        -- methods keep raising-stub definitions, the parent slot always exists
+        -- regardless -- an unkept copy is a NULL-vs-stub difference on paths
+        -- the CN proves dead.
+        keptSlot n                  = case dbpCNX (envX env) of
+                                        Nothing -> True
+                                        Just cn -> dbpIsWitnessClass c
+                                                     || dbpMethodReached cn n
+                                                     || isVarSlot n
+        isVarSlot n                 = case lookup n (fullAttrEnv env tc) of
+                                        Just (NVar _) -> True
+                                        _             -> False
         super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi

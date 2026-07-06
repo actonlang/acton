@@ -1227,6 +1227,11 @@ data BackInput = BackInput
   , biTypedMod  :: A.Module
   , biSrc       :: String
   , biImplHash  :: B.ByteString
+  -- The program-wide called-method set (CN) when this job renders a DBP-pruned
+  -- module; CodeGen filters inherited-slot copies with it so a subclass never
+  -- copies a slot its (equally pruned) ancestor's table no longer has. Nothing
+  -- for eager (unpruned) back jobs -- then every inherited slot exists.
+  , biDbpCN     :: Maybe (Data.Set.Set A.Name)
   }
 
 data BackJob = BackJob
@@ -2811,6 +2816,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                                               , biTypedMod = tchecked
                                                               , biSrc = srcContent
                                                               , biImplHash = moduleImplHash
+                                                              , biDbpCN = Nothing
                                                               }
                                          }
                   do
@@ -2902,7 +2908,30 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
             , (m, _) <- mds
             , dbpIsWitnessClass (InterfaceFiles.nhName nh)
                 || dbpMethodReached (dnsCalledMethods nameSelection) m ]
-      codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) keptMethods
+      -- The emitted class-table init copies an INHERITED slot only when the slot
+      -- is kept under the program-wide CN (CodeGen filter, see biDbpCN), so the
+      -- generated C also depends on the kept-status of each selected class's
+      -- ancestor attributes. Include the kept subset of those names in the cache
+      -- key, or a CN shift would leave a stale consumer whose inherited-copy set
+      -- disagrees with a freshly rendered provider. Interface-level lookups only.
+      ancestorKept =
+        [ a
+        | cls <- Data.Set.toList (dnsSelectedNames nameSelection)
+        , not (dbpIsWitnessClass cls)
+        , Just (I.NClass _ us _ _) <- [lookupIfaceName mn cls]
+        , (_, tc) <- us
+        , Just ai <- [lookupIfaceQ (A.tcname tc)]
+        , (a, _) <- ifaceAttrs ai
+        , dbpMethodReached calledMethods a ]
+      lookupIfaceName m n =
+        Acton.Env.lookupModuleInfo m envAcc >>= \mi -> Acton.Env.moduleLookupName mi n
+      lookupIfaceQ (A.GName m n) = lookupIfaceName m n
+      lookupIfaceQ (A.QName m n) = lookupIfaceName m n
+      lookupIfaceQ (A.NoQ n)     = lookupIfaceName mn n
+      ifaceAttrs (I.NClass _ _ te _) = te
+      ifaceAttrs (I.NProto _ _ te _) = te
+      ifaceAttrs _                   = []
+      codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) (keptMethods ++ ancestorKept)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
@@ -2928,6 +2957,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
             , biTypedMod = dbsModule selection
             , biSrc = Source.ssText snap
             , biImplHash = codegenHash
+            , biDbpCN = Just calledMethods
             }
         }
 
@@ -3058,17 +3088,16 @@ dbpReadOwningName paths mn tyFile n = do
 -- methods are dispatched through protocol witnesses (e.g. __str__ via print, __eq__
 -- via ==, __iter__/__next__ via for) or synthesized by the normalizer *after*
 -- hashing (so they never appear as a source Dot and are never in the called-method
--- set CN). Such methods, and __init__
+-- set CN); 'append' is generated for comprehensions. Such methods, and __init__
 -- (run on construction), must always be kept and have their deps followed.
+-- Shared with Acton.CodeGen (see Acton.Names): pruning here and class-table
+-- emission there must apply the SAME kept predicate, or a consumer module
+-- copies inherited slots the provider's pruned table no longer has.
 dbpMethodAlwaysKept :: A.Name -> Bool
-dbpMethodAlwaysKept n =
-  n == initKW ||
-  (length s >= 5 && "__" `isPrefixOf` s && "__" `isSuffixOf` s)
-  where s = A.nstr n
+dbpMethodAlwaysKept = Names.dbpMethodAlwaysKept
 
 dbpMethodReached :: Data.Set.Set A.Name -> A.Name -> Bool
-dbpMethodReached calledMethods n =
-  dbpMethodAlwaysKept n || Data.Set.member n calledMethods
+dbpMethodReached = Names.dbpMethodReached
 
 -- A protocol-witness / extension dictionary is a Derived-named class. Per-method
 -- pruning must not touch it: its "methods" are the dictionary slots, and CodeGen
@@ -3078,7 +3107,7 @@ dbpMethodReached calledMethods n =
 -- witness class keeps ALL its methods, slots and an unsliced __init__, and the
 -- selection closure follows all of its method deps.
 dbpIsWitnessClass :: A.Name -> Bool
-dbpIsWitnessClass n = Names.isWitness n || case n of { A.Derived{} -> True; _ -> False }
+dbpIsWitnessClass = Names.dbpIsWitnessClass
 
 dbpNameHashClosure :: Paths
                    -> A.ModName
@@ -3337,7 +3366,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
       ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
         let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
             emitLines = not (C.dbg_no_lines opts)
-        Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+        Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines (biDbpCN backInput) boxed hexHash
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
       if C.hgen opts
@@ -3798,6 +3827,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   , biTypedMod = tmod
                   , biSrc = srcText
                   , biImplHash = moduleImplHash
+                  , biDbpCN = Nothing
                   }
               }
 

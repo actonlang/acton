@@ -453,3 +453,34 @@ instance Vars Type where
     freeQ (TStar _ _ r)             = freeQ r
     freeQ (TUnboxed _ t)            = freeQ t
     freeQ _                         = []
+
+-- Deferred-back-pass kept-method predicates, shared by the selection/pruning in
+-- Acton.Compile and the class-table emission in Acton.CodeGen. Both sides MUST
+-- agree across modules: a consumer copies an inherited method slot only when the
+-- provider's pruned table is known to still have it.
+--
+-- A class method may be reached other than by a direct source dot-call: dunder
+-- methods are dispatched through protocol witnesses (e.g. __str__ via print,
+-- __eq__ via ==, __iter__/__next__ via for) or synthesized by the normalizer
+-- *after* hashing (so they never appear as a source Dot and are never in the
+-- called-method set CN); altInit ("init", the ancestor-chaining initializer
+-- synthesized by the type checker) is called only from generated G_new
+-- constructor code. Such methods, and __init__ (run on construction), must
+-- always be kept and have their deps followed. (Comprehension desugaring also
+-- synthesizes post-hash calls -- append/add/__setitem__ -- but those always
+-- target the BUILTIN list/set/dict witnesses, and __builtin__ is never subject
+-- to the deferred back pass, so they need no protection here.)
+dbpMethodAlwaysKept                 :: Name -> Bool
+dbpMethodAlwaysKept n               = n == altInit || s == "__init__" ||
+                                      (length s >= 5 && "__" `isPrefixOf` s && "__" `isSuffixOf` s)
+  where s                           = nstr n
+
+dbpMethodReached                    :: Set.Set Name -> Name -> Bool
+dbpMethodReached calledMethods n    = dbpMethodAlwaysKept n || Set.member n calledMethods
+
+-- A protocol-witness / extension dictionary is a Derived-named class. Per-method
+-- pruning must not touch it: its "methods" are the dictionary slots, and CodeGen
+-- emits the dict's `_new` only when it is concrete (has all its methods). So a
+-- witness class keeps ALL its methods, slots and an unsliced __init__.
+dbpIsWitnessClass                   :: Name -> Bool
+dbpIsWitnessClass n                 = isWitness n || case n of { Derived{} -> True; _ -> False }
