@@ -1027,6 +1027,19 @@ def reversed[A](seq : Sequence[A]) -> Iterator[A]:
 def round [A(Real)] (x : A, n : ?int) -> A:
     return x.__round__(n)
 
+def serialize(obj: value) -> bytes:
+    """Serialize an object graph into a compact binary representation.
+
+    The result can be turned back into an equivalent graph with deserialize().
+    Shared and cyclic references within the graph are preserved.
+    """
+    NotImplemented
+
+def deserialize(data: bytes) -> value:
+    """Reconstruct an object graph previously produced by serialize().
+    """
+    NotImplemented
+
 def sorted [A(Ord)] (iter: Iterable[A]) -> list[A]:
     NotImplemented
 
