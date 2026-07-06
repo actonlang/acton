@@ -2893,7 +2893,37 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
       totalNames = dbjNameCount dbj
-  nameSelection <- selectDbpNames paths mn tyFile calledMethods selectedSeeds
+  -- Selection and the abstract-impl obligations are mutually recursive: which
+  -- methods must be force-kept depends on which classes are selected, and a
+  -- force-kept method's body deps must in turn be SELECTED (not merely kept),
+  -- or a name reachable only through it is pruned while the body references
+  -- it. Iterate to a fixpoint; obligations only grow with the selection, so
+  -- this terminates in a couple of rounds.
+  let abstractImplFor selNames =
+        Data.Set.fromList
+        [ a
+        | cls <- Data.Set.toList selNames
+        , not (dbpIsWitnessClass cls)
+        , Just (I.NClass _ us _ _) <- [lookupIfaceName mn cls]
+        , (_, tc) <- us
+        , Just ai <- [lookupIfaceQ (A.tcname tc)]
+        , (a, I.NSig _ dec _) <- ifaceAttrs ai
+        , dec /= A.Property ]
+      lookupIfaceName m n =
+        Acton.Env.lookupModuleInfo m envAcc >>= \mi -> Acton.Env.moduleLookupName mi n
+      lookupIfaceQ (A.GName m n) = lookupIfaceName m n
+      lookupIfaceQ (A.QName m n) = lookupIfaceName m n
+      lookupIfaceQ (A.NoQ n)     = lookupIfaceName mn n
+      ifaceAttrs (I.NClass _ _ te _) = te
+      ifaceAttrs (I.NProto _ _ te _) = te
+      ifaceAttrs _                   = []
+      selectFix cn = do
+        sel <- selectDbpNames paths mn tyFile cn selectedSeeds
+        let absN = abstractImplFor (dnsSelectedNames sel)
+        if absN `Data.Set.isSubsetOf` cn
+          then return (sel, absN)
+          else selectFix (Data.Set.union cn absN)
+  (nameSelection, abstractImplNames) <- selectFix calledMethods
   -- The codegen depends not just on which classes are selected but on which of
   -- their methods are kept (dbpMethodReached against the closed CN). Two builds
   -- can select the same classes yet keep a different method subset, so the kept
@@ -2919,15 +2949,15 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
         , Just ai <- [lookupIfaceQ (A.tcname tc)]
         , (a, _) <- ifaceAttrs ai
         , dbpMethodReached calledMethods a ]
-      lookupIfaceName m n =
-        Acton.Env.lookupModuleInfo m envAcc >>= \mi -> Acton.Env.moduleLookupName mi n
-      lookupIfaceQ (A.GName m n) = lookupIfaceName m n
-      lookupIfaceQ (A.QName m n) = lookupIfaceName m n
-      lookupIfaceQ (A.NoQ n)     = lookupIfaceName mn n
-      ifaceAttrs (I.NClass _ _ te _) = te
-      ifaceAttrs (I.NProto _ _ te _) = te
-      ifaceAttrs _                   = []
-      codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) (keptMethods ++ ancestorKept)
+      -- A method implementing an abstract attribute inherited from a base
+      -- (protocol or abstract class) is load-bearing for CONSTRUCTIBILITY: drop
+      -- it and the class re-inherits the base's unimplemented signature, so
+      -- codegen deems the class abstract and emits no G_new -- yet same-module
+      -- code still calls that constructor. Force-keep such methods whenever their
+      -- class is selected, like __init__, by folding the base obligation names
+      -- into the CN. Direct bases only: a transitive obligation surfaces through
+      -- the intermediate base's own selected interface (also walked here).
+      codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) (keptMethods ++ ancestorKept ++ Data.Set.toList abstractImplNames)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
@@ -2938,7 +2968,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj =
       -- Same-version .tydb files always carry statement indices, so a failed
       -- selective read means a corrupt or hand-doctored file -- an eager
       -- whole-module fallback would mask that (and read gigabytes doing it).
-      let closedCalledMethods = dnsCalledMethods nameSelection
+      let closedCalledMethods = Data.Set.union (dnsCalledMethods nameSelection) abstractImplNames
       selection <- case selectedTmod of
         Just tmod -> return $ selectDbpModule totalNames closedCalledMethods nameSelection tmod
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)

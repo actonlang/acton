@@ -442,6 +442,25 @@ compilerTests =
             , ""
             , "def local_container_name(x: object) -> bool:"
             , "    return isinstance(x, Container)"
+            , ""
+            , "class WorkBase(object):"
+            , "    work : proc() -> int"
+            , ""
+            , "class _WorkHelper(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def val(self) -> int:"
+            , "        return 42"
+            , ""
+            , "class WorkImpl(WorkBase):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    proc def work(self) -> int:"
+            , "        h = _WorkHelper()"
+            , "        return h.val()"
+            , ""
+            , "def make_work() -> WorkImpl:"
+            , "    return WorkImpl()"
             ]
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
@@ -519,6 +538,22 @@ compilerTests =
           assertBool "empty interest should select empty closure" ("selected closure 0" `isInfixOf` fifthLog)
           providerC4 <- readFile (typesDir </> "provider.c")
           assertBool "empty provider C should omit provider definitions" (not ("make_box" `isInfixOf` providerC4))
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    w = provider.make_work()"
+            , "    print(\"ok\")"
+            , "    env.exit(0)"
+            ]
+          -- WorkImpl.work is never called, but implements WorkBase's abstract
+          -- signature, so it is force-kept -- and its body's only dependency
+          -- (_WorkHelper) must then be SELECTED too, or codegen references a
+          -- pruned name.
+          _absLog <- assertOk "dbp selects abstract-impl body deps" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
+          providerCAbs <- readFile (typesDir </> "provider.c")
+          assertBool "abstract impl body dep should be selected" ("providerQ__WorkHelper" `isInfixOf` providerCAbs)
           removeIfExists (typesDir </> "main.c")
           removeIfExists (typesDir </> "main.h")
           removeIfExists (typesDir </> "main.root.c")
