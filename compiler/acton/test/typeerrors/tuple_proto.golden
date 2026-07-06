@@ -1,0 +1,18 @@
+Building file test/typeerrors/tuple_proto.act using temporary scratch directory
+   tuple_proto  Parse done                                                               0.000 s
+[error]: Cannot satisfy the following simultaneous constraints for the unknown types
+     +--> tuple_proto.act@2:9-2:24
+     |
+   2 |     d = {(1, [2]): "a"}
+     :         ^--------------
+     :         `------- t0 must implement __builtin__.Hashable
+     :          |    |  __builtin__.list[t2] must be a subclass of t0
+     :          `------ The type of the indicated expression (which we call t1) must be a subclass of t2
+     :               |- The type of the indicated expression (which we call t3) must be a subtype of t1
+     :               `- The type of the indicated expression (which we call t3) must implement __builtin__.Number
+   3 |     return d[(1, [2])]
+     :              ^------- 
+     :              `------ The type of the indicated expression (which we call t4) must be a subclass of t2
+     :                   |- The type of the indicated expression (which we call t5) must be a subtype of t4
+     :                   `- The type of the indicated expression (which we call t5) must implement __builtin__.Number
+-----+

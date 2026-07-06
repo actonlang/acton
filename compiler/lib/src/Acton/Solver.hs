@@ -592,7 +592,8 @@ allBelowProto env (TC n [t@TFX{},_])
   | n == primWrappedP               = [ schematic (wtype w) | w <- witsByPName env n, t == (head $ tcargs $ proto w) ]
 allBelowProto env p
   | p == pIdentity                  = ts ++ [ schematic $ tCon tc | tc <- tyactorsAll env ++ importedActors env ]
-  | p == pEq                        = ts ++ [tOpt tWild]
+  | p == pEq                        = ts ++ [tTuple tWild tWild, tOpt tWild]
+  | p `elem` tupleProtos            = ts ++ [tTuple tWild tWild]
   | otherwise                       = ts
   where ts                          = [ schematic (wtype w) | w <- witsByPName env (tcname p) ] -- includes tvars; oldest first, lazy
 
@@ -654,6 +655,17 @@ reduce' eq c@(Proto info env w t@(TOpt _ t') p)
 
 reduce' eq c@(Proto _ env w t@(TNone _) p)
   | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
+
+reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
+  | Just wit <- witSearch                   = case tupleComponents prow krow of
+                                                Just ts -> do
+                                                    ws <- mapM (const newWitness) ts
+                                                    let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
+                                                        e = eCall (tApp (eQVar wit) [wrow, prow, krow]) [eTuple (map eVar ws)]
+                                                    reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
+                                                Nothing ->
+                                                    do defer [c]; return eq
+  where witSearch                           = lookup (tcname p) tupleWits
 
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
 
@@ -797,6 +809,9 @@ hasWitness env TUni{} p     = True
 hasWitness env (TCon _ c) p
   | isActor env (tcname c),
     tcname p == qnIdentity  = True
+hasWitness env (TTuple _ prow krow) p
+  | Just _ <- tupleComponents prow krow
+                            = tcname p `elem` map fst tupleWits
 hasWitness env t p          =  not $ null $ findWitness env t p
 
 
@@ -1790,6 +1805,8 @@ implAll env [] t                        = True
 implAll env ps t@TCon{}                 = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TFX{}                  = and [ hasWitness env t p | (w,p) <- ps ]
 implAll env ps t@TOpt{}                 = all ((`elem` [qnIdentity,qnEq]) . tcname . snd) ps
+implAll env ps (TTuple _ p k)
+  | Just _ <- tupleComponents p k       = all ((`elem` map fst tupleWits) . tcname . snd) ps
 implAll env ps t                        = False
 
 noDots vi v                             = null (lookup' v $ selattrs vi) && null (lookup' v $ mutattrs vi)

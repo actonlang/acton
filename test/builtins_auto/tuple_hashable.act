@@ -1,0 +1,91 @@
+
+def test_dict_literal():
+    d = {(1, 2): "a", (3, 4): "b"}
+    return d[(1, 2)] == "a" and d[(3, 4)] == "b"
+
+def test_dict_fresh_key():
+    # equal-but-distinct key instances must hash equal
+    d : dict[(int, str), int] = {}
+    d[(1, "x")] = 42
+    k = (1, "x")
+    return d[k] == 42 and (1, "x") in d and (2, "x") not in d
+
+def test_dict_update():
+    d = {(1, 2): "a"}
+    d[(1, 2)] = "b"
+    return d[(1, 2)] == "b" and len(d) == 1
+
+def test_dict_iterate():
+    d = {(1, 2): 10, (3, 4): 20}
+    total = 0
+    for (a, b), v in d.items():
+        total += a + b + v
+    return total == 40
+
+def test_dict_key_selection():
+    # selecting components of an unannotated dict's keys needs the annotation
+    # to fix the key type before the .0/.1 selections are solved
+    d : dict[(int, int), int] = {(1, 2): 10, (3, 4): 20}
+    total = 0
+    for k, v in d.items():
+        total += k.0 + k.1 + v
+    return total == 40
+
+def test_set():
+    s : set[(int, int)] = set()
+    s.add((1, 2))
+    s.add((1, 2))
+    s.add((3, 4))
+    return len(s) == 2 and (1, 2) in s and (5, 6) not in s
+
+def test_nested_key():
+    d = {((1, 2), "x"): True}
+    return d[((1, 2), "x")]
+
+def test_named_key():
+    d = {(x=1, y=2): "point"}
+    return d[(x=1, y=2)] == "point"
+
+def test_hash_boundaries():
+    # component boundaries must contribute to the hash
+    return hash(("ab", "c")) != hash(("a", "bc"))
+
+def test_keys_values():
+    d = {(1, 2): 10, (3, 4): 20}
+    ksum = 0
+    for (a, b) in d.keys():
+        ksum += a + b
+    vsum = 0
+    for v in d.values():
+        vsum += v
+    return ksum == 10 and vsum == 30
+
+tests = {
+    "test_dict_literal": test_dict_literal,
+    "test_dict_fresh_key": test_dict_fresh_key,
+    "test_dict_update": test_dict_update,
+    "test_dict_iterate": test_dict_iterate,
+    "test_dict_key_selection": test_dict_key_selection,
+    "test_set": test_set,
+    "test_nested_key": test_nested_key,
+    "test_named_key": test_named_key,
+    "test_hash_boundaries": test_hash_boundaries,
+    "test_keys_values": test_keys_values,
+}
+
+actor main(env):
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+        env.exit(0)
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+        env.exit(1)

@@ -1268,12 +1268,20 @@ explainRequirement c                = case info c of
                                                (case c of
                                                    Cast _ _ t1 t2 -> intro t1 mbe <+> text "must be a subclass of" <+> pretty t2
                                                    Sub i _ _ t1 t2 -> intro t1 mbe <+> text "must be a subtype of" <+> pretty t2
-                                                   Proto _ _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p
+                                                   Proto _ _ _ t p -> intro t mbe <+> text "must implement" <+> pretty p Pretty.<> protoHint t p
                                                    Sel _ _ _ t n t0 -> intro t mbe <+> text "must have an attribute" <+> pretty n <+> text "with type" <+> pretty t0
                                                                           Pretty.<> text "; no such type is known."
                                                    _ -> pretty c <+> text "must hold")
                                           DeclInfo _ _ n sc msg -> text msg   -- $+$ pretty n <+> text "is inferred to have type"<+> pretty sc
 
+-- A trailing hint for protocol requirements on tuple types, which are solved
+-- by derivation (Solver.reduce' over tupleWits), not witness search.
+protoHint (TTuple _ prow krow) p
+  | tcname p `notElem` map fst tupleWits
+                                       = text " (tuples can only implement Eq, Ord and Hashable)"
+  | Nothing <- tupleComponents prow krow
+                                       = text " (cannot be derived for a tuple with an open row)"
+protoHint _ _                          = empty
 
 
 useless vs c                           = case c of

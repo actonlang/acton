@@ -101,6 +101,9 @@ primRCont           = gPrim "R_CONT"
 primRFail           = gPrim "R_FAIL"
 
 primEqOpt           = gPrim "EqOpt"
+primEqTuple         = gPrim "EqTuple"
+primOrdTuple        = gPrim "OrdTuple"
+primHashableTuple   = gPrim "HashableTuple"
 
 primIdentityActor   = gPrim "IdentityActor"
 
@@ -214,6 +217,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primRFail,         NDef scRFail NoDec Nothing),
 
                             (noq primEqOpt,         clEqOpt),
+                            (noq primEqTuple,       clEqTuple),
+                            (noq primOrdTuple,      clOrdTuple),
+                            (noq primHashableTuple, clHashableTuple),
                             (noq primIdentityActor, clIdentityActor),
 
                             (noq primWEqNone,       NVar tEqNone),
@@ -500,6 +506,27 @@ clEqOpt             = NClass [qbind a] (leftpath [TC qnEq [tOpt $ tVar a]]) clTE
   where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
         scInit      = tSchema [] $ tFun fxPure (posRow (tCon $ TC qnEq [tVar a]) posNil) kwdNil tNone
         a           = TV KType (name "A")
+
+--  class $EqTuple[W,P,K] (Eq[(*P,**K)]): pass, and likewise for Ord and Hashable.
+--  W is the row of component witnesses for (*P,**K), passed to __init__ as one tuple
+clEqTuple           = clTupleWit qnEq
+clOrdTuple          = clTupleWit qnOrd
+clHashableTuple     = clTupleWit qnHashable
+
+clTupleWit qn       = NClass [qbind w, qbind p, qbind k] (leftpath [TC qn [tTuple (tVar p) (tVar k)]]) clTEnv Nothing
+  where clTEnv      = [ (initKW, NDef scInit NoDec Nothing) ]
+        scInit      = tSchema [] $ tFun fxPure (posRow (tTuple (tVar w) kwdNil) posNil) kwdNil tNone
+        w           = TV PRow (name "W")
+        p           = TV PRow (name "P")
+        k           = TV KRow (name "K")
+
+-- The protocols the solver can derive for a closed tuple type, by structural
+-- induction over its components, and the prim witness classes implementing them.
+tupleWits           :: [(QName, QName)]
+tupleWits           = [ (qnEq, primEqTuple), (qnOrd, primOrdTuple), (qnHashable, primHashableTuple) ]
+
+tupleProtos         :: [PCon]
+tupleProtos         = [ TC n [] | (n,_) <- tupleWits ]
 
 --  class $IdentityActor (Identity[$Actor]): pass
 clIdentityActor     = NClass [] (leftpath [TC qnIdentity [tActor]]) [] Nothing                 -- methods not modelled

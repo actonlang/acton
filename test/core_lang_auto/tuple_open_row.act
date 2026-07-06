@@ -1,0 +1,12 @@
+def f() -> int:
+    d = {(1, 2): 10}
+    total = 0
+    for k, v in d.items():
+        total += k.0 + k.1 + v
+    return total
+
+actor main(env):
+      if f() == 13:
+          env.exit(0)
+      else:
+          env.exit(1)

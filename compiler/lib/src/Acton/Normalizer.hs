@@ -730,6 +730,7 @@ instance Conv Type where
 instance Conv TCon where
     conv (TC c ts)                  = TC c (conv ts)
 
+-- Must mirror Syntax.tupleComponents, which the solver uses to derive tuple witnesses.
 joinRow (TRow l k n t p) r          = TRow l PRow nWild (conv t) (joinRow p r)
 joinRow (TStar l k p) r             = TRow l PRow nWild (TTuple l (conv p) kwdNil) (conv r)
 joinRow (TNil _ _) r                = conv r

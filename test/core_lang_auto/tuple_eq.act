@@ -1,0 +1,68 @@
+
+def test_pair():
+    return (1, "x") == (1, "x") and not (1, "x") == (1, "y")
+
+def test_ne():
+    return (1, 2) != (1, 3) and not (1, 2) != (1, 2)
+
+def test_unit():
+    return () == ()
+
+def test_nested():
+    return (1, (2, "x")) == (1, (2, "x")) and (1, (2, "x")) != (1, (2, "y"))
+
+def test_named():
+    return (x=1, y="a") == (x=1, y="a") and (x=1, y="a") != (x=2, y="a")
+
+def test_none_component():
+    return (1, None) == (1, None)
+
+def both_eq(a, b, c, d):
+    return (a, b) == (c, d)
+
+def test_generic():
+    return both_eq(1, "x", 1, "x") and not both_eq(1, "x", 1, "y")
+
+def test_optional():
+    a : ?(int, str) = (1, "x")
+    b : ?(int, str) = None
+    return a == (1, "x") and not b == (1, "x")
+
+def test_in_list():
+    return (1, 2) in [(3, 4), (1, 2)] and (5, 6) not in [(3, 4), (1, 2)]
+
+def test_coerced_labels():
+    # Equality is defined at a single common type: reordered named literals only
+    # compare after coercion to that type, here forced by the annotation.
+    a : (x: int, y: int) = (y=2, x=1)
+    return (x=1, y=2) == a
+
+tests = {
+    "test_pair": test_pair,
+    "test_ne": test_ne,
+    "test_unit": test_unit,
+    "test_nested": test_nested,
+    "test_named": test_named,
+    "test_none_component": test_none_component,
+    "test_generic": test_generic,
+    "test_optional": test_optional,
+    "test_in_list": test_in_list,
+    "test_coerced_labels": test_coerced_labels,
+}
+
+actor main(env):
+    failed = []
+    for name, t in tests.items():
+        print("== test: " + name)
+        if not t():
+            print("-- FAILED test: " + name)
+            failed.append(name)
+        print()
+    if len(failed) == 0:
+        print("All {len(tests)} tests OK!")
+        env.exit(0)
+    else:
+        print("\n{len(failed)} of {len(tests)} tests failed:")
+        for name in failed:
+            print(" - {name}")
+        env.exit(1)
