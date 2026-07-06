@@ -3269,7 +3269,7 @@ testCodeGen env0 modulePaths = do
           let act_file = "test" </> "src" </> modulePath ++ ".act"
           srcText <- readFile act_file
           let srcbase = "test" </> "src" </> modulePath
-          (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+          (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase srcText True Nothing boxed "test-hash"
           let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
 
@@ -3307,7 +3307,7 @@ testCodeGenContains env0 modulePath expected = do
     let act_file = "test" </> "src" </> modulePath ++ ".act"
     srcText <- readFile act_file
     let srcbase = "test" </> "src" </> modulePath
-    (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+    (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True Nothing boxed "test-hash"
     return c
 
   describe modulePath $
