@@ -37,6 +37,7 @@ import qualified Acton.Names as Names
 import Acton.Prim (mPrim)
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
+import Utils (chunksOf)
 
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Char8 as B
@@ -135,9 +136,6 @@ nameHashesFromItemsWithProgress onProgress items = do
   pure (M.unions maps)
   where
     grouped = topLevelItemsByName items
-
-    chunksOf _ [] = []
-    chunksOf k xs = let (h, t) = splitAt k xs in h : chunksOf k t
 
     hashChunk doneRef chunk =
       withHashScratch $ \sink ->
@@ -1504,9 +1502,6 @@ nameInfoHashesWithProgress onProgress infos = do
   maps <- mapConcurrently (hashChunk doneRef) chunks
   pure (M.unions maps)
   where
-    chunksOf _ [] = []
-    chunksOf k xs = let (h, t) = splitAt k xs in h : chunksOf k t
-
     hashChunk doneRef chunk =
       withHashScratch $ \sink ->
         M.fromList <$> mapM (hashOne sink doneRef) chunk
