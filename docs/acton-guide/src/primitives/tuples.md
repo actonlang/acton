@@ -65,14 +65,17 @@ actor main(env):
     env.exit(0)
 ```
 
-Directly in an actor's body, type inference currently needs a little
-help pinning the tuple type for `<` and for dictionary keys: give the
-dictionary an annotation such as `d : dict[(int, int), str]`, or put the
-code in a function as above. Equality needs no such help.
+Acton derives equality, ordering, and hashing for tuple types from their
+components. Type inference can use those derived tuple protocols when it
+solves ordinary code, including dictionary keys and set elements. For
+example, if a dictionary key is later used as a tuple with `k.0` and
+`k.1`, Acton can infer the tuple key type without an explicit dictionary
+annotation.
 
-Equality, ordering and hashing apply componentwise, so they require each
-component to support the operation in turn: `(int, str)` can be compared
-because `int` and `str` can, but a tuple containing a function cannot.
+Equality, ordering, and hashing apply componentwise, so they require
+each component to support the operation in turn: `(int, str)` can be
+compared because `int` and `str` can, but a tuple containing a function
+cannot.
 
 Both sides of a comparison must have the same shape: the same number of
 components, and for named tuples the same field names in the same order.
