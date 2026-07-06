@@ -2766,6 +2766,14 @@ p55_dbp_reads_selected_statements =
       (not (null bigStmtLines))
     assertEqual ("did not expect broad incremental_cases/big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
+    -- Full build (no --skip-build) so the DBP-selected subset is actually
+    -- C-compiled and linked, catching codegen regressions in the pruned module
+    -- that a --skip-build selection trace cannot see, then run it.
+    buildRes <- runActonIn proj ["build", "--color", "never", "--dbp", "big:Node000A"]
+    assertExitSuccess "DBP-selected subset compiles and links" buildRes
+    runOut <- runBinaryIn proj "small"
+    assertBool ("expected DBP-selected binary to produce output\n" ++ T.unpack runOut)
+      (not (T.null (T.strip runOut)))
 
 p54_unused_import_reads_no_names :: TestTree
 p54_unused_import_reads_no_names =

@@ -221,16 +221,61 @@ storageType env t                   = rawType env t
 
 -- Header -------------------------------------------------------------------------------------------
 
+-- QNames referenced in *type position* by a suite: field/parameter/return type
+-- annotations, type-parameter constraints, and base classes. Unlike freeQ this
+-- never descends into value/code positions, so a generated witness-method
+-- reference in an emitted vtable assignment (a value reference whose flat name
+-- is neither a top-level binder nor env-resolvable) is not mistaken for an
+-- unselected type that needs a forward declaration.
+typeRefsQ                           :: Suite -> [QName]
+typeRefsQ ss                        = concatMap stmt ss
+  where stmt (Decl _ ds)            = concatMap decl ds
+        stmt (Signature _ _ t _)    = freeQ t
+        stmt _                      = []
+        decl (Def _ _ q p k a b _ _ _) = freeQ q ++ parTs p ++ kwdTs k ++ freeQ a ++ typeRefsQ b
+        decl (Actor _ _ q p k b _)  = freeQ q ++ parTs p ++ kwdTs k ++ typeRefsQ b
+        decl (Class _ _ q cs b _)   = freeQ q ++ freeQ cs ++ typeRefsQ b
+        decl (Protocol _ _ q ps b _) = freeQ q ++ freeQ ps ++ typeRefsQ b
+        decl (Extension _ q c ps b _) = freeQ q ++ freeQ c ++ freeQ ps ++ typeRefsQ b
+        parTs (PosPar _ t _ p)      = freeQ t ++ parTs p
+        parTs (PosSTAR _ t)         = freeQ t
+        parTs PosNIL                = []
+        kwdTs (KwdPar _ t _ k)      = freeQ t ++ kwdTs k
+        kwdTs (KwdSTAR _ t)         = freeQ t
+        kwdTs KwdNIL                = []
+
 hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "out/types") $ modNames imps) $+$
+                                      vcat (map (forwardStub env1) forwardOnly) $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
   where env1                        = classdefine stmts env
+        -- Same-module types referenced by selected code but not themselves
+        -- emitted (deferred-back-pass subset selection): a type-only reference
+        -- such as a pointer field whose target was not selected needs an opaque
+        -- forward declaration so the header type-checks. Empty for full modules.
+        emitted                     = bound stmts
+        localRef (NoQ n)            = Just n
+        localRef (GName m' n)
+          | m' == m                 = Just n
+        localRef _                  = Nothing
+        -- A same-module *type-position* reference (typeRefsQ, not freeQ) that is
+        -- neither emitted here (bound stmts, including generated witnesses) nor
+        -- resolvable in the env (builtins/imports do resolve) is an unselected
+        -- local class from a deferred-back-pass subset, kept only as the target
+        -- type of a still-emitted field/signature, so it needs an opaque forward
+        -- declaration. Restricting to type position is essential: freeQ would
+        -- also surface value references such as a generated witness-method vtable
+        -- entry, whose flat name collides with the method's own declaration.
+        forwardOnly                 = Data.List.nub [ n | qn <- typeRefsQ stmts, Just n <- [localRef qn],
+                                                          n `notElem` emitted, Nothing <- [tryQName qn env1] ]
+        forwardStub env0 n          = (text "struct" <+> genTopName env0 n <> semi) $+$
+                                      (text "typedef" <+> text "struct" <+> genTopName env0 n <+> char '*' <> genTopName env0 n <> semi)
 
 
 hSuite phase env []                 = empty

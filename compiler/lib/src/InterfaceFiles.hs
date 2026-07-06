@@ -118,6 +118,8 @@ module InterfaceFiles
   , readHeader
   , readHeaderSummary
   , readRoots
+  , readCalledMethods
+  , readCalledMethodsMaybe
   , readExtensionsByClass
   , readExtensionsByProtocol
   , readFileMaybe
@@ -150,7 +152,7 @@ import qualified Control.Exception as E
 import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newMVar, withMVar)
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (forM, forM_, join, unless, when)
 import Data.IORef (atomicModifyIORef', newIORef)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
@@ -195,6 +197,20 @@ data NameHashInfo = NameHashInfo
   , nhOwnImplHash :: BS.ByteString
   , nhPubLocalDeps  :: [A.Name]
   , nhImplLocalDeps :: [A.Name]
+  -- Code-position (call/construction) deps only, excluding type-annotation
+  -- references. Nothing when not computed (consumers fall back to pub+impl).
+  -- Used for deferred-back-pass selection so a type-only-referenced name is not
+  -- regenerated unless its code is actually reached.
+  , nhCodeLocalDeps :: Maybe [A.Name]
+  -- Per-method code-position deps for a class: each non-__init__ method mapped to
+  -- the local names its body constructs/calls. Nothing for non-classes / old caches.
+  -- A method's deps are followed by deferred-back selection only when the method
+  -- name is in the program-wide called-method set (CN). __init__ / class-level deps
+  -- stay in nhCodeLocalDeps (always followed).
+  , nhMethodCodeDeps :: Maybe [(A.Name, [A.Name])]
+  -- Method names (Dot attributes) called anywhere in this name's body. Unioned
+  -- across all modules to form CN. Nothing when not computed.
+  , nhCalledMethods :: Maybe [A.Name]
   , nhPubDeps  :: [(A.QName, BS.ByteString)]
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   , nhStmtIndices :: [Int]
@@ -447,7 +463,7 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyCalledMethods, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -456,6 +472,11 @@ keyRoots        = key "roots"
 keyTests        = key "tests"
 keyDoc          = key "doc"
 keyNameCount    = key "name-count"
+-- Union of every name-hash's nhCalledMethods for this module. Persisted as a
+-- single small key so a module loaded from cache (header only, name-hashes not
+-- decoded) can still contribute its dot-called method names to the program-wide
+-- called-method set that drives per-method DBP selection.
+keyCalledMethods = key "called-methods"
 keyPublicNames  = key "public-names"
 keyConstructors = key "constructors"
 keyActors       = key "actors"
@@ -1320,6 +1341,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
           , (keyTests, encodeStrict tests)
           , (keyDoc, encodeStrict mdoc)
           , (keyNameCount, encodeStrict (length te))
+          , (keyCalledMethods, encodeStrict calledMethodsUnion)
           , (keyStmtCount, encodeStrict (length body))
           , (keyStmtHasNotImpl, encodeStrict (A.hasNotImpl body))
           , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
@@ -1349,6 +1371,9 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
   where
     I.NModule _ te _ = nmod
     A.Module tmn timps tdoc body = tchecked
+    calledMethodsUnion =
+      Data.List.sort (Data.List.nub
+        (concat [ ms | nh <- nameHashes, Just ms <- [nhCalledMethods nh] ]))
     nameInfoEntries (i, (n, info)) =
       [ (keyNameOrder i, encodeStrict suffix)
       , (keyNameInfoSuffix suffix, encodeStrict (n, info))
@@ -1520,6 +1545,23 @@ readRoots f =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
       getValue "roots" txn dbi keyRoots
+
+-- The union of dot-called method names recorded for this module, read from the
+-- single cached key (no per-name decoding). Used so a module loaded from cache
+-- still contributes to the program-wide called-method set for per-method DBP.
+-- Returns Nothing when the key is absent (a .tydb written before this key
+-- existed) so the caller can fall back; the key is optional for backward
+-- compatibility (no interface version bump).
+readCalledMethods :: FilePath -> IO (Maybe [A.Name])
+readCalledMethods f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      getMaybeValue "called-methods" txn dbi keyCalledMethods
+
+-- Nothing if the file is unreadable/invalid OR the key is absent; Just ms if the
+-- union was stored. (join flattens the readTyMaybe wrapper over the inner Maybe.)
+readCalledMethodsMaybe :: FilePath -> IO (Maybe [A.Name])
+readCalledMethodsMaybe f = fmap join (readTyMaybe readCalledMethods f)
 
 readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
