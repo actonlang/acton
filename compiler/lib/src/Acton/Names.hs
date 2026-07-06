@@ -475,8 +475,15 @@ dbpMethodAlwaysKept n               = n == altInit || s == "__init__" ||
                                       (length s >= 5 && "__" `isPrefixOf` s && "__" `isSuffixOf` s)
   where s                           = nstr n
 
+-- When the synthesized reflective getter __get_attr__ is called anywhere in the
+-- program, attribute access is no longer statically enumerable: any field of any
+-- instantiated class may be observed by name. Selection stays interest/root
+-- driven (unreached classes still prune away entirely), but within a selected
+-- class everything counts as reached -- fields, their __init__ construction
+-- groups and methods -- so a reflected object is fully initialized and complete.
 dbpMethodReached                    :: Set.Set Name -> Name -> Bool
-dbpMethodReached calledMethods n    = dbpMethodAlwaysKept n || Set.member n calledMethods
+dbpMethodReached calledMethods n    = dbpMethodAlwaysKept n || Set.member n calledMethods ||
+                                      Set.member getAttrKW calledMethods
 
 -- A protocol-witness / extension dictionary is a Derived-named class. Per-method
 -- pruning must not touch it: its "methods" are the dictionary slots, and CodeGen
