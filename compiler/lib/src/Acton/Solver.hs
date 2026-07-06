@@ -656,11 +656,15 @@ reduce' eq c@(Proto _ env w t@(TNone _) p)
   | tcname p == qnEq                        = return (mkEqn env w (proto2type t p) (eQVar primWEqNone) : eq)
 
 reduce' eq c@(Proto info env w t@(TTuple _ prow krow) p)
-  | Just con <- lookup (tcname p) derivableTupleProtos,
-    Just ts <- tupleComponents prow krow    = do ws <- mapM (const newWitness) ts
-                                                 let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
-                                                     e = eCall (tApp (eQVar con) [wrow, prow, krow]) [eTuple (map eVar ws)]
-                                                 reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
+  | Just wit <- witSearch                   = case tupleComponents prow krow of
+                                                Just ts -> do
+                                                    ws <- mapM (const newWitness) ts
+                                                    let wrow = foldr posRow posNil [ proto2type t' p | t' <- ts ]
+                                                        e = eCall (tApp (eQVar wit) [wrow, prow, krow]) [eTuple (map eVar ws)]
+                                                    reduce (mkEqn env w (proto2type t p) e : eq) [ Proto info env w' t' p | (w',t') <- ws `zip` ts ]
+                                                Nothing ->
+                                                    do defer [c]; return eq
+  where witSearch                           = lookup (tcname p) derivableTupleProtos
 
 reduce' eq c@(Sel _ env w TUni{} n _)       = do defer [c]; return eq
 

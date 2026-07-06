@@ -6,5 +6,7 @@ def f() -> int:
     return total
 
 actor main(env):
-    print(f())
-    env.exit(0)
+      if f() == 13:
+          env.exit(0)
+      else:
+          env.exit(1)
