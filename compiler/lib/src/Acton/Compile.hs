@@ -225,7 +225,7 @@ import qualified Acton.LambdaLifter
 import Acton.Analytics
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
-import Acton.Builtin (mBuiltin)
+import Acton.Builtin (mBuiltin, initKW)
 import Acton.Prim (mPrim)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
@@ -1253,6 +1253,10 @@ data FrontResult = FrontResult
   , frImplHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
   , frInterestDeps :: Data.Set.Set (A.ModName, A.Name)
+  -- Method names called anywhere in this module (union of nhCalledMethods),
+  -- accumulated across modules into the program-wide called-method set used by
+  -- deferred-back per-method selection.
+  , frCalledMethods :: Data.Set.Set A.Name
   , frFrontTime :: Maybe TimeSpec
   , frFrontTiming :: Maybe FrontTiming
   , frInferredSigs :: [InferredSignature]
@@ -1315,6 +1319,16 @@ interestDepsFromNameHashes nameHashes =
         A.GName m n -> Just (m, n)
         A.QName m n -> Just (m, n)
         A.NoQ{} -> Nothing
+
+-- | Union of method names called anywhere in a module's name hashes.
+calledMethodsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set A.Name
+calledMethodsFromNameHashes nameHashes =
+  Data.Set.fromList
+    [ m
+    | nh <- nameHashes
+    , Just ms <- [InterfaceFiles.nhCalledMethods nh]
+    , m <- ms
+    ]
 
 addInterestDeps :: Data.Set.Set (A.ModName, A.Name) -> InterestMap -> InterestMap
 addInterestDeps deps im =
@@ -2567,12 +2581,19 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               (hashProgress afterIfaceHashes)
               mn hashEnv nameKeys nameInfoMap
           evaluate (rnf (pubSigLocalDeps, pubSigExtDeps))
-          -- implDeps: term-level deps from typed bodies.
-          (implLocalDeps, implExtDeps) <-
-            Hashing.implSplitDepsFromItemsWithProgress
+          -- A SINGLE position-tagged descent over the typed items yields both the
+          -- impl-hash deps and the deferred-back-pass deps, so each method body is
+          -- walked once instead of twice. implLocalDeps/implExtDeps: term-level
+          -- deps for hashing. codeLocalDeps: code-position deps only (so type-only
+          -- references don't force regeneration), split per class-method so an
+          -- auto-vivifying accessor's child is followed only when the accessor is
+          -- actually called, with calledMethods feeding the program-wide call set.
+          (implLocalDeps, implExtDeps, codeLocalDeps, codeMethodDeps, calledMethods) <-
+            Hashing.frontSplitDepsFromItemsWithProgress
               (hashProgress afterIfaceDeps)
               mn hashEnv nameKeys implItems
           evaluate (rnf (implLocalDeps, implExtDeps))
+          evaluate (rnf (codeLocalDeps, codeMethodDeps, calledMethods))
           -- pubDeps include signature deps plus term-level deps for reuse
           -- in pubHash. Derived names are internal and should never require
           -- a pub hash.
@@ -2609,6 +2630,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           implLocalDeps
                           pubExtHashes
                           implExtHashes
+                          (Just codeLocalDeps)
+                          (Just codeMethodDeps)
+                          (Just calledMethods)
                   evaluate (rnf nameHashes)
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
                   evaluate (rnf (nameHashes, roots, tests, mdoc))
@@ -2719,6 +2743,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                                    , frImplHash = moduleImplHash
                                                    , frNameHashes = publicNameHashes nameHashes
                                                    , frInterestDeps = interestDepsFromNameHashes nameHashes
+                                                   , frCalledMethods = calledMethodsFromNameHashes nameHashes
                                                    , frFrontTime = frontTimeMaybe
                                                    , frFrontTiming = frontTimingMaybe
                                                    , frInferredSigs = inferredSigs
@@ -2736,6 +2761,11 @@ data DbpSelection = DbpSelection
 data DbpNameSelection = DbpNameSelection
   { dnsSelectedNames :: Data.Set.Set A.Name
   , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
+  -- The called-method set after transitive closure over method->method calls
+  -- (see dbpClosureFixpoint). Pruning must use this, not the consumer-seeded
+  -- CN, or a sibling method reached only from another method (e.g. a list's
+  -- get, called by create) would be dropped from the regenerated class.
+  , dnsCalledMethods :: Data.Set.Set A.Name
   }
 
 prepareDeferredBackJob :: Source.SourceProvider
@@ -2743,9 +2773,10 @@ prepareDeferredBackJob :: Source.SourceProvider
                        -> CompileCallbacks
                        -> Acton.Env.Env0
                        -> InterestMap
+                       -> Data.Set.Set A.Name
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
+prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj = do
   let paths = dbjPaths dbj
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
@@ -2755,8 +2786,17 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
       totalNames = dbjNameCount dbj
-  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds
-  let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
+  nameSelection <- selectDbpNames paths mn tyFile calledMethods selectedSeeds
+  -- The codegen depends not just on which classes are selected but on which of
+  -- their methods are kept (dbpMethodReached against the closed CN). Two builds
+  -- can select the same classes yet keep a different method subset, so the kept
+  -- methods must be part of the codegen cache key or stale C would be reused.
+  let keptMethods =
+        [ m | nh <- dnsNameHashes nameSelection
+            , Just mds <- [InterfaceFiles.nhMethodCodeDeps nh]
+            , (m, _) <- mds
+            , dbpMethodReached (dnsCalledMethods nameSelection) m ]
+      codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection) keptMethods
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
@@ -2767,8 +2807,9 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       -- Same-version .tydb files always carry statement indices, so a failed
       -- selective read means a corrupt or hand-doctored file -- an eager
       -- whole-module fallback would mask that (and read gigabytes doing it).
+      let closedCalledMethods = dnsCalledMethods nameSelection
       selection <- case selectedTmod of
-        Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
+        Just tmod -> return $ selectDbpModule totalNames closedCalledMethods nameSelection tmod
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
       snap <- Source.readSource sp actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
@@ -2806,47 +2847,76 @@ logDbpSelection gopts callbacks mn dbj totalNames interestedCount rootCount sele
       ++ maybe "" (\reason -> ", fallback: " ++ reason) fallbackReason
       ++ ", " ++ codegenReason
 
-dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
-dbpCodegenHash moduleImplHash selected =
-  SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, selectedNames)))
+dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> [A.Name] -> B.ByteString
+dbpCodegenHash moduleImplHash selected keptMethods =
+  SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, selectedNames, keptMethodKeys)))
   where
     selectedNames =
       [ Hashing.nameKey n
       | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
       ]
+    keptMethodKeys =
+      Data.List.sort (Data.List.nub (map Hashing.nameKey keptMethods))
 
 selectDbpNames :: Paths
                -> A.ModName
                -> FilePath
                -> Data.Set.Set A.Name
+               -> Data.Set.Set A.Name
                -> IO DbpNameSelection
-selectDbpNames paths mn tyFile seeds
+selectDbpNames paths mn tyFile calledMethods seeds
   | Data.Set.null seeds =
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.empty
         , dnsNameHashes = []
+        , dnsCalledMethods = calledMethods
         }
   | otherwise = do
       roots <- traverse (dbpReadOwningName paths mn tyFile) (Data.Set.toList seeds)
-      selected <- dbpNameHashClosure paths mn tyFile M.empty roots
+      (selected, cn') <- dbpClosureFixpoint paths mn tyFile calledMethods roots
       return DbpNameSelection
         { dnsSelectedNames = Data.Set.fromList (M.keys selected)
         , dnsNameHashes = M.elems selected
+        , dnsCalledMethods = cn'
         }
 
 dbpSelectionError :: Paths -> A.ModName -> String -> IO a
 dbpSelectionError paths mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
+  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason
+             ++ " (this indicates a compiler bug; 'acton build --no-dbp' works around it)"))
+
+-- The consumer-seeded called-method set (CN) records only methods dot-called
+-- from a front-passed module. A reached method may itself call a sibling method
+-- that is never called from source -- e.g. a list wrapper's create() calls its
+-- own get() -- so CN must be transitively closed: each selected class folds in
+-- the methods it calls (its persisted nhCalledMethods). Growing CN can make more
+-- methods reached, whose deps select more classes, so iterate to a fixpoint.
+-- Both CN and the selection only grow and are bounded, so this terminates (in
+-- practice one or two rounds). Each round re-runs the closure from an empty memo
+-- so method deps are re-evaluated against the larger CN.
+dbpClosureFixpoint :: Paths
+                   -> A.ModName
+                   -> FilePath
+                   -> Data.Set.Set A.Name
+                   -> [A.Name]
+                   -> IO (M.Map A.Name InterfaceFiles.NameHashInfo, Data.Set.Set A.Name)
+dbpClosureFixpoint paths mn tyFile cn roots = do
+  selected <- dbpNameHashClosure paths mn tyFile cn M.empty roots
+  let cn' = Data.Set.union cn (calledMethodsFromNameHashes (M.elems selected))
+  if Data.Set.size cn' == Data.Set.size cn
+    then return (selected, cn')
+    else dbpClosureFixpoint paths mn tyFile cn' roots
 
 selectDbpModule :: Int
+                -> Data.Set.Set A.Name
                 -> DbpNameSelection
                 -> A.Module
                 -> DbpSelection
-selectDbpModule totalNames nameSelection tmod@(A.Module loc imps mdoc suite)
+selectDbpModule totalNames calledMethods nameSelection tmod@(A.Module loc imps mdoc suite)
   | A.hasNotImpl suite = fallback "module contains NotImplemented/native extension hooks"
   | otherwise =
       let selected = dnsSelectedNames nameSelection
-          suite' = mapMaybe (dbpPruneTopStmt selected) suite
+          suite' = mapMaybe (dbpPruneTopStmt calledMethods selected) suite
       in DbpSelection
            { dbsModule = A.Module loc imps mdoc suite'
            , dbsSelectedCount = Data.Set.size selected
@@ -2878,25 +2948,59 @@ dbpReadOwningName paths mn tyFile n = do
         _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ nameToString n)
         _ -> dbpSelectionError paths mn ("no top-level owner for " ++ nameToString n)
 
+-- A class method may be reached other than by a direct source dot-call: dunder
+-- methods are dispatched through protocol witnesses (e.g. __str__ via print, __eq__
+-- via ==, __iter__/__next__ via for) or synthesized by the normalizer *after*
+-- hashing (so they never appear as a source Dot and are never in the called-method
+-- set CN). Such methods, and __init__
+-- (run on construction), must always be kept and have their deps followed.
+dbpMethodAlwaysKept :: A.Name -> Bool
+dbpMethodAlwaysKept n =
+  n == initKW ||
+  (length s >= 5 && "__" `isPrefixOf` s && "__" `isSuffixOf` s)
+  where s = A.nstr n
+
+dbpMethodReached :: Data.Set.Set A.Name -> A.Name -> Bool
+dbpMethodReached calledMethods n =
+  dbpMethodAlwaysKept n || Data.Set.member n calledMethods
+
 dbpNameHashClosure :: Paths
                    -> A.ModName
                    -> FilePath
+                   -> Data.Set.Set A.Name
                    -> M.Map A.Name InterfaceFiles.NameHashInfo
                    -> [A.Name]
                    -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
-dbpNameHashClosure _ _ _ selected [] = return selected
-dbpNameHashClosure paths mn tyFile selected (n:ns)
-  | M.member n selected = dbpNameHashClosure paths mn tyFile selected ns
+dbpNameHashClosure _ _ _ _ selected [] = return selected
+dbpNameHashClosure paths mn tyFile calledMethods selected (n:ns)
+  | M.member n selected = dbpNameHashClosure paths mn tyFile calledMethods selected ns
   | otherwise = do
       nh <- dbpReadNameHash paths mn tyFile n
-      localDeps <- traverse (dbpReadOwningName paths mn tyFile)
-                     (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
+      -- Follow code-position deps (calls/constructions) when recorded, so a
+      -- type-only-referenced name (e.g. a node's child field type) is not pulled
+      -- in unless its code is actually reached. Fall back to pub+impl for caches
+      -- written before code deps existed.
+      let baseDeps = case InterfaceFiles.nhCodeLocalDeps nh of
+                       Just cs -> cs
+                       Nothing -> InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh
+          -- For a class, a method's code deps are followed only when the method
+          -- is actually called. __init__'s declarative attribute initializers are
+          -- recorded keyed by the assigned attribute (not by initKW), so a
+          -- `self.x = X()` is followed only when attribute x is read somewhere (x
+          -- in CN) -- per-attribute dead-code elimination. The imperative tail
+          -- stays under initKW and is always followed.
+          methodDeps = case InterfaceFiles.nhMethodCodeDeps nh of
+                         Nothing  -> []
+                         Just mds -> concat [ ds | (m, ds) <- mds
+                                                 , dbpMethodReached calledMethods m ]
+          depNames = baseDeps ++ methodDeps
+      localDeps <- traverse (dbpReadOwningName paths mn tyFile) depNames
       exts <- dbpExtensionsForName tyFile n
       extDeps <- traverse (dbpReadOwningName paths mn tyFile) exts
       let deps = unionNames localDeps extDeps
           selected' = M.insert n nh selected
           new = filter (`M.notMember` selected') deps
-      dbpNameHashClosure paths mn tyFile selected' (new ++ ns)
+      dbpNameHashClosure paths mn tyFile calledMethods selected' (new ++ ns)
   where
     unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
 
@@ -2906,13 +3010,13 @@ dbpExtensionsForName tyFile n = do
   byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
   return (Data.List.sortOn Hashing.nameKey (Data.List.nub (byClass ++ byProtocol)))
 
-dbpPruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
-dbpPruneTopStmt selected stmt =
+dbpPruneTopStmt :: Data.Set.Set A.Name -> Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
+dbpPruneTopStmt calledMethods selected stmt =
   case stmt of
     A.Decl l ds ->
       case filter (\d -> Data.Set.member (Names.dname' d) selected) ds of
         [] -> Nothing
-        ds' -> Just (A.Decl l ds')
+        ds' -> Just (A.Decl l (map pruneClassBody ds'))
     A.Signature l ns typ dec ->
       case filter (`Data.Set.member` selected) ns of
         [] -> Nothing
@@ -2930,6 +3034,60 @@ dbpPruneTopStmt selected stmt =
     -- level. VarAssign and Pass are compiler-introduced typed forms handled
     -- above; other statement forms should not appear in a typed module suite.
     _ -> Nothing
+  where
+    -- Drop a selected class's methods that are neither __init__ nor called
+    -- anywhere in the program. Their bodies would otherwise reference children
+    -- that the per-method closure deliberately left unselected.
+    pruneClassBody (A.Class l n q cs body kd) =
+      A.Class l n q cs (mapMaybe pruneMethodStmt body) kd
+    pruneClassBody d = d
+
+    -- A pruned method keeps its Def -- and thereby its class-struct slot and
+    -- method-table assignment -- with the body replaced by a raising stub.
+    -- Removing the Def entirely would shift every later member's offset, and a
+    -- SUBCLASS rendered elsewhere (another module, or unpruned via the
+    -- NotImplemented/no-dbp fallbacks) still lays out the full interface, so
+    -- dispatch through a parent-typed reference would land on the wrong slot.
+    -- The stub also turns any residual under-selection into a named error
+    -- instead of silent misdispatch.
+    pruneMethodStmt (A.Decl l' inner) =
+      Just (A.Decl l' [ if keepMethod d then sliceInit d else stubDef d | d <- inner ])
+      where stubDef d = d { A.dbody = [ A.Raise NoLoc
+                              (A.Call NoLoc (A.Var NoLoc (A.GName (A.ModName [A.name "__builtin__"]) (A.name "ValueError")))
+                                 (A.PosArg (A.Strings NoLoc ["\"dead code eliminated: " ++ A.nstr (A.dname d) ++ "\""]) A.PosNil)
+                                 A.KwdNil) ] }
+    pruneMethodStmt s = Just s
+
+    keepMethod d@A.Def{} = dbpMethodReached calledMethods (A.dname d)
+    keepMethod _         = True
+
+    -- __init__ stays kept (it runs on construction), but its declarative
+    -- attribute initializations are sliced: `self.x = e` is dropped when x is
+    -- never read anywhere (x not in the called-attribute set CN), since the
+    -- per-method closure deliberately pruned the child types such an init would
+    -- construct. A kept init that reads self.a keeps a automatically -- self.a is
+    -- itself a Dot, so a is in CN. Slicing stops at the first statement that is
+    -- not a self-attribute init (the constructor boundary), leaving any later
+    -- imperative code untouched.
+    sliceInit d@A.Def{}
+      | A.dname d == initKW
+      , Just selfp <- selfParName d = d { A.dbody = sliceInitBody selfp (A.dbody d) }
+    sliceInit d = d
+
+    selfParName d = case A.pos d of
+                      A.PosPar n _ _ _ -> Just n
+                      _                -> Nothing
+
+    sliceInitBody selfp (s : ss)
+      | Just attr <- selfAttrInit selfp s =
+          if Data.Set.member attr calledMethods
+            then s : sliceInitBody selfp ss
+            else sliceInitBody selfp ss
+    sliceInitBody _ ss = ss
+
+    selfAttrInit selfp (A.MutAssign _ (A.Dot _ (A.Var _ (A.NoQ x)) attr) _)
+      | x == selfp = Just attr
+    selfAttrInit _ _ = Nothing
 
 
 -- | Run the back passes for a single module.
@@ -3174,7 +3332,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
@@ -3271,17 +3429,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
 
     flushReadyDeferredBacks :: Acton.Env.Env0
                             -> InterestMap
+                            -> Data.Set.Set A.Name
                             -> Data.Set.Set TaskKey
                             -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
                             -> IO (Either CompileFailure (M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)))
-    flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks = do
+    flushReadyDeferredBacks envAcc interestMap calledMethods frontDone deferredBacks = do
       let (ready, waiting) =
             M.partitionWithKey
               (\_ (_dbj, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
               deferredBacks
       prepared <- (try $
         forM (M.elems ready) $ \(dbj, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
+          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap calledMethods dbj
           case mJob of
             Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
             Just _ -> return ()
@@ -3393,6 +3552,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frImplHash = implHash
               , frNameHashes = nameHashes
               , frInterestDeps = interestDepsFromNameHashes interestNameHashes
+              , frCalledMethods = calledMethodsFromNameHashes interestNameHashes
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -3410,6 +3570,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frImplHash = B.empty
               , frNameHashes = []
               , frInterestDeps = Data.Set.empty
+              , frCalledMethods = Data.Set.empty
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -3417,6 +3578,17 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frDeferredBackJob = Nothing
               , frOutputJobs = []
               }
+          -- A reused/cached module has empty tyNameHashes, so deriving its
+          -- called-method contribution from those name-hashes yields the empty
+          -- set; a method called only from such a module would then be wrongly
+          -- pruned from a DBP-selected dependency. Recover the real contribution
+          -- from the .tydb's persisted called-method union (falling back to the
+          -- in-memory name-hashes when the key is absent, e.g. a pre-version file).
+          reusedCalledMethods tf cachedNHs = do
+            mCalled <- InterfaceFiles.readCalledMethodsMaybe tf
+            return $ case mCalled of
+              Just ms -> Data.Set.fromList ms
+              Nothing -> calledMethodsFromNameHashes cachedNHs
           addCachedTyOutputJob fr
             | not (C.tydb optsT) = return fr
             | not (null (frOutputJobs fr)) = return fr
@@ -3796,9 +3968,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         _ -> []
                       cachedNameHashes = publicNameHashes cachedFullNameHashes
                   interestDeps <- cachedInterestDeps
+                  calledMethods0 <- reusedCalledMethods tyFile cachedFullNameHashes
                   let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing Nothing)
                              { frModuleInfo = mModuleInfo
                              , frInterestDeps = interestDeps
+                             , frCalledMethods = calledMethods0
                              }
                   cacheFrontResult fr
                 Left _ ->
@@ -4090,9 +4264,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               _ -> []
                             cachedNameHashes = publicNameHashes cachedFullNameHashes
                         interestDeps <- cachedInterestDeps
+                        calledMethods0 <- reusedCalledMethods tyFile cachedFullNameHashes
                         let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing cachedDeferredBackJob)
                                    { frModuleInfo = mModuleInfo
                                    , frInterestDeps = interestDeps
+                                   , frCalledMethods = calledMethods0
                                    }
                         cacheFrontResult fr
               case () of
@@ -4192,6 +4368,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
          -> M.Map TaskKey CompileTask
          -> InterestMap
+         -> Data.Set.Set A.Name
          -> Data.Set.Set TaskKey
          -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
          -> M.Map StageKey Int
@@ -4201,7 +4378,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap calledMethods frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
         res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running frontOutputRef res implRes nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
@@ -4209,7 +4386,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       if null running1 && null rdy1
         then if Data.Set.null pend
                  then do
-                   flushRes <- flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks
+                   flushRes <- flushReadyDeferredBacks envAcc interestMap calledMethods frontDone deferredBacks
                    case flushRes of
                      Left err -> return (Left err)
                      Right deferredBacks' -> do
@@ -4241,7 +4418,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap calledMethods frontDone deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = case M.lookup stageDone stageRevMap of
@@ -4258,7 +4435,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 StageParsed parsed mParseTime -> do
                   ccOnParseDone callbacks tDone optsDone mParseTime
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap calledMethods frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
                   ccOnFrontDone callbacks tDone optsDone
                   ccOnFrontResult callbacks tDone optsDone fr
@@ -4269,16 +4446,17 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       parsedTasks2 = M.delete keyDone parsedTasks
                       envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
                       interestMap2 = addInterestDeps (frInterestDeps fr) interestMap
+                      calledMethods2 = Data.Set.union (frCalledMethods fr) calledMethods
                       frontDone2 = Data.Set.insert keyDone frontDone
                       deferredBacks1 =
                         case frDeferredBackJob fr of
                           Nothing -> deferredBacks
                           Just dbj -> M.insert keyDone (dbj, dependentClosure keyDone) deferredBacks
-                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 frontDone2 deferredBacks1
+                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 calledMethods2 frontDone2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)
                     Right deferredBacks2 ->
-                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 calledMethods2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Execute back-pass jobs in parallel while keeping output order stable.
