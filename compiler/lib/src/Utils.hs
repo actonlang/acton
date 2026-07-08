@@ -79,6 +79,11 @@ duplicates []                   = []
 duplicates (x:xs)               = eqs ++ duplicates others
   where (eqs,others)            = partition (==x) xs
 
+chunksOf                        :: Int -> [a] -> [[a]]
+chunksOf _ []                   = []
+chunksOf n xs                   = pre : chunksOf n post
+  where (pre,post)              = splitAt n xs
+
 dom                             = map fst
 
 rng                             = map snd

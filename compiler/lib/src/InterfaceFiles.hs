@@ -171,7 +171,7 @@ import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
 import Acton.Names (isPublicName)
 import qualified Acton.Names as Names
-import Utils (SrcLoc(NoLoc))
+import Utils (SrcLoc(NoLoc), chunksOf)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (peek)
 import GHC.Generics (Generic)
@@ -1141,10 +1141,6 @@ forceEntries entries = do
 
 entryEncodeChunkMin :: Int
 entryEncodeChunkMin = 256
-
-chunksOf :: Int -> [a] -> [[a]]
-chunksOf _ [] = []
-chunksOf n ys = let (as, bs) = splitAt n ys in as : chunksOf n bs
 
 entryChunks :: Int -> [a] -> [[a]]
 entryChunks _ [] = []
