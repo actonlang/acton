@@ -271,7 +271,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
     return res;
 }
 
-B_dict jsonQ_decode (B_str data) {
+B_dict jsonQ__decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &acton_alc, &err);
@@ -292,7 +292,7 @@ B_dict jsonQ_decode (B_str data) {
     return res;
 }
 
-B_list jsonQ_decode_list (B_str data) {
+B_list jsonQ__decode_list (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &acton_alc, &err);
@@ -313,7 +313,7 @@ B_list jsonQ_decode_list (B_str data) {
     return res;
 }
 
-B_str jsonQ_encode (B_dict data, B_bool pretty) {
+B_str jsonQ__encode (B_dict data, B_bool pretty) {
     if (pretty == NULL)
         pretty = B_False;
 
@@ -334,7 +334,7 @@ B_str jsonQ_encode (B_dict data, B_bool pretty) {
     return to$str(json);
 }
 
-B_str jsonQ_encode_list (B_list data, B_bool pretty) {
+B_str jsonQ__encode_list (B_list data, B_bool pretty) {
     if (pretty == NULL)
         pretty = B_False;
 
