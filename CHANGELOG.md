@@ -24,12 +24,20 @@ imported modules.
   followed by another hex digit, matching the generated split C string
   fragments instead of letting the escape consume too much of the following
   text. [#2996]
+- Use tuple truth values safely in `if`, `while`, `not`, and conditional
+  expressions, fixing a panic when tuple `__bool__` returned an unboxed C
+  `bool`. [#3004]
 
 ### Compiler & Build
 - Track what specific names are used from each import and selectively load
   exactly those names, avoiding full imported-module reads during type
-  checking, back passes, and final C compilation. Tested large-module cases see
-  10,000x improvements. [#2930]
+  checking, back passes, final C compilation, and cached implementation-hash
+  refreshes. Deferred back passes are enabled for normal modules, and tested
+  large-module cases see 10,000x improvements. [#2930] [#3000] [#3005]
+  [#3008]
+- Speed up large generated modules by deduplicating external witnesses within
+  each protocol/type bucket instead of scanning every accumulated witness.
+  [#2999]
 - Generate direct C calls for statically known builtin protocol methods on
   builtin types, avoiding witness-table dispatch for those calls while keeping
   the existing builtin witness values available to the generated code. [#2935]
@@ -49,6 +57,15 @@ imported modules.
 - Preserve boxed values for primitives stored across awaited actor calls, so
   augmented assignments update `int` and `float` locals safely after an
   `await` instead of corrupting the boxed cell slot. [#2998]
+- Compile continuation calls that return proc values through closure
+  conversion, fixing `### BAD contArg` crashes in `actonc --llift` and other
+  passes that force the generated continuation type annotations. [#3014]
+- Raise the compiler process open-file limit on startup, reducing
+  file-descriptor failures during large concurrent builds and cache-heavy
+  projects. [#3002]
+- Avoid macOS cached-interface lock exhaustion after interrupted builds by
+  building vendored LMDB with process-shared mutexes instead of global named
+  semaphores. [#3007]
 
 ### CLI & Project Workflow
 - Prevent parallel `acton test` runs from hanging when a worker or output
@@ -59,6 +76,10 @@ imported modules.
 - Add UDP support to `net`, with `UDPCap`, fixed-remote `UDPConnection`
   sockets, bound `UDPListener` sockets, peer address and port reporting, and
   listener replies to arbitrary peers. [#2989]
+- Add `serialize(obj) -> bytes` and `deserialize(data) -> value` builtins for
+  in-memory object graph round-trips, preserving shared and cyclic references
+  and rejecting actors that cannot be serialized without a global reference
+  map. [#2997]
 - Report missing or empty `process.Process` and `process.RunProcess` commands
   through `on_error`, and mark failed spawns as not running so follow-up
   process operations are safely ignored. [#2986]
@@ -67,6 +88,9 @@ imported modules.
   `int` rows. [#2994]
 - Serialize `bytes` values with their own class id so they round-trip as
   `bytes` instead of deserializing as `str`. [#2995]
+- Preserve shared object references during deserialization by using the same
+  integer key representation for back-reference registration and lookup,
+  fixing repeated references that previously decoded as missing values. [#3011]
 
 ### Packages & Distribution
 - Speed up macOS CI by reducing the PR test matrix to faster macOS 26 runners,
@@ -77,6 +101,8 @@ imported modules.
   prebuilt `dist/` tree, avoiding the slow, hard-to-cache Debian package
   rebuild while sharing installed-payload validation and package version checks
   across both package formats. [#2987]
+- Compress RPM payloads with zstd, and check for the `zstd` tool before
+  building RPM packages. [#3001]
 
 ### Documentation
 - Document the type checker's witness environment invariants, active and closed
@@ -4583,7 +4609,18 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2994]: https://github.com/actonlang/acton/pull/2994
 [#2995]: https://github.com/actonlang/acton/pull/2995
 [#2996]: https://github.com/actonlang/acton/pull/2996
+[#2997]: https://github.com/actonlang/acton/pull/2997
 [#2998]: https://github.com/actonlang/acton/pull/2998
+[#2999]: https://github.com/actonlang/acton/pull/2999
+[#3000]: https://github.com/actonlang/acton/pull/3000
+[#3001]: https://github.com/actonlang/acton/pull/3001
+[#3002]: https://github.com/actonlang/acton/pull/3002
+[#3004]: https://github.com/actonlang/acton/pull/3004
+[#3005]: https://github.com/actonlang/acton/pull/3005
+[#3007]: https://github.com/actonlang/acton/pull/3007
+[#3008]: https://github.com/actonlang/acton/pull/3008
+[#3011]: https://github.com/actonlang/acton/pull/3011
+[#3014]: https://github.com/actonlang/acton/pull/3014
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
