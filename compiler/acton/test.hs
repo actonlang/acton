@@ -1682,6 +1682,30 @@ actonProjTests =
             assertBool "path error should point users to artifact repos"
               ("Use --artifact-repo to search output artifacts" `isInfixOf` pathErr)
 
+  -- Producing an artifact ships .tydb only, so the back passes must not run;
+  -- code generation is deferred to the build that consumes the artifact.
+  , testCase "artifact pack skips back passes" $ do
+        withSystemTempDirectory "acton-artifact-pack-nocodegen" $ \proj -> do
+            let srcDir = proj </> "src"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"artifact_pack_nocodegen\""
+              , "fingerprint = 0xd51ea8e2a1b2c3d4"
+              ]
+            writeFile (srcDir </> "lib.act") $ unlines
+              [ "def greeting() -> str:"
+              , "    return \"hello\""
+              ]
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["artifact", "pack"]){ cwd = Just proj } ""
+            assertEqual ("artifact pack should succeed: " ++ cmdErr) ExitSuccess returnCode
+            archiveExists <- doesFileExist (proj </> "out" </> "acton-out.tar.gz")
+            assertBool "artifact archive should be written" archiveExists
+            tydbExists <- doesDirectoryExist (proj </> "out" </> "types" </> "artifact_pack_nocodegen" </> "lib.tydb")
+            assertBool "artifact pack should write .tydb" tydbExists
+            cExists <- doesFileExist (proj </> "out" </> "types" </> "artifact_pack_nocodegen" </> "lib.c")
+            assertBool "artifact pack should not generate C code" (not cExists)
+
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do
         let proj = "test/project/prune_executables"

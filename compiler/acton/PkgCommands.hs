@@ -369,6 +369,7 @@ packActonArtifactTo sourceHash outputArg = do
       Artifact.writeManifest tmp (Artifact.expectedManifest sourceHash)
       runProcessChecked Nothing "tar"
         [ "-czf", output0
+        , "--exclude=*.c", "--exclude=*.h"
         , "-C", tmp, Artifact.artifactManifestFile
         , "-C", cwd, "Build.act", "out/types"
         ]

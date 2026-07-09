@@ -688,6 +688,7 @@ data CompilePlan = CompilePlan
   , cpGlobalTasks :: [GlobalTask]
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
+  , cpPrebuiltRoots :: Data.Set.Set FilePath
   , cpRootTasks :: [CompileTask]
   , cpRootPins :: M.Map String BuildSpec.PkgDep
   , cpIncremental :: Bool
@@ -742,12 +743,14 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
       rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
+      prebuiltRoots = Data.Set.fromList [ projRoot pctx | pctx <- M.elems projMap, projPrebuilt pctx ]
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
     , cpGlobalTasks = globalTasks
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
+    , cpPrebuiltRoots = prebuiltRoots
     , cpRootTasks = rootTasks
     , cpRootPins = rootPins
     , cpIncremental = incremental
@@ -839,7 +842,7 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }
-  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) (cpPrebuiltRoots plan) callbacks
 
 -- | Tap the generic progress hooks to feed the analytics sampler. Each pass
 -- already reports through these callbacks, so a single wrapper covers parse,
@@ -891,6 +894,7 @@ defaultCompileOptions =
     , C.optimize = C.Debug
     , C.only_build = False
     , C.skip_build = False
+    , C.skip_backpass = False
     , C.watch = False
     , C.no_threads = False
     , C.parse_serial = False
@@ -2702,19 +2706,27 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
-                      backJob =
-                        case deferredBackJob of
-                          Just _ -> Nothing
-                          Nothing ->
-                            Just BackJob { bjPaths = paths
-                                         , bjOpts = opts
-                                         , bjInput = BackInput { biTypeEnv = typeEnv
-                                                              , biTypedMod = tchecked
-                                                              , biSrc = srcContent
-                                                              , biImplHash = moduleImplHash
-                                                              }
-                                         }
+                      -- With skip_backpass no back job is created at all, eager or
+                      -- deferred: the .tydb committed by the front pass is the
+                      -- complete output, and code generation is left to a later
+                      -- build that consumes it.
+                      deferredBackJob
+                        | C.skip_backpass opts = Nothing
+                        | otherwise = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
+                      backJob
+                        | C.skip_backpass opts = Nothing
+                        | otherwise =
+                            case deferredBackJob of
+                              Just _ -> Nothing
+                              Nothing ->
+                                Just BackJob { bjPaths = paths
+                                             , bjOpts = opts
+                                             , bjInput = BackInput { biTypeEnv = typeEnv
+                                                                  , biTypedMod = tchecked
+                                                                  , biSrc = srcContent
+                                                                  , biImplHash = moduleImplHash
+                                                                  }
+                                             }
                   do
                     let outputKey = TaskKey (projPath paths) mn
                     -- The .tydb commit is synchronous with front completion:
@@ -2767,14 +2779,24 @@ data DbpNameSelection = DbpNameSelection
   , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
   }
 
+-- | Source text to embed in a module's back-pass input. It feeds only the
+-- #line directives in generated C (byte offset -> source line). A prebuilt
+-- artifact-only dependency ships no source, and its regenerated C carries no
+-- #line directives, so the empty string is exactly right -- and it avoids
+-- reading a source file that does not exist.
+backSrcText :: Source.SourceProvider -> Bool -> FilePath -> IO String
+backSrcText _ True _         = return ""
+backSrcText sp False actFile = Source.ssText <$> Source.readSource sp actFile
+
 prepareDeferredBackJob :: Source.SourceProvider
                        -> C.GlobalOptions
                        -> CompileCallbacks
                        -> Acton.Env.Env0
                        -> InterestMap
+                       -> Bool
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
+prepareDeferredBackJob sp gopts callbacks envAcc interestMap prebuilt dbj = do
   let paths = dbjPaths dbj
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
@@ -2799,7 +2821,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       selection <- case selectedTmod of
         Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
-      snap <- Source.readSource sp actFile
+      srcText <- backSrcText sp prebuilt actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
@@ -2808,7 +2830,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
         , bjInput = BackInput
             { biTypeEnv = Converter.convEnvProtos env1
             , biTypedMod = dbsModule selection
-            , biSrc = Source.ssText snap
+            , biSrc = srcText
             , biImplHash = codegenHash
             }
         }
@@ -3056,7 +3078,10 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 
       ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
         let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
-            emitLines = not (C.dbg_no_lines opts)
+            -- With no source text (a prebuilt artifact-only dep) there are no
+            -- byte offsets to map, so skip #line directives rather than point
+            -- them at source that was never shipped.
+            emitLines = not (C.dbg_no_lines opts) && not (null (biSrc backInput))
         Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
@@ -3147,9 +3172,10 @@ compileTasks :: Source.SourceProvider
              -> FilePath                  -- root project path
              -> [GlobalTask]
              -> Data.Set.Set TaskKey
+             -> Data.Set.Set FilePath     -- prebuilt (artifact-only) project roots
              -> CompileCallbacks
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
+compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked prebuiltRoots callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = do
@@ -3208,6 +3234,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
     isDbpBlocked k = Data.Set.member k dbpBlocked
+    -- Artifact-only dependency: no local source, so back passes regenerate its
+    -- C from the .tydb alone (see backSrcText).
+    isPrebuilt k = Data.Set.member (tkProj k) prebuiltRoots
     isBuiltinKey k = tkMod k == A.modName ["__builtin__"]
     builtinOrder = [ t | t <- tasks, isBuiltinKey (gtKey t) ]
     nonBuiltinTasks = [ t | t <- tasks, not (isBuiltinKey (gtKey t)) ]
@@ -3310,7 +3339,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               deferredBacks
       prepared <- (try $
         forM (M.elems ready) $ \(dbj, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
+          let prebuilt = isPrebuilt (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
+          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap prebuilt dbj
           case mJob of
             Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
             Just _ -> return ()
@@ -3871,7 +3901,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
               cachedDeferredBackJob <- case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
+                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } | not (C.skip_backpass optsT) -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
                       return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn implHash nameCount)
                     _ -> return Nothing
@@ -3879,7 +3909,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case cachedDeferredBackJob of
                       Just _ -> True
                       Nothing -> False
-              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp
+              -- With skip_backpass generated code is never (re)built, so its
+              -- staleness must not force any work.
+              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp && not (C.skip_backpass optsT)
               mCodegenStatus <- case mModuleImplHash of
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
                 _ -> return Nothing
@@ -4036,9 +4068,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                                                  FrontOutputTydbCopy
                                                                                  (copyTydbInterface optsT paths mn)
                                               else return []
-                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
-                                      case deferredBackJob0 of
-                                        Just _ -> do
+                                          -- Under skip_backpass the refreshed rows are the whole
+                                          -- point; no back job follows, deferred or eager.
+                                          skipBack = C.skip_backpass optsT
+                                          deferredBackJob0
+                                            | skipBack = Nothing
+                                            | otherwise = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
+                                      if skipBack || isJust deferredBackJob0
+                                        then do
                                           ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
                                           case ifaceRes of
                                             Left diags -> return (key, Left diags)
@@ -4055,12 +4092,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                         , frModuleInfo = mModuleInfo
                                                         }
                                                   cacheFrontResult fr
-                                        Nothing -> do
+                                        else do
                                           tyRes <- readTyFile
                                           case tyRes of
                                             Left diags -> return (key, Left diags)
                                             Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
-                                              snap <- Source.readSource sp actFile
+                                              srcText <- backSrcText sp (isPrebuilt key) actFile
                                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
                                                 Acton.Env.mkEnv (searchPath paths) envSnap tmod
                                               case envRes of
@@ -4076,7 +4113,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                       rememberFrontOutputJobList frontOutputRef outputJobs
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
-                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                                          backJob = Just (mkBackJob env1 tmod srcText moduleImplHash)
                                                           fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
                                                             { frOutputJobs = outputJobs }
                                                       cacheFrontResult fr
@@ -4091,7 +4128,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case tyRes of
                       Left diags -> return (key, Left diags)
                       Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, _depModules, nameHashes, _roots, _tests, mdoc) -> do
-                        snap <- Source.readSource sp actFile
+                        srcText <- backSrcText sp (isPrebuilt key) actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
                         interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
@@ -4100,7 +4137,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing
-                                Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
+                                Nothing -> Just (mkBackJob env1 tmod srcText moduleImplHashStored)
                             fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
                                    { frInterestDeps = interestDeps }
                         cacheFrontResult fr

@@ -91,6 +91,7 @@ data CompileOptions   = CompileOptions {
                          optimize    :: OptimizeMode,
                          only_build  :: Bool,
                          skip_build  :: Bool,
+                         skip_backpass :: Bool,
                          watch       :: Bool,
                          no_threads  :: Bool,
                          parse_serial :: Bool,
@@ -358,6 +359,7 @@ sigCompileOptions = mkSigCompileOptions
         , optimize = Debug
         , only_build = False
         , skip_build = True
+        , skip_backpass = False
         , watch = False
         , no_threads = False
         , parse_serial = False
@@ -396,6 +398,7 @@ compileOptions = CompileOptions
         <*> optimizeOption
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
+        <*> switch (long "skip-backpass" <> help "Skip back passes (no C code generation), only type check and write interfaces")
         <*> switch (long "watch"        <> help "Rebuild on file changes")
         <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> switch (long "parse-serial" <> help "Use the serial whole-file parser")

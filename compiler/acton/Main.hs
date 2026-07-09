@@ -517,7 +517,9 @@ artifactCommand gopts cmd =
       C.ArtifactHash _ ->
         PkgCommands.artifactCommand gopts cmd
       _ -> do
-        let opts = defaultCompileOptions { C.skip_build = True }
+        -- Artifacts ship interfaces (.tydb) only; code generation is deferred
+        -- to the consuming build, so the back passes are skipped here.
+        let opts = defaultCompileOptions { C.skip_build = True, C.skip_backpass = True }
             sp = Source.diskSourceProvider
         paths <- loadProjectPaths opts
         let projDir = projPath paths
@@ -1033,7 +1035,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
           , ccOnBackJob = \_ -> return ()
           }
-    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) (cpPrebuiltRoots plan) callbacks
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
@@ -2091,7 +2093,7 @@ runCliPostCompile cliHooks gopts plan env = do
           cchFinalStart cliHooks
           action `onException` cchFinalDone cliHooks False
           cchFinalDone cliHooks True
-    if C.skip_build opts'
+    if C.skip_build opts' || C.skip_backpass opts'
       then
         logLine "  Skipping final build step"
       else
