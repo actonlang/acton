@@ -1361,7 +1361,7 @@ runFrontOutputSync onStart onDone shouldWrite key kind action = do
   current <- shouldWrite
   when current $ do
     onStart key kind
-    runFrontOutputAction onDone shouldWrite key kind action
+    runStartedFrontOutputAction onDone key kind action
 
 runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                      -> IO Bool
@@ -1371,13 +1371,21 @@ runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                      -> IO ()
 runFrontOutputAction onDone shouldWrite key kind action = do
   current <- shouldWrite
-  when current $ do
-    t0 <- getTime Monotonic
-    res <- (try action :: IO (Either SomeException ()))
-    t1 <- getTime Monotonic
-    let elapsed = t1 - t0
-    onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
-    either throwIO return res
+  when current $
+    runStartedFrontOutputAction onDone key kind action
+
+runStartedFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                            -> TaskKey
+                            -> FrontOutputKind
+                            -> IO ()
+                            -> IO ()
+runStartedFrontOutputAction onDone key kind action = do
+  t0 <- getTime Monotonic
+  res <- (try action :: IO (Either SomeException ()))
+  t1 <- getTime Monotonic
+  let elapsed = t1 - t0
+  onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
+  either throwIO return res
   where
     ignoreProgressException :: SomeException -> IO ()
     ignoreProgressException err
@@ -3998,7 +4006,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                               Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
                                                        | otherwise -> return (Just (tydbWriteDiagnostics mn err))
                                               Right () -> return Nothing
-                                          mkOutputJobs =
+                                          startOutputJobs =
                                             if C.tydb optsT
                                               then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
                                                                                  (ccOnFrontOutputDone callbacks)
@@ -4018,7 +4026,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                               case writeFailure of
                                                 Just diags -> return (key, Left diags)
                                                 Nothing -> mask_ $ do
-                                                  outputJobs <- mkOutputJobs
+                                                  outputJobs <- startOutputJobs
                                                   rememberFrontOutputJobList frontOutputRef outputJobs
                                                   let deferredBackJob = deferredBackJob0
                                                       fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
@@ -4037,13 +4045,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                               case envRes of
                                                 Left err -> handleSyncFailure err
                                                 Right env1 -> do
+                                                  evaluate (rnf nmod)
+                                                  evaluate (rnf tmod)
                                                   writeFailure <- writeRefreshedRows
                                                   case writeFailure of
                                                     Just diags -> return (key, Left diags)
                                                     Nothing -> mask_ $ do
-                                                      evaluate (rnf nmod)
-                                                      evaluate (rnf tmod)
-                                                      outputJobs <- mkOutputJobs
+                                                      outputJobs <- startOutputJobs
                                                       rememberFrontOutputJobList frontOutputRef outputJobs
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
