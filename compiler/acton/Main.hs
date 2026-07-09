@@ -528,7 +528,7 @@ artifactCommand gopts cmd =
       C.ArtifactHash _ ->
         PkgCommands.artifactCommand gopts cmd
       _ -> do
-        let opts = C.defaultCompileOptions { C.skip_build = True }
+        let opts = C.defaultCompileOptions { C.skip_build = True, C.skip_backpass = True }
             sp = Source.diskSourceProvider
         paths <- loadProjectPaths opts
         let projDir = projPath paths
@@ -2065,7 +2065,7 @@ runCliPostCompile reporter gopts plan env = do
           success <- action `onException` finishFinal reporter False
           finishFinal reporter success
           return success
-    if C.skip_build opts'
+    if C.skip_build opts' || C.skip_backpass opts'
       then
         logLine "  Skipping final build step" >> return True
       else if C.altOutput opts' then return True else do

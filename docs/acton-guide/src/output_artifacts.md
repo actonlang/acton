@@ -6,6 +6,11 @@ use a prebuilt output artifact instead of rebuilding the dependency from
 source. If no matching artifact is available, Acton falls back to fetching and
 building the source locally.
 
+An output artifact contains the package's compiled type interfaces, not
+generated code. Producing an artifact only runs the compiler front end (parse
+and type check); code generation is deferred to the consuming build, which
+generates code from the artifact for the parts it uses.
+
 Acton uses OCI repositories for artifact distribution. OCI is the image and
 artifact format used by container registries. Acton takes advantage of that
 registry infrastructure, which is widely available across hosting providers,
@@ -118,16 +123,18 @@ acton artifact push --artifact-repo ghcr.io/OWNER/REPO/acton-out
 acton artifact push --artifact-repo /tmp/acton-out
 ```
 
-`acton artifact push` builds the current package before packaging and pushing
-it. `acton artifact pack` does the same build-and-pack step but only writes the
-artifact locally:
+`acton artifact push` type checks the current package before packaging and
+pushing it. No code is generated in this step; the artifact ships the compiled
+type interfaces and the consuming build performs code generation. `acton
+artifact pack` does the same check-and-pack step but only writes the artifact
+locally:
 
 ```bash
 acton artifact pack
 ```
 
 The artifact is packaged from the local checkout. Acton computes the source
-content hash from the package source after the build step, and the artifact tag
+content hash from the package source after the check step, and the artifact tag
 is derived from that hash. Consumers need matching source content to use the
 artifact.
 
