@@ -93,6 +93,7 @@ import System.FileLock
 import System.FilePath ((</>), addTrailingPathSeparator)
 import System.FilePath.Posix
 import System.IO hiding (readFile, writeFile)
+import GHC.IO.Encoding (setLocaleEncoding)
 import System.IO.Temp (writeSystemTempFile)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
@@ -138,6 +139,8 @@ raiseOpenFileLimit =
 
 main = do
     raiseOpenFileLimit
+    setLocaleEncoding utf8
+    mapM_ (`hSetEncoding` utf8) [stdin, stdout, stderr]
     hSetBuffering stdout LineBuffering
     arg <- C.parseCmdLine
     let gopts = case arg of
