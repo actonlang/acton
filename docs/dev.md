@@ -31,6 +31,7 @@ There are two types of releases, "version releases" and the `tip` release.
 - this is like version `1.2.3`
 - create a new branch called `release-v` followed by the version number, like
   `release-v1.2.3`
+- update `version.mk` — set `VERSION` to the new version number, like `1.2.3`
 - prepare `CHANGELOG.md` by placing the content currently under the `Unreleased`
   heading under a version number, like version `1.2.3` instead
 - push branch to GitHub and open PR
