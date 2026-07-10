@@ -818,6 +818,7 @@ findConName n env           = case findQName n env of
                                 NAct q p k te _  -> (q, [], notHidden te)
                                 NClass q us te _ -> (q, us, te)
                                 NProto q us te _ -> (q, us, te)
+                                NType q t _      -> (q, [], [])
                                 NExt q c us te _ _ -> (q, us, te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
