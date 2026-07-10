@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.29.0] - 2026-07-10
 
 This release drastically improves compile times for modules that import very
 large modules. The compiler tracks what specific names are used from each
@@ -107,6 +107,9 @@ imported modules.
   prebuilt `dist/` tree, avoiding the slow, hard-to-cache Debian package
   rebuild while sharing installed-payload validation and package version checks
   across both package formats. [#2987]
+- Expand ecosystem CI coverage with standalone `acton-ssh` and `acton-grpc`
+  test jobs, and drop the stale standalone `ncurl` job now that its source
+  lives in StratoWeave. [#2974]
 - Compress RPM payloads with zstd, and check for the `zstd` tool before
   building RPM packages. [#3001]
 
@@ -4602,6 +4605,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#2964]: https://github.com/actonlang/acton/pull/2964
 [#2970]: https://github.com/actonlang/acton/pull/2970
 [#2972]: https://github.com/actonlang/acton/pull/2972
+[#2974]: https://github.com/actonlang/acton/pull/2974
 [#2976]: https://github.com/actonlang/acton/pull/2976
 [#2978]: https://github.com/actonlang/acton/pull/2978
 [#2981]: https://github.com/actonlang/acton/pull/2981
@@ -4774,6 +4778,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.28.1]: https://github.com/actonlang/acton/compare/v0.28.0...v0.28.1
 [0.28.2]: https://github.com/actonlang/acton/compare/v0.28.1...v0.28.2
 [0.28.3]: https://github.com/actonlang/acton/compare/v0.28.2...v0.28.3
+[0.29.0]: https://github.com/actonlang/acton/compare/v0.28.3...v0.29.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
