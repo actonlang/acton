@@ -1095,6 +1095,15 @@ missingIfaceDiagnostics ownerMn src missingMn =
     errsToDiagnostics "Compilation error" (modNameToFilename ownerMn) src
       [(NoLoc, "Type interface file not found or unreadable for " ++ modNameToString missingMn)]
 
+-- | A synchronous .tydb write failure is this module's front failure: the
+-- module cannot report complete without committed rows, and shaping it as a
+-- diagnostic keeps it on the structured error path (callers expect Left, not
+-- an escaped exception -- the task loop's waitAny would rethrow one).
+tydbWriteDiagnostics :: A.ModName -> SomeException -> [Diagnostic String]
+tydbWriteDiagnostics mn err =
+    errsToDiagnostics "Compilation error" (modNameToFilename mn) ""
+      [(NoLoc, "Failed to write .tydb for " ++ modNameToString mn ++ ": " ++ displayException err)]
+
 -- | Parse a module from source text, returning diagnostics on failure.
 -- Wraps parser, context, and indentation errors into a uniform format.
 parseActSource :: C.CompileOptions -> A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
@@ -1227,7 +1236,6 @@ data DeferredBackJob = DeferredBackJob
   , dbjMod :: A.ModName
   , dbjImplHash :: B.ByteString
   , dbjNameCount :: Int
-  , dbjOutputJobs :: [FrontOutputJob]
   }
 
 data FrontOutputJob = FrontOutputJob
@@ -1291,7 +1299,6 @@ dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
         , dbjMod = mn
         , dbjImplHash = moduleImplHash
         , dbjNameCount = nameCount
-        , dbjOutputJobs = []
         }
 
 interestDepsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
@@ -1338,31 +1345,23 @@ startFrontOutputJob onStart onDone shouldWrite key kind action = do
     , fojAsync = a
     }
 
-startDependentFrontOutputJob :: (TaskKey -> FrontOutputKind -> IO ())
-                             -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
-                             -> IO Bool
-                             -> FrontOutputJob
-                             -> TaskKey
-                             -> FrontOutputKind
-                             -> IO ()
-                             -> IO FrontOutputJob
-startDependentFrontOutputJob onStart onDone shouldWrite dep key kind action = do
-  a <- asyncWithUnmask $ \unmask -> do
-         depRes <- unmask (waitCatch (fojAsync dep))
-         case depRes of
-           Right () -> do
-             current <- unmask shouldWrite
-             when current $ do
-               onStart key kind
-               runFrontOutputAction onDone shouldWrite key kind (unmask action)
-           Left err
-             | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
-             | otherwise -> return ()
-  return FrontOutputJob
-    { fojKey = key
-    , fojKind = kind
-    , fojAsync = a
-    }
+-- Run a front output SYNCHRONOUSLY: used for the .tydb commit, so that a
+-- module reporting its front as complete IMPLIES its rows are on disk --
+-- readers never wait for, or race, a write. Same start/done reporting and
+-- skip-write gating as the background jobs; a failure propagates like any
+-- other front error (and no longer only when someone waits on a job).
+runFrontOutputSync :: (TaskKey -> FrontOutputKind -> IO ())
+                   -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                   -> IO Bool
+                   -> TaskKey
+                   -> FrontOutputKind
+                   -> IO ()
+                   -> IO ()
+runFrontOutputSync onStart onDone shouldWrite key kind action = do
+  current <- shouldWrite
+  when current $ do
+    onStart key kind
+    runFrontOutputAction onDone shouldWrite key kind action
 
 runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                      -> IO Bool
@@ -2687,40 +2686,46 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                                               , biImplHash = moduleImplHash
                                                               }
                                          }
-                  mask_ $ do
+                  do
                     let outputKey = TaskKey (projPath paths) mn
-                        startOutput =
-                          startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey
-                        startDependentOutput =
-                          startDependentFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput
-                    tyDbJob <- startOutput FrontOutputTydb (writeTyDb outputKey)
-                    docJobs <-
-                      forM docOutputActions $ uncurry startOutput
-                    tyJobs <-
-                      if C.tydb opts
-                        then
-                          (:[]) <$>
-                            startDependentOutput tyDbJob outputKey FrontOutputTydbCopy (copyTydbInterface opts paths mn)
-                        else return []
-                    let outputJobs = tyDbJob : docJobs ++ tyJobs
-                    recordFrontOutputJobs outputJobs
-                    let deferredBackJob' =
-                          fmap (\dbj -> dbj{ dbjOutputJobs = filter ((== FrontOutputTydb) . fojKind) outputJobs }) deferredBackJob
-                    return $ Right FrontResult { frIfaceTE = publicIface
-                                               , frImps = imps
-                                               , frDoc = mdoc
-                                               , frModuleInfo = Nothing
-                                               , frPubHash = modulePubHash
-                                               , frImplHash = moduleImplHash
-                                               , frNameHashes = publicNameHashes nameHashes
-                                               , frInterestDeps = interestDepsFromNameHashes nameHashes
-                                               , frFrontTime = frontTimeMaybe
-                                               , frFrontTiming = frontTimingMaybe
-                                               , frInferredSigs = inferredSigs
-                                               , frBackJob = backJob
-                                               , frDeferredBackJob = deferredBackJob'
-                                               , frOutputJobs = outputJobs
-                                               }
+                    -- The .tydb commit is synchronous with front completion:
+                    -- once this module reports done, its rows are on disk.
+                    -- A write failure (disk full, permissions) fails THIS
+                    -- module's front on the structured diagnostics path.
+                    -- Docs and the interface copy are never read back within
+                    -- this build, so they stay in the background.
+                    writeRes <- try (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey FrontOutputTydb (writeTyDb outputKey))
+                    case writeRes of
+                      Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+                               | otherwise -> return (Left (tydbWriteDiagnostics mn err))
+                      Right () -> do
+                        outputJobs <- mask_ $ do
+                          let startOutput =
+                                startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey
+                          docJobs <-
+                            forM docOutputActions $ uncurry startOutput
+                          tyJobs <-
+                            if C.tydb opts
+                              then (:[]) <$> startOutput FrontOutputTydbCopy (copyTydbInterface opts paths mn)
+                              else return []
+                          let jobs = docJobs ++ tyJobs
+                          recordFrontOutputJobs jobs
+                          return jobs
+                        return $ Right FrontResult { frIfaceTE = publicIface
+                                                   , frImps = imps
+                                                   , frDoc = mdoc
+                                                   , frModuleInfo = Nothing
+                                                   , frPubHash = modulePubHash
+                                                   , frImplHash = moduleImplHash
+                                                   , frNameHashes = publicNameHashes nameHashes
+                                                   , frInterestDeps = interestDepsFromNameHashes nameHashes
+                                                   , frFrontTime = frontTimeMaybe
+                                                   , frFrontTiming = frontTimingMaybe
+                                                   , frInferredSigs = inferredSigs
+                                                   , frBackJob = backJob
+                                                   , frDeferredBackJob = deferredBackJob
+                                                   , frOutputJobs = outputJobs
+                                                   }
 
 data DbpSelection = DbpSelection
   { dbsModule :: A.Module
@@ -2741,7 +2746,6 @@ prepareDeferredBackJob :: Source.SourceProvider
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
 prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
-  waitFrontOutputJobList (dbjOutputJobs dbj)
   let paths = dbjPaths dbj
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
@@ -3977,39 +3981,51 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                     Right updatedDepModules -> do
                                       evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
                                       let outputKey = TaskKey (projPath paths) mn
-                                          mkOutputJobs = do
-                                            outputJob <- startFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                             (ccOnFrontOutputDone callbacks)
-                                                                             (ccShouldWriteFrontOutput callbacks)
-                                                                             outputKey
-                                                                             FrontOutputTydb $
-                                              InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes
-                                            tyJobs <-
-                                              if C.tydb optsT
-                                                then (:[]) <$> startDependentFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                                           (ccOnFrontOutputDone callbacks)
-                                                                                           (ccShouldWriteFrontOutput callbacks)
-                                                                                           outputJob
-                                                                                           outputKey
-                                                                                           FrontOutputTydbCopy
-                                                                                           (copyTydbInterface optsT paths mn)
-                                                else return []
-                                            return (outputJob, outputJob : tyJobs)
+                                          -- Synchronous, like the full write: completion implies
+                                          -- the refreshed rows are committed. A write failure is
+                                          -- THIS module's front failure on the diagnostics path --
+                                          -- returned, not thrown, so handleImplRefreshException
+                                          -- cannot misread it as stale dep hashes and rerun the
+                                          -- front against a persistent environmental error.
+                                          writeRefreshedRows = do
+                                            res <- try (runFrontOutputSync (ccOnFrontOutputStart callbacks)
+                                                                           (ccOnFrontOutputDone callbacks)
+                                                                           (ccShouldWriteFrontOutput callbacks)
+                                                                           outputKey
+                                                                           FrontOutputTydb $
+                                                          InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes)
+                                            case res of
+                                              Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+                                                       | otherwise -> return (Just (tydbWriteDiagnostics mn err))
+                                              Right () -> return Nothing
+                                          mkOutputJobs =
+                                            if C.tydb optsT
+                                              then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
+                                                                                 (ccOnFrontOutputDone callbacks)
+                                                                                 (ccShouldWriteFrontOutput callbacks)
+                                                                                 outputKey
+                                                                                 FrontOutputTydbCopy
+                                                                                 (copyTydbInterface optsT paths mn)
+                                              else return []
                                           deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
                                       case deferredBackJob0 of
                                         Just _ -> do
                                           ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
                                           case ifaceRes of
                                             Left diags -> return (key, Left diags)
-                                            Right (imps, ifaceTE, mdocI, storedPubH, _storedImplH, mModuleInfo) -> mask_ $ do
-                                              (outputJob, outputJobs) <- mkOutputJobs
-                                              rememberFrontOutputJobList frontOutputRef outputJobs
-                                              let deferredBackJob = fmap (\dbj -> dbj{ dbjOutputJobs = [outputJob] }) deferredBackJob0
-                                                  fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
-                                                    { frOutputJobs = outputJobs
-                                                    , frModuleInfo = mModuleInfo
-                                                    }
-                                              cacheFrontResult fr
+                                            Right (imps, ifaceTE, mdocI, storedPubH, _storedImplH, mModuleInfo) -> do
+                                              writeFailure <- writeRefreshedRows
+                                              case writeFailure of
+                                                Just diags -> return (key, Left diags)
+                                                Nothing -> mask_ $ do
+                                                  outputJobs <- mkOutputJobs
+                                                  rememberFrontOutputJobList frontOutputRef outputJobs
+                                                  let deferredBackJob = deferredBackJob0
+                                                      fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
+                                                        { frOutputJobs = outputJobs
+                                                        , frModuleInfo = mModuleInfo
+                                                        }
+                                                  cacheFrontResult fr
                                         Nothing -> do
                                           tyRes <- readTyFile
                                           case tyRes of
@@ -4020,17 +4036,21 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                 Acton.Env.mkEnv (searchPath paths) envSnap tmod
                                               case envRes of
                                                 Left err -> handleSyncFailure err
-                                                Right env1 -> mask_ $ do
-                                                  evaluate (rnf nmod)
-                                                  evaluate (rnf tmod)
-                                                  (_outputJob, outputJobs) <- mkOutputJobs
-                                                  rememberFrontOutputJobList frontOutputRef outputJobs
-                                                  let I.NModule imps ifaceFull _mdoc = nmod
-                                                      ifaceTE = publicIfaceTE ifaceFull
-                                                      backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                                      fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
-                                                        { frOutputJobs = outputJobs }
-                                                  cacheFrontResult fr
+                                                Right env1 -> do
+                                                  writeFailure <- writeRefreshedRows
+                                                  case writeFailure of
+                                                    Just diags -> return (key, Left diags)
+                                                    Nothing -> mask_ $ do
+                                                      evaluate (rnf nmod)
+                                                      evaluate (rnf tmod)
+                                                      outputJobs <- mkOutputJobs
+                                                      rememberFrontOutputJobList frontOutputRef outputJobs
+                                                      let I.NModule imps ifaceFull _mdoc = nmod
+                                                          ifaceTE = publicIfaceTE ifaceFull
+                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                                          fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                            { frOutputJobs = outputJobs }
+                                                      cacheFrontResult fr
                         _ -> rerunFront
                       ) `catch` handleImplRefreshException
                   runCodegenRefresh = do
