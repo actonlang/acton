@@ -77,9 +77,15 @@ Once an artifact has been pulled into the dependency cache, later plain
 
 Acton checks the local dependency cache before contacting any registry. If a
 matching artifact is available locally, Acton checks that it matches the
-requested source content hash, interface version, and target before using it. If
-only a source cache entry exists, Acton uses that entry without probing remote
-artifact repositories.
+requested source content hash, interface version, and target before using it.
+
+Passing `--artifact-repo` opts the build into artifact consumption: a valid
+artifact is preferred even when a cached source entry already exists, and the
+cached source is used only when no artifact can be found. This matters on a
+machine that has published the artifact itself, since producing seeds the
+caches with the package source, which would otherwise always win over the
+artifact. Without `--artifact-repo`, a cached source entry is used as is,
+without probing remote artifact repositories.
 
 For local testing or offline workflows, `--artifact-repo` can also point to an
 OCI image layout directory:

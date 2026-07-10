@@ -5279,6 +5279,14 @@ fetchDependencies gopts paths depOverrides artifactRepos = do
     claimVisited ref key = atomicModifyIORef' ref $ \s ->
       if Data.Set.member key s then (s, False) else (Data.Set.insert key s, True)
 
+    -- Passing --artifact-repo opts in to artifact consumption: a valid output
+    -- artifact is then preferred over already-cached source. Without it cached
+    -- source always wins, so ordinary builds never retry artifact pulls for
+    -- deps they already have. The opt-in matters on any host that has run
+    -- 'acton artifact hash/push': producing seeds the caches with the
+    -- producer's own source, which would otherwise shadow the artifact forever.
+    preferArtifacts = not (null artifactRepos)
+
     fetchPkg name dep url h cacheDir zigExe globalCache depsCache = do
       let dst = joinPath [depsCache, name ++ "-" ++ h]
       present <- doesDirectoryExist dst
@@ -5291,9 +5299,21 @@ fetchDependencies gopts paths depOverrides artifactRepos = do
             Right False -> do
               stillPresent <- doesDirectoryExist dst
               if stillPresent
-                then useCachedPkg name h dst
+                then usePkgOrPreferredArtifact name dep h dst depsCache
                 else fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst
         else fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst
+
+    -- dst holds a cached source checkout. With artifact consumption enabled,
+    -- try to replace it with the matching output artifact (tryArtifactRefs
+    -- swaps dst in place); on a miss keep building from the cached source.
+    usePkgOrPreferredArtifact name dep h dst depsCache
+      | not preferArtifacts = useCachedPkg name h dst
+      | otherwise = do
+          artifact <- fetchPkgArtifact name dep h dst depsCache
+          case artifact of
+            Left err -> return (Left err)
+            Right True -> return (Right h)
+            Right False -> useCachedPkg name h dst
 
     useCachedArtifact name h _dst = do
       unless (C.quiet gopts) $
@@ -5306,8 +5326,8 @@ fetchDependencies gopts paths depOverrides artifactRepos = do
       return (Right h)
 
     fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst = do
-      sourcePresent <- doesDirectoryExist (cacheDir h)
-      if sourcePresent
+      sourcePresent <- cacheEntryExists cacheDir h
+      if sourcePresent && not preferArtifacts
         then fetchOne "pkg" name url (Just h) cacheDir zigExe globalCache
         else do
           artifact <- fetchPkgArtifact name dep h dst depsCache
