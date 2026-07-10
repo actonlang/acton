@@ -365,212 +365,241 @@ copyTree src dir = do
 -- fetching its source. Local dependencies are always compiled from source.
 actonDependencyFetch :: FetchEnv -> String -> BuildSpec.PkgDep -> Maybe (IO (Either String ()))
 actonDependencyFetch env name dep
-  | isJust (localPath dep) = Nothing
-  | Just url <- BuildSpec.url dep, Just h <- BuildSpec.hash dep =
-      Just (fmap (fmap (const ())) (fetchActonPackage env name dep url h))
-  | isJust (BuildSpec.url dep) = Just (return (Left (missingHash ActonPackage name)))
-  | otherwise = Nothing
+    | isJust (localPath dep) = Nothing
+    | Just url <- BuildSpec.url dep, Just h <- BuildSpec.hash dep =
+        Just (fetchActonPackage env name dep url h)
+    | isJust (BuildSpec.url dep) = Just (return (Left (missingHash ActonPackage name)))
+    | otherwise = Nothing
 
+fetchActonPackage :: FetchEnv -> String -> BuildSpec.PkgDep -> String -> String -> IO (Either String ())
 fetchActonPackage env name dep url h = do
-  let dst = joinPath [depsCache env, name ++ "-" ++ h]
-  present <- doesDirectoryExist dst
-  if present
-    then do
-      cachedArtifact <- validateCachedArtifactDir env name h dst
-      case cachedArtifact of
-        Left err -> return (Left err)
-        Right True -> useCachedArtifact env name h dst
-        Right False -> do
-          stillPresent <- doesDirectoryExist dst
-          if stillPresent
-            then useCachedPkg env name h dst
-            else fetchActonPackageFresh env name dep url h dst
-    else fetchActonPackageFresh env name dep url h dst
+    let dst = depCacheEntry (depsCache env) name h
+    present <- doesDirectoryExist dst
+    if present
+      then do
+        cachedArtifact <- validateCachedArtifactDir env name h dst
+        case cachedArtifact of
+          Left err -> return (Left err)
+          Right True -> useCachedArtifact env name h
+          Right False -> do
+            stillPresent <- doesDirectoryExist dst
+            if stillPresent
+              then usePkgOrPreferredArtifact env name dep h dst
+              else fetchActonPackageFresh env name dep url h dst
+      else fetchActonPackageFresh env name dep url h dst
 
-useCachedArtifact env name h _dst = do
-  unless (C.quiet (options env)) $
-    putStrLn ("Using cached Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
-  return (Right h)
+-- | Explicit artifact repositories prefer artifacts to cached source, so a
+-- producer can consume the artifact it published in the same environment.
+usePkgOrPreferredArtifact :: FetchEnv -> String -> BuildSpec.PkgDep -> String -> FilePath -> IO (Either String ())
+usePkgOrPreferredArtifact env name dep h dst
+    | null (artifactRepos env) = useCachedPkg env name h
+    | otherwise = do
+        artifact <- fetchPkgArtifact env name dep h dst
+        case artifact of
+          Left err -> return (Left err)
+          Right True -> return (Right ())
+          Right False -> useCachedPkg env name h
 
-useCachedPkg env name h _dst = do
-  unless (C.quiet (options env)) $
-    putStrLn ("Using cached pkg dependency " ++ name ++ " (" ++ h ++ ")")
-  return (Right h)
+useCachedArtifact :: FetchEnv -> String -> String -> IO (Either String ())
+useCachedArtifact env name h = do
+    unless (C.quiet (options env)) $
+      putStrLn ("Using cached Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
+    return (Right ())
 
+useCachedPkg :: FetchEnv -> String -> String -> IO (Either String ())
+useCachedPkg env name h = do
+    unless (C.quiet (options env)) $
+      putStrLn ("Using cached pkg dependency " ++ name ++ " (" ++ h ++ ")")
+    return (Right ())
+
+fetchActonPackageFresh :: FetchEnv -> String -> BuildSpec.PkgDep -> String -> String -> FilePath -> IO (Either String ())
 fetchActonPackageFresh env name dep url h dst = do
-  sourcePresent <- doesDirectoryExist (cachedPackage env h)
-  if sourcePresent
-    then fmap (fmap (const h)) (fetchPackage env ActonPackage name url h)
-    else do
-      artifact <- fetchPkgArtifact env name dep h dst
-      case artifact of
-        Left err -> return (Left err)
-        Right True -> return (Right h)
-        Right False -> fmap (fmap (const h)) (fetchPackage env ActonPackage name url h)
+    sourcePresent <- isCached env ActonPackage h
+    if sourcePresent && null (artifactRepos env)
+      then fetchPackage env ActonPackage name url h
+      else do
+        artifact <- fetchPkgArtifact env name dep h dst
+        case artifact of
+          Left err -> return (Left err)
+          Right True -> return (Right ())
+          Right False -> fetchPackage env ActonPackage name url h
 
+validateCachedArtifactDir :: FetchEnv -> String -> String -> FilePath -> IO (Either String Bool)
 validateCachedArtifactDir env name h dst = do
-  artifactRoot <- isActonArtifactOnlyRoot dst
-  if not artifactRoot
-    then return (Right False)
-    else do
-      valid <- validateArtifactDir name h dst
-      case valid of
-        Right () -> return (Right True)
-        Left err -> do
-          when (C.verbose (options env)) $
-            putStrLn ("Ignoring cached Acton artifact for " ++ name ++ ": " ++ err)
-          rm <- try (removePathForcibly dst) :: IO (Either IOException ())
-          case rm of
-            Right _ -> return (Right False)
-            Left ex -> return (Left ("Failed to remove stale Acton artifact " ++ dst ++ ": " ++ displayException ex))
+    artifactRoot <- isActonArtifactOnlyRoot dst
+    if not artifactRoot
+      then return (Right False)
+      else do
+        valid <- validateArtifactDir name h dst
+        case valid of
+          Right () -> return (Right True)
+          Left err -> do
+            when (C.verbose (options env)) $
+              putStrLn ("Ignoring cached Acton artifact for " ++ name ++ ": " ++ err)
+            rm <- try (removePathForcibly dst) :: IO (Either IOException ())
+            case rm of
+              Right _ -> return (Right False)
+              Left ex -> return (Left ("Failed to remove stale Acton artifact " ++ dst ++ ": " ++ displayException ex))
 
+fetchPkgArtifact :: FetchEnv -> String -> BuildSpec.PkgDep -> String -> FilePath -> IO (Either String Bool)
 fetchPkgArtifact env name dep h dst = do
-  refs <- artifactRefs env dep h
-  case refs of
-    Left err -> return (Left err)
-    Right allRefs -> tryArtifactRefs env name h dst (localArtifactRefs allRefs ++ remoteArtifactRefs allRefs)
+    refs <- artifactRefs env dep h
+    case refs of
+      Left err -> return (Left err)
+      Right allRefs -> tryArtifactRefs env name h dst (localArtifactRefs allRefs ++ remoteArtifactRefs allRefs)
 
+localArtifactRefs :: [String] -> [String]
 localArtifactRefs refs = filter Artifact.ociRefIsLocal refs
 
+remoteArtifactRefs :: [String] -> [String]
 remoteArtifactRefs refs = filter (not . Artifact.ociRefIsLocal) refs
 
+artifactRefs :: FetchEnv -> BuildSpec.PkgDep -> String -> IO (Either String [String])
 artifactRefs env dep h =
-  let (repoErrors, repoRefs) = partitionEithers [ artifactRepoRef repo h | repo <- artifactRepos env ]
-  in case repoErrors of
-       err:_ -> return (Left err)
-       [] -> return (Right (repoRefs ++ derivedArtifactRefs dep h))
-  where
-    artifactRepoRef repo h =
-      case Artifact.ociRefForRepository repo h of
-        Just ref -> Right ref
-        Nothing  -> Left ("Invalid Acton artifact repository " ++ repo)
+    let (repoErrors, repoRefs) = partitionEithers [ artifactRepoRef repo h | repo <- artifactRepos env ]
+    in case repoErrors of
+         err:_ -> return (Left err)
+         [] -> return (Right (repoRefs ++ derivedArtifactRefs dep h))
+    where
+      artifactRepoRef repo h =
+        case Artifact.ociRefForRepository repo h of
+          Just ref -> Right ref
+          Nothing  -> Left ("Invalid Acton artifact repository " ++ repo)
 
-    derivedArtifactRefs dep h =
-      catMaybes [ BuildSpec.repo_url dep >>= \repoUrl -> Artifact.deriveOciRef repoUrl h ]
+      derivedArtifactRefs dep h =
+        catMaybes [ BuildSpec.repo_url dep >>= \repoUrl -> Artifact.deriveOciRef repoUrl h ]
 
+tryArtifactRefs :: FetchEnv -> String -> String -> FilePath -> [String] -> IO (Either String Bool)
 tryArtifactRefs env name h dst refs =
-  case refs of
-    [] -> return (Right False)
-    ref:rest -> do
-      unless (C.quiet (options env)) $
-        putStrLn ("Trying Acton artifact " ++ name ++ " from " ++ ref)
-      tmpRoot <- getTemporaryDirectory
-      nonce <- randomRIO (0, maxBound :: Int)
-      let tmpDir = joinPath [tmpRoot, "acton-oci-" ++ show nonce]
-          pullDir = joinPath [tmpDir, "pull"]
-          stageDir = joinPath [tmpDir, "stage"]
-          refArg = Artifact.ociRefOrasTarget ref
-          pullArgs = ["pull"] ++ Artifact.ociRefOrasOptions ref ++ [refArg, "--output", pullDir]
-      createDirectoryIfMissing True pullDir
-      pullRes <- runProcessCapture "oras" pullArgs Nothing
-      case pullRes of
-        Left _ -> cleanupTmp tmpDir >> tryArtifactRefs env name h dst rest
-        Right (ExitFailure _, _, _) -> cleanupTmp tmpDir >> tryArtifactRefs env name h dst rest
-        Right (ExitSuccess, _, _) -> do
-          let archive = pullDir </> Artifact.artifactArchiveFile
-          archiveExists <- doesFileExist archive
-          if not archiveExists
-            then do
-              skipArtifact env name h dst ref tmpDir rest ("did not contain " ++ Artifact.artifactArchiveFile)
-            else do
-              createDirectoryIfMissing True stageDir
-              extracted <- extractArtifactArchive ref archive stageDir
-              case extracted of
-                Left err -> skipArtifact env name h dst ref tmpDir rest err
-                Right () -> do
-                  valid <- validateArtifactDir name h stageDir
-                  case valid of
-                    Left err -> skipArtifact env name h dst ref tmpDir rest err
-                    Right () -> do
-                      createDirectoryIfMissing True (depsCache env)
-                      dstExists <- doesDirectoryExist dst
-                      materialized <- if dstExists
-                                        then try (removePathForcibly dst >> renameDirectory stageDir dst) :: IO (Either IOException ())
-                                        else try (renameDirectory stageDir dst) :: IO (Either IOException ())
-                      case materialized of
-                        Right _ -> do
-                          cleanupTmp tmpDir
-                          unless (C.quiet (options env)) $
-                            putStrLn ("Using Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
-                          return (Right True)
-                        Left ex -> do
-                          cleanupTmp tmpDir
-                          return (Left ("Failed to materialize Acton artifact " ++ ref ++ ": " ++ displayException ex))
+    case refs of
+      [] -> return (Right False)
+      ref:rest -> do
+        unless (C.quiet (options env)) $
+          putStrLn ("Trying Acton artifact " ++ name ++ " from " ++ ref)
+        tmpRoot <- getTemporaryDirectory
+        nonce <- randomRIO (0, maxBound :: Int)
+        let tmpDir = joinPath [tmpRoot, "acton-oci-" ++ show nonce]
+            pullDir = joinPath [tmpDir, "pull"]
+            stageDir = joinPath [tmpDir, "stage"]
+            refArg = Artifact.ociRefOrasTarget ref
+            pullArgs = ["pull"] ++ Artifact.ociRefOrasOptions ref ++ [refArg, "--output", pullDir]
+        createDirectoryIfMissing True pullDir
+        pullRes <- runProcessCapture "oras" pullArgs Nothing
+        case pullRes of
+          Left _ -> cleanupTmp tmpDir >> tryArtifactRefs env name h dst rest
+          Right (ExitFailure _, _, _) -> cleanupTmp tmpDir >> tryArtifactRefs env name h dst rest
+          Right (ExitSuccess, _, _) -> do
+            let archive = pullDir </> Artifact.artifactArchiveFile
+            archiveExists <- doesFileExist archive
+            if not archiveExists
+              then do
+                skipArtifact env name h dst ref tmpDir rest ("did not contain " ++ Artifact.artifactArchiveFile)
+              else do
+                createDirectoryIfMissing True stageDir
+                extracted <- extractArtifactArchive ref archive stageDir
+                case extracted of
+                  Left err -> skipArtifact env name h dst ref tmpDir rest err
+                  Right () -> do
+                    valid <- validateArtifactDir name h stageDir
+                    case valid of
+                      Left err -> skipArtifact env name h dst ref tmpDir rest err
+                      Right () -> do
+                        createDirectoryIfMissing True (depsCache env)
+                        dstExists <- doesDirectoryExist dst
+                        materialized <- if dstExists
+                                          then try (removePathForcibly dst >> renameDirectory stageDir dst) :: IO (Either IOException ())
+                                          else try (renameDirectory stageDir dst) :: IO (Either IOException ())
+                        case materialized of
+                          Right _ -> do
+                            cleanupTmp tmpDir
+                            unless (C.quiet (options env)) $
+                              putStrLn ("Using Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
+                            return (Right True)
+                          Left ex -> do
+                            cleanupTmp tmpDir
+                            return (Left ("Failed to materialize Acton artifact " ++ ref ++ ": " ++ displayException ex))
 
+skipArtifact :: FetchEnv -> String -> String -> FilePath -> String -> FilePath -> [String] -> String -> IO (Either String Bool)
 skipArtifact env name h dst ref tmpDir rest reason = do
-  when (C.verbose (options env)) $
-    putStrLn ("Ignoring Acton artifact " ++ ref ++ ": " ++ reason)
-  cleanupTmp tmpDir
-  tryArtifactRefs env name h dst rest
+    when (C.verbose (options env)) $
+      putStrLn ("Ignoring Acton artifact " ++ ref ++ ": " ++ reason)
+    cleanupTmp tmpDir
+    tryArtifactRefs env name h dst rest
 
+validateArtifactDir :: String -> String -> FilePath -> IO (Either String ())
 validateArtifactDir name h dir = do
-  manifestE <- Artifact.readManifest dir
-  case manifestE of
-    Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
-    Right manifest ->
-      case Artifact.validateManifest h manifest of
-        Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
-        Right () -> do
-          hasBuildAct <- doesFileExist (dir </> "Build.act")
-          hasTypesDir <- doesDirectoryExist (dir </> "out" </> "types")
-          if hasBuildAct && hasTypesDir
-            then return (Right ())
-            else return (Left ("Acton artifact for " ++ name ++ " must contain Build.act and out/types"))
+    manifestE <- Artifact.readManifest dir
+    case manifestE of
+      Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
+      Right manifest ->
+        case Artifact.validateManifest h manifest of
+          Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
+          Right () -> do
+            hasBuildAct <- doesFileExist (dir </> "Build.act")
+            hasTypesDir <- doesDirectoryExist (dir </> "out" </> "types")
+            if hasBuildAct && hasTypesDir
+              then return (Right ())
+              else return (Left ("Acton artifact for " ++ name ++ " must contain Build.act and out/types"))
 
+extractArtifactArchive :: String -> FilePath -> FilePath -> IO (Either String ())
 extractArtifactArchive ref archive stageDir = do
-  safe <- validateArtifactArchiveEntries archive
-  case safe of
-    Left err ->
-      return (Left ("Unsafe Acton artifact " ++ ref ++ ": " ++ err))
-    Right () -> do
-      extractRes <- runProcessCapture "tar" ["-xzf", archive, "-C", stageDir] Nothing
-      case extractRes of
-        Left ex ->
-          return (Left ("Failed to extract Acton artifact " ++ ref ++ ": " ++ displayException ex))
-        Right (ExitFailure _, _, err) ->
-          return (Left ("Failed to extract Acton artifact " ++ ref ++ ":\n" ++ err))
-        Right (ExitSuccess, _, _) -> return (Right ())
+    safe <- validateArtifactArchiveEntries archive
+    case safe of
+      Left err ->
+        return (Left ("Unsafe Acton artifact " ++ ref ++ ": " ++ err))
+      Right () -> do
+        extractRes <- runProcessCapture "tar" ["-xzf", archive, "-C", stageDir] Nothing
+        case extractRes of
+          Left ex ->
+            return (Left ("Failed to extract Acton artifact " ++ ref ++ ": " ++ displayException ex))
+          Right (ExitFailure _, _, err) ->
+            return (Left ("Failed to extract Acton artifact " ++ ref ++ ":\n" ++ err))
+          Right (ExitSuccess, _, _) -> return (Right ())
 
+validateArtifactArchiveEntries :: FilePath -> IO (Either String ())
 validateArtifactArchiveEntries archive = do
-  namesRes <- runProcessCapture "tar" ["-tzf", archive] Nothing
-  case namesRes of
-    Left ex -> return (Left ("failed to list archive entries: " ++ displayException ex))
-    Right (ExitFailure _, _, err) -> return (Left ("failed to list archive entries:\n" ++ err))
-    Right (ExitSuccess, out, _) -> do
-      let entries = filter (not . null) (lines out)
-          badPaths = filter (not . safeArtifactPath) entries
-      if not (null badPaths)
-        then return (Left ("invalid archive path " ++ head badPaths))
-        else do
-          typesRes <- runProcessCapture "tar" ["-tvzf", archive] Nothing
-          case typesRes of
-            Left ex -> return (Left ("failed to inspect archive entries: " ++ displayException ex))
-            Right (ExitFailure _, _, err) -> return (Left ("failed to inspect archive entries:\n" ++ err))
-            Right (ExitSuccess, typeOut, _) -> do
-              let badTypes = filter (not . safeArtifactTypeLine) (filter (not . null) (lines typeOut))
-              if null badTypes
-                then return (Right ())
-                else return (Left ("unsupported archive entry type " ++ take 1 (head badTypes)))
+    namesRes <- runProcessCapture "tar" ["-tzf", archive] Nothing
+    case namesRes of
+      Left ex -> return (Left ("failed to list archive entries: " ++ displayException ex))
+      Right (ExitFailure _, _, err) -> return (Left ("failed to list archive entries:\n" ++ err))
+      Right (ExitSuccess, out, _) -> do
+        let entries = filter (not . null) (lines out)
+            badPaths = filter (not . safeArtifactPath) entries
+        if not (null badPaths)
+          then return (Left ("invalid archive path " ++ head badPaths))
+          else do
+            typesRes <- runProcessCapture "tar" ["-tvzf", archive] Nothing
+            case typesRes of
+              Left ex -> return (Left ("failed to inspect archive entries: " ++ displayException ex))
+              Right (ExitFailure _, _, err) -> return (Left ("failed to inspect archive entries:\n" ++ err))
+              Right (ExitSuccess, typeOut, _) -> do
+                let badTypes = filter (not . safeArtifactTypeLine) (filter (not . null) (lines typeOut))
+                if null badTypes
+                  then return (Right ())
+                  else return (Left ("unsupported archive entry type " ++ take 1 (head badTypes)))
 
+safeArtifactPath :: FilePath -> Bool
 safeArtifactPath p =
-  not (isAbsolute p) &&
-  ".." `notElem` splitDirectories p &&
-  (p == Artifact.artifactManifestFile ||
-   p == "Build.act" ||
-   p == "out" ||
-   p == "out/types" ||
-   "out/types/" `isPrefixOf` p)
+    not (isAbsolute p) &&
+    ".." `notElem` splitDirectories p &&
+    (p == Artifact.artifactManifestFile ||
+     p == "Build.act" ||
+     p == "out" ||
+     p == "out/types" ||
+     "out/types/" `isPrefixOf` p)
 
+safeArtifactTypeLine :: String -> Bool
 safeArtifactTypeLine [] = True
 safeArtifactTypeLine (c:_) = c == '-' || c == 'd'
 
+runProcessCapture :: FilePath -> [String] -> Maybe FilePath -> IO (Either SomeException (ExitCode, String, String))
 runProcessCapture exe args mcwd = do
-  let cmd = (proc exe args){ cwd = mcwd }
-  try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+    let cmd = (proc exe args){ cwd = mcwd }
+    try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
 
+cleanupTmp :: FilePath -> IO ()
 cleanupTmp dir =
-  removePathForcibly dir `catch` ignoreCleanup
+    removePathForcibly dir `catch` ignoreCleanup
 
 ignoreCleanup :: IOException -> IO ()
 ignoreCleanup _ = return ()
-
