@@ -14,7 +14,7 @@ imported modules.
   a single common type, so comparing tuples of different shapes (positional
   vs named, or reordered field names) is a type error. Witness classes are
   registered for serialization with preassigned class ids, shifting all
-  dynamically assigned class ids once.
+  dynamically assigned class ids once. [#3009]
 - Add a compiler-synthesized `__get_attr__(name: str) -> ?value` reflection
   getter on every class, returning boxed instance attributes by their Acton
   names while reserving `__get_attr__` against user definitions. This lets
@@ -60,6 +60,9 @@ imported modules.
 - Compile continuation calls that return proc values through closure
   conversion, fixing `### BAD contArg` crashes in `actonc --llift` and other
   passes that force the generated continuation type annotations. [#3014]
+- Initialize module globals in bounded chunks and assign simple top-level
+  globals directly, avoiding startup stack overflows and oversized temporary
+  frames in modules with many generated globals. [#3015]
 - Raise the compiler process open-file limit on startup, reducing
   file-descriptor failures during large concurrent builds and cache-heavy
   projects. [#3002]
@@ -91,6 +94,9 @@ imported modules.
 - Preserve shared object references during deserialization by using the same
   integer key representation for back-reference registration and lookup,
   fixing repeated references that previously decoded as missing values. [#3011]
+- Fix `json.Json` actor actions so `decode`, `decode_list`, `encode`, and
+  `encode_list` call the shared JSON implementations instead of recursively
+  calling themselves. [#3017]
 
 ### Packages & Distribution
 - Speed up macOS CI by reducing the PR test matrix to faster macOS 26 runners,
@@ -4619,8 +4625,11 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3005]: https://github.com/actonlang/acton/pull/3005
 [#3007]: https://github.com/actonlang/acton/pull/3007
 [#3008]: https://github.com/actonlang/acton/pull/3008
+[#3009]: https://github.com/actonlang/acton/pull/3009
 [#3011]: https://github.com/actonlang/acton/pull/3011
 [#3014]: https://github.com/actonlang/acton/pull/3014
+[#3015]: https://github.com/actonlang/acton/pull/3015
+[#3017]: https://github.com/actonlang/acton/pull/3017
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
