@@ -868,9 +868,12 @@ hasCleanup ss                       = any isCleanup ss
 
 isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
 
+declbody Typedef{}                  = []
+declbody d                          = dbody d
+
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl
-isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
+isNotImpl (Decl _ ds)               = any (hasNotImpl . declbody) ds
 isNotImpl _                         = False
 
 notImplBody b                       = not $ null $ notImpls b
