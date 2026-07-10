@@ -424,6 +424,9 @@ feedDecl decl sink = case decl of
   A.Protocol _ n q ps b doc ->
     feedTag 43 sink >> feedName n sink >> feedQBinds q sink >> feedList feedTCon ps sink >>
     feedSuite b sink >> feedMaybe feedString doc sink
+  A.Typedef _ n q t doc ->
+    feedTag 45 sink >> feedName n sink >> feedQBinds q sink >> feedType t sink >>
+    feedMaybe feedString doc sink
   A.Extension _ q c ps b doc ->
     feedTag 44 sink >> feedQBinds q sink >> feedTCon c sink >> feedList feedTCon ps sink >>
     feedSuite b sink >> feedMaybe feedString doc sink
@@ -702,6 +705,7 @@ feedNameInfo info sink = feedTag 249 sink >> case info of
   I.NAct q p k te _  -> feedTag 4 sink >> feedQBinds q sink >> feedType p sink >> feedType k sink >> feedTEnv te sink
   I.NClass q cs te _ -> feedTag 5 sink >> feedQBinds q sink >> feedList feedWTCon cs sink >> feedTEnv te sink
   I.NProto q ps te _ -> feedTag 6 sink >> feedQBinds q sink >> feedList feedWTCon ps sink >> feedTEnv te sink
+  I.NType q t _      -> feedTag 10 sink >> feedQBinds q sink >> feedType t sink
   I.NExt q c ps te o _ ->
     feedTag 7 sink >> feedQBinds q sink >> feedTCon c sink >> feedList feedWTCon ps sink >>
     feedTEnv te sink >> feedList feedName o sink
@@ -866,6 +870,7 @@ foldNameInfoDeps add info acc = case info of
   I.NAct q p k te _    -> foldDepsTEnv add te (foldDepsType add k (foldDepsType add p (foldDepsList (foldDepsQBind add) q acc)))
   I.NClass q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
   I.NProto q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
+  I.NType q t _        -> foldDepsType add t (foldDepsList (foldDepsQBind add) q acc)
   I.NExt q c ws te _ _ -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsTCon add c (foldDepsList (foldDepsQBind add) q acc)))
   I.NTVar _ c ps       -> foldDepsList (foldDepsTCon add) ps (foldDepsTCon add c acc)
   I.NAlias qn          -> add qn acc
@@ -966,6 +971,7 @@ boundDecl decl acc = case decl of
   A.Actor _ n _ _ _ _ _     -> Data.Set.insert n acc
   A.Class _ n _ _ _ _       -> Data.Set.insert n acc
   A.Protocol _ n _ _ _ _    -> Data.Set.insert n acc
+  A.Typedef _ n _ _ _       -> Data.Set.insert n acc
   A.Extension{}             -> acc
 
 boundBranch :: A.Branch -> NameSet -> NameSet
@@ -1158,6 +1164,9 @@ implItemSplitDeps mn env localNames item =
       A.Protocol _ n q ps b _ ->
         let bound' = Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps acc)
+      A.Typedef _ n q t _ ->
+        let bound' = Data.Set.insert n (boundList boundQBind q bound)
+        in splitTypeDirect bound' t acc
       A.Extension _ q c ps b _ ->
         let bound' = assignedSuite b (boundList boundQBind q bound)
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps (splitTConDirect bound' c acc))

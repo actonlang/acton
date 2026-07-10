@@ -391,6 +391,7 @@ instance Unalias NameInfo where
     unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
+    unalias env (NType q t doc)     = NType (unalias env q) (unalias env t) doc
     unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
     unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
@@ -713,6 +714,7 @@ tconKind n env              = case findQName n env of
                                 NAct q _ _ _ _ -> kind KType q
                                 NClass q _ _ _ -> kind KType q
                                 NProto q _ _ _ -> kind KProto q
+                                NType q _ _    -> kind KType q
                                 NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
@@ -1410,6 +1412,7 @@ impName _ mi n              = case moduleLookupName mi n of
                                 Just NAct{}   -> imported
                                 Just NClass{} -> imported
                                 Just NProto{} -> imported
+                                Just NType{}  -> imported
                                 Just NExt{}   -> Nothing
                                 Just NAlias{} -> imported
                                 Just NVar{}   -> imported
@@ -1573,6 +1576,8 @@ instance Simp (Name, NameInfo) where
     simp env (n, NClass q us te doc)= (n, NClass (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
+      where env'                    = defineTVars (stripQual q) env
+    simp env (n, NType q t doc)     = (n, NType (simp env' q) (simp env' t) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NExt q c us te opts doc)
                                     = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)

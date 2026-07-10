@@ -98,6 +98,7 @@ extractNameDocstring (NSig _ _ mdoc) = mdoc
 extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
+extractNameDocstring (NType _ _ mdoc) = mdoc
 extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
@@ -247,6 +248,21 @@ docDeclWithTypes tenv (Protocol _ n q a b ddoc) =
         methods = docProtocolBodyWithTypes tenv b
     in header $+$ docstrDoc $+$
        (if isEmpty methods then empty else blank $+$ methods)
+
+docDeclWithTypes tenv (Typedef _ n q t ddoc) =
+    let (targetType, mdocstring) = case lookup n tenv of
+            Just info@(NType _ t' _) -> (t', extractNameDocstring info)
+            Just info -> (t, extractNameDocstring info)
+            _ -> (t, Nothing)
+        docstr = case mdocstring of
+            Just ds -> Just ds
+            Nothing -> ddoc
+        header = text "##" <+> text "*type*" <+> text "`" <> pretty n <> text "`" <>
+                 docGenerics q <+> text "=" <+> pretty targetType
+        docstrDoc = case docstr of
+            Just ds -> blank $+$ text ds
+            Nothing -> empty
+    in header $+$ docstrDoc
 
 docDeclWithTypes tenv (Extension _ q c a b ddoc) =
     let mdocstring = Nothing  -- Extensions don't have their own docstrings in TEnv
@@ -917,6 +933,22 @@ docDeclUnified useStyle tenv (Protocol _ n q a b ddoc) =
                 Just ds -> nest 2 (text ds)
                 Nothing -> empty
         in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
+
+docDeclUnified useStyle tenv (Typedef _ n q t ddoc) =
+    let (targetType, docstringFromTEnv) = case lookup n tenv of
+            Just info@(NType _ t' _) -> (t', extractNameDocstring info)
+            Just info -> (t, extractNameDocstring info)
+            _ -> (t, Nothing)
+        docstr = case docstringFromTEnv of
+            Just ds -> Just ds
+            Nothing -> ddoc
+        header = text (cyan useStyle ++ "type" ++ reset useStyle) <+>
+                 text (bold useStyle) <> pretty n <> text (reset useStyle) <>
+                 docGenerics q <+> text "=" <+> pretty targetType
+        docstrDoc = case docstr of
+            Just ds -> nest 2 (text ds)
+            Nothing -> empty
+    in header $+$ (if isEmpty docstrDoc then empty else docstrDoc)
 
 docDeclUnified useStyle tenv (Extension _ q c a b ddoc) =
     let docstringFromTEnv = Nothing  -- Extensions don't have docstrings in TEnv
@@ -2455,10 +2487,28 @@ docDeclHtmlWithTypesAndClassesAndModule tenv currentModule classNames decl =
         Protocol _ n q a b ddoc ->
             let wtcons = map (\pc -> ([], pc)) a
             in docProtocolHtmlWithModule tenv currentModule classNames n q wtcons b ddoc
+        Typedef _ n q t ddoc -> docTypedefHtmlWithModule tenv currentModule classNames n q t ddoc
         Extension _ q c a b ddoc ->
             let wtcons = map (\pc -> ([], pc)) a
             in docExtensionHtmlWithModule tenv currentModule classNames q c wtcons b ddoc
   where
+    docTypedefHtmlWithModule tenv curMod classNames n q t ddoc =
+        let generics = extractGenerics q
+            (targetType, mdocstring) = case Map.lookup n tenv of
+                Just info@(NType _ t' _) -> (t', extractNameDocstring info)
+                Just info -> (t, extractNameDocstring info)
+                _ -> (t, ddoc)
+            header = text "<h2 class=\"type-context\"><span class=\"keyword\">type</span> <code>" <> pretty n <> text "</code>" <>
+                     docGenericsHtmlWithHighlight generics q <> text " = <span class=\"type\">" <>
+                     text (renderTypeWithGenericsConstraintsAndClassesAndModule curMod generics [] classNames targetType) <>
+                     text "</span></h2>"
+            docstr = case mdocstring of
+                Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+                Nothing -> empty
+        in header $+$ docstr
+      where
+        nl2br = intercalate "<br>" . lines
+
     docDefHtmlWithModule tenv curMod classNames n q p k a b d ddoc =
         let explicitGenerics = extractGenerics q
             funcScope = "def-" ++ nstr n
@@ -2700,6 +2750,23 @@ docDeclHtmlWithTypesAndClasses tenv classNames (Protocol _ n q a b ddoc) =
         methods = docProtocolBodyHtmlWithGenericsTypesAndClasses tenv generics classNames b
     in header $+$ docstr $+$
        (if isEmpty methods then empty else blank $+$ methods)
+  where
+    nl2br = intercalate "<br>" . lines
+
+docDeclHtmlWithTypesAndClasses tenv classNames (Typedef _ n q t ddoc) =
+    let generics = extractGenerics q
+        (targetType, mdocstring) = case lookup n tenv of
+            Just info@(NType _ t' _) -> (t', extractNameDocstring info)
+            Just info -> (t, extractNameDocstring info)
+            _ -> (t, ddoc)
+        header = text "<h2 class=\"type-context\"><span class=\"keyword\">type</span> <code>" <> pretty n <> text "</code>" <>
+                 docGenericsHtmlWithHighlight generics q <> text " = <span class=\"type\">" <>
+                 text (renderTypeWithGenericsConstraintsAndClasses generics [] classNames targetType) <>
+                 text "</span></h2>"
+        docstr = case mdocstring of
+            Just ds -> text "<div class=\"docstring\">" <> text (nl2br $ htmlEscape ds) <> text "</div>"
+            Nothing -> empty
+    in header $+$ docstr
   where
     nl2br = intercalate "<br>" . lines
 

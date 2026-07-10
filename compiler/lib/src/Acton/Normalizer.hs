@@ -495,6 +495,7 @@ instance Norm Decl where
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b doc) = Class l n q as <$> normSuite env1 b <*> return doc
       where env1                    = defineTVars (selfQuant (NoQ n) q) env
+    norm env (Typedef l n q t doc)  = return $ Typedef l n q (conv t) doc
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
@@ -705,6 +706,7 @@ instance (Conv a) => Conv (Name, a) where
 instance Conv NameInfo where
     conv (NAct q p k te doc)        = NAct q (joinRow p k) kwdNil (conv te) doc
     conv (NClass q ps te doc)       = NClass q (conv ps) (conv te) doc
+    conv (NType q t doc)            = NType q (conv t) doc
     conv (NSig sc dec doc)          = NSig (conv sc) dec doc
     conv (NDef sc dec doc)          = NDef (conv sc) dec doc
     conv (NVar t)                   = NVar (conv t)

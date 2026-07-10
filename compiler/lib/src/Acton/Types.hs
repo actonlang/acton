@@ -494,8 +494,10 @@ pushEqns env eqs s
           where forward                 = free eq `intersect` bvs
 
 inject env [] s                         = s
-inject env eqs (Decl l ds)              = Decl l [ d{ dbody = prune [] (free d) reveqs ++ dbody d } | d <- ds ]
+inject env eqs (Decl l ds)              = Decl l (map injectDecl ds)
   where reveqs                          = reverse eqs
+        injectDecl d@Typedef{}          = d
+        injectDecl d                    = d{ dbody = prune [] (free d) reveqs ++ dbody d }
         prune inj fvs []                = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
                                           bindWits inj
         prune inj fvs (eq:eqs)
@@ -1104,6 +1106,13 @@ instance InfEnv Decl where
             te'                         = parentTEnv env ps
             q'                          = selfQuant (NoQ n) q
 
+    infEnv env d@(Typedef l n q t ddoc)
+                                        = case findName n env of
+                                             NReserved ->
+                                                 return ([], [(n, NType q t ddoc)], d)
+                                             _ ->
+                                                 illegalRedef n
+
     infEnv env (Extension l q c us b ddoc)
       | length us == 0                  = err (loc n) "Extension lacks a protocol"
 --      | length us > 1                   = notYet (loc n) "Extensions with multiple protocols"
@@ -1612,6 +1621,7 @@ checkDeclNoSelfReference self seen decl = case decl of
     Actor _ _ _ _ _ body _     -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
     Class _ _ _ _ body _       -> True  -- Nested classes don't capture self by default
     Protocol _ _ _ _ body _    -> True  -- Nested protocols don't capture self
+    Typedef _ _ _ _ _          -> True  -- Type aliases don't capture self
     Extension _ _ _ _ body _   -> True  -- Extensions don't capture self
 
 -- Infer all class attributes by scanning the entire __init__ method for any
@@ -1721,6 +1731,7 @@ abstractDefs env q b                    = qsigs ++ map absDef b
                                             p -> qualWPar env q p
                 qcopies                 = [ MutAssign NoLoc (eDot (eVar nSelf) n) (eVar n) | (v,p) <- quals env q, let n = tvarWit v p ]
                 qcopies'                = [ mkEqn env n (proto2type (tVar v) p) (eDot (eVar nSelf) n) | (v,p) <- quals env q, let n = tvarWit v p ]
+        absDef' d                       = d
 
 
 instance Check Decl where
@@ -1768,6 +1779,12 @@ instance Check Decl where
       where env1                        = reserve (bound (p,k) ++ assigned b) $ setInAct $
                                           define [(selfKW, NVar (tCon tc))] $ tydefineVars q env
             tc                          = TC (NoQ n) (map tVar $ qbound q)
+
+    checkEnv env (Typedef l n q t ddoc)
+                                        = do wellformed env1 q
+                                             wellformed env1 t
+                                             return ([], Typedef l n (noqual env q) t ddoc)
+      where env1                        = tydefineVars q env
 
     checkEnv' env (Class l n q us b ddoc)
                                         = do --traceM ("## checkEnv class " ++ prstr n)

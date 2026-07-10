@@ -106,6 +106,9 @@ autoQuantD env (Def l n q p k t b d x doc)
 autoQuantD env (Extension l q c ps b doc)
                                     = Extension l (q ++ auto_q) c ps b doc
   where auto_q                      = map qbind $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
+autoQuantD env (Typedef l n q t doc)
+                                    = Typedef l n (q ++ auto_q) t doc
+  where auto_q                      = map qbind $ nub (vfree q ++ vfree t) \\ (qbound q ++ tvars env)
 autoQuantD env d                    = d
 
 
@@ -275,6 +278,7 @@ kchkSuite env (Decl l ds : ss)      = do ds <- instKWild (map (autoQuantD env) d
   where kinds (Actor _ n q _ _ _ _) = [(n, NAct q posNil kwdNil [] Nothing)]
         kinds (Class _ n q _ _ _)   = [(n, NClass q [] [] Nothing)]
         kinds (Protocol _ n q _ _ _)= [(n, NProto q [] [] Nothing)]
+        kinds (Typedef _ n q _ _)   = [(n, NType q tWild Nothing)]
         kinds _                     = []
         kind k []                   = k
         kind k q                    = KFun [ tvkind v | QBind v _ <- q ] k
@@ -335,6 +339,15 @@ instance KCheck Decl where
     kchk env (Protocol l n q us b doc)
                                     = do env1 <- extvars (tvSelf : qbound q) env
                                          Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
+    kchk env (Typedef l n q t doc)
+                                    = do tmp <- swapXVars []
+                                         q <- convPExist env q
+                                         t <- convPExist env t
+                                         q <- (q++) <$> swapXVars tmp
+                                         env1 <- extvars (qbound q) env
+                                         q <- convTWild env1 q
+                                         t <- convTWild env1 t
+                                         Typedef l n <$> kchkQBinds env1 q <*> kexp KType env1 t <*> pure doc
     kchk env (Extension l q c us b doc)
       | not $ null ambig            = err2 ambig "Ambiguous type variables in extension:"
       | not $ null undet            = err2 undet "Type variables undetermined by extended class:"
@@ -666,6 +679,8 @@ instance KSubst Decl where
     ksubst g (Class l n q as b doc) = Class l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc
     ksubst g (Protocol l n q as b doc)
                                     = Protocol l n <$> ksubst g q <*> ksubst g as <*> ksubst g b <*> return doc
+    ksubst g (Typedef l n q t doc)
+                                    = Typedef l n <$> ksubst g q <*> ksubst g t <*> return doc
     ksubst g (Extension l q c as b doc)
                                     = Extension l <$> ksubst g q <*> ksubst g c <*> ksubst g as <*> ksubst g b <*> return doc
 

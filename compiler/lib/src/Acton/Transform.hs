@@ -124,6 +124,7 @@ instance Transform Decl where
       where env1                        = blockscope (bound p ++ bound k) env
     trans env (Class l n q us b doc)    = Class l n q us (wtrans env b) doc
     trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans env b) doc
+    trans env (Typedef l n q t doc)     = Typedef l n q t doc
     trans env (Extension l n q us b doc)= Extension l n q us (wtrans env b) doc
 
 transCall (Dot _ (Var _ n) m) ts [e1,e2]

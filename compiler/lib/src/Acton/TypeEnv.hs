@@ -852,6 +852,7 @@ instance USubst Decl where
     usubstWith s (Actor l n q p k ss doc)         = Actor l n (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s ss) doc
     usubstWith s (Class l n q bs ss doc)          = Class l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
     usubstWith s (Protocol l n q bs ss doc)       = Protocol l n (usubstWith s q) (usubstWith s bs) (usubstWith s ss) doc
+    usubstWith s (Typedef l n q t doc)            = Typedef l n (usubstWith s q) (usubstWith s t) doc
     usubstWith s (Extension l q c bs ss doc)      = Extension l (usubstWith s q) (usubstWith s c) (usubstWith s bs) (usubstWith s ss) doc
 
 instance USubst Stmt where
@@ -968,6 +969,7 @@ instance USubst NameInfo where
     usubstWith s (NAct q p k te doc)  = NAct (usubstWith s q) (usubstWith s p) (usubstWith s k) (usubstWith s te) doc
     usubstWith s (NClass q us te doc) = NClass (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NProto q us te doc) = NProto (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
+    usubstWith s (NType q t doc)       = NType (usubstWith s q) (usubstWith s t) doc
     usubstWith s (NExt q c ps te opts doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts doc
     usubstWith s (NTVar k c ps)       = NTVar k (usubstWith s c) (usubstWith s ps)
     usubstWith s (NAlias qn)          = NAlias qn
@@ -1013,6 +1015,7 @@ instance WellFormed TCon where
                                 NAct q p k te _ -> q
                                 NClass q us te _ -> q
                                 NProto q us te _ -> q
+                                NType q _ _ -> q
                                 NReserved -> nameReserved n
                                 i -> err1 n ("wf: Class or protocol name expected, got " ++ show i)
             s               = qbound q `zip` ts

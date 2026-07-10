@@ -1889,7 +1889,7 @@ decl_group = do p <- L.indentLevel
                 return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
 
 decl :: Parser S.Decl
-decl = funcdef <|> classdef <|> protodef <|> extdef <|> actordef
+decl = funcdef <|> classdef <|> protodef <|> typedef <|> extdef <|> actordef
 
 decorator :: Bool -> Parser S.Deco
 decorator sig = do
@@ -1956,6 +1956,14 @@ classdefGen k pname ctx con = addLoc $ do
                 cs <- optbounds
                 (ss, docstring) <- suiteWithDocstring ctx s
                 return $ con NoLoc nm q cs ss docstring
+
+typedef = addLoc $ do
+                (s,l) <- withPos (rwordLoc "type")
+                assertTop l "type"
+                nm <- name
+                q <- optbinds
+                t <- ttype
+                return $ S.Typedef NoLoc nm q t Nothing
 
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")

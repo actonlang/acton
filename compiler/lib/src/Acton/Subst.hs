@@ -90,6 +90,7 @@ instance VFree Decl where
     vfree (Actor _ n q p k ss doc)       = vfree q ++ vfree p ++ vfree k ++ vfree ss
     vfree (Class _ n q bs ss doc)        = vfree q ++ vfree bs ++ vfree ss
     vfree (Protocol _ n q bs ss doc)     = vfree q ++ vfree bs ++ vfree ss
+    vfree (Typedef _ n q t doc)          = vfree q ++ vfree t
     vfree (Extension _ q c bs ss doc)    = vfree q ++ vfree c ++ vfree bs ++ vfree ss
 
 instance VFree Stmt where
@@ -272,6 +273,8 @@ instance VSubst Decl where
       where r                               = quantsubst s q (vfree bs ++ vfree ss)
     vsubst s (Protocol l n q bs ss doc)     = Protocol l n (vsubst s q) (vsubst s bs) (vsubst s ss) doc
       where r                               = quantsubst s q (vfree bs ++ vfree ss)
+    vsubst s (Typedef l n q t doc)          = Typedef l n (vsubst r q) (vsubst r t) doc
+      where r                               = quantsubst s q (vfree t)
     vsubst s (Extension l q c bs ss doc)    = Extension l (vsubst s q) (vsubst s c) (vsubst s bs) (vsubst s ss) doc
       where r                               = quantsubst s q (vfree c ++ vfree bs ++ vfree ss)
 
@@ -439,6 +442,7 @@ instance UFree Decl where
     ufree (Actor _ n q p k ss _)        = ufree q ++ ufree p ++ ufree k ++ ufree ss
     ufree (Class _ n q bs ss _)         = ufree q ++ ufree bs ++ ufree ss
     ufree (Protocol _ n q bs ss _)      = ufree q ++ ufree bs ++ ufree ss
+    ufree (Typedef _ n q t _)           = ufree q ++ ufree t
     ufree (Extension _ q c bs ss _)     = ufree q ++ ufree c ++ ufree bs ++ ufree ss
 
 instance UFree Stmt where

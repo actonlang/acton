@@ -415,6 +415,7 @@ instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx doc)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec doc)]
     envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) doc)]
+    envOf (Typedef _ n q t doc)     = [(n, NType q t doc)]
 
     envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) doc)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss

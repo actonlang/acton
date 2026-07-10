@@ -764,6 +764,7 @@ typeOfInfo info =
     I.NSVar t -> Just t
     I.NDef schema _ _ -> Just (S.sctype schema)
     I.NSig schema _ _ -> Just (S.sctype schema)
+    I.NType _ t _ -> Just t
     _ -> Nothing
 
 callResultType :: Env.Env0 -> SourceContext -> [String] -> Maybe S.Type
@@ -845,6 +846,7 @@ docOfInfo info =
       I.NAct _ _ _ _ doc -> doc
       I.NClass _ _ _ doc -> doc
       I.NProto _ _ _ doc -> doc
+      I.NType _ _ doc -> doc
       I.NExt _ _ _ _ _ doc -> doc
       _ -> Nothing
 

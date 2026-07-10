@@ -251,6 +251,7 @@ convEnvProtos env                       = convertModules convSources conv env
     conv m ni@(n, NExt q c us te opts doc)
                                         = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te) opts
     conv m (n, NClass q us te doc)      = [(n, NClass (noqual env q) us (convClassTEnv env q te) doc)]
+    conv m (n, NType q t doc)           = [(n, NType (noqual env q) (convT q t) doc)]
     conv m ni                           = [ni]
     convS (TSchema l q t)               = TSchema l (noqual env q) (convT q t)
     convT q (TFun l x p k t)            = TFun l x (qualWRow env q p) k t
@@ -272,6 +273,8 @@ fromDefs env (Def l n q p k a _ d fx ddoc : ds)
                                         = (n, NDef (TSchema NoLoc q (TFun NoLoc fx (prowOf' p d) (krowOf k) (fromJust a))) d ddoc) : fromDefs env ds
   where prowOf' p Static                = prowOf p
         prowOf' (PosPar _ _ _ p) _      = prowOf p
+fromDefs env (Typedef l n q t ddoc : ds)
+                                        = (n, NType q t ddoc) : fromDefs env ds
 fromDefs env (_ : ds)                   = fromDefs env ds
 fromDefs env []                         = []
 
@@ -281,6 +284,7 @@ fromTEnv ((n, NDef sc dec doc) : te)    = Decl NoLoc [def] : fromTEnv te
         def                             = Def NoLoc n q (pPar' dec p) (kPar attrKW k) (Just t) [sNotImpl] dec fx doc
         pPar' Static p                  = pPar pNames p
         pPar' _ p                       = pPar pNames (posRow tSelf p)
+fromTEnv ((n, NType q t doc) : te)      = Decl NoLoc [Typedef NoLoc n q t doc] : fromTEnv te
 fromTEnv ((n, NVar t) : te)             = sAssign (pVar n t) eNotImpl : fromTEnv te
 fromTEnv (_ : te)                       = fromTEnv te
 fromTEnv []                             = []

@@ -239,12 +239,14 @@ instance Vars Decl where
     freeQ (Actor _ n q ps ks b _)   = (freeQ ps ++ freeQ ks ++ freeQ b) `diffQ` (n : self : bound q ++ bound ps ++ bound ks ++ assigned b)
     freeQ (Class _ n q cs b _)      = (freeQ cs ++ freeQ b) `diffQ` (n : bound q ++ assigned b)
     freeQ (Protocol _ n q ps b _)   = (freeQ ps ++ freeQ b) `diffQ` (n : bound q ++ assigned b)
+    freeQ (Typedef _ n q t _)       = freeQ t `diffQ` (n : bound q)
     freeQ (Extension _ q c ps b _)  = (freeQ c ++ freeQ ps ++ freeQ b) `diffQ` (bound q ++ assigned b)
 
     bound (Def _ n _ _ _ _ _ _ _ _) = [n]
     bound (Actor _ n _ _ _ _ _)     = [n]
     bound (Class _ n _ _ _ _)       = [n]
     bound (Protocol _ n _ _ _ _)    = [n]
+    bound (Typedef _ n _ _ _)       = [n]
     bound (Extension _ _ _ _ _ _)   = []
 
 instance Vars Branch where

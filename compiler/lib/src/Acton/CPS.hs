@@ -252,6 +252,8 @@ instance CPS Decl where
             p'                          = conv env p
             t'                          = conv env t
 
+    cps env (Typedef l n q t ddoc)      = return $ Typedef l n (conv env q) (conv env t) ddoc
+
     cps env d                           = error ("cps unexpected: " ++ prstr d)
 
 
@@ -346,6 +348,7 @@ instance NeedCont Stmt where
 instance NeedCont Decl where
     needCont env Class{}                = True
     needCont env d@Def{}                = contFX (dfx d)
+    needCont env _                      = False
 
 ------------------------------------------------
 ------------------------------------------------
@@ -395,6 +398,7 @@ instance PreCPS Decl where
     pre env (Def l n q p _k a b d fx ddoc)
                                         = Def l n q p _k a <$> preSuite env1 b <*> pure d <*> pure fx <*> pure ddoc
       where env1                        = define (envOf p) $ defineTVars q env
+    pre env d@Typedef{}                 = return d
 
 instance PreCPS Branch where
     pre env (Branch e ss)               = Branch  <$> pre env e <*> preSuite env ss
@@ -526,6 +530,7 @@ instance (Conv a) => Conv (Name, a) where
 
 instance Conv NameInfo where
     conv env (NClass q ps te doc)       = NClass q (conv env ps) (conv env te) doc
+    conv env (NType q t doc)            = NType q (conv env t) doc
     conv env (NSig sc dec doc)          = NSig (conv env sc) dec doc
     conv env (NDef sc dec doc)          = NDef (conv env sc) dec doc
     conv env (NVar t)                   = NVar (conv env t)
