@@ -32,19 +32,20 @@ For how imports are loaded before these passes run, see
 
 The pipeline is split into a front end and a back end. The scheduler runs front
 passes across the dependency graph, then queues back-pass work once type
-checking succeeds for a module. Normal modules queue their back job immediately.
-DBP candidates hold a deferred back job until all reverse-dependent front passes
-that can add interest have completed.
+checking succeeds for a module. Whole-surface modules can queue their back job
+immediately. Eligible selective modules retain only a reloadable deferred job
+until all front passes needed by the global reachability closure have
+completed.
 
 Front passes (1–3) are:
 - Parse
 - Kinds check
 - Type check
 
-These passes produce all user-facing diagnostics, write the module interface
-cache (`.tydb`), and compute public hashes used for incremental rebuilds. They
-also define the cross-module dependency edges: a module can only start once its
-imports have completed the front passes.
+These passes produce all user-facing diagnostics, compute public hashes used
+for incremental rebuilds, and commit the module interface cache (`.tydb`)
+before reporting front completion. They also define the cross-module dependency
+edges: a module can only start once its imports have completed the front passes.
 
 Back passes (4–9) are:
 - Normalize
@@ -60,10 +61,21 @@ front completion and even in the background. The CLI waits for all back jobs to
 finish before invoking Zig; the LSP enqueues back jobs in the background and
 does not wait for them or run Zig.
 
-DBP still runs the same back-pass sequence once it is ready. The difference is
-that it may prune the typed module to the selected top-level declarations before
-normalization, and it can skip the back job entirely when the selected DBP
-codegen hash already matches the generated `.c`/`.h` files.
+DBP still runs the same back-pass sequence once it is ready. After all required
+front passes finish, one exact whole-program reachability closure starts at the
+executable roots and the persisted whole summaries of ordinary whole surfaces,
+then crosses module boundaries. Each selectively compiled module is materialized
+from exact `.tydb` rows as a typed projection containing only the selected
+top-level declarations, container methods and attributes, and their activated
+initialization fragments. That projection enters normalization; no full typed
+module is loaded and pruned afterward. Internal providers of a declared library
+remain selective. Native `NotImplemented` modules and their provider closure
+run whole back passes because hand-written C can contain hidden references.
+Persistent `--db` builds also run whole because restored class ids are dynamic
+roots. Dynamic `serialize` or `deserialize` interest makes the deferred batch
+whole because runtime type names can escape the static reachability graph. A
+matching projection-aware codegen hash lets the compiler skip the back job
+entirely.
 
 The shared orchestration lives in `compiler/lib/src/Acton/Compile.hs` and is
 used by both `acton` and the LSP server.

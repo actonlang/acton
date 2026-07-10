@@ -105,22 +105,15 @@ read; stale checks and DBP selection read exact `name-hash` rows on demand.
 Full reads are used when the compiler needs the full typed payload, not for
 normal imported-name lookup:
 
-- implementation-hash refresh
-- codegen refresh
-- DBP back-pass fallback when selected statements cannot be reconstructed
+- implementation-hash or codegen refresh for a compilation unit already
+  designated as a whole surface
 - tools that intentionally inspect a whole interface
 - completion fallback when the normal import environment cannot be restored
 
 Reading a full `.tydb` does not by itself reconstruct the import closure in the
 active environment. It only gives the caller the stored interface and typed
-module payload.
-
-DBP interest is also scheduler metadata, not an import overlay. Each completed
-front result contributes external dependency names into an `InterestMap`; for
-cached modules those names are reconstructed from the `.tydb` dependency rows.
-DBP later uses that map to prune a provider's typed module. That does not make
-the selected provider names available to the active type-checker environment;
-imports still become type-checker bindings only through `mkEnv`/`doImp`.
+module payload. Selective back passes never use a full read as recovery: a
+missing or inconsistent exact row is a cache/compiler error.
 
 ### Selective interface reads
 
@@ -147,6 +140,15 @@ attribute indexes record attributes where they are declared; `allConAttr` and
 constructor, which preserves the ancestry-aware semantics of the old full
 scan. All transitive imports are consulted with keyed reads, so query cost is
 proportional to the number of imported modules, never to their size.
+
+Deferred back passes use a separate generation-bound form of the same idea.
+The scheduler captures the interface closure after all required fronts commit,
+closes executable and whole-surface interest by reading only exact keyed rows
+demanded by the worklist, and then reads only the selected statement, container,
+and member content rows. The reconstructed environment keeps generation-bound
+lazy name and query-index handles. Ordered source imports and public interface
+hashes are part of the batch's codegen key, and the complete snapshot is
+validated before enqueueing output and after the final job completes.
 
 Broad enumeration stays explicit. `from module import *` walks
 `modulePublicNames` and forces one lookup per importable public name.
