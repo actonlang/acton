@@ -1962,6 +1962,7 @@ typedef = addLoc $ do
                 assertTop l "type"
                 nm <- name
                 q <- optbinds
+                equals
                 t <- ttype
                 return $ S.Typedef NoLoc nm q t Nothing
 
