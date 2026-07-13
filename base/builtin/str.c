@@ -598,7 +598,7 @@ static int isspace_codepoint(int codepoint) {
 
 static int islinebreak_codepoint(int codepoint) {
     // category not useful; all the seven codepoints we handle are in category Other, control.
-    return (codepoint <= 0x0a && codepoint <= 0x0d) ||
+    return (codepoint >= 0x0a && codepoint <= 0x0d) ||
         (codepoint >= 0x1c && codepoint <= 0x1e);
     // For now we ignore the three codepoints below which are counted as linebreaks by
     // Python's splitlines for strings.
