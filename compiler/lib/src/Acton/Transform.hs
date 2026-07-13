@@ -221,6 +221,7 @@ eta (Lambda _ p k (Call _ e p' k') fx)
 eta ee@(Lambda _ (PosPar n (Just t) Nothing PosNIL) KwdNIL (Tuple _ p k) (TFX _ FXPure))
   | idtup t p k                         = eLambda [(n,t)] (eVar n)
   where idtup (TTuple _ prow krow) p k  = ptup (eVar n) 0 prow p && ktup (eVar n) krow k
+        idtup _ _ _                     = False
         ptup e0 i TNil{} PosNil         = True
         ptup e0 i r@TRow{} (PosArg e p) = idot e0 i e && ptup e0 (i+1) (rtail r) p
         ptup e0 i r@TStar{} (PosStar e)

@@ -1,0 +1,11 @@
+# Regression: a pure lambda returning a tuple over a non-tuple
+# parameter crashed eta reduction idtup with "Non-exhaustive
+# patterns in function idtup".
+actor main(env):
+    f: pure(int) -> (int, int) = lambda x: (x-1, x+1)
+    a, b = f(21)
+    if a + b == 42:
+        env.exit(0)
+    else:
+        print("ERROR: got a=%d b=%d" % (a, b))
+        env.exit(1)
