@@ -248,6 +248,13 @@ def test_str_startswith_longer_prefix():
     print("'foo'.startswith('foobar'): {result}")
     return result == False
 
+def test_str_splitlines():
+    result = "foo\nbar\nbaz".splitlines()
+    print("'foo\\nbar\\nbaz'.splitlines(): {result}")
+    crlf_result = "foo\r\nbar\r\nbaz".splitlines()
+    print("'foo\\r\\nbar\\r\\nbaz'.splitlines(): {crlf_result}")
+    return result == ["foo", "bar", "baz"] and crlf_result == ["foo", "bar", "baz"]
+
 def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
     result = b.hex()
@@ -352,6 +359,7 @@ tests = {
     "test_str_startswith_empty": test_str_startswith_empty,
     "test_str_startswith_single_char": test_str_startswith_single_char,
     "test_str_startswith_longer_prefix": test_str_startswith_longer_prefix,
+    "test_str_splitlines": test_str_splitlines,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_from_hex": test_bytes_from_hex,
     "test_helloworld": test_helloworld,
