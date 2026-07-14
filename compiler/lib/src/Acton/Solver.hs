@@ -149,14 +149,14 @@ newrank pol (Cast _ env t (TUni _ v))
   | pos && not neg                          = R_pos v alts
   | otherwise                               = R_low v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = reverse $ allAbove (limitQuant v env) t
+        alts                                = reverse $ allAbove (limitQuant v env) (expanded env t)
 newrank pol (Cast _ env (TUni _ v) t)
   | TOpt _ (TUni _ v') <- t                 = R_var v v'
   | neg && pos                              = R_ret
   | neg                                     = R_neg v alts
   | otherwise                               = R_amb v alts
   where (pos, neg)                          = (v `elem` fst pol, v `elem` snd pol)
-        alts                                = allBelow (limitQuant v env) t
+        alts                                = allBelow (limitQuant v env) (expanded env t)
 newrank pol (Proto _ env _ (TUni _ v) p)                                                        -- Proto behaves as an upper type bound
   | neg && pos                              = R_ret
 --  | neg                                     = R_neg v alts                                    -- Later, when protos have become proper types
@@ -418,8 +418,8 @@ rank _ (Sub info env _ t1 t2)               = rank env (Cast info env t1 t2)
 rank _ (Cast _ env (TUni _ v) t2@TUni{})    = RVar v [t2]
 rank _ (Cast _ env (TUni _ v) t2)
   | TOpt _ t2@TUni{} <- t2                  = RVar v [t2]
-  | otherwise                               = RTry v (allBelow (limitQuant v env) t2) False
-rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) t1) True
+  | otherwise                               = RTry v (allBelow (limitQuant v env) (expanded env t2)) False
+rank _ (Cast _ env t1 (TUni _ v))           = RTry v (allAbove (limitQuant v env) (expanded env t1)) True
 
 rank _ (Proto _ env _ (TUni _ v) p)         = RTry v ts False
   where ts                                  = allBelowProto (limitQuant v env) p
@@ -683,6 +683,7 @@ reduce' eq c@(Sel _ env w (TCon _ tc) n _)
                                                  reduce (eq'++eq) cs
   | Just p <- protoSearch                   = do (eq',cs) <- solveSelProto p c
                                                  reduce (eq'++eq) cs
+  | Just t <- tExpand env tc                = reduce' eq c{ type1 = t }
   | otherwise                               = tyerr n "Attribute not found"
   where attrSearch                          = findAttr env tc n
         protoSearch                         = findProtoByAttr env (tcname tc) n
@@ -837,6 +838,12 @@ cast' env info (TCon _ c1) (TCon _ c2)
                                               else                                              -- TODO: infer polarities in general!
                                                   unifyM info (tcargs c') (tcargs c2)
   where search                              = findAncestor env c1 (tcname c2)
+
+cast' env info (TCon _ c1) t2
+  | Just t1 <- tExpand env c1               = cast' env info t1 t2
+
+cast' env info t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2               = cast' env info t1 t2
 
 --                 as declared               as called
 --                 existing                  expected
