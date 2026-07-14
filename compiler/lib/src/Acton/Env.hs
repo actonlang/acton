@@ -808,7 +808,7 @@ localCons env               = local (reverse (closedNames env)) ++ local (revers
 
 tExpand                     :: EnvF x -> TCon -> Maybe Type
 tExpand env (TC n ts)       = case findQName n env of
-                                NType q t _ -> Just $ vsubst (qbound q `zip` ts) t
+                                NType q t _ -> Just $ expanded env $ vsubst (qbound q `zip` ts) t
                                 _ -> Nothing
 
 expanded                    :: EnvF x -> Type -> Type
