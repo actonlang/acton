@@ -1,0 +1,111 @@
+name: Branch .deb (x86)
+
+# One-off convenience workflow: build ONLY the x86_64 (amd64) Debian package on
+# pushes to any branch other than main, without running the test suite.
+#
+# main and release tags are already covered by test.yml, so they are excluded
+# here (branches-ignore matches branch refs only, so v* tag pushes never trigger
+# this). Delete this file when it is no longer needed.
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+env:
+  ZIG_DOWNLOAD_BASE_URL: https://github.com/actonlang/zigballs/raw/main
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-24.04
+    env:
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      HOME: /tmp/acton-gh-home
+      STACK_ROOT: /tmp/acton-gh-home/.stack
+    steps:
+      - name: "Set build time"
+        run: echo "BUILD_TIME=$(date -u '+%Y%m%d.%-H.%-M')" >> "$GITHUB_ENV"
+      - name: "Show platform and environment"
+        run: |
+          env
+          ldd --version | head -n1
+          uname -a
+      - name: "Install build prerequisites"
+        run: |
+          # Retry network-bound installs so a transient mirror/CDN blip doesn't
+          # fail the whole job.
+          retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
+          retry sudo apt-get update
+          retry sudo apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
+          retry sudo apt-get install -qy bash-completion build-essential debhelper devscripts gnupg2 locales xz-utils zstd
+          sudo apt-get clean || true
+      - name: "Prepare stack directories"
+        run: |
+          mkdir -p "${HOME}/.local/bin" "${STACK_ROOT}"
+      - name: "Check out repository code"
+        uses: actions/checkout@v7
+      # Read-only cache restores. These are pure build accelerators, independent
+      # of the Acton compiler source, so no staleness risk for the produced .deb:
+      #   - deps-download: source tarballs for the bundled C dependencies
+      #   - ~/.stack: GHC + Haskell dependencies
+      # The Acton compile cache (~/.cache/acton) is deliberately NOT restored, so
+      # the stdlib/base build is cold and reflects this branch's compiler.
+      - name: "Cache downloaded source archives"
+        uses: actions/cache/restore@v6
+        with:
+          path: deps-download
+          key: deps-download-build-packages-amd64-${{ hashFiles('Makefile', 'deps/**/build.zig', 'deps/**/build.zig.zon') }}
+      - name: "Restore Haskell deps (~/.stack)"
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ${{ env.STACK_ROOT }}
+          key: build-packages-amd64-${{ hashFiles('compiler/stack.yaml', 'compiler/stack.yaml.lock', 'debian/control') }}
+      - name: "locale en_US.UTF-8"
+        run: |
+          sudo locale-gen en_US.UTF-8
+          echo "locales locales/default_environment_locale select en_US.UTF-8" | sudo debconf-set-selections
+          echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" | sudo debconf-set-selections
+          sudo rm -f "/etc/locale.gen"
+          sudo dpkg-reconfigure --frontend noninteractive locales
+      - name: "Install newer stack"
+        run: |
+          STACK_VERSION=3.9.3
+          STACK_TAR="stack-${STACK_VERSION}-linux-x86_64.tar.gz"
+          STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
+          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${STACK_URL}" -o /tmp/stack.tgz
+          tar -xzf /tmp/stack.tgz -C /tmp
+          install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-x86_64/stack" "${HOME}/.local/bin/stack"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+          "${HOME}/.local/bin/stack" --version
+      - name: "Build Acton"
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -j2 -C "${GITHUB_WORKSPACE}" BUILD_TIME="${BUILD_TIME}"
+      - name: "Build Debian package"
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C "${GITHUB_WORKSPACE}" debs BUILD_TIME="${BUILD_TIME}"
+      - name: "Show packaged .deb metadata"
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(ls "${GITHUB_WORKSPACE}"/../acton_*.deb | head -n1)"
+          dpkg-deb -I "$deb"
+      - name: "Move deb into place for artifact extraction"
+        id: vars
+        run: |
+          debdir="$(realpath "${GITHUB_WORKSPACE}"/../deb)"
+          mkdir -p "${debdir}"
+          mv "${debdir}"/../acton_* "${debdir}/"
+          echo "artifact_dir=$(dirname "${GITHUB_WORKSPACE}")" >> "$GITHUB_OUTPUT"
+      - name: "Upload Debian artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: acton-debs-amd64
+          # Wildcard + deb forces the whole directory into the artifact.
+          path: ${{ steps.vars.outputs.artifact_dir }}/*deb/
+          if-no-files-found: error
