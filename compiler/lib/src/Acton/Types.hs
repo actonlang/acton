@@ -582,7 +582,7 @@ genEnv env cs te ds
       | not $ null ambig_vs             = do --traceM ("  #defaulting: " ++ prstrs ambig_vs)
                                              (cs',eq') <- solve env isAmbig te eq cs
                                              refineAgain cs' eq'
-      | not $ null tail_vs              = do sequence [ tryUnify (Simple NoLoc "internal") (tUni v) (tNil $ uvkind v) | v <- tail_vs ]
+      | not $ null tail_vs              = do sequence [ tryUnify env (Simple NoLoc "internal") (tUni v) (tNil $ uvkind v) | v <- tail_vs ]
                                              refineAgain cs eq
       | otherwise                       = do eq <- usubst eq
                                              return (gen_vs, cs, te, eq)
@@ -719,7 +719,7 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
                                              let t1 = vsubst [(fxSelf,fx)] t0
                                                  t2 = tFun fxPure (foldr posRow posNil ts) kwdNil t'
                                              w <- newWitness
-                                             unify (locinfo l 30) t1 t2
+                                             unify env (locinfo l 30) t1 t2
                                              t' <- usubst t'
                                              cs' <- usubst (Proto (locinfo l 29) env w fx p : cs)
                                              return (cs', t', eCall (tApp (Dot l0 (eVar w) kw) tvs) args)
@@ -847,7 +847,7 @@ instance InfEnv Stmt where
                                              (cs1,e) <- inferSub env t e
                                              (cs2,stmt) <- asgn t0 t e0 e tg
                                              return (cs0++cs1++cs2, [], stmt)
-      where asgn t0 t e0 e (TgVar n)    = do tryUnify (locinfo l 40) t0 t
+      where asgn t0 t e0 e (TgVar n)    = do tryUnify env (locinfo l 40) t0 t
                                              return ( [], sAssign (pVar' n) e )
             asgn t0 t e0 e (TgIndex ix) = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
@@ -884,14 +884,14 @@ instance InfEnv Stmt where
             oper _ BAndA                = (pLogical,  iandKW)
             oper _ MMultA               = (pMatrix,   imatmulKW)
 
-            aug t0 t x f e (TgVar _)    = do tryUnify (locinfo l 46) t0 t
+            aug t0 t x f e (TgVar _)    = do tryUnify env (locinfo l 46) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
             aug t0 t x f e (TgIndex ix) = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
                                              return ( Proto (locinfo l 47) env w t0 (pIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
-            aug t0 t x f e (TgSlice sl) = do tryUnify (locinfo l 1115) t0 t
+            aug t0 t x f e (TgSlice sl) = do tryUnify env (locinfo l 1115) t0 t
                                              (cs,sl) <- inferSlice env sl
                                              t' <- newUnivar env
                                              w <- newWitness
@@ -1001,7 +1001,7 @@ initComplement env n as body
         baseHasAltInit                  = isJust $ findAttr env base altInit
         mkInit stmt                     = sDef altInit (pospar [(selfKW,tSelf)]) tNone [stmt] fxPure
 
-lockSelf l p k dec                      = tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
+lockSelf env l p k dec                  = tryUnify env (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -1010,10 +1010,10 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NSig sc dec _ | t@TFun{} <- sctype sc, matchingDec n sc dec dec' -> do
                                                  --traceM ("\n## infEnv (sig) def " ++ prstr (n, NDef sc dec Nothing))
-                                                 when (inClass env) $ lockSelf l p k dec
+                                                 when (inClass env) $ lockSelf env l p k dec
                                                  return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
                                              NReserved -> do
-                                                 when (inClass env) $ lockSelf l p k dec'
+                                                 when (inClass env) $ lockSelf env l p k dec'
                                                  t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
                                                  let sc = tSchema q (if inClass env then dropSelf t dec' else t)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc dec' Nothing))
@@ -1744,7 +1744,7 @@ instance Check Decl where
                                              wellformed env1 q
                                              wellformed env1 a
                                              when (inClass env) $
-                                                 tryUnify (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
+                                                 tryUnify env (Simple l "Type of first parameter of class method does not unify with Self") tSelf $ selfType p k dec
                                              (csp,te0,p') <- infEnv env1 p
                                              (csk,te1,k') <- infEnv (define te0 env1) k
                                              (csb,_,b') <- infDefBody (define te1 (define te0 env1)) n p' k' b
@@ -2498,7 +2498,7 @@ instance InfEnvT PosPat where
                                              return (te1++te2, posRow t r, PosPat p' ps')
     infEnvT env (PosPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newUnivarOfKind PRow env
-                                             tryUnify (locinfo p 102) t (tTupleP r)
+                                             tryUnify env (locinfo p 102) t (tTupleP r)
                                              return (te, posStar r, PosPatStar p')
     infEnvT env PosPatNil               = return ([], posNil, PosPatNil)
 
@@ -2509,7 +2509,7 @@ instance InfEnvT KwdPat where
                                              return (te1++te2, kwdRow n t r, KwdPat n p' ps')
     infEnvT env (KwdPatStar p)          = do (te,t,p') <- infEnvT env p
                                              r <- newUnivarOfKind KRow env
-                                             tryUnify (locinfo p 103) t (tTupleK r)
+                                             tryUnify env (locinfo p 103) t (tTupleK r)
                                              return (te, kwdStar r, KwdPatStar p')
     infEnvT env KwdPatNil               = return ([], kwdNil, KwdPatNil)
 
@@ -2548,7 +2548,7 @@ instance InfEnvT Pattern where
                                              return (te1++te2, TTuple NoLoc prow krow, PTuple l ps' ks')
     infEnvT env (PList l ps p)          = do (te1,t1,ps') <- infEnvT env ps
                                              (te2,t2,p') <- infEnvT (define te1 env) p
-                                             tryUnify (locinfo l 108) t2 (tList t1)
+                                             tryUnify env (locinfo l 108) t2 (tList t1)
                                              return (te1++te2, t2, PList l ps' p')
     infEnvT env (PParen l p)            = do (te,t,p') <- infEnvT env p
                                              return (te, t, PParen l p')
@@ -2566,7 +2566,7 @@ instance InfEnvT [Pattern] where
                                              return (te1,t1,[p'])
     infEnvT env (p:ps)                  = do (te1,t1,p') <- infEnvT env p
                                              (te2,t2,ps') <- infEnvT env ps
-                                             tryUnify (locinfo p 109) t1 t2
+                                             tryUnify env (locinfo p 109) t1 t2
                                              return (te1++te2, t1, p':ps')
 
 

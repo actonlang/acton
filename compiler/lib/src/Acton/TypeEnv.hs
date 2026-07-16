@@ -675,61 +675,66 @@ newUnivar env                           = newUnivarOfKind KType env
 
 -- unification ----------------------------------------------------------------------------------------------------------------------
 
-tryUnify info t1 t2                         = unify info t1 t2 `catchError` \err -> Control.Exception.throw err
+tryUnify env info t1 t2                     = unify env info t1 t2 `catchError` \err -> Control.Exception.throw err
 
-unify                                       :: ErrInfo -> Type -> Type -> TypeM ()
-unify info t1 t2                            = do t1' <- usubst t1
+unify                                       :: Env -> ErrInfo -> Type -> Type -> TypeM ()
+unify env info t1 t2                        = do t1' <- usubst t1
                                                  t2' <- usubst t2
                                                  --traceM ("  #unify " ++ prstr t1' ++ " and " ++ prstr t2')
-                                                 unify' info t1' t2'
+                                                 unify' env info t1' t2'
 
-unifyM info ts1 ts2                         = mapM_ (uncurry $ unify info) (ts1 `zip` ts2)
+unifyM env info ts1 ts2                     = mapM_ (uncurry $ unify env info) (ts1 `zip` ts2)
 
 
-unify' _ (TWild _) t2                       = return ()
-unify' _ t1 (TWild _)                       = return ()
+unify' env _ (TWild _) t2                   = return ()
+unify' env _ t1 (TWild _)                   = return ()
 
-unify' info (TCon _ c1) (TCon _ c2)
-  | tcname c1 == tcname c2                  = unifyM info (tcargs c1) (tcargs c2)
+unify' env info (TCon _ c1) (TCon _ c2)
+  | tcname c1 == tcname c2                  = unifyM env info (tcargs c1) (tcargs c2)
 
-unify' info (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                            = do unify info fx1 fx2
-                                                 unify info p2 p1
-                                                 unify info k2 k1
-                                                 unify info t1 t2
+unify' env info (TCon _ c1) t2
+  | Just t1 <- tExpand env c1               = unify' env info t1 t2
+unify' env info t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2               = unify' env info t1 t2
 
-unify' info (TTuple _ p1 k1) (TTuple _ p2 k2)
-                                            = do unify info p1 p2
-                                                 unify info k1 k2
+unify' env info (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
+                                            = do unify env info fx1 fx2
+                                                 unify env info p2 p1
+                                                 unify env info k2 k1
+                                                 unify env info t1 t2
 
-unify' info (TOpt _ t1) (TOpt _ t2)         = unify info t1 t2
-unify' _ (TNone _) (TNone _)                = return ()
+unify' env info (TTuple _ p1 k1) (TTuple _ p2 k2)
+                                            = do unify env info p1 p2
+                                                 unify env info k1 k2
 
-unify' _ (TFX _ fx1) (TFX _ fx2)
+unify' env info (TOpt _ t1) (TOpt _ t2)     = unify env info t1 t2
+unify' env _ (TNone _) (TNone _)            = return ()
+
+unify' env _ (TFX _ fx1) (TFX _ fx2)
   | fx1 == fx2                              = return ()
 
-unify' _ (TNil _ k1) (TNil _ k2)
+unify' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-unify' info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
-  | k1 == k2 && n1 == n2                    = do unify info t1 t2
-                                                 unify info r1 r2
-unify' info (TStar _ k1 r1) (TStar _ k2 r2)
-  | k1 == k2                                = unify info r1 r2
+unify' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = do unify env info t1 t2
+                                                 unify env info r1 r2
+unify' env info (TStar _ k1 r1) (TStar _ k2 r2)
+  | k1 == k2                                = unify env info r1 r2
 
-unify' info (TVar _ v1) (TVar _ v2)
+unify' env info (TVar _ v1) (TVar _ v2)
   | v1 == v2                                = return ()
 
-unify' info t1@(TUni _ v1) t2@(TUni _ v2)
+unify' env info t1@(TUni _ v1) t2@(TUni _ v2)
   | v1 == v2                                = return ()
   | uvlevel v1 < uvlevel v2                 = usubstitute v2 t1
   | otherwise                               = usubstitute v1 t2     -- Retain the var with the smallest ulevel (largest scope)
 
-unify' info (TUni _  v) t2                  = do when (v `elem` ufree t2) (infiniteType v t2)
+unify' env info (TUni _  v) t2              = do when (v `elem` ufree t2) (infiniteType v t2)
                                                  usubstitute v t2
-unify' info t1 (TUni _  v)                  = do when (v `elem` ufree t1) (infiniteType v t1)
+unify' env info t1 (TUni _  v)              = do when (v `elem` ufree t1) (infiniteType v t1)
                                                  usubstitute v t1
 
-unify' info t1 t2                           = noUnify info t1 t2
+unify' env info t1 t2                       = noUnify info t1 t2
 
 
 -- Asymmetric matching --------------------------------------------------------------------------------
@@ -1070,14 +1075,14 @@ instWitness env p0 wit      = case wit of
                                  WClass q t p w ws opts -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (locinfo p0 22) (tcargs p0) (tcargs $ vsubst s p)
+                                    unifyM env (locinfo p0 22) (tcargs p0) (tcargs $ vsubst s p)
                                     t <- usubst (vsubst s t)
                                     cs <- usubst cs
                                     return (cs, t, wexpr ws (eCall (tApp (eQVar w) tvs) (wvars cs ++ replicate opts eNone)))
                                  WInst q t p w ws -> do
                                     (cs,tvs) <- instQBinds env q
                                     let s = (tvSelf,t) : qbound q `zip` tvs
-                                    unifyM (locinfo p0 23) (tcargs p0) (tcargs $ vsubst s p)
+                                    unifyM env (locinfo p0 23) (tcargs p0) (tcargs $ vsubst s p)
                                     t <- usubst (vsubst s t)
                                     return (cs, t, wexpr ws (eQVar w))
 

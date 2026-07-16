@@ -99,7 +99,7 @@ groupCs env cs                              = do st <- currentState
   where mark n []                           = return n
         mark n (c : cs)                     = do tvs <- ufree <$> usubst c
                                                  tvs' <- ufree <$> usubst (map tUni $ attrfree c)
-                                                 sequence [ unify (noinfo 1) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
+                                                 sequence [ unify env (noinfo 1) (newUnivarToken n) (tUni tv) | tv <- nub (tvs++tvs') ]
                                                  mark (n+1) cs
         group m c                           = do tvs <- ufree <$> usubst c
                                                  let tv = case tvs of [] -> tv0; tv:_ -> tv
@@ -200,14 +200,14 @@ newsolve' env te eq cs                      = do let pol = closePolVars (polvars
                                                     R_amb v ts ->                               -- must-solve upper con
                                                         newtry env st te eq cs v ts
                                                     R_var v v' -> do                            -- var-var
-                                                        unify info0 (tUni v) (tUni v')
+                                                        unify env info0 (tUni v) (tUni v')
                                                         newsolve env te eq cs
                                                     R_ret -> do                                 -- acceptable upper con 
                                                         (eq,cs) <- validate env eq cs
                                                         coalesce env eq cs
 
 newtry env st te eq cs v []                 = noSolve0 env (Just $ tUni v) [] cs
-newtry env st te eq cs v (t:ts)             = (unify info0 (tUni v) t >> newsolve env te eq cs)
+newtry env st te eq cs v (t:ts)             = (unify env info0 (tUni v) t >> newsolve env te eq cs)
                                               `catchError`
                                               const (rollbackState st >> newtry env st te eq cs v ts)
 
@@ -284,7 +284,7 @@ solveGroups env select te eq (cs:css)       = do --traceM ("\n\n######### solveG
 solve' env select hist te eq cs
   | not $ null vargoals                     = do --traceM (unlines [ "### var goal " ++ prstr t ++ " ~ " ++ prstrs alts | RVar t alts <- vargoals ])
                                                  --traceM ("### var goals: " ++ show (sum [ length alts | RVar t alts <- vargoals ]))
-                                                 sequence [ unify (noinfo 2) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
+                                                 sequence [ unify env (noinfo 2) (tUni v) t | RVar v alts <- vargoals, t <- alts ]
                                                  proceed hist eq cs
   | any not keep_evidence                   = noSolve0 env Nothing [] keep_cs
   | null solve_cs || null goals             = return (keep_cs, eq)
@@ -307,7 +307,7 @@ solve' env select hist te eq cs
                                                         tryAlts st v alts
                                                     RVar v alts -> do
                                                         --traceM ("### var goal " ++ prstr v ++ ", unifying with " ++ prstrs alts)
-                                                        unifyM (noinfo 3) alts (repeat $ tUni v) >> proceed hist eq cs
+                                                        unifyM env (noinfo 3) alts (repeat $ tUni v) >> proceed hist eq cs
                                                     RSkip ->
                                                         return (keep_cs, eq)
 
@@ -337,21 +337,21 @@ solve' env select hist te eq cs
         tryAlt v (TTuple _ _ _)
           | not $ null attrs                = do t <- instwild env KType (tTupleK $ foldr (\n -> kwdRow n tWild) tWild attrs)
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (noinfo 5) (tUni v) t
+                                                 unify env (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
           where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
                 attrs                       = nub $ selsOf solve_cs \\ valueKWs
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # TRYING " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (noinfo 5) (tUni v) t
+                                                 unify env (noinfo 5) (tUni v) t
                                                  (cs,eq) <- quicksimp env eq cs
                                                  hist <- usubst hist
                                                  te <- usubst te
                                                  solve' env select hist te eq cs
         tryAlt v t                          = do t <- instwild env (uvkind v) t
                                                  --traceM ("  # trying " ++ prstr v ++ " = " ++ prstr t)
-                                                 unify (noinfo 5) (tUni v) t
+                                                 unify env (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
         proceed hist eq cs                  = do te <- usubst te
                                                  (cs,eq) <- simplify' env te eq cs
@@ -741,7 +741,7 @@ reduce' eq c                                = noRed0 (scope c) c
 
 
 solveProto env wit w t p                    = do (cs,t',we) <- instWitness env p wit
-                                                 unify (noinfo 7) t t'
+                                                 unify env (noinfo 7) t t'
                                                  return ([mkEqn env w (proto2type t p) we], cs)
 
 solveSelAttr (wf,sc,d) (Sel info env w t1 n t2)
@@ -836,7 +836,7 @@ cast' env info (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = if tcname c1 == tcname c2 && tcname c1 `elem` covariant then
                                                   castM env info (tcargs c') (tcargs c2)
                                               else                                              -- TODO: infer polarities in general!
-                                                  unifyM info (tcargs c') (tcargs c2)
+                                                  unifyM env info (tcargs c') (tcargs c2)
   where search                              = findAncestor env c1 (tcname c2)
 
 cast' env info (TCon _ c1) t2
@@ -849,7 +849,7 @@ cast' env info t1 (TCon _ c2)
 --                 existing                  expected
 cast' env info t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("## Unifying funs: " ++ prstr t1 ++ " ~ " ++ prstr t2)
-                                                 unify info t1 t2
+                                                 unify env info t1 t2
                                                  return ()
   | otherwise                               = do --traceM ("### Aligning fun " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ts) <- castpos env info p2 p1
@@ -862,7 +862,7 @@ cast' env info t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
 
 cast' env info t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr t1 ++ " ~ " ++ prstr t2)
-                                                 unify info t1 t2
+                                                 unify env info t1 t2
                                                  return ()
   | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ts) <- castpos env info p1 p2
@@ -989,15 +989,15 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
           | otherwise                       = do --traceM (" ## castkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr tv)
                                                  t2 <- newUnivar env
                                                  r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
         unif (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Star - Var: " ++ prstr (tStar KRow r) ++ " = " ++ prstr tv)
                                                  r2 <- tStar KRow <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
         unif TNil{}                         = do --traceM (" ## castkwd Nil - Var: " ++ prstr (tNil KRow) ++ " = " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
 
 castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
                                                  r2 <- usubst r2
@@ -1007,7 +1007,7 @@ castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Var - Row: " ++ prstr (tUni tv) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
                                                  r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  pick r1
         pick (TRow _ _ n t r)
           | n == n2                         = do --traceM (" ## castkwd Row - Row: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
@@ -1024,13 +1024,13 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Var - Star: " ++ prstr (tUni tv) ++ " = " ++ prstr (tStar KRow r2))
                                                  r1 <- tStar KRow <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  match r1
         match (TRow _ _ n t r)              = do --traceM (" ## castkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tStar KRow r2))
                                                  kwdUnexpected info n
         match r1@(TStar _ _ r)
           | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## castkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
-                                                 unify info r r2
+                                                 unify env info r r2
                                                  return []
           | TUni _ v <- r                   = do --traceM (" ## castkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
                                                  castkwd env info r1 r2
@@ -1042,7 +1042,7 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
 castkwd env info r1 r2@TNil{}               = term r1
   where term (TUni _ tv)                    = do --traceM (" ## castkwd Var - Nil: " ++ prstr (tUni tv) ++ " = " ++ prstr (tNil KRow))
                                                  r1 <- pure $ tNil KRow
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  term (tNil KRow)
         term (TNil _ _)                     = do --traceM (" ## castkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " = " ++ prstr (tNil KRow))
                                                  return []
@@ -1091,7 +1091,7 @@ sub' env _ eq w t1 t2@TWild{}               = return (idwit env w t1 t2 : eq)
 --                     existing                  expected
 sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("## Unifying funs: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
-                                                 unify info t1 t2
+                                                 unify env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
   | otherwise                               = do --traceM ("### Aligning fun " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info ((map eVar pNames)!!) 0 p2 p1
@@ -1107,7 +1107,7 @@ sub' env info eq w t1@(TFun _ fx1 p1 k1 t1') t2@(TFun _ fx2 p2 k2 t2')
 --                     existing            expected
 sub' env info eq w t1@(TTuple _ p1 k1) t2@(TTuple _ p2 k2)
   | varTails [p1,p2] || varTails [k1,k2]    = do --traceM ("### Unifying tuples: " ++ prstr w ++ ": " ++ prstr t1 ++ " ~ " ++ prstr t2)
-                                                 unify info t1 t2
+                                                 unify env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
   | otherwise                               = do --traceM ("### Aligning tuple " ++ prstr w ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs1,ap,es) <- subpos env info (eDotI (eVar px0) . toInteger) 0 p1 p2
@@ -1228,15 +1228,15 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
           | otherwise                       = do --traceM (" ## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  t2 <- newUnivar env
                                                  r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- tStar KRow <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
         unif f seen TNil{}                  = do --traceM (" ## subkwd Nil - Var: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
                                                  r2 <- pure $ tNil KRow
-                                                 unify info (tUni tv) r2
+                                                 unify env info (tUni tv) r2
 
 subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
                                             = do (cs1,e) <- pick f seen r1
@@ -1248,7 +1248,7 @@ subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
                                                  r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  pick f seen r1
         pick f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
@@ -1270,7 +1270,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
           | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Var - Star: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  r1 <- tStar KRow <$> newUnivarOfKind KRow env
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  match f seen r1
         match f seen r1@(TRow _ _ n t r)
           | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
@@ -1280,7 +1280,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  return (cs, eTupleK as)
         match f seen r1@(TStar _ _ r)
           | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 unify info r r2
+                                                 unify env info r r2
                                                  return ([], f attrKW)
           | TUni _ v <- r                   = do --traceM (" ## subkwd StarVar - Star: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  (cs,as) <- subkwd env info f seen r1 r2
@@ -1294,7 +1294,7 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
 subkwd env info f seen r1 TNil{}            = term f seen r1
   where term f seen (TUni _ tv)             = do --traceM (" ## subkwd Var - Nil: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  r1 <- pure $ tNil KRow
-                                                 unify info (tUni tv) r1
+                                                 unify env info (tUni tv) r1
                                                  term f seen (tNil KRow)
         term f seen (TRow _ _ n t r)
           | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
@@ -1683,12 +1683,12 @@ improve env te eq cs
   | Nothing <- info                     = do --traceM ("  *Resubmit " ++ show (length cs))
                                              simplify' env te eq cs
   | Left (v,vs) <- closure              = do --traceM ("  *Unify cycle " ++ prstr v ++ " = " ++ prstrs vs)
-                                             sequence [ unify (noinfo 12) (tUni v) (tUni v') | v' <- vs ]
+                                             sequence [ unify env (noinfo 12) (tUni v) (tUni v') | v' <- vs ]
                                              simplify' env te eq cs
   | not $ null gsimple                  = do --traceM ("  *G-simplify " ++ prstrs [ (v,tUni v') | (v,v') <- gsimple ])
                                              --traceM ("  *obsvars: " ++ prstrs obsvars)
                                              --traceM ("  *varvars: " ++ prstrs (varvars vi))
-                                             sequence [ unify (noinfo 13) (tUni v) (tUni v') | (v,v') <- gsimple ]
+                                             sequence [ unify env (noinfo 13) (tUni v) (tUni v') | (v,v') <- gsimple ]
                                              simplify' env te eq cs
   | not $ null cyclic                   = tyerrs cyclic ("Cyclic subtyping:")
   | not $ null (multiUBnd++multiLBnd)   = do ub <- mapM (mkGLB env) multiUBnd   -- GLB of the upper bounds
@@ -1698,20 +1698,20 @@ improve env te eq cs
                                              simplify' env te eq (replace ub lb cs)
   | not $ null posLBnd                  = do --traceM ("  *S-simplify (dn) " ++ prstrs posLBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
-                                             sequence [ unify (noinfo 15) (tUni v) t | (v,t) <- posLBnd ]
+                                             sequence [ unify env (noinfo 15) (tUni v) t | (v,t) <- posLBnd ]
                                              simplify' env te eq cs
   | not $ null negUBnd                  = do --traceM ("  *S-simplify (up) " ++ prstrs negUBnd)
                                              --traceM ("   posnames "  ++ prstrs (posnames $ envX env))
-                                             sequence [ unify (noinfo 16) (tUni v) t | (v,t) <- negUBnd ]
+                                             sequence [ unify env (noinfo 16) (tUni v) t | (v,t) <- negUBnd ]
                                              simplify' env te eq cs
   | not $ null closUBnd                 = do --traceM ("  *Simplify upper closed bound " ++ prstrs closUBnd)
-                                             sequence [ unify (noinfo 17) (tUni v) t | (v,t) <- closUBnd ]
+                                             sequence [ unify env (noinfo 17) (tUni v) t | (v,t) <- closUBnd ]
                                              simplify' env te eq cs
   | not $ null closLBnd                 = do --traceM ("  *Simplify lower closed bound " ++ prstrs closLBnd)
-                                             sequence [ unify (noinfo 18) (tUni v) t | (v,t) <- closLBnd ]
+                                             sequence [ unify env (noinfo 18) (tUni v) t | (v,t) <- closLBnd ]
                                              simplify' env te eq cs
   | not $ null redEq                    = do --traceM ("  *(Context red) " ++ prstrs (bound redEq))
-                                             sequence [ unify (noinfo 19) t1 t2 | (t1,t2) <- redUni ]
+                                             sequence [ unify env (noinfo 19) t1 t2 | (t1,t2) <- redUni ]
                                              simplify' env te (redEq++eq) (remove (bound redEq) cs)
   | not $ null dots                     = do --traceM ("  *Implied mutation/selection solutions " ++ prstrs dots)
                                              (eq',cs') <- solveDots mutC selC selP cs
