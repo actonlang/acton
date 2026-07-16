@@ -1957,13 +1957,13 @@ classdefGen k pname ctx con = addLoc $ do
                 (ss, docstring) <- suiteWithDocstring ctx s
                 return $ con NoLoc nm q cs ss docstring
 
-typedef = addLoc $ do
+typedef = addLoc $ try $ do
                 (s,l) <- withPos (rwordLoc "type")
-                assertTop l "type"
                 nm <- name
                 q <- optbinds
                 equals
                 t <- ttype
+                assertTop l "type"
                 return $ S.Typedef NoLoc nm q t Nothing
 
 extdef = addLoc $ do
