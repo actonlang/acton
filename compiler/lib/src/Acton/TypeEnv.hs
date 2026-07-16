@@ -1113,7 +1113,7 @@ instance UFree Equation where
     ufree (Eqn i w t e)                 = ufree t ++ ufree e
 
 instance Vars Equation where
-    free (Eqn i w t e)                  = free e
+    free (Eqn i w t e)                  = free t ++ free e
 
     bound (Eqn i w t e)                 = [w]
 
