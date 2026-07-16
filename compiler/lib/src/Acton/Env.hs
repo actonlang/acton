@@ -1076,6 +1076,11 @@ castable env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = tcargs c2 == tcargs c'
   where search                              = findAncestor env c1 (tcname c2)
 
+castable env (TCon _ c1) t2
+  | Just t1 <- tExpand env c1               = castable env t1 t2
+castable env t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2               = castable env t1 t2
+
 castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
 
