@@ -107,9 +107,6 @@ autoQuantD env (Def l n [] p k t b d x doc)
 autoQuantD env (Extension l [] c ps b doc)
                                     = Extension l auto_q c ps b doc
   where auto_q                      = map qbind $ nub (vfree c ++ vfree ps) \\ [tvSelf]
-autoQuantD env (Typedef l n [] t doc)
-                                    = Typedef l n auto_q t doc
-  where auto_q                      = map qbind $ nub (vfree t)
 autoQuantD env d                    = d
 
 
