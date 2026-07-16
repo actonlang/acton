@@ -41,6 +41,8 @@ typecast t t' e
 typeOf env x                        = t
   where (t, fx, x')                 = qType env accept x
 
+expTypeOf env x                     = expanded env (typeOf env x)
+
 fxOf env x                          = fx
   where (t, fx, x')                 = qType env accept x
 
@@ -54,7 +56,7 @@ closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
   | NClass q _ _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
-closedType env (Dot _ e n)          = case expanded env (typeOf env e) of
+closedType env (Dot _ e n)          = case expTypeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> n `notElem` valueKWs

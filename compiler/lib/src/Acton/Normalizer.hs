@@ -310,7 +310,6 @@ instance Norm Stmt where
                                          ps2 <- norm env ps1
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
-      where t                       = typeOf env e
     norm' env s@(For l p e b els)
       | Just r <- rangeIteratorArg e = do i <- newName "range_iter"
                                           v <- newName "val"
@@ -320,7 +319,7 @@ instance Norm Stmt where
                                          v <- newName "val"
                                          normSuite env [sAssign (pVar i $ conv env t) e,
                                                         handleStop (While l (eBool True) (body v i) []) els]
-      where t@(TCon _ (TC c [t']))  = typeOf env e
+      where t@(TCon _ (TC c [t']))  = expTypeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
             rangeNext i             = eCall (eQVar primUNext) [eVar i]
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
@@ -333,7 +332,7 @@ instance Norm Stmt where
             isPVar PVar{}           = True
             isPVar _                = False
             rangeIteratorArg (Call _ f (PosArg r PosNil) KwdNil)
-               | isIterCall f && typeOf env r == tRange = Just r
+               | isIterCall f && expTypeOf env r == tRange = Just r
             rangeIteratorArg (Paren _ e) = rangeIteratorArg e
             rangeIteratorArg _       = Nothing
             isIterCall (Dot _ _ n)   = n == iterKW
@@ -519,7 +518,7 @@ normBool env e
                                          return $ BinOp l e1 op e2
   | otherwise                       = do e' <- norm env e
                                          return $ eCall (eDot e' boolKW) []
-  where t                           = typeOf env e
+  where t                           = expTypeOf env e
 
 instance Norm Expr where
     norm env (Var l (NoQ n))
@@ -547,7 +546,7 @@ instance Norm Expr where
       | TTuple _ p k <- t,
         n `notElem` valueKWs        = DotI l <$> norm env e <*> pure (nargs p + narg n k)
       | otherwise                   = Dot l <$> norm env e <*> pure n
-      where t                       = typeOf env e
+      where t                       = expTypeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> normBool env e2 <*> norm env e3
@@ -556,7 +555,7 @@ instance Norm Expr where
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
     norm env (UnOp l Not e)         = UnOp l Not <$> normBool env e
     norm env (Rest l e n)           = RestI l <$> norm env e <*> pure (nargs p + narg n k)
-      where TTuple _ p k            = typeOf env e
+      where TTuple _ p k            = expTypeOf env e
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
@@ -576,7 +575,7 @@ instance Norm Expr where
 
 listGetItemCall env (Dot _ _ n) (PosArg e (PosArg ix PosNil))
   | n == getitemKW,
-    typeOf env ix == tInt,
+    expTypeOf env ix == tInt,
     Just t <- listElementType (typeOf env e)
                                     = Just (t, e, ix)
 listGetItemCall env (TApp _ e _) p  = listGetItemCall env e p
