@@ -641,6 +641,7 @@ reduce' eq c@(Proto _ env w t@(TCon _ tc) p)
                                                  return (mkEqn env w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce (eq'++eq) cs
+  | Just t' <- tExpand env tc               = reduce' eq c{ type1 = t' }
   where witSearch                           = findWitness env t p
 
 reduce' eq c@(Proto _ env w t@(TFX _ tc) p)
@@ -721,6 +722,7 @@ reduce' eq c@(Mut _ env (TVar _ tv) n _)
 reduce' eq c@(Mut _ env (TCon _ tc) n _)
   | Just wsc <- attrSearch                  = do solveMutAttr wsc c
                                                  return eq
+  | Just t <- tExpand env tc                = reduce' eq c{ type1 = t }
   | otherwise                               = tyerr n "Attribute not found:"
   where attrSearch                          = findAttr env tc n
 
