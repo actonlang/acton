@@ -338,13 +338,7 @@ instance KCheck Decl where
                                     = do env1 <- extvars (tvSelf : qbound q) env
                                          Protocol l n <$> kchkQBinds env1 q <*> kchkPBounds env1 us <*> kchkSuite env1 b <*> pure doc
     kchk env (Typedef l n q t doc)
-                                    = do tmp <- swapXVars []
-                                         q <- convPExist env q
-                                         t <- convPExist env t
-                                         q <- (q++) <$> swapXVars tmp
-                                         env1 <- extvars (qbound q) env
-                                         q <- convTWild env1 q
-                                         t <- convTWild env1 t
+                                    = do env1 <- extvars (qbound q) env
                                          Typedef l n <$> kchkQBinds env1 q <*> kexp KType env1 t <*> pure doc
     kchk env (Extension l q c us b doc)
       | not $ null ambig            = err2 ambig "Ambiguous type variables in extension:"
