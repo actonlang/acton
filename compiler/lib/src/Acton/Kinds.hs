@@ -97,18 +97,19 @@ instance Pretty (Name,Kind) where
     pretty (n,k)                    = pretty n <+> colon <+> pretty k
 
 
-autoQuantS env (TSchema l q t)      = TSchema l (q ++ auto_q) t
-  where auto_q                      = map qbind $ nub (vfree q ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
+autoQuantS env (TSchema l [] t)     = TSchema l auto_q t
+  where auto_q                      = map qbind $ nub (vfree t) \\ (tvSelf : tvars env)
+autoQuantS env sc                   = sc
 
-autoQuantD env (Def l n q p k t b d x doc)
-                                    = Def l n (q ++ auto_q) p k t b d x doc
-  where auto_q                      = map qbind $ nub (vfree q ++ vfree p ++ vfree k ++ vfree t) \\ (tvSelf : qbound q ++ tvars env)
-autoQuantD env (Extension l q c ps b doc)
-                                    = Extension l (q ++ auto_q) c ps b doc
-  where auto_q                      = map qbind $ nub (vfree q ++ vfree c ++ vfree ps) \\ (tvSelf : qbound q ++ tvars env)
-autoQuantD env (Typedef l n q t doc)
-                                    = Typedef l n (q ++ auto_q) t doc
-  where auto_q                      = map qbind $ nub (vfree q ++ vfree t) \\ (qbound q ++ tvars env)
+autoQuantD env (Def l n [] p k t b d x doc)
+                                    = Def l n auto_q p k t b d x doc
+  where auto_q                      = map qbind $ nub (vfree p ++ vfree k ++ vfree t) \\ (tvSelf : tvars env)
+autoQuantD env (Extension l [] c ps b doc)
+                                    = Extension l auto_q c ps b doc
+  where auto_q                      = map qbind $ nub (vfree c ++ vfree ps) \\ [tvSelf]
+autoQuantD env (Typedef l n [] t doc)
+                                    = Typedef l n auto_q t doc
+  where auto_q                      = map qbind $ nub (vfree t)
 autoQuantD env d                    = d
 
 
