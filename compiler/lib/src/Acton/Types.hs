@@ -466,6 +466,7 @@ checkTopStmt env te (Assign l pats e)   = do (_,t,pats) <- infEnvT env pats
 finishToStmt env te eq s                = do te <- defaultX env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
+                                             eq <- usubst eq
                                              let (eq0, eq1) = spliteqns eq
                                              s <- defaultX env =<< termred eq1 <$> usubst (pushEqns env eq0 s)
                                              tieWitKnots te [fixupSelf s]
