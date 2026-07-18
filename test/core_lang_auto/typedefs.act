@@ -1,0 +1,59 @@
+type Point = (float, float)
+
+def test1(p: Point):
+    return p
+
+def test2(q):
+    return test1(q)
+
+def test3(p: Point):
+    return p.0 + p.1
+
+#
+
+type MyError = LookupError
+
+def test4(err: MyError) -> Exception:
+    return err
+
+#
+
+type Apa = (int, Bepa[str])
+
+class Bepa[K]():
+    attr: Apa
+
+#
+
+class Root():
+    pass
+
+class Left(Root):
+    pass
+
+class Right(Root):
+    pass
+
+type LeftAlias = Left
+
+type RightAlias = Right
+
+def test5(l: LeftAlias, r: RightAlias):
+    return l if True else r
+
+#
+
+type String = str
+
+def test6(s: String):
+    return s.isspace()
+
+#
+
+type Dict[K(Hashable)] = dict[K, str]
+
+def test7(x: Dict[int]):
+    return x[1]
+
+actor main(env):
+    env.exit(0)

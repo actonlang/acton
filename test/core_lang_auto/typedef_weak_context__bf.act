@@ -1,0 +1,1 @@
+type Apa[K(Eq)] = dict[K,str]
