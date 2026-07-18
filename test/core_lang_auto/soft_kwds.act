@@ -1,0 +1,14 @@
+import random
+from math import sqrt
+
+def softy(from, import, type, class, protocol, extension, actor):
+    pass
+
+import = 1
+
+from = 2
+
+#extension = 3
+
+actor main(env):
+    env.exit(0)
