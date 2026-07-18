@@ -1,11 +1,11 @@
-ERROR: [error Parse error]: unexpected 'i'
-                     expecting "@static", "@staticmethod", "action", "actor", "class", "def", "extension", "mut", "proc", "protocol", "pure", "type", '_', end of input, end of line, or statement
+ERROR: [error Parse error]: unexpected "mat"
+                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
 
-     ╭──▶ test.act@3:1-3:2
+     ╭──▶ test.act@3:8-3:9
      │
    3 │ import math
-     • ┬ 
-     • ╰╸ unexpected 'i'
-     •    expecting "@static", "@staticmethod", "action", "actor", "class", "def", "extension", "mut", "proc", "protocol", "pure", "type", '_', end of input, end of line, or statement
-     •    
+     •        ┬ 
+     •        ╰╸ unexpected "mat"
+     •           expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+     •           
 ─────╯

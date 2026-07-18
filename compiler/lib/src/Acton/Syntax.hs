@@ -842,11 +842,13 @@ isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isK
 
 isKeyword x                         = x `Data.Set.member` rws
   where rws                         = Data.Set.fromDistinctAscList [
-                                        "False","None","NotImplemented","Self","True","action","actor","after","and","as",
-                                        "assert","async","await","break","class","continue","def","del","elif","else",
-                                        "except","extension","finally","for","from","if","import","in","is","isinstance",
-                                        "lambda","mut","not","or","pass","proc","protocol","pure","raise","return","try",
-                                        {-"type",-}"var","while","with","yield","_"
+                                        "False","None","NotImplemented","Self","True","action","after","and","as",
+                                        "assert","async","await","break","continue","def","del","elif","else",
+                                        "except","finally","for","if","in","is","isinstance",
+                                        "lambda","mut","not","or","pass","proc","pure","raise","return","try",
+                                        "var","while","with","yield","_"
+                                        -- The following are soft keywords and not included in the above list:
+                                        -- "actor","class","extension","from","import","protocol","type"
                                       ]
 
 isSig Signature{}                   = True
