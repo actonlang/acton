@@ -64,7 +64,7 @@ data Decl       = Def           { dloc::SrcLoc, dname:: Name, qbinds::QBinds, po
                 | Actor         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, pos::PosPar, kwd::KwdPar, dbody::Suite, ddoc::Maybe String }
                 | Class         { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[TCon], dbody::Suite, ddoc::Maybe String }
                 | Protocol      { dloc::SrcLoc, dname:: Name, qbinds::QBinds, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
---                | Extension     { dloc::SrcLoc, dqname::QName, qbinds::QBinds, bounds::[PCon], dbody::Suite }
+                | Typedef       { dloc::SrcLoc, dname:: Name, qbinds::QBinds, texp::Type, ddoc::Maybe String }
                 | Extension     { dloc::SrcLoc, qbinds::QBinds, tycon::TCon, bounds::[PCon], dbody::Suite, ddoc::Maybe String }
                 deriving (Show,Read,NFData,Generic)
 
@@ -692,6 +692,7 @@ instance Eq Decl where
     Actor _ n1 q1 p1 k1 b1 doc1          ==  Actor _ n2 q2 p2 k2 b2 doc2      = n1 == n2 && q1 == q2 && p1 == p2 && k1 == k2 && b1 == b2 && doc1 == doc2
     Class _ n1 q1 a1 b1 doc1             ==  Class _ n2 q2 a2 b2 doc2         = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
     Protocol _ n1 q1 a1 b1 doc1          ==  Protocol _ n2 q2 a2 b2 doc2      = n1 == n2 && q1 == q2 && a1 == a2 && b1 == b2 && doc1 == doc2
+    Typedef _ n1 q1 t1 doc1              ==  Typedef _ n2 q2 t2 doc2          = n1 == n2 && q1 == q2 && t1 == t2 && doc1 == doc2
     Extension _ q1 c1 a1 b1 doc1         ==  Extension _ q2 c2 a2 b2 doc2     = q1 == q2 && c1 == c2 && a1 == a2 && b1 == b2 && doc1 == doc2
     _                               == _                            = False
 
@@ -845,7 +846,7 @@ isKeyword x                         = x `Data.Set.member` rws
                                         "assert","async","await","break","class","continue","def","del","elif","else",
                                         "except","extension","finally","for","from","if","import","in","is","isinstance",
                                         "lambda","mut","not","or","pass","proc","protocol","pure","raise","return","try",
-                                        "var","while","with","yield","_"
+                                        {-"type",-}"var","while","with","yield","_"
                                       ]
 
 isSig Signature{}                   = True
@@ -867,9 +868,12 @@ hasCleanup ss                       = any isCleanup ss
 
 isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
 
+declbody Typedef{}                  = []
+declbody d                          = dbody d
+
 isNotImpl (Expr _ e)                = e == eNotImpl
 isNotImpl (Assign _ _ e)            = e == eNotImpl
-isNotImpl (Decl _ ds)               = any (hasNotImpl . dbody) ds
+isNotImpl (Decl _ ds)               = any (hasNotImpl . declbody) ds
 isNotImpl _                         = False
 
 notImplBody b                       = not $ null $ notImpls b

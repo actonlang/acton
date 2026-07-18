@@ -363,6 +363,7 @@ unboxedAugTarget env _              = True
 isTypeRef NAct{}                    = True
 isTypeRef NClass{}                  = True
 isTypeRef NProto{}                  = True
+isTypeRef NType{}                   = True
 isTypeRef NExt{}                    = True
 isTypeRef _                         = False
 
@@ -845,6 +846,7 @@ instance Boxing Decl where
             keepSelf p r            = fixpars p r
             te                      = envOf pFinal
             env1                    = setReturnType (Just t') $ setInAction (fx == fxAction) $ define te env
+    boxing env d@Typedef{}          = return (HashSet.empty, d)
   
 instance Boxing Branch where
     boxing env (Branch e ss)       = do (ws1,e') <- boxing env e

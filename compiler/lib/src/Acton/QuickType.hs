@@ -41,6 +41,8 @@ typecast t t' e
 typeOf env x                        = t
   where (t, fx, x')                 = qType env accept x
 
+expTypeOf env x                     = expanded env (typeOf env x)
+
 fxOf env x                          = fx
   where (t, fx, x')                 = qType env accept x
 
@@ -54,7 +56,7 @@ closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
 closedType env (Dot _ (Var _ x) n)
   | NClass q _ _ _ <- findQName x env = closedAttr env (TC x (map tVar $ qbound q)) n
-closedType env (Dot _ e n)          = case typeOf env e of
+closedType env (Dot _ e n)          = case expTypeOf env e of
                                         TCon _ c -> closedAttr env c n
                                         TVar _ v  -> closedAttr env (findTVBound env v) n
                                         TTuple _ p k -> n `notElem` valueKWs
@@ -126,7 +128,7 @@ qSchema env f e@(Dot _ (Var _ x) n)
                                           (TSchema _ q' t, mbdec) = findAttr' env tc n
                                       in (tSchema (q++q') $ vsubst [(tvSelf,tCon tc)] (addSelf t mbdec), fxPure, mbdec, e)
   where info                        = findQName x env
-qSchema env f e0@(Dot l e n)        = case t of
+qSchema env f e0@(Dot l e n)        = case expanded env t of
                                         TCon _ c -> addE e' $ findAttr' env c n
                                         TTuple _ p k
                                           | n `elem` valueKWs -> addE e' $ findAttr' env cValue n
@@ -170,14 +172,14 @@ instance QType Expr where
 --  qType env f (Ellipsis _)        = undefined
     qType env f e0@(Call l e ps KwdNil)
       | Just _ <- qGeneratedCallableType env e,
-        TFun{} <- t                 = (restype t, fx', Call l e' (qMatch f p (posrow t) ps') KwdNil)
+        TFun{} <- expanded env t    = (restype t, fx', Call l e' (qMatch f p (posrow t) ps') KwdNil)
       | Just _ <- qGeneratedCallableType env e
                                     = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, fx, e')             = qType env f e
             (p, fxp, ps')           = qTypeGeneratedPos env f (posrow t) ps
             fx'                     = upbound env [fx,fxp,effect t]
     qType env f e0@(Call l e ps ks)
-      | TFun{} <- t                 = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
+      | TFun{} <- expanded env t    = --trace ("## qType Call " ++ prstr e0 ++ ", t = " ++ prstr t) $
                                       (restype t, fx', Call l e' (qMatch f p (posrow t) ps') (qMatch f k (kwdrow t) ks'))
       | otherwise                   = error ("###### qType Fun " ++ prstr e ++ " : " ++ prstr t)
       where (t, fx, e')             = qType env f e
@@ -187,10 +189,10 @@ instance QType Expr where
     qType env f (Let l ss e)        = (t, fx, Let l ss e')
        where te                     = envOf ss
              (t,fx,e')              = qType (define te env) f e
-    qType env f (Async l e)         = case t of
+    qType env f (Async l e)         = case expanded env t of
                                         TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), fx, Async l e')
       where (t, fx, e')             = qType env f e
-    qType env f (Await l e)         = case t of
+    qType env f (Await l e)         = case expanded env t of
                                         TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
     qType env f e@(BinOp l e1 op e2)
@@ -218,16 +220,16 @@ instance QType Expr where
             fx'                     = upbound env [fx1,fx,fx2]
     qType env f (IsInstance l e c)  = (tBool, fx, IsInstance l e' c)
       where (t, fx, e')             = qType env f e
-    qType env f (DotI l e i)        = case t of
+    qType env f (DotI l e i)        = case expanded env t of
                                         TTuple _ p _ -> (pick i p, fx, DotI l e' i)
       where (t, fx, e')             = qType env f e
             pick i (TRow _ _ _ t' p) = if i == 0 then t' else pick (i-1) p
-    qType env f (RestI l e i)       = case t of
+    qType env f (RestI l e i)       = case expanded env t of
                                         TTuple _ p _ -> (TTuple NoLoc (pick i p) kwdNil, fx, RestI l e' i)
       where (t, fx, e')             = qType env f e
             pick i (TRow l k x t r) = if i == 0 then r else TRow l k x t (pick (i-1) r)
             pick i (TNil l k)       = TNil l k
-    qType env f (Rest l e n)        = case t of
+    qType env f (Rest l e n)        = case expanded env t of
                                         TTuple _ p k -> (TTuple NoLoc posNil (pick n k), fx, Rest l e' n)
       where (t, fx, e')             = qType env f e
             pick n (TRow l k x t r) = if x == n then r else TRow l k x t (pick n r)
@@ -285,7 +287,7 @@ instance QType PosArg where
     qType env f (PosArg e p)        = (posRow t r, upbound env [fx,fxp], PosArg e' p')
       where (t, fx, e')             = qType env f e
             (r, fxp, p')            = qType env f p
-    qType env f (PosStar e)         = case t of TTuple _ p _ -> (p, fx, PosStar e')
+    qType env f (PosStar e)         = case expanded env t of TTuple _ p _ -> (p, fx, PosStar e')
       where (t, fx, e')             = qType env f e
     qType env f PosNil              = (posNil, fxPure, PosNil)
 
@@ -301,7 +303,7 @@ instance QType KwdArg where
     qType env f (KwdArg n e k)      = (kwdRow n t r, upbound env [fx,fxk], KwdArg n e' k')
       where (t, fx, e')             = qType env f e
             (r, fxk, k')            = qType env f k
-    qType env f (KwdStar e)         = case t of TTuple _ _ k -> (k, fx, KwdStar e')
+    qType env f (KwdStar e)         = case expanded env t of TTuple _ _ k -> (k, fx, KwdStar e')
       where (t, fx, e')             = qType env f e
     qType env f KwdNil              = (kwdNil, fxPure, KwdNil)
 
@@ -415,6 +417,7 @@ instance EnvOf Decl where
     envOf (Def _ n q p k (Just t) b dec fx doc)
                                     = [(n, NDef (TSchema NoLoc q $ TFun NoLoc fx (prowOf p) (krowOf k) t) dec doc)]
     envOf (Class _ n q as ss doc)   = [(n, NClass q (leftpath as) (map dropDefSelf $ envOf ss) doc)]
+    envOf (Typedef _ n q t doc)     = [(n, NType q t doc)]
 
     envOf (Actor _ n q p k ss doc)  = [(n, NAct q (prowOf p) (krowOf k) (map wrap te) doc)]
       where te                      = filter (not . isHidden . fst) $ envOf ss `exclude` statevars ss

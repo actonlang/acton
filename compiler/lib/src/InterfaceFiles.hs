@@ -1259,6 +1259,7 @@ queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattr
         isCons I.NClass{}      = True
         isCons I.NProto{}      = True
         isCons I.NAct{}        = True
+        isCons I.NType{}       = True
         isCons _               = False
         isCon I.NClass{}       = True
         isCon I.NAct{}         = True

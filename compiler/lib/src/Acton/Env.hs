@@ -391,6 +391,7 @@ instance Unalias NameInfo where
     unalias env (NAct q p k te doc) = NAct (unalias env q) (unalias env p) (unalias env k) (unalias env te) doc
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
+    unalias env (NType q t doc)     = NType (unalias env q) (unalias env t) doc
     unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
     unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
@@ -713,6 +714,7 @@ tconKind n env              = case findQName n env of
                                 NAct q _ _ _ _ -> kind KType q
                                 NClass q _ _ _ -> kind KType q
                                 NProto q _ _ _ -> kind KProto q
+                                NType q _ _    -> kind KType q
                                 NReserved    -> nameReserved n
                                 _            -> notClassOrProto n
   where kind k []           = k
@@ -804,6 +806,16 @@ localCons env               = local (reverse (closedNames env)) ++ local (revers
         isCon NAct{}        = True
         isCon _             = False
 
+tExpand                     :: EnvF x -> TCon -> Maybe Type
+tExpand env (TC n ts)       = case findQName n env of
+                                NType q t _ -> Just $ vsubst (qbound q `zip` ts) t
+                                _ -> Nothing
+
+expanded                    :: EnvF x -> Type -> Type
+expanded env (TCon _ c)
+  | Just t <- tExpand env c = expanded env t
+expanded env t              = t
+
 findCon                     :: EnvF x -> TCon -> ([WTCon],TEnv)
 findCon env (TC n ts)
   | map tVar tvs == ts      = (us, te)
@@ -816,6 +828,7 @@ findConName n env           = case findQName n env of
                                 NAct q p k te _  -> (q, [], notHidden te)
                                 NClass q us te _ -> (q, us, te)
                                 NProto q us te _ -> (q, us, te)
+                                NType q t _      -> (q, [], [])
                                 NExt q c us te _ _ -> (q, us, te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
@@ -994,7 +1007,6 @@ localProtos env             = local (reverse (closedNames env)) ++ local (revers
 hasAttr                     :: EnvF x -> TCon -> Name -> Bool
 hasAttr env tc n            = maybe False (const True) (findAttrInfo' env (tcname tc) n)
 
-
 -- TVar queries ------------------------------------------------------------------------------------------------------------------
 
 findSelf                    :: EnvF x -> TCon
@@ -1064,6 +1076,11 @@ castable env (TCon _ c1) (TCon _ c2)
   | Just (wf,c') <- search                  = tcargs c2 == tcargs c'
   where search                              = findAncestor env c1 (tcname c2)
 
+castable env (TCon _ c1) t2
+  | Just t1 <- tExpand env c1               = castable env t1 t2
+castable env t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2               = castable env t1 t2
+
 castable env (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
                                             = castable env fx1 fx2 && castable env p2 p1 && castable env k2 k1 && castable env t1 t2
 
@@ -1124,6 +1141,11 @@ glb env (TCon _ c1) (TCon _ c2)
   | tcname c1 == tcname c2              = pure $ tCon c1
   | hasAncestor env c1 c2               = pure $ tCon c1
   | hasAncestor env c2 c1               = pure $ tCon c2
+
+glb env (TCon _ c1) t2
+  | Just t1 <- tExpand env c1           = glb env t1 t2
+glb env t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2           = glb env t1 t2
 
 glb env (TFun _ e1 p1 k1 t1) (TFun _ e2 p2 k2 t2)
                                         = do e <- glb env e1 e2
@@ -1210,6 +1232,11 @@ lub env (TCon _ c1) (TCon _ c2)
   | hasAncestor env c2 c1               = pure $ tCon c1
   | not $ null common                   = pure $ tCon $ head common
   where common                          = commonAncestors env c1 c2
+
+lub env (TCon _ c1) t2
+  | Just t1 <- tExpand env c1           = lub env t1 t2
+lub env t1 (TCon _ c2)
+  | Just t2 <- tExpand env c2           = lub env t1 t2
 
 lub env f1@(TFun _ e1 p1 k1 t1) f2@(TFun _ e2 p2 k2 t2)
                                         = do e <- lub env e1 e2
@@ -1410,6 +1437,7 @@ impName _ mi n              = case moduleLookupName mi n of
                                 Just NAct{}   -> imported
                                 Just NClass{} -> imported
                                 Just NProto{} -> imported
+                                Just NType{}  -> imported
                                 Just NExt{}   -> Nothing
                                 Just NAlias{} -> imported
                                 Just NVar{}   -> imported
@@ -1573,6 +1601,8 @@ instance Simp (Name, NameInfo) where
     simp env (n, NClass q us te doc)= (n, NClass (simp env' q) (simp env' us) (simp env' te) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NProto q us te doc)= (n, NProto (simp env' q) (simp env' us) (simp env' te) doc)
+      where env'                    = defineTVars (stripQual q) env
+    simp env (n, NType q t doc)     = (n, NType (simp env' q) (simp env' t) doc)
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NExt q c us te opts doc)
                                     = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)

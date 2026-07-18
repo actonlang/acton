@@ -185,6 +185,8 @@ instance Deact Decl where
                                     = Class l n q u <$> deactSuite env1 b <*> pure ddoc
       where env1                    = defineTVars (selfQuant (NoQ n) q) env
 
+    deact env d@Typedef{}           = return d
+
     deact env d                     = error ("deact unexpected decl: " ++ prstr d)
 
 newact env n q p ddoc               = Def l0 (newactName n) q p KwdNIL (Just t) [newassign, install_gc_finalizer, waitinit, sReturn x] NoDec fxProc ddoc

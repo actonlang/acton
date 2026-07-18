@@ -1,0 +1,5 @@
+import foo
+
+actor main(env):
+    f: foo.Foo = "abc"
+    env.exit(0)

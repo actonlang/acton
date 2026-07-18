@@ -91,6 +91,10 @@ instance Pretty Decl where
                                       nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
     pretty (Protocol _ n q a b doc) = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b
+    pretty (Typedef _ n q t doc)    = text "type" <+> pretty n <> nonEmpty brackets commaList q <+>
+                                      equals <+> pretty t $+$ prettyDoc doc
+      where prettyDoc Nothing       = empty
+            prettyDoc (Just s)      = nest 4 $ text "\"\"\"" <> text (escapeDocstring s) <> text "\"\"\""
     pretty (Extension _ q c a b doc)
       | tvs == tcargs c             = text "extension" <+> pretty (tcname c) <> nonEmpty brackets commaList q <+>
                                       nonEmpty parens commaList a <> colon $+$ prettyDocSuite doc b

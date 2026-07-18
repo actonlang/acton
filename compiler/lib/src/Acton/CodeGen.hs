@@ -246,9 +246,11 @@ hStmt _ env s                       = empty
 
 declstub env (Class _ n q a b ddoc) = text "struct" <+> genTopName env n <> semi
 declstub env Def{}                  = empty
+declstub env Typedef{}              = empty
 
 typedef env (Class _ n q a b ddoc)  = text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 typedef env Def{}                   = empty
+typedef env Typedef{}               = empty
 
 decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> char '{') $+$
                                       nest 4 (vcat $ stdprefix env ++ initdef : serialize env tc : deserialize env tc : meths) $+$
@@ -264,6 +266,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
+decl env Typedef{}                  = empty
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
                                       vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
@@ -272,6 +275,7 @@ methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classn
         c                           = TC (NoQ n) (map tVar $ qbound q)
         env1                        = setInClass (defineTVars q env)
 methstub env Def{}                  = empty
+methstub env Typedef{}              = empty
 
 constub env t n r b
   | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
@@ -544,6 +548,8 @@ declDecl env (Class _ n q as b ddoc)
         sup_c                       = filter ((`elem` special_repr) . tcname) as
         special_repr                = [primActor] -- To be extended...
         cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+
+declDecl env Typedef{}              = empty
 
 declCleanup env n sup_c
   -- TODO: only match if this is an actor, or even better if this actor has a __cleanup__ method defined (not empty!?)

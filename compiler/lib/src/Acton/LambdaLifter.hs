@@ -240,6 +240,7 @@ instance Lift Decl where
     ll env (Class l n q cs b doc)       = do b' <- llSuite (setCtxt InClass env1) b
                                              return $ Class l n q (conv cs) b' doc
       where env1                        = defineTVars (selfQuant (NoQ n) q) env
+    ll env (Typedef l n q t doc)        = return $ Typedef l n (conv q) (conv t) doc
     ll env d                            = error ("ll unexpected: " ++ prstr d)
 
 instance Lift Branch where
@@ -454,6 +455,7 @@ instance (Conv a) => Conv (Name, a) where
 
 instance Conv NameInfo where
     conv (NClass q ps te doc)           = NClass (conv q) (conv ps) (conv te) doc
+    conv (NType q t doc)                = NType (conv q) (conv t) doc
     conv (NSig sc Property doc)         = NSig (conv sc) Property doc
     conv (NSig sc dec doc)              = NSig (convTop sc) dec doc
     conv (NDef sc dec doc)              = NDef (convTop sc) dec doc

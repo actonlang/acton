@@ -30,7 +30,7 @@ import Debug.Trace
 normalize                           :: Env0 -> Module -> IO (Module, Env0)
 normalize env0 m                    = return (evalState (norm env m) (0,[]), env0')
   where env                         = normEnv env0
-        env0'                       = convertModules (const []) convEnv env0
+        env0'                       = convertModules (const []) (convEnv env) env0
 
 
 --  Normalization:
@@ -156,13 +156,13 @@ normSuite env (s : ss)              = do s' <- norm' env s
 
 
 normPat                             :: NormEnv -> Pattern -> NormM (Pattern,Suite)
-normPat _ (PWild l a)               = do n <- newName "ignore"
-                                         return (PVar l n $ conv a,[])
-normPat _ (PVar l n a)              = return (PVar l n $ conv a,[])
+normPat env (PWild l a)             = do n <- newName "ignore"
+                                         return (PVar l n $ conv env a,[])
+normPat env (PVar l n a)            = return (PVar l n $ conv env a,[])
 normPat env (PParen _ p)            = normPat env p
 normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
                                          ss <- normSuite (define [(v, NVar t)] env) $ normPP v 0 pp ++ normKP v [] kp
-                                         return (pVar v $ conv t, ss)
+                                         return (pVar v $ conv env t, ss)
   where normPP v n (PosPat p pp)    = Assign NoLoc [p] (DotI NoLoc (eVar v) n) : normPP v (n+1) pp
         normPP v n (PosPatStar p)   = [Assign NoLoc [p] (foldl (RestI NoLoc) (eVar v) [0..n-1])]
         normPP _ _ PosPatNil        = []
@@ -172,7 +172,7 @@ normPat env p@(PTuple _ pp kp)      = do v <- newName "tup"
         t                           = typeOf env p
 normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          ss <- normSuite env $ normList v 0 ps pt
-                                         return (pVar v $ conv t, ss)
+                                         return (pVar v $ conv env t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
           where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
@@ -208,7 +208,7 @@ handle env x hs                     = do bs <- sequence [ branch e b | Handler e
         branch (Except _ y) b       = Branch (eIsInstance x y) <$> normSuite env b
         branch (ExceptAs _ y z) b   = Branch (eIsInstance x y) <$> (bind:) <$> normSuite env' b
           where env'                = define [(z,NVar t)] env
-                bind                = sAssign (pVar z $ conv t) (eVar x)
+                bind                = sAssign (pVar z $ conv env t) (eVar x)
                 t                   = tCon $ TC y []
 
 exitContext env s
@@ -259,7 +259,7 @@ instance Norm Stmt where
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> normSuite env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
     norm env (After l e e')         = After l <$> norm env e <*> norm env e'
-    norm env (Signature l ns t d)   = return $ Signature l ns (conv t) d
+    norm env (Signature l ns t d)   = return $ Signature l ns (conv env t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)
 
     norm' env (Decl l ds)           = do (eqs,ds) <- normDecls env ds
@@ -301,7 +301,7 @@ instance Norm Stmt where
                                              True -> return $ retContext e
                                              False -> do
                                                  n <- newName "tmp"
-                                                 return $ sAssign (pVar n $ conv t) e : retContext (eVar n)
+                                                 return $ sAssign (pVar n $ conv env t) e : retContext (eVar n)
       where retContext e            = exitContext env $ Return l $ Just e
             t                       = typeOf env e
 
@@ -310,7 +310,6 @@ instance Norm Stmt where
                                          ps2 <- norm env ps1
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
-      where t                       = typeOf env e
     norm' env s@(For l p e b els)
       | Just r <- rangeIteratorArg e = do i <- newName "range_iter"
                                           v <- newName "val"
@@ -318,9 +317,9 @@ instance Norm Stmt where
                                                          handleStop (While l (eBool True) (rangeBody v i) []) els]
       | otherwise                   = do i <- newName "iter"
                                          v <- newName "val"
-                                         normSuite env [sAssign (pVar i $ conv t) e,
+                                         normSuite env [sAssign (pVar i $ conv env t) e,
                                                         handleStop (While l (eBool True) (body v i) []) els]
-      where t@(TCon _ (TC c [t']))  = typeOf env e
+      where t@(TCon _ (TC c [t']))  = expTypeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
             rangeNext i             = eCall (eQVar primUNext) [eVar i]
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
@@ -333,7 +332,7 @@ instance Norm Stmt where
             isPVar PVar{}           = True
             isPVar _                = False
             rangeIteratorArg (Call _ f (PosArg r PosNil) KwdNil)
-               | isIterCall f && typeOf env r == tRange = Just r
+               | isIterCall f && expTypeOf env r == tRange = Just r
             rangeIteratorArg (Paren _ e) = rangeIteratorArg e
             rangeIteratorArg _       = Nothing
             isIterCall (Dot _ _ n)   = n == iterKW
@@ -476,7 +475,7 @@ instance Norm Decl where
     norm env (Def l n q p k t b d x doc)
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
-                                         return $ Def l n q p' KwdNIL (conv t) (ret b') d x doc
+                                         return $ Def l n q p' KwdNIL (conv env t) (ret b') d x doc
       where env1                    = setMarks [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env00
             env00                   = case p of
@@ -495,6 +494,7 @@ instance Norm Decl where
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b doc) = Class l n q as <$> normSuite env1 b <*> return doc
       where env1                    = defineTVars (selfQuant (NoQ n) q) env
+    norm env (Typedef l n q t doc)  = return $ Typedef l n q (conv env t) doc
     norm env d                      = error ("norm unexpected: " ++ prstr d)
 
 
@@ -518,7 +518,7 @@ normBool env e
                                          return $ BinOp l e1 op e2
   | otherwise                       = do e' <- norm env e
                                          return $ eCall (eDot e' boolKW) []
-  where t                           = typeOf env e
+  where t                           = expTypeOf env e
 
 instance Norm Expr where
     norm env (Var l (NoQ n))
@@ -536,9 +536,9 @@ instance Norm Expr where
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
     norm env (Call l e p k)
       | Just (t, e1, e2) <- listGetItemCall env e (joinArg p k)
-                                    = eCall (tApp (eQVar primUGetItem) [conv t]) <$> mapM (norm env) [e1, e2]
+                                    = eCall (tApp (eQVar primUGetItem) [conv env t]) <$> mapM (norm env) [e1, e2]
       | otherwise                   = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
-    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv ts)
+    norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv env ts)
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
@@ -546,7 +546,7 @@ instance Norm Expr where
       | TTuple _ p k <- t,
         n `notElem` valueKWs        = DotI l <$> norm env e <*> pure (nargs p + narg n k)
       | otherwise                   = Dot l <$> norm env e <*> pure n
-      where t                       = typeOf env e
+      where t                       = expTypeOf env e
     norm env (Async l e)            = Async l <$> norm env e
     norm env (Await l e)            = Await l <$> norm env e
     norm env (Cond l e1 e2 e3)      = Cond l <$> norm env e1 <*> normBool env e2 <*> norm env e3
@@ -555,7 +555,7 @@ instance Norm Expr where
     norm env (BinOp l e1 And e2)    = BinOp l <$> norm env e1 <*> pure And <*> norm env e2
     norm env (UnOp l Not e)         = UnOp l Not <$> normBool env e
     norm env (Rest l e n)           = RestI l <$> norm env e <*> pure (nargs p + narg n k)
-      where TTuple _ p k            = typeOf env e
+      where TTuple _ p k            = expTypeOf env e
     norm env (DotI l e i)           = DotI l <$> norm env e <*> pure i
     norm env (RestI l e i)          = RestI l <$> norm env e <*> pure i
     norm env (Lambda l p k e fx)    = do p' <- joinPar <$> norm env p <*> norm (define (envOf p) env) k
@@ -575,7 +575,7 @@ instance Norm Expr where
 
 listGetItemCall env (Dot _ _ n) (PosArg e (PosArg ix PosNil))
   | n == getitemKW,
-    typeOf env ix == tInt,
+    expTypeOf env ix == tInt,
     Just t <- listElementType (typeOf env e)
                                     = Just (t, e, ix)
 listGetItemCall env (TApp _ e _) p  = listGetItemCall env e p
@@ -611,8 +611,8 @@ narg n (TStar _ _ _)
 narg n k                            = error ("### Bad narg " ++ prstr n ++ " " ++ prstr k)
 
 instance Norm Pattern where
-    norm env (PWild l a)            = return $ PWild l (conv a)
-    norm env (PVar l n a)           = return $ PVar l n (conv a)
+    norm env (PWild l a)            = return $ PWild l (conv env a)
+    norm env (PVar l n a)           = return $ PVar l n (conv env a)
     norm env (PTuple l ps ks)       = PTuple l <$> norm env ps <*> norm env ks
     norm env (PList l ps p)         = PList l <$> norm env ps <*> norm env p        -- TODO: eliminate here
     norm env (PParen l p)           = norm env p
@@ -625,13 +625,13 @@ instance Norm Handler where
       where env1                    = define (envOf ex) env
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
-    norm env (PosSTAR n t)          = return $ PosSTAR n (conv t)
+    norm env (PosPar n t e p)       = PosPar n (conv env t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
+    norm env (PosSTAR n t)          = return $ PosSTAR n (conv env t)
     norm env PosNIL                 = return PosNIL
 
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar n (conv t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
-    norm env (KwdSTAR n t)          = return $ KwdSTAR n (conv t)
+    norm env (KwdPar n t e k)       = KwdPar n (conv env t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
+    norm env (KwdSTAR n t)          = return $ KwdSTAR n (conv env t)
     norm env KwdNIL                 = return KwdNIL
 
 joinPar (PosPar n t e p) k          = PosPar n t e (joinPar p k)
@@ -687,53 +687,56 @@ instance Norm Assoc where
 
 -- Convert function types ---------------------------------------------------------------------------------
 
-convEnv m (n, i)                    = [(n, conv i)]
+convEnv env m (n, i)                = [(n, conv env i)]
 
 
 class Conv a where
-    conv                            :: a -> a
+    conv                            :: NormEnv -> a -> a
 
 instance (Conv a) => Conv [a] where
-    conv                            = map conv
+    conv env                        = map $ conv env
 
 instance (Conv a) => Conv (Maybe a) where
-    conv                            = fmap conv
+    conv env                        = fmap $ conv env
 
 instance (Conv a) => Conv (Name, a) where
-    conv (n, x)                     = (n, conv x)
+    conv env (n, x)                 = (n, conv env x)
 
 instance Conv NameInfo where
-    conv (NAct q p k te doc)        = NAct q (joinRow p k) kwdNil (conv te) doc
-    conv (NClass q ps te doc)       = NClass q (conv ps) (conv te) doc
-    conv (NSig sc dec doc)          = NSig (conv sc) dec doc
-    conv (NDef sc dec doc)          = NDef (conv sc) dec doc
-    conv (NVar t)                   = NVar (conv t)
-    conv (NSVar t)                  = NSVar (conv t)
-    conv ni                         = ni
+    conv env (NAct q p k te doc)    = NAct q (joinRow env p k) kwdNil (conv env te) doc
+    conv env (NClass q ps te doc)   = NClass q (conv env ps) (conv env te) doc
+    conv env (NType q t doc)        = NType q (conv env t) doc
+    conv env (NSig sc dec doc)      = NSig (conv env sc) dec doc
+    conv env (NDef sc dec doc)      = NDef (conv env sc) dec doc
+    conv env (NVar t)               = NVar (conv env t)
+    conv env (NSVar t)              = NSVar (conv env t)
+    conv env ni                     = ni
 
 instance Conv WTCon where
-    conv (w,c)                      = (w, conv c)
+    conv env (w,c)                  = (w, conv env c)
 
 instance Conv TSchema where
-    conv (TSchema l q t)            = TSchema l q (conv t)
+    conv env (TSchema l q t)        = TSchema l q (conv env t)
 
 instance Conv Type where
-    conv (TFun l fx p k t)          = TFun l fx (joinRow p k) kwdNil (conv t)
-    conv (TCon l c)                 = TCon l (conv c)
-    conv (TTuple l p k)             = TTuple l (joinRow p k) kwdNil
-    conv (TOpt l t)                 = TOpt l (conv t)
-    conv (TRow l k n t r)           = TRow l PRow nWild (conv t) (conv r)
-    conv (TStar l k r)              = TRow l PRow nWild (TTuple l (conv r) kwdNil) posNil
-    conv (TNil l k)                 = TNil l PRow
-    conv t                          = t
+    conv env (TFun l fx p k t)      = TFun l fx (joinRow env p k) kwdNil (conv env t)
+    conv env (TCon l c)
+      | Just t <- tExpand env c     = conv env t
+      | otherwise                   = TCon l (conv env c)
+    conv env (TTuple l p k)         = TTuple l (joinRow env p k) kwdNil
+    conv env (TOpt l t)             = TOpt l (conv env t)
+    conv env (TRow l k n t r)       = TRow l PRow nWild (conv env t) (conv env r)
+    conv env (TStar l k r)          = TRow l PRow nWild (TTuple l (conv env r) kwdNil) posNil
+    conv env (TNil l k)             = TNil l PRow
+    conv env t                      = t
 
 instance Conv TCon where
-    conv (TC c ts)                  = TC c (conv ts)
+    conv env (TC c ts)              = TC c (conv env ts)
 
 -- Must mirror Syntax.tupleComponents, which the solver uses to derive tuple witnesses.
-joinRow (TRow l k n t p) r          = TRow l PRow nWild (conv t) (joinRow p r)
-joinRow (TStar l k p) r             = TRow l PRow nWild (TTuple l (conv p) kwdNil) (conv r)
-joinRow (TNil _ _) r                = conv r
+joinRow env (TRow l k n t p) r      = TRow l PRow nWild (conv env t) (joinRow env p r)
+joinRow env (TStar l k p) r         = TRow l PRow nWild (TTuple l (conv env p) kwdNil) (conv env r)
+joinRow env (TNil _ _) r            = conv env r
 -- To be removed:
-joinRow p (TNil _ _)                = conv p
-joinRow p r                         = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)
+joinRow env p (TNil _ _)            = conv env p
+joinRow env p r                     = error ("##### joinRow " ++ prstr p ++ "  AND  " ++ prstr r)
