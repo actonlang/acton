@@ -8,8 +8,8 @@ seamless addition of a powerful new construct to an existing language: Acton
 adds *actors* to *Python*.
 
 Acton is a compiled language, offering the speed of C but with a considerably
-simpler programming model. There is no explicit memory management, instead
-relying on garbage collection.
+simpler programming model. There is no explicit memory management; instead, it
+relies on garbage collection.
 
 Acton is statically typed with an expressive type language and type inference.
 Type inference means you don't have to explicitly declare types of every
