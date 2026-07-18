@@ -1,11 +1,11 @@
-ERROR: [error Parse error]: unexpected 'i'
-                     expecting end of input, end of line, or statement
+ERROR: [error Parse error]: unexpected "mat"
+                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
 
-     ╭──▶ test.act@2:1-2:2
+     ╭──▶ test.act@2:8-2:9
      │
    2 │ import math
-     • ┬ 
-     • ╰╸ unexpected 'i'
-     •    expecting end of input, end of line, or statement
-     •    
+     •        ┬ 
+     •        ╰╸ unexpected "mat"
+     •           expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+     •           
 ─────╯

@@ -1,9 +1,11 @@
-ERROR: [error Syntax error]: Only declarations and assignments are allowed at the module top level
-     ╭──▶ test.act@1:1-1:1
+ERROR: [error Parse error]: unexpected "mat"
+                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+
+     ╭──▶ test.act@3:8-3:9
      │
-   1 │ for i in range(10):
-     •  
-     • ╰╸ Only declarations and assignments are allowed at the module top level
-     •
-     │ Hint: Assign the value to a name or move runtime work into an actor or function
+   3 │ import math
+     •        ┬ 
+     •        ╰╸ unexpected "mat"
+     •           expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+     •           
 ─────╯
