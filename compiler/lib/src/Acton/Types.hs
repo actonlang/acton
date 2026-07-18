@@ -452,8 +452,6 @@ checkTopStmt env te (Decl l ds)         = do (cs,ds) <- checkEnv (tydefine te en
 
                                              (te,eq,ds) <- genEnv env cs te ds
                                              --traceM ("============ push\n" ++ render (nest 4 $ vcat $ map pretty eq))
-                                             --traceM ("~~~~~~~~~~~~ i.e. top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
-                                             --traceM ("============ and scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
                                              --traceM ("------------ onto\n" ++ render (nest 4 $ vcat $ map pretty ds))
                                              finishToStmt env te eq (Decl l ds)
 checkTopStmt env te (Signature l ns sc d)
@@ -465,10 +463,13 @@ checkTopStmt env te (Assign l pats e)   = do (_,t,pats) <- infEnvT env pats
 
 finishToStmt env te eq s                = do te <- defaultX env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
-                                             --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
+                                             --traceM ("-----------\n" ++ render (nest 4 $ pretty s))
                                              eq <- usubst eq
                                              let (eq0, eq1) = spliteqns eq
+                                             --traceM ("~~~~~~~~~~~~ top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
+                                             --traceM ("============ scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
                                              s <- defaultX env =<< termred eq1 <$> usubst (pushEqns env eq0 s)
+                                             --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
                                              tieWitKnots te [fixupSelf s]
 
 defaultX                                :: (UFree a, USubst a) => Env -> a -> TypeM a
@@ -497,7 +498,7 @@ pushEqns env eqs s
 inject env [] s                         = s
 inject env eqs (Decl l ds)              = Decl l (map injectDecl ds)
   where reveqs                          = reverse eqs
-        injectDecl d@Typedef{}          = d
+        injectDecl d@Typedef{}          = d -- A typedef can never refer to any witness names
         injectDecl d                    = d{ dbody = prune [] (free d) reveqs ++ dbody d }
         prune inj fvs []                = --trace ("### Injecting " ++ prstrs (bound inj) ++ " into " ++ prstr n) $
                                           bindWits inj

@@ -48,10 +48,10 @@ tieDeclKnots te ds
   | null cycledeps              = (te, ds)
   | not $ null insts            = error ("INTERNAL: #### Witness cycles with instantiations, not yet handled:\n" ++ 
                                          render (nest 4 $ vcat $ map pretty insts))
-  | otherwise                   = do --trace ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps)) $
-                                     --trace ("#### Chains:\n" ++ render (nest 4 $ vcat $ map pretty wchains)) $
-                                     --trace ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles)) $
-                                     --trace ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps )) $
+  | otherwise                   = do --traceM ("#### Local witness deps:\n" ++ render (nest 4 $ vcat $ map pretty wdeps))
+                                     --traceM ("#### Chains:\n" ++ render (nest 4 $ vcat $ map pretty wchains))
+                                     --traceM ("#### Cycles:\n" ++ render (nest 4 $ vcat $ map pretty cycles))
+                                     --traceM ("#### Cycle dependencies:\n" ++ render (nest 4 $ vcat $ map pretty cycledeps ))
                                      let ds' = map (tieknots cycledeps) ds
                                          te' = map (addopts cycledeps) te
                                      (te', ds')
@@ -160,7 +160,9 @@ addopts cycledeps (n, NExt q c us te _ doc)
 addopts cycledeps ni            = ni
 
 
-tieknots cycledeps dec          = dec{ dbody = map tie (dbody dec) }
+tieknots cycledeps dec
+  | Typedef{} <- dec            = dec
+  | otherwise                   = dec{ dbody = map tie (dbody dec) }
   where
     me                          = dname dec
     mydeps                      = depsof me cycledeps
