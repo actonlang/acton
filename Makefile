@@ -665,13 +665,6 @@ dist/std: std std/Build.act std/build.zig std/build.zig.zon dist/base dist/bin/a
 # the file and modify it, which the Linux kernel (and perhaps others?) will
 # prevent if the file to be modified is an executable program that is currently
 # running.  We work around it by moving / renaming the file in place instead!
-ifeq ($(OS),macos)
-# Workaround for macOS 26.4 CLI tools breaking Zig: point DEVELOPER_DIR to
-# /dev/null to prevent Zig from trying to use them and instead falling back to
-# its own implementation.
-# See https://codeberg.org/ziglang/zig/issues/31658.
-dist/bin/actondb: export DEVELOPER_DIR := /dev/null
-endif
 dist/bin/actondb: $(DIST_ZIG) $(DEPS)
 	@mkdir -p $(dir $@)
 	cd dist/backend && "$(ZIG)" build -Donly_actondb $(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET)) --prefix "$(TD)/dist"
