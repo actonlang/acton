@@ -35,6 +35,7 @@ import Data.Void
 import Data.Char
 import qualified Data.List.NonEmpty as N
 import qualified Data.Set as Set
+import Data.Graph (SCC(..), stronglyConnComp)
 import GHC.Conc (getNumCapabilities)
 import Numeric
 import Text.Megaparsec
@@ -61,6 +62,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | InvalidModuleStatement
                       | InvalidTopLevelAssignmentPattern
                       | DuplicateTopLevelAssignment String
+                      | CyclicTypedef [String]
                       -- String interpolation errors
                       | EmptyInterpolationExpression
                       | MissingExpressionBeforeFormat
@@ -91,6 +93,8 @@ instance ShowErrorComponent CustomParseError where
     "Module top-level assignments must bind at least one name"
   showErrorComponent (DuplicateTopLevelAssignment name) =
     "Module top-level name '" ++ name ++ "' cannot be assigned more than once"
+  showErrorComponent (CyclicTypedef names) =
+    "Type definitions " ++ show names ++ " are cyclically dependent"
   -- String interpolation errors
   showErrorComponent EmptyInterpolationExpression = "Empty expression in string interpolation"
   showErrorComponent MissingExpressionBeforeFormat = "Missing expression before format specifier"
@@ -1217,7 +1221,11 @@ validateModuleSuite = go Set.empty
               seen' <- addNames seen names
               go seen' stmts
         S.Signature{} -> go seen stmts
-        S.Decl{}      -> go seen stmts
+        S.Decl _ ds
+          | null cycles -> go seen stmts
+          | otherwise -> parseException (S.sloc stmt) (CyclicTypedef $ map S.rawstr $ head cycles)
+          where cycles = [ map S.dname ds | CyclicSCC ds <- stronglyConnComp tdefs ]
+                tdefs  = [ (d, S.dname d, Names.free d) | d@S.Typedef{} <- ds ]
         _             -> parseException (S.sloc stmt) InvalidModuleStatement
 
     addNames seen [] = return seen
