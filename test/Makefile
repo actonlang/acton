@@ -17,9 +17,6 @@ done
 TESTS= \
 	$(DDB_TESTS)
 TLS_TEST_SERVER_ENV=
-ifeq ($(shell uname -s),Darwin)
-TLS_TEST_SERVER_ENV=DEVELOPER_DIR=$(or $(DEVELOPER_DIR),/dev/null)
-endif
 test:
 	$(MAKE) $(TESTS)
 
