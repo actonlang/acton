@@ -151,7 +151,7 @@ showTyFile env0 m fname verbose = do
 
                                      putStrLn $ prettySigs env0 m imps te
 
-prettySigs env m imps te        = render $ vcat [ text "import" <+> pretty m | m <- imps ] $++$
+prettySigs env m imps te        = render $ vcat [ text "import" <+> pretty m | m <- nub imps ] $++$
                                            vpretty (simp env1 te)
   where env1                    = defineClosed te $ setMod m env
 

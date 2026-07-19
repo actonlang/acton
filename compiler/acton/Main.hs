@@ -18,6 +18,7 @@ import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
+import qualified Acton.Names
 import Text.Megaparsec.Error (ParseErrorBundle)
 import Acton.Parser (CustomParseError)
 import qualified Acton.CommandLineParser as C
@@ -1135,11 +1136,12 @@ printSigInterface paths mn mName tyFile = do
             envForPrint = case mName of
               Nothing -> envImports
               Just _  -> define te (setMod mn envImports)
+            dropPrefix = dropProjPrefixOrLib paths
         case mName of
           Just n | null selected ->
             printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
-            putStrLn (Acton.Types.prettySigs envForPrint mn (map (dropProjPrefixOrLib paths) imps) selected)
+            putStrLn (Acton.Types.prettySigs envForPrint mn (map dropPrefix imps) (Acton.Names.nmap dropPrefix selected))
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()

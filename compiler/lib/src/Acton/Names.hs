@@ -163,10 +163,12 @@ class Vars a where
     free                            :: a -> [Name]
     freeQ                           :: a -> [QName]
     bound                           :: a -> [Name]
+    nmap                            :: (ModName->ModName) -> a -> a
 
     free x                          = free $ freeQ x
     freeQ x                         = []
     bound x                         = []
+    nmap f                          = id
 
 qns `diffQ` ns
   | hasMany ns                      = filter fSet qns
@@ -182,11 +184,13 @@ instance Vars a => Vars [a] where
     free                            = concatMap free
     freeQ                           = concatMap freeQ
     bound                           = concatMap bound
+    nmap f                          = map (nmap f)
 
 instance Vars a => Vars (Maybe a) where
     free                            = maybe [] free
     freeQ                           = maybe [] freeQ
     bound                           = maybe [] bound
+    nmap f                          = fmap (nmap f)
 
 instance Vars Stmt where
     freeQ (Expr _ e)                = freeQ e
@@ -313,6 +317,10 @@ instance Vars QName where
     
     freeQ n                         = [n]
 
+    nmap f (QName m n)              = QName (f m) n
+    nmap f (NoQ n)                  = NoQ n
+    nmap f (GName m n)              = GName (f m) n
+
 instance Vars Except where
     freeQ (ExceptAll _)             = []
     freeQ (Except _ x)              = freeQ x
@@ -432,6 +440,8 @@ instance Vars ImportItem where
 instance Vars TSchema where
     freeQ (TSchema _ q t)           = freeQ q ++ freeQ t
 
+    nmap f (TSchema l q t)          = TSchema l (nmap f q) (nmap f t)
+
 instance Vars TVar where
     freeQ (TV k v)                  = []
 
@@ -441,8 +451,12 @@ instance Vars TUni where
 instance Vars TCon where
     freeQ (TC n ts)                 = freeQ n ++ freeQ ts
 
+    nmap f (TC n ts)                = TC (nmap f n) (nmap f ts)
+
 instance Vars QBind where
     freeQ (QBind v cs)              = freeQ cs
+
+    nmap f (QBind v cs)             = QBind v (nmap f cs)
 
 instance Vars Type where
     freeQ (TVar _ v)                = freeQ v
@@ -455,3 +469,12 @@ instance Vars Type where
     freeQ (TStar _ _ r)             = freeQ r
     freeQ (TUnboxed _ t)            = freeQ t
     freeQ _                         = []
+
+    nmap f (TCon l c)               = TCon l (nmap f c)
+    nmap f (TFun l fx p k t)        = TFun l (nmap f fx) (nmap f p) (nmap f k) (nmap f t)
+    nmap f (TTuple l p k)           = TTuple l (nmap f p) (nmap f k)
+    nmap f (TOpt l t)               = TOpt l (nmap f t)
+    nmap f (TRow l k n t r)         = TRow l k n (nmap f t) (nmap f r)
+    nmap f (TStar l k r)            = TStar l k (nmap f r)
+    nmap f (TUnboxed l t)           = TUnboxed l (nmap f t)
+    nmap f t                        = t

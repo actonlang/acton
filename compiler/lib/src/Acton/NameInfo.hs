@@ -382,35 +382,50 @@ instance UFree WTCon where
 instance VSubst WTCon where
     vsubst s (w,u)      = (w, vsubst s u)
 
+instance Vars x => Vars (Name,x) where
+    freeQ (n,x)         = freeQ x
+
+    nmap f (n,x)        = (n, nmap f x)
+
 instance Vars NameInfo where
     freeQ ni = case ni of
       NVar t -> freeQ t
       NSVar t -> freeQ t
       NDef sc _ _ -> freeQ sc
       NSig sc _ _ -> freeQ sc
-      NAct q p k te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQTEnv te
-      NClass q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
-      NProto q ws te _ -> freeQ q ++ freeQWTCons ws ++ freeQTEnv te
+      NAct q p k te _ -> freeQ q ++ freeQ p ++ freeQ k ++ freeQ te
+      NClass q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
+      NProto q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
       NType q t _ -> freeQ q ++ freeQ t
-      NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQWTCons ws ++ freeQTEnv te
+      NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQ ws ++ freeQ te
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
       NReserved -> []
-      where
-        freeQTEnv :: TEnv -> [QName]
-        freeQTEnv tenv = concatMap (freeQ . snd) tenv
 
-        freeQWTCons :: [WTCon] -> [QName]
-        freeQWTCons = concatMap freeQWTCon
+    nmap f (NVar t)             = NVar (nmap f t)
+    nmap f (NSVar t)            = NSVar (nmap f t)
+    nmap f (NDef sc d s)        = NDef (nmap f sc) d s
+    nmap f (NSig sc d s)        = NSig (nmap f sc) d s
+    nmap f (NAct q p k te s)    = NAct (nmap f q) (nmap f p) (nmap f k) (nmap f te) s
+    nmap f (NClass q ws te s)   = NClass (nmap f q) (nmap f ws) (nmap f te) s
+    nmap f (NProto q ws te s)   = NProto (nmap f q) (nmap f ws) (nmap f te) s
+    nmap f (NType q t s)        = NType (nmap f q) (nmap f t) s
+    nmap f (NExt q c ws te o s) = NExt (nmap f q) (nmap f c) (nmap f ws) (nmap f te) o s
+    nmap f (NTVar k c ps)       = NTVar k (nmap f c) (nmap f ps)
+    nmap f (NAlias n)           = NAlias (nmap f n)
+    nmap f i                    = i
 
-        freeQWTCon :: WTCon -> [QName]
-        freeQWTCon (wpath, pcon) = freeQWPath wpath ++ freeQ pcon
+instance Vars WTCon where
+    freeQ (wp, p)               = freeQ wp ++ freeQ p
 
-        freeQWPath :: WPath -> [QName]
-        freeQWPath = concatMap step
-          where
-            step (Left qn) = freeQ qn
-            step (Right qn) = freeQ qn
+    nmap f (wp, p)              = (nmap f wp, nmap f p)
+
+instance Vars (Either QName QName) where
+    freeQ (Left n)              = freeQ n
+    freeQ (Right n)             = freeQ n
+
+    nmap f (Left n)             = Left (nmap f n)
+    nmap f (Right n)            = Right (nmap f n)
 
 instance Pretty WTCon where
     pretty (wpath, p)   = pretty p
