@@ -3370,6 +3370,285 @@ testDocstrings env0 testname = do
 testAttributesInitialization :: Acton.Env.Env0 -> Spec
 testAttributesInitialization env0 = do
   describe "Class Attribute Initialization Check" $ do
+    it "exposes the declarative constructor prefix at the self-escape boundary" $ do
+      let self = S.name "self"
+          tmp = S.name "tmp"
+          x = S.name "x"
+          y = S.name "y"
+          publish = S.name "publish"
+          local = S.Assign NoLoc [S.PVar NoLoc tmp Nothing] (S.Int NoLoc 1 "1")
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX = set x (S.Var NoLoc (S.NoQ tmp))
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            S.PosNil
+            S.KwdNil
+          setY = set y (S.Int NoLoc 2 "2")
+          body = [local, setX, escape, setY]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 2
+
+    it "counts structured initialization as one top-level constructor statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          z = S.name "z"
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX value = set x (S.Int NoLoc value (show value))
+          branches = [S.Branch (S.Bool NoLoc True) [setX 1]]
+          conditional = S.If NoLoc branches [setX 2]
+          setY = set y (S.Int NoLoc 3 "3")
+          body = [conditional, setY, S.Return NoLoc Nothing, set z (S.Int NoLoc 4 "4")]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x, y]
+      prefixLength `shouldBe` 2
+
+    it "does not cross a self escape nested in a structured statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          publish = S.name "publish"
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX value = set x (S.Int NoLoc value (show value))
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            S.PosNil
+            S.KwdNil
+          branches = [S.Branch (S.Bool NoLoc True) [setX 1, escape]]
+          conditional = S.If NoLoc branches [setX 2]
+          body = [conditional, set y (S.Int NoLoc 3 "3")]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 0
+
+    it "does not cross a return nested in a structured statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          branches = [S.Branch (S.Bool NoLoc True) [S.Return NoLoc Nothing]]
+          conditional = S.If NoLoc branches [S.Pass NoLoc]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "checks branch conditions for constructor-boundary escapes" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          publish = S.name "publish"
+          condition = S.Call NoLoc (S.Var NoLoc (S.NoQ publish))
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setX value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc value (show value))
+          conditional = S.If NoLoc [S.Branch condition [setX 1]] [setX 2]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX 3]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "checks both sides of non-attribute mutations for self escapes" $ do
+      let self = S.name "self"
+          sink = S.name "sink"
+          value = S.name "value"
+          x = S.name "x"
+          leak = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ sink)) value)
+            (S.Var NoLoc (S.NoQ self))
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [leak, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not cross a return nested in a loop" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          loop = S.While NoLoc (S.Bool NoLoc True) [S.Return NoLoc Nothing] []
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [loop, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "treats raising an exception containing self as a boundary" $ do
+      let self = S.name "self"
+          errorName = S.name "Error"
+          x = S.name "x"
+          exception = S.Call NoLoc (S.Var NoLoc (S.NoQ errorName))
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          conditional = S.If NoLoc
+            [S.Branch (S.Bool NoLoc True) [S.Raise NoLoc exception]]
+            [S.Pass NoLoc]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not let finally initialize an attribute used by try" $ do
+      let self = S.name "self"
+          publish = S.name "publish"
+          x = S.name "x"
+          y = S.name "y"
+          selfAttr attr = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr
+          publishX = S.Expr NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ publish))
+            (S.PosArg (selfAttr x) S.PosNil)
+            S.KwdNil
+          set attr value = S.MutAssign NoLoc (selfAttr attr) value
+          setX = set x (S.Int NoLoc 1 "1")
+          setY = set y (S.Int NoLoc 2 "2")
+          guarded = S.Try NoLoc [publishX] [] [] [setX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded, setY]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "makes completed try assignments visible to its else block" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          selfAttr attr = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr
+          set attr value = S.MutAssign NoLoc (selfAttr attr) value
+          setX = set x (S.Int NoLoc 1 "1")
+          setY = set y (selfAttr x)
+          guarded = S.Try NoLoc [setX] [] [setY] []
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded]
+      attrs `shouldBe` [x, y]
+      prefixLength `shouldBe` 1
+
+    it "looks through typed expression wrappers for self escapes" $ do
+      let self = S.name "self"
+          publish = S.name "publish"
+          x = S.name "x"
+          wrapped = S.TApp NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            [S.tWild]
+          escape = S.Expr NoLoc $ S.Call NoLoc wrapped S.PosNil S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [escape, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "recognizes typed parent constructor calls in the declarative prefix" $ do
+      let self = S.name "self"
+          parent = S.name "Parent"
+          y = S.name "y"
+          env = Acton.Env.define [(parent, I.NClass [] [] [] Nothing)] env0
+          parentInit = S.Expr NoLoc $ S.Call NoLoc
+            (S.TApp NoLoc
+              (S.Dot NoLoc (S.Var NoLoc (S.NoQ parent)) Builtin.initKW)
+              [S.tWild])
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setY = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) y)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) =
+            Acton.Types.scanInitPrefix env self [] [parentInit, setY]
+      attrs `shouldBe` [y]
+      prefixLength `shouldBe` 2
+
+    it "recognizes typed NotImplemented self calls in the declarative prefix" $ do
+      let self = S.name "self"
+          native = S.name "native"
+          y = S.name "y"
+          nativeDef = S.Def NoLoc native []
+            (S.PosPar self Nothing Nothing S.PosNIL) S.KwdNIL Nothing
+            [S.Expr NoLoc (S.NotImplemented NoLoc)]
+            S.NoDec S.fxPure Nothing
+          nativeCall = S.Expr NoLoc $ S.Call NoLoc
+            (S.TApp NoLoc
+              (S.Dot NoLoc
+                (S.TApp NoLoc (S.Var NoLoc (S.NoQ self)) [S.tWild])
+                native)
+              [S.tWild])
+            S.PosNil S.KwdNil
+          setY = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) y)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix
+            env0 self [S.Decl NoLoc [nativeDef]] [nativeCall, setY]
+      attrs `shouldBe` [y]
+      prefixLength `shouldBe` 2
+
+    it "detects aliased constructor receivers captured by nested actors" $ do
+      let receiver = S.name "me"
+          actorName = S.name "Nested"
+          x = S.name "x"
+          nested = S.Actor NoLoc actorName [] S.PosNIL S.KwdNIL
+            [S.Expr NoLoc (S.Var NoLoc (S.NoQ receiver))] Nothing
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ receiver)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix
+            env0 receiver [] [S.Decl NoLoc [nested], setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not expose try assignments to finally" $ do
+      let self = S.name "self"
+          f = S.name "f"
+          publish = S.name "publish"
+          x = S.name "x"
+          selfX = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x
+          setX = S.MutAssign NoLoc selfX $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ f)) S.PosNil S.KwdNil
+          publishX = S.Expr NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ publish)) (S.PosArg selfX S.PosNil) S.KwdNil
+          guarded = S.Try NoLoc [setX] [] [] [publishX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "ignores an unreachable else boundary after an unconditional raise" $ do
+      let self = S.name "self"
+          errorName = S.name "Error"
+          publish = S.name "publish"
+          x = S.name "x"
+          raiseError = S.Raise NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ errorName)) S.PosNil S.KwdNil
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish) S.PosNil S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          guarded = S.Try NoLoc [raiseError] [] [escape] []
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded, setX]
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 2
+
+    it "checks nested declaration defaults before parameter shadowing" $ do
+      let self = S.name "self"
+          nested = S.name "nested"
+          x = S.name "x"
+          declaration = S.Def NoLoc nested []
+            (S.PosPar self Nothing (Just (S.Var NoLoc (S.NoQ self))) S.PosNIL)
+            S.KwdNIL
+            Nothing
+            [S.Pass NoLoc]
+            S.NoDec
+            S.fxPure
+            Nothing
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          body = [S.Decl NoLoc [declaration], setX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
     testTypeSuccess env0 "class_init_attrs/init_basic"
     testTypeSuccess env0 "class_init_attrs/init_inferred_only"
     testTypeError   env0 "class_init_attrs/uninit_basic"
