@@ -124,6 +124,7 @@ module InterfaceFiles
   , TyHeader
   , TyHeaderSummary
   , InterfaceDB
+  , InterfaceReadSession
   , interfaceExt
   , interfacePath
   , interfaceExists
@@ -180,6 +181,17 @@ module InterfaceFiles
   , openInterfaceDB
   , openInterfaceDBAtGeneration
   , openInterfaceDBMaybe
+  , withInterfaceReadSessionAtGeneration
+  , readInterfaceSessionNameHashMaybe
+  , readInterfaceSessionReachModule
+  , readInterfaceSessionReachTop
+  , readInterfaceSessionReachTopMaybe
+  , readInterfaceSessionReachMemberMaybe
+  , readInterfaceSessionReachShapeMaybe
+  , readInterfaceSessionReachSlotMaybe
+  , readInterfaceSessionReachSlots
+  , readInterfaceSessionReachReflectionMaybe
+  , readInterfaceSessionSelection
   , readInterfaceDBIface
   , readInterfaceDBModuleInfo
   , readInterfaceDBNameInfoMaybe
@@ -492,6 +504,16 @@ instance Show InterfaceDB where
 
 interfaceDBPath :: InterfaceDB -> FilePath
 interfaceDBPath (InterfaceDB path _) = path
+
+-- | A generation-bound read transaction shared by a group of exact-key
+-- lookups. Selective compilation keeps one session per participating module,
+-- so a huge interface is mapped and entered once without loading unrelated
+-- rows.
+data InterfaceReadSession = InterfaceReadSession
+  FilePath LMDB.MDB_txn LMDB.MDB_dbi
+
+interfaceReadSessionPath :: InterfaceReadSession -> FilePath
+interfaceReadSessionPath (InterfaceReadSession path _ _) = path
 
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
@@ -1071,6 +1093,16 @@ withInterfaceDBReadTxn (InterfaceDB path expected) action =
     withReadTxn path $ \txn dbi -> do
       forM_ expected $ \generation -> validateGeneration generation txn dbi
       action txn dbi
+
+withInterfaceReadSessionAtGeneration :: FilePath
+                                     -> BS.ByteString
+                                     -> (InterfaceReadSession -> IO a)
+                                     -> IO a
+withInterfaceReadSessionAtGeneration path generation action =
+    withReadTxn path $ \txn dbi -> do
+      validateVersion txn dbi
+      validateGeneration generation txn dbi
+      action (InterfaceReadSession path txn dbi)
 
 validateGeneration :: BS.ByteString -> LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ()
 validateGeneration expected txn dbi = do
@@ -1865,30 +1897,53 @@ readModuleSelection :: FilePath
 readModuleSelection f nameHashes selected interests staticInitializerInterests instanceInitializerInterests =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      (moduleName, imports, doc) <- getValue "module-header" txn dbi keyModuleHeader
-      hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
-      mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory
-      when hasNotImpl $
-        invalidModuleRows "native module requested through selective materialization"
-      let stmtMap = Map.fromList [ (nhName nh, nhStmtIndices nh) | nh <- nameHashes ]
-          owners = [ (name, Map.lookup name stmtMap) | name <- Set.toAscList selected ]
-          unusable = [ name | (name, indices) <- owners, maybe True null indices ]
-      unless (null unusable) $
-        invalidModuleRows
-          ("selected names have no statement rows: " ++
-           Data.List.intercalate ", " (map A.rawstr unusable))
-      let indices = IntSet.toAscList $ IntSet.fromList $
-            mandatory ++ concat [ owned | (_, Just owned) <- owners ]
-      stored <- mapM (readStoredStmtEntry txn dbi) indices
-      restored <- mapM
-        (restoreSelectedStoredStmt txn dbi selected interests
-          staticInitializerInterests instanceInitializerInterests)
-        stored
-      let statements = [ stmt | Just stmt <- restored ]
-      traceTydbRead "selection" f
-        (show (Set.size selected) ++ " tops, " ++
-         show (sum (map Set.size (Map.elems interests))) ++ " members")
-      return (A.Module moduleName imports doc statements)
+      readModuleSelectionEntry f txn dbi nameHashes selected interests
+        staticInitializerInterests instanceInitializerInterests
+
+readInterfaceSessionSelection :: InterfaceReadSession
+                              -> [NameHashInfo]
+                              -> Set.Set A.Name
+                              -> Map.Map A.Name (Set.Set MemberKey)
+                              -> Map.Map A.Name (Set.Set A.Name)
+                              -> Map.Map A.Name (Set.Set A.Name)
+                              -> IO A.Module
+readInterfaceSessionSelection session@(InterfaceReadSession _ txn dbi) =
+    readModuleSelectionEntry (interfaceReadSessionPath session) txn dbi
+
+readModuleSelectionEntry :: FilePath
+                         -> LMDB.MDB_txn
+                         -> LMDB.MDB_dbi
+                         -> [NameHashInfo]
+                         -> Set.Set A.Name
+                         -> Map.Map A.Name (Set.Set MemberKey)
+                         -> Map.Map A.Name (Set.Set A.Name)
+                         -> Map.Map A.Name (Set.Set A.Name)
+                         -> IO A.Module
+readModuleSelectionEntry f txn dbi nameHashes selected interests staticInitializerInterests instanceInitializerInterests = do
+    (moduleName, imports, doc) <- getValue "module-header" txn dbi keyModuleHeader
+    hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+    mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory
+    when hasNotImpl $
+      invalidModuleRows "native module requested through selective materialization"
+    let stmtMap = Map.fromList [ (nhName nh, nhStmtIndices nh) | nh <- nameHashes ]
+        owners = [ (name, Map.lookup name stmtMap) | name <- Set.toAscList selected ]
+        unusable = [ name | (name, indices) <- owners, maybe True null indices ]
+    unless (null unusable) $
+      invalidModuleRows
+        ("selected names have no statement rows: " ++
+         Data.List.intercalate ", " (map A.rawstr unusable))
+    let indices = IntSet.toAscList $ IntSet.fromList $
+          mandatory ++ concat [ owned | (_, Just owned) <- owners ]
+    stored <- mapM (readStoredStmtEntry txn dbi) indices
+    restored <- mapM
+      (restoreSelectedStoredStmt txn dbi selected interests
+        staticInitializerInterests instanceInitializerInterests)
+      stored
+    let statements = [ stmt | Just stmt <- restored ]
+    traceTydbRead "selection" f
+      (show (Set.size selected) ++ " tops, " ++
+       show (sum (map Set.size (Map.elems interests))) ++ " members")
+    return (A.Module moduleName imports doc statements)
 
 extensionIndexFromNameInfo :: A.ModName -> I.NModule -> ExtensionIndex
 extensionIndexFromNameInfo mn (I.NModule _ te _) =
@@ -2647,16 +2702,30 @@ readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHash f n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
-      forM_ mInfo $ \info ->
-        unless (nhName info == n) $
-          invalidContentRow ("name-hash key/value mismatch for " ++ A.rawstr n)
+      mInfo <- readNameHashEntry txn dbi n
       traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.rawstr n)
       return mInfo
+
+readNameHashEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO (Maybe NameHashInfo)
+readNameHashEntry txn dbi n = do
+    mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
+    forM_ mInfo $ \info ->
+      unless (nhName info == n) $
+        invalidContentRow ("name-hash key/value mismatch for " ++ A.rawstr n)
+    return mInfo
 
 readNameHashMaybe :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHashMaybe f n =
     readNameHash f n `E.catch` tyCacheMiss
+
+readInterfaceSessionNameHashMaybe :: InterfaceReadSession
+                                  -> A.Name
+                                  -> IO (Maybe NameHashInfo)
+readInterfaceSessionNameHashMaybe session@(InterfaceReadSession _ txn dbi) n = do
+    mInfo <- readNameHashEntry txn dbi n
+    traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" })
+      (interfaceReadSessionPath session) (A.rawstr n)
+    return mInfo
 
 readContainerShape :: FilePath -> A.Name -> IO ContainerShape
 readContainerShape f n =
@@ -2683,6 +2752,23 @@ readReachModule f moduleName =
         (Data.List.intercalate "." $ A.modPath moduleName)
       return summary
 
+readInterfaceSessionReachModule :: InterfaceReadSession
+                                -> A.ModName
+                                -> IO Reach.ReachSummary
+readInterfaceSessionReachModule session@(InterfaceReadSession _ txn dbi) moduleName = do
+    (summary, _) <- readReachModuleEntry txn dbi moduleName
+    traceTydbRead "reach-module" (interfaceReadSessionPath session)
+      (Data.List.intercalate "." $ A.modPath moduleName)
+    return summary
+
+readInterfaceSessionReachTop :: InterfaceReadSession
+                             -> ReachRows.TopKey
+                             -> IO ReachRows.TopInfo
+readInterfaceSessionReachTop session@(InterfaceReadSession _ txn dbi) owner = do
+    info <- readReachTopEntry txn dbi owner
+    traceTydbRead "reach-top" (interfaceReadSessionPath session) (topKeyLabel owner)
+    return info
+
 readReachWholeModule :: FilePath -> A.ModName -> IO Reach.ReachSummary
 readReachWholeModule f moduleName =
     withReadTxn f $ \txn dbi -> do
@@ -2708,6 +2794,15 @@ readReachTopMaybe f owner =
       traceTydbRead (maybe "reach-top-miss" (const "reach-top") info) f (topKeyLabel owner)
       return info
 
+readInterfaceSessionReachTopMaybe :: InterfaceReadSession
+                                  -> ReachRows.TopKey
+                                  -> IO (Maybe ReachRows.TopInfo)
+readInterfaceSessionReachTopMaybe session@(InterfaceReadSession _ txn dbi) owner = do
+    info <- readReachTopEntryMaybe txn dbi owner
+    traceTydbRead (maybe "reach-top-miss" (const "reach-top") info)
+      (interfaceReadSessionPath session) (topKeyLabel owner)
+    return info
+
 readReachMember :: FilePath -> ReachRows.TopKey -> MemberKey -> IO ReachRows.MemberInfo
 readReachMember f owner member =
     withReadTxn f $ \txn dbi -> do
@@ -2729,6 +2824,17 @@ readReachMemberMaybe f owner member =
         (topKeyLabel owner ++ "." ++ Rows.memberLabel member)
       return info
 
+readInterfaceSessionReachMemberMaybe :: InterfaceReadSession
+                                     -> ReachRows.TopKey
+                                     -> MemberKey
+                                     -> IO (Maybe ReachRows.MemberInfo)
+readInterfaceSessionReachMemberMaybe session@(InterfaceReadSession _ txn dbi) owner member = do
+    info <- readReachMemberEntryMaybe txn dbi owner member
+    traceTydbRead (maybe "reach-member-miss" (const "reach-member") info)
+      (interfaceReadSessionPath session)
+      (topKeyLabel owner ++ "." ++ Rows.memberLabel member)
+    return info
+
 readReachShape :: FilePath -> ReachRows.TopKey -> IO ReachRows.ShapeInfo
 readReachShape f owner =
     withReadTxn f $ \txn dbi -> do
@@ -2744,6 +2850,15 @@ readReachShapeMaybe f owner =
       info <- readReachShapeEntryMaybe txn dbi owner
       traceTydbRead (maybe "reach-shape-miss" (const "reach-shape") info) f (topKeyLabel owner)
       return info
+
+readInterfaceSessionReachShapeMaybe :: InterfaceReadSession
+                                    -> ReachRows.TopKey
+                                    -> IO (Maybe ReachRows.ShapeInfo)
+readInterfaceSessionReachShapeMaybe session@(InterfaceReadSession _ txn dbi) owner = do
+    info <- readReachShapeEntryMaybe txn dbi owner
+    traceTydbRead (maybe "reach-shape-miss" (const "reach-shape") info)
+      (interfaceReadSessionPath session) (topKeyLabel owner)
+    return info
 
 readReachSlot :: FilePath
               -> ReachRows.TopKey
@@ -2768,6 +2883,17 @@ readReachSlotMaybe f owner member =
         (topKeyLabel owner ++ "." ++ memberRefLabel member)
       return info
 
+readInterfaceSessionReachSlotMaybe :: InterfaceReadSession
+                                   -> ReachRows.TopKey
+                                   -> Reach.MemberRef
+                                   -> IO (Maybe ReachRows.SlotInfo)
+readInterfaceSessionReachSlotMaybe session@(InterfaceReadSession _ txn dbi) owner member = do
+    info <- readReachSlotEntryMaybe txn dbi owner member
+    traceTydbRead (maybe "reach-slot-miss" (const "reach-slot") info)
+      (interfaceReadSessionPath session)
+      (topKeyLabel owner ++ "." ++ memberRefLabel member)
+    return info
+
 readReachSlots :: FilePath
                -> ReachRows.TopKey
                -> IO [(Reach.MemberRef, ReachRows.SlotInfo)]
@@ -2777,6 +2903,14 @@ readReachSlots f owner =
       slots <- readReachSlotsEntry txn dbi owner
       traceTydbRead "reach-slots" f (topKeyLabel owner)
       return slots
+
+readInterfaceSessionReachSlots :: InterfaceReadSession
+                               -> ReachRows.TopKey
+                               -> IO [(Reach.MemberRef, ReachRows.SlotInfo)]
+readInterfaceSessionReachSlots session@(InterfaceReadSession _ txn dbi) owner = do
+    slots <- readReachSlotsEntry txn dbi owner
+    traceTydbRead "reach-slots" (interfaceReadSessionPath session) (topKeyLabel owner)
+    return slots
 
 readReachReflection :: FilePath -> ReachRows.TopKey -> IO ReachRows.ReflectableAttrs
 readReachReflection f owner =
@@ -2796,6 +2930,15 @@ readReachReflectionMaybe f owner =
       traceTydbRead (maybe "reach-reflection-miss" (const "reach-reflection") attrs) f
         (topKeyLabel owner)
       return attrs
+
+readInterfaceSessionReachReflectionMaybe :: InterfaceReadSession
+                                         -> ReachRows.TopKey
+                                         -> IO (Maybe ReachRows.ReflectableAttrs)
+readInterfaceSessionReachReflectionMaybe session@(InterfaceReadSession _ txn dbi) owner = do
+    attrs <- readReachReflectionEntryMaybe txn dbi owner
+    traceTydbRead (maybe "reach-reflection-miss" (const "reach-reflection") attrs)
+      (interfaceReadSessionPath session) (topKeyLabel owner)
+    return attrs
 
 readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS.ByteString))
 readModuleHashesMaybe =

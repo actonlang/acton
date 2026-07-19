@@ -19,6 +19,8 @@ module Acton.SelectiveBack
   , selectedProgramSnapshots
   , materializeInterfaceProjections
   , materializeInterfaceProjection
+  , projectImports
+  , restrictEnvironmentPublicNames
   , projectionModuleInfo
   , captureInterfaceSnapshots
   , captureInterfaceClosure
@@ -26,6 +28,7 @@ module Acton.SelectiveBack
   , bindInterfaceSnapshots
   , snapshotWholeModuleSeeds
   , snapshotRootSeeds
+  , snapshotRootlessModules
   , snapshotNotImplementedModules
   , snapshotSourceHash
   , snapshotImplementationHash
@@ -136,51 +139,50 @@ selectFromSnapshots :: InterfaceResolver
                     -> IO (Either Worklist.SelectionError SelectedProgram)
 selectFromSnapshots resolve snapshots selectableModules seeds = do
     result <- withSnapshotValidation resolve snapshots $ do
-      moduleSeeds <- fmap (concatMap reachEdges) $ mapM
-        (readModuleSummary snapshots) (Set.toAscList selectableModules)
-      Worklist.selectProgramM (lookups snapshots) (seeds ++ moduleSeeds)
+      withSnapshotSessions snapshots (Map.keysSet $ interfaceSnapshotMap snapshots) $ \sessions -> do
+        moduleSeeds <- fmap (concatMap reachEdges) $ mapM
+          (readModuleSummary sessions) (Set.toAscList selectableModules)
+        Worklist.selectProgramM (lookups sessions) (seeds ++ moduleSeeds)
     return $ fmap
       (\selection -> SelectedProgram
         (classifyOpaqueDeclarations selection) snapshots)
       result
   where
-    readModuleSummary snapshots mn =
-      case lookupSnapshot mn snapshots of
-        Nothing -> throwIO (MissingInterfaceModule mn)
-        Just snapshot ->
-          InterfaceFiles.readReachModule (snapshotPath snapshot) mn
+    readModuleSummary sessions mn =
+      InterfaceFiles.readInterfaceSessionReachModule
+        (requiredSession sessions mn) mn
 
-    lookups snapshots = Worklist.ProgramLookup
+    lookups sessions = Worklist.ProgramLookup
       { Worklist.lookupTopRow = \key@(TopKey mn _) ->
           if Set.member mn selectableModules || mn == Builtin.mBuiltin
-            then readOne snapshots InterfaceFiles.readReachTopMaybe key
+            then readOne sessions InterfaceFiles.readInterfaceSessionReachTopMaybe key
             else return (Just $ OpaqueTop mempty)
       , Worklist.lookupMemberRow = \owner member ->
-          readOne snapshots
-            (\path key -> InterfaceFiles.readReachMemberMaybe path key member) owner
-      , Worklist.lookupShapeRow = readOne snapshots InterfaceFiles.readReachShapeMaybe
+          readOne sessions
+            (\session key -> InterfaceFiles.readInterfaceSessionReachMemberMaybe session key member) owner
+      , Worklist.lookupShapeRow = readOne sessions InterfaceFiles.readInterfaceSessionReachShapeMaybe
       , Worklist.lookupSlotRow = \owner member ->
-          readOne snapshots
-            (\path key -> InterfaceFiles.readReachSlotMaybe path key member) owner
-      , Worklist.lookupSurfaceSlots = readRequired snapshots
-          InterfaceFiles.readReachSlots
+          readOne sessions
+            (\session key -> InterfaceFiles.readInterfaceSessionReachSlotMaybe session key member) owner
+      , Worklist.lookupSurfaceSlots = readRequired sessions
+          InterfaceFiles.readInterfaceSessionReachSlots
       , Worklist.lookupReflectableAttrs =
-          readOne snapshots InterfaceFiles.readReachReflectionMaybe
+          readOne sessions InterfaceFiles.readInterfaceSessionReachReflectionMaybe
       }
 
-    readOne :: InterfaceSnapshots
-            -> (FilePath -> TopKey -> IO (Maybe a))
+    readOne :: Map.Map A.ModName InterfaceFiles.InterfaceReadSession
+            -> (InterfaceFiles.InterfaceReadSession -> TopKey -> IO (Maybe a))
             -> TopKey
             -> IO (Maybe a)
-    readOne snapshots readRow key@(TopKey mn _) =
-      case lookupSnapshot mn snapshots of
+    readOne sessions readRow key@(TopKey mn _) =
+      case Map.lookup mn sessions of
         Nothing -> return Nothing
-        Just snapshot -> readRow (snapshotPath snapshot) key
+        Just session -> readRow session key
 
-    readRequired snapshots readRows key@(TopKey mn _) =
-      case lookupSnapshot mn snapshots of
+    readRequired sessions readRows key@(TopKey mn _) =
+      case Map.lookup mn sessions of
         Nothing -> return []
-        Just snapshot -> readRows (snapshotPath snapshot) key
+        Just session -> readRows session key
 
     classifyOpaqueDeclarations selection = selection
       { Worklist.selectedDeclarations = localDeclarations
@@ -307,6 +309,11 @@ snapshotRootSeeds snapshots candidates = fmap catMaybes $ mapM rootSeed candidat
           then Just (Construct mn root)
           else Nothing
 
+snapshotRootlessModules :: InterfaceSnapshots -> Set.Set A.ModName
+snapshotRootlessModules = Map.keysSet . Map.filter noRoots . interfaceSnapshotMap
+  where
+    noRoots = null . InterfaceFiles.msRoots . snapshotInfo
+
 snapshotNotImplementedModules :: InterfaceSnapshots -> Set.Set A.ModName
 snapshotNotImplementedModules = Map.keysSet . Map.filter hasNotImpl . interfaceSnapshotMap
   where
@@ -395,6 +402,28 @@ withSnapshotValidation resolve snapshots action = do
 lookupSnapshot :: A.ModName -> InterfaceSnapshots -> Maybe InterfaceSnapshot
 lookupSnapshot mn = Map.lookup mn . interfaceSnapshotMap
 
+withSnapshotSessions :: InterfaceSnapshots
+                     -> Set.Set A.ModName
+                     -> (Map.Map A.ModName InterfaceFiles.InterfaceReadSession -> IO a)
+                     -> IO a
+withSnapshotSessions snapshots modules action =
+    open Map.empty (Set.toAscList $ Set.delete Prim.mPrim modules)
+  where
+    open sessions [] = action sessions
+    open sessions (mn:rest) = case lookupSnapshot mn snapshots of
+      Nothing -> throwIO (MissingInterfaceModule mn)
+      Just snapshot -> InterfaceFiles.withInterfaceReadSessionAtGeneration
+        (snapshotPath snapshot)
+        (InterfaceFiles.msGeneration $ snapshotInfo snapshot) $ \session ->
+          open (Map.insert mn session sessions) rest
+
+requiredSession :: Map.Map A.ModName InterfaceFiles.InterfaceReadSession
+                -> A.ModName
+                -> InterfaceFiles.InterfaceReadSession
+requiredSession sessions mn = case Map.lookup mn sessions of
+    Just session -> session
+    Nothing -> error ("Missing captured interface session for " ++ show mn)
+
 unionSnapshots :: InterfaceSnapshots -> InterfaceSnapshots -> InterfaceSnapshots
 unionSnapshots left right = InterfaceSnapshots $
     Map.union (interfaceSnapshotMap left) (interfaceSnapshotMap right)
@@ -406,16 +435,18 @@ materializeInterfaceProjections :: InterfaceResolver
                                 -> SelectedProgram
                                 -> IO [Projection]
 materializeInterfaceProjections resolve modules program =
-    withSnapshotValidation resolve snapshots $ mapM materialize modules
+    withSnapshotValidation resolve snapshots $
+      withSnapshotSessions snapshots (Set.fromList modules) $ \sessions ->
+        mapM (materialize sessions) modules
   where
     snapshots = selectedProgramSnapshots program
     selection = selectedProgramSelection program
 
-    materialize mn =
+    materialize sessions mn =
       case lookupSnapshot mn snapshots of
         Nothing -> throwIO (MissingInterfaceModule mn)
-        Just snapshot -> materializeProjection
-          (snapshotPath snapshot) mn selection
+        Just snapshot -> materializeProjection (snapshotPath snapshot)
+          (requiredSession sessions mn) mn selection
 
 materializeInterfaceProjection :: InterfaceResolver
                                -> A.ModName
@@ -438,8 +469,11 @@ captureSelectedOpaqueHashes resolve program = do
     opaqueSnapshots <- captureInterfaceClosure resolve missingModules
     let snapshots = selectedProgramSnapshots program `unionSnapshots` opaqueSnapshots
         capturedProgram = program{ selectedProgramSnapshots = snapshots }
+    let opaqueModules = Set.fromList
+          [ mn | TopKey mn _ <- opaqueTops, mn /= Prim.mPrim ]
     hashes <- withSnapshotValidation resolve snapshots $
-      mapM (fingerprint snapshots) opaqueTops
+      withSnapshotSessions snapshots opaqueModules $ \sessions ->
+        mapM (fingerprint snapshots sessions) opaqueTops
     return (capturedProgram,hashes)
   where
     selection = selectedProgramSelection program
@@ -452,17 +486,18 @@ captureSelectedOpaqueHashes resolve program = do
       , Map.notMember mn captured
       ]
 
-    fingerprint snapshots key@(TopKey mn name)
+    fingerprint snapshots sessions key@(TopKey mn name)
       | mn == Prim.mPrim = case lookup name Prim.primEnv of
           Nothing -> throwIO (MissingPrimitiveName name)
           Just info -> case Map.lookup name $ Hashing.nameInfoHashes $ Map.singleton name info of
             Nothing -> throwIO (MissingPrimitiveName name)
             Just hash -> return (key,hash)
       | otherwise = do
-          tyFile <- case lookupSnapshot mn snapshots of
-            Nothing -> throwIO (MissingInterfaceModule mn)
-            Just snapshot -> return (snapshotPath snapshot)
-          row <- InterfaceFiles.readNameHashMaybe tyFile name
+          let session = requiredSession sessions mn
+              tyFile = case lookupSnapshot mn snapshots of
+                Nothing -> error ("Missing captured interface " ++ show mn)
+                Just snapshot -> snapshotPath snapshot
+          row <- InterfaceFiles.readInterfaceSessionNameHashMaybe session name
           info <- maybe (throwIO $ MissingSelectedNameHash tyFile name) return row
           return (key,InterfaceFiles.nhPubHash info)
 
@@ -481,14 +516,17 @@ resolveInterface resolve mn = do
       _ -> throwIO (AmbiguousInterfaceModule mn paths)
 
 materializeProjection :: FilePath
+                      -> InterfaceFiles.InterfaceReadSession
                       -> A.ModName
                       -> Worklist.Selection
                       -> IO Projection
-materializeProjection tyFile mn selection = do
+materializeProjection tyFile session mn selection = do
     nameHashes <- mapM readNameHash selectedNames
-    typedModule <- InterfaceFiles.readModuleSelection
-      tyFile nameHashes (Set.fromList selectedNames) memberInterests
+    selectedModule <- InterfaceFiles.readInterfaceSessionSelection
+      session nameHashes (Set.fromList selectedNames) memberInterests
       staticInitializerInterests instanceInitializerInterests
+    let typedModule = selectedModule
+          { A.imps = projectImports selection (A.imps selectedModule) }
     headers <- catMaybes <$> mapM readSelectedHeader selectedKeys
     declarations <- mapM readDeclaration declarationKeys
     projectedEnv <- either throwIO return $
@@ -533,21 +571,61 @@ materializeProjection tyFile mn selection = do
       ]
 
     readNameHash name = do
-      row <- InterfaceFiles.readNameHashMaybe tyFile name
+      row <- InterfaceFiles.readInterfaceSessionNameHashMaybe session name
       maybe (throwIO $ MissingSelectedNameHash tyFile name) return row
 
     readSelectedHeader key@(TopKey _ name) = do
-      row <- InterfaceFiles.readReachTop tyFile key
+      row <- InterfaceFiles.readInterfaceSessionReachTop session key
       case row of
         LocalTop header _ -> return $ fmap ((,) name) header
         _ -> throwIO (InvalidSelectedHeader tyFile key row)
 
     readDeclaration key@(TopKey _ name) = do
-      row <- InterfaceFiles.readReachTop tyFile key
+      row <- InterfaceFiles.readInterfaceSessionReachTop session key
       case row of
         LocalTop (Just info) _ -> return (name, info)
         LocalTop Nothing _ -> throwIO (MissingDeclarationHeader tyFile key)
         _ -> throwIO (InvalidDeclarationHeader tyFile key row)
+
+-- | Keep module imports, which name a qualifier or a wildcard, and project
+-- explicit imports to the exact provider names retained by the global
+-- selection. Wildcards are narrowed through 'restrictEnvironmentPublicNames'
+-- so their ordinary importability rules remain unchanged. An empty explicit
+-- import still carries the provider's module initialization dependency.
+projectImports :: Worklist.Selection -> [A.Import] -> [A.Import]
+projectImports selection = map project
+  where
+    selected = Worklist.selectedTops selection `Set.union`
+      Worklist.selectedDeclarations selection `Set.union`
+      Worklist.selectedOpaqueTops selection
+
+    project importSpec = case importSpec of
+      A.FromImport loc mn items ->
+        A.FromImport loc mn (filter (retained mn) items)
+      _ -> importSpec
+
+    retained mn (A.ImportItem name _) =
+      Set.member (TopKey mn name) selected
+
+
+-- | Limit wildcard enumeration to names that the global selection has
+-- already retained. The original ModuleInfo still decides whether each name
+-- is importable, so extensions and other non-value entries keep their normal
+-- wildcard behavior without loading unrelated public rows.
+restrictEnvironmentPublicNames :: Worklist.Selection -> Env.Env0 -> Env.Env0
+restrictEnvironmentPublicNames selection env = env
+    { Env.modules = Map.mapWithKey restrict (Env.modules env) }
+  where
+    selected = Worklist.selectedTops selection `Set.union`
+      Worklist.selectedDeclarations selection `Set.union`
+      Worklist.selectedOpaqueTops selection
+    byModule = Map.fromListWith Set.union
+      [ (mn,Set.singleton name)
+      | TopKey mn name <- Set.toAscList selected
+      ]
+    restrict mn info = info
+      { Env.modulePublicNames = filter retained (Env.modulePublicNames info) }
+      where retained name = Set.member name $ Map.findWithDefault Set.empty mn byModule
 
 -- | The projected module contributes the selected members reconstructed from
 -- typed syntax.  Container headers retain the front pass's exact inferred

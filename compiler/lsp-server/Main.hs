@@ -37,6 +37,7 @@ import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
 import qualified Acton.Env as Env
+import qualified Acton.Hashing as Hashing
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Syntax as S
 
@@ -336,22 +337,25 @@ watchProjectShape rootProj watchedRoot =
 prepareLspCompilePlan
   :: Source.SourceProvider
   -> C.GlobalOptions
-  -> C.CompileOptions
+  -> Compile.CompileContext
   -> FilePath
+  -> Maybe [FilePath]
   -> LspM () (Either String (PlanOrigin, Compile.CompilePlan))
-prepareLspCompilePlan sp gopts opts path = do
+prepareLspCompilePlan sp gopts ctx path changedPaths = do
   planE <- liftIO ((try $ do
-    ctx <- Compile.prepareCompileContext opts [path]
     path' <- Compile.normalizePathSafe path
-    mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
-    case mcache of
-      Just cache
-        | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
-            mplan <- compilePlanFromCache ctx path' cache
-            case mplan of
-              Just plan -> return (PlanFromCache, plan)
-              Nothing -> freshPlan
-      _ -> freshPlan
+    case changedPaths of
+      Just _ -> do
+        mcache <- HM.lookup (Compile.ccRootProj ctx) <$> readIORef projectBuildCachesRef
+        case mcache of
+          Just cache
+            | Compile.ccBuildStamp (cachedCompileContext cache) == Compile.ccBuildStamp ctx -> do
+                mplan <- compilePlanFromCache ctx path' cache
+                case mplan of
+                  Just plan -> return (PlanFromCache, plan)
+                  Nothing -> freshPlan
+          _ -> freshPlan
+      Nothing -> freshPlan
     ) :: IO (Either SomeException (PlanOrigin, Compile.CompilePlan)))
   case planE of
     Left err ->
@@ -361,7 +365,8 @@ prepareLspCompilePlan sp gopts opts path = do
     Right plan -> return (Right plan)
   where
     freshPlan = do
-      plan <- Compile.prepareCompilePlan sp gopts compileScheduler opts [path] False (Just [path])
+      plan <- Compile.prepareCompilePlanFromContext
+        sp gopts ctx [path] False changedPaths
       cacheCompilePlan plan
       return (PlanFromDiscovery, plan)
 
@@ -379,6 +384,17 @@ compilePlanFromCache ctx changedPath cache = do
         dbpBlocked
         [changedPath]
       let rootProj = Compile.ccRootProj ctx
+          rootTaskKeys = Data.Set.fromList
+            [ Compile.gtKey t
+            | t <- neededTasks
+            , Compile.tkProj (Compile.gtKey t) == rootProj
+            ]
+          requestedTasks = Data.Set.fromList
+            [ Compile.gtKey t
+            | t <- neededTasks
+            , let key = Compile.gtKey t
+            , Compile.srcFile (Compile.gtPaths t) (Compile.tkMod key) == changedPath
+            ]
           rootTasks =
             [ Compile.gtTask t
             | t <- neededTasks
@@ -399,6 +415,8 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpNeededTasks = neededTasks
         , Compile.cpDbpBlocked = dbpBlocked
         , Compile.cpRootTasks = rootTasks
+        , Compile.cpRootTaskKeys = rootTaskKeys
+        , Compile.cpRequestedTasks = requestedTasks
         , Compile.cpRootPins = cachedRootPins cache
         , Compile.cpIncremental = True
         , Compile.cpAllowPrune = False
@@ -706,33 +724,42 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
   compileRes <- liftIO $
     Compile.withProjectLock rootProj $
       do
-        planE <- runLspT env $
-          prepareLspCompilePlan sp gopts opts path
-        case planE of
-          Left msg ->
-            return (Left msg)
-          Right (origin, plan) -> do
-            progressFor $
-              case origin of
-                PlanFromCache -> "Acton cached project ready"
-                PlanFromDiscovery -> "Acton compile plan ready"
-            runRes <- Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
-            case runRes of
-              Left err ->
-                return (Left (Compile.compileFailureMessage err))
-              Right (envAcc, _) -> do
-                rememberCompletionStates gen plan envAcc
-                progressFor "Completion ready"
-                let opts' = Compile.ccOpts (Compile.cpContext plan)
-                backFailure <-
-                  if C.only_build opts'
-                    then return Nothing
-                    else Compile.backQueueWait (Compile.csBackQueue compileScheduler) gen
-                case backFailure of
-                  Just failure ->
-                    return (Left (Compile.backPassFailureMessage failure))
-                  Nothing ->
-                    return (Right ())
+        ctx <- Compile.prepareCompileContext opts [path]
+        specChanged <- Compile.checkBuildSpecChange
+          compileScheduler (Compile.ccBuildStamp ctx)
+        when specChanged $
+          Compile.fetchDependencies gopts
+            (Compile.ccPathsRoot ctx) (Compile.ccDepOverrides ctx)
+        lockPaths <- Compile.compileOutputLockPaths gopts ctx
+        Compile.withCompileOutputLockPaths lockPaths $ do
+          let changedPaths = if specChanged then Nothing else Just [path]
+          planE <- runLspT env $
+            prepareLspCompilePlan sp gopts ctx path changedPaths
+          case planE of
+            Left msg ->
+              return (Left msg)
+            Right (origin, plan) -> do
+              progressFor $
+                case origin of
+                  PlanFromCache -> "Acton cached project ready"
+                  PlanFromDiscovery -> "Acton compile plan ready"
+              runRes <- Compile.runCompilePlan sp gopts plan compileScheduler gen hooks
+              case runRes of
+                Left err ->
+                  return (Left (Compile.compileFailureMessage err))
+                Right (envAcc, _) -> do
+                  rememberCompletionStates gen plan envAcc
+                  progressFor "Completion ready"
+                  let opts' = Compile.ccOpts (Compile.cpContext plan)
+                  backFailure <-
+                    if C.only_build opts'
+                      then return Nothing
+                      else Compile.backQueueWait (Compile.csBackQueue compileScheduler) gen
+                  case backFailure of
+                    Just failure ->
+                      return (Left (Compile.backPassFailureMessage failure))
+                    Nothing ->
+                      return (Right ())
   case compileRes of
     Left msg -> notifyCompileError gen msg >> return False
     Right () -> return True
@@ -1089,7 +1116,10 @@ handlers =
 
 -- | Start the Acton LSP server with the configured handlers.
 main :: IO Int
-main =
+main = do
+  -- Force the executable identity before background compilation starts.
+  -- Hashing memoizes the result for all later code-generation keys.
+  _ <- evaluate Hashing.codegenIdentity
   runServer serverDef `finally` releaseBackgroundCompilerLocks
   where
     serverDef =
