@@ -12,7 +12,7 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
+module Acton.Types(reconstruct, scanInitPrefix, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
 
 import Control.Concurrent.Async
 import Control.Concurrent.Chan
@@ -1185,7 +1185,7 @@ checkClassAttributesInitialized className classLoc env ancestors b
                                                              explicit  = concat [ ns | Signature _ ns sc dec <- b, isProp dec sc ]
                                                              inferred  = inferClassAttributes self initBody
                                                              expected  = nub $ inherited ++ explicit ++ inferred
-                                                             initialized = scanSelfAssigns env self b initBody
+                                                             (initialized, _) = scanInitPrefix env self b initBody
                                                              -- Track which parent __init__ methods are called
                                                              calledParentInits = getCalledParentInits env initBody
                                                              -- Get attributes initialized by called parent __init__ methods
@@ -1306,6 +1306,27 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
 findInitMethod :: Suite -> Maybe (Name, Suite, SrcLoc)
 findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | Decl _ ds <- b, d <- ds, dname d == initKW, Just x <- [selfPar d] ]
 
+-- Type reconstruction may add one or more explicit type applications around
+-- a selected method. Constructor analysis cares about the underlying direct
+-- receiver, not those inferred arguments.
+directDotCall :: Expr -> Maybe (QName, Name)
+directDotCall (Call _ f _ _)            = directDot (stripTypeApps f)
+  where
+    directDot (Dot _ e n)
+      | Var _ qn <- stripTypeApps e     = Just (qn, n)
+    directDot _                         = Nothing
+directDotCall _                         = Nothing
+
+isDotCall :: Expr -> Bool
+isDotCall (Call _ f _ _)                = case stripTypeApps f of
+                                              Dot{} -> True
+                                              _     -> False
+isDotCall _                             = False
+
+stripTypeApps :: Expr -> Expr
+stripTypeApps (TApp _ f _)              = stripTypeApps f
+stripTypeApps f                         = f
+
 -- Scan __init__ for "self.x = ..." to find which attributes are definitely
 -- assigned before any references to `self` escape externally. We allow most
 -- statements in the constructor as long as `self` does not escape although
@@ -1315,9 +1336,24 @@ findInitMethod b                        = listToMaybe [ (x, dbody d, loc d) | De
 -- but any assignments in a loop does not count to the set of initialized
 -- attributes since we cannot statically determine if the loop executes. The
 -- loop is scanned to ensure `self` does not escape.
-scanSelfAssigns :: Env -> Name -> Suite -> Suite -> [Name]
-scanSelfAssigns env self classBody stmts = scanSuite [] stmts
+-- | Return the attributes initialized by the declarative prefix of __init__,
+-- and the number of top-level statements in that prefix. Later compiler passes
+-- may split those statements by attribute while keeping the imperative suffix
+-- whole.
+scanInitPrefix :: EnvF x -> Name -> Suite -> Suite -> ([Name], Int)
+scanInitPrefix env self classBody stmts = (attrs, count)
   where
+    (attrs, count, _)                  = scanSuite [] stmts
+
+    continue assigns crossesBoundary seen rest
+      | crossesBoundary                 = (assigns, 0, True)
+      | otherwise                       = let (assigns', count', restCrossesBoundary) = scanSuite seen rest
+                                          in (assigns ++ assigns', count' + 1, restCrossesBoundary)
+
+    scanAttrs (assigns, _, _)           = assigns
+    scanCrossesBoundary (_, _, crossesBoundary)
+                                        = crossesBoundary
+
     -- Check if a method in the class has NotImplemented body
     isNotImplMethod :: Name -> Bool
     isNotImplMethod methodName          = case [ d | Decl _ ds <- classBody, d@Def{dname=n} <- ds, n == methodName ] of
@@ -1343,27 +1379,29 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                                          all (\(Handler _ hbody) -> branchExitsEarly hbody) handlers &&
                                                          (null elseBranch || branchExitsEarly elseBranch)
                                               _ -> False
-    scanSuite seen []                   = []
+    scanSuite seen []                   = ([], 0, False)
     -- Handle assignments
     scanSuite seen (MutAssign _ (Dot _ (Var _ qn) n) e : rest)
         | noq qn == self                = if checkNoSelfReference self seen e
-                                            then n : scanSuite (n:seen) rest
-                                            else []  -- Stop at self reference
-    scanSuite seen (MutAssign _ _ _ : rest)
-                                        =     -- Continue: local assignment is OK
-                                          scanSuite seen rest
+                                            then continue [n] False (n:seen) rest
+                                            else ([], 0, True)  -- Stop at self reference
+    scanSuite seen (MutAssign _ target e : rest)
+        | checkNoSelfReference self seen target && checkNoSelfReference self seen e
+                                        = continue [] False seen rest
+        | otherwise                     = ([], 0, True)
     scanSuite seen (Assign _ _ e : rest)
                                         =     -- Continue past local assignments, unless RHS contains self reference
                                           if checkNoSelfReference self seen e
-                                            then scanSuite seen rest  -- Continue past assignment
-                                            else []  -- Stop at self reference
-    scanSuite seen (AugAssign _ (Dot _ (Var _ qn) n) _ _ : rest)
-        | noq qn == self && n `elem` seen  -- OK: augmenting already-initialized attribute
-                                        = scanSuite seen rest
-        | noq qn == self                = []  -- STOP: can't augment uninitialized attribute
-    scanSuite seen (AugAssign _ _ _ _ : rest)
-                                        =     -- Continue: local augmented assignment is OK
-                                          scanSuite seen rest
+                                            then continue [] False seen rest  -- Continue past assignment
+                                            else ([], 0, True)  -- Stop at self reference
+    scanSuite seen (AugAssign _ (Dot _ (Var _ qn) n) _ e : rest)
+        | noq qn == self && n `elem` seen && checkNoSelfReference self seen e
+                                        = continue [] False seen rest
+        | noq qn == self                = ([], 0, True)  -- STOP: can't augment uninitialized attribute
+    scanSuite seen (AugAssign _ target _ e : rest)
+        | checkNoSelfReference self seen target && checkNoSelfReference self seen e
+                                        = continue [] False seen rest
+        | otherwise                     = ([], 0, True)
     -- Handle if/elif/else statements. Count assignments that happen in all
     -- branches as unconditional. Note how we must have an else branch in order
     -- to consider it exhaustive. Each branch either:
@@ -1392,11 +1430,16 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                               elseResult = (scanSuite seen elseBranch, branchExitsEarly elseBranch)
 
                                               -- Branches that complete normally must be considered
-                                              normalBranches = [assigns | (assigns, exits) <- branchResults, not exits]
+                                              normalBranches = [scanAttrs result | (result, exits) <- branchResults, not exits]
                                               -- Else branch if it completes normally
                                               normalElse = case elseResult of
-                                                             (assigns, False) -> [assigns]  -- Else completes normally
+                                                             (result, False) -> [scanAttrs result]  -- Else completes normally
                                                              (_, True) -> []  -- Else exits early
+
+                                              conditionCrossesBoundary = any (\(Branch cond _) ->
+                                                  not $ checkNoSelfReference self seen cond) branches
+                                              crossesBoundary = conditionCrossesBoundary ||
+                                                  any (scanCrossesBoundary . fst) (elseResult : branchResults)
 
                                               -- All normal branches that do not exit early
                                               allNormalBranches = normalBranches ++ normalElse
@@ -1407,23 +1450,30 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                                   True -> case allNormalBranches of
                                                             [] -> []  -- All branches exit: no object returned
                                                             branches -> foldl1 intersect branches  -- Require intersection
-                                          in newAssigns ++ scanSuite (newAssigns ++ seen) rest
+                                              assignsBeforeBoundary = if conditionCrossesBoundary then [] else newAssigns
+                                          in continue assignsBeforeBoundary crossesBoundary
+                                                      (assignsBeforeBoundary ++ seen) rest
     -- Only continue past simple statements
-    scanSuite seen (Pass _ : rest)      = scanSuite seen rest
+    scanSuite seen (Pass _ : rest)      = continue [] False seen rest
     -- Parent init calls are special - they initialize parent attributes
-    scanSuite seen (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
-        | isClass env c, n == initKW    = scanSuite seen rest
+    scanSuite seen (Expr _ e : rest)
+        | Just (c, n) <- directDotCall e
+        , isClass env c, n == initKW    = continue [] False seen rest
     -- Allow calling self methods that have NotImplemented body (C implementations)
-    scanSuite seen (Expr _ (Call _ (Dot _ (Var _ (NoQ x)) methodName) _ _) : rest)
-        | x == self && isNotImplMethod methodName
-                                        = scanSuite seen rest  -- Continue: NotImplemented method on self
-    -- Stop at other self method calls
-    scanSuite seen (Expr _ (Call _ (Dot _ _ _) _ _) : _)
-                                        = []  -- STOP: method call
+    scanSuite seen (Expr _ e : rest)
+        | Just (NoQ x, methodName) <- directDotCall e
+        , x == self && isNotImplMethod methodName
+                                        = continue [] False seen rest  -- Continue: NotImplemented method on self
+    -- Stop at method calls that expose self; calls on an initialized attribute
+    -- are safe because they pass only that attribute value.
+    scanSuite seen (Expr _ e : rest)
+        | isDotCall e && checkNoSelfReference self seen e
+                                        = continue [] False seen rest
+        | isDotCall e                   = ([], 0, True)
     -- Allow expressions without references to `self`
     scanSuite seen (Expr _ e : rest)
         | checkNoSelfReference self seen e
-                                        = scanSuite seen rest
+                                        = continue [] False seen rest
     -- Handle try/except/else/finally
     --
     -- The possible execution paths are:
@@ -1456,29 +1506,37 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
     -- it doesn't contribute to the intersection (like if/else branches that exit).
     -- Finally assignments always count since finally always executes.
     scanSuite seen (Try _ tryBody handlers elseBranch finallyBlock : rest)
-                                        = let -- Finally always executes
-                                              finallyAssigns = scanSuite seen finallyBlock
-                                              seenAfterFinally = finallyAssigns ++ seen
-
-                                              -- Scan all code paths
-                                              tryAssigns = scanSuite seenAfterFinally tryBody
-                                              elseAssigns = scanSuite seenAfterFinally elseBranch
-                                              handlerAssigns = map (\(Handler _ hbody) ->
-                                                  scanSuite seenAfterFinally hbody) handlers
+                                        = let -- Scan paths in runtime order. The else block sees
+                                              -- assignments made by a completed try; handlers cannot
+                                              -- assume where the exception occurred.
+                                              tryResult = scanSuite seen tryBody
+                                              tryAssigns = scanAttrs tryResult
+                                              elseResult = scanSuite (tryAssigns ++ seen) elseBranch
+                                              handlerResults = map (\(Handler _ hbody) ->
+                                                  scanSuite seen hbody) handlers
+                                              elseAssigns = scanAttrs elseResult
+                                              handlerAssigns = map scanAttrs handlerResults
 
                                               -- Check which paths exit early
                                               tryExits = branchExitsEarly tryBody
                                               elseExits = branchExitsEarly elseBranch
                                               handlerExits = map (\(Handler _ hbody) ->
                                                   branchExitsEarly hbody) handlers
+                                              pathResults = tryResult : handlerResults ++
+                                                  [elseResult | not tryExits]
+                                              pathCrossesBoundary = any scanCrossesBoundary pathResults
 
                                               -- Build list of paths that complete normally:
                                               -- 1. try+else path (if try doesn't exit)
                                               -- 2. each handler that doesn't exit
+                                              tryCrossesBoundary = scanCrossesBoundary tryResult
                                               tryElsePath = if not tryExits
-                                                           then [tryAssigns ++ if elseExits then [] else elseAssigns]
+                                                           then [tryAssigns ++ if tryCrossesBoundary || elseExits
+                                                                                 then [] else elseAssigns]
                                                            else []
-                                              handlerPaths = [assigns | (assigns, exits) <- zip handlerAssigns handlerExits, not exits]
+                                              handlerPaths = [ if tryCrossesBoundary then [] else assigns
+                                                             | (assigns, exits) <- zip handlerAssigns handlerExits
+                                                             , not exits ]
                                               normalPaths = tryElsePath ++ handlerPaths
 
                                               -- Intersect all normal paths (or empty if all exit)
@@ -1486,41 +1544,60 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
                                                   [] -> []
                                                   paths -> foldl1 intersect paths
 
-                                          in finallyAssigns ++ guaranteedFromPaths ++
-                                             scanSuite (finallyAssigns ++ guaranteedFromPaths ++ seen) rest
+                                              -- Finally runs after every path, so it may use only
+                                              -- attributes guaranteed by the preceding paths. If a
+                                              -- path already crossed the boundary, finally is too late
+                                              -- to contribute initialized attributes.
+                                              finallyResult = scanSuite seen finallyBlock
+                                              finallyAssigns = scanAttrs finallyResult
+                                              finallyCrossesBoundary = scanCrossesBoundary finallyResult
+                                              assignsBeforeBoundary
+                                                | pathCrossesBoundary = guaranteedFromPaths
+                                                | finallyCrossesBoundary = finallyAssigns
+                                                | otherwise = finallyAssigns ++ guaranteedFromPaths
+
+                                          in continue assignsBeforeBoundary
+                                                      (pathCrossesBoundary || finallyCrossesBoundary)
+                                                      (assignsBeforeBoundary ++ seen) rest
     -- Handle loops - skip over them if they don't leak self references
     scanSuite seen (While _ cond body elseBranch : rest)
-        | checkNoSelfReference self seen cond &&
-          checkNoSelfReferenceInSuite self seen body &&
-          checkNoSelfReferenceInSuite self seen elseBranch
-                                        = scanSuite seen rest  -- Continue past safe loop
-        | otherwise                     = []  -- STOP: loop references self
+        | checkNoSelfReference self seen cond && not crossesBoundary
+                                        = continue [] False seen rest  -- Continue past safe loop
+        | otherwise                     = ([], 0, True)  -- STOP: loop references self
+      where crossesBoundary             = any scanCrossesBoundary
+                                              [scanSuite seen body, scanSuite seen elseBranch]
     scanSuite seen (For _ pat expr body elseBranch : rest)
-        | checkNoSelfReference self seen expr &&
-          checkNoSelfReferenceInSuite self seen body &&
-          checkNoSelfReferenceInSuite self seen elseBranch
-                                        = scanSuite seen rest  -- Continue past safe loop
-        | otherwise                     = []  -- STOP: loop references self
-    scanSuite _ (With _ _ _ : _)        = []  -- STOP: with statements not supported
+        | checkNoSelfReference self seen expr && not crossesBoundary
+                                        = continue [] False seen rest  -- Continue past safe loop
+        | otherwise                     = ([], 0, True)  -- STOP: loop references self
+      where crossesBoundary             = any scanCrossesBoundary
+                                              [scanSuite seen body, scanSuite seen elseBranch]
+    scanSuite _ (With _ _ _ : _)        = ([], 0, True)  -- STOP: with statements not supported
     -- Handle assert like if & raise - continue if test doesn't reference self
     scanSuite seen (Assert _ test msg : rest)
         | checkNoSelfReference self seen test &&
           maybe True (checkNoSelfReference self seen) msg
-                                        = scanSuite seen rest  -- Continue: assert doesn't leak self
-        | otherwise                     = []  -- STOP: assert references self
-    scanSuite _ (Return _ _ : _)        = []  -- STOP: early exit
-    scanSuite _ (Raise _ _ : _)         = []  -- STOP: raises exception
+                                        = continue [] False seen rest  -- Continue: assert doesn't leak self
+        | otherwise                     = ([], 0, True)  -- STOP: assert references self
+    scanSuite _ (Return _ _ : _)        = ([], 0, True)  -- STOP: returns an incompletely initialized object
+    scanSuite seen (Raise _ e : _)
+        | checkNoSelfReference self seen e
+                                        = ([], 0, False)  -- STOP: no object is returned
+        | otherwise                     = ([], 0, True)
     -- Skip past break and continue - they are loop control flow, and we skip loops anyway
-    scanSuite seen (Break _ : rest)     = scanSuite seen rest
-    scanSuite seen (Continue _ : rest)  = scanSuite seen rest
-    scanSuite seen (Delete _ _ : rest)  = scanSuite seen rest
-    scanSuite _ (After _ _ _ : _)       = []  -- STOP: after statement (async)
+    scanSuite seen (Break _ : rest)     = continue [] False seen rest
+    scanSuite seen (Continue _ : rest)  = continue [] False seen rest
+    scanSuite seen (Delete _ target : rest)
+        | checkNoSelfReference self seen target
+                                        = continue [] False seen rest
+        | otherwise                     = ([], 0, True)
+    scanSuite _ (After _ _ _ : _)       = ([], 0, True)  -- STOP: after statement (async)
     -- Check nested function declarations for self references
     scanSuite seen (Decl _ decls : rest)
         | all (checkDeclNoSelfReference self seen) decls
-                                        = scanSuite seen rest  -- Continue: nested functions don't capture self
-        | otherwise                     = []  -- STOP: nested function captures self
-    scanSuite _ (_ : _)                 = []  -- STOP: unhandled statement type (safe default)
+                                        = continue [] False seen rest  -- Continue: nested functions don't capture self
+        | otherwise                     = ([], 0, True)  -- STOP: nested function captures self
+    scanSuite _ (_ : _)                 = ([], 0, True)  -- STOP: unhandled statement type (safe default)
 
 
 -- Check if a suite (list of statements) contains disallowed references to self
@@ -1531,8 +1608,14 @@ checkNoSelfReferenceInSuite self seen stmts = all checkStmt stmts
     checkStmt (Assign _ _ e)            = checkNoSelfReference self seen e
     checkStmt (MutAssign _ target e)    = checkNoSelfReference self seen e && checkNoSelfReference self seen target
     checkStmt (AugAssign _ target _ e)  = checkNoSelfReference self seen e && checkNoSelfReference self seen target
+    checkStmt (Assert _ test msg)       = checkNoSelfReference self seen test && maybe True (checkNoSelfReference self seen) msg
+    checkStmt Pass{}                    = True
+    checkStmt (Delete _ target)         = checkNoSelfReference self seen target
     checkStmt (Return _ Nothing)        = True
     checkStmt (Return _ (Just e))       = checkNoSelfReference self seen e
+    checkStmt (Raise _ e)               = checkNoSelfReference self seen e
+    checkStmt Break{}                   = True
+    checkStmt Continue{}                = True
     checkStmt (If _ branches elseBranch) = all (\(Branch cond body) -> checkNoSelfReference self seen cond && checkNoSelfReferenceInSuite self seen body) branches &&
                                            checkNoSelfReferenceInSuite self seen elseBranch
     checkStmt (While _ cond body elseBranch) = checkNoSelfReference self seen cond &&
@@ -1546,7 +1629,14 @@ checkNoSelfReferenceInSuite self seen stmts = all checkStmt stmts
                                            all (\(Handler _ hbody) -> checkNoSelfReferenceInSuite self seen hbody) handlers &&
                                            checkNoSelfReferenceInSuite self seen elseBranch &&
                                            checkNoSelfReferenceInSuite self seen finallyBlock
-    checkStmt _                          = True  -- Conservative: allow other statements
+    checkStmt (With _ items body)       = all checkWithItem items && checkNoSelfReferenceInSuite self seen body
+    checkStmt (Data _ _ body)           = checkNoSelfReferenceInSuite self seen body
+    checkStmt (VarAssign _ _ e)         = checkNoSelfReference self seen e
+    checkStmt (After _ delay e)         = checkNoSelfReference self seen delay && checkNoSelfReference self seen e
+    checkStmt Signature{}               = True
+    checkStmt (Decl _ decls)            = all (checkDeclNoSelfReference self seen) decls
+
+    checkWithItem (WithItem e _)        = checkNoSelfReference self seen e
 
 -- Check if an expression contains disallowed references to self
 -- We allow self.x since it can be seen as just a lone variable, which is valid
@@ -1560,10 +1650,16 @@ checkNoSelfReference self seen expr = checkExpr expr
     checkExpr (Await _ _)               = False  -- Await is not allowed
     checkExpr (Var _ qn) | noq qn == self
                                         = False  -- Direct reference to self not allowed
-    checkExpr e@(Dot _ (Var _ qn) attr)
+    checkExpr Var{}                     = True
+    checkExpr (Dot _ (Var _ qn) attr)
         | noq qn == self                = attr `elem` seen  -- self.attr is OK only if attr is initialized
+    checkExpr (Rest _ (Var _ qn) attr)
+        | noq qn == self                = attr `elem` seen
     -- For other expressions, recursively check subexpressions
     checkExpr (Call _ func args kwds)   = checkExpr func && checkPosArgs args && checkKwdArgs kwds
+    checkExpr (Let _ ss e)              = checkNoSelfReferenceInSuite self seen ss && checkExpr e
+    checkExpr (TApp _ func _)           = checkExpr func
+    checkExpr (Async _ e)               = checkExpr e
     checkExpr (BinOp _ e1 _ e2)         = checkExpr e1 && checkExpr e2
     checkExpr (CompOp _ e1 ops)         = checkExpr e1 && all checkOpArg ops
       where checkOpArg (OpArg _ e)      = checkExpr e
@@ -1572,6 +1668,7 @@ checkNoSelfReference self seen expr = checkExpr expr
     checkExpr (Tuple _ args kwds)       = checkPosArgs args && checkKwdArgs kwds
     checkExpr (Paren _ e)               = checkExpr e
     checkExpr (Cond _ cond thenE elseE) = checkExpr cond && checkExpr thenE && checkExpr elseE
+    checkExpr (IsInstance _ e _)        = checkExpr e
     checkExpr (Index _ base idx)        = checkExpr base && checkExpr idx
     checkExpr (Slice _ base (Sliz _ start stop step))
                                         = checkExpr base &&
@@ -1581,20 +1678,29 @@ checkNoSelfReference self seen expr = checkExpr expr
     checkExpr (Dict _ items)            = all checkItem items
     checkExpr (Set _ elems)             = all checkElem elems
     checkExpr (ListComp _ elem comp)    = checkElem elem && checkComp comp
-    checkExpr (DictComp _ (Assoc k v) comp)
-                                        = checkExpr k && checkExpr v && checkComp comp
+    checkExpr (DictComp _ item comp)    = checkItem item && checkComp comp
     checkExpr (SetComp _ elem comp)     = checkElem elem && checkComp comp
-    checkExpr (Lambda _ _ _ body _)     = checkExpr body
+    checkExpr (Lambda _ ps ks body _)   = checkPosPars ps && checkKwdPars ks &&
+                                          (self `elem` (bound ps ++ bound ks) || checkNoSelfReference self [] body)
     checkExpr (Yield _ e)               = maybe True checkExpr e
     checkExpr (YieldFrom _ e)           = checkExpr e
     checkExpr (Dot _ e _)               = checkExpr e  -- Check base expression
+    checkExpr (Rest _ e _)              = checkExpr e
+    checkExpr (DotI _ e _)              = checkExpr e
+    checkExpr (RestI _ e _)             = checkExpr e
+    checkExpr (Opt _ e _)               = checkExpr e
+    checkExpr (OptChain _ e)            = checkExpr e
+    checkExpr (Box _ e)                 = checkExpr e
+    checkExpr (UnBox _ e)               = checkExpr e
     checkExpr (Int _ _ _)               = True  -- Integer literals are OK
     checkExpr (Float _ _ _)             = True  -- Float literals are OK
+    checkExpr (Imaginary _ _ _)         = True
     checkExpr (Strings _ _)             = True  -- String literals are OK
     checkExpr (BStrings _ _)            = True  -- Byte string literals are OK
     checkExpr (Bool _ _)                = True  -- Boolean literals are OK
     checkExpr None{}                    = True  -- None is OK
-    checkExpr _                         = True  -- Other expressions are OK (for now)
+    checkExpr NotImplemented{}          = True
+    checkExpr Ellipsis{}                = True
 
     checkPosArgs (PosArg e rest)        = checkExpr e && checkPosArgs rest
     checkPosArgs (PosStar e)            = checkExpr e
@@ -1604,14 +1710,38 @@ checkNoSelfReference self seen expr = checkExpr expr
     checkKwdArgs (KwdStar e)            = checkExpr e
     checkKwdArgs KwdNil                 = True
 
+    checkPosPars (PosPar _ _ e rest)    = maybe True checkExpr e && checkPosPars rest
+    checkPosPars PosSTAR{}              = True
+    checkPosPars PosNIL                 = True
+
+    checkKwdPars (KwdPar _ _ e rest)    = maybe True checkExpr e && checkKwdPars rest
+    checkKwdPars KwdSTAR{}              = True
+    checkKwdPars KwdNIL                 = True
+
     checkElem (Elem e)                  = checkExpr e
     checkElem (Star e)                  = checkExpr e
 
     checkItem (Assoc k v)               = checkExpr k && checkExpr v
+    checkItem (StarStar e)              = checkExpr e
 
-    checkComp (CompFor _ _ iter c)      = checkExpr iter && checkComp c
+    checkComp (CompFor _ pat iter c)    = checkPattern pat && checkExpr iter && checkComp c
     checkComp (CompIf _ test c)         = checkExpr test && checkComp c
     checkComp NoComp                    = True
+
+    checkPattern PWild{}                = True
+    checkPattern PVar{}                 = True
+    checkPattern (PParen _ pat)         = checkPattern pat
+    checkPattern (PTuple _ ps ks)       = checkPosPatterns ps && checkKwdPatterns ks
+    checkPattern (PList _ ps tailPat)   = all checkPattern ps && maybe True checkPattern tailPat
+    checkPattern (PData _ _ indices)    = all checkExpr indices
+
+    checkPosPatterns (PosPat pat rest)  = checkPattern pat && checkPosPatterns rest
+    checkPosPatterns (PosPatStar pat)   = checkPattern pat
+    checkPosPatterns PosPatNil          = True
+
+    checkKwdPatterns (KwdPat _ pat rest)= checkPattern pat && checkKwdPatterns rest
+    checkKwdPatterns (KwdPatStar pat)   = checkPattern pat
+    checkKwdPatterns KwdPatNil          = True
 
 
 -- Check if a declaration (nested function) references self
@@ -1619,12 +1749,31 @@ checkNoSelfReference self seen expr = checkExpr expr
 -- even if it only accesses already-initialized attributes
 checkDeclNoSelfReference :: Name -> [Name] -> Decl -> Bool
 checkDeclNoSelfReference self seen decl = case decl of
-    Def _ _ _ _ _ _ body _ _ _ -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
-    Actor _ _ _ _ _ body _     -> checkNoSelfReferenceInSuite self [] body  -- Pass empty list to disallow ANY self reference
+    Def _ _ _ ps ks _ body _ _ _ ->
+        checkParameterDefaults ps ks &&
+        (self `elem` (bound ps ++ bound ks) || checkNoSelfReferenceInSuite self [] body)
+    Actor _ _ _ ps ks body _      ->
+        checkParameterDefaults ps ks &&
+        (self == selfKW || self `elem` (bound ps ++ bound ks) ||
+          checkNoSelfReferenceInSuite self [] body)
     Class _ _ _ _ body _       -> True  -- Nested classes don't capture self by default
     Protocol _ _ _ _ body _    -> True  -- Nested protocols don't capture self
     Typedef _ _ _ _ _          -> True  -- Type aliases don't capture self
     Extension _ _ _ _ body _   -> True  -- Extensions don't capture self
+  where
+    checkParameterDefaults ps ks = checkPosDefaults ps && checkKwdDefaults ks
+
+    checkPosDefaults (PosPar _ _ value rest)
+                                        = maybe True (checkNoSelfReference self seen) value &&
+                                          checkPosDefaults rest
+    checkPosDefaults PosSTAR{}           = True
+    checkPosDefaults PosNIL              = True
+
+    checkKwdDefaults (KwdPar _ _ value rest)
+                                        = maybe True (checkNoSelfReference self seen) value &&
+                                          checkKwdDefaults rest
+    checkKwdDefaults KwdSTAR{}           = True
+    checkKwdDefaults KwdNIL              = True
 
 -- Infer all class attributes by scanning the entire __init__ method for any
 -- self.x assignments, regardless of control flow. This is used for attribute
@@ -1662,8 +1811,9 @@ inferClassAttributes self stmts = nub $ scanAll stmts
 -- Get all parent classes whose __init__ methods are called
 getCalledParentInits :: Env -> Suite -> [QName]
 getCalledParentInits _ []               = []
-getCalledParentInits env (Expr _ (Call _ (Dot _ (Var _ c) n) _ _) : rest)
-    | isClass env c, n == initKW        = c : getCalledParentInits env rest
+getCalledParentInits env (Expr _ e : rest)
+    | Just (c, n) <- directDotCall e
+    , isClass env c, n == initKW        = c : getCalledParentInits env rest
 getCalledParentInits env (_ : rest)     = getCalledParentInits env rest
 
 -- Get attributes that would be initialized by calling a parent's __init__

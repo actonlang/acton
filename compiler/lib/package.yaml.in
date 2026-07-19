@@ -80,6 +80,8 @@ library:
     - Acton.Fingerprint
     - Acton.Hashing
     - Acton.HttpFetch
+    - Acton.InterfaceRows
+    - Acton.InterfaceRowsBuilder
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo
