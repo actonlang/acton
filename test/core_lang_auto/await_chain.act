@@ -1,0 +1,53 @@
+# The fully deterministic pending park/wake baseline: three nested sync
+# calls, three simultaneously parked actors, LIFO unwind with the value
+# threaded through every resumed frame.
+#
+# RTS coverage:
+#  - Deterministic pending registration at every level: each sync call
+#    ($ASYNCf+$AWAITf -> $RWAIT) runs ADD_waiting BEFORE
+#    reverse_outgoing_queue/FLUSH_outgoing_local, so the caller is on the
+#    callee message's waiter list before the callee can possibly run: no
+#    interleaving reaches the frozen arms here.
+#  - Simultaneous park chain: while Leaf computes, main->$waitsfor,
+#    Top->$waitsfor and Mid->$waitsfor are all set; Top and Mid are each at
+#    once ON a waiter list (of their callee's message) and HOLDING a waiter
+#    list (on their own in-progress message) — the dual role an owner-local
+#    waiter redesign must preserve.
+#  - Unwind: three $RDONE freeze+single-waiter-wake sequences in strict LIFO
+#    order, each writing its value into the next parked frame's value slot
+#    and ENQ_readying exactly one actor. The +1 per hop makes any
+#    wrong-frame value write (cross-wiring) visible in the final sum.
+#  - No timers, escapes, or exceptions: a failure here isolates the plain
+#    ADD_waiting/FREEZE_waiting/wake machinery itself. A stuck unwind parks
+#    the whole chain; the Watchdog actor (never parked, mailbox empty, so
+#    its handle_timeout delivery DOES ENQ_ready it) bounds the run.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Leaf():
+    def leaf() -> int:
+        return 1
+
+actor Mid(nxt):
+    def mid() -> int:
+        return nxt.leaf() + 1
+
+actor Top(nxt):
+    def top() -> int:
+        return nxt.mid() + 1
+
+actor main(env):
+    wd = Watchdog(env)
+    l = Leaf()
+    m = Mid(l)
+    t = Top(m)
+
+    def go():
+        v = t.top()
+        if v == 3:
+            print("chain ok")
+            env.exit(0)
+        env.exit(1)
+
+    go()

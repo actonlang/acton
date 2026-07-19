@@ -1,0 +1,56 @@
+# Result payloads of several types through the wake write, and effect
+# ordering around an awaited void call.
+#
+# RTS coverage:
+#  - The $RDONE wake loop delivers a result by writing a single word (a
+#    pointer) into the waiter's parked frame value slot; this test routes
+#    int, str and bool payloads through that write via implicit-await sync
+#    calls (all deterministic pending-path parks: ADD_waiting precedes the
+#    outgoing flush).
+#  - `await async b.bump()` is the suite's only await of a void method: the
+#    completion wake carries a None result. The observable is the wake
+#    itself — a rewrite that ships results as messages must not confuse a
+#    None payload with "no result yet"; that confusion parks main at this
+#    await and is bounded by the Watchdog actor.
+#  - Effect visibility: bump() and effects_seen() are tail-appended to
+#    Prod's FIFO mailbox across two successive parks of main, so
+#    effects_seen() must observe bump()'s write (n == 1) — mailbox FIFO
+#    ordering across await boundaries.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    var effects = 0
+
+    def geti() -> int:
+        return 42
+
+    def gets() -> str:
+        return "hello"
+
+    def getb() -> bool:
+        return True
+
+    def bump():
+        effects += 1
+
+    def effects_seen() -> int:
+        return effects
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+
+    def go():
+        i = b.geti()
+        s = b.gets()
+        t = b.getb()
+        await async b.bump()
+        n = b.effects_seen()
+        if i == 42 and s == "hello" and t and n == 1:
+            print("values ok")
+            env.exit(0)
+        env.exit(1)
+
+    go()

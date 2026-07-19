@@ -1,0 +1,60 @@
+# Per-future result routing: one actor with five outstanding futures must
+# get each producer's value delivered to the await of THAT future — the
+# direct probe for cross-wiring in per-message waiter bookkeeping.
+#
+# RTS coverage:
+#  - One turn issues five $ASYNCs (five messages PUSH_outgoing'd, restored
+#    to program order by reverse_outgoing_queue, flushed to five different
+#    producers at the first $RWAIT).
+#  - `await f4` is a same-turn await: its $RWAIT runs ADD_waiting before the
+#    flush, so it is a deterministic pending park and its wake comes from
+#    b4's $RDONE single-waiter loop.
+#  - The remaining awaits (f3..f0, reverse issue order) race their
+#    producers: each independently resolves via EITHER the pending
+#    park/wake OR the $RWAIT frozen-value fast arm. Both arms must key the
+#    value by message identity; the per-await assertions (v_i == i) catch a
+#    value delivered to the wrong await on either arm — a plain sum would be
+#    permutation-invariant and mask exactly that swap.
+#  - A lost completion parks main with $waitsfor set forever; the Watchdog
+#    actor bounds it.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod(i: int):
+    def produce() -> int:
+        return i
+
+actor main(env):
+    wd = Watchdog(env)
+    b0 = Prod(0)
+    b1 = Prod(1)
+    b2 = Prod(2)
+    b3 = Prod(3)
+    b4 = Prod(4)
+
+    def go():
+        f0 = async b0.produce()
+        f1 = async b1.produce()
+        f2 = async b2.produce()
+        f3 = async b3.produce()
+        f4 = async b4.produce()
+        v4 = await f4
+        if v4 != 4:
+            env.exit(1)
+        v3 = await f3
+        if v3 != 3:
+            env.exit(1)
+        v2 = await f2
+        if v2 != 2:
+            env.exit(1)
+        v1 = await f1
+        if v1 != 1:
+            env.exit(1)
+        v0 = await f0
+        if v0 != 0:
+            env.exit(1)
+        print("fan-out ok")
+        env.exit(0)
+
+    go()

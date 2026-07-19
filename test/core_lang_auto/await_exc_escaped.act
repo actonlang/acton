@@ -1,0 +1,61 @@
+# Exception propagation through an escaped future to a foreign pending
+# waiter, while the future's creator is parked: the exception flavor of
+# await_relay.
+#
+# RTS coverage:
+#  - Producer failure: boom()'s raise longjmps to the worker's jump buffer;
+#    wt_work_cb's exceptional path converts it to $R_FAIL. Prod has no
+#    catcher, so the $RFAIL no-catcher arm runs: the message is frozen as an
+#    exception (FREEZE_waiting) and — because Rel IS registered — the waiter
+#    propagation loop writes $Fail$instance into Rel's parked consume frame's
+#    cont slot plus the exception as its value, clears $waitsfor, and
+#    ENQ_readys Rel. A registered waiter suppresses the "Unhandled exception"
+#    stderr notice (that waiter-less branch is owned by await_already_failed).
+#  - Waiter resume: Rel re-dispatches its parked frame; the cont is now
+#    $Fail$instance, whose __call__ returns $R_FAIL, hitting the
+#    $RFAIL-with-catcher arm: the catcher installed by $PUSH_C for Rel's
+#    `try` receives the exception, the frame's cont is set to the catcher
+#    cont with value False (the except branch selector), and the typed
+#    `except ValueError` runs — turning the failure into a normal -1 return
+#    that completes consume via the ordinary $RDONE freeze+wake of main.
+#  - Rel's pending registration rests on the spin margin (see await_relay);
+#    the degraded arm is the $RWAIT frozen-exception fast path, owned
+#    deterministically by await_already_failed.
+#  - Watchdog in a separate actor: timer envelopes tail-append behind a
+#    parked head (no ENQ_ready), so an in-main timer cannot guard the park.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    var i = 0
+
+    def spin():
+        while i < 20000000:
+            i += 1
+
+    def boom() -> int:
+        raise ValueError("boom")
+
+actor Rel():
+    def consume(fut) -> int:
+        try:
+            return await fut
+        except ValueError:
+            return -1
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+    c = Rel()
+
+    def go():
+        async b.spin()
+        x = async b.boom()
+        v = c.consume(x)
+        if v == -1:
+            print("escaped exception ok")
+            env.exit(0)
+        env.exit(1)
+
+    go()
