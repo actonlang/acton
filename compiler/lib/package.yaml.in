@@ -93,8 +93,7 @@ library:
     - Acton.QuickType
     - Acton.Reachability
     - Acton.ReachabilityRows
-    - Acton.ReachabilityRowsBuilder
-    - Acton.ReachabilityTypes
+    - Acton.SelectiveBack
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
