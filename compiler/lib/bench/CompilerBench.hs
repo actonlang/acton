@@ -234,14 +234,17 @@ prepareHashBench typesPath sourcePath = do
     E.evaluate (length tests)
 
     let NameInfo.NModule _ fullIface _ = nmod
-        srcItems = Hashing.topLevelItems parsed
-        implItems = Hashing.topLevelItems tchecked
+        owners = Hashing.typedTopLevelOwners tchecked
+        srcItems = Hashing.sourceTopLevelItems parsed
+        implItems = Hashing.topLevelItems owners tchecked
         nameKeys = Set.fromList (map topLevelItemName srcItems ++ map topLevelItemName implItems)
         nameInfoMap = Map.fromList fullIface
         hashEnv = Env.setMod modName env
         (_, pubSigExtDeps) = Hashing.pubSigSplitDepsFromNameInfoMap modName hashEnv nameKeys nameInfoMap
         (_, implExtDeps) = Hashing.implSplitDepsFromItems modName hashEnv nameKeys implItems
-        extMods = Set.toList (Hashing.externalModules pubSigExtDeps `Set.union` Hashing.externalModules implExtDeps)
+        extMods = Set.toList
+          (Hashing.externalModules (concat $ Map.elems pubSigExtDeps) `Set.union`
+           Hashing.externalModules (concat $ Map.elems implExtDeps))
     extMaps <- fmap Map.fromList $
       mapM (\mn -> do
               m <- resolveNameHashMap paths mn
@@ -296,7 +299,7 @@ hashBenchFromHashes mn env nmod extMaps implItems nameSrcHashes nameImplHashes s
             pubExtHashes
             implExtHashes
         modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes
-        moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes
+        moduleImplHash = Hashing.moduleImplHashFromNameHashes InterfaceFiles.emptyModuleHashInfo nameHashes
     in (modulePubHash, moduleImplHash, nameHashes)
 
 hashBenchOnce :: Syntax.ModName
@@ -308,9 +311,10 @@ hashBenchOnce :: Syntax.ModName
               -> (B.ByteString, B.ByteString, [InterfaceFiles.NameHashInfo])
 hashBenchOnce mn env parsed tchecked nmod extMaps =
     let NameInfo.NModule _ fullIface _ = nmod
-        srcItems = Hashing.topLevelItems parsed
+        owners = Hashing.typedTopLevelOwners tchecked
+        srcItems = Hashing.sourceTopLevelItems parsed
         nameSrcHashes = Hashing.nameHashesFromItems srcItems
-        implItems = Hashing.topLevelItems tchecked
+        implItems = Hashing.topLevelItems owners tchecked
         nameImplHashes = Hashing.nameHashesFromItems implItems
         nameInfoMap = Map.fromList fullIface
         selfPubHashes = Hashing.nameInfoHashes nameInfoMap
@@ -353,8 +357,9 @@ runHashBreakdown reps typesPath sourcePath = do
         nmod = hbsNMod bench
         NameInfo.NModule _ fullIface _ = nmod
         nameInfoMap = Map.fromList fullIface
-        srcItems = Hashing.topLevelItems parsed
-        implItems = Hashing.topLevelItems tchecked
+        owners = Hashing.typedTopLevelOwners tchecked
+        srcItems = Hashing.sourceTopLevelItems parsed
+        implItems = Hashing.topLevelItems owners tchecked
 
     E.evaluate (length srcItems)
     E.evaluate (length implItems)
@@ -368,12 +373,12 @@ runHashBreakdown reps typesPath sourcePath = do
 
     _ <- measureRepeated statsEnabled "hash_extract_src_items" reps $ do
       parsed' <- readIORef parsedRef
-      let items = Hashing.topLevelItems parsed'
+      let items = Hashing.sourceTopLevelItems parsed'
       E.evaluate (length items)
 
     _ <- measureRepeated statsEnabled "hash_extract_impl_items" reps $ do
       tchecked' <- readIORef tcheckedRef
-      let items = Hashing.topLevelItems tchecked'
+      let items = Hashing.topLevelItems owners tchecked'
       E.evaluate (length items)
 
     _ <- measureRepeated statsEnabled "hash_ast_src" reps $ do
@@ -634,7 +639,7 @@ runHashBreakdown reps typesPath sourcePath = do
     _ <- measureRepeated statsEnabled "hash_finish_module_hashes" reps $ do
       nameHashes' <- readIORef nameHashesRef
       let modulePubHash = Hashing.modulePubHashFromIface nmod nameHashes'
-          moduleImplHash = Hashing.moduleImplHashFromNameHashes nameHashes'
+          moduleImplHash = Hashing.moduleImplHashFromNameHashes InterfaceFiles.emptyModuleHashInfo nameHashes'
       E.evaluate (rnf (modulePubHash, moduleImplHash))
       return (B.length modulePubHash + B.length moduleImplHash)
 
@@ -642,7 +647,7 @@ runHashBreakdown reps typesPath sourcePath = do
       nameKeys' <- readIORef nameKeysRef
       pubHashes' <- readIORef pubHashesRef
       implHashes' <- readIORef implHashesRef
-      let moduleHashes = Hashing.moduleHashesFromHashMaps nmod nameKeys' pubHashes' implHashes'
+      let moduleHashes = Hashing.moduleHashesFromHashMaps nmod InterfaceFiles.emptyModuleHashInfo nameKeys' pubHashes' implHashes'
       E.evaluate (rnf moduleHashes)
       return (B.length (fst moduleHashes) + B.length (snd moduleHashes))
 
@@ -769,6 +774,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       benchGopts
       opts
       False
+      False
       paths
       env0
       parsed
@@ -800,7 +806,9 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
         (do
             s3 <- getStats statsEnabled
             t3 <- getCurrentTime
-            (_mtime, mtiming) <- Compile.runBackPasses benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job) (return True)
+            (_mtime, mtiming) <- Compile.runBackPasses
+              benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job)
+              (\action -> action >> return True) (\_ -> return ())
             t4 <- getCurrentTime
             s4 <- getStats statsEnabled
             elapsed "back" t3 t4

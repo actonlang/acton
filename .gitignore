@@ -16,6 +16,7 @@
 **/zig-cache
 **/.acton.compile.lock
 **/.acton.lock
+**/.acton.output.lock
 **/.build/
 **/*.swp
 **/*.ty
