@@ -17,6 +17,16 @@ class Outer(object):
         self.flag = 99
         self.inner = None
 
+class Payload(object):
+    n: int
+    def __init__(self):
+        self.n = 11
+
+class Carrier(object):
+    load: ?Payload
+    def __init__(self):
+        self.load = Payload()
+
 actor main(env):
     o = Outer()
     ok = True
@@ -53,6 +63,13 @@ actor main(env):
     # unknown attribute name -> None
     if o.__get_attr__("nope") is not None:
         print("FAIL: nope should be None"); ok = False
+
+    # A constructed child observed ONLY through reflection: per-attribute
+    # __init__ slicing must honor the reflection escape like selection does,
+    # or the construction is sliced away and this reads None.
+    c = Carrier()
+    if c.__get_attr__("load") is None:
+        print("FAIL: load is None"); ok = False
 
     if ok:
         print("get_attr ok")

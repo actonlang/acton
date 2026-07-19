@@ -100,5 +100,6 @@ snapshots/output/**
 # tests organized as acton projects; ignore all but source
 test/**/out/**
 test/**/.acton.lock
+test/**/.acton.output.lock
 compiler/acton/test/project/*/out
 compiler/acton/test/root/test
