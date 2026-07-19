@@ -2224,16 +2224,16 @@ readIfaceFromTy paths mn src mHash = do
           _ -> return $ Left (missingIfaceDiagnostics mn src mn)
 
 
--- | Snapshot of expected/recorded impl hashes for generated code.
+-- | Snapshot of expected and recorded hashes for generated code.
 data CodegenStatus = CodegenStatus
   { csExpected :: String
   , csC :: Maybe String
   , csH :: Maybe String
   }
 
--- | Header prefix used to tag generated code with the module impl hash.
+-- | Header prefix used to tag generated code with its exact codegen hash.
 codegenHashTag :: String
-codegenHashTag = "/* Acton impl hash:"
+codegenHashTag = "/* Acton codegen hash:"
 
 -- | Parse a tagged hash line from generated output.
 extractCodegenHash :: String -> Maybe String

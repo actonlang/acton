@@ -131,6 +131,8 @@ nMsg                                = name "Msg"
 nBaseException                      = name "BaseException"
 nException                          = name "Exception"
 nNotImplementedError               = name "NotImplementedError"
+nSerialize                         = name "serialize"
+nDeserialize                       = name "deserialize"
 nStopIteration                      = name "StopIteration"
 nValueError                         = name "ValueError"
 ---
@@ -200,6 +202,8 @@ qnMsg                               = gBuiltin nMsg
 qnBaseException                     = gBuiltin nBaseException
 qnException                         = gBuiltin nException
 qnNotImplementedError              = gBuiltin nNotImplementedError
+qnSerialize                        = gBuiltin nSerialize
+qnDeserialize                      = gBuiltin nDeserialize
 qnStopIteration                     = gBuiltin nStopIteration
 qnValueError                        = gBuiltin nValueError
 ---

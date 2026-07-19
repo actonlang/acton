@@ -73,6 +73,7 @@ library:
     - Acton.Completion
     - Acton.Compile
     - Acton.CommandLineParser
+    - Acton.Converter
     - Acton.Deactorizer
     - Acton.Diagnostics
     - Acton.DocPrinter
@@ -90,12 +91,17 @@ library:
     - Acton.Parser
     - Acton.Printer
     - Acton.QuickType
+    - Acton.Reachability
+    - Acton.ReachabilityRows
+    - Acton.ReachabilityRowsBuilder
+    - Acton.ReachabilityTypes
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Testing
     - Acton.Types
     - Acton.TypeEnv
+    - Acton.WitnessForwarding
     - Acton.WitKnots
     - Acton.Zon
     - Utils
@@ -115,7 +121,6 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
       - -Wno-x-partial
-
 executables:
   compiler-bench:
     main: CompilerBench.hs

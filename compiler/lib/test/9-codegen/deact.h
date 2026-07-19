@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"
