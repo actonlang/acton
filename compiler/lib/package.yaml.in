@@ -83,6 +83,7 @@ library:
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo
+    - Acton.Names
     - Acton.Normalizer
     - Acton.Parser
     - Acton.Printer
