@@ -20,6 +20,7 @@ import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
+import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
 import           System.Timeout (timeout)
@@ -36,6 +37,7 @@ import           Test.Tasty.HUnit
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.DocPrinter as DocP
+import qualified Acton.Hashing as Hashing
 import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
 import qualified Acton.Syntax as A
@@ -175,7 +177,7 @@ stale = statusReported "Stale"
 
 -- | Whether any line reports "<keyword> <module>:" for the given module. The
 -- module name is anchored right after the keyword, so a module name that appears
--- later in some other line (e.g. an "{impl c missing}" codegen delta on a
+-- later in some other line (e.g. a "{codegen c missing}" delta on a
 -- different module's line) cannot cause a cross-module false match.
 statusReported :: T.Text -> T.Text -> T.Text -> Bool
 statusReported keyword out modName =
@@ -501,21 +503,16 @@ heavyClassModule trees =
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
-  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
+  (_sourceMeta, _srcHash, _pubHash, _implHash, _imps, depModules, nameHashes, _roots, _tests, _mdoc) <-
+    InterfaceFiles.readHeader tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') roots tests mdoc nmod tmod
+  InterfaceFiles.updateSourceHashAndNameHashes tyPath srcHash' depModules (f nameHashes')
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
-rewriteTySourceMeta tyPath sourceMeta' = do
-  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' roots tests mdoc nmod tmod
+rewriteTySourceMeta = InterfaceFiles.updateSourceMeta
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
-rewriteTyVersion tyPath version' = do
-  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' roots tests mdoc nmod tmod
+rewriteTyVersion = InterfaceFiles.updateVersion
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
@@ -549,6 +546,48 @@ restoreExternalDeps tyPath depModules nameHashes = do
             M.insertWith merge user ([], [implDep | not (B.null (InterfaceFiles.dniImplHash depInfo))]) m
           merge (p1, i1) (p2, i2) = (p1 ++ p2, i1 ++ i2)
       pure (foldl addImpl (foldl addPub acc (InterfaceFiles.duPubUsers users)) (InterfaceFiles.duImplUsers users))
+
+-- | Move one binding's external dependency rows into the mandatory module
+-- component. Source-level top assignments necessarily have an owner, while
+-- front transformations can introduce ownerless initialization. This helper
+-- exercises the incremental scheduler's persisted module-component path
+-- without inventing source syntax that the language deliberately rejects.
+moveBindingDepsToModuleHash :: FilePath -> String -> IO ()
+moveBindingDepsToModuleHash tyPath binding = do
+  refreshInput <- InterfaceFiles.readImplRefreshInput tyPath
+  let depModules = InterfaceFiles.iriDependencies refreshInput
+      nameHashes = InterfaceFiles.iriNameHashes refreshInput
+      storedModuleHash = InterfaceFiles.iriModuleHashInfo refreshInput
+  selected <- case find ((== binding) . prstr . InterfaceFiles.nhName) nameHashes of
+    Nothing -> assertFailure ("missing binding " ++ binding ++ " in " ++ tyPath) >> error "unreachable"
+    Just info -> return info
+  let withoutBindingDeps info
+        | InterfaceFiles.nhName info == InterfaceFiles.nhName selected = info
+            { InterfaceFiles.nhPubDeps = []
+            , InterfaceFiles.nhImplDeps = []
+            }
+        | otherwise = info
+      updatedNameHashes = map withoutBindingDeps nameHashes
+      implHashes = M.fromList
+        [ (InterfaceFiles.nhName info, InterfaceFiles.nhImplHash info)
+        | info <- updatedNameHashes
+        ]
+      updatedModuleHash = Hashing.finishModuleHash
+        implHashes
+        (InterfaceFiles.mhOwnImplHash storedModuleHash)
+        (InterfaceFiles.mhStatementOwners storedModuleHash)
+        (InterfaceFiles.mhImplLocalDeps storedModuleHash)
+        (InterfaceFiles.nhPubDeps selected)
+        (InterfaceFiles.nhImplDeps selected)
+      updatedImplHash =
+        Hashing.moduleImplHashFromNameHashes updatedModuleHash updatedNameHashes
+  InterfaceFiles.updateImplRefresh tyPath refreshInput
+    InterfaceFiles.ImplRefreshOutput
+      { InterfaceFiles.iroImplementationHash = updatedImplHash
+      , InterfaceFiles.iroModuleHashInfo = updatedModuleHash
+      , InterfaceFiles.iroDependencies = depModules
+      , InterfaceFiles.iroNameHashes = updatedNameHashes
+      }
 
 sourceFileMetaForPath :: FilePath -> IO InterfaceFiles.SourceFileMeta
 sourceFileMetaForPath path = do
@@ -733,11 +772,12 @@ p10_change_a_iface = testCase "10-change-a-iface" $ do
     assertBool "expected pub-change propagation a->b" (T.isInfixOf "pub changes in rebuild.a.aaa" out)
     assertBool "expected pub-change propagation b->c" (T.isInfixOf "pub changes in rebuild.b.baa" out)
 
--- Docstring-only change in an imported module should not rebuild dependents
+-- Docstring-only change in an imported module should not rebuild generated code
 p11_change_b_doc :: TestTree
 p11_change_b_doc = testCase "11-change-b-doc" $ do
-    -- Change only the docstring of a method in b.act; this should recompile b
-    -- (source changed) but not its dependent c (public hash is doc-free).
+    -- Change only the docstring of an unused method in b.act. The front passes
+    -- refresh b's source rows, but neither b's selected code nor dependent c
+    -- changes.
     writeFileUtf8 (srcDir </> "b.act") $ T.unlines
       [ "import a"
       , "def baa():"
@@ -750,11 +790,11 @@ p11_change_b_doc = testCase "11-change-b-doc" $ do
       , "        return 1"
       ]
     out <- buildOut
-    -- Doc-only change to b recompiles b (source changed) but its public hash is
-    -- doc-free, so c stays fresh -- the change does not propagate. a is untouched.
+    -- The public hash is doc-free, so c stays fresh. Since DocInfo is outside
+    -- the active projection, b's generated code stays fresh too.
     assertBool "expected a to stay fresh" (fresh out "rebuild/a")
     assertBool "expected b.act to type check" (typechecked out "rebuild/b")
-    assertBool "expected b.act to compile" (compiled out "rebuild/b")
+    assertBool "did not expect b.act codegen" (not $ compiled out "rebuild/b")
     assertBool "expected c to stay fresh (doc change does not propagate)" (fresh out "rebuild/c")
 
 p12_codegen_stale :: TestTree
@@ -1234,7 +1274,7 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   rewriteFirstLine bH "/* Acton codegen hash: deadbeef */"
   out <- buildOutInArgs proj ["--no-dbp"]
   assertBool "expected single-delta codegen message"
-    (T.isInfixOf "generated code out of date {impl deadbeef ->" out)
+    (T.isInfixOf "generated code out of date {codegen deadbeef ->" out)
   assertBool "expected b.act to compile codegen" (compiled out modB)
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
 
@@ -1242,6 +1282,7 @@ p25_whitespace_change :: TestTree
 p25_whitespace_change = testCase "25-whitespace-only change does not propagate" $ do
   let proj = casesProjDir
       src = casesSrcDir
+      modA = modLabel proj "a"
       modB = modLabel proj "b"
       modC = modLabel proj "c"
   ensureCasesProject
@@ -1271,6 +1312,28 @@ p25_whitespace_change = testCase "25-whitespace-only change does not propagate" 
   out <- buildOutIn proj
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
   assertBool "did not expect c.act to type check" (not (typechecked out modC))
+
+  -- Whole output carries source line mappings, so a source-only change must
+  -- refresh this module even though its semantic implementation is unchanged.
+  -- The raw source hash belongs to the codegen key, not dependency hashes, and
+  -- therefore must not propagate to consumers.
+  _ <- buildOutInArgs proj ["--no-dbp"]
+  writeFileUtf8 (src </> "a.act") $ T.unlines
+    [ "# another comment"
+    , "def foo() -> int:"
+    , "    return 1"
+    ]
+  wholeOut <- buildOutInArgs proj ["--no-dbp"]
+  assertBool "expected a.act whole codegen after source-only change"
+    (compiled wholeOut modA)
+  assertBool "did not expect b.act to type check after source-only change"
+    (not $ typechecked wholeOut modB)
+  assertBool "did not expect c.act to type check after source-only change"
+    (not $ typechecked wholeOut modC)
+  assertBool "did not expect b.act codegen after source-only change"
+    (not $ compiled wholeOut modB)
+  assertBool "did not expect c.act codegen after source-only change"
+    (not $ compiled wholeOut modC)
 
 p26_corrupt_ty_header :: TestTree
 p26_corrupt_ty_header = testCase "26-corrupt .tydb header forces re-parse" $ do
@@ -2355,9 +2418,9 @@ p45_tydb_records_local_name_dependencies =
 
 p46_huge_module_skips_doc_output :: TestTree
 p46_huge_module_skips_doc_output =
-  testCase "46-huge module skips doc output" $ do
+  testCase "46-huge module skips doc output" $
+  withSystemTempDirectory "acton-doc-index" $ \docDir -> do
     let opts = Compile.defaultCompileOptions
-        docDir = casesProjDir </> "doc-index"
     assertBool "doc output should run at the threshold"
       (Compile.shouldGenerateDocOutput opts False Compile.docNameCountThreshold)
     assertBool "doc output should skip above the threshold"
@@ -2366,8 +2429,6 @@ p46_huge_module_skips_doc_output =
       (not (Compile.shouldGenerateDocOutput opts{ C.skip_build = True } False 1))
     assertBool "temporary builds should skip doc output"
       (not (Compile.shouldGenerateDocOutput opts True 1))
-    removeDirIfExists docDir
-    createDirectoryIfMissing True docDir
     DocP.generateDocIndex docDir [(A.modName ["huge"], Just "Huge module", False)]
     index <- T.readFile (docDir </> "index.html")
     assertBool "skipped module should remain visible"
@@ -2386,7 +2447,9 @@ p47_unchanged_dep_reads_module_hashes_only =
     writeHashTraceMain
     buildHashTraceDep depDir
     buildHashTraceRoot
-    out <- buildTraceOutInArgs proj hashTraceBuildArgs
+    -- This case isolates unchanged front-cache validation. Selective back
+    -- passes intentionally read the exact selected name and reachability rows.
+    out <- buildTraceOutInArgs proj (hashTraceBuildArgs ++ ["--no-dbp"])
     let bigTrace = traceLinesForTydb "big_dep/big" out
     assertTraceHas "big_dep.big should be checked by module hash" "module-hashes" bigTrace
     assertTraceLacks "big_dep.big should not scan all name hashes" "name-hash-all" bigTrace
@@ -2501,6 +2564,8 @@ hashTraceBuildArgs = ["--skip-build", "--searchpath", "deps/big/out/types"]
 broadReadMarkers :: [T.Text]
 broadReadMarkers =
   [ "tydb-read all"
+  , "tydb-read iface"
+  , "tydb-read module-rows"
   , "tydb-read public-names"
   , "tydb-read constructors"
   , "tydb-read name-hash-all"
@@ -2758,7 +2823,7 @@ p55_dbp_reads_selected_statements =
         bigLines = traceLinesForTydb "incremental_cases/big" out
         bigForbiddenLines = filter (\line -> any (`T.isInfixOf` line) broadReadMarkers) bigLines
         bigNodeLines = filter (\line -> T.isInfixOf "name-hash" line && T.isInfixOf "Node000A" line) bigLines
-        bigStmtLines = filter (T.isInfixOf "tydb-read stmts") bigLines
+        bigStmtLines = filter (T.isInfixOf "tydb-read selection") bigLines
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
     assertBool ("expected exact Node000A hash lookup in incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       (not (null bigNodeLines))
@@ -2766,6 +2831,10 @@ p55_dbp_reads_selected_statements =
       (not (null bigStmtLines))
     assertEqual ("did not expect broad incremental_cases/big.tydb reads\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
+    buildRes <- runActonIn proj ["build", "--color", "never"]
+    assertExitSuccess "selective subset compiles and links" buildRes
+    runOut <- runBinaryIn proj "small"
+    assertEqual "selective binary output" "844" (T.unpack $ T.strip runOut)
 
 p54_unused_import_reads_no_names :: TestTree
 p54_unused_import_reads_no_names =
@@ -2799,6 +2868,89 @@ p54_unused_import_reads_no_names =
     assertBool ("expected small.act to type check\n" ++ T.unpack out) (typechecked out modSmall)
     assertEqual ("did not expect any broad or name reads from unused incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
+
+p56_module_dep_impl_change_refreshes_back :: TestTree
+p56_module_dep_impl_change_refreshes_back =
+  testCase "56-module dependency impl change refreshes back passes" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        modMain = modLabel proj "main"
+        tyMain = proj </> "out" </> "types" </> casesProjName </> "main.tydb"
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject proj "libfoo"
+    let depSrc = depDir </> "src" </> "lib.act"
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def calculate() -> int:"
+      , "    return 1"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import libfoo.lib"
+      , ""
+      , "value = libfoo.lib.calculate()"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(value)"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial module dependency build" res1
+    moveBindingDepsToModuleHash tyMain "value"
+    moduleHash <- InterfaceFiles.readModuleHashInfo tyMain
+    assertDepsContain "module impl deps" ["libfoo.lib.calculate"]
+      (map (prstr . fst) $ InterfaceFiles.mhImplDeps moduleHash)
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def calculate() -> int:"
+      , "    return 2"
+      ]
+    res2@(_ec2, out2) <-
+      runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitSuccess "rebuild after module dependency impl change" res2
+    assertBool ("expected module impl-change refresh\n" ++ T.unpack out2)
+      (T.isInfixOf "impl changes in libfoo.lib.calculate" out2)
+    assertBool ("did not expect main.act to rerun front passes\n" ++ T.unpack out2)
+      (not $ typechecked out2 modMain)
+    assertBool ("expected main.act to rerun back passes\n" ++ T.unpack out2)
+      (compiled out2 modMain)
+
+p57_module_dep_pub_change_reruns_front :: TestTree
+p57_module_dep_pub_change_reruns_front =
+  testCase "57-module dependency pub change reruns front passes" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        tyMain = proj </> "out" </> "types" </> casesProjName </> "main.tydb"
+    ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+    depDir <- ensureDepProject proj "libfoo"
+    let depSrc = depDir </> "src" </> "lib.act"
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def calculate() -> int:"
+      , "    return 1"
+      ]
+    writeFileUtf8 (src </> "main.act") $ T.unlines
+      [ "import libfoo.lib"
+      , ""
+      , "value = libfoo.lib.calculate()"
+      , ""
+      , "actor main(env: Env):"
+      , "    print(value)"
+      , "    env.exit(0)"
+      ]
+    res1 <- runActonIn proj ["build", "--color", "never", "--skip-build"]
+    assertExitSuccess "initial module dependency build" res1
+    moveBindingDepsToModuleHash tyMain "value"
+    moduleHash <- InterfaceFiles.readModuleHashInfo tyMain
+    assertDepsContain "module pub deps" ["libfoo.lib.calculate"]
+      (map (prstr . fst) $ InterfaceFiles.mhPubDeps moduleHash)
+    writeFileUtf8 depSrc $ T.unlines
+      [ "def calculate(value: int) -> int:"
+      , "    return value"
+      ]
+    res2@(_ec2, out2) <-
+      runActonIn proj ["build", "--color", "never", "--verbose", "--skip-build"]
+    assertExitFailure "rebuild after module dependency pub change" 1 res2
+    assertBool ("expected module pub-change front refresh\n" ++ T.unpack out2)
+      (T.isInfixOf "pub changes in libfoo.lib.calculate" out2)
+    assertBool ("expected refreshed module call to fail type checking\n" ++ T.unpack out2)
+      (T.isInfixOf "keyword component(s) 'value' is missing in tuple" out2)
 
 -- Main -----------------------------------------------------------------------
 
@@ -2879,5 +3031,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p53_imported_attr_inference_stays_selective
       , p54_unused_import_reads_no_names
       , p55_dbp_reads_selected_statements
+      , p56_module_dep_impl_change_refreshes_back
+      , p57_module_dep_pub_change_reruns_front
       ]
   ]
