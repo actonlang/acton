@@ -1196,7 +1196,7 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
-  rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
+  rewriteFirstLine bC "/* Acton codegen hash: deadbeef */"
   out <- buildOutIn proj
   assertBool "expected codegen stale message" (T.isInfixOf "generated code out of date" out)
   assertBool "expected b.act to compile codegen" (compiled out modB)
@@ -1230,8 +1230,8 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   -- The single-delta message is emitted by the EAGER codegen refresh; under
   -- default-on DBP the module would be deferred, so pin this path explicitly.
   _ <- buildOutInArgs proj ["--no-dbp"]
-  rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
-  rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
+  rewriteFirstLine bC "/* Acton codegen hash: deadbeef */"
+  rewriteFirstLine bH "/* Acton codegen hash: deadbeef */"
   out <- buildOutInArgs proj ["--no-dbp"]
   assertBool "expected single-delta codegen message"
     (T.isInfixOf "generated code out of date {impl deadbeef ->" out)

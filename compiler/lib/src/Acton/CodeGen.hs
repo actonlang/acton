@@ -17,7 +17,6 @@ module Acton.CodeGen where
 import qualified Data.Set
 import qualified Data.HashSet as HashSet
 import qualified Data.List
-import qualified Data.Map.Strict as Map
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -30,6 +29,7 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Subst
+import qualified Acton.WitnessForwarding as Forward
 import qualified Acton.Boxing as B
 import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
@@ -38,18 +38,20 @@ import Numeric
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
 
-generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
-generate env srcbase srcText emitLines m hash = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> [Name] -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
+generate env declarations srcbase srcText emitLines m@(Module mn _ _ stmts) hash = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
-        h                           = render $ hashComment $+$ hModule env0 m
+        hashComment                 = text "/* Acton codegen hash:" <+> text hash <+> text "*/"
+        h                           = render $ hashComment $+$ hModule env0 declarations m
         c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
-        env0                        = genEnv $ setMod (modname m) env
+        env0                        = genEnv forwardContext $ setMod mn env
+        classEnv                    = [ ni | ni@(_,NClass{}) <- envOf stmts ]
+        forwardContext              = Forward.buildForwardContext (define classEnv $ setMod mn env) (dom classEnv)
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
-  where env                         = genEnv $ setMod m env0
+  where env                         = genEnv Forward.emptyForwardContext $ setMod m env0
         cInclude                    = text "#include \"rts/common.h\""
         cIncludeMods                = include env "out/types" m
         cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
@@ -107,9 +109,10 @@ builtinStaticKey gn                 = case gn of
 
 -- Environment --------------------------------------------------------------------------------------
 
-genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
+genEnv forwarding env0             = setX env0 GenX{ globalX = HashSet.empty,
                                                       localX = HashSet.empty,
-                                                      retX = tNone, volVarsX = [], lineEmitX = Nothing }
+                                                      retX = tNone, volVarsX = [], lineEmitX = Nothing,
+                                                      forwardingX = forwarding }
 
 type GenEnv                         = EnvF GenX
 
@@ -118,6 +121,7 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , retX :: Type
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
+                                           , forwardingX :: Forward.ForwardContext
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -221,16 +225,23 @@ storageType env t                   = rawType env t
 
 -- Header -------------------------------------------------------------------------------------------
 
-hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
+hModule env declarations (Module m imps _ stmts)
+                                    = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "out/types") $ modNames imps) $+$
+                                      vcat (map (compactDeclaration env) declarationOnly) $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
   where env1                        = classdefine stmts env
+        classNames                  = [ n | (n,NClass{}) <- envOf stmts ]
+        declarationOnly             = uniqueNames [ n | n <- declarations, n `notElem` classNames ]
+
+compactDeclaration env n           = text "struct" <+> genTopName env n <> semi $+$
+                                      text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 
 
 hSuite phase env []                 = empty
@@ -268,7 +279,7 @@ decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
                                     = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 decl env Typedef{}                  = empty
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
-                                      constub env t n r b $+$
+                                      constub env t n q r b $+$
                                       vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
         b'                          = vsubst [(tvSelf, tCon c)] b
@@ -277,10 +288,10 @@ methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classn
 methstub env Def{}                  = empty
 methstub env Typedef{}              = empty
 
-constub env t n r b
+constub env t n q r b
   | null ns || hasNotImpl b         = rawType env t <+> newcon env n <> parens (rawParams env r) <> semi
   | otherwise                       = empty
-  where ns                          = abstractAttrs env (NoQ n)
+  where ns                          = unforwardedAbstracts env n q
 
 methodDefStub env (Def _ n q p KwdNIL (Just t) _ d fx _)
                                     = t3 <+> genTopName env n <> parens (genPosPar env n d t1 p) <> semi
@@ -307,7 +318,9 @@ fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
         field (n, NDef sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NDef sc NoDec _)  
                                     = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
-        field (n, NVar t)           = varsig env n t <> semi
+        field (n, NVar t)
+          | isWitness n             = empty
+          | otherwise               = varsig env n t <> semi
         field (n, NSig sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc NoDec _)  = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc Property _)
@@ -675,8 +688,8 @@ initGlobalDoc env s                 = genStmt1 env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$
-                                      vcat [ forward n | ForwardSlot n _ _ _ _ <- forwardSlots env c q ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c), not (isWitness n) ] $+$
+                                      vcat [ forward (Forward.forwardSlotName plan) | plan <- forwardSlots env c q ]
   where tc                          = TC (NoQ c) [ tVar v | QBind v _ <- q ]
         super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n
@@ -697,7 +710,8 @@ initClass env c q (Signature{} : ss) b = initClass env c q ss b
 initClass env c q (s : ss) b
   | isNotImpl s                     = initClass env c q ss b
   | otherwise                       = genStmt1 env s $+$
-                                      vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
+                                      vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi
+                                           | (n,_) <- te, not (isWitness n) ] $+$
                                       initClass env1 c q ss b
   where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env
@@ -716,110 +730,37 @@ methodCast env c q n                = case lookup n (fullAttrEnv env tc) of
   where tc                          = TC (NoQ c) (map tVar $ qbound q)
         rt                          = B.rtypeOf env tc n
 
--- Protocol witness classes can inherit abstract slots through more than one
--- protocol path.  If the target witness does not implement such a slot itself
--- and normal inheritance did not fill it, generate a small forwarding wrapper
--- that calls the same slot on a concrete provider witness.  The wrapper keeps
--- the target table ABI while avoiding unsafe casts of the target witness to the
--- provider witness type.
-data ForwardSlot                    = ForwardSlot Name Type TCon Doc Type
-
 forwardName c n                     = Derived c (Derived (name "$forward") n)
 
 forwardDecls env c q                = vcat [ forwardDecl env c q f | f <- forwardSlots env c q ]
 
-forwardDecl env c q (ForwardSlot n targetSlot providerTc providerExpr providerSlot)
+forwardDecl env c q plan
                                     = text "static" <+> forwardResult env targetSlot <+> genTopName env (forwardName c n) <> parens (repPar env paramNames (posrow targetSlot)) <+> char '{' $+$
                                       nest 4 (gen env (tCon providerTc) <+> gen env providerV <+> equals <+> providerValue <> semi $+$
                                               text "return" <+> providerCall <> semi) $+$
                                       char '}'
-  where paramNames                  = take (arity $ posrow targetSlot) forwardParamNames
+  where n                           = Forward.forwardSlotName plan
+        targetSlot                  = Forward.forwardTargetSlot plan
+        providerTc                  = Forward.forwardProviderType plan
+        providerSlot                = Forward.forwardProviderSlot plan
+        providerExpr                = foldl forwardStep (rootWitnessExpr env $ tcname $ Forward.forwardProviderRoot plan)
+                                      (Forward.forwardProviderSteps plan)
+        forwardStep expr step       = expr <> text "->" <> gen env (Forward.forwardStepField step)
+        paramNames                  = take (arity $ posrow targetSlot) forwardParamNames
         providerArgs                = hsep $ punctuate comma $ map (gen env) (drop 1 paramNames)
         providerValue               = parens (gen env (tCon providerTc)) <> parens providerExpr
         providerCall                = parens (parens (funsig2 env Nothing providerSlot) <> gen env providerV <> text "->" <> gen env classKW <> text "->" <> gen env n) <>
                                       parens (gen env providerV <> comma' providerArgs)
 
--- Missing slots are only forwarded for generated witness classes, and only
--- when the provider slot has the same ABI after removing the witness argument.
 forwardSlots env c q
-  | not $ forwardClass c            = []
-  | otherwise                       = [ ForwardSlot n targetSlot providerTc providerExpr providerSlot
-                                      | (n, i) <- fullAttrEnv env tc,
-                                        forwardTarget i,
-                                        forwardableSlot n,
-                                        n `notElem` inherited,
-                                        n `notElem` direct,
-                                        Just targetSlot <- [slotType env tc n],
-                                        Just (providerTc, providerExpr, providerSlot) <- [forwardProvider env providers tc n targetSlot] ]
+                                    = Forward.forwardPlans env (forwardingX $ envX env) tc
   where tc                          = TC (NoQ c) (map tVar $ qbound q)
-        inherited                   = [ n | (_, n) <- inheritedAttrs env (NoQ c) ]
-        direct                      = directNoDecMethods env (NoQ c)
-        providers                   = providerObjects env
 
-slotType env tc n                   = case lookup n (fullAttrEnv env tc) of
-                                        Just (NDef _ Static _) -> Just rt
-                                        Just (NSig _ Static _) -> Just rt
-                                        Just (NDef _ NoDec _)  -> Just $ vsubst [(tvSelf, tCon tc)] $ addSelf rt (Just NoDec)
-                                        Just (NSig _ NoDec _)  -> Just $ vsubst [(tvSelf, tCon tc)] $ addSelf rt (Just NoDec)
-                                        _                     -> Nothing
-  where rt                          = B.rtypeOf env tc n
-
--- Pick the first concrete witness that already provides the requested slot for
--- the same protocol/type owner.  This still permits a sibling witness such as
--- Ord[str] to fill an Eq[str] slot in Hashable[str], but excludes unrelated
--- classes that only happen to have the same method name and ABI.
-forwardProvider env providers targetTc n targetSlot
-                                    = first [ (providerTc, providerExpr, providerSlot)
-                                            | ownerTc <- slotOwners env targetTc n,
-                                              (providerTc, providerExpr) <- providers,
-                                              providerTc /= targetTc,
-                                              providerCoversOwner env providerTc ownerTc,
-                                              concreteProvider env providerTc n,
-                                              Just providerSlot <- [slotType env providerTc n],
-                                              compatibleSlots targetSlot providerSlot ]
-
-slotOwners env targetTc n           = [ ownerTc
-                                      | (_, ownerTc) <- tail (findAncestry env targetTc),
-                                        ownsSlotDirectly env ownerTc n ]
-
-ownsSlotDirectly env tc n           = case findAttrInfoIn n te of
-                                        Just NDef{}  -> True
-                                        Just NSig{}  -> True
-                                        Just NVar{}  -> True
-                                        Just NSVar{} -> True
-                                        _            -> False
-  where (_, te)                     = findCon env tc
-
-providerCoversOwner env providerTc ownerTc
-                                    = any ((== ownerTc) . snd) (findAncestry env providerTc)
-
-providerObjects env                 = concat [ providerRoot qn q | (qn, q) <- allClasses env, nullConArgs env qn ]
-  where providerRoot qn q           = walk [] rootExpr rootTc
-          where rootTc              = TC qn (map tVar $ qbound q)
-                rootExpr            = rootWitnessExpr env qn
-        walk seen expr tc
-          | tcname tc `elem` seen   = []
-          | otherwise               = (tc, expr) : concat [ walk (tcname tc : seen) (expr <> text "->" <> gen env w) tc'
-                                                          | (w, tc') <- witnessFields env tc ]
-
--- Not to intrude in Types.hs, we accept that we do not have the complete list of witnesses in Env
--- For completing method tables, we start with all classes in the program but filter to only consider ancestor witness classes.
-allClasses env                      = active ++ closed ++ mods
-  where active                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- activeNames env ]
-        closed                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- closedNames env ]
-        -- modulePublicTEnv resolves through each module's lookup function, so
-        -- entries rewritten by earlier passes are seen in converted form.
-        mods                        = [ (GName m n, q) | (m, mi) <- Map.toList (modules env),
-                                                         (n, NClass q _ _ _) <- modulePublicTEnv mi ]
-
-nullConArgs env qn                  = case findQName qn env of
-                                        NClass _ _ te _ -> case lookup initKW te of
-                                                             Just (NDef sc _ _) -> initArity sc == 0
-                                                             Just (NSig sc _ _) -> initArity sc == 0
-                                                             _                  -> False
-                                        _               -> False
-  where initArity (TSchema _ _ (TFun _ _ r _ _)) = arity r
-        initArity _                              = 1
+unforwardedAbstracts env c q        = [ n
+                                      | n <- abstractAttrs env (NoQ c)
+                                      , n `notElem` forwarded
+                                      ]
+  where forwarded                   = map Forward.forwardSlotName (forwardSlots env c q)
 
 rootWitnessExpr env (NoQ n)
   | inBuiltin env                   = staticwitness env (gname env n)
@@ -828,57 +769,6 @@ rootWitnessExpr env qn@(GName m n)
   | m == mBuiltin                   = staticwitness env qn
   | otherwise                       = newcon' env qn <> parens empty
 rootWitnessExpr env qn              = newcon' env qn <> parens empty
-
-witnessFields env tc                = [ (n, tc') | (n, i) <- fullAttrEnv env tc,
-                                                  isWitness n,
-                                                  TCon _ fieldTc <- [fieldType i],
-                                                  tc' <- witnessTargets env tc fieldTc ]
-  where fieldType (NDef sc Property _)  = sctype sc
-        fieldType (NSig sc Property _)  = sctype sc
-        fieldType (NVar t)              = t
-        fieldType (NSVar t)             = t
-        fieldType _                     = tWild
-
--- Witness fields are often typed as an abstract protocol witness.  Prefer the
--- concrete generated witness named by convention when it exists, but keep the
--- declared field type as a fallback.
-witnessTargets env ownerTc fieldTc  = case concreteWitnessTarget env ownerTc fieldTc of
-                                        Just tc -> [tc, fieldTc]
-                                        Nothing -> [fieldTc]
-
-concreteWitnessTarget env ownerTc fieldTc
-                                    = case classQBinds env qn of
-                                        Just q  -> Just $ TC qn (take (length $ qbound q) (tcargs ownerTc ++ tcargs fieldTc))
-                                        Nothing -> Nothing
-  where qn                          = derivedWitnessQName (tcname ownerTc) (tcname fieldTc)
-
-derivedWitnessQName (NoQ owner) field
-                                    = NoQ (Derived (noq field) owner)
-derivedWitnessQName (GName m owner) field
-                                    = GName m (Derived (noq field) owner)
-derivedWitnessQName (QName m owner) field
-                                    = GName m (Derived (noq field) owner)
-
-classQBinds env (NoQ n)             = case lookupName n env of
-                                        Just (NClass q _ _ _) -> Just q
-                                        _                     -> Nothing
-classQBinds env (GName m n)         = case lookupModuleInfo m env >>= \mi -> moduleLookupName mi n of
-                                        Just (NClass q _ _ _) -> Just q
-                                        _                     -> Nothing
-classQBinds env (QName m n)         = classQBinds env (GName m n)
-
-concreteProvider env tc n           = case lookup n (fullAttrEnv env tc) of
-                                        Just (NDef _ _ _) -> True
-                                        Just (NVar _) -> True
-                                        Just (NSVar _) -> True
-                                        _           -> False
-
-compatibleSlots (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                    = fx1 == fx2 && k1 == k2 && t1 == t2 && dropFirstRow p1 == dropFirstRow p2
-compatibleSlots _ _                 = False
-
-dropFirstRow (TRow _ _ _ _ r)       = r
-dropFirstRow r                      = r
 
 forwardResult env (TFun _ fx _ _ t) = repType env (exposeMsg fx t)
 forwardResult _ _                   = empty
@@ -891,19 +781,6 @@ repPar env (n : _) (TRow _ _ _ t TVar{})
                                     = repType env t <+> gen env n
 repPar _ _ TNil{}                   = empty
 repPar _ _ _                        = empty
-
-forwardTarget (NDef _ NoDec _)      = True
-forwardTarget (NSig _ NoDec _)      = True
-forwardTarget _                     = False
-
-forwardableSlot n                   = n `notElem` ([initKW, serializeKW, deserializeKW] ++ valueKWs)
-
-forwardClass Derived{}              = True
-forwardClass _                      = False
-
-directNoDecMethods env qn           = case findQName qn env of
-                                        NClass _ _ te _ -> [ n | (n, NDef _ NoDec _) <- te ]
-                                        _               -> []
 
 forwardParamNames                   = [ name ("fw_" ++ show i) | i <- [(0 :: Int)..] ]
 providerV                           = name "fw_provider"
@@ -1532,7 +1409,8 @@ staticWitnessValue env e            = case staticWitnessName e of
 -- by an ancestor protocol class, so the concrete implementation is resolved
 -- here and cast back to the target slot ABI.
 staticWitnessSlotType env tc n rt
-  | Just slot <- slotType env tc n   = slot
+  | Just slot <- Forward.slotType env tc n
+                                    = slot
   | otherwise                       = addWitness rt
   where addWitness (TFun l fx r k t)= TFun l fx (posRow (tCon tc) r) k t
         addWitness t                = t
@@ -1565,7 +1443,7 @@ directMethodImpl env qn n           = case findQName qn env of
                                         Just NDef{} -> True
                                         _           -> False
 
-schematicClass env qn               = case classQBinds env qn of
+schematicClass env qn               = case Forward.classQBinds env qn of
                                         Just q  -> TC qn (map tVar $ qbound q)
                                         Nothing -> TC qn []
 
@@ -1743,7 +1621,7 @@ declCon env n q b
                                       text "return" <+> gen env tmpV <> semi
         retobj (PosArg e p)         = PosArg (eCall (tApp (eQVar primCONSTCONT) [tObj]) [eVar tmpV, e]) p
         env1                        = ldefine ((tmpV, NVar tObj) : envOf pars) env
-        abstr                       = abstractAttrs env (NoQ n)
+        abstr                       = unforwardedAbstracts env n q
 
 acton_malloc env n                  = text "acton_malloc" <> parens (text "sizeof" <> parens (text "struct" <+> gen env n))
 

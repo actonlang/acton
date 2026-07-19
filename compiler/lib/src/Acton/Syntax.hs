@@ -26,7 +26,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,34]
+version = [0,35]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -170,7 +170,7 @@ modPath (ModName ns) = map nstr ns
 modCat (ModName ns) n = ModName (ns++[n])
 
 instance Ord ModName where
-    compare a b = compare (modPath a) (modPath b)
+    compare (ModName as) (ModName bs) = compare as bs
 
 instance Data.Hashable.Hashable ModName where
     hashWithSalt s (ModName ns) = Data.Hashable.hashWithSalt s ns
