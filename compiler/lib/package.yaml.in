@@ -95,6 +95,8 @@ library:
     - Acton.ReachabilityRows
     - Acton.ReachabilityRowsBuilder
     - Acton.ReachabilityTypes
+    - Acton.SelectiveBack
+    - Acton.SelectiveWorklist
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
