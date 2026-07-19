@@ -1912,6 +1912,11 @@ void $register_rts () {
   $register(&$DoneG_methods);
   $register(&$InitRootG_methods);
   $register(&B_EnvG_methods);
+  // $Fail$instance ends up in message $cont slots when an exception propagates
+  // to a waiting actor ($RFAIL wake, and the await-on-failed-message path). It
+  // must be registered like $Done, or serializing such a message emits no
+  // header row for the $cont field and the blob misaligns on recovery.
+  $register(&$FailG_methods);
 }
  
 ////////////////////////////////////////////////////////////////////////////////////////

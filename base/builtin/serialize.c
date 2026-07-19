@@ -87,6 +87,10 @@ $ROW $add_header(int class_id, int blob_size, $Serial$state state) {
 void $step_serialize($WORD self, $Serial$state state) {
     if (self) {
         int class_id = $GET_CLASSID((($Serializable)self)->$class);
+        if (class_id == UNASSIGNED)
+            // An unregistered class would serialize without a header row, silently
+            // misaligning the blob and corrupting deserialization. Fail loudly.
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: class not registered")));
         if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
             if (!state->globmap && issubtype(class_id, ACTOR_ID))
                 // This also catches Msg or Cont because they reference the target actor transitively
