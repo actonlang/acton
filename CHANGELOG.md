@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+### Language
+- Add `type` aliases for naming existing types, including parameterized
+  aliases such as `type Dict[K(Hashable)] = dict[K, str]`, so annotations,
+  casts, imports, witness resolution, generated docs, and completion can use
+  alias names while the compiler expands them for checking. [#3026]
+- Treat top-level statement initiators such as `actor`, `class`, `extension`,
+  `from`, `import`, `protocol`, and `type` as soft keywords, so they can be
+  used as parameter or local names when they are not starting a declaration or
+  import. [#3027]
+
+### Compiler & Build
+- Commit cached module-interface rows synchronously before reporting a module's
+  front pass as complete, making `.tydb` writes part of front-pass completion
+  and reporting write failures as normal compiler diagnostics. [#3019]
+- Compile pure lambdas that return tuples without crashing eta reduction when
+  the lambda parameter itself is not tuple-typed. [#3024]
+
+### CLI & Project Workflow
+- Show local project signatures without the project-prefix in `acton sig`
+  output, including imports and nested type and witness references. [#3030]
+
+### Runtime & Standard Library
+- Fix `str.splitlines()` linebreak detection so newline and CRLF-separated
+  strings split into the expected lines. [#3023]
+- Register failed continuations for serialization and reject unregistered
+  classes during serialization, preventing silent DB recovery corruption when
+  exceptions propagate to waiting actors. [#3031]
+
 ## [0.29.0] - 2026-07-10
 
 This release drastically improves compile times for modules that import very
@@ -4634,6 +4664,13 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3014]: https://github.com/actonlang/acton/pull/3014
 [#3015]: https://github.com/actonlang/acton/pull/3015
 [#3017]: https://github.com/actonlang/acton/pull/3017
+[#3019]: https://github.com/actonlang/acton/pull/3019
+[#3023]: https://github.com/actonlang/acton/pull/3023
+[#3024]: https://github.com/actonlang/acton/pull/3024
+[#3026]: https://github.com/actonlang/acton/pull/3026
+[#3027]: https://github.com/actonlang/acton/pull/3027
+[#3030]: https://github.com/actonlang/acton/pull/3030
+[#3031]: https://github.com/actonlang/acton/pull/3031
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
