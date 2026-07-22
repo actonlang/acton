@@ -28,7 +28,7 @@ class L_4action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin_
     # (recursive group)
 proc def L_5C_3cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_4res : UNBOXED __builtin__.int) -> $R:
     v: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_4res)
-    m: __builtin__.Msg[__builtin__.int] = cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 2)))
+    m: __builtin__.Future[__builtin__.int] = cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 2)))
     N_tmp: UNBOXED __builtin__.int = ((UNBOX __builtin__.int v) * (UNBOX __builtin__.int 10))
     return $R_CONT@[__builtin__.int](C_cont, (BOX __builtin__.int N_tmp))
 class L_6Cont ($Cont[__builtin__.int], __builtin__.value):
@@ -354,7 +354,7 @@ class main ($Actor, __builtin__.value):
     @property
     b : Bepa
     @property
-    x : __builtin__.Msg[__builtin__.int]
+    x : __builtin__.Future[__builtin__.int]
     @property
     r : __builtin__.int
     proc def __init__ (self : main, C_cont : $Cont[None], env : __builtin__.Env) -> $R:

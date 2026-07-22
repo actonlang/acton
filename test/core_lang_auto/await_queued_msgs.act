@@ -7,7 +7,7 @@
 #    go() turn and flushed at the $RWAIT — FLUSH_outgoing_local ENQ_msgs
 #    them onto main's OWN mailbox, tail-appended behind the parked __init__
 #    head frame.
-#  - Parked semantics: while main sits in $RWAIT on produce()'s message,
+#  - Parked semantics: while main sits in $RWAIT on produce()'s future,
 #    those envelopes must not be dispatched (the mailbox head is only
 #    advanced by DEQ_msg at $RDONE / final $RFAIL). The awaited-guard in
 #    ping() converts any early execution — e.g. a control-queue rewrite

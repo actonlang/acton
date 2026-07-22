@@ -2,8 +2,9 @@
 # kinds — plus the genuinely waiter-less failure and producer survival.
 #
 # RTS coverage:
-#  - Waiter-less failure: boom() raises with NO waiter registered: $RFAIL
-#    no-catcher arm freezes the message as an exception, the propagation loop
+#  - Waiter-less failure: boom() raises with NO waiter registered: the $RFAIL
+#    no-catcher arm delivers the exception into the envelope's future and
+#    freezes it (FREEZE_waiting(fut, FUT_EXCEPTION)); the propagation loop
 #    iterates zero times, and — uniquely in this suite — the "Unhandled
 #    exception" stderr notice prints (the branch taken only when
 #    FREEZE_waiting returns an empty list). Prod then DEQ_msgs and continues
@@ -13,9 +14,9 @@
 #    await runs, and asserts the producer still answers after an unhandled
 #    failure.
 #  - Frozen-exception reads: both Rel's `await fut` and main's own
-#    check_self() hit the $RWAIT frozen-exception fast arm: ADD_waiting finds
-#    the message frozen-exceptional, the parked frame's cont is set to
-#    $Fail$instance with the stored exception as value, and the awaiter is
+#    check_self() hit the $RWAIT frozen-exception fast arm: ADD_waiting
+#    declines (the future is already FUT_EXCEPTION), the parked frame's cont is
+#    set to $Fail$instance with fut->value (the exception), and the awaiter is
 #    immediately ENQ_readyd. Resume runs $Fail$instance -> $R_FAIL ->
 #    $RFAIL-with-catcher into the $PUSH_C catcher for the enclosing try ->
 #    typed except -> -1. Without this test, the frozen-exception arm is

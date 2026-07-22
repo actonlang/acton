@@ -3,16 +3,18 @@
 #
 # RTS coverage:
 #  - Zero-waiter freeze: produce() is issued in main's __init__ turn and
-#    completes while nobody awaits: its $RDONE runs FREEZE_waiting on an
-#    empty waiter list (the wake loop iterates zero times) and the value must
-#    be retained on the frozen message.
+#    completes while nobody awaits: its $RDONE delivers the value into the
+#    envelope's future (m->$fut) and FREEZE_waiting(fut, FUT_VALUE) returns an
+#    empty waiter list (the wake loop iterates zero times). The envelope is
+#    consumed (DEQ_msg) but the value must be retained on the future, which
+#    lives on in x.
 #  - Structural determinism: phase2's warm = b.produce() is a fresh sync
 #    round trip; Prod's mailbox is FIFO (ENQ_msg tail-append), so warm
 #    returning proves the original produce was consumed and frozen — under
 #    any load, with no reliance on the 0.3s timer figure.
 #  - Foreign frozen read: Rel's `await fut` inside consume takes the $RWAIT
-#    frozen-value fast arm: ADD_waiting finds the message frozen, the stored
-#    value is copied into Rel's parked frame, and Rel is immediately
+#    frozen-value fast arm: ADD_waiting declines (the future is already
+#    FUT_VALUE), x->value is copied into Rel's parked frame, and Rel is immediately
 #    ENQ_readyd — no waiter registration, no involvement of the producer.
 #  - Creator frozen read across turns: x lives in actor state (deactorized to
 #    a main attribute); phase2 arrives via the timer path (ENQ_timed ->

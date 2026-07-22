@@ -297,12 +297,12 @@ clCell              = NClass [qbind a] (leftpath [cObject, cValue]) te Nothing
 --  class $Actor (): pass
 clActor             = NClass [] (leftpath [cValue]) te Nothing
   where te          = [ (primKW "next",       NSig (monotype tActor) Property Nothing),
-                        (primKW "msg",        NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "msg_tail",   NSig (monotype (tMsg tWild)) Property Nothing),
+                        (primKW "msg",        NSig (monotype $ tCon $ TC (gBuiltin (name "Msg")) []) Property Nothing),
+                        (primKW "msg_tail",   NSig (monotype $ tCon $ TC (gBuiltin (name "Msg")) []) Property Nothing),
                         (primKW "msg_lock",   NSig (monotype $ tCon $ TC (gPrim "Lock") []) Property Nothing),
                         (primKW "affinity",   NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
-                        (primKW "outgoing",   NSig (monotype (tMsg tWild)) Property Nothing),
-                        (primKW "waitsfor",   NSig (monotype (tMsg tWild)) Property Nothing),
+                        (primKW "outgoing",   NSig (monotype $ tCon $ TC (gBuiltin (name "Msg")) []) Property Nothing),
+                        (primKW "waitsfor",   NSig (monotype (tFuture tWild)) Property Nothing),
                         (primKW "consume_hd", NSig (monotype $ tCon $ TC (gPrim "int64") []) Property Nothing),
                         (primKW "catcher",    NSig (monotype $ tCon $ TC (gPrim "Catcher") []) Property Nothing),
                         (primKW "globkey",    NSig (monotype $ tCon $ TC (gPrim "long") []) Property Nothing),
@@ -352,9 +352,9 @@ scAFTERf            = tSchema [qbind a] tAFTER
         a           = TV KType $ name "A"
         tFun'       = tFun fxProc posNil kwdNil (tVar a)
 
---  $AWAITf         : [A] => proc(Msg[A]) -> A
+--  $AWAITf         : [A] => proc(Future[A]) -> A
 scAWAITf            = tSchema [qbind a] tAWAIT
-  where tAWAIT      = tFun fxProc (posRow (tMsg $ tVar a) posNil) kwdNil (tVar a)
+  where tAWAIT      = tFun fxProc (posRow (tFuture $ tVar a) posNil) kwdNil (tVar a)
         a           = TV KType $ name "T"
 
 
@@ -372,9 +372,9 @@ scAFTERc            = tSchema [qbind a] tAFTER
         tCont'      = tFun fxProc (posRow tCont'' posNil) kwdNil tR
         tCont''     = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
---  $AWAITc         : [A] => proc(proc(A)->$R, Msg[A]) -> $R
+--  $AWAITc         : [A] => proc(proc(A)->$R, Future[A]) -> $R
 scAWAITc            = tSchema [qbind a] tAWAIT
-  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tFuture $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tFun fxProc (posRow (tVar a) posNil) kwdNil tR
 
@@ -393,9 +393,9 @@ scAFTER             = tSchema [qbind a] tAFTER
         tCont'      = tCont tCont''
         tCont''     = tCont (tVar a)
 
---  $AWAIT          : [A] => proc($Cont[A], Msg[A]) -> $R
+--  $AWAIT          : [A] => proc($Cont[A], Future[A]) -> $R
 scAWAIT             = tSchema [qbind a] tAWAIT
-  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tMsg $ tVar a) posNil) kwdNil tR
+  where tAWAIT      = tFun fxProc (posRow tCont' $ posRow (tFuture $ tVar a) posNil) kwdNil tR
         a           = TV KType $ name "A"
         tCont'      = tCont (tVar a)
 

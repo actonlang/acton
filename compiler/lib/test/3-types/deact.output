@@ -14,7 +14,7 @@ actor Apa ():
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("compute",), sep = None, end = None, err = None, flush = None)
         v: __builtin__.int = cb(W_Apa_39.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
+        m: __builtin__.Future[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
         return W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
     proc def notice (i : __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](*("notice",), sep = None, end = None, err = None, flush = None)
@@ -36,7 +36,7 @@ actor main (env : __builtin__.Env):
     b: Bepa = Bepa()
     print@[(__builtin__.str,)](*("-----",), sep = None, end = None, err = None, flush = None)
     a.setup(cb = action lambda (G_1y : __builtin__.int): a.notice(i = G_1y))
-    x: __builtin__.Msg[__builtin__.int] = (async action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): a.compute(cb = G_1p))(action lambda (G_1y : __builtin__.int): b.callback(i = G_1y))
+    x: __builtin__.Future[__builtin__.int] = (async action lambda (G_1p : action(__builtin__.int) -> __builtin__.int): a.compute(cb = G_1p))(action lambda (G_1y : __builtin__.int): b.callback(i = G_1y))
     r: __builtin__.int = await x
     print@[(__builtin__.str, __builtin__.int)](*("r =", r), sep = None, end = None, err = None, flush = None)
     a.compute(cb = action lambda (G_1y : __builtin__.int): $WRAP@[(), (i: __builtin__.int), __builtin__.int](self, myproc)(i = G_1y))

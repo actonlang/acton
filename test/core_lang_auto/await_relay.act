@@ -5,21 +5,23 @@
 #
 # RTS coverage (rts.c wt_work_cb dispatch, q.c queues):
 #  - Deterministic pending park of main: c.consume(x) lowers to
-#    $ASYNCf+$AWAITf -> $RWAIT, and ADD_waiting(main, consume_msg) runs
-#    BEFORE reverse_outgoing_queue/FLUSH_outgoing_local, so main is on the
-#    consume message's waiter list before Rel has even received it.
+#    $ASYNCf+$AWAITf -> $RWAIT, which registers main on the consume call's
+#    future (ADD_waiting) before FLUSH_outgoing_local delivers the buffered
+#    envelopes (reverse_outgoing_queue only restores program order first) —
+#    so main is on the future's waiter list before Rel has even received the
+#    consume envelope.
 #  - Flush ordering: spin/produce/consume envelopes are PUSH_outgoing'd
 #    (LIFO), restored to program order by reverse_outgoing_queue, and
 #    tail-appended by ENQ_msg; spin keeps Prod's mailbox busy so produce runs
 #    tens of ms later.
 #  - Target path: Rel's `await fut` takes the $RWAIT pending arm
-#    (ADD_waiting under the wait lock finds the message unfrozen); produce's
-#    $RDONE then runs FREEZE_waiting (value) and the waiter wake loop, which
+#    (ADD_waiting under the future's $wait_lock finds it still PENDING);
+#    produce's $RDONE then freezes the future (FUT_VALUE) and the waiter wake loop
 #    writes 42 into Rel's parked consume frame, clears Rel->$waitsfor, and
 #    ENQ_ready(Rel) — all while main stays parked. Rel's consume $RDONE then
 #    repeats freeze+wake with main as the sole waiter.
 #  - Degraded arm (heavily loaded host, spin margin lost): Rel instead hits
-#    the $RWAIT frozen-value fast arm (stored value copied into the parked
+#    the $RWAIT frozen-value fast arm (the future's stored value copied into the parked
 #    frame, immediate ENQ_ready) — still a pass; that arm is owned by
 #    await_already_done.
 #  - Watchdog is a separate never-parked actor because handle_timeout
