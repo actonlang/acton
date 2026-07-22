@@ -1,18 +1,19 @@
 # Per-future result routing: one actor with five outstanding futures must
 # get each producer's value delivered to the await of THAT future — the
-# direct probe for cross-wiring in per-message waiter bookkeeping.
+# direct probe for cross-wiring in per-future waiter bookkeeping.
 #
 # RTS coverage:
-#  - One turn issues five $ASYNCs (five messages PUSH_outgoing'd, restored
+#  - One turn issues five $ASYNCs (five envelopes PUSH_outgoing'd, restored
 #    to program order by reverse_outgoing_queue, flushed to five different
 #    producers at the first $RWAIT).
-#  - `await f4` is a same-turn await: its $RWAIT runs ADD_waiting before the
-#    flush, so it is a deterministic pending park and its wake comes from
+#  - `await f4` is a same-turn await: its $RWAIT registers on f4 before the
+#    flush delivers the envelopes, so it is a deterministic pending park and
+#    its wake comes from
 #    b4's $RDONE single-waiter loop.
 #  - The remaining awaits (f3..f0, reverse issue order) race their
 #    producers: each independently resolves via EITHER the pending
 #    park/wake OR the $RWAIT frozen-value fast arm. Both arms must key the
-#    value by message identity; the per-await assertions (v_i == i) catch a
+#    value by future identity; the per-await assertions (v_i == i) catch a
 #    value delivered to the wrong await on either arm — a plain sum would be
 #    permutation-invariant and mask exactly that swap.
 #  - A lost completion parks main with $waitsfor set forever; the Watchdog

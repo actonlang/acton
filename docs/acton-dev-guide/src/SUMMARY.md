@@ -31,6 +31,7 @@
   - [Scheduler](runtime/scheduler.md)
   - [RTS sync pause](runtime/sync_pause.md)
   - [Actors](runtime/actors.md)
+  - [Messages and futures](runtime/messages.md)
   - [Memory and GC](runtime/memory.md)
   - [IO memory management](runtime/io_memory.md)
 - [Tooling](tooling/index.md)

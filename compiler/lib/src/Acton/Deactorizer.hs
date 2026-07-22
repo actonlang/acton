@@ -213,9 +213,9 @@ addSelfPar p                        = PosPar selfKW (Just tSelf) Nothing p
 selfRef n                           = Dot l0 (Var l0 (NoQ selfKW)) n
 
 
--- $ASYNCf : [A] => action($Actor, proc()->A) -> Msg[A]
--- $AFTERf : [A] => proc(int,      proc()->A) -> Msg[A]
--- $AWAITf : [A] => proc(Msg[A])              -> A
+-- $ASYNCf : [A] => action($Actor, proc()->A) -> Future[A]
+-- $AFTERf : [A] => proc(int,      proc()->A) -> Future[A]
+-- $AWAITf : [A] => proc(Future[A])           -> A
 
 
 instance Deact Branch where

@@ -82,7 +82,7 @@ struct linesQ_L_4actionG_class {
     B_str (*__repr__) (linesQ_L_4action);
     $R (*__call__) (linesQ_L_4action, $Cont, B_int);
     $R (*__exec__) (linesQ_L_4action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_4action, B_int);
+    B_Future (*__asyn__) (linesQ_L_4action, B_int);
 };
 struct linesQ_L_4action {
     struct linesQ_L_4actionG_class *$class;
@@ -190,7 +190,7 @@ struct linesQ_L_14actionG_class {
     B_str (*__repr__) (linesQ_L_14action);
     $R (*__call__) (linesQ_L_14action, $Cont, B_int);
     $R (*__exec__) (linesQ_L_14action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_14action, B_int);
+    B_Future (*__asyn__) (linesQ_L_14action, B_int);
 };
 struct linesQ_L_14action {
     struct linesQ_L_14actionG_class *$class;
@@ -208,7 +208,7 @@ struct linesQ_L_16actionG_class {
     B_str (*__repr__) (linesQ_L_16action);
     $R (*__call__) (linesQ_L_16action, $Cont, B_int);
     $R (*__exec__) (linesQ_L_16action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_16action, B_int);
+    B_Future (*__asyn__) (linesQ_L_16action, B_int);
 };
 struct linesQ_L_16action {
     struct linesQ_L_16actionG_class *$class;
@@ -226,7 +226,7 @@ struct linesQ_L_19actionG_class {
     B_str (*__repr__) (linesQ_L_19action);
     $R (*__call__) (linesQ_L_19action, $Cont, B_int);
     $R (*__exec__) (linesQ_L_19action, $Cont, B_int);
-    B_Msg (*__asyn__) (linesQ_L_19action, B_int);
+    B_Future (*__asyn__) (linesQ_L_19action, B_int);
 };
 struct linesQ_L_19action {
     struct linesQ_L_19actionG_class *$class;
@@ -459,9 +459,9 @@ struct linesQ_ApaG_class {
     $R (*setupG_local) (linesQ_Apa, $Cont, $action);
     $R (*computeG_local) (linesQ_Apa, $Cont, $action);
     $R (*noticeG_local) (linesQ_Apa, $Cont, int64_t);
-    B_Msg (*setup) (linesQ_Apa, $action);
-    B_Msg (*compute) (linesQ_Apa, $action);
-    B_Msg (*notice) (linesQ_Apa, int64_t);
+    B_Future (*setup) (linesQ_Apa, $action);
+    B_Future (*compute) (linesQ_Apa, $action);
+    B_Future (*notice) (linesQ_Apa, int64_t);
 };
 struct linesQ_Apa {
     struct linesQ_ApaG_class *$class;
@@ -471,7 +471,7 @@ struct linesQ_Apa {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
-    B_Msg $waitsfor;
+    B_Future $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
     $long $globkey;
@@ -493,7 +493,7 @@ struct linesQ_BepaG_class {
     B_NoneType (*__resume__) (linesQ_Bepa);
     B_NoneType (*__cleanup__) (linesQ_Bepa);
     $R (*callbackG_local) (linesQ_Bepa, $Cont, int64_t);
-    B_Msg (*callback) (linesQ_Bepa, int64_t);
+    B_Future (*callback) (linesQ_Bepa, int64_t);
 };
 struct linesQ_Bepa {
     struct linesQ_BepaG_class *$class;
@@ -503,7 +503,7 @@ struct linesQ_Bepa {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
-    B_Msg $waitsfor;
+    B_Future $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
     $long $globkey;
@@ -522,8 +522,8 @@ struct linesQ_mainG_class {
     B_NoneType (*__cleanup__) (linesQ_main);
     $R (*myprocG_local) (linesQ_main, $Cont, int64_t);
     $R (*nopG_local) (linesQ_main, $Cont);
-    B_Msg (*myproc) (linesQ_main, int64_t);
-    B_Msg (*nop) (linesQ_main);
+    B_Future (*myproc) (linesQ_main, int64_t);
+    B_Future (*nop) (linesQ_main);
 };
 struct linesQ_main {
     struct linesQ_mainG_class *$class;
@@ -533,14 +533,14 @@ struct linesQ_main {
     $Lock $msg_lock;
     $int64 $affinity;
     B_Msg $outgoing;
-    B_Msg $waitsfor;
+    B_Future $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
     $long $globkey;
     B_Env env;
     linesQ_Apa a;
     linesQ_Bepa b;
-    B_Msg x;
+    B_Future x;
     int64_t r;
     int64_t v;
     int64_t i;
@@ -557,7 +557,7 @@ linesQ_L_4action linesQ_L_4actionG_new(linesQ_Apa);
 B_NoneType linesQ_L_4actionD___init__(linesQ_L_4action L_self, linesQ_Apa L_3obj);
 $R linesQ_L_4actionD___call__(linesQ_L_4action L_self, $Cont L_cont, B_int G_1);
 $R linesQ_L_4actionD___exec__(linesQ_L_4action L_self, $Cont L_cont, B_int G_1);
-B_Msg linesQ_L_4actionD___asyn__(linesQ_L_4action L_self, B_int G_1);
+B_Future linesQ_L_4actionD___asyn__(linesQ_L_4action L_self, B_int G_1);
 extern struct linesQ_L_6ContG_class linesQ_L_6ContG_methods;
 linesQ_L_6Cont linesQ_L_6ContG_new($action, $Cont);
 B_NoneType linesQ_L_6ContD___init__(linesQ_L_6Cont L_self, $action cb, $Cont C_cont);
@@ -587,19 +587,19 @@ linesQ_L_14action linesQ_L_14actionG_new(linesQ_Apa);
 B_NoneType linesQ_L_14actionD___init__(linesQ_L_14action L_self, linesQ_Apa L_13obj);
 $R linesQ_L_14actionD___call__(linesQ_L_14action L_self, $Cont L_cont, B_int G_1);
 $R linesQ_L_14actionD___exec__(linesQ_L_14action L_self, $Cont L_cont, B_int G_1);
-B_Msg linesQ_L_14actionD___asyn__(linesQ_L_14action L_self, B_int G_1);
+B_Future linesQ_L_14actionD___asyn__(linesQ_L_14action L_self, B_int G_1);
 extern struct linesQ_L_16actionG_class linesQ_L_16actionG_methods;
 linesQ_L_16action linesQ_L_16actionG_new(linesQ_Bepa);
 B_NoneType linesQ_L_16actionD___init__(linesQ_L_16action L_self, linesQ_Bepa L_15obj);
 $R linesQ_L_16actionD___call__(linesQ_L_16action L_self, $Cont L_cont, B_int G_1);
 $R linesQ_L_16actionD___exec__(linesQ_L_16action L_self, $Cont L_cont, B_int G_1);
-B_Msg linesQ_L_16actionD___asyn__(linesQ_L_16action L_self, B_int G_1);
+B_Future linesQ_L_16actionD___asyn__(linesQ_L_16action L_self, B_int G_1);
 extern struct linesQ_L_19actionG_class linesQ_L_19actionG_methods;
 linesQ_L_19action linesQ_L_19actionG_new(linesQ_main);
 B_NoneType linesQ_L_19actionD___init__(linesQ_L_19action L_self, linesQ_main L_18obj);
 $R linesQ_L_19actionD___call__(linesQ_L_19action L_self, $Cont L_cont, B_int G_1);
 $R linesQ_L_19actionD___exec__(linesQ_L_19action L_self, $Cont L_cont, B_int G_1);
-B_Msg linesQ_L_19actionD___asyn__(linesQ_L_19action L_self, B_int G_1);
+B_Future linesQ_L_19actionD___asyn__(linesQ_L_19action L_self, B_int G_1);
 extern struct linesQ_L_20procG_class linesQ_L_20procG_methods;
 linesQ_L_20proc linesQ_L_20procG_new(linesQ_main);
 B_NoneType linesQ_L_20procD___init__(linesQ_L_20proc L_self, linesQ_main self);
@@ -660,21 +660,21 @@ $R linesQ_ApaD___init__(linesQ_Apa self, $Cont C_cont);
 $R linesQ_ApaD_setupG_local(linesQ_Apa self, $Cont C_cont, $action cb);
 $R linesQ_ApaD_computeG_local(linesQ_Apa self, $Cont C_cont, $action cb);
 $R linesQ_ApaD_noticeG_local(linesQ_Apa self, $Cont C_cont, int64_t i);
-B_Msg linesQ_ApaD_setup(linesQ_Apa self, $action cb);
-B_Msg linesQ_ApaD_compute(linesQ_Apa self, $action cb);
-B_Msg linesQ_ApaD_notice(linesQ_Apa self, int64_t i);
+B_Future linesQ_ApaD_setup(linesQ_Apa self, $action cb);
+B_Future linesQ_ApaD_compute(linesQ_Apa self, $action cb);
+B_Future linesQ_ApaD_notice(linesQ_Apa self, int64_t i);
 extern struct linesQ_BepaG_class linesQ_BepaG_methods;
 $R linesQ_BepaG_new($Cont);
 $R linesQ_BepaD___init__(linesQ_Bepa self, $Cont C_cont);
 $R linesQ_BepaD_callbackG_local(linesQ_Bepa self, $Cont C_cont, int64_t i);
-B_Msg linesQ_BepaD_callback(linesQ_Bepa self, int64_t i);
+B_Future linesQ_BepaD_callback(linesQ_Bepa self, int64_t i);
 extern struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_mainG_new($Cont, B_Env);
 $R linesQ_mainD___init__(linesQ_main self, $Cont C_cont, B_Env env);
 $R linesQ_mainD_myprocG_local(linesQ_main self, $Cont C_cont, int64_t i);
 $R linesQ_mainD_nopG_local(linesQ_main self, $Cont C_cont);
-B_Msg linesQ_mainD_myproc(linesQ_main self, int64_t i);
-B_Msg linesQ_mainD_nop(linesQ_main self);
+B_Future linesQ_mainD_myproc(linesQ_main self, int64_t i);
+B_Future linesQ_mainD_nop(linesQ_main self);
 extern B_Eq linesQ_W_Apa_1097;
 extern B_Eq linesQ_W_Apa_759;
 extern B_Eq linesQ_W_Apa_331;

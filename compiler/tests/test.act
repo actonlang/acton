@@ -22,7 +22,7 @@ x7 : [A(Hashable), B, S(Mapping[A,B])] => (S)->dict[A,B] # Qualified/constrained
 x8 : ((int) -> int,(b : bool),(int,int))                 # more complicated tuple
 x9 : act[X] (int,*A,b : bool,**B) -> set[int]            # function with effects and all kinds of parameters
 
-x10: action(int, *A, b: bool) -> Msg[int]
+x10: action(int, *A, b: bool) -> Future[int]
 x11: X(f: X(A)->B, a: [A]) -> [B]
 #x12: st[Y](int, list[Y,str]) -> str
 #x13: st(int, dict[int]) -> None

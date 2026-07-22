@@ -55,7 +55,7 @@ struct $actionG_class {
     B_str (*__repr__)($action);
     $R (*__call__)($action, $Cont, $WORD);
     $R (*__exec__)($action, $Cont, $WORD);
-    B_Msg (*__asyn__)($action, $WORD);
+    B_Future (*__asyn__)($action, $WORD);
 };
 struct $action {
     struct $actionG_class *$class;
@@ -118,7 +118,7 @@ struct $action2G_class {
     B_str (*__repr__)($action2);
     $R (*__call__)($action2, $Cont, $WORD, $WORD);
     $R (*__exec__)($action2, $Cont, $WORD, $WORD);
-    B_Msg (*__asyn__)($action2, $WORD, $WORD);
+    B_Future (*__asyn__)($action2, $WORD, $WORD);
 };
 struct $action2 {
     struct $action2G_class *$class;
@@ -138,7 +138,7 @@ struct $action3G_class {
     B_str (*__repr__)($action3);
     $R (*__call__)($action3, $Cont, $WORD, $WORD, $WORD);
     $R (*__exec__)($action3, $WORD, $WORD, $WORD);
-    B_Msg (*__asyn__)($action3, $WORD, $WORD, $WORD);
+    B_Future (*__asyn__)($action3, $WORD, $WORD, $WORD);
 };
 struct $action3 {
     struct $action3G_class *$class;

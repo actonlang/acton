@@ -260,17 +260,17 @@ boxedResultExpr env (Paren _ e)      = boxedResultExpr env e
 boxedResultExpr env DotI{}           = True
 boxedResultExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f       = False
-  | callReturnsMsg env f              = False
+  | callReturnsFuture env f           = False
   | otherwise                         = callReturnsBoxed env f
 boxedResultExpr env _                = False
 
 rawClassConstructor env c f           = callIsClass env f && isUnboxable (boxedRepType (typeOf env c))
 
-exposeMsg fx t
-  | fx == fxAction                    = tMsg t
+exposeFuture fx t
+  | fx == fxAction                    = tFuture t
   | otherwise                         = t
 
-callReturnsMsg env f                  = case rtypeOfFun env f of
+callReturnsFuture env f               = case rtypeOfFun env f of
                                           TFun _ fx _ _ _ -> fx == fxAction
                                           _               -> False
 
@@ -321,7 +321,7 @@ generatedExprType env (Box t _)       = Just t
 generatedExprType env (UnBox t _)     = Just t
 generatedExprType env (Call _ f _ KwdNil)
                                       = case generatedCallableType env f of
-                                          Just (TFun _ fx _ _ t) -> Just (exposeMsg fx t)
+                                          Just (TFun _ fx _ _ t) -> Just (exposeFuture fx t)
                                           _                     -> Nothing
 generatedExprType env (Dot _ e n)     = do t <- generatedExprType env e
                                            generatedDotType env t n
@@ -431,7 +431,7 @@ exprUnboxedRep env c@(Call _ f _ KwdNil)
                                   = Just t
   | Just _ <- generatedCallableType env f
                                   = Nothing
-  | callReturnsMsg env f          = Nothing
+  | callReturnsFuture env f       = Nothing
   | rawClassConstructor env c f    = unboxedRepType (typeOf env c)
   | Just t <- callableRawRep env f = Just t
 exprUnboxedRep env e
@@ -645,7 +645,7 @@ instance Boxing Expr where
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
       | otherwise                   = do (ws1,p1) <- boxing env p
-                                         return (ws1, tryBox (exposeMsg fx t) $ eCallP e (fixargs env p1 r))
+                                         return (ws1, tryBox (exposeFuture fx t) $ eCallP e (fixargs env p1 r))
        where e'                     = tApp (eQVar (unboxedPrim f)) ts
              TFun _ fx r _ t        = rtypeOfFun env e
     boxing env (Call l f@Async{} p KwdNil)
@@ -662,7 +662,7 @@ instance Boxing Expr where
     boxing env (Call l f p KwdNil)  = do (ws1,f1) <- boxing env f
                                          (ws2,p1) <- boxing env p
                                          let c = eCallP f1 (fixargs env p1 r)
-                                         return (HashSet.union ws1 ws2, tryBox (exposeMsg fx t) c)
+                                         return (HashSet.union ws1 ws2, tryBox (exposeFuture fx t) c)
         where  TFun _ fx r _ t      = rtypeOfFun env f
     boxing env (TApp l f ts)        = do (ws1,f1) <- boxing env f
                                          return (ws1, TApp l f1 ts)
@@ -743,7 +743,7 @@ boxValueExpr env e e1
   | Box{} <- e1                      = e1
   | boxedResultExpr env e            = e1
 boxValueExpr env (Call _ f _ KwdNil) e1
-  | callReturnsMsg env f              = e1
+  | callReturnsFuture env f           = e1
 boxValueExpr env (Paren _ e) e1       = boxValueExpr env e e1
 boxValueExpr env e e1
   | Just rt <- exprUnboxedRep env e

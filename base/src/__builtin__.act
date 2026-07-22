@@ -353,7 +353,7 @@ class bytearray (object):
     def zfill        (self, width: int) -> bytearray:
         NotImplemented
 
-class Msg[A] (value):
+class Future[A] (value):
     NotImplemented
 
 ## Exceptions ##################################################################################

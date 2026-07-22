@@ -73,8 +73,10 @@ typedef struct $R $R;
 
 struct $Actor;
 struct $Catcher;
+struct B_Msg;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
+typedef struct B_Msg *B_Msg;
 
 #define $Lock                   volatile atomic_flag
 
