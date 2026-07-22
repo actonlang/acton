@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.29.1] - 2026-07-22
 
 ### Language
 - Add `type` aliases for naming existing types, including parameterized
