@@ -1,0 +1,60 @@
+# Ordinary messages queued behind a parked frame: not run while parked,
+# delivered exactly once each after resume, in send order.
+#
+# RTS coverage:
+#  - `async ping(1)` / `async ping(2)` are real self-addressed envelopes (a
+#    bare self-call would be a direct inline call): PUSH_outgoing'd in main's
+#    go() turn and flushed at the $RWAIT — FLUSH_outgoing_local ENQ_msgs
+#    them onto main's OWN mailbox, tail-appended behind the parked __init__
+#    head frame.
+#  - Parked semantics: while main sits in $RWAIT on produce()'s message,
+#    those envelopes must not be dispatched (the mailbox head is only
+#    advanced by DEQ_msg at $RDONE / final $RFAIL). The awaited-guard in
+#    ping() converts any early execution — e.g. a control-queue rewrite
+#    misclassifying an ordinary message as processable-while-parked — into
+#    exit 1.
+#  - Resume and drain: produce's $RDONE wake writes into the parked head and
+#    ENQ_readys main; the head's own $RDONE then DEQ_msgs, and the has_more
+#    self-re-ENQ_ready chain dispatches ping(1) then ping(2) in FIFO order.
+#    The [1, 2] log catches loss, duplication, and reordering.
+#  - finish() ordering is structural, not timing: its timer envelope is
+#    delivered by handle_timeout's ENQ_msg to the TAIL of main's queue,
+#    behind both pings queued since park time. A lost wake parks main; the
+#    Watchdog actor bounds the run.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    def produce() -> int:
+        return 1
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+    var order = []
+    var awaited = False
+
+    def ping(n: int):
+        if not awaited:
+            env.exit(1)
+            return
+        order.append(n)
+
+    def finish():
+        if order == [1, 2]:
+            print("queued-msgs ok")
+            env.exit(0)
+        env.exit(1)
+
+    def go():
+        x = async b.produce()
+        async ping(1)
+        async ping(2)
+        v = await x
+        if v != 1:
+            env.exit(1)
+        awaited = True
+        after 0.4: finish()
+
+    go()

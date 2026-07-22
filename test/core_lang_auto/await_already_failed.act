@@ -1,0 +1,66 @@
+# The $RWAIT frozen-EXCEPTION fast arm, deterministically, for both awaiter
+# kinds — plus the genuinely waiter-less failure and producer survival.
+#
+# RTS coverage:
+#  - Waiter-less failure: boom() raises with NO waiter registered: $RFAIL
+#    no-catcher arm freezes the message as an exception, the propagation loop
+#    iterates zero times, and — uniquely in this suite — the "Unhandled
+#    exception" stderr notice prints (the branch taken only when
+#    FREEZE_waiting returns an empty list). Prod then DEQ_msgs and continues
+#    serving: the RFAIL arm must leave the actor schedulable.
+#  - Structural determinism + survival: phase2's alive = b.produce() both
+#    proves (FIFO mailbox) that boom was consumed and frozen before either
+#    await runs, and asserts the producer still answers after an unhandled
+#    failure.
+#  - Frozen-exception reads: both Rel's `await fut` and main's own
+#    check_self() hit the $RWAIT frozen-exception fast arm: ADD_waiting finds
+#    the message frozen-exceptional, the parked frame's cont is set to
+#    $Fail$instance with the stored exception as value, and the awaiter is
+#    immediately ENQ_readyd. Resume runs $Fail$instance -> $R_FAIL ->
+#    $RFAIL-with-catcher into the $PUSH_C catcher for the enclosing try ->
+#    typed except -> -1. Without this test, the frozen-exception arm is
+#    reached only on race arms of the other exception tests; an owner-local
+#    rewrite must store the exception and replay it, still typed, to late
+#    arrivals of either kind.
+#  - Hangs (e.g. a producer that never answers) park main and are bounded by
+#    the Watchdog actor.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    def boom() -> int:
+        raise ValueError("boom")
+
+    def produce() -> int:
+        return 8
+
+actor Rel():
+    def consume(fut) -> int:
+        try:
+            return await fut
+        except ValueError:
+            return -1
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+    c = Rel()
+    x = async b.boom()
+
+    def check_self() -> int:
+        try:
+            return await x
+        except ValueError:
+            return -1
+
+    def phase2():
+        alive = b.produce()
+        v1 = c.consume(x)
+        v2 = check_self()
+        if alive == 8 and v1 == -1 and v2 == -1:
+            print("already-failed ok")
+            env.exit(0)
+        env.exit(1)
+
+    after 0.3: phase2()

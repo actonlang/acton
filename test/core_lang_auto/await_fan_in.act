@@ -1,0 +1,74 @@
+# The N-waiter wake loop: four actors registered on ONE unresolved message,
+# all woken by a single completion, each exactly once.
+#
+# RTS coverage:
+#  - Concurrent registration: Waiter construction is itself a sync await of
+#    __init__ (newact = $ASYNCf(init)+$AWAITf), so the inits are kept trivial
+#    and go() is fired with `async`, letting all four go() turns run
+#    concurrently. Each takes the $RWAIT pending arm: ADD_waiting pushes the
+#    waiter onto the message's singly-linked waiter list (linked through the
+#    waiters' own $next fields), guarded by the message's wait lock; the spin
+#    margin keeps produce unresolved throughout.
+#  - Target path: produce's $RDONE runs FREEZE_waiting once and the wake loop
+#    walks the 4-deep waiter chain: for each waiter it writes 42 into the
+#    waiter's parked go frame, clears $waitsfor, and ENQ_readys it. This is
+#    the only test where that loop iterates more than once for a value.
+#  - Duplicate accounting: each report(wid,...) is an ordinary envelope
+#    tail-appended to main's mailbox. Success is deferred (after 0.3:
+#    env.exit(0)) because env.exit sets rts_exit and halts dispatch: an
+#    immediate exit would discard a trailing duplicate-wake report still in
+#    main's queue. Within the settle window a duplicate trips seen[wid] and
+#    its env.exit(1) wins (first exit wins).
+#  - A lost wakeup leaves that Waiter parked with $waitsfor set forever; the
+#    (never-parked) Watchdog actor converts the hang to exit 1.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    var i = 0
+
+    def spin():
+        while i < 20000000:
+            i += 1
+
+    def produce() -> int:
+        return 42
+
+actor Waiter(wid: int, fut, report):
+    def go():
+        v = await fut
+        report(wid, v)
+
+actor main(env):
+    wd = Watchdog(env)
+    var seen = [False, False, False, False]
+    var count = 0
+    b = Prod()
+
+    def report(wid: int, v: int):
+        if v != 42:
+            env.exit(1)
+            return
+        if seen[wid]:
+            env.exit(1)
+            return
+        seen[wid] = True
+        count += 1
+        if count == 4:
+            print("fan-in ok")
+            after 0.3: env.exit(0)
+
+    def go():
+        async b.spin()
+        x = async b.produce()
+        w0 = Waiter(0, x, report)
+        w1 = Waiter(1, x, report)
+        w2 = Waiter(2, x, report)
+        w3 = Waiter(3, x, report)
+        async w0.go()
+        async w1.go()
+        async w2.go()
+        async w3.go()
+
+    go()

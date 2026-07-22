@@ -1,0 +1,53 @@
+# The $RWAIT frozen-VALUE fast arm, deterministically, for both awaiter
+# kinds — plus the zero-waiter completion.
+#
+# RTS coverage:
+#  - Zero-waiter freeze: produce() is issued in main's __init__ turn and
+#    completes while nobody awaits: its $RDONE runs FREEZE_waiting on an
+#    empty waiter list (the wake loop iterates zero times) and the value must
+#    be retained on the frozen message.
+#  - Structural determinism: phase2's warm = b.produce() is a fresh sync
+#    round trip; Prod's mailbox is FIFO (ENQ_msg tail-append), so warm
+#    returning proves the original produce was consumed and frozen — under
+#    any load, with no reliance on the 0.3s timer figure.
+#  - Foreign frozen read: Rel's `await fut` inside consume takes the $RWAIT
+#    frozen-value fast arm: ADD_waiting finds the message frozen, the stored
+#    value is copied into Rel's parked frame, and Rel is immediately
+#    ENQ_readyd — no waiter registration, no involvement of the producer.
+#  - Creator frozen read across turns: x lives in actor state (deactorized to
+#    a main attribute); phase2 arrives via the timer path (ENQ_timed ->
+#    handle_timeout -> ENQ_msg onto idle main -> ENQ_ready), and main's own
+#    `await x` hits the same frozen-value arm. Under an owner-local rewrite
+#    these two reads become DIFFERENT code paths (foreign request/reply vs
+#    owner-local read); today both are the same fast arm.
+#  - Ordering also exercises the single-waiter $RDONE wake when consume's
+#    result resumes parked main. Hangs are bounded by the Watchdog actor
+#    (in-main timers cannot fire behind a parked head).
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    def produce() -> int:
+        return 3
+
+actor Rel():
+    def consume(fut) -> int:
+        return await fut
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+    c = Rel()
+    x = async b.produce()
+
+    def phase2():
+        warm = b.produce()
+        v1 = c.consume(x)
+        v2 = await x
+        if warm == 3 and v1 == 3 and v2 == 3:
+            print("already-done ok")
+            env.exit(0)
+        env.exit(1)
+
+    after 0.3: phase2()

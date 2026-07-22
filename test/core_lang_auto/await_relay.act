@@ -1,0 +1,61 @@
+# Escaped future awaited by a foreign actor while the future's creator is
+# parked. The scenario an owner-mediated await rewrite is most likely to
+# break: if waking Rel required action from the (parked) creator, this
+# program would three-way deadlock.
+#
+# RTS coverage (rts.c wt_work_cb dispatch, q.c queues):
+#  - Deterministic pending park of main: c.consume(x) lowers to
+#    $ASYNCf+$AWAITf -> $RWAIT, and ADD_waiting(main, consume_msg) runs
+#    BEFORE reverse_outgoing_queue/FLUSH_outgoing_local, so main is on the
+#    consume message's waiter list before Rel has even received it.
+#  - Flush ordering: spin/produce/consume envelopes are PUSH_outgoing'd
+#    (LIFO), restored to program order by reverse_outgoing_queue, and
+#    tail-appended by ENQ_msg; spin keeps Prod's mailbox busy so produce runs
+#    tens of ms later.
+#  - Target path: Rel's `await fut` takes the $RWAIT pending arm
+#    (ADD_waiting under the wait lock finds the message unfrozen); produce's
+#    $RDONE then runs FREEZE_waiting (value) and the waiter wake loop, which
+#    writes 42 into Rel's parked consume frame, clears Rel->$waitsfor, and
+#    ENQ_ready(Rel) — all while main stays parked. Rel's consume $RDONE then
+#    repeats freeze+wake with main as the sole waiter.
+#  - Degraded arm (heavily loaded host, spin margin lost): Rel instead hits
+#    the $RWAIT frozen-value fast arm (stored value copied into the parked
+#    frame, immediate ENQ_ready) — still a pass; that arm is owned by
+#    await_already_done.
+#  - Watchdog is a separate never-parked actor because handle_timeout
+#    delivers timer messages with ENQ_msg, which tail-appends behind a parked
+#    actor's head frame and (queue non-empty) never ENQ_readys it: an
+#    in-main timer cannot guard main's own park.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    var i = 0
+
+    def spin():
+        while i < 20000000:
+            i += 1
+
+    def produce() -> int:
+        return 42
+
+actor Rel():
+    def consume(fut) -> int:
+        return await fut
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+    c = Rel()
+
+    def go():
+        async b.spin()
+        x = async b.produce()
+        v = c.consume(x)
+        if v == 42:
+            print("relay ok")
+            env.exit(0)
+        env.exit(1)
+
+    go()

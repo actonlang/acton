@@ -1,0 +1,61 @@
+# One producer, two outstanding futures with DIVERGENT outcomes: the
+# exception stays keyed to bad()'s message and the value to good()'s, and
+# the producer keeps serving between them.
+#
+# RTS coverage:
+#  - Prod's mailbox receives [bad, good] in program order (LIFO outgoing
+#    buffer restored by reverse_outgoing_queue, ENQ_msg tail-append).
+#  - check_bad(h): a deterministic pending park (ADD_waiting on h's message
+#    precedes the flush). bad() raises -> $RFAIL no-catcher arm freezes h's
+#    message as an exception and the propagation loop writes $Fail$instance
+#    + the exception into main's parked frame (waiter present, so no
+#    "Unhandled exception" notice); main resumes through its $PUSH_C catcher
+#    into the typed except -> -1.
+#  - Producer survival on the $RFAIL path: after the failure Prod DEQ_msgs
+#    and runs good(), whose $RDONE freezes 21 onto g's message — good()
+#    delivering at all requires the failed actor to keep serving.
+#  - check_good(g): main's resume races Prod's good() turn, so this await
+#    exercises EITHER the pending park/wake or the $RWAIT frozen-value fast
+#    arm; both must key by message identity. Cross-contamination in either
+#    direction (value 21 surfacing at h's await, or the ValueError at g's)
+#    is converted by the sentinel excepts (-1 expected / -2 unexpected) into
+#    a failed final comparison rather than an uncaught abort.
+#  - Lost completions park main; the Watchdog actor bounds the run.
+
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor Prod():
+    def good() -> int:
+        return 21
+
+    def bad() -> int:
+        raise ValueError("bad")
+
+actor main(env):
+    wd = Watchdog(env)
+    b = Prod()
+
+    def check_bad(fut) -> int:
+        try:
+            return await fut
+        except ValueError:
+            return -1
+
+    def check_good(fut) -> int:
+        try:
+            return await fut
+        except ValueError:
+            return -2
+
+    def go():
+        h = async b.bad()
+        g = async b.good()
+        hv = check_bad(h)
+        gv = check_good(g)
+        if hv == -1 and gv == 21:
+            print("mixed outcomes ok")
+            env.exit(0)
+        env.exit(1)
+
+    go()
