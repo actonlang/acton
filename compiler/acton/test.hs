@@ -912,6 +912,26 @@ compilerTests =
             runBuild ["build", "--verbose", "--color", "never"]
           assertBool "initial build should report selective provider back"
             ("Selective back provider:" `isInfixOf` firstLog)
+          reachabilityLog <- assertOk "project reachability output" =<<
+            runBuild ["sig", "--reachability", "--color", "never"]
+          assertBool "project reachability should start with the report"
+            ("reachability\n" `isPrefixOf` reachabilityLog)
+          assertBool "project reachability should show the selected provider"
+            ("module dbp_fixture.provider" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should show the selected entry point"
+            ("make_box [body]" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should omit an unused provider definition"
+            (not $ "unused_1 [body]" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should not include build progress"
+            (not $ "Compilation done" `isInfixOf` reachabilityLog)
+          storedReachability <- assertOk "stored reachability output" =<<
+            runBuild ["sig", "--reachability", "provider"]
+          assertBool "stored reachability should include unselected definitions"
+            ("name unused_1" `isInfixOf` storedReachability)
+          classReachability <- assertOk "stored class reachability output" =<<
+            runBuild ["sig", "--reachability", "provider.WorkImpl"]
+          assertBool "stored class reachability should show the requested class"
+            ("class WorkImpl" `isInfixOf` classReachability)
           providerC <- readFile (typesDir </> "provider.c")
           providerH <- readFile (typesDir </> "provider.h")
           assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
@@ -1798,18 +1818,35 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
+  , testCase "sig parser accepts project reachability without a target" $ do
+      parsed <- parseArgs ["sig", "--reachability"]
+      case parsed of
+        C.CmdOpt _ (C.Sig sigOpts) -> do
+          assertEqual "project target" Nothing (C.sigTarget sigOpts)
+          assertBool "reachability option should be set"
+            (C.sigReachability sigOpts)
+        _ ->
+          assertFailure "expected sig command"
+  , testCase "sig parser accepts dot as the project target" $ do
+      parsed <- parseArgs ["sig", "--reachability", "."]
+      case parsed of
+        C.CmdOpt _ (C.Sig sigOpts) ->
+          assertEqual "project target" (Just ".") (C.sigTarget sigOpts)
+        _ ->
+          assertFailure "expected sig command"
   , testCase "build parser help includes --release alias" $ do
       helpText <- renderParserHelp ["build", "--help"]
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
       assertBool "help text should mention release variants" ("=safe or =small" `isInfixOf` helpText)
       assertBool "help text should mention default release mode" ("same as --release=fast" `isInfixOf` helpText)
   , testCase "sig parser accepts target and project options" $ do
-      parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
+      parsed <- parseArgs ["sig", "--always-build", "--reachability", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
       case parsed of
         C.CmdOpt _ (C.Sig sigOpts) -> do
           let opts = C.sigCompile sigOpts
-          assertEqual "sig target" "foo.bar" (C.sigTarget sigOpts)
+          assertEqual "sig target" (Just "foo.bar") (C.sigTarget sigOpts)
           assertBool "sig should force rebuild when requested" (C.alwaysbuild opts)
+          assertBool "sig should request reachability" (C.sigReachability sigOpts)
           assertEqual "sig searchpath" ["out/types"] (C.searchpath opts)
           assertEqual "sig dep overrides" [("dep", "../dep")] (C.dep_overrides opts)
           assertBool "sig should skip final build" (C.skip_build opts)

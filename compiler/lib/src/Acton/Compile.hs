@@ -218,10 +218,8 @@ import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
 import qualified Acton.InterfaceRows as InterfaceRows
 import qualified Acton.InterfaceRowsBuilder as InterfaceRowsBuilder
-import qualified Acton.ReachabilityRowsBuilder as ReachabilityRowsBuilder
-import qualified Acton.ReachabilityTypes as Reachability
+import qualified Acton.Reachability as Reachability
 import qualified Acton.SelectiveBack as SelectiveBack
-import qualified Acton.SelectiveWorklist as SelectiveWorklist
 import qualified Acton.Names as Names
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -446,6 +444,7 @@ data CompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput :: IO Bool
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnBackSkipped :: TaskKey -> IO ()
+  , ccOnReachability :: Data.Set.Set A.ModName -> Reachability.Selection -> IO ()
   , ccOnInfo :: String -> IO ()
   }
 
@@ -467,6 +466,7 @@ defaultCompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput = return True
   , ccOnBackJob = \_ -> return ()
   , ccOnBackSkipped = \_ -> return ()
+  , ccOnReachability = \_ _ -> return ()
   , ccOnInfo = \_ -> return ()
   }
 
@@ -2586,7 +2586,7 @@ runFrontPasses gopts opts dbpBlocked requested paths env0 parsed srcContent srcB
                        modNameToString mn ++ ": " ++ msg)
               Right rows -> rows
           reachabilityRows =
-            case ReachabilityRowsBuilder.prepareReachabilityRows typeEnv fullIface tchecked moduleRows of
+            case Reachability.prepareReachabilityRows typeEnv fullIface tchecked moduleRows of
               Left (InterfaceRows.RowError msg) ->
                 error ("Internal error while preparing reachability rows for " ++
                        modNameToString mn ++ ": " ++ msg)
@@ -3234,7 +3234,9 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
 
     flushDeferredBacks :: M.Map TaskKey DeferredBackJob
                        -> IO (Either CompileFailure ())
-    flushDeferredBacks deferredBacks | M.null deferredBacks = return (Right ())
+    flushDeferredBacks deferredBacks | M.null deferredBacks = do
+      ccOnReachability callbacks Data.Set.empty Reachability.emptySelection
+      return (Right ())
     flushDeferredBacks deferredBacks = do
       prepared <- (try prepareAll :: IO (Either SomeException [Maybe BackJob]))
       case prepared of
@@ -3312,25 +3314,30 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
             (rootSeeds ++ wholeSeeds)
           case selectedPreparation of
             Left () -> do
+              ccOnReachability callbacks
+                (interestWholeModules `Data.Set.union` selectableModules)
+                Reachability.emptySelection
               wholeJobs <- prepareWholeModules snapshots deferred
               attachBatchValidation snapshots wholeJobs
-            Right (selectedSnapshots,selectiveJobs) -> do
+            Right (selectedSnapshots,selection,selectiveJobs) -> do
+              ccOnReachability callbacks interestWholeModules selection
               wholeJobs <- prepareWholeModules snapshots wholeDeferred
               attachBatchValidation
                 (fromMaybe snapshots selectedSnapshots)
                 (wholeJobs ++ selectiveJobs)
 
-        prepareSelected _ [] _ = return (Right (Nothing,[]))
+        prepareSelected _ [] _ =
+          return (Right (Nothing,Reachability.emptySelection,[]))
         prepareSelected _ selectedDeferred [] = do
           mapM_ (ccOnBackSkipped callbacks . fst) selectedDeferred
-          return (Right (Nothing,[]))
+          return (Right (Nothing,Reachability.emptySelection,[]))
         prepareSelected snapshots selectedDeferred seeds = do
           let selectableModules = Data.Set.fromList
                 [ dbjMod dbj | (_,dbj) <- selectedDeferred ]
           selectedResult <- SelectiveBack.selectFromSnapshots
             resolveInterfaces snapshots selectableModules seeds
           case selectedResult of
-            Left SelectiveWorklist.DynamicSerializationRequiresWhole ->
+            Left Reachability.DynamicSerializationRequiresWhole ->
               return (Left ())
             Left err -> throwIO $ ProjectError
               ("Selective back-pass reachability failed: " ++ show err)
@@ -3343,10 +3350,10 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
                   selection = SelectiveBack.selectedProgramSelection selectedProgram
                   selectedModules = Data.Set.fromList
                     [ mn
-                    | SelectiveWorklist.TopKey mn _ <-
+                    | Reachability.TopKey mn _ <-
                         Data.Set.toAscList
-                          ( SelectiveWorklist.selectedTops selection
-                            `Data.Set.union` SelectiveWorklist.selectedDeclarations selection
+                          ( Reachability.selectedTops selection
+                            `Data.Set.union` Reachability.selectedDeclarations selection
                           )
                     ]
                   projectionModules = selectedModules `Data.Set.union`
@@ -3404,7 +3411,7 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
                           }
                       , bjValidate = return ()
                       }
-              return (Just activeSnapshots,jobs)
+              return (Just activeSnapshots,selection,jobs)
 
         attachBatchValidation snapshots jobs = do
           let validate = SelectiveBack.validateInterfaceSnapshots

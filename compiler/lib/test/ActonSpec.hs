@@ -33,6 +33,7 @@ import qualified Acton.Hashing as Hashing
 import qualified Acton.Names as Names
 import qualified Acton.InterfaceRows as InterfaceRows
 import qualified Acton.InterfaceRowsBuilder as InterfaceRowsBuilder
+import qualified Acton.ReachabilityPrinter as ReachabilityPrinter
 import qualified Acton.ReachabilityRows as ReachRows
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
@@ -718,6 +719,12 @@ main = do
               session topKey (ReachRows.AttrRef member) `shouldReturn` Nothing
             InterfaceFiles.readInterfaceSessionReachReflectionMaybe session missingTop
               `shouldReturn` Nothing
+          InterfaceFiles.readReachabilityRows tyPath mn Nothing `shouldReturn` reachRows
+          InterfaceFiles.readReachabilityRows tyPath mn (Just owner) `shouldReturn` reachRows
+          let printed = ReachabilityPrinter.prettyRows mn (Just owner) reachRows
+          printed `shouldSatisfy` isInfixOf "class Payload"
+          printed `shouldSatisfy`
+            isInfixOf "direct dependency.Other.attr field"
           InterfaceFiles.updateSourceHashAndNameHashes tyPath "src-2" [] nameHashes
           (_sourceMeta, sourceHash, _pubHash, _implHash, _imports,
             _depModules, _storedNameHashes, _roots, _tests, _doc) <-
