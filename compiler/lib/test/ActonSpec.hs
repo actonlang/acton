@@ -33,6 +33,7 @@ import qualified Acton.Hashing as Hashing
 import qualified Acton.Names as Names
 import qualified Acton.InterfaceRows as InterfaceRows
 import qualified Acton.InterfaceRowsBuilder as InterfaceRowsBuilder
+import qualified Acton.ReachabilityPrinter as ReachabilityPrinter
 import qualified Acton.ReachabilityRows as ReachRows
 import qualified Acton.ReachabilityTypes as Reach
 import qualified InterfaceFiles
@@ -690,6 +691,12 @@ main = do
           InterfaceFiles.readReachSlot tyPath topKey memberRef `shouldReturn` slotInfo
           InterfaceFiles.readReachSlots tyPath topKey `shouldReturn` [(memberRef,slotInfo)]
           InterfaceFiles.readReachReflection tyPath topKey `shouldReturn` reflection
+          InterfaceFiles.readReachabilityRows tyPath mn Nothing `shouldReturn` reachRows
+          InterfaceFiles.readReachabilityRows tyPath mn (Just owner) `shouldReturn` reachRows
+          let printed = ReachabilityPrinter.prettyRows mn (Just owner) reachRows
+          printed `shouldSatisfy` isInfixOf "class Payload"
+          printed `shouldSatisfy`
+            isInfixOf "direct dependency.Other.attr field"
           InterfaceFiles.readReachTopMaybe tyPath topKey `shouldReturn` Just topInfo
           InterfaceFiles.readReachTopMaybe tyPath missingTop `shouldReturn` Nothing
           InterfaceFiles.readReachMemberMaybe tyPath topKey (InterfaceRows.Attr member)

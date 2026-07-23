@@ -5,11 +5,13 @@ module SelectiveWorklistTests (tests) where
 import qualified Acton.Builtin as Builtin
 import qualified Acton.InterfaceRows as Rows
 import qualified Acton.NameInfo as I
+import qualified Acton.ReachabilityPrinter as Printer
 import qualified Acton.ReachabilityTypes as Reach
 import qualified Acton.SelectiveWorklist as Select
 import qualified Acton.Syntax as A
 
 import Control.Monad.State.Strict (State, modify', runState)
+import Data.List (intercalate)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Test.Syd
@@ -18,6 +20,27 @@ import Test.Syd
 tests :: Spec
 tests = do
   describe "exact selective worklist" $ do
+    it "prints a stable project selection" $ do
+      let value = A.name "value"
+          selection = Select.emptySelection
+            { Select.selectedTops = Set.singleton c
+            , Select.selectedMembers = Set.fromList
+                [(c,Rows.Attr value),(c,Rows.Method run)]
+            , Select.selectedAttrs = Set.singleton (c,value)
+            , Select.selectedInstanceInitializers = Set.singleton (c,value)
+            , Select.selectedConstructed = Set.singleton c
+            , Select.selectedInitialized = Set.singleton c
+            }
+      Printer.prettySelection (Set.singleton $ A.modName ["whole"]) selection
+        `shouldBe` intercalate "\n"
+          [ "reachability"
+          , "  module whole [whole]"
+          , "  module worklist"
+          , "    C [body, constructed, initialized]"
+          , "      attr value [declaration, used, instance initializer]"
+          , "      method run [body]"
+          ]
+
     it "is independent of seed queue order" $ do
       let index = methodHierarchy
           forward = [construct d, dispatch b run]

@@ -161,6 +161,7 @@ module InterfaceFiles
   , readReachSlots
   , readReachReflection
   , readReachReflectionMaybe
+  , readReachabilityRows
   , readModuleRows
   , readModuleHashesMaybe
   , readModuleSnapshotMaybe
@@ -1621,6 +1622,53 @@ readReachMemberEntryMaybe txn dbi owner member = do
   where
     label = "reach/member " ++ topKeyLabel owner ++ "." ++ Rows.memberLabel member
 
+readReachMembersEntry :: LMDB.MDB_txn
+                      -> LMDB.MDB_dbi
+                      -> ReachRows.TopKey
+                      -> IO [(MemberKey, ReachRows.MemberInfo)]
+readReachMembersEntry txn dbi owner = do
+    rows <- getEntriesWithPrefix txn dbi
+      (reachOwnerPrefix (key "reach/member/") owner)
+    entries <- forM (zip [0 :: Int ..] rows) $ \(i,(storedKey,bytes)) -> do
+      row@(ReachMemberRow _ storedMember _) <- decodeStrict
+        ("reach/member " ++ topKeyLabel owner ++ " #" ++ show i) bytes
+      unless (storedKey == keyReachMember owner storedMember) $
+        invalidContentRow
+          ("reach/member key/value mismatch for " ++ topKeyLabel owner)
+      info <- validateReachMemberRow owner storedMember row
+      return (storedMember,info)
+    let members = Map.fromList entries
+    when (length entries /= Map.size members) $
+      invalidContentRow ("duplicate reach/member rows for " ++ topKeyLabel owner)
+    return (Map.toAscList members)
+
+readReachTopRowsEntry :: LMDB.MDB_txn
+                      -> LMDB.MDB_dbi
+                      -> A.ModName
+                      -> IO [(ReachRows.TopKey, ReachRows.TopInfo)]
+readReachTopRowsEntry txn dbi moduleName = do
+    rows <- getEntriesWithPrefix txn dbi (key "reach/top/")
+    entries <- forM (zip [0 :: Int ..] rows) $ \(i,(storedKey,bytes)) -> do
+      row@(ReachTopRow owner _) <- decodeStrict
+        ("reach/top " ++ Data.List.intercalate "." (A.modPath moduleName) ++
+         " #" ++ show i) bytes
+      unless (storedKey == keyReachTop owner) $
+        invalidContentRow
+          ("reach/top key/value mismatch for " ++ topKeyLabel owner)
+      case owner of
+        ReachRows.TopKey storedModule _ ->
+          unless (storedModule == moduleName) $
+            invalidContentRow
+              ("foreign reach/top row " ++ topKeyLabel owner ++ " in " ++
+               Data.List.intercalate "." (A.modPath moduleName))
+      info <- validateReachTopRow owner row
+      return (owner,info)
+    let tops = Map.fromList entries
+    when (length entries /= Map.size tops) $
+      invalidContentRow
+        ("duplicate reach/top rows for " ++ Data.List.intercalate "." (A.modPath moduleName))
+    return (Map.toAscList tops)
+
 validateReachMemberRow :: ReachRows.TopKey
                        -> MemberKey
                        -> ReachMemberRow
@@ -2939,6 +2987,49 @@ readInterfaceSessionReachReflectionMaybe session@(InterfaceReadSession _ txn dbi
     traceTydbRead (maybe "reach-reflection-miss" (const "reach-reflection") attrs)
       (interfaceReadSessionPath session) (topKeyLabel owner)
     return attrs
+
+-- | Read the persisted reachability analysis for a module or one exact
+-- top-level name. This is an explicit inspection path; normal selection keeps
+-- using the exact-key readers above and never enumerates unrelated rows.
+readReachabilityRows :: FilePath
+                     -> A.ModName
+                     -> Maybe A.Name
+                     -> IO ReachRows.ReachabilityRows
+readReachabilityRows f moduleName target =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      (moduleSummary,wholeSummary) <- readReachModuleEntry txn dbi moduleName
+      tops <- case target of
+        Nothing -> readReachTopRowsEntry txn dbi moduleName
+        Just name -> do
+          let owner = ReachRows.TopKey moduleName name
+          info <- readReachTopEntryMaybe txn dbi owner
+          return [ (owner,found) | Just found <- [info] ]
+      let owners = map fst tops
+      members <- fmap concat $ forM owners $ \owner -> do
+        entries <- readReachMembersEntry txn dbi owner
+        return [ ((owner,member),info) | (member,info) <- entries ]
+      shapes <- forM owners $ \owner -> do
+        info <- readReachShapeEntryMaybe txn dbi owner
+        return [ (owner,found) | Just found <- [info] ]
+      slots <- fmap concat $ forM owners $ \owner -> do
+        entries <- readReachSlotsEntry txn dbi owner
+        return [ ((owner,member),info) | (member,info) <- entries ]
+      reflected <- forM owners $ \owner -> do
+        attrs <- readReachReflectionEntryMaybe txn dbi owner
+        return [ (owner,found) | Just found <- [attrs] ]
+      traceTydbRead "reachability" f
+        (Data.List.intercalate "." (A.modPath moduleName) ++
+         maybe "" (("." ++) . A.rawstr) target)
+      return ReachRows.ReachabilityRows
+        { ReachRows.reachModuleSummary = moduleSummary
+        , ReachRows.reachWholeSummary = wholeSummary
+        , ReachRows.reachTopRows = Map.fromList tops
+        , ReachRows.reachMemberRows = Map.fromList members
+        , ReachRows.reachShapeRows = Map.fromList (concat shapes)
+        , ReachRows.reachSlotRows = Map.fromList slots
+        , ReachRows.reachReflectableRows = Map.fromList (concat reflected)
+        }
 
 readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS.ByteString))
 readModuleHashesMaybe =

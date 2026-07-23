@@ -446,6 +446,7 @@ data CompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput :: IO Bool
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnBackSkipped :: TaskKey -> IO ()
+  , ccOnReachability :: Data.Set.Set A.ModName -> SelectiveWorklist.Selection -> IO ()
   , ccOnInfo :: String -> IO ()
   }
 
@@ -467,6 +468,7 @@ defaultCompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput = return True
   , ccOnBackJob = \_ -> return ()
   , ccOnBackSkipped = \_ -> return ()
+  , ccOnReachability = \_ _ -> return ()
   , ccOnInfo = \_ -> return ()
   }
 
@@ -3234,7 +3236,9 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
 
     flushDeferredBacks :: M.Map TaskKey DeferredBackJob
                        -> IO (Either CompileFailure ())
-    flushDeferredBacks deferredBacks | M.null deferredBacks = return (Right ())
+    flushDeferredBacks deferredBacks | M.null deferredBacks = do
+      ccOnReachability callbacks Data.Set.empty SelectiveWorklist.emptySelection
+      return (Right ())
     flushDeferredBacks deferredBacks = do
       prepared <- (try prepareAll :: IO (Either SomeException [Maybe BackJob]))
       case prepared of
@@ -3312,18 +3316,23 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
             (rootSeeds ++ wholeSeeds)
           case selectedPreparation of
             Left () -> do
+              ccOnReachability callbacks
+                (interestWholeModules `Data.Set.union` selectableModules)
+                SelectiveWorklist.emptySelection
               wholeJobs <- prepareWholeModules snapshots deferred
               attachBatchValidation snapshots wholeJobs
-            Right (selectedSnapshots,selectiveJobs) -> do
+            Right (selectedSnapshots,selection,selectiveJobs) -> do
+              ccOnReachability callbacks interestWholeModules selection
               wholeJobs <- prepareWholeModules snapshots wholeDeferred
               attachBatchValidation
                 (fromMaybe snapshots selectedSnapshots)
                 (wholeJobs ++ selectiveJobs)
 
-        prepareSelected _ [] _ = return (Right (Nothing,[]))
+        prepareSelected _ [] _ =
+          return (Right (Nothing,SelectiveWorklist.emptySelection,[]))
         prepareSelected _ selectedDeferred [] = do
           mapM_ (ccOnBackSkipped callbacks . fst) selectedDeferred
-          return (Right (Nothing,[]))
+          return (Right (Nothing,SelectiveWorklist.emptySelection,[]))
         prepareSelected snapshots selectedDeferred seeds = do
           let selectableModules = Data.Set.fromList
                 [ dbjMod dbj | (_,dbj) <- selectedDeferred ]
@@ -3404,7 +3413,7 @@ compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks 
                           }
                       , bjValidate = return ()
                       }
-              return (Just activeSnapshots,jobs)
+              return (Just activeSnapshots,selection,jobs)
 
         attachBatchValidation snapshots jobs = do
           let validate = SelectiveBack.validateInterfaceSnapshots

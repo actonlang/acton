@@ -20,6 +20,7 @@ module Acton.SelectiveWorklist
   , ProgramLookup(..)
   , emptyProgramIndex
   , Selection(..)
+  , emptySelection
   , SelectionManifest(..)
   , SelectionError(..)
   , selectProgram
@@ -86,6 +87,20 @@ data Selection = Selection
   , selectedConstructed :: Set.Set TopKey
   , selectedInitialized :: Set.Set TopKey
   } deriving (Eq, Show)
+
+emptySelection :: Selection
+emptySelection = Selection
+  { selectedDeclarations = Set.empty
+  , selectedTops = Set.empty
+  , selectedOpaqueTops = Set.empty
+  , selectedMembers = Set.empty
+  , selectedAttrs = Set.empty
+  , selectedStaticInitializers = Set.empty
+  , selectedInstanceInitializers = Set.empty
+  , selectedGenerated = Set.empty
+  , selectedConstructed = Set.empty
+  , selectedInitialized = Set.empty
+  }
 
 -- | Canonically ordered selection facts suitable as the semantic part of a
 -- code-generation manifest.  Hashing remains a backend concern: it combines

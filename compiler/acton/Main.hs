@@ -26,6 +26,8 @@ import Acton.Printer ()
 import qualified Acton.Env
 import Acton.Env (simp, define, setMod)
 import qualified Acton.QuickType
+import qualified Acton.ReachabilityPrinter as ReachabilityPrinter
+import qualified Acton.ReachabilityRows as ReachRows
 import qualified Acton.Kinds
 import qualified Acton.Types
 import qualified Acton.Solver
@@ -959,16 +961,20 @@ fetchCommand gopts = do
           putStrLn "Dependencies fetched"
 
 data SigTarget
-    = SigSourceTarget ProjCtx A.ModName (Maybe A.Name) FilePath
+    = SigProjectTarget
+    | SigSourceTarget ProjCtx A.ModName (Maybe A.Name) FilePath
     | SigTyTarget A.ModName (Maybe A.Name) FilePath
 
 sigCommand :: C.GlobalOptions -> C.SigOptions -> IO ()
 sigCommand gopts sigOpts = do
+    let projectTarget = maybe True (== ".") (C.sigTarget sigOpts)
+    when (projectTarget && not (C.sigReachability sigOpts)) $
+      printErrorAndExit "Signature target required; use --reachability for the project"
     let opts0 = (C.sigCompile sigOpts)
           { C.skip_build = True
           , C.only_build = False
           , C.sigs = False
-          , C.no_dbp = True
+          , C.no_dbp = not projectTarget
           }
         queryGopts = if C.verbose gopts then gopts else gopts { C.quiet = True }
     paths0 <- loadProjectPaths opts0
@@ -990,16 +996,45 @@ sigCommand gopts sigOpts = do
             }
       lockPaths <- compileOutputLockPaths queryGopts compileCtx
       withCompileOutputLockPaths lockPaths $ do
-        projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
-        target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
-        tyFile <- case target of
-          SigSourceTarget ctx mn _ srcPath ->
-            compileSigTarget gopts queryGopts compileCtx ctx mn srcPath
-          SigTyTarget _ _ tyPath ->
-            return tyPath
+        target <- case C.sigTarget sigOpts of
+          Nothing  -> return SigProjectTarget
+          Just "." -> return SigProjectTarget
+          Just rawTarget -> do
+            projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
+            resolveSigTarget opts paths rootProj projMap rawTarget
         case target of
-          SigSourceTarget _ mn mName _ -> printSigInterface paths mn mName tyFile
-          SigTyTarget mn mName _       -> printSigInterface paths mn mName tyFile
+          SigProjectTarget ->
+            printProjectReachability gopts queryGopts compileCtx paths
+          SigSourceTarget ctx mn mName srcPath -> do
+            tyFile <- compileSigTarget gopts queryGopts compileCtx ctx mn srcPath
+            printSigResult (C.sigReachability sigOpts) paths mn mName tyFile
+          SigTyTarget mn mName tyFile ->
+            printSigResult (C.sigReachability sigOpts) paths mn mName tyFile
+
+printProjectReachability :: C.GlobalOptions
+                         -> C.GlobalOptions
+                         -> CompileContext
+                         -> Paths
+                         -> IO ()
+printProjectReachability gopts queryGopts cctx paths = do
+    let sp = Source.diskSourceProvider
+    srcFiles <- projectSourceFiles paths
+    plan <- prepareCompilePlanFromContext sp queryGopts cctx srcFiles True Nothing
+    let cctx' = cpContext plan
+        opts' = ccOpts cctx'
+        callbacks = defaultCompileCallbacks
+          { ccOnDiagnostics = \_ optsT diags -> printDiagnostics gopts optsT diags
+          , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
+          , ccOnBackJob = \_ -> return ()
+          , ccOnReachability = \whole selection ->
+              putStrLn (ReachabilityPrinter.prettySelection whole selection)
+          }
+    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx')
+      (cpRootTaskKeys plan) (cpRequestedTasks plan)
+      (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    case compileRes of
+      Left err -> printErrorAndExit (compileFailureMessage err)
+      Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
 
 compileSigTarget :: C.GlobalOptions
                  -> C.GlobalOptions
@@ -1147,6 +1182,28 @@ printSigInterface paths mn mName tyFile = do
             printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
           _ ->
             putStrLn (Acton.Types.prettySigs envForPrint mn (map dropPrefix imps) (Acton.Names.nmap dropPrefix selected))
+
+printSigResult :: Bool -> Paths -> A.ModName -> Maybe A.Name -> FilePath -> IO ()
+printSigResult showReachability paths mn mName tyFile
+  | showReachability = printSigReachability mn mName tyFile
+  | otherwise        = printSigInterface paths mn mName tyFile
+
+printSigReachability :: A.ModName -> Maybe A.Name -> FilePath -> IO ()
+printSigReachability mn mName tyFile = do
+    exists <- InterfaceFiles.interfaceExists tyFile
+    unless exists $
+      printErrorAndExit ("Type interface not found for " ++ modNameToString mn)
+    rowsRes <- try (InterfaceFiles.readReachabilityRows tyFile mn mName)
+      :: IO (Either SomeException ReachRows.ReachabilityRows)
+    case rowsRes of
+      Left err ->
+        printErrorAndExit
+          ("Could not read reachability for " ++ modNameToString mn ++ ": " ++ show err)
+      Right rows -> case mName of
+        Just name | M.null (ReachRows.reachTopRows rows) ->
+          printErrorAndExit
+            ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString name)
+        _ -> putStrLn (ReachabilityPrinter.prettyRows mn mName rows)
 
 -- Show dependency tree with overrides applied from root pins
 pkgShow :: C.GlobalOptions -> IO ()
