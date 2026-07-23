@@ -1,0 +1,10 @@
+# A class with an Eq-constrained type parameter stores a hidden Eq[K]
+# witness as its first instance field.
+
+class Keyed[K(Eq)](object):
+    # Always None. Sits right after the hidden witness field, so if a
+    # subclass loses that field, this slot shifts and reads invalid data or crashes
+    marker: ?int
+
+    mut def __init__(self) -> None:
+        self.marker = None

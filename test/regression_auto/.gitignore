@@ -1,4 +1,6 @@
 *
+!*/
+out/
 !*.act
 !*.ext.c
 !.gitignore

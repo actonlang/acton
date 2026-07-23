@@ -1,0 +1,37 @@
+import keyed
+
+# Subclass a generic Eq-constrained class from another module and check
+# that the inherited hidden witness field stays in the subclass layouts
+# (see keyed.act).
+
+# K concretized to str.
+class Sub(keyed.Keyed[str]):
+    pass
+
+# Still generic: adds its own witness field after the inherited one.
+class GSub[J(Eq)](keyed.Keyed[J]):
+    pass
+
+actor main(env):
+    # The annotations make the reads below go through the subclass
+    # layouts; without them, s and g widen to keyed.Keyed and the base
+    # layout hides the witness slot shift.
+    s: Sub = Sub()
+    if s.marker is not None:
+        print("FAIL: Sub dropped the inherited witness field")
+        await async env.exit(1)
+    g: GSub[str] = GSub()
+    if g.marker is not None:
+        print("FAIL: GSub dropped the inherited witness field")
+        await async env.exit(1)
+    # The generated serializers walk the same attribute list as the
+    # struct layout, so round-trip an instance as well.
+    r = deserialize(serialize(s))
+    if isinstance(r, Sub):
+        if r.marker is not None:
+            print("FAIL: round-tripped Sub has misplaced fields")
+            await async env.exit(1)
+        print("OK")
+        await async env.exit(0)
+    print("FAIL: deserialize did not return a Sub")
+    await async env.exit(1)
