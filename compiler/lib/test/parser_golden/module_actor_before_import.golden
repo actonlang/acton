@@ -1,11 +1,9 @@
-ERROR: [error Parse error]: unexpected "mat"
-                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
-
-     ╭──▶ test.act@3:8-3:9
+ERROR: [error Syntax error]: Import statements must appear at the beginning of a module, preceded only by a possible docstring
+     ╭──▶ test.act@3:1-3:7
      │
    3 │ import math
-     •        ┬ 
-     •        ╰╸ unexpected "mat"
-     •           expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
-     •           
+     • ┬───── 
+     • ╰╸ Import statements must appear at the beginning of a module, preceded only by a possible docstring
+     •
+     │ Hint: Move all imports before the module's top-level definitions
 ─────╯

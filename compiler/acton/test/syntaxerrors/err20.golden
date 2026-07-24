@@ -1,12 +1,12 @@
 Building file test/syntaxerrors/err20.act using temporary scratch directory
 [error Parse error]: unexpected "@<newline>def decorate"
-                     expecting statement
+                     expecting top statement
 
      +--> test/syntaxerrors/err20.act@2:1-2:2
      |
    2 | @
      : ^
      : `- unexpected "@<newline>def decorate"
-     :    expecting statement
+     :    expecting top statement
      :    
 -----+

@@ -1,0 +1,11 @@
+# Not supported on the top level:
+from: str = ""
+#import: str = ""
+#type: str = ""
+#class: str = ""
+#protocol: str = ""
+#extension: str = ""
+#actor: str = ""
+
+actor main(env):
+    env.exit(0)

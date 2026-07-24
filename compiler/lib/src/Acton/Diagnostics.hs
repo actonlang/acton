@@ -56,6 +56,8 @@ customParseErrorToDiagnostic InvalidTopLevelAssignmentPattern  = ("Module top-le
 customParseErrorToDiagnostic (DuplicateTopLevelAssignment name) = ("Module top-level name '" ++ name ++ "' cannot be assigned more than once",
                                                                    [Note "Module top-level assignments define constants",
                                                                     Hint "Use a fresh name or move mutable state into an actor"])
+customParseErrorToDiagnostic MisplacedImport                    = ("Import statements must appear at the beginning of a module, preceded only by a possible docstring",
+                                                                   [Hint "Move all imports before the module's top-level definitions"])
 customParseErrorToDiagnostic (CyclicTypedef names)              = ("Type definitions " ++ show names ++ " are cyclically dependent",
                                                                    [Hint "A dependency cycle among types must involve at least one class or actor name"])
 -- String interpolation errors

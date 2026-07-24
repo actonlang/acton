@@ -4,11 +4,72 @@ from math import sqrt
 def softy(from, import, type, class, protocol, extension, actor):
     pass
 
-import = 1
+def softy2():
+    from: str = ""
+    import: str = ""
+    type: str = ""
+    class: str = ""
+    protocol: str = ""
+    extension: str = ""
+    actor: str = ""
 
-from = 2
+type Apa = str
 
-#extension = 3
+class Bepa():
+    from: str
+    import: str
+    type: str
+    class: str
+    protocol: str
+    extension: str
+    actor: str
+    def __init__(self):
+        self.from = ""
+        self.import = ""
+        self.type = ""
+        self.class = ""
+        self.protocol = ""
+        self.extension = ""
+        self.actor = ""
+
+protocol Cepa:
+    from: ()->str
+    import: ()->str
+    type: ()->str
+    class: ()->str
+    protocol: ()->str
+    extension: ()->str
+    actor: ()->str
+
+class Depa():
+    pass
+
+extension Depa(Cepa):
+    def from(self): return ""
+    def import(self): return ""
+    def type(self): return ""
+    def class(self): return ""
+    def protocol(self): return ""
+    def extension(self): return ""
+    def actor(self): return ""
+
+actor Eepa():
+    from: str
+    import: str
+    type: str
+    class: str
+    protocol: str
+    extension: str
+    actor: str
+
+# Not supported on the top level:
+#from: str = ""
+#import: str = ""
+#type: str = ""
+#class: str = ""
+#protocol: str = ""
+#extension: str = ""
+#actor: str = ""
 
 actor main(env):
     env.exit(0)
