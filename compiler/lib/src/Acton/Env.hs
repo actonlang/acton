@@ -433,29 +433,38 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             context = [],
                                             qlevel = 0,
                                             envX = () }
-initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
-                                let NModule _ envBuiltin builtinDocstring = nmod
-                                    envBuiltinPublic = publicTEnv envBuiltin
-                                    initialNames = []
-                                    env0 = EnvF{ activeNames = [],
-                                                 closedNames = initialNames,
-                                                 hnames = hnamesFrom initialNames,
-                                                 closedHNames = hnamesFrom initialNames,
-                                                 sigLocs = M.empty,
-                                                 closedSigLocs = M.empty,
-                                                 defLocs = M.empty,
-                                                 closedDefLocs = M.empty,
-                                                 activeStateNames = [],
-                                                 activeTypeVars = [],
-                                                 imports = [],
-                                                 qualifiers = [],
-                                                 modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
-                                                 thismod = Nothing,
-                                                 context = [],
-                                                 qlevel = 0,
-                                                 envX = () }
-                                    env = importAll mBuiltin (mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring) env0
-                                return env
+initEnv path False         = do (_,NModule _ envBuiltin builtinDocstring) <-
+                                  InterfaceFiles.readModuleIface
+                                    (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
+                                return (initEnvFromBuiltin envBuiltin builtinDocstring)
+
+-- | Construct the base environment from one already generation-coherent
+-- builtin interface. Deferred backs use this entry point so no memoized
+-- ModuleInfo from the front scheduler can leak into their snapshot.
+initEnvFromBuiltin         :: TEnv -> Maybe String -> Env0
+initEnvFromBuiltin envBuiltin builtinDocstring = env
+  where envBuiltinPublic   = publicTEnv envBuiltin
+        initialNames       = []
+        env0               = EnvF{ activeNames = [],
+                                   closedNames = initialNames,
+                                   hnames = hnamesFrom initialNames,
+                                   closedHNames = hnamesFrom initialNames,
+                                   sigLocs = M.empty,
+                                   closedSigLocs = M.empty,
+                                   defLocs = M.empty,
+                                   closedDefLocs = M.empty,
+                                   activeStateNames = [],
+                                   activeTypeVars = [],
+                                   imports = [],
+                                   qualifiers = [],
+                                   modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
+                                   thismod = Nothing,
+                                   context = [],
+                                   qlevel = 0,
+                                   envX = () }
+        env                = importAll mBuiltin
+                               (mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring)
+                               env0
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = env{modules = modules env'}

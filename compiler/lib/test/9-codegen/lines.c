@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #include "rts/common.h"
 #include "out/types/lines.h"
 B_Eq linesQ_W_Apa_1097;

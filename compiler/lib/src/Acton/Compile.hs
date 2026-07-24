@@ -37,11 +37,11 @@ Call flow:
        builds a CompilePlan for the requested subgraph. Parsing is performed
        through parseActSource/parseActSnapshot/parseActFile so SourceProvider
        overlays can supply unsaved buffers.
-    2) runCompilePlan drives compileTasks. As each module finishes its front
-       passes, the CompileHooks callbacks (for example chOnFrontResult)
-       enqueue a BackJob into the scheduler's
-       BackQueue, so back passes begin as soon as they are ready and can overlap
-       remaining front passes.
+    2) runCompilePlan drives compileTasks. Whole-module BackJobs can enter the
+       scheduler's BackQueue as soon as their front passes finish and overlap
+       remaining front work. Selective jobs retain only reloadable metadata;
+       after the required fronts have committed their interfaces, one global
+       reachability closure prepares the deferred batch.
     3) Callers either wait for backQueueWait (CLI builds) or let back jobs run
        in the background. CLI builds wait before invoking Zig.
     4) runBackJobs/runBackPasses can be used for standalone back-pass execution
@@ -74,8 +74,8 @@ State and orchestration:
     (LSP uses debounceMicros, acton watch uses 0). Back jobs and front-output
     writes are filtered by generation; front-pass diagnostics should be gated
     by the caller if needed.
-  - CLI builds share the same pipeline and enqueue back jobs as soon as front
-    passes finish, overlapping work without needing a watch event source.
+  - CLI builds share the same pipeline. Whole back jobs can overlap front work;
+    selective jobs are prepared after the required front passes finish.
 
 TODO:
   - Make generation invalidation more precise so unrelated in-flight modules
@@ -128,6 +128,8 @@ module Acton.Compile
   , CompileHooks(..)
   , defaultCompileHooks
   , runCompilePlan
+  , compileOutputLockPaths
+  , withCompileOutputLockPaths
   , CompileFailure(..)
   , compileFailureMessage
   , BackPassFailure(..)
@@ -214,6 +216,12 @@ import qualified Acton.Env
 import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
+import qualified Acton.InterfaceRows as InterfaceRows
+import qualified Acton.InterfaceRowsBuilder as InterfaceRowsBuilder
+import qualified Acton.ReachabilityRowsBuilder as ReachabilityRowsBuilder
+import qualified Acton.ReachabilityTypes as Reachability
+import qualified Acton.SelectiveBack as SelectiveBack
+import qualified Acton.SelectiveWorklist as SelectiveWorklist
 import qualified Acton.Names as Names
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -244,7 +252,6 @@ import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newT
 import Control.DeepSeq (rnf)
 import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
 import Control.Monad
-import Data.Binary (encode)
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
@@ -284,19 +291,14 @@ import Text.Printf
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
 
 newtype ProjectError = ProjectError String deriving (Show)
 
-instance Exception ProjectError
-
-newtype DbpSelectionError = DbpSelectionError String deriving (Show)
-
-instance Exception DbpSelectionError where
-  displayException (DbpSelectionError msg) = msg
+instance Exception ProjectError where
+  displayException (ProjectError msg) = msg
 
 newtype FrontOutputError = FrontOutputError String deriving (Show)
 
@@ -444,6 +446,7 @@ data CompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput :: IO Bool
   , ccOnBackJob :: BackJob -> IO ()
   , ccOnBackSkipped :: TaskKey -> IO ()
+  , ccOnReachability :: Data.Set.Set A.ModName -> SelectiveWorklist.Selection -> IO ()
   , ccOnInfo :: String -> IO ()
   }
 
@@ -465,6 +468,7 @@ defaultCompileCallbacks = CompileCallbacks
   , ccShouldWriteFrontOutput = return True
   , ccOnBackJob = \_ -> return ()
   , ccOnBackSkipped = \_ -> return ()
+  , ccOnReachability = \_ _ -> return ()
   , ccOnInfo = \_ -> return ()
   }
 
@@ -514,8 +518,8 @@ checkBuildSpecChange sched stamp =
 
 -- | Create a concurrent back-pass queue gated by a generation counter.
 -- Each job is tagged with a generation id; stale jobs are skipped.
-newBackQueue :: IORef Int -> C.GlobalOptions -> Int -> IO BackQueue
-newBackQueue genRef gopts maxPar = do
+newBackQueue :: IORef Int -> MVar () -> C.GlobalOptions -> Int -> IO BackQueue
+newBackQueue genRef generationLock gopts maxPar = do
   queue <- newTChanIO
   counts <- newTVarIO M.empty
   failures <- newTVarIO M.empty
@@ -540,47 +544,54 @@ newBackQueue genRef gopts maxPar = do
               writeTChan queue (gen, job, callbacks)
             return True
       waitDone gen = atomically $ do
+        pending <- readTVar counts
+        check (M.findWithDefault 0 gen pending == 0)
         failuresNow <- readTVar failures
-        case M.lookup gen failuresNow of
-          Just failure -> do
-            modifyTVar' failures (M.delete gen)
-            return (Just failure)
-          Nothing -> do
-            pending <- readTVar counts
-            let n = M.findWithDefault 0 gen pending
-            check (n == 0)
-            return Nothing
+        modifyTVar' failures (M.delete gen)
+        return (M.lookup gen failuresNow)
       worker = forever $ do
         (gen, job, callbacks) <- atomically $ readTChan queue
+        process gen job callbacks
+          `finally` atomically (modifyTVar' counts $ decPending gen)
+
+      process gen job callbacks = do
         current <- readIORef genRef
-        if current /= gen
-          then atomically $ modifyTVar' counts (decPending gen)
-          else do
-            failed <- atomically $ do
-              failuresNow <- readTVar failures
-              return (M.member gen failuresNow)
-            if failed
-              then atomically $ modifyTVar' counts (decPending gen)
-              else do
-                let shouldWrite = do
-                      currentWrite <- readIORef genRef
-                      return (currentWrite == gen)
-                bjcOnStart callbacks job
-                res <- (try $
-                          runBackPassesWithProgress
-                            gopts (bjOpts job) (bjPaths job) (bjInput job)
-                            shouldWrite (bjcOnProgress callbacks job))
-                        :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
-                currentDone <- readIORef genRef
-                when (currentDone == gen) $
-                  case res of
-                    Left err -> do
-                      let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
-                          failure = BackPassFailure key (displayException err)
-                      atomically $ modifyTVar' failures (recordFailure gen failure)
-                      bjcOnDone callbacks job (BackJobFailed failure)
-                    Right (t, bt) -> bjcOnDone callbacks job (BackJobOk t bt)
-                atomically $ modifyTVar' counts (decPending gen)
+        when (current == gen) $ do
+          failed <- M.member gen <$> atomically (readTVar failures)
+          unless failed $ do
+            let commitWrite action = withMVar generationLock $ \_ -> do
+                  currentWrite <- readIORef genRef
+                  if currentWrite == gen
+                    then action >> return True
+                    else return False
+            res <- (try $ do
+                      bjcOnStart callbacks job
+                      result <- runBackPasses
+                        gopts (bjOpts job) (bjPaths job) (bjInput job)
+                        commitWrite (bjcOnProgress callbacks job)
+                      bjValidate job
+                      return result)
+                    :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
+            currentDone <- readIORef genRef
+            when (currentDone == gen) $ publish gen job callbacks res
+
+      publish gen job callbacks res = do
+        result <- case res of
+          Left err -> do
+            let failure = jobFailure job err
+            atomically $ modifyTVar' failures (recordFailure gen failure)
+            return (BackJobFailed failure)
+          Right (t,bt) -> return (BackJobOk t bt)
+        done <- try (bjcOnDone callbacks job result) :: IO (Either SomeException ())
+        case done of
+          Left err -> atomically $ modifyTVar' failures
+            (recordFailure gen $ jobFailure job err)
+          Right () -> return ()
+
+      jobFailure job err = BackPassFailure key (displayException err)
+        where key = TaskKey
+                (projPath $ bjPaths job)
+                (A.modname $ biTypedMod $ bjInput job)
   let workers = max 1 maxPar
   replicateM_ workers (forkIO worker)
   return BackQueue
@@ -590,6 +601,7 @@ newBackQueue genRef gopts maxPar = do
 
 data CompileScheduler = CompileScheduler
   { csGenRef :: IORef Int
+  , csGenerationLock :: MVar ()
   , csAsyncRef :: MVar (Maybe (Async ()))
   , csBackQueue :: BackQueue
   , csBuildStampRef :: IORef (Maybe BuildSpecStamp)
@@ -599,11 +611,13 @@ data CompileScheduler = CompileScheduler
 newCompileScheduler :: C.GlobalOptions -> Int -> IO CompileScheduler
 newCompileScheduler gopts maxPar = do
   genRef <- newIORef 0
+  generationLock <- newMVar ()
   asyncRef <- newMVar Nothing
-  backQueue <- newBackQueue genRef gopts maxPar
+  backQueue <- newBackQueue genRef generationLock gopts maxPar
   buildStampRef <- newIORef Nothing
   return CompileScheduler
     { csGenRef = genRef
+    , csGenerationLock = generationLock
     , csAsyncRef = asyncRef
     , csBackQueue = backQueue
     , csBuildStampRef = buildStampRef
@@ -613,7 +627,8 @@ newCompileScheduler gopts maxPar = do
 -- Returns the generation id associated with this run.
 startCompile :: CompileScheduler -> Int -> (Int -> IO ()) -> IO Int
 startCompile sched delay run = do
-  gen <- atomicModifyIORef' (csGenRef sched) $ \g -> let g' = g + 1 in (g', g')
+  gen <- withMVar (csGenerationLock sched) $ \_ ->
+    atomicModifyIORef' (csGenRef sched) $ \g -> let g' = g + 1 in (g', g')
   modifyMVar_ (csAsyncRef sched) $ \m -> do
     forM_ m $ \old -> do
       -- The canceled action drains front-output jobs in its finalizer; wait so
@@ -688,6 +703,8 @@ data CompilePlan = CompilePlan
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
   , cpRootTasks :: [CompileTask]
+  , cpRootTaskKeys :: Data.Set.Set TaskKey
+  , cpRequestedTasks :: Data.Set.Set TaskKey
   , cpRootPins :: M.Map String BuildSpec.PkgDep
   , cpIncremental :: Bool
   , cpAllowPrune :: Bool
@@ -734,11 +751,17 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
     (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
   let dbpBlocked = libraryBoundaryTasks projMap globalTasks
+  requestedKeys <- taskKeysForFiles pathsRoot rootProj globalTasks srcFiles
   neededTasks0 <- case mChangedPaths of
     Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
     Just changed -> selectAffectedTasks rootProj opts' globalTasks dbpBlocked changed
   let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
+      rootTaskKeys = Data.Set.fromList
+        [ gtKey t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
+      requestedTasks
+        | allowPrune = Data.Set.empty
+        | otherwise = Data.Set.fromList requestedKeys
       rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
   return CompilePlan
     { cpContext = ctx
@@ -747,6 +770,8 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
     , cpRootTasks = rootTasks
+    , cpRootTaskKeys = rootTaskKeys
+    , cpRequestedTasks = requestedTasks
     , cpRootPins = rootPins
     , cpIncremental = incremental
     , cpAllowPrune = allowPrune'
@@ -837,7 +862,34 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }
-  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+  compileTasks sp gopts opts' pathsRoot rootProj
+    (cpRootTaskKeys plan) (cpRequestedTasks plan)
+    (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+
+-- | Selective C/H is keyed by one consumer universe but lives in the provider
+-- project's output tree. Hold every participating output lock, in canonical
+-- order, through back passes and native consumption so concurrent root builds
+-- cannot overwrite a shared provider projection underneath each other.
+-- Discover the output locks before reading any shared interface state.
+-- Dependency fetches happen before this point; project discovery itself is
+-- read-only with respect to compiler outputs.
+compileOutputLockPaths :: C.GlobalOptions -> CompileContext -> IO [FilePath]
+compileOutputLockPaths gopts ctx
+  | isTmp paths = return [lockPath root]
+  | otherwise = do
+      projects <- discoverProjects gopts (ccSysAbs ctx) root (ccDepOverrides ctx)
+      return [ lockPath (projRoot project) | project <- M.elems projects ]
+  where
+    paths = ccPathsRoot ctx
+    root = ccRootProj ctx
+    lockPath projectRoot = joinPath [projectRoot, ".acton.output.lock"]
+
+withCompileOutputLockPaths :: [FilePath] -> IO a -> IO a
+withCompileOutputLockPaths = lockAll . Data.List.sort . nub
+  where
+    lockAll [] action = action
+    lockAll (path:paths) action =
+      withFileLock path Exclusive $ \_ -> lockAll paths action
 
 -- | Tap the generic progress hooks to feed the analytics sampler. Each pass
 -- already reports through these callbacks, so a single wrapper covers parse,
@@ -1212,20 +1264,39 @@ readSourceFileMeta path = do
     fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
     fileStatusCTimeNs st = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
 
+-- | Read the source paired with a cached interface, rejecting a concurrent
+-- edit instead of generating output from source text that does not match the
+-- interface and codegen hash selected for this compile generation.
+readMatchingSource :: Source.SourceProvider
+                   -> A.ModName
+                   -> B.ByteString
+                   -> FilePath
+                   -> IO Source.SourceSnapshot
+readMatchingSource sp mn expected path = do
+  snap <- Source.readSource sp path
+  unless (SHA256.hash (Source.ssBytes snap) == expected) $
+    throwIO $ ProjectError $
+      "Source changed while preparing back passes for " ++ modNameToString mn
+  return snap
+
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
 
 data BackInput = BackInput
   { biTypeEnv   :: Acton.Env.Env0
   , biTypedMod  :: A.Module
-  , biSrc       :: String
-  , biImplHash  :: B.ByteString
+  , biDeclarations :: [A.Name]
+  , biSrc       :: Maybe String
+  , biCodegenHash :: B.ByteString
   }
 
 data BackJob = BackJob
   { bjPaths :: Paths
   , bjOpts  :: C.CompileOptions
   , bjInput :: BackInput
+  -- Deferred batches share a completion barrier which revalidates their
+  -- captured interfaces after the last generated output is complete.
+  , bjValidate :: IO ()
   }
 
 -- Deferred jobs deliberately keep only reloadable metadata so large typed
@@ -1234,8 +1305,6 @@ data DeferredBackJob = DeferredBackJob
   { dbjPaths :: Paths
   , dbjOpts :: C.CompileOptions
   , dbjMod :: A.ModName
-  , dbjImplHash :: B.ByteString
-  , dbjNameCount :: Int
   }
 
 data FrontOutputJob = FrontOutputJob
@@ -1252,7 +1321,6 @@ data FrontResult = FrontResult
   , frPubHash :: B.ByteString
   , frImplHash :: B.ByteString
   , frNameHashes :: [InterfaceFiles.NameHashInfo]
-  , frInterestDeps :: Data.Set.Set (A.ModName, A.Name)
   , frFrontTime :: Maybe TimeSpec
   , frFrontTiming :: Maybe FrontTiming
   , frInferredSigs :: [InferredSignature]
@@ -1265,8 +1333,6 @@ frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
 frontResultModuleInfo mn fr =
     fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
 
-type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
-
 docNameCountThreshold :: Int
 docNameCountThreshold = 10000
 
@@ -1274,16 +1340,20 @@ shouldGenerateDocOutput :: C.CompileOptions -> Bool -> Int -> Bool
 shouldGenerateDocOutput opts tmp nameCount =
   not (C.skip_build opts) && not tmp && nameCount <= docNameCountThreshold
 
-dbpDeferredBackJob :: Bool
-                   -> Bool
-                   -> C.CompileOptions
-                   -> Paths
-                   -> A.ModName
-                   -> B.ByteString
-                   -> Int
-                   -> Maybe DeferredBackJob
-dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
+shouldRunBackPass :: Bool -> Bool -> C.CompileOptions -> [A.Name] -> Bool
+shouldRunBackPass dbpBlocked requested opts roots =
+  dbpBlocked || altOutput opts || not requested || not (null roots)
+
+selectiveDeferredBackJob :: Bool
+                         -> Bool
+                         -> C.CompileOptions
+                         -> Paths
+                         -> A.ModName
+                         -> Maybe DeferredBackJob
+selectiveDeferredBackJob blocked hasNotImpl opts paths mn
   | C.no_dbp opts = Nothing
+  -- Persistence restores classes by stored id, outside static reachability.
+  | C.db opts = Nothing
   | C.only_build opts = Nothing
   | altOutput opts = Nothing
   | mn == A.modName ["__builtin__"] = Nothing
@@ -1297,31 +1367,7 @@ dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
         { dbjPaths = paths
         , dbjOpts = opts
         , dbjMod = mn
-        , dbjImplHash = moduleImplHash
-        , dbjNameCount = nameCount
         }
-
-interestDepsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
-interestDepsFromNameHashes nameHashes =
-  Data.Set.fromList
-    [ target
-    | nh <- nameHashes
-    , (qn, _) <- InterfaceFiles.nhPubDeps nh ++ InterfaceFiles.nhImplDeps nh
-    , Just target <- [interestTarget qn]
-    ]
-  where
-    interestTarget qn =
-      case qn of
-        A.GName m n -> Just (m, n)
-        A.QName m n -> Just (m, n)
-        A.NoQ{} -> Nothing
-
-addInterestDeps :: Data.Set.Set (A.ModName, A.Name) -> InterestMap -> InterestMap
-addInterestDeps deps im =
-  foldl'
-    (\acc (mn, n) -> M.insertWith Data.Set.union mn (Data.Set.singleton n) acc)
-    im
-    (Data.Set.toList deps)
 
 startFrontOutputJob :: (TaskKey -> FrontOutputKind -> IO ())
                     -> (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
@@ -1361,7 +1407,7 @@ runFrontOutputSync onStart onDone shouldWrite key kind action = do
   current <- shouldWrite
   when current $ do
     onStart key kind
-    runFrontOutputAction onDone shouldWrite key kind action
+    runStartedFrontOutputAction onDone key kind action
 
 runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                      -> IO Bool
@@ -1371,13 +1417,21 @@ runFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
                      -> IO ()
 runFrontOutputAction onDone shouldWrite key kind action = do
   current <- shouldWrite
-  when current $ do
-    t0 <- getTime Monotonic
-    res <- (try action :: IO (Either SomeException ()))
-    t1 <- getTime Monotonic
-    let elapsed = t1 - t0
-    onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
-    either throwIO return res
+  when current $
+    runStartedFrontOutputAction onDone key kind action
+
+runStartedFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ())
+                            -> TaskKey
+                            -> FrontOutputKind
+                            -> IO ()
+                            -> IO ()
+runStartedFrontOutputAction onDone key kind action = do
+  t0 <- getTime Monotonic
+  res <- (try action :: IO (Either SomeException ()))
+  t1 <- getTime Monotonic
+  let elapsed = t1 - t0
+  onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
+  either throwIO return res
   where
     ignoreProgressException :: SomeException -> IO ()
     ignoreProgressException err
@@ -1631,40 +1685,43 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
 -- | Select the subgraph needed for a given build request.
 -- Maps file paths to TaskKeys, adds __builtin__, and computes the reachable
 -- dependency closure.
+taskKeysForFiles :: Paths -> FilePath -> [GlobalTask] -> [FilePath] -> IO [TaskKey]
+taskKeysForFiles pathsRoot rootProj globalTasks srcFiles = do
+    requested <- catMaybes <$> mapM lookupTaskKey srcFiles
+    let wantedNames = map takeFileName srcFiles
+    return $ if null requested
+      then [ gtKey task
+           | task <- globalTasks
+           , takeFileName (srcFile (gtPaths task) (tkMod $ gtKey task)) `elem` wantedNames
+           ]
+      else requested
+  where
+    lookupTaskKey file = do
+      absolute <- canonicalizePath file
+      case listToMaybe
+             [ gtKey task
+             | task <- globalTasks
+             , srcFile (gtPaths task) (tkMod $ gtKey task) == absolute
+             ] of
+        Just key -> return (Just key)
+        Nothing -> do
+          mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absolute
+          return $ listToMaybe
+            [ gtKey task
+            | task <- globalTasks
+            , tkProj (gtKey task) == rootProj
+            , tkMod (gtKey task) == mn
+            ]
+
 selectNeededTasks :: Paths -> FilePath -> [GlobalTask] -> [FilePath] -> IO [GlobalTask]
 selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
-    requestedKeys <- catMaybes <$> mapM (lookupTaskKey globalTasks) srcFiles
-    let wantedNames   = map takeFileName srcFiles
-        requestedKeys' = if null requestedKeys
-                           then [ gtKey t
-                                | t <- globalTasks
-                                , takeFileName (srcFile (gtPaths t) (tkMod (gtKey t))) `elem` wantedNames
-                                ]
-                           else requestedKeys
-        builtinKeys = [ gtKey t | t <- globalTasks, tkMod (gtKey t) == A.modName ["__builtin__"] ]
-        startKeys   = if null requestedKeys' then map gtKey globalTasks else requestedKeys' ++ builtinKeys
+    requestedKeys <- taskKeysForFiles pathsRoot rootProj globalTasks srcFiles
+    let builtinKeys = [ gtKey t | t <- globalTasks, tkMod (gtKey t) == A.modName ["__builtin__"] ]
+        startKeys   = if null requestedKeys then map gtKey globalTasks else requestedKeys ++ builtinKeys
         depMapSet   = M.fromList [ (gtKey t, Data.Set.fromList (M.elems (gtImportProviders t))) | t <- globalTasks ]
         neededKeys  = reachable depMapSet (Data.Set.fromList startKeys)
     return [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
   where
-    lookupTaskKey ts f = do
-      absF <- canonicalizePath f
-      let byPath = listToMaybe [ gtKey t
-                               | t <- ts
-                               , let k = gtKey t
-                                     pths = gtPaths t
-                               , srcFile pths (tkMod k) == absF
-                               ]
-      case byPath of
-        Just k -> return (Just k)
-        Nothing -> do
-          mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absF
-          return $ listToMaybe [ gtKey t
-                               | t <- ts
-                               , tkProj (gtKey t) == rootProj
-                               , tkMod (gtKey t) == mn
-                               ]
-
     reachable depMap start = go (Data.Set.toList start) Data.Set.empty
       where
         go [] seen = seen
@@ -1744,8 +1801,9 @@ dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affect
       case M.lookup k taskMap of
         Just t ->
           case gtTask t of
-            TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
-              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) (tkMod k) implHash nameCount)
+            TyTask{} ->
+              isJust (selectiveDeferredBackJob (Data.Set.member k dbpBlocked) False
+                        (optsFor k) (gtPaths t) (tkMod k))
             _ -> False
         Nothing -> False
 
@@ -1774,11 +1832,12 @@ dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affect
               seen' = Data.Set.insert k seen
           in reverseReachable seen' (ks ++ deps)
 
--- | DBP may prune generated C/H for internal library modules, but a module at
--- an explicit library boundary must keep its full generated surface.
+-- | A declared library's exposed modules keep their complete generated
+-- surface. Internal providers remain selective: the persisted whole-module
+-- reach summary of each exposed module supplies their exact interest.
 libraryBoundaryTasks :: M.Map FilePath ProjCtx -> [GlobalTask] -> Data.Set.Set TaskKey
 libraryBoundaryTasks projMap globalTasks =
-    Data.Set.unions (map boundaryFor libraryGroups)
+    Data.Set.unions $ map exposedModules libraryGroups
   where
     taskKeys = Data.Set.fromList (map gtKey globalTasks)
     revMap = foldl'
@@ -1791,11 +1850,14 @@ libraryBoundaryTasks projMap globalTasks =
       globalTasks
     libraryGroups = libraryTaskGroups projMap globalTasks
 
-    boundaryFor group =
-      Data.Set.filter hasOutsideConsumer group
+    exposedModules group = Data.Set.filter exposed group
       where
-        hasOutsideConsumer k =
-          any (`Data.Set.notMember` group) (M.findWithDefault [] k revMap)
+        exposed key =
+          null internalConsumers || not (null externalConsumers)
+          where
+            consumers = M.findWithDefault [] key revMap
+            (internalConsumers,externalConsumers) = partition
+              (`Data.Set.member` group) consumers
 
 moduleStringToName :: String -> A.ModName
 moduleStringToName = A.modName . splitMod
@@ -2216,16 +2278,16 @@ readIfaceFromTy paths mn src mHash = do
           _ -> return $ Left (missingIfaceDiagnostics mn src mn)
 
 
--- | Snapshot of expected/recorded impl hashes for generated code.
+-- | Snapshot of expected and recorded hashes for generated code.
 data CodegenStatus = CodegenStatus
   { csExpected :: String
   , csC :: Maybe String
   , csH :: Maybe String
   }
 
--- | Header prefix used to tag generated code with the module impl hash.
+-- | Header prefix used to tag generated code with its exact codegen hash.
 codegenHashTag :: String
-codegenHashTag = "/* Acton impl hash:"
+codegenHashTag = "/* Acton codegen hash:"
 
 -- | Parse a tagged hash line from generated output.
 extractCodegenHash :: String -> Maybe String
@@ -2249,15 +2311,15 @@ readCodegenHash path = do
 
 -- | Collect codegen hash status for a module.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn implHash = do
-  let expected = B.unpack $ Base16.encode implHash
+codegenStatus paths mn codegenHash = do
+  let expected = B.unpack $ Base16.encode codegenHash
       cFile = outBase paths mn ++ ".c"
       hFile = outBase paths mn ++ ".h"
   cHash <- readCodegenHash cFile
   hHash <- readCodegenHash hFile
   return CodegenStatus { csExpected = expected, csC = cHash, csH = hHash }
 
--- | Check whether generated .c/.h hashes match the expected impl hash.
+-- | Check whether generated .c/.h hashes match the expected codegen hash.
 codegenUpToDate :: CodegenStatus -> Bool
 codegenUpToDate status =
   csC status == Just (csExpected status) && csH status == Just (csExpected status)
@@ -2269,9 +2331,9 @@ formatCodegenDelta status =
       short actual = maybe "missing" (take 8) actual
   in case (csC status, csH status) of
        (Just c, Just h) | c == h ->
-         " {impl " ++ take 8 c ++ " -> " ++ expected ++ "}"
+         " {codegen " ++ take 8 c ++ " -> " ++ expected ++ "}"
        _ ->
-         " {impl c " ++ short (csC status) ++ " -> " ++ expected
+         " {codegen c " ++ short (csC status) ++ " -> " ++ expected
          ++ ", h " ++ short (csH status) ++ " -> " ++ expected ++ "}"
 
 -- | Run the front passes for a single module.
@@ -2283,6 +2345,7 @@ formatCodegenDelta status =
 
 runFrontPasses :: C.GlobalOptions
                -> C.CompileOptions
+               -> Bool
                -> Bool
                -> Paths
                -> Acton.Env.Env0
@@ -2300,7 +2363,7 @@ runFrontPasses :: C.GlobalOptions
                -> IO Bool
                -> ([FrontOutputJob] -> IO ())
                -> IO (Either [Diagnostic String] FrontResult)
-runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
+runFrontPasses gopts opts dbpBlocked requested paths env0 parsed srcContent srcBytes sourceMeta resolveImportHash resolveImportImplHash resolveNameHash onFrontProgress onFrontOutputStart onFrontOutputProgress onFrontOutputDone shouldWriteFrontOutput recordFrontOutputJobs = do
   createDirectoryIfMissing True (getModPath (projTypes paths) mn)
   core
     `catch` handleGeneral
@@ -2368,10 +2431,29 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       errsToDiagnostics "Compilation error" filename srcContent
         [(NoLoc, "Hash info missing for " ++ prstr qn)]
 
-    missingDepHashDiagnostics :: String -> A.Name -> SrcLoc -> A.QName -> [Diagnostic String]
+    missingDepHashDiagnostics :: String -> String -> SrcLoc -> A.QName -> [Diagnostic String]
     missingDepHashDiagnostics label owner loc qn =
       errsToDiagnostics "Compilation error" filename srcContent
-        [(loc, label ++ " hash missing for " ++ prstr qn ++ " (used by " ++ A.nstr owner ++ ")")]
+        [(loc, label ++ " hash missing for " ++ prstr qn ++ " (used by " ++ owner ++ ")")]
+
+    resolveDepHash :: String
+                   -> (InterfaceFiles.NameHashInfo -> B.ByteString)
+                   -> String
+                   -> SrcLoc
+                   -> A.QName
+                   -> IO (Either [Diagnostic String] (A.QName, B.ByteString))
+    resolveDepHash label getHash owner loc qn = case qn of
+      A.GName m n -> lookupName m n
+      A.QName m n -> lookupName m n
+      A.NoQ _ -> return (Left (missingNameHashDiagnostics qn))
+      where
+        lookupName m n = do
+          mInfo <- resolveNameHash m n
+          return $ case mInfo of
+            Just info
+              | not (B.null (getHash info)) -> Right (A.GName m n, getHash info)
+              | otherwise -> Left (missingDepHashDiagnostics label owner loc (A.GName m n))
+            Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
 
     resolveDepHashes :: String
                      -> (InterfaceFiles.NameHashInfo -> B.ByteString)
@@ -2380,27 +2462,23 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                      -> IO (Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)]))
     resolveDepHashes label getHash deps nameLocs = do
       resolved <- forM (M.toList deps) $ \(owner, qns) -> do
-        resolvedQns <- forM qns $ \qn -> case qn of
-          A.GName m n -> lookupName owner m n
-          A.QName m n -> lookupName owner m n
-          A.NoQ _ -> return (Left (missingNameHashDiagnostics qn))
+        let loc = M.findWithDefault NoLoc owner nameLocs
+        resolvedQns <- forM qns (resolveDepHash label getHash (A.nstr owner) loc)
         let (errs, vals) = partitionEithers resolvedQns
         return $ if null errs
-          then Right (owner, catMaybes vals)
+          then Right (owner, vals)
           else Left (concat errs)
       let (errs, vals) = partitionEithers resolved
       return $ if null errs then Right (M.fromList vals) else Left (concat errs)
-      where
-        lookupName owner m n = do
-          mInfo <- resolveNameHash m n
-          return $ case mInfo of
-            Just info ->
-              let h = getHash info
-                  loc = M.findWithDefault NoLoc owner nameLocs
-              in if B.null h
-                   then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
-                   else Right (Just (A.GName m n, h))
-            Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
+
+    resolveModuleDepHashes :: String
+                           -> (InterfaceFiles.NameHashInfo -> B.ByteString)
+                           -> [A.QName]
+                           -> IO (Either [Diagnostic String] [(A.QName, B.ByteString)])
+    resolveModuleDepHashes label getHash qns = do
+      resolved <- mapM (resolveDepHash label getHash "module initialization" NoLoc) qns
+      let (errs, vals) = partitionEithers resolved
+      return $ if null errs then Right vals else Left (concat errs)
 
     emitFrontProgress pass completed total current =
       onFrontProgress FrontPassProgress
@@ -2499,9 +2577,31 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
       let roots = [ n | (n,i) <- fullIface, rootEligible i ]
-      -- Extract top-level items from parsed and typed ASTs for per-name hashes.
-      let srcItems = Hashing.topLevelItems parsed
-          implItems = Hashing.topLevelItems tchecked
+          hashEnv = setMod mn env
+          -- Constructor partitioning follows the backend tree, whose imported
+          -- protocols have already become generated sibling classes.
+          rowEnv = define fullIface (setMod mn typeEnv)
+          moduleRows =
+            case InterfaceRowsBuilder.prepareInterfaceRows rowEnv tchecked of
+              Left (InterfaceRows.RowError msg) ->
+                error ("Internal error while preparing .tydb rows for " ++
+                       modNameToString mn ++ ": " ++ msg)
+              Right rows -> rows
+          reachabilityRows =
+            case ReachabilityRowsBuilder.prepareReachabilityRows typeEnv fullIface tchecked moduleRows of
+              Left (InterfaceRows.RowError msg) ->
+                error ("Internal error while preparing reachability rows for " ++
+                       modNameToString mn ++ ": " ++ msg)
+              Right rows -> rows
+          topLevelOwners = map InterfaceRows.storedStmtNames (InterfaceRows.rowStatements moduleRows)
+          moduleStatements =
+            [ stmt
+            | InterfaceRows.StoredWhole [] stmt <- InterfaceRows.rowStatements moduleRows
+            ]
+          -- Parsed and typed fragments use the same ownership partition that
+          -- is persisted for selective reconstruction.
+          srcItems = Hashing.sourceTopLevelItems parsed
+          implItems = Hashing.topLevelItems topLevelOwners tchecked
           -- NameInfo defines the full local environment for this module.
           nameInfoMap = M.fromList fullIface
           nameLocsParsed = M.fromListWith (\a _ -> a)
@@ -2513,7 +2613,6 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             M.fromListWith (\a _ -> a)
             [ (n, A.sloc s) | Hashing.TLStmt n s <- implItems ]
           nameLocs = M.union nameLocsParsed nameLocsTyped
-          hashEnv = setMod mn env
           sourceHashWork = length srcItems
           implHashWork = length implItems
           ifaceHashWork = M.size nameInfoMap
@@ -2530,6 +2629,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             let completed = base + done
             when (completed `rem` hashProgressCheckStride == 0) $
               emitHashProgressPaced False completed hashProgressTotal Nothing
+      evaluate (rnf moduleRows)
+      evaluate (rnf reachabilityRows)
       evaluate (sourceHashWork + implHashWork + ifaceHashWork + ifaceDepWork + implDepWork + M.size nameLocs)
       emitHashProgressPaced True 0 hashProgressTotal Nothing
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
@@ -2555,7 +2656,11 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               implItems
           evaluate (rnf nameImplHashes)
           let nameKeys = M.keysSet nameSrcHashes `Data.Set.union` M.keysSet nameImplHashes
-          evaluate (rnf nameKeys)
+              moduleOwnHash = Hashing.moduleOwnImplHash (A.importsOf tchecked) moduleStatements
+              (moduleLocalDeps, moduleImplExtDeps) =
+                Hashing.moduleImplSplitDeps mn hashEnv nameKeys moduleStatements
+              modulePubExtDeps = Hashing.publicImplDeps moduleImplExtDeps
+          evaluate (rnf (nameKeys, moduleOwnHash, moduleLocalDeps, modulePubExtDeps, moduleImplExtDeps))
           selfPubHashes <-
             Hashing.nameInfoHashesWithProgress
               (hashProgress afterImplHashes)
@@ -2578,7 +2683,11 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           -- a pub hash.
           let (pubLocalDeps, pubExtDeps) =
                 Hashing.mergePubDeps pubSigLocalDeps pubSigExtDeps implLocalDeps implExtDeps
-              extMods = Data.Set.toList (Hashing.externalModules pubExtDeps `Data.Set.union` Hashing.externalModules implExtDeps)
+              extMods = Data.Set.toList $
+                Hashing.externalModules (concat $ M.elems pubExtDeps) `Data.Set.union`
+                Hashing.externalModules (concat $ M.elems implExtDeps) `Data.Set.union`
+                Hashing.externalModules modulePubExtDeps `Data.Set.union`
+                Hashing.externalModules moduleImplExtDeps
           evaluate (rnf (pubLocalDeps, pubExtDeps, extMods))
           depModulesRes <- resolveDepModuleHashes extMods
           case depModulesRes of
@@ -2588,16 +2697,26 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               pubSigExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubSigExtDeps nameLocs
               pubExtRes <- resolveDepHashes "pub" InterfaceFiles.nhPubHash pubExtDeps nameLocs
               implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps nameLocs
-              case (pubSigExtRes, pubExtRes, implExtRes) of
-                (Left diags, _, _) -> return (Left diags)
-                (_, Left diags, _) -> return (Left diags)
-                (_, _, Left diags) -> return (Left diags)
-                (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
-                  evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes))
+              modulePubExtRes <- resolveModuleDepHashes "pub" InterfaceFiles.nhPubHash modulePubExtDeps
+              moduleImplExtRes <- resolveModuleDepHashes "impl" InterfaceFiles.nhImplHash moduleImplExtDeps
+              case (pubSigExtRes, pubExtRes, implExtRes, modulePubExtRes, moduleImplExtRes) of
+                (Left diags, _, _, _, _) -> return (Left diags)
+                (_, Left diags, _, _, _) -> return (Left diags)
+                (_, _, Left diags, _, _) -> return (Left diags)
+                (_, _, _, Left diags, _) -> return (Left diags)
+                (_, _, _, _, Left diags) -> return (Left diags)
+                (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes,
+                 Right modulePubExtHashes, Right moduleImplExtHashes) -> do
+                  evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes,
+                                 modulePubExtHashes, moduleImplExtHashes))
                   let pubHashes = Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes
                       implHashes = Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes
-                      (modulePubHash, moduleImplHash) = Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
-                  evaluate (rnf (pubHashes, implHashes, modulePubHash, moduleImplHash))
+                      moduleHashInfo = Hashing.finishModuleHash
+                        implHashes moduleOwnHash topLevelOwners moduleLocalDeps
+                        modulePubExtHashes moduleImplExtHashes
+                      (modulePubHash, moduleImplHash) =
+                        Hashing.moduleHashesFromHashMaps nmod moduleHashInfo nameKeys pubHashes implHashes
+                  evaluate (rnf (pubHashes, implHashes, moduleHashInfo, modulePubHash, moduleImplHash))
                   let nameHashes =
                         Hashing.assembleNameHashes
                           nameKeys
@@ -2620,32 +2739,47 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   timeTypeCheck <- getTime Monotonic
 
                   let writeTyDb outputKey = do
-                        InterfaceFiles.writeFileWithProgress
+                        InterfaceFiles.writeFile
                           (\p -> onFrontOutputProgress outputKey FrontOutputTydb (frontOutputTyDbProgress p))
-                          A.version
                           (tyDbPath paths mn)
-                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes roots tests mdoc nmod tchecked
-                      writeDoc = do
-                        let docDir = joinPath [projPath paths, "out", "doc"]
-                            modPathList = A.modPath mn
-                            docFile = if null modPathList
-                                      then docDir </> "unnamed" <.> "html"
-                                      else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
-                            docFileDir = takeDirectory docFile
-                            -- Get the type environment for this module
-                            modTypeEnv = case Acton.Env.lookupModuleInfo mn typeEnv of
-                              Just mi -> Acton.Env.modulePublicTEnv mi
-                              Nothing -> publicIface
-                            -- Apply the same simplification as --sigs uses
-                            env1 = define publicIface $ setMod mn env
-                            simplifiedTypeEnv = simp env1 modTypeEnv
-                        createDirectoryIfMissing True docFileDir
-                        -- Use parsed (original AST) to preserve docstrings
-                        let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
-                        writeFile docFile htmlDoc
+                          InterfaceFiles.InterfaceContents
+                            { InterfaceFiles.ifcSourceHash = moduleSrcBytesHash
+                            , InterfaceFiles.ifcPublicHash = modulePubHash
+                            , InterfaceFiles.ifcImplementationHash = moduleImplHash
+                            , InterfaceFiles.ifcModuleHashInfo = moduleHashInfo
+                            , InterfaceFiles.ifcSourceMeta = sourceMeta
+                            , InterfaceFiles.ifcImports = impsWithHash
+                            , InterfaceFiles.ifcDependencies = depModules
+                            , InterfaceFiles.ifcNameHashes = nameHashes
+                            , InterfaceFiles.ifcRoots = roots
+                            , InterfaceFiles.ifcTests = tests
+                            , InterfaceFiles.ifcDoc = mdoc
+                            , InterfaceFiles.ifcModule = nmod
+                            , InterfaceFiles.ifcRows = moduleRows
+                            , InterfaceFiles.ifcReachabilityRows = reachabilityRows
+                            }
                       docOutputActions =
                         if shouldGenerateDocOutput opts (isTmp paths) (length nameHashes)
-                          then [(FrontOutputDoc, writeDoc)]
+                          then
+                            let writeDoc = do
+                                  let docDir = joinPath [projPath paths, "out", "doc"]
+                                      modPathList = A.modPath mn
+                                      docFile = if null modPathList
+                                                then docDir </> "unnamed" <.> "html"
+                                                else joinPath (docDir : init modPathList) </> last modPathList <.> "html"
+                                      docFileDir = takeDirectory docFile
+                                      -- Get the type environment for this module
+                                      modTypeEnv = case Acton.Env.lookupModuleInfo mn typeEnv of
+                                        Just mi -> Acton.Env.modulePublicTEnv mi
+                                        Nothing -> publicIface
+                                      -- Apply the same simplification as --sigs uses
+                                      env1 = define publicIface $ setMod mn env
+                                      simplifiedTypeEnv = simp env1 modTypeEnv
+                                  createDirectoryIfMissing True docFileDir
+                                  -- Use parsed (original AST) to preserve docstrings
+                                  let htmlDoc = DocP.printHtmlDoc (I.NModule imps simplifiedTypeEnv mdoc) parsed
+                                  writeFile docFile htmlDoc
+                            in [(FrontOutputDoc, writeDoc)]
                           else []
                   typeStmtTimings <- reverse <$> readIORef typeStmtTimingsRef
                   typeProgressDone <- readIORef typeProgressDoneRef
@@ -2673,19 +2807,30 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
+                      backPassNeeded = shouldRunBackPass dbpBlocked requested opts roots
+                      deferredBackJob
+                        | backPassNeeded = selectiveDeferredBackJob dbpBlocked
+                            (A.hasNotImpl (A.mbody tchecked)) opts paths mn
+                        | otherwise = Nothing
                       backJob =
                         case deferredBackJob of
                           Just _ -> Nothing
-                          Nothing ->
+                          Nothing | backPassNeeded ->
                             Just BackJob { bjPaths = paths
                                          , bjOpts = opts
                                          , bjInput = BackInput { biTypeEnv = typeEnv
                                                               , biTypedMod = tchecked
-                                                              , biSrc = srcContent
-                                                              , biImplHash = moduleImplHash
+                                                              , biDeclarations = []
+                                                              , biSrc = Just srcContent
+                                                              , biCodegenHash = Hashing.wholeCodegenHash
+                                                                  (not $ C.dbg_no_lines opts)
+                                                                  moduleImplHash moduleSrcBytesHash
                                                               }
+                                         , bjValidate = return ()
                                          }
+                          Nothing -> Nothing
+                  evaluate backJob
+                  evaluate docOutputActions
                   do
                     let outputKey = TaskKey (projPath paths) mn
                     -- The .tydb commit is synchronous with front completion:
@@ -2711,242 +2856,37 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           let jobs = docJobs ++ tyJobs
                           recordFrontOutputJobs jobs
                           return jobs
-                        return $ Right FrontResult { frIfaceTE = publicIface
-                                                   , frImps = imps
-                                                   , frDoc = mdoc
-                                                   , frModuleInfo = Nothing
-                                                   , frPubHash = modulePubHash
-                                                   , frImplHash = moduleImplHash
-                                                   , frNameHashes = publicNameHashes nameHashes
-                                                   , frInterestDeps = interestDepsFromNameHashes nameHashes
-                                                   , frFrontTime = frontTimeMaybe
-                                                   , frFrontTiming = frontTimingMaybe
-                                                   , frInferredSigs = inferredSigs
-                                                   , frBackJob = backJob
-                                                   , frDeferredBackJob = deferredBackJob
-                                                   , frOutputJobs = outputJobs
-                                                   }
-
-data DbpSelection = DbpSelection
-  { dbsModule :: A.Module
-  , dbsSelectedCount :: Int
-  , dbsFallbackReason :: Maybe String
-  }
-
-data DbpNameSelection = DbpNameSelection
-  { dnsSelectedNames :: Data.Set.Set A.Name
-  , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
-  }
-
-prepareDeferredBackJob :: Source.SourceProvider
-                       -> C.GlobalOptions
-                       -> CompileCallbacks
-                       -> Acton.Env.Env0
-                       -> InterestMap
-                       -> DeferredBackJob
-                       -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
-  let paths = dbjPaths dbj
-      mn = dbjMod dbj
-      tyFile = tyDbPath paths mn
-      actFile = srcFile paths mn
-  roots <- InterfaceFiles.readRoots tyFile
-  let interested = M.findWithDefault Data.Set.empty mn interestMap
-      rootSeeds = Data.Set.fromList roots
-      selectedSeeds = Data.Set.union interested rootSeeds
-      totalNames = dbjNameCount dbj
-  nameSelection <- selectDbpNames paths mn tyFile selectedSeeds
-  let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
-  codegen <- codegenStatus paths mn codegenHash
-  if codegenUpToDate codegen
-    then do
-      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
-      return Nothing
-    else do
-      selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
-      -- Same-version .tydb files always carry statement indices, so a failed
-      -- selective read means a corrupt or hand-doctored file -- an eager
-      -- whole-module fallback would mask that (and read gigabytes doing it).
-      selection <- case selectedTmod of
-        Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
-        Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
-      snap <- Source.readSource sp actFile
-      env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
-      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
-      return $ Just BackJob
-        { bjPaths = paths
-        , bjOpts = dbjOpts dbj
-        , bjInput = BackInput
-            { biTypeEnv = Converter.convEnvProtos env1
-            , biTypedMod = dbsModule selection
-            , biSrc = Source.ssText snap
-            , biImplHash = codegenHash
-            }
-        }
-
-logDbpSelection :: C.GlobalOptions
-                -> CompileCallbacks
-                -> A.ModName
-                -> DeferredBackJob
-                -> Int
-                -> Int
-                -> Int
-                -> Int
-                -> Maybe String
-                -> String
-                -> IO ()
-logDbpSelection gopts callbacks mn dbj totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
-  when (C.verbose gopts) $
-    ccOnInfo callbacks $
-      "  DBP " ++ modNameToString (dropProjPrefix (dbjPaths dbj) mn)
-      ++ ": total names " ++ show totalNames
-      ++ ", interested names " ++ show interestedCount
-      ++ ", root names " ++ show rootCount
-      ++ ", selected closure " ++ show selectedCount
-      ++ maybe "" (\reason -> ", fallback: " ++ reason) fallbackReason
-      ++ ", " ++ codegenReason
-
-dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
-dbpCodegenHash moduleImplHash selected =
-  SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, selectedNames)))
-  where
-    selectedNames =
-      [ Hashing.nameKey n
-      | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
-      ]
-
-selectDbpNames :: Paths
-               -> A.ModName
-               -> FilePath
-               -> Data.Set.Set A.Name
-               -> IO DbpNameSelection
-selectDbpNames paths mn tyFile seeds
-  | Data.Set.null seeds =
-      return DbpNameSelection
-        { dnsSelectedNames = Data.Set.empty
-        , dnsNameHashes = []
-        }
-  | otherwise = do
-      roots <- traverse (dbpReadOwningName paths mn tyFile) (Data.Set.toList seeds)
-      selected <- dbpNameHashClosure paths mn tyFile M.empty roots
-      return DbpNameSelection
-        { dnsSelectedNames = Data.Set.fromList (M.keys selected)
-        , dnsNameHashes = M.elems selected
-        }
-
-dbpSelectionError :: Paths -> A.ModName -> String -> IO a
-dbpSelectionError paths mn reason =
-  throwIO (DbpSelectionError ("DBP selection failed for " ++ modNameToString (dropProjPrefix paths mn) ++ ": " ++ reason))
-
-selectDbpModule :: Int
-                -> DbpNameSelection
-                -> A.Module
-                -> DbpSelection
-selectDbpModule totalNames nameSelection tmod@(A.Module loc imps mdoc suite)
-  | A.hasNotImpl suite = fallback "module contains NotImplemented/native extension hooks"
-  | otherwise =
-      let selected = dnsSelectedNames nameSelection
-          suite' = mapMaybe (dbpPruneTopStmt selected) suite
-      in DbpSelection
-           { dbsModule = A.Module loc imps mdoc suite'
-           , dbsSelectedCount = Data.Set.size selected
-           , dbsFallbackReason = Nothing
-           }
-  where
-    fallback reason =
-      DbpSelection
-        { dbsModule = tmod
-        , dbsSelectedCount = totalNames
-        , dbsFallbackReason = Just reason
-        }
-
-dbpReadNameHash :: Paths -> A.ModName -> FilePath -> A.Name -> IO InterfaceFiles.NameHashInfo
-dbpReadNameHash paths mn tyFile n = do
-  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
-  case mnh of
-    Just nh -> return nh
-    Nothing -> dbpSelectionError paths mn ("hash info missing for " ++ nameToString n)
-
-dbpReadOwningName :: Paths -> A.ModName -> FilePath -> A.Name -> IO A.Name
-dbpReadOwningName paths mn tyFile n = do
-  mnh <- InterfaceFiles.readNameHashMaybe tyFile n
-  case mnh of
-    Just _ -> return n
-    Nothing ->
-      case n of
-        A.Derived base _ -> dbpReadOwningName paths mn tyFile base
-        _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ nameToString n)
-        _ -> dbpSelectionError paths mn ("no top-level owner for " ++ nameToString n)
-
-dbpNameHashClosure :: Paths
-                   -> A.ModName
-                   -> FilePath
-                   -> M.Map A.Name InterfaceFiles.NameHashInfo
-                   -> [A.Name]
-                   -> IO (M.Map A.Name InterfaceFiles.NameHashInfo)
-dbpNameHashClosure _ _ _ selected [] = return selected
-dbpNameHashClosure paths mn tyFile selected (n:ns)
-  | M.member n selected = dbpNameHashClosure paths mn tyFile selected ns
-  | otherwise = do
-      nh <- dbpReadNameHash paths mn tyFile n
-      localDeps <- traverse (dbpReadOwningName paths mn tyFile)
-                     (InterfaceFiles.nhPubLocalDeps nh ++ InterfaceFiles.nhImplLocalDeps nh)
-      exts <- dbpExtensionsForName tyFile n
-      extDeps <- traverse (dbpReadOwningName paths mn tyFile) exts
-      let deps = unionNames localDeps extDeps
-          selected' = M.insert n nh selected
-          new = filter (`M.notMember` selected') deps
-      dbpNameHashClosure paths mn tyFile selected' (new ++ ns)
-  where
-    unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
-
-dbpExtensionsForName :: FilePath -> A.Name -> IO [A.Name]
-dbpExtensionsForName tyFile n = do
-  byClass <- InterfaceFiles.readExtensionsByClass tyFile n
-  byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
-  return (Data.List.sortOn Hashing.nameKey (Data.List.nub (byClass ++ byProtocol)))
-
-dbpPruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
-dbpPruneTopStmt selected stmt =
-  case stmt of
-    A.Decl l ds ->
-      case filter (\d -> Data.Set.member (Names.dname' d) selected) ds of
-        [] -> Nothing
-        ds' -> Just (A.Decl l ds')
-    A.Signature l ns typ dec ->
-      case filter (`Data.Set.member` selected) ns of
-        [] -> Nothing
-        ns' -> Just (A.Signature l ns' typ dec)
-    A.Assign{} ->
-      if any (`Data.Set.member` selected) (Names.bound stmt)
-        then Just stmt
-        else Nothing
-    A.VarAssign{} ->
-      if any (`Data.Set.member` selected) (Names.bound stmt)
-        then Just stmt
-        else Nothing
-    A.Pass{} -> Nothing
-    -- Source-level modules only admit Decl, Signature, and Assign at the top
-    -- level. VarAssign and Pass are compiler-introduced typed forms handled
-    -- above; other statement forms should not appear in a typed module suite.
-    _ -> Nothing
-
+                        ifaceRes <- readIfaceFromTy paths mn srcContent (Just modulePubHash)
+                        case ifaceRes of
+                          Left diags -> return (Left diags)
+                          Right (_,_,_,_,_,moduleInfo) ->
+                            return $ Right FrontResult
+                              { frIfaceTE = []
+                              , frImps = imps
+                              , frDoc = mdoc
+                              , frModuleInfo = moduleInfo
+                              , frPubHash = modulePubHash
+                              , frImplHash = moduleImplHash
+                              , frNameHashes = publicNameHashes nameHashes
+                              , frFrontTime = frontTimeMaybe
+                              , frFrontTiming = frontTimingMaybe
+                              , frInferredSigs = inferredSigs
+                              , frBackJob = backJob
+                              , frDeferredBackJob = deferredBackJob
+                              , frOutputJobs = outputJobs
+                              }
 
 -- | Run the back passes for a single module.
 -- Executes normalization through codegen, writes .c/.h output as needed, and
 -- returns the back-pass elapsed time for logging.
-runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO Bool -> IO (Maybe TimeSpec, Maybe BackTiming)
-runBackPasses gopts opts paths backInput shouldWrite =
-      runBackPassesWithProgress gopts opts paths backInput shouldWrite (\_ -> return ())
-
-runBackPassesWithProgress :: C.GlobalOptions
-                          -> C.CompileOptions
-                          -> Paths
-                          -> BackInput
-                          -> IO Bool
-                          -> (BackPassProgress -> IO ())
-                          -> IO (Maybe TimeSpec, Maybe BackTiming)
-runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
+runBackPasses :: C.GlobalOptions
+              -> C.CompileOptions
+              -> Paths
+              -> BackInput
+              -> (IO () -> IO Bool)
+              -> (BackPassProgress -> IO ())
+              -> IO (Maybe TimeSpec, Maybe BackTiming)
+runBackPasses gopts opts paths backInput commitWrite onProgress = do
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
           relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
@@ -3026,12 +2966,14 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
         return res
 
       ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
-        let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
-            emitLines = not (C.dbg_no_lines opts)
-        Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+        let hexHash = B.unpack $ Base16.encode (biCodegenHash backInput)
+            srcText = fromMaybe "" (biSrc backInput)
+            emitLines = isJust (biSrc backInput) && not (C.dbg_no_lines opts)
+        Acton.CodeGen.generate liftEnv (biDeclarations backInput)
+          relSrcBase srcText emitLines boxed hexHash
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
-      if C.hgen opts
+      result <- if C.hgen opts
         then do
           (_, tRender) <- timedBackPass BackPassRender (forceOut h)
           putStrLn h
@@ -3047,19 +2989,21 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
               if not writesOutput
                 then return Nothing
                 else do
-                  ok <- shouldWrite
-                  if not ok
+                  writeTime <- newIORef Nothing
+                  wrote <- commitWrite $ do
+                    (_, tWrite) <- timedBackPass BackPassWrite $ do
+                      let cFile = outbase ++ ".c"
+                          hFile = outbase ++ ".h"
+                      writeFile hFile h
+                      writeFile cFile c
+                    writeIORef writeTime (Just tWrite)
+                  if not wrote
                     then do
                       emitSkipped BackPassWrite
                       return Nothing
-                    else do
-                      (_, tWrite) <- timedBackPass BackPassWrite $ do
-                        let cFile = outbase ++ ".c"
-                            hFile = outbase ++ ".h"
-                        writeFile hFile h
-                        writeFile cFile c
-                      return (Just tWrite)
+                    else readIORef writeTime
             finishBack tRender mWriteTime
+      return result
 
 
 -- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
@@ -3116,11 +3060,13 @@ compileTasks :: Source.SourceProvider
              -> C.CompileOptions
              -> Paths                     -- root project paths (for alt output root selection)
              -> FilePath                  -- root project path
+             -> Data.Set.Set TaskKey       -- root-project modules that can produce requested binaries
+             -> Data.Set.Set TaskKey       -- explicitly requested modules
              -> [GlobalTask]
              -> Data.Set.Set TaskKey
              -> CompileCallbacks
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
+compileTasks sp gopts opts rootPaths rootProj rootTaskKeys requestedTasks tasks dbpBlocked callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = do
@@ -3174,7 +3120,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
 
-      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty Data.Set.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
+      loop frontOutputRef runningRef stageInitialReady [] M.empty M.empty M.empty M.empty M.empty stageIndeg stagePending0 baseEnv False maxParallel cwMap
 
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
@@ -3243,6 +3189,25 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     stagePending0 = Data.Set.fromList (M.keys stageIndeg)
 
     rootAlt = modName rootPaths
+    rootAltKey = TaskKey rootProj rootAlt
+
+    rootCandidates :: [(TaskKey,A.Name)]
+    rootCandidates
+      | C.test opts =
+          [ (key,A.name "test_main") | key <- Data.Set.toAscList rootTaskKeys ]
+      | not (null $ C.root opts) = [explicitRootCandidate]
+      | otherwise =
+          [ (key,A.name "main") | key <- Data.Set.toAscList rootTaskKeys ]
+
+    explicitRootCandidate =
+      let parts = A.modPath (moduleStringToName $ C.root opts)
+          moduleParts = init parts
+          project = projName rootPaths
+          canonicalModule
+            | null moduleParts = rootAlt
+            | project `elem` special_projects = A.modName moduleParts
+            | otherwise = A.modName (project : moduleParts)
+      in (TaskKey rootProj canonicalModule,A.name $ last parts)
 
     builtinPath =
       case builtinOrder of
@@ -3269,32 +3234,269 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               seen' = foldl' (flip Data.Set.insert) seen new
           in go seen' (new ++ xs)
 
-    flushReadyDeferredBacks :: Acton.Env.Env0
-                            -> InterestMap
-                            -> Data.Set.Set TaskKey
-                            -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
-                            -> IO (Either CompileFailure (M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)))
-    flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks = do
-      let (ready, waiting) =
-            M.partitionWithKey
-              (\_ (_dbj, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
-              deferredBacks
-      prepared <- (try $
-        forM (M.elems ready) $ \(dbj, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
-          case mJob of
-            Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
-            Just _ -> return ()
-          return mJob)
-        :: IO (Either SomeException [Maybe BackJob])
+    flushDeferredBacks :: M.Map TaskKey DeferredBackJob
+                       -> IO (Either CompileFailure ())
+    flushDeferredBacks deferredBacks | M.null deferredBacks = do
+      ccOnReachability callbacks Data.Set.empty SelectiveWorklist.emptySelection
+      return (Right ())
+    flushDeferredBacks deferredBacks = do
+      prepared <- (try prepareAll :: IO (Either SomeException [Maybe BackJob]))
       case prepared of
-        Left err ->
-          if isJust (fromException err :: Maybe SomeAsyncException)
-            then throwIO err
-            else return (Left (CompileInternalFailure (displayException err)))
+        Left err
+          | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+          | otherwise -> return (Left (CompileInternalFailure (displayException err)))
         Right jobs -> do
           mapM_ (ccOnBackJob callbacks) (catMaybes jobs)
-          return (Right waiting)
+          return (Right ())
+      where
+        deferred = M.toAscList deferredBacks
+        taskInterfaces = M.fromListWith (++)
+          [ (tkMod key, [tyDbPath (gtPaths task) (tkMod key)])
+          | task <- tasks
+          , let key = gtKey task
+          ]
+        searchPaths = nub (concatMap (searchPath . gtPaths) tasks)
+
+        resolveInterfaces mn =
+          case M.findWithDefault [] mn taskInterfaces of
+            [] -> maybe [] (:[]) <$> Acton.Env.findTyFile searchPaths mn
+            paths -> return (nub paths)
+
+        prepareAll = do
+          let byModule = M.fromListWith (++)
+                [ (dbjMod dbj, [key]) | (key,dbj) <- deferred ]
+              ambiguous = [ (mn,keys) | (mn,keys) <- M.toAscList byModule, length keys > 1 ]
+          unless (null ambiguous) $
+            throwIO $ ProjectError
+              ("Selective back-pass module identity is ambiguous: " ++ show ambiguous)
+
+          let deferredKeys = Data.Set.fromList (map fst deferred)
+              selectableModules = Data.Set.fromList
+                [ dbjMod dbj | (_,dbj) <- deferred ]
+              wholeKeys0 = M.keysSet taskMap `Data.Set.difference` deferredKeys
+              wholeModules0 = Data.Set.fromList
+                [ tkMod key | key <- Data.Set.toAscList wholeKeys0 ]
+              snapshotModules = selectableModules `Data.Set.union` wholeModules0
+              rootModules =
+                [ (tkMod key,root)
+                | (key,root) <- rootCandidates
+                , M.member key taskMap
+                ]
+          snapshots <- SelectiveBack.captureInterfaceClosure
+            resolveInterfaces snapshotModules
+          let rootlessModules = SelectiveBack.snapshotRootlessModules snapshots
+              noBackKeys
+                | altOutput opts = Data.Set.empty
+                | otherwise = Data.Set.filter
+                    (\key -> Data.Set.notMember key dbpBlocked &&
+                             Data.Set.member key requestedTasks &&
+                             Data.Set.member (tkMod key) rootlessModules)
+                    wholeKeys0
+              wholeKeys = wholeKeys0 `Data.Set.difference` noBackKeys
+              wholeModules = Data.Set.fromList
+                [ tkMod key | key <- Data.Set.toAscList wholeKeys ]
+              notImplementedModules =
+                SelectiveBack.snapshotNotImplementedModules snapshots
+              nativeRoots = Data.Set.filter
+                (\key -> Data.Set.member (tkMod key) notImplementedModules)
+                wholeKeys
+              nativeForcedKeys = providerClosure nativeRoots
+                `Data.Set.intersection` deferredKeys
+              (wholeDeferred,selectedDeferred) = partition
+                (\(key,_) -> Data.Set.member key nativeForcedKeys)
+                deferred
+              forcedWholeModules = Data.Set.fromList
+                [ dbjMod dbj | (_,dbj) <- wholeDeferred ]
+              interestWholeModules = wholeModules
+                `Data.Set.union` forcedWholeModules
+          rootSeeds <- SelectiveBack.snapshotRootSeeds snapshots rootModules
+          wholeSeeds <- SelectiveBack.snapshotWholeModuleSeeds
+            resolveInterfaces snapshots interestWholeModules
+          selectedPreparation <- prepareSelected snapshots selectedDeferred
+            (rootSeeds ++ wholeSeeds)
+          case selectedPreparation of
+            Left () -> do
+              ccOnReachability callbacks
+                (interestWholeModules `Data.Set.union` selectableModules)
+                SelectiveWorklist.emptySelection
+              wholeJobs <- prepareWholeModules snapshots deferred
+              attachBatchValidation snapshots wholeJobs
+            Right (selectedSnapshots,selection,selectiveJobs) -> do
+              ccOnReachability callbacks interestWholeModules selection
+              wholeJobs <- prepareWholeModules snapshots wholeDeferred
+              attachBatchValidation
+                (fromMaybe snapshots selectedSnapshots)
+                (wholeJobs ++ selectiveJobs)
+
+        prepareSelected _ [] _ =
+          return (Right (Nothing,SelectiveWorklist.emptySelection,[]))
+        prepareSelected _ selectedDeferred [] = do
+          mapM_ (ccOnBackSkipped callbacks . fst) selectedDeferred
+          return (Right (Nothing,SelectiveWorklist.emptySelection,[]))
+        prepareSelected snapshots selectedDeferred seeds = do
+          let selectableModules = Data.Set.fromList
+                [ dbjMod dbj | (_,dbj) <- selectedDeferred ]
+          selectedResult <- SelectiveBack.selectFromSnapshots
+            resolveInterfaces snapshots selectableModules seeds
+          case selectedResult of
+            Left SelectiveWorklist.DynamicSerializationRequiresWhole ->
+              return (Left ())
+            Left err -> throwIO $ ProjectError
+              ("Selective back-pass reachability failed: " ++ show err)
+            Right selectedProgram -> Right <$> prepareProjection selectedProgram
+          where
+            prepareProjection selectedProgram0 = do
+              (selectedProgram,opaqueHashes) <-
+                SelectiveBack.captureSelectedOpaqueHashes resolveInterfaces selectedProgram0
+              let activeSnapshots = SelectiveBack.selectedProgramSnapshots selectedProgram
+                  selection = SelectiveBack.selectedProgramSelection selectedProgram
+                  selectedModules = Data.Set.fromList
+                    [ mn
+                    | SelectiveWorklist.TopKey mn _ <-
+                        Data.Set.toAscList
+                          ( SelectiveWorklist.selectedTops selection
+                            `Data.Set.union` SelectiveWorklist.selectedDeclarations selection
+                          )
+                    ]
+                  projectionModules = selectedModules `Data.Set.union`
+                    Data.Set.fromList [ dbjMod dbj | (_,dbj) <- selectedDeferred ]
+              projections <- SelectiveBack.materializeInterfaceProjections
+                resolveInterfaces (Data.Set.toAscList projectionModules) selectedProgram
+              let projectionMap = M.fromList
+                    [ (A.modname $ SelectiveBack.projectionModule projection,projection)
+                    | projection <- projections
+                    ]
+              keyedProjections <- forM selectedDeferred $ \(key,dbj) ->
+                case M.lookup (dbjMod dbj) projectionMap of
+                  Nothing -> throwIO $ ProjectError
+                    ("Missing selective projection for " ++ modNameToString (dbjMod dbj))
+                  Just projection -> return (key,dbj,projection)
+
+              let universeHash = SelectiveBack.bindInterfaceSnapshots
+                    (SelectiveBack.projectionUniverseHash selection projections opaqueHashes)
+                    activeSnapshots
+              snapshotEnv <- SelectiveBack.snapshotEnvironment
+                resolveInterfaces activeSnapshots
+              let selectiveEnv = SelectiveBack.restrictEnvironmentPublicNames
+                    selection snapshotEnv
+                  projectedEnv = foldl' installProjection selectiveEnv projections
+                  installProjection env projection =
+                    let mn = A.modname $ SelectiveBack.projectionModule projection
+                        info = SelectiveBack.projectionModuleInfo env projection
+                    in Acton.Env.addModuleInfo mn info env
+
+              jobs <- forM keyedProjections $ \(key,dbj,projection) -> do
+                let paths = dbjPaths dbj
+                    mn = dbjMod dbj
+                    typed = SelectiveBack.projectionModule projection
+                    codegenHash = SelectiveBack.projectionCodegenHash universeHash mn
+                status <- codegenStatus paths mn codegenHash
+                if codegenUpToDate status
+                  then do
+                    logSelection dbj projection "generated code up to date"
+                    ccOnBackSkipped callbacks key
+                    return Nothing
+                  else do
+                    importedEnv <- Acton.Env.mkEnv (searchPath paths) projectedEnv typed
+                    let declarations = SelectiveBack.projectionDeclarations projection
+                        env = Acton.Env.defineClosed declarations importedEnv
+                    logSelection dbj projection "generated code out of date"
+                    return $ Just BackJob
+                      { bjPaths = paths
+                      , bjOpts = dbjOpts dbj
+                      , bjInput = BackInput
+                          { biTypeEnv = Converter.convEnvProtos env
+                          , biTypedMod = typed
+                          , biDeclarations = map fst declarations
+                          , biSrc = Nothing
+                          , biCodegenHash = codegenHash
+                          }
+                      , bjValidate = return ()
+                      }
+              return (Just activeSnapshots,selection,jobs)
+
+        attachBatchValidation snapshots jobs = do
+          let validate = SelectiveBack.validateInterfaceSnapshots
+                resolveInterfaces snapshots
+              count = length (catMaybes jobs)
+          validate
+          if count == 0
+            then return jobs
+            else do
+              remaining <- newMVar count
+              let complete = modifyMVar_ remaining $ \pending ->
+                    if pending == 1
+                      then validate >> return 0
+                      else return (pending - 1)
+                  attach job = job{ bjValidate = complete }
+              return (map (fmap attach) jobs)
+
+        providerClosure initial = go (Data.Set.toAscList initial) initial
+          where
+            go [] seen = seen
+            go (key:pending) seen =
+              let new = filter (`Data.Set.notMember` seen) $
+                    M.findWithDefault [] key depMap
+                  seen' = foldl' (flip Data.Set.insert) seen new
+              in go (pending ++ new) seen'
+
+        prepareWholeModules _ [] = return []
+        prepareWholeModules snapshots wholeDeferred = do
+          snapshotEnv <- SelectiveBack.snapshotEnvironment resolveInterfaces snapshots
+          mapM (prepareWhole snapshots snapshotEnv) wholeDeferred
+
+        prepareWhole snapshots snapshotEnv (key,dbj) = do
+          let paths = dbjPaths dbj
+              mn = dbjMod dbj
+          implHash <- SelectiveBack.snapshotImplementationHash snapshots mn
+          sourceHash <- SelectiveBack.snapshotSourceHash snapshots mn
+          let wholeHash = Hashing.wholeCodegenHash
+                (not $ C.dbg_no_lines $ dbjOpts dbj) implHash sourceHash
+              codegenHash = SelectiveBack.bindInterfaceSnapshots wholeHash snapshots
+          status <- codegenStatus paths mn codegenHash
+          if codegenUpToDate status
+            then do
+              logWhole dbj "generated code up to date"
+              ccOnBackSkipped callbacks key
+              return Nothing
+            else do
+              (typed,storedImplHash) <- SelectiveBack.materializeWholeModule
+                resolveInterfaces snapshots mn
+              unless (storedImplHash == implHash) $
+                throwIO $ ProjectError $
+                  "Interface changed while preparing full back pass for " ++
+                  modNameToString mn
+              env <- Acton.Env.mkEnv (searchPath paths) snapshotEnv typed
+              snap <- readMatchingSource sp mn sourceHash (srcFile paths mn)
+              logWhole dbj "generated code out of date"
+              return $ Just BackJob
+                { bjPaths = paths
+                , bjOpts = dbjOpts dbj
+                , bjInput = BackInput
+                    { biTypeEnv = Converter.convEnvProtos env
+                    , biTypedMod = typed
+                    , biDeclarations = []
+                    , biSrc = Just (Source.ssText snap)
+                    , biCodegenHash = codegenHash
+                    }
+                , bjValidate = return ()
+                }
+
+        logSelection dbj projection reason =
+          when (C.verbose gopts) $
+            ccOnInfo callbacks $
+              "  Selective back " ++
+              modNameToString (dropProjPrefix (dbjPaths dbj) (dbjMod dbj)) ++
+              ": " ++ show (SelectiveBack.projectionTopCount projection) ++ " tops, " ++
+              show (SelectiveBack.projectionMemberCount projection) ++ " members, " ++ reason
+
+        logWhole dbj reason =
+          when (C.verbose gopts) $
+            ccOnInfo callbacks $
+              "  Full back " ++
+              modNameToString (dropProjPrefix (dbjPaths dbj) (dbjMod dbj)) ++
+              ": full-module closure, " ++ reason
+
 
     -- TODO: can we reintegrate this into the normal loop to avoid duplication?
     -- NOTE: FYI, it was originally part of the main loop but factored out for
@@ -3308,7 +3510,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           mn = name (gtTask t)
           optsBuiltin = optsFor (gtKey t)
           actFile = srcFile bPaths mn
-          forceAlt = altOutput optsBuiltin && mn == rootAlt
+          forceAlt = altOutput optsBuiltin && gtKey t == rootAltKey
       if C.only_build optsBuiltin
         then return (Right ())
         else do
@@ -3328,6 +3530,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               res <- runFrontPasses
                 gopts
                 optsBuiltin
+                False
                 False
                 bPaths
                 builtinEnv0
@@ -3383,7 +3586,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           actFile = srcFile paths mn
           tyFile = tyDbPath paths mn
           short8 bs   = take 8 (B.unpack $ Base16.encode bs)
-          mkFrontResult imps ifaceTE mdoc pubHash implHash nameHashes interestNameHashes backJob deferredBackJob =
+          mkFrontResult imps ifaceTE mdoc pubHash implHash nameHashes backJob deferredBackJob =
             FrontResult
               { frIfaceTE = ifaceTE
               , frImps = imps
@@ -3392,7 +3595,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frPubHash = pubHash
               , frImplHash = implHash
               , frNameHashes = nameHashes
-              , frInterestDeps = interestDepsFromNameHashes interestNameHashes
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -3409,7 +3611,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               , frPubHash = B.empty
               , frImplHash = B.empty
               , frNameHashes = []
-              , frInterestDeps = Data.Set.empty
               , frFrontTime = Nothing
               , frFrontTiming = Nothing
               , frInferredSigs = []
@@ -3441,16 +3642,18 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             case tyRes of
               Nothing -> return (Left (missingIfaceDiagnostics mn "" mn))
               Just ty -> return (Right ty)
-          mkBackJob env1 tmod srcText moduleImplHash =
+          mkBackJob env1 tmod srcText codegenHash =
             BackJob
               { bjPaths = paths
               , bjOpts = optsT
               , bjInput = BackInput
                   { biTypeEnv = Converter.convEnvProtos env1
                   , biTypedMod = tmod
-                  , biSrc = srcText
-                  , biImplHash = moduleImplHash
+                  , biDeclarations = []
+                  , biSrc = Just srcText
+                  , biCodegenHash = codegenHash
                   }
+              , bjValidate = return ()
               }
 
           resolveImportHash m =
@@ -3565,64 +3768,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                      then ""
                      else " (used by " ++ intercalate ", " names ++ ")"
 
-          interestDepsFromDepRows depModules = do
-            depSets <- forM depModules $ \depInfo -> do
-              let depMn = InterfaceFiles.dmiModule depInfo
-              depNames <- InterfaceFiles.readDepNames tyFile depMn
-              return (Data.Set.fromList [ (depMn, InterfaceFiles.dniName depName) | depName <- depNames ])
-            return (Data.Set.unions depSets)
-
-          cachedInterestDeps = case taskCurrent of
-            TyTask{ tyDepModules = depModules } -> interestDepsFromDepRows depModules
-            _ -> return Data.Set.empty
-
-          -- Restore BOTH the pub and the impl per-name external deps from the
-          -- module-level dep rows (the per-name rows on disk are stripped, see
-          -- InterfaceFiles.stripExternalDeps). The impl half matters: a header
-          -- rewrite (impl-hash refresh) re-derives the dep rows from these name
-          -- hashes, and losing the impl users would erase the per-name impl
-          -- change tracking for every dependency of this module.
-          restorePubDepsFromRows depModules nameHashes = do
-            (pubByOwner, implByOwner) <- foldM addModule (M.empty, M.empty) depModules
-            -- Canonical order: the hash combinators (computeHashesSortedDeps)
-            -- require dep lists sorted by name, exactly as the front pass
-            -- stores them -- row iteration order must not leak into hashes.
-            return
-              [ nh { InterfaceFiles.nhPubDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) pubByOwner)
-                   , InterfaceFiles.nhImplDeps = Data.List.sortOn fst (M.findWithDefault [] (InterfaceFiles.nhName nh) implByOwner)
-                   }
-              | nh <- nameHashes
-              ]
-            where
-              addModule acc depInfo = do
-                let depMn = InterfaceFiles.dmiModule depInfo
-                depNames <- InterfaceFiles.readDepNames tyFile depMn
-                foldM (addName depMn) acc depNames
-
-              addName depMn (pubAcc, implAcc) depInfo = do
-                users <- InterfaceFiles.readDepUsers tyFile depMn (InterfaceFiles.dniName depInfo)
-                let mkDep h =
-                      ( A.GName depMn (InterfaceFiles.dniName depInfo)
-                      , h
-                      )
-                    addUser dep m user =
-                      M.insertWith (++) user [dep] m
-                    pubAcc'
-                      | B.null (InterfaceFiles.dniPubHash depInfo) = pubAcc
-                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniPubHash depInfo))) pubAcc (InterfaceFiles.duPubUsers users)
-                    implAcc'
-                      | B.null (InterfaceFiles.dniImplHash depInfo) = implAcc
-                      | otherwise = foldl' (addUser (mkDep (InterfaceFiles.dniImplHash depInfo))) implAcc (InterfaceFiles.duImplUsers users)
-                return (pubAcc', implAcc')
-
-          depModulesFromNameHashes nameHashes = do
+          depModulesFromHashes moduleHashInfo nameHashes = do
             let depMods =
-                  Data.List.sortOn modNameToString $
+                  Data.List.sort $
                   Data.Set.toList $
                   Data.Set.fromList
                     [ depMn
-                    | nh <- nameHashes
-                    , (qn, _) <- InterfaceFiles.nhPubDeps nh ++ InterfaceFiles.nhImplDeps nh
+                    | (qn, _) <-
+                        InterfaceFiles.mhPubDeps moduleHashInfo ++
+                        InterfaceFiles.mhImplDeps moduleHashInfo ++
+                        concatMap (\nh -> InterfaceFiles.nhPubDeps nh ++ InterfaceFiles.nhImplDeps nh) nameHashes
                     , depMn <- case qn of
                         A.GName m _ -> [m]
                         A.QName m _ -> [m]
@@ -3704,6 +3859,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 return (fmap (\curr -> (qn, curr)) currE)) qns
               return (fmap (\vals -> (n, vals)) resolvedQns)) (M.toList deps)
             return (fmap M.fromList resolved)
+
+          resolveModuleDepHashes label getHash qns =
+            traverseDiags (\qn -> do
+              currE <- resolveQNameHash label getHash " (used by module initialization)" qn
+              return (fmap (\curr -> (qn, curr)) currE)) qns
 
           checkDepModuleRows depModules = do
             resolved <- traverseDiags checkOne depModules
@@ -3795,11 +3955,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         TyTask{ tyNameHashes = nhs } -> nhs
                         _ -> []
                       cachedNameHashes = publicNameHashes cachedFullNameHashes
-                  interestDeps <- cachedInterestDeps
-                  let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing Nothing)
-                             { frModuleInfo = mModuleInfo
-                             , frInterestDeps = interestDeps
-                             }
+                  let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes Nothing Nothing)
+                             { frModuleInfo = mModuleInfo }
                   cacheFrontResult fr
                 Left _ ->
                   return (key, Right emptyFrontResult)
@@ -3834,25 +3991,32 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   needByPub = not (null pubDeltas)
                   needByMissing = not (null pubMissing) || not (null implMissing) || not (Data.Set.null rowMissingMods)
                   needByImpl = not (null implDeltas)
-                  forceAlt    = altOutput optsT && mn == rootAlt
+                  forceAlt    = altOutput optsT && key == rootAltKey
                   forceAlways = C.alwaysbuild optsT
                   -- Front passes run on source or API changes, or when forced.
                   needFront = needBySource || needByPub || needByMissing || forceAlt || forceAlways
-                  mModuleImplHash = case taskCurrent of
-                    TyTask{ tyImplHash = implHash } -> Just implHash
+                  mCodegenHash = case taskCurrent of
+                    TyTask{ tyHash = sourceHash, tyImplHash = implHash } ->
+                      Just (Hashing.wholeCodegenHash
+                        (not $ C.dbg_no_lines optsT) implHash sourceHash)
                     _ -> Nothing
+                  backPassNeeded = case taskCurrent of
+                    TyTask{ tyRoots = roots } ->
+                      shouldRunBackPass (isDbpBlocked key)
+                        (Data.Set.member key requestedTasks) optsT roots
+                    _ -> True
               cachedDeferredBackJob <- case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
+                    TyTask{} | backPassNeeded -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn implHash nameCount)
+                      return (selectiveDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn)
                     _ -> return Nothing
               let isCachedDbp =
                     case cachedDeferredBackJob of
                       Just _ -> True
                       Nothing -> False
-              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp
-              mCodegenStatus <- case mModuleImplHash of
-                Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
+              let canCheckCodegen = backPassNeeded && not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp
+              mCodegenStatus <- case mCodegenHash of
+                Just codegenHash | canCheckCodegen -> Just <$> codegenStatus paths mn codegenHash
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
@@ -3894,6 +4058,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           gopts
                           optsT
                           (isDbpBlocked key)
+                          (Data.Set.member key requestedTasks)
                           paths
                           envSnap
                           (adjustImports providers m)
@@ -3946,18 +4111,27 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       -- only when the refresh must feed an EAGER back job -- then it
                       -- is the compilation input.
                       case taskCurrent of
-                        TyTask{ tyDepModules = depModules, tyPubHash = storedPubHash } -> do
-                          -- The task header carries only the name COUNT (selective
-                          -- reads); the refresh needs the module's own hash rows.
-                          storedNameHashes <- InterfaceFiles.readNameHashes tyFile
-                          moduleHasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                          restored <- restorePubDepsFromRows depModules storedNameHashes
+                        TyTask{ tyHash = expectedSourceHash
+                              , tyPubHash = expectedPublicHash
+                              , tyImplHash = expectedImplHash
+                              } -> do
+                          refreshInput <- InterfaceFiles.readImplRefreshInput tyFile
+                          unless (InterfaceFiles.iriSourceHash refreshInput == expectedSourceHash
+                                  && InterfaceFiles.iriPublicHash refreshInput == expectedPublicHash
+                                  && InterfaceFiles.iriImplementationHash refreshInput == expectedImplHash) $
+                            throwIO (InterfaceFiles.ImplRefreshStale
+                              "Interface changed after dependency freshness was checked")
+                          let storedNameHashes = InterfaceFiles.iriNameHashes refreshInput
+                              storedModuleHash = InterfaceFiles.iriModuleHashInfo refreshInput
+                              moduleHasNotImpl = InterfaceFiles.iriHasNotImpl refreshInput
+                              storedPubHash = InterfaceFiles.iriPublicHash refreshInput
+                              roots = InterfaceFiles.iriRoots refreshInput
                           -- Only names with an impl item participate in the refresh --
                           -- exactly the names the front pass gave a (non-empty) own
                           -- impl-hash component. A signature-only name's impl hash is
                           -- invariant under dependency changes.
                           let refreshables =
-                                [ nh | nh <- restored
+                                [ nh | nh <- storedNameHashes
                                      , not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
                               ownImplHashes = M.fromList
                                 [ (InterfaceFiles.nhName nh, InterfaceFiles.nhOwnImplHash nh) | nh <- refreshables ]
@@ -3966,20 +4140,36 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               implExtDeps = M.fromList
                                 [ (InterfaceFiles.nhName nh, map fst (InterfaceFiles.nhImplDeps nh)) | nh <- refreshables ]
                           do
-                              implExtRes <- (try :: IO a -> IO (Either SomeException a)) $
-                                resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
+                              implExtRes <- (try :: IO a -> IO (Either SomeException a)) $ do
+                                nameDeps <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
+                                moduleDeps <- resolveModuleDepHashes "impl" InterfaceFiles.nhImplHash
+                                  (map fst (InterfaceFiles.mhImplDeps storedModuleHash))
+                                return (nameDeps, moduleDeps)
                               case implExtRes of
                                 Left err -> handleSyncFailure err
-                                Right (Left _) -> rerunFront
-                                Right (Right implExtHashes) -> do
+                                Right (Left _, _) -> rerunFront
+                                Right (_, Left _) -> rerunFront
+                                Right (Right implExtHashes, Right moduleImplExtHashes) -> do
                                   let updatedNameHashes =
-                                        Hashing.refreshImplHashes restored ownImplHashes implLocalDeps implExtHashes
-                                      moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                  depModulesRes <- depModulesFromNameHashes updatedNameHashes
+                                        Hashing.refreshImplHashes storedNameHashes ownImplHashes implLocalDeps implExtHashes
+                                      updatedImplHashes = M.fromList
+                                        [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplHash nh)
+                                        | nh <- updatedNameHashes
+                                        ]
+                                      updatedModuleHash = Hashing.finishModuleHash
+                                        updatedImplHashes
+                                        (InterfaceFiles.mhOwnImplHash storedModuleHash)
+                                        (InterfaceFiles.mhStatementOwners storedModuleHash)
+                                        (InterfaceFiles.mhImplLocalDeps storedModuleHash)
+                                        (InterfaceFiles.mhPubDeps storedModuleHash)
+                                        moduleImplExtHashes
+                                      moduleImplHash =
+                                        Hashing.moduleImplHashFromNameHashes updatedModuleHash updatedNameHashes
+                                  depModulesRes <- depModulesFromHashes updatedModuleHash updatedNameHashes
                                   case depModulesRes of
                                     Left _ -> rerunFront
                                     Right updatedDepModules -> do
-                                      evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
+                                      evaluate (rnf (moduleImplHash, updatedModuleHash, updatedDepModules, updatedNameHashes))
                                       let outputKey = TaskKey (projPath paths) mn
                                           -- Synchronous, like the full write: completion implies
                                           -- the refreshed rows are committed. A write failure is
@@ -3993,12 +4183,19 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                                            (ccShouldWriteFrontOutput callbacks)
                                                                            outputKey
                                                                            FrontOutputTydb $
-                                                          InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes)
+                                                          InterfaceFiles.updateImplRefresh tyFile refreshInput
+                                                            InterfaceFiles.ImplRefreshOutput
+                                                              { InterfaceFiles.iroImplementationHash = moduleImplHash
+                                                              , InterfaceFiles.iroModuleHashInfo = updatedModuleHash
+                                                              , InterfaceFiles.iroDependencies = updatedDepModules
+                                                              , InterfaceFiles.iroNameHashes = updatedNameHashes
+                                                              })
                                             case res of
                                               Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+                                                       | InterfaceFiles.isImplRefreshStale err -> throwIO err
                                                        | otherwise -> return (Just (tydbWriteDiagnostics mn err))
                                               Right () -> return Nothing
-                                          mkOutputJobs =
+                                          startOutputJobs =
                                             if C.tydb optsT
                                               then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
                                                                                  (ccOnFrontOutputDone callbacks)
@@ -4007,9 +4204,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                                                  FrontOutputTydbCopy
                                                                                  (copyTydbInterface optsT paths mn)
                                               else return []
-                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
-                                      case deferredBackJob0 of
-                                        Just _ -> do
+                                          backPassNeeded0 = shouldRunBackPass (isDbpBlocked key)
+                                            (Data.Set.member key requestedTasks) optsT roots
+                                          deferredBackJob0
+                                            | backPassNeeded0 = selectiveDeferredBackJob
+                                                (isDbpBlocked key) moduleHasNotImpl optsT paths mn
+                                            | otherwise = Nothing
+                                      if not backPassNeeded0 || isJust deferredBackJob0
+                                        then do
                                           ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
                                           case ifaceRes of
                                             Left diags -> return (key, Left diags)
@@ -4018,37 +4220,41 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                               case writeFailure of
                                                 Just diags -> return (key, Left diags)
                                                 Nothing -> mask_ $ do
-                                                  outputJobs <- mkOutputJobs
+                                                  outputJobs <- startOutputJobs
                                                   rememberFrontOutputJobList frontOutputRef outputJobs
                                                   let deferredBackJob = deferredBackJob0
-                                                      fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
+                                                      fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) Nothing deferredBackJob)
                                                         { frOutputJobs = outputJobs
                                                         , frModuleInfo = mModuleInfo
                                                         }
                                                   cacheFrontResult fr
-                                        Nothing -> do
+                                        else do
                                           tyRes <- readTyFile
                                           case tyRes of
                                             Left diags -> return (key, Left diags)
-                                            Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
-                                              snap <- Source.readSource sp actFile
+                                            Right (_ms, nmod, tmod, _sourceMeta, moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
+                                              snap <- readMatchingSource
+                                                sp mn moduleSrcBytesHash actFile
                                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
                                                 Acton.Env.mkEnv (searchPath paths) envSnap tmod
                                               case envRes of
                                                 Left err -> handleSyncFailure err
                                                 Right env1 -> do
+                                                  evaluate (rnf nmod)
+                                                  evaluate (rnf tmod)
                                                   writeFailure <- writeRefreshedRows
                                                   case writeFailure of
                                                     Just diags -> return (key, Left diags)
                                                     Nothing -> mask_ $ do
-                                                      evaluate (rnf nmod)
-                                                      evaluate (rnf tmod)
-                                                      outputJobs <- mkOutputJobs
+                                                      outputJobs <- startOutputJobs
                                                       rememberFrontOutputJobList frontOutputRef outputJobs
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
-                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                                          fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                          codegenHash = Hashing.wholeCodegenHash
+                                                            (not $ C.dbg_no_lines optsT)
+                                                            moduleImplHash moduleSrcBytesHash
+                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) codegenHash)
+                                                          fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) backJob Nothing)
                                                             { frOutputJobs = outputJobs }
                                                       cacheFrontResult fr
                         _ -> rerunFront
@@ -4061,19 +4267,27 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     tyRes <- readTyFile
                     case tyRes of
                       Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, _depModules, nameHashes, _roots, _tests, mdoc) -> do
-                        snap <- Source.readSource sp actFile
+                      Right (_ms, nmod, tmod, _sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, _depModules, nameHashes, roots, _tests, mdoc) -> do
+                        snap <- readMatchingSource
+                          sp mn moduleSrcBytesHash actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
-                        interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
-                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn moduleImplHashStored (length nameHashes)
+                            backPassNeeded0 = shouldRunBackPass (isDbpBlocked key)
+                              (Data.Set.member key requestedTasks) optsT roots
+                            deferredBackJob
+                              | backPassNeeded0 = selectiveDeferredBackJob
+                                  (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn
+                              | otherwise = Nothing
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing
-                                Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
-                                   { frInterestDeps = interestDeps }
+                                Nothing | backPassNeeded0 -> Just (mkBackJob env1 tmod (Source.ssText snap)
+                                  (Hashing.wholeCodegenHash
+                                    (not $ C.dbg_no_lines optsT)
+                                    moduleImplHashStored moduleSrcBytesHash))
+                                Nothing -> Nothing
+                            fr = mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) backJob deferredBackJob
                         cacheFrontResult fr
                   runReuse = do
                     --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
@@ -4089,11 +4303,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               TyTask{ tyNameHashes = nhs } -> nhs
                               _ -> []
                             cachedNameHashes = publicNameHashes cachedFullNameHashes
-                        interestDeps <- cachedInterestDeps
-                        let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes cachedFullNameHashes Nothing cachedDeferredBackJob)
-                                   { frModuleInfo = mModuleInfo
-                                   , frInterestDeps = interestDeps
-                                   }
+                        let fr = (mkFrontResult imps ifaceTE mdoc ih implH cachedNameHashes Nothing cachedDeferredBackJob)
+                                   { frModuleInfo = mModuleInfo }
                         cacheFrontResult fr
               case () of
                 _ | needFront -> runFront
@@ -4191,9 +4402,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> M.Map TaskKey B.ByteString
          -> M.Map TaskKey (M.Map A.Name InterfaceFiles.NameHashInfo)
          -> M.Map TaskKey CompileTask
-         -> InterestMap
-         -> Data.Set.Set TaskKey
-         -> M.Map TaskKey (DeferredBackJob, Data.Set.Set TaskKey)
+         -> M.Map TaskKey DeferredBackJob
          -> M.Map StageKey Int
          -> Data.Set.Set StageKey
          -> Acton.Env.Env0
@@ -4201,20 +4410,22 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
          -> Int
          -> M.Map TaskKey Integer
          -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks interestMap frontDone deferredBacks ind pend envAcc hadErrors maxPar cw = do
+    loop frontOutputRef runningRef rdy running res implRes nameRes parsedTasks deferredBacks ind pend envAcc hadErrors maxPar cw = do
       (rdy1, running1) <- mask_ $ do
         res@(rdy1', running1') <- scheduleMore (maxPar - length running) rdy running frontOutputRef res implRes nameRes parsedTasks envAcc cw
         writeIORef runningRef (map fst running1')
         return res
       if null running1 && null rdy1
         then if Data.Set.null pend
-                 then do
-                   flushRes <- flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks
-                   case flushRes of
-                     Left err -> return (Left err)
-                     Right deferredBacks' -> do
-                       writeIORef runningRef []
-                       return (Right (envAcc, hadErrors || not (M.null deferredBacks')))
+                 then if hadErrors
+                   then return (Right (envAcc, True))
+                   else do
+                     flushRes <- flushDeferredBacks deferredBacks
+                     case flushRes of
+                       Left err -> return (Left err)
+                       Right () -> do
+                         writeIORef runningRef []
+                         return (Right (envAcc, False))
                  else return (Right (envAcc, True))
         else do
           (doneA, (stageDone, outcome)) <- waitAny $ map fst running1
@@ -4241,7 +4452,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   rdy2 = filter (`Data.Set.notMember` blockedStages) rdy1
                   dropKeys = keyDone : Data.Set.toList blockedMods
                   parsedTasks2 = foldl' (flip M.delete) parsedTasks dropKeys
-              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
+              loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
                   ind2  = case M.lookup stageDone stageRevMap of
@@ -4258,7 +4469,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 StageParsed parsed mParseTime -> do
                   ccOnParseDone callbacks tDone optsDone mParseTime
                   let parsedTasks2 = M.insert keyDone parsed parsedTasks
-                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
+                  loop frontOutputRef runningRef rdy2 running2 res implRes nameRes parsedTasks2 deferredBacks ind2 pend2 envAcc hadErrors maxPar cw
                 StageFronted fr -> do
                   ccOnFrontDone callbacks tDone optsDone
                   ccOnFrontResult callbacks tDone optsDone fr
@@ -4268,17 +4479,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       nameRes2 = M.insert keyDone (nameHashMapFromList (frNameHashes fr)) nameRes
                       parsedTasks2 = M.delete keyDone parsedTasks
                       envAcc' = Acton.Env.addModuleInfo (tkMod keyDone) (frontResultModuleInfo (tkMod keyDone) fr) envAcc
-                      interestMap2 = addInterestDeps (frInterestDeps fr) interestMap
-                      frontDone2 = Data.Set.insert keyDone frontDone
                       deferredBacks1 =
                         case frDeferredBackJob fr of
                           Nothing -> deferredBacks
-                          Just dbj -> M.insert keyDone (dbj, dependentClosure keyDone) deferredBacks
-                  flushRes <- flushReadyDeferredBacks envAcc' interestMap2 frontDone2 deferredBacks1
-                  case flushRes of
-                    Left err -> return (Left err)
-                    Right deferredBacks2 ->
-                      loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
+                          Just dbj -> M.insert keyDone dbj deferredBacks
+                  loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 deferredBacks1 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
 -- | Execute back-pass jobs in parallel while keeping output order stable.
@@ -4308,7 +4513,9 @@ runBackJobs gopts maxPar onStart onDone jobs = do
         new <- forM toStart $ \(ix, job) ->
                  async $ do
                    onStart job
-                   (res, _timing) <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) (return True)
+                   (res, _timing) <- runBackPasses
+                     gopts (bjOpts job) (bjPaths job) (bjInput job)
+                     (\action -> action >> return True) (\_ -> return ())
                    return (ix, job, res)
         let running' = running ++ new
         writeIORef runningRef running'

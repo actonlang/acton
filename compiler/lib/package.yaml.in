@@ -73,6 +73,7 @@ library:
     - Acton.Completion
     - Acton.Compile
     - Acton.CommandLineParser
+    - Acton.Converter
     - Acton.Deactorizer
     - Acton.Diagnostics
     - Acton.DocPrinter
@@ -80,6 +81,8 @@ library:
     - Acton.Fingerprint
     - Acton.Hashing
     - Acton.HttpFetch
+    - Acton.InterfaceRows
+    - Acton.InterfaceRowsBuilder
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo
@@ -88,12 +91,20 @@ library:
     - Acton.Parser
     - Acton.Printer
     - Acton.QuickType
+    - Acton.Reachability
+    - Acton.ReachabilityPrinter
+    - Acton.ReachabilityRows
+    - Acton.ReachabilityRowsBuilder
+    - Acton.ReachabilityTypes
+    - Acton.SelectiveBack
+    - Acton.SelectiveWorklist
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
     - Acton.Testing
     - Acton.Types
     - Acton.TypeEnv
+    - Acton.WitnessForwarding
     - Acton.WitKnots
     - Acton.Zon
     - Utils
@@ -106,6 +117,22 @@ tests:
   test_lib:
     main: ActonSpec.hs
     source-dirs: test
+    dependencies:
+      - libacton
+    ghc-options:
+      - -threaded
+      - -rtsopts
+      - -with-rtsopts=-N
+      - -Wno-x-partial
+  test_selective:
+    main: SelectiveSpec.hs
+    source-dirs: selective-test
+    other-modules:
+      - ReachabilityRowsTests
+      - ReachabilityTests
+      - SelectiveBackTests
+      - SelectiveWorklistTests
+      - WitnessForwardingTests
     dependencies:
       - libacton
     ghc-options:

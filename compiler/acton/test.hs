@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Control.Monad
-import Data.Char (isAlphaNum, isSpace)
+import Data.Char (isAlphaNum, isHexDigit, isSpace)
 import Data.List
 import Data.List.Split
 import Data.Maybe (catMaybes)
@@ -382,6 +382,400 @@ compilerTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
 
+  , testCase "dce closure keeps qualified member dependencies exact" $ do
+        withSystemTempDirectory "acton-dce-baseline" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dce_baseline"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types" </> "dce_baseline"
+              runBuild args = readCreateProcessWithExitCode (proc actonExe args){ cwd = Just proj } ""
+              assertOk label (code, out, err) = do
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                return (out ++ err)
+              runSmall label expected = do
+                (code,out,err) <- readCreateProcessWithExitCode
+                  (proc (proj </> "out" </> "bin" </> "small") []) ""
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                assertEqual (label ++ " output") expected
+                  (dropWhileEnd isSpace $ dropWhile isSpace out)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            , ""
+            ]
+          -- Apa.bepa is never called; its body is the only reference to
+          -- Jungle.
+          writeFile (srcDir </> "big.act") $ unlines
+            [ "class Jungle(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def roar(self) -> int:"
+            , "        return 99"
+            , ""
+            , "class Apa(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def apa(self) -> int:"
+            , "        return 1"
+            , "    def bepa(self) -> int:"
+            , "        j = Jungle()"
+            , "        return j.roar()"
+            , ""
+            , "class Bepa(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def bepa(self) -> int:"
+            , "        return 2"
+            ]
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "actor main(env):"
+            , "    a = big.Apa()"
+            , "    b = big.Bepa()"
+            , "    print(a.apa() + b.bepa())"
+            , "    env.exit(0)"
+            ]
+          -- The call is recorded as (Bepa, bepa), so Apa.bepa is not kept. It
+          -- stubs out, and Jungle is never selected because only that body
+          -- references it.
+          log1 <- assertOk "dce qualified member build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "qualified selection should select big" ("Selective back big:" `isInfixOf` log1)
+          bigC1 <- readFile (typesDir </> "big.c")
+          assertBool "qualified selection should omit Jungle" (not ("JungleG_new" `isInfixOf` bigC1))
+          assertBool "qualified selection should keep the Apa.bepa slot" ("ApaG_methods.bepa" `isInfixOf` bigC1)
+          runSmall "qualified member selection runs" "3"
+          -- Drop the Bepa.bepa call too: bepa leaves the CN entirely; the
+          -- closure stays at 2 (both classes are constructed) and Bepa.bepa
+          -- now stubs as well.
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "actor main(env):"
+            , "    a = big.Apa()"
+            , "    b = big.Bepa()"
+            , "    print(a.apa())"
+            , "    env.exit(0)"
+            ]
+          log2 <- assertOk "dce baseline pruned build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "pruned state should select big" ("Selective back big:" `isInfixOf` log2)
+          bigC2 <- readFile (typesDir </> "big.c")
+          assertBool "pruned state should omit Jungle" (not ("JungleG_new" `isInfixOf` bigC2))
+          assertBool "pruned state should keep the bepa slot" ("ApaG_methods.bepa" `isInfixOf` bigC2)
+          runSmall "pruned state runs" "1"
+          -- DISPATCH, override direction: poke takes an Apa and calls x.apa();
+          -- the runtime object is a Cepa, whose apa OVERRIDE is the only
+          -- reference to Jungle. The (Apa, apa) entry must reach Cepa.apa
+          -- (Apa is an ancestor of Cepa), or the run would hit the stub.
+          writeFile (srcDir </> "big.act") $ unlines
+            [ "class Jungle(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def roar(self) -> int:"
+            , "        return 99"
+            , ""
+            , "class Apa(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def apa(self) -> int:"
+            , "        return 1"
+            , "    def bepa(self) -> int:"
+            , "        return 3"
+            , ""
+            , "class Cepa(Apa):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def apa(self) -> int:"
+            , "        j = Jungle()"
+            , "        return j.roar()"
+            ]
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "def poke(x: big.Apa) -> int:"
+            , "    return x.apa()"
+            , ""
+            , "actor main(env):"
+            , "    c = big.Cepa()"
+            , "    print(poke(c))"
+            , "    env.exit(0)"
+            ]
+          log3 <- assertOk "dce dispatch override build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          bigC3 <- readFile (typesDir </> "big.c")
+          assertBool "override dispatch should keep Cepa.apa (and Jungle)" ("JungleG_new" `isInfixOf` bigC3)
+          runSmall "override dispatch runs selected implementation" "99"
+          -- DISPATCH, inherited direction: the call is typed through the
+          -- SUBCLASS (Cepa.bepa) but the implementation lives on the base
+          -- (Apa.bepa, never overridden). The (Cepa, bepa) entry must reach
+          -- Apa.bepa (Apa is an ancestor of the receiver class).
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "actor main(env):"
+            , "    c = big.Cepa()"
+            , "    print(c.bepa())"
+            , "    env.exit(0)"
+            ]
+          log4 <- assertOk "dce dispatch inherited build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          bigC4 <- readFile (typesDir </> "big.c")
+          assertBool "inherited dispatch should keep the bepa slot" ("ApaG_methods.bepa" `isInfixOf` bigC4)
+          runSmall "inherited dispatch runs base implementation" "3"
+          -- DISPATCH over PRIVATE classes (yang's _Builder/_PosBuilder
+          -- pattern): the persisted shape lineage must preserve private
+          -- ancestors or overrides in a private hierarchy are wrongly
+          -- stubbed and the program raises.
+          writeFile (srcDir </> "big.act") $ unlines
+            [ "class _Base(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def part(self) -> int:"
+            , "        return 0"
+            , ""
+            , "class _P(_Base):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def part(self) -> int:"
+            , "        return 1"
+            , ""
+            , "class _N(_Base):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def part(self) -> int:"
+            , "        return 2"
+            , ""
+            , "def build(neg: bool) -> int:"
+            , "    b: _Base = _N() if neg else _P()"
+            , "    return b.part()"
+            ]
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "actor main(env):"
+            , "    print(big.build(True) + big.build(False))"
+            , "    env.exit(0)"
+            ]
+          log5 <- assertOk "dce dispatch private-class build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          bigC5 <- readFile (typesDir </> "big.c")
+          assertBool "private-class dispatch should keep the hierarchy" ("bigQ__N" `isInfixOf` bigC5)
+          runSmall "private-class dispatch runs every selected override" "3"
+          -- REFRESH PATH: calls made inside a consumer CLASS METHOD live only
+          -- in its member rows. When the provider changes and the consumer is
+          -- unchanged, the consumer takes the impl-refresh path (rows re-read
+          -- from disk); its call-set contribution must come from the persisted
+          -- union or the provider prunes methods the consumer still invokes.
+          writeFile (srcDir </> "big.act") $ unlines
+            [ "class Bepa(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def bepa(self) -> int:"
+            , "        return 2"
+            ]
+          writeFile (srcDir </> "small.act") $ unlines
+            [ "import big"
+            , ""
+            , "class Wrapper(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def wrap(self) -> int:"
+            , "        b = big.Bepa()"
+            , "        return b.bepa()"
+            , ""
+            , "actor main(env):"
+            , "    w = Wrapper()"
+            , "    print(w.wrap())"
+            , "    env.exit(0)"
+            ]
+          _ <- assertOk "dce refresh baseline build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          runSmall "refresh baseline runs" "2"
+          -- Change ONLY the provider: the consumer re-derives its front result
+          -- from disk rows.
+          writeFile (srcDir </> "big.act") $ unlines
+            [ "class Bepa(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def bepa(self) -> int:"
+            , "        return 3"
+            ]
+          _ <- assertOk "dce refresh provider-change build" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          bigC6 <- readFile (typesDir </> "big.c")
+          assertBool "provider change must retain Bepa" ("bigQ_Bepa" `isInfixOf` bigC6)
+          runSmall "provider refresh preserves consumer member dependencies" "3"
+
+  , testCase "selective constructor fields and actor initializers" $ do
+        withSystemTempDirectory "acton-selective-init" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "selective_init"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              providerC = proj </> "out" </> "types" </> name </> "provider.c"
+              providerH = proj </> "out" </> "types" </> name </> "provider.h"
+              assertSelection generated header = do
+                assertBool "selected field initializer should keep its dependency"
+                  ("used_value" `isInfixOf` generated)
+                assertBool "unselected field initializer should omit its dependency"
+                  (not ("unused_value" `isInfixOf` generated))
+                assertBool "selected conditional initializer should keep its guard"
+                  ("choose_value" `isInfixOf` generated)
+                assertBool "selected actor initializer should keep its dependency"
+                  ("actor_value" `isInfixOf` generated)
+                assertBool "unselected actor initializer should omit its dependency"
+                  (not ("unused_actor_value" `isInfixOf` generated))
+                assertBool "imperative constructor rest should remain selected"
+                  ("rest_marker" `isInfixOf` generated)
+                assertBool "selected class field should remain in the object layout"
+                  ("    int64_t used;" `isInfixOf` header)
+                assertBool "unselected class field should be absent from the object layout"
+                  (not $ "    int64_t unused;" `isInfixOf` header)
+                assertBool "selected actor field should remain in the object layout"
+                  ("    int64_t MAGIC;" `isInfixOf` header)
+                assertBool "unselected actor field should be absent from the object layout"
+                  (not $ "    int64_t UNUSED;" `isInfixOf` header)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            , ""
+            ]
+          writeFile (srcDir </> "provider.act") $ unlines
+            [ "def used_value() -> int:"
+            , "    return 40"
+            , ""
+            , "def unused_value() -> int:"
+            , "    return 99"
+            , ""
+            , "def choose_value() -> bool:"
+            , "    return True"
+            , ""
+            , "def actor_value() -> int:"
+            , "    return 2"
+            , ""
+            , "def unused_actor_value() -> int:"
+            , "    return 100"
+            , ""
+            , "def rest_marker() -> None:"
+            , "    pass"
+            , ""
+            , "class Payload(object):"
+            , "    def __init__(self):"
+            , "        if choose_value():"
+            , "            self.used = used_value()"
+            , "            self.unused = unused_value()"
+            , "        else:"
+            , "            self.used = used_value()"
+            , "            self.unused = unused_value()"
+            , "        rest_marker()"
+            , ""
+            , "    def total(self) -> int:"
+            , "        return self.used"
+            , ""
+            , "actor Constants():"
+            , "    MAGIC = actor_value()"
+            , "    UNUSED = unused_actor_value()"
+            , ""
+            , "    def magic() -> int:"
+            , "        return MAGIC"
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    payload = provider.Payload()"
+            , "    constants = provider.Constants()"
+            , "    print(payload.total() + constants.magic())"
+            , "    env.exit(0)"
+            ]
+          (buildCode,buildOut,buildErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--verbose", "--color", "never"]){ cwd = Just proj } ""
+          when (buildCode /= ExitSuccess) $
+            putStrLn ("\nERROR: selective initializer build\nSTDOUT:\n" ++ buildOut ++ "STDERR:\n" ++ buildErr)
+          assertEqual "selective initializer build" ExitSuccess buildCode
+          generated <- readFile providerC
+          header <- readFile providerH
+          assertSelection generated header
+          removeFile providerC
+          removeFile providerH
+          (cachedCode,cachedOut,cachedErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--verbose", "--color", "never"]){ cwd = Just proj } ""
+          when (cachedCode /= ExitSuccess) $
+            putStrLn ("\nERROR: cached selective initializer build\nSTDOUT:\n" ++ cachedOut ++ "STDERR:\n" ++ cachedErr)
+          assertEqual "cached selective initializer build" ExitSuccess cachedCode
+          let cachedLog = cachedOut ++ cachedErr
+          assertBool "cached initializer consumer should reuse its TYDB"
+            ("Fresh main: using cached .tydb" `isInfixOf` cachedLog)
+          assertBool "cached initializer build should reconstruct its provider"
+            ("Selective back provider:" `isInfixOf` cachedLog)
+          cachedGenerated <- readFile providerC
+          cachedHeader <- readFile providerH
+          assertSelection cachedGenerated cachedHeader
+          (runCode,runOut,runErr) <- readCreateProcessWithExitCode
+            (proc (proj </> "out" </> "bin" </> "main") []) ""
+          assertEqual ("selective initializer binary should run: " ++ runErr) ExitSuccess runCode
+          assertEqual "selective initializer binary should print 42" "42"
+            (dropWhileEnd isSpace $ dropWhile isSpace runOut)
+
+  , testCase "selective imports preserve module initialization dependencies" $ do
+        withSystemTempDirectory "acton-selective-import-init" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "selective_import_init"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              consumerC = proj </> "out" </> "types" </> name </> "consumer.c"
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            , ""
+            ]
+          writeFile (srcDir </> "provider.act") $ unlines
+            [ "marker = 1" ]
+          writeFile (srcDir </> "consumer.act") $ unlines
+            [ "from provider import marker"
+            , ""
+            , "def answer() -> int:"
+            , "    return 42"
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import consumer"
+            , ""
+            , "actor main(env):"
+            , "    print(consumer.answer())"
+            , "    env.exit(0)"
+            ]
+          (buildCode,buildOut,buildErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--verbose", "--color", "never"]){ cwd = Just proj } ""
+          when (buildCode /= ExitSuccess) $
+            putStrLn ("\nERROR: selective import initializer build\nSTDOUT:\n" ++
+              buildOut ++ "STDERR:\n" ++ buildErr)
+          assertEqual "selective import initializer build" ExitSuccess buildCode
+          generated <- readFile consumerC
+          assertBool "selective consumer should initialize its imported provider"
+            ("providerQ___init__();" `isInfixOf` generated)
+          (runCode,runOut,runErr) <- readCreateProcessWithExitCode
+            (proc (proj </> "out" </> "bin" </> "main") []) ""
+          assertEqual ("selective import initializer binary should run: " ++ runErr)
+            ExitSuccess runCode
+          assertEqual "selective import initializer binary output" "42"
+            (dropWhileEnd isSpace $ dropWhile isSpace runOut)
+
   , testCase "dbp selects provider subset and cached header interest" $ do
         withSystemTempDirectory "acton-dbp" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
@@ -403,46 +797,110 @@ compilerTests =
                 assertBool label (code /= ExitSuccess)
                 return (out ++ err)
               removeIfExists path = removeFile path `catch` \(_ :: IOException) -> return ()
+              runMain label expected = do
+                (code,out,err) <- readCreateProcessWithExitCode
+                  (proc (proj </> "out" </> "bin" </> "main") []) ""
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                assertEqual (label ++ " output") expected
+                  (dropWhileEnd isSpace $ dropWhile isSpace out)
           createDirectoryIfMissing True srcDir
           writeFile (proj </> "Build.act") $ unlines
             [ "name = \"" ++ name ++ "\""
             , "fingerprint = " ++ fp
             , ""
             ]
-          writeFile (srcDir </> "provider.act") $ unlines
-            [ "protocol Renderable:"
-            , "    val : () -> int"
+          writeFile (srcDir </> "sibling.act") $ unlines
+            [ "protocol BaseSlot:"
+            , "    same : () -> int"
             , ""
-            , "class Box(value):"
-            , "    def __init__(self, x: int):"
-            , "        self.x = x"
+            , "protocol ProviderSlot(BaseSlot):"
+            , "    pass"
             , ""
-            , "    def get(self) -> int:"
-            , "        return self.x"
-            , ""
-            , "extension Box(Renderable):"
-            , "    def val(self) -> int:"
-            , "        return self.get()"
-            , ""
-            , "def make_box() -> Box:"
-            , "    return Box(42)"
-            , ""
-            , "def render_box() -> int:"
-            , "    return Box(7).val()"
-            , ""
-            , "def unused_0() -> int:"
-            , "    return 0"
-            , ""
-            , "def unused_1() -> int:"
-            , "    return 1"
-            , ""
-            , "class Container:"
+            , "class SiblingHost(object):"
             , "    def __init__(self):"
             , "        pass"
             , ""
-            , "def local_container_name(x: object) -> bool:"
-            , "    return isinstance(x, Container)"
+            , "extension SiblingHost(ProviderSlot):"
+            , "    def same(self) -> int:"
+            , "        return 73"
             ]
+          let providerSource = unlines
+                [ "import sibling"
+                , ""
+                , "protocol Renderable:"
+                , "    val : () -> int"
+                , ""
+                , "class SignatureOnly(object):"
+                , "    def __init__(self):"
+                , "        pass"
+                , ""
+                , "class Box(value):"
+                , "    def __init__(self, x: int):"
+                , "        self.x = x"
+                , ""
+                , "    def get(self) -> int:"
+                , "        return self.x"
+                , ""
+                , "    def unused_typed(self, value: SignatureOnly) -> SignatureOnly:"
+                , "        return value"
+                , ""
+                , "extension Box(Renderable):"
+                , "    def val(self) -> int:"
+                , "        return self.get()"
+                , ""
+                , "def make_box() -> Box:"
+                , "    return Box(42)"
+                , ""
+                , "def render_box() -> int:"
+                , "    return Box(7).val()"
+                , ""
+                , "protocol TargetSlot(sibling.BaseSlot):"
+                , "    pass"
+                , ""
+                , "extension sibling.SiblingHost(TargetSlot):"
+                , "    pass"
+                , ""
+                , "def invoke_sibling[T(TargetSlot)](value: T) -> int:"
+                , "    return value.same()"
+                , ""
+                , "def run_sibling() -> int:"
+                , "    return invoke_sibling(sibling.SiblingHost())"
+                , ""
+                , "def unused_0() -> int:"
+                , "    return 0"
+                , ""
+                , "def unused_1() -> int:"
+                , "    return 1"
+                , ""
+                , "class Container:"
+                , "    def __init__(self):"
+                , "        pass"
+                , ""
+                , "def local_container_name(x: object) -> bool:"
+                , "    return isinstance(x, Container)"
+                , ""
+                , "class WorkBase(object):"
+                , "    work : proc() -> int"
+                , ""
+                , "class _WorkHelper(object):"
+                , "    def __init__(self):"
+                , "        pass"
+                , "    def val(self) -> int:"
+                , "        return 42"
+                , ""
+                , "class WorkImpl(WorkBase):"
+                , "    def __init__(self):"
+                , "        pass"
+                , "    proc def work(self) -> int:"
+                , "        h = _WorkHelper()"
+                , "        return h.val()"
+                , ""
+                , "def make_work() -> WorkImpl:"
+                , "    return WorkImpl()"
+                ]
+          writeFile (srcDir </> "provider.act") providerSource
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -451,12 +909,68 @@ compilerTests =
             , "    env.exit(0)"
             ]
           firstLog <- assertOk "initial dbp build" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "initial build should report DBP selection" ("DBP provider: total names" `isInfixOf` firstLog)
-          assertBool "initial build should select a subset" ("selected closure" `isInfixOf` firstLog)
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "initial build should report selective provider back"
+            ("Selective back provider:" `isInfixOf` firstLog)
+          reachabilityLog <- assertOk "project reachability output" =<<
+            runBuild ["sig", "--reachability", "--color", "never"]
+          assertBool "project reachability should start with the report"
+            ("reachability\n" `isPrefixOf` reachabilityLog)
+          assertBool "project reachability should show the selected provider"
+            ("module dbp_fixture.provider" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should show the selected entry point"
+            ("make_box [body]" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should omit an unused provider definition"
+            (not $ "unused_1 [body]" `isInfixOf` reachabilityLog)
+          assertBool "project reachability should not include build progress"
+            (not $ "Compilation done" `isInfixOf` reachabilityLog)
+          storedReachability <- assertOk "stored reachability output" =<<
+            runBuild ["sig", "--reachability", "provider"]
+          assertBool "stored reachability should include unselected definitions"
+            ("name unused_1" `isInfixOf` storedReachability)
+          classReachability <- assertOk "stored class reachability output" =<<
+            runBuild ["sig", "--reachability", "provider.WorkImpl"]
+          assertBool "stored class reachability should show the requested class"
+            ("class WorkImpl" `isInfixOf` classReachability)
           providerC <- readFile (typesDir </> "provider.c")
+          providerH <- readFile (typesDir </> "provider.h")
           assertBool "selected provider C should include selected root" ("make_box" `isInfixOf` providerC)
           assertBool "selected provider C should omit unused definitions" (not ("unused_1" `isInfixOf` providerC))
+          let signatureOnly = "dbp_fixtureQ_providerQ_SignatureOnly"
+          assertBool "stub signatures should forward-declare local types"
+            (("struct " ++ signatureOnly ++ ";") `isInfixOf` providerH)
+          assertBool "stub signatures should typedef local types"
+            (("typedef struct " ++ signatureOnly ++ " *" ++ signatureOnly ++ ";") `isInfixOf` providerH)
+          assertBool "declaration-only local types should not define an object layout"
+            (not $ ("struct " ++ signatureOnly ++ " {") `isInfixOf` providerH)
+          assertBool "declaration-only local types should not declare a constructor"
+            (not $ (signatureOnly ++ "G_new(") `isInfixOf` providerH)
+          assertBool "declaration-only local types should not emit a constructor"
+            (not $ (signatureOnly ++ "G_new(") `isInfixOf` providerC)
+          assertBool "declaration-only local types should not emit method bodies"
+            (not $ (signatureOnly ++ "D_") `isInfixOf` providerC)
+          assertBool "declaration-only local types should not emit a methods table"
+            (not $ (signatureOnly ++ "G_methods") `isInfixOf` providerC)
+          runMain "stub signature declaration links" "42"
+          let oldUnusedBody = "def unused_1() -> int:\n    return 1"
+              newUnusedBody = "def unused_1() -> int:\n    return 101"
+              updatedProviderSource =
+                intercalate newUnusedBody (splitOn oldUnusedBody providerSource)
+          assertBool "provider fixture should contain the unselected body"
+            (oldUnusedBody `isInfixOf` providerSource)
+          writeFile (srcDir </> "provider.act") updatedProviderSource
+          unselectedEditLog <- assertOk "unselected provider edit skips selective codegen" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
+          assertBool "unselected provider edit should rerun front passes"
+            ("Stale provider: source changed" `isInfixOf` unselectedEditLog)
+          assertBool "unchanged selection should keep provider codegen up to date"
+            (any (\line -> "Selective back provider:" `isInfixOf` line &&
+                           "generated code up to date" `isInfixOf` line)
+                 (lines unselectedEditLog))
+          assertEqual "unselected provider edit should preserve selected C output"
+            providerC =<< readFile (typesDir </> "provider.c")
+          assertEqual "unselected provider edit should preserve selected header output"
+            providerH =<< readFile (typesDir </> "provider.h")
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -466,7 +980,8 @@ compilerTests =
             ]
           changedConsumerLog <- assertOk "changed consumer updates dbp selection" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "changed consumer should rerun provider DBP" ("DBP provider: total names" `isInfixOf` changedConsumerLog)
+          assertBool "changed consumer should rerun provider back"
+            ("Selective back provider:" `isInfixOf` changedConsumerLog)
           assertBool "changed consumer should make DBP codegen stale" ("generated code out of date" `isInfixOf` changedConsumerLog)
           providerC1b <- readFile (typesDir </> "provider.c")
           assertBool "changed consumer C should include newly interested root" ("unused_0" `isInfixOf` providerC1b)
@@ -480,14 +995,13 @@ compilerTests =
           secondLog <- assertOk "cached dbp build" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "cached consumer should be reused" ("Fresh main: using cached .tydb" `isInfixOf` secondLog)
-          assertBool "cached build should collect provider interest from headers" ("interested names 1" `isInfixOf` secondLog)
-          assertBool "cached build should still select the dependency closure" ("selected closure" `isInfixOf` secondLog)
+          assertBool "cached build should reconstruct the selective provider"
+            ("Selective back provider:" `isInfixOf` secondLog)
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
             , "actor main(env):"
-            , "    f = provider.local_container_name"
-            , "    print(\"ok\")"
+            , "    print(provider.local_container_name(provider.WorkImpl()))"
             , "    env.exit(0)"
             ]
           _thirdLog <- assertOk "dbp local name shadows builtin" =<<
@@ -502,10 +1016,30 @@ compilerTests =
             , "    env.exit(0)"
             ]
           fourthLog <- assertOk "dbp keeps extension" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "extension selection should not fall back" (not ("fallback:" `isInfixOf` fourthLog))
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "extension build should remain selective"
+            ("Selective back provider:" `isInfixOf` fourthLog)
           providerC3 <- readFile (typesDir </> "provider.c")
           assertBool "selected provider C should keep extension" ("providerQ_RenderableD_Box" `isInfixOf` providerC3)
+          runMain "selected extension runs" "7"
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.run_sibling())"
+            , "    env.exit(0)"
+            ]
+          siblingLog <- assertOk "dbp forwards an inherited slot through a sibling witness" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          assertBool "sibling witness build should remain selective"
+            ("Selective back provider:" `isInfixOf` siblingLog)
+          providerCSibling <- readFile (typesDir </> "provider.c")
+          assertBool "selected target witness should emit its forwarding slot"
+            ("$forwardD_same" `isInfixOf` providerCSibling)
+          siblingC <- readFile (typesDir </> "sibling.c")
+          assertBool "selected sibling witness should retain the concrete slot"
+            ("ProviderSlotD_SiblingHostD_same" `isInfixOf` siblingC)
+          runMain "inherited slot forwards through sibling witness" "73"
           writeFile (srcDir </> "main.act") $ unlines
             [ "import provider"
             , ""
@@ -514,27 +1048,64 @@ compilerTests =
             ]
           fifthLog <- assertOk "dbp empty interest" =<<
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
-          assertBool "empty interest should not fall back" (not ("fallback:" `isInfixOf` fifthLog))
-          assertBool "empty interest should be reported" ("interested names 0" `isInfixOf` fifthLog)
-          assertBool "empty interest should select empty closure" ("selected closure 0" `isInfixOf` fifthLog)
+          assertBool "empty interest should produce an empty provider projection"
+            ("Selective back provider: 0 tops, 0 members" `isInfixOf` fifthLog)
           providerC4 <- readFile (typesDir </> "provider.c")
           assertBool "empty provider C should omit provider definitions" (not ("make_box" `isInfixOf` providerC4))
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    w = provider.make_work()"
+            , "    print(\"ok\")"
+            , "    env.exit(0)"
+            ]
+          _ <- assertOk "dbp stubs an uncalled abstract implementation" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          providerCStub <- readFile (typesDir </> "provider.c")
+          assertBool "uncalled abstract implementation helper should remain pruned"
+            (not $ "providerQ__WorkHelper" `isInfixOf` providerCStub)
+          runMain "uncalled abstract implementation stub links" "ok"
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "proc def invoke(w: provider.WorkBase) -> int:"
+            , "    return w.work()"
+            , ""
+            , "actor main(env):"
+            , "    print(invoke(provider.make_work()))"
+            , "    env.exit(0)"
+            ]
+          _ <- assertOk "dbp selects abstract implementation body dependencies" =<<
+            runBuild ["build", "--verbose", "--color", "never"]
+          providerCAbs <- readFile (typesDir </> "provider.c")
+          assertBool "selected implementation body should keep its helper"
+            ("providerQ__WorkHelper" `isInfixOf` providerCAbs)
+          runMain "abstract dispatch runs selected implementation" "42"
           removeIfExists (typesDir </> "main.c")
           removeIfExists (typesDir </> "main.h")
           removeIfExists (typesDir </> "main.root.c")
           sixthLog <- assertOk "dbp keeps executable root actor" =<<
             runBuild ["build", "--verbose", "--color", "never"]
-          assertBool "root module should report root seed" ("DBP main: total names" `isInfixOf` sixthLog)
-          assertBool "root module should count root name" ("root names 1" `isInfixOf` sixthLog)
+          assertBool "root module should report selective back"
+            ("Selective back main:" `isInfixOf` sixthLog)
           mainC <- readFile (typesDir </> "main.c")
           assertBool "selected main C should keep root actor" ("mainQ_main" `isInfixOf` mainC)
           seventhLog <- assertOk "no-dbp disables dbp" =<<
             runBuild ["build", "--skip-build", "--verbose", "--no-dbp", "--color", "never"]
-          assertBool "no-dbp should suppress provider DBP" (not ("DBP provider:" `isInfixOf` seventhLog))
+          assertBool "no-dbp should suppress selective provider back"
+            (not ("Selective back provider:" `isInfixOf` seventhLog))
           providerC5 <- readFile (typesDir </> "provider.c")
           assertBool "no-dbp provider C should include full module definitions" ("unused_1" `isInfixOf` providerC5)
+          dbLog <- assertOk "db mode keeps persistence providers whole" =<<
+            runBuild ["build", "--skip-build", "--verbose", "--db", "--color", "never"]
+          assertBool "db mode should suppress selective provider back"
+            (not $ "Selective back provider:" `isInfixOf` dbLog)
+          providerDbC <- readFile (typesDir </> "provider.c")
+          assertBool "db mode should preserve the full persistence schema"
+            ("unused_1" `isInfixOf` providerDbC)
 
-  , testCase "dbp excludes explicit library boundary modules" $ do
+  , testCase "dbp keeps library dependency projections consumer-specific" $ do
         withSystemTempDirectory "acton-dbp-library-boundary" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
           let name = "dbp_library_boundary"
@@ -554,7 +1125,7 @@ compilerTests =
             [ "name = \"" ++ name ++ "\""
             , "fingerprint = " ++ fp
             , "libraries = {"
-            , "    \"foo\": (modules=[\"a\", \"b\"], linkage=\"static\")"
+            , "    \"foo\": (modules=[\"a\", \"b\", \"d\"], linkage=\"static\")"
             , "}"
             ]
           writeFile (srcDir </> "a.act") $ unlines
@@ -566,32 +1137,270 @@ compilerTests =
             ]
           writeFile (srcDir </> "b.act") $ unlines
             [ "import a"
+            , "import base"
+            , "import impl"
+            , "import proto"
             , ""
             , "def exposed() -> int:"
-            , "    return a.used()"
+            , "    return a.used() + Derived().inherited()"
+            , ""
+            , "def use_protocol[T(proto.Proto)](value: T) -> int:"
+            , "    return value.val()"
+            , ""
+            , "def call_protocol() -> int:"
+            , "    return use_protocol(impl.Concrete())"
+            , ""
+            , "def make_concrete() -> impl.Concrete:"
+            , "    return impl.Concrete()"
+            , ""
+            , "class Derived(base.Base):"
+            , "    pass"
+            , ""
+            , "class HeaderOnly(base.HeaderBase):"
+            , "    pass"
             , ""
             , "def unused_b() -> int:"
             , "    return 22"
+            ]
+          writeFile (srcDir </> "proto.act") $ unlines
+            [ "protocol Proto:"
+            , "    val : () -> int"
+            ]
+          writeFile (srcDir </> "leaf.act") $ unlines
+            [ "class Leaf(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def answer(self) -> int:"
+            , "        return 44"
+            ]
+          writeFile (srcDir </> "impl.act") $ unlines
+            [ "import leaf"
+            , "import proto"
+            , ""
+            , "class Concrete(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , "    def next(self) -> leaf.Leaf:"
+            , "        return leaf.Leaf()"
+            , "    def unused(self) -> int:"
+            , "        return 99"
+            , "    def _hidden(self) -> int:"
+            , "        return 100"
+            , ""
+            , "extension Concrete(proto.Proto):"
+            , "    def val(self) -> int:"
+            , "        return 42"
+            ]
+          writeFile (srcDir </> "base.act") $ unlines
+            [ "class Field(object):"
+            , "    def __init__(self):"
+            , "        pass"
+            , ""
+            , "class HeaderBase(object):"
+            , "    hidden: Field"
+            , "    def __init__(self):"
+            , "        self.hidden = Field()"
+            , ""
+            , "class Base(object):"
+            , "    def __init__(self):"
+            , "        self._padding = 1"
+            , "        self.used = 7"
+            , "    def inherited(self) -> int:"
+            , "        return self.used"
+            , "    def uncalled(self) -> int:"
+            , "        return 987654321"
+            , "    def _hidden(self) -> int:"
+            , "        return 876543210"
             ]
           writeFile (srcDir </> "c.act") $ unlines
             [ "import b"
             , ""
             , "actor main(env):"
-            , "    print(b.exposed())"
+            , "    print(b.exposed() + b.call_protocol())"
             , "    env.exit(0)"
             ]
-          logTxt <- assertOk "dbp skips library boundary" =<<
-            runBuild ["build", "--skip-build", "--verbose", "--color", "never", "src/c.act"]
+          writeFile (srcDir </> "d.act") $ unlines
+            [ "def independent() -> int:"
+            , "    return 33"
+            ]
+          logTxt <- assertOk "dbp keeps consumer-specific library dependencies" =<<
+            runBuild ["build", "--verbose", "--color", "never", "src/c.act"]
           writeFile (proj </> "log.txt") logTxt
-          assertBool "internal library module should still run DBP"
-            ("DBP a: total names" `isInfixOf` logTxt)
-          assertBool "boundary library module should not run DBP"
-            (not ("DBP b:" `isInfixOf` logTxt))
+          assertBool "internal library dependency should remain selective"
+            ("Selective back a:" `isInfixOf` logTxt)
+          assertBool "protocol implementation should remain selective"
+            ("Selective back impl:" `isInfixOf` logTxt)
+          assertBool "inherited provider should remain selective"
+            ("Selective back base:" `isInfixOf` logTxt)
+          assertBool "boundary library module should remain whole"
+            (not ("Selective back b:" `isInfixOf` logTxt))
+          assertBool "independent library sibling should remain whole"
+            (not ("Selective back d:" `isInfixOf` logTxt))
           aC <- readFile (typesDir </> "a.c")
           bC <- readFile (typesDir </> "b.c")
+          dC <- readFile (typesDir </> "d.c")
+          implC <- readFile (typesDir </> "impl.c")
+          baseC <- readFile (typesDir </> "base.c")
+          baseH <- readFile (typesDir </> "base.h")
+          leafC <- readFile (typesDir </> "leaf.c")
           assertBool "internal DBP module should keep used name" ("used" `isInfixOf` aC)
-          assertBool "internal DBP module should omit unused name" (not ("unused_a" `isInfixOf` aC))
+          assertBool "internal library dependency should omit its unused surface" (not $ "unused_a" `isInfixOf` aC)
           assertBool "boundary module should be compiled whole" ("unused_b" `isInfixOf` bC)
+          assertBool "independent sibling should be compiled whole" ("independent" `isInfixOf` dC)
+          assertBool "abstract return should retain its concrete protocol slot"
+            ((name ++ "Q_implQ_ProtoD_" ++ name ++ "D_protoD_ConcreteD_val")
+              `isInfixOf` implC)
+          assertBool "uncalled public method bodies should stay pruned"
+            (not $ "99LL" `isInfixOf` implC)
+          assertBool "uncalled private method bodies should stay pruned"
+            (not $ "100LL" `isInfixOf` implC)
+          assertBool "uncalled member result surfaces should stay pruned"
+            (not $ "leafQ_LeafD_answer" `isInfixOf` leafC)
+          assertBool "called inherited methods should route through the whole subclass"
+            ("baseQ_BaseD_inherited" `isInfixOf` baseC)
+          assertBool "uncalled inherited method bodies should stay pruned"
+            (not $ "987654321LL" `isInfixOf` baseC)
+          assertBool "uncalled private base method bodies should stay pruned"
+            (not $ "876543210LL" `isInfixOf` baseC)
+          assertBool "whole subclass layout should retain private inherited padding"
+            ("_padding" `isInfixOf` baseC)
+          assertBool "whole unconstructed subclass should retain its inherited property type declaration"
+            ("baseQ_Field" `isInfixOf` baseH)
+          assertBool "property type declaration should not select its constructor"
+            (not $ "baseQ_FieldG_new" `isInfixOf` baseC)
+          (runCode,runOut,runErr) <- readCreateProcessWithExitCode
+            (proc (proj </> "out" </> "bin" </> "c") []) ""
+          assertEqual ("boundary library binary should run: " ++ runErr)
+            ExitSuccess runCode
+          assertEqual "boundary library should execute its selected protocol implementation"
+            "50" (dropWhileEnd isSpace $ dropWhile isSpace runOut)
+
+  , testCase "dbp keeps providers of native whole modules whole" $ do
+        withSystemTempDirectory "acton-dbp-native-provider" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dbp_native_provider"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types" </> name
+              runBuild args = readCreateProcessWithExitCode
+                (proc actonExe
+                  (["build", "--skip-build", "--verbose", "--color", "never"] ++ args))
+                  { cwd = Just proj } ""
+              assertOk label (code,out,err) = do
+                when (code /= ExitSuccess) $
+                  putStrLn ("\nERROR: " ++ label ++ "\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+                assertEqual label ExitSuccess code
+                return (out ++ err)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            ]
+          writeFile (srcDir </> "provider.act") $ unlines
+            [ "def used() -> int:"
+            , "    return 1"
+            , ""
+            , "def unused() -> int:"
+            , "    return 2"
+            ]
+          writeFile (srcDir </> "native.act") $ unlines
+            [ "import provider"
+            , ""
+            , "def native_hook(value: int) -> int:"
+            , "    NotImplemented"
+            , ""
+            , "def call() -> int:"
+            , "    return provider.used()"
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import native"
+            , ""
+            , "actor main(env):"
+            , "    print(native.call())"
+            , "    env.exit(0)"
+            ]
+          firstLog <- assertOk "native provider closure build" =<< runBuild []
+          assertBool "native provider should use a whole back pass"
+            ("Full back provider: full-module closure" `isInfixOf` firstLog)
+          assertBool "native provider should not be projected selectively"
+            (not $ "Selective back provider:" `isInfixOf` firstLog)
+          providerC <- readFile (typesDir </> "provider.c")
+          assertBool "whole native provider closure should retain unused definitions"
+            ("providerQ_unused" `isInfixOf` providerC)
+          secondLog <- assertOk "cached native provider closure build" =<< runBuild []
+          assertBool "cached native provider should remain whole"
+            ("Full back provider: full-module closure" `isInfixOf` secondLog)
+
+  , testCase "dbp skips explicitly requested rootless modules" $ do
+        withSystemTempDirectory "acton-dbp-mixed-surface" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let name = "dbp_mixed_surface"
+              fp = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              srcDir = proj </> "src"
+              typesDir = proj </> "out" </> "types" </> name
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ name ++ "\""
+            , "fingerprint = " ++ fp
+            ]
+          writeFile (srcDir </> "provider.act") $ unlines
+            [ "def used() -> int:"
+            , "    return 1"
+            , ""
+            , "def required_by_api() -> int:"
+            , "    return 2"
+            , ""
+            , "def unused() -> int:"
+            , "    return 3"
+            ]
+          writeFile (srcDir </> "api.act") $ unlines
+            [ "import provider"
+            , ""
+            , "def exposed() -> int:"
+            , "    return provider.required_by_api()"
+            ]
+          writeFile (srcDir </> "main.act") $ unlines
+            [ "import provider"
+            , ""
+            , "actor main(env):"
+            , "    print(provider.used())"
+            , "    env.exit(0)"
+            ]
+          (apiCode,apiOut,apiErr) <- readCreateProcessWithExitCode
+            (proc actonExe
+              [ "build", "--verbose", "--color", "never"
+              , "src/api.act"
+              ]){ cwd = Just proj } ""
+          when (apiCode /= ExitSuccess) $
+            putStrLn ("\nERROR: rootless API build\nSTDOUT:\n" ++ apiOut ++ "STDERR:\n" ++ apiErr)
+          assertEqual "rootless API build" ExitSuccess apiCode
+          apiCExists <- doesFileExist (typesDir </> "api.c")
+          providerCExists <- doesFileExist (typesDir </> "provider.c")
+          assertBool "rootless API should not run back passes" (not apiCExists)
+          assertBool "rootless API should not seed provider back passes" (not providerCExists)
+
+          (code,out,err) <- readCreateProcessWithExitCode
+            (proc actonExe
+              [ "build", "--skip-build", "--verbose", "--color", "never"
+              , "src/main.act", "src/api.act"
+              ]){ cwd = Just proj } ""
+          when (code /= ExitSuccess) $
+            putStrLn ("\nERROR: mixed whole/selective build\nSTDOUT:\n" ++ out ++ "STDERR:\n" ++ err)
+          assertEqual "mixed whole/selective build" ExitSuccess code
+          let logTxt = out ++ err
+          assertBool "provider of executable root should remain selective"
+            ("Selective back provider:" `isInfixOf` logTxt)
+          providerC <- readFile (typesDir </> "provider.c")
+          assertBool "rootless API should not contribute provider interest"
+            (not $ "required_by_api" `isInfixOf` providerC)
+          assertBool "executable interest should remain present"
+            ("providerQ_used" `isInfixOf` providerC)
+          assertBool "uninterested provider code should be absent"
+            (not $ "providerQ_unused" `isInfixOf` providerC)
 
   , testCase "path dependency fetches transitive cached deps before discovery" $ do
         withSystemTempDirectory "acton-transitive-path-fetch" $ \tmp -> do
@@ -842,6 +1651,10 @@ compilerTests =
               , ""
               , "def stale() -> int:"
               , "    return dep.legacy.legacy()"
+              , ""
+              , "actor main(env: Env):"
+              , "    print(stale())"
+              , "    env.exit(0)"
               ]
 
             writeBuildActAt appProj "app" [("mid", midProj), ("dep", depV2)]
@@ -1005,18 +1818,35 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
+  , testCase "sig parser accepts project reachability without a target" $ do
+      parsed <- parseArgs ["sig", "--reachability"]
+      case parsed of
+        C.CmdOpt _ (C.Sig sigOpts) -> do
+          assertEqual "project target" Nothing (C.sigTarget sigOpts)
+          assertBool "reachability option should be set"
+            (C.sigReachability sigOpts)
+        _ ->
+          assertFailure "expected sig command"
+  , testCase "sig parser accepts dot as the project target" $ do
+      parsed <- parseArgs ["sig", "--reachability", "."]
+      case parsed of
+        C.CmdOpt _ (C.Sig sigOpts) ->
+          assertEqual "project target" (Just ".") (C.sigTarget sigOpts)
+        _ ->
+          assertFailure "expected sig command"
   , testCase "build parser help includes --release alias" $ do
       helpText <- renderParserHelp ["build", "--help"]
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
       assertBool "help text should mention release variants" ("=safe or =small" `isInfixOf` helpText)
       assertBool "help text should mention default release mode" ("same as --release=fast" `isInfixOf` helpText)
   , testCase "sig parser accepts target and project options" $ do
-      parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
+      parsed <- parseArgs ["sig", "--always-build", "--reachability", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
       case parsed of
         C.CmdOpt _ (C.Sig sigOpts) -> do
           let opts = C.sigCompile sigOpts
-          assertEqual "sig target" "foo.bar" (C.sigTarget sigOpts)
+          assertEqual "sig target" (Just "foo.bar") (C.sigTarget sigOpts)
           assertBool "sig should force rebuild when requested" (C.alwaysbuild opts)
+          assertBool "sig should request reachability" (C.sigReachability sigOpts)
           assertEqual "sig searchpath" ["out/types"] (C.searchpath opts)
           assertEqual "sig dep overrides" [("dep", "../dep")] (C.dep_overrides opts)
           assertBool "sig should skip final build" (C.skip_build opts)
@@ -1297,7 +2127,20 @@ parseFlagTests =
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc acton (flags ++ [sample])) ""
         assertEqual ("acton " ++ unwords flags ++ " should succeed") ExitSuccess returnCode
         assertEqual ("acton " ++ unwords flags ++ " stderr") "" cmdErr
-        return (LBS.pack cmdOut)
+        return (LBS.pack $ normalizeCodegenHashes cmdOut)
+
+    normalizeCodegenHashes = unlines . map normalize . lines
+      where
+        normalize line
+          | validCodegenHash line =
+              "/* Acton codegen hash: test-hash */"
+          | otherwise = line
+        validCodegenHash line = case stripPrefix prefix line of
+          Just rest -> length rest == 67 &&
+                       all isHexDigit (take 64 rest) &&
+                       drop 64 rest == " */"
+          Nothing   -> False
+        prefix = "/* Acton codegen hash: "
 
 actonProjTests =
   testGroup "compiler project tests"

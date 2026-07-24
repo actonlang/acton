@@ -32,7 +32,6 @@ module Acton.Testing
 
 import qualified Acton.Compile as Compile
 import qualified Acton.Env
-import qualified Acton.Hashing as Hashing
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import Utils (prstr)
@@ -300,7 +299,7 @@ hashRun implHash depsHash ctxHash = toHex (SHA256.hash (B.concat [implHash, deps
 -- | Hash a dependency list with a stable ordering.
 hashDeps :: [(A.QName, B.ByteString)] -> B.ByteString
 hashDeps deps =
-    let sorted = Data.List.sortOn (Hashing.qnameKey . fst) deps
+    let sorted = Data.List.sortOn fst deps
     in SHA256.hash (BL.toStrict (encode sorted))
 
 -- | Shorten a hash to 8 hex characters.
