@@ -227,6 +227,7 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import Acton.Builtin (mBuiltin)
 import Acton.Prim (mPrim)
+import qualified Acton.Artifact as Artifact
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Fingerprint as Fingerprint
@@ -677,7 +678,7 @@ prepareCompilePlan sp gopts sched opts srcFiles allowPrune mChangedPaths = do
   ctx <- prepareCompileContext opts srcFiles
   specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
   when specChanged $
-    fetchDependencies gopts (ccPathsRoot ctx) (ccDepOverrides ctx)
+    fetchDependencies gopts (ccPathsRoot ctx) (ccDepOverrides ctx) (C.artifact_repos opts)
   let mChanged = if specChanged then Nothing else mChangedPaths
   prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChanged
 
@@ -687,6 +688,7 @@ data CompilePlan = CompilePlan
   , cpGlobalTasks :: [GlobalTask]
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
+  , cpPrebuiltRoots :: Data.Set.Set FilePath
   , cpRootTasks :: [CompileTask]
   , cpRootPins :: M.Map String BuildSpec.PkgDep
   , cpIncremental :: Bool
@@ -721,6 +723,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
             , projBuildSpec = scratchBuildSpec rootProj
             , projDeps = []
+            , projPrebuilt = False
             }
       return (M.singleton rootProj ctx')
     else discoverProjects gopts sysAbs rootProj depOverrides
@@ -740,12 +743,14 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
       rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
+      prebuiltRoots = Data.Set.fromList [ projRoot pctx | pctx <- M.elems projMap, projPrebuilt pctx ]
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
     , cpGlobalTasks = globalTasks
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
+    , cpPrebuiltRoots = prebuiltRoots
     , cpRootTasks = rootTasks
     , cpRootPins = rootPins
     , cpIncremental = incremental
@@ -837,7 +842,7 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }
-  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+  compileTasks sp gopts opts' pathsRoot rootProj (cpNeededTasks plan) (cpDbpBlocked plan) (cpPrebuiltRoots plan) callbacks
 
 -- | Tap the generic progress hooks to feed the analytics sampler. Each pass
 -- already reports through these callbacks, so a single wrapper covers parse,
@@ -889,6 +894,7 @@ defaultCompileOptions =
     , C.optimize = C.Debug
     , C.only_build = False
     , C.skip_build = False
+    , C.skip_backpass = False
     , C.watch = False
     , C.no_threads = False
     , C.parse_serial = False
@@ -900,6 +906,7 @@ defaultCompileOptions =
     , C.test = False
     , C.searchpath = []
     , C.dep_overrides = []
+    , C.artifact_repos = []
     }
 
 -- | Debug helper for pass dumps.
@@ -1613,7 +1620,9 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
             Just actFile -> do
               let ctx = projMap M.! tkProj k
               paths <- pathsForModule opts projMap ctx (tkMod k)
-              task  <- readModuleTask sp gopts opts paths actFile
+              task  <- if projPrebuilt ctx
+                          then readPrebuiltModuleTask paths actFile
+                          else readModuleTask sp gopts opts paths actFile
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
                   deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
                   imps = restoredImportsOf paths task
@@ -2066,6 +2075,30 @@ readModuleTask sp gopts opts paths actFile = do
       ParseTask mn srcContent bytes mSourceMeta imps
     HeadError{ mhName = mn, mhDiagnostics = diags } ->
       ParseErrorTask mn diags
+
+readPrebuiltModuleTask :: Paths -> FilePath -> IO CompileTask
+readPrebuiltModuleTask paths tyFile = do
+  let mn = modName paths
+  hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeader tyFile
+  case hdrE of
+    Left ex ->
+      throwProjectError ("Invalid prebuilt Acton interface " ++ tyFile ++ ": " ++ displayException ex)
+    Right (_sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc) ->
+      let nmodStub = I.NModule [] [] mdoc
+          tmodStub = A.Module mn [] mdoc []
+      in return TyTask { name      = mn
+                       , tyHash     = moduleSrcBytesHash
+                       , tyPubHash  = modulePubHash
+                       , tyImplHash = moduleImplHash
+                       , tyImports  = imps
+                       , tyDepModules = depModules
+                       , tyNameHashes = nameHashes
+                       , tyNameCount = length nameHashes
+                       , tyRoots   = roots
+                       , tyTests   = tests
+                       , tyDoc     = mdoc
+                       , iface     = nmodStub
+                       , typed     = tmodStub }
 
 readModuleDoc :: Source.SourceProvider
               -> C.GlobalOptions
@@ -2673,19 +2706,27 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
-                      backJob =
-                        case deferredBackJob of
-                          Just _ -> Nothing
-                          Nothing ->
-                            Just BackJob { bjPaths = paths
-                                         , bjOpts = opts
-                                         , bjInput = BackInput { biTypeEnv = typeEnv
-                                                              , biTypedMod = tchecked
-                                                              , biSrc = srcContent
-                                                              , biImplHash = moduleImplHash
-                                                              }
-                                         }
+                      -- With skip_backpass no back job is created at all, eager or
+                      -- deferred: the .tydb committed by the front pass is the
+                      -- complete output, and code generation is left to a later
+                      -- build that consumes it.
+                      deferredBackJob
+                        | C.skip_backpass opts = Nothing
+                        | otherwise = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
+                      backJob
+                        | C.skip_backpass opts = Nothing
+                        | otherwise =
+                            case deferredBackJob of
+                              Just _ -> Nothing
+                              Nothing ->
+                                Just BackJob { bjPaths = paths
+                                             , bjOpts = opts
+                                             , bjInput = BackInput { biTypeEnv = typeEnv
+                                                                  , biTypedMod = tchecked
+                                                                  , biSrc = srcContent
+                                                                  , biImplHash = moduleImplHash
+                                                                  }
+                                             }
                   do
                     let outputKey = TaskKey (projPath paths) mn
                     -- The .tydb commit is synchronous with front completion:
@@ -2738,14 +2779,24 @@ data DbpNameSelection = DbpNameSelection
   , dnsNameHashes :: [InterfaceFiles.NameHashInfo]
   }
 
+-- | Source text to embed in a module's back-pass input. It feeds only the
+-- #line directives in generated C (byte offset -> source line). A prebuilt
+-- artifact-only dependency ships no source, and its regenerated C carries no
+-- #line directives, so the empty string is exactly right -- and it avoids
+-- reading a source file that does not exist.
+backSrcText :: Source.SourceProvider -> Bool -> FilePath -> IO String
+backSrcText _ True _         = return ""
+backSrcText sp False actFile = Source.ssText <$> Source.readSource sp actFile
+
 prepareDeferredBackJob :: Source.SourceProvider
                        -> C.GlobalOptions
                        -> CompileCallbacks
                        -> Acton.Env.Env0
                        -> InterestMap
+                       -> Bool
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
+prepareDeferredBackJob sp gopts callbacks envAcc interestMap prebuilt dbj = do
   let paths = dbjPaths dbj
       mn = dbjMod dbj
       tyFile = tyDbPath paths mn
@@ -2770,7 +2821,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
       selection <- case selectedTmod of
         Just tmod -> return $ selectDbpModule totalNames nameSelection tmod
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
-      snap <- Source.readSource sp actFile
+      srcText <- backSrcText sp prebuilt actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
       logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
@@ -2779,7 +2830,7 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
         , bjInput = BackInput
             { biTypeEnv = Converter.convEnvProtos env1
             , biTypedMod = dbsModule selection
-            , biSrc = Source.ssText snap
+            , biSrc = srcText
             , biImplHash = codegenHash
             }
         }
@@ -3027,7 +3078,10 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 
       ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
         let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
-            emitLines = not (C.dbg_no_lines opts)
+            -- With no source text (a prebuilt artifact-only dep) there are no
+            -- byte offsets to map, so skip #line directives rather than point
+            -- them at source that was never shipped.
+            emitLines = not (C.dbg_no_lines opts) && not (null (biSrc backInput))
         Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
@@ -3118,9 +3172,10 @@ compileTasks :: Source.SourceProvider
              -> FilePath                  -- root project path
              -> [GlobalTask]
              -> Data.Set.Set TaskKey
+             -> Data.Set.Set FilePath     -- prebuilt (artifact-only) project roots
              -> CompileCallbacks
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
+compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked prebuiltRoots callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = do
@@ -3179,6 +3234,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     -- Basic maps/sets ----------------------------------------------------
     taskMap = M.fromList [ (gtKey t, t) | t <- tasks ]
     isDbpBlocked k = Data.Set.member k dbpBlocked
+    -- Artifact-only dependency: no local source, so back passes regenerate its
+    -- C from the .tydb alone (see backSrcText).
+    isPrebuilt k = Data.Set.member (tkProj k) prebuiltRoots
     isBuiltinKey k = tkMod k == A.modName ["__builtin__"]
     builtinOrder = [ t | t <- tasks, isBuiltinKey (gtKey t) ]
     nonBuiltinTasks = [ t | t <- tasks, not (isBuiltinKey (gtKey t)) ]
@@ -3281,7 +3339,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               deferredBacks
       prepared <- (try $
         forM (M.elems ready) $ \(dbj, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
+          let prebuilt = isPrebuilt (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
+          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap prebuilt dbj
           case mJob of
             Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
             Just _ -> return ()
@@ -3842,7 +3901,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     TyTask{ tyImplHash = implHash } -> Just implHash
                     _ -> Nothing
               cachedDeferredBackJob <- case taskCurrent of
-                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
+                    TyTask{ tyImplHash = implHash, tyNameCount = nameCount } | not (C.skip_backpass optsT) -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
                       return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn implHash nameCount)
                     _ -> return Nothing
@@ -3850,7 +3909,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case cachedDeferredBackJob of
                       Just _ -> True
                       Nothing -> False
-              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp
+              -- With skip_backpass generated code is never (re)built, so its
+              -- staleness must not force any work.
+              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp && not (C.skip_backpass optsT)
               mCodegenStatus <- case mModuleImplHash of
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
                 _ -> return Nothing
@@ -4007,9 +4068,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                                                  FrontOutputTydbCopy
                                                                                  (copyTydbInterface optsT paths mn)
                                               else return []
-                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
-                                      case deferredBackJob0 of
-                                        Just _ -> do
+                                          -- Under skip_backpass the refreshed rows are the whole
+                                          -- point; no back job follows, deferred or eager.
+                                          skipBack = C.skip_backpass optsT
+                                          deferredBackJob0
+                                            | skipBack = Nothing
+                                            | otherwise = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
+                                      if skipBack || isJust deferredBackJob0
+                                        then do
                                           ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
                                           case ifaceRes of
                                             Left diags -> return (key, Left diags)
@@ -4026,12 +4092,12 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                         , frModuleInfo = mModuleInfo
                                                         }
                                                   cacheFrontResult fr
-                                        Nothing -> do
+                                        else do
                                           tyRes <- readTyFile
                                           case tyRes of
                                             Left diags -> return (key, Left diags)
                                             Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
-                                              snap <- Source.readSource sp actFile
+                                              srcText <- backSrcText sp (isPrebuilt key) actFile
                                               envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
                                                 Acton.Env.mkEnv (searchPath paths) envSnap tmod
                                               case envRes of
@@ -4047,7 +4113,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                       rememberFrontOutputJobList frontOutputRef outputJobs
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
-                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                                          backJob = Just (mkBackJob env1 tmod srcText moduleImplHash)
                                                           fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
                                                             { frOutputJobs = outputJobs }
                                                       cacheFrontResult fr
@@ -4062,7 +4128,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case tyRes of
                       Left diags -> return (key, Left diags)
                       Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, _depModules, nameHashes, _roots, _tests, mdoc) -> do
-                        snap <- Source.readSource sp actFile
+                        srcText <- backSrcText sp (isPrebuilt key) actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
                         interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
@@ -4071,7 +4137,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing
-                                Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
+                                Nothing -> Just (mkBackJob env1 tmod srcText moduleImplHashStored)
                             fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
                                    { frInterestDeps = interestDeps }
                         cacheFrontResult fr
@@ -4361,7 +4427,8 @@ data ProjCtx = ProjCtx {
                      projSysPath :: FilePath,
                      projSysTypes:: FilePath,
                      projBuildSpec :: BuildSpec.BuildSpec,
-                     projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
+                     projDeps     :: [(String, FilePath)],         -- resolved dependency roots (abs paths)
+                     projPrebuilt :: Bool
                    } deriving (Show)
 
 systemTypePaths :: FilePath -> FilePath -> [FilePath]
@@ -4431,7 +4498,8 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
               srcDir'  = joinPath [dirAbs, "src"]
-              ctx = ProjCtx { projRoot = dirAbs
+          prebuilt <- isActonArtifactOnlyRoot dirAbs
+          let ctx = ProjCtx { projRoot = dirAbs
                             , projOutDir = outDir
                             , projTypesDir = typesDir
                             , projSrcDir = srcDir'
@@ -4439,6 +4507,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
                             , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
                             , projBuildSpec = spec
                             , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
+                            , projPrebuilt = prebuilt
                             }
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
@@ -4458,6 +4527,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
                     ++ " overridden by root pin")
       depBase <- resolveDepBase base depName chosenDep
       depAbs  <- normalizePathSafe depBase
+      validateDependencyPath depName chosenDep depAbs
       (depPath, fpMap', depSpec) <- canonicalizeDep depAbs fpMap
       return ((depName, depPath, depSpec) : accDeps, fpMap')
 
@@ -4525,6 +4595,19 @@ isActonProjectRoot path = do
         hasBuildAct <- doesFileExist (path </> "Build.act")
         hasSrcDir <- doesDirectoryExist (path </> "src")
         return (hasBuildAct && hasSrcDir)
+
+isActonArtifactRoot :: FilePath -> IO Bool
+isActonArtifactRoot path = do
+    hasManifest <- doesFileExist (path </> Artifact.artifactManifestFile)
+    hasBuildAct <- doesFileExist (path </> "Build.act")
+    hasTypesDir <- doesDirectoryExist (path </> "out" </> "types")
+    return (hasManifest && hasBuildAct && hasTypesDir)
+
+isActonArtifactOnlyRoot :: FilePath -> IO Bool
+isActonArtifactOnlyRoot path = do
+    isArtifact <- isActonArtifactRoot path
+    hasSrcDir <- doesDirectoryExist (path </> "src")
+    return (isArtifact && not hasSrcDir)
 
 findProjectDir :: FilePath -> IO (Maybe FilePath)
 findProjectDir path = do
@@ -4650,23 +4733,42 @@ moduleNameFromFile srcBase proj actFile = do
 -- Used to seed the project module index for graph construction.
 enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
 enumerateProjectModules ctx = do
-    exists <- doesDirectoryExist (projSrcDir ctx)
+    if projPrebuilt ctx
+      then enumeratePrebuiltModules ctx
+      else do
+        exists <- doesDirectoryExist (projSrcDir ctx)
+        if not exists
+          then return []
+          else do
+            files <- getFilesRecursive (projSrcDir ctx)
+            let actFiles = filter (\f -> takeExtension f == ".act") files
+                proj = BuildSpec.specName $ projBuildSpec ctx
+                rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
+                depNames = map fst $ projDeps ctx
+                depOverlaps = filter ((`elem` depNames) . rootName) actFiles
+            when (not $ null depOverlaps) $
+                throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
+                                   concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
+            forM actFiles $ \f -> do
+              mn <- moduleNameFromFile (projSrcDir ctx) proj f
+              return (f, mn)
+
+enumeratePrebuiltModules :: ProjCtx -> IO [(FilePath, A.ModName)]
+enumeratePrebuiltModules ctx = do
+    exists <- doesDirectoryExist (projTypesDir ctx)
     if not exists
       then return []
       else do
-        files <- getFilesRecursive (projSrcDir ctx)
-        let actFiles = filter (\f -> takeExtension f == ".act") files
-            proj = BuildSpec.specName $ projBuildSpec ctx
-            rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
-            depNames = map fst $ projDeps ctx
-            depOverlaps = filter ((`elem` depNames) . rootName) actFiles
-
-        when (not $ null depOverlaps) $
-            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
-                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
-
-        forM actFiles $ \f -> do
-          mn <- moduleNameFromFile (projSrcDir ctx) proj f
+        tyFiles <- InterfaceFiles.listInterfaceDirsRecursive (projTypesDir ctx)
+        base <- normalizePathSafe (projTypesDir ctx)
+        forM tyFiles $ \f -> do
+          file <- normalizePathSafe f
+          -- Interface paths under out/types already encode the full, project-
+          -- prefixed module name (see interfacePath), so derive it directly
+          -- rather than via moduleNameFromFile, which would prepend the project
+          -- name a second time.
+          let rel = dropExtension (makeRelative base file)
+              mn = A.modName (splitDirectories rel)
           return (f, mn)
 
 -- | Remove stale generated module artifacts when source modules disappear.
@@ -4674,22 +4776,23 @@ enumerateProjectModules ctx = do
 -- cached headers cannot mask deleted .act modules.
 pruneMissingModuleOutputs :: ProjCtx -> IO ()
 pruneMissingModuleOutputs ctx = do
-    let srcRoot = projSrcDir ctx
-        typesRoot = projTypesDir ctx
-    typesExists <- doesDirectoryExist typesRoot
-    when typesExists $ do
-      srcExists <- doesDirectoryExist srcRoot
-      srcMods <- if srcExists
-                   then do
-                     srcFiles <- getFilesRecursive srcRoot
-                     let actFiles = filter (\f -> takeExtension f == ".act") srcFiles
-                         modBases = map (normalise . dropExtension . makeRelative srcRoot) actFiles
-                     return (Data.Set.fromList modBases)
-                   else return Data.Set.empty
-      outFiles <- getFilesRecursive typesRoot
-      mapM_ (pruneFile srcMods typesRoot) outFiles
-      tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
-      mapM_ (pruneTyDb srcMods typesRoot) tyDbs
+    unless (projPrebuilt ctx) $ do
+      let srcRoot = projSrcDir ctx
+          typesRoot = projTypesDir ctx
+      typesExists <- doesDirectoryExist typesRoot
+      when typesExists $ do
+        srcExists <- doesDirectoryExist srcRoot
+        srcMods <- if srcExists
+                     then do
+                       srcFiles <- getFilesRecursive srcRoot
+                       let actFiles = filter (\f -> takeExtension f == ".act") srcFiles
+                           modBases = map (normalise . dropExtension . makeRelative srcRoot) actFiles
+                       return (Data.Set.fromList modBases)
+                     else return Data.Set.empty
+        outFiles <- getFilesRecursive typesRoot
+        mapM_ (pruneFile srcMods typesRoot) outFiles
+        tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
+        mapM_ (pruneTyDb srcMods typesRoot) tyDbs
   where
     isRootStub rel ext =
       ext == ".c" &&
@@ -4735,14 +4838,15 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
         mapM_ (pruneForCtx actPath) ctxs
   where
     pruneForCtx actPath ctx = do
-      srcRoot <- normalizePathSafe (projSrcDir ctx)
-      let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
-          actPath' = normalise actPath
-      when (Data.List.isPrefixOf srcRoot' actPath') $ do
-        let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
-            outBase = projTypesDir ctx </> modBase
-        removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
-        mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
+      unless (projPrebuilt ctx) $ do
+        srcRoot <- normalizePathSafe (projSrcDir ctx)
+        let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
+            actPath' = normalise actPath
+        when (Data.List.isPrefixOf srcRoot' actPath') $ do
+          let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
+              outBase = projTypesDir ctx </> modBase
+          removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
+          mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
@@ -4955,12 +5059,18 @@ applyDepOverrides base overrides spec = do
         Just dep -> do
           let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
           absP <- normalizePathSafe absP0
-          validateDepOverridePath depName absP
+          validateLocalDepPath depName absP
           let dep' = dep { BuildSpec.path = Just absP }
           return (M.insert depName dep' depsMap)
 
-validateDepOverridePath :: String -> FilePath -> IO ()
-validateDepOverridePath depName depPath = do
+validateDependencyPath :: String -> BuildSpec.PkgDep -> FilePath -> IO ()
+validateDependencyPath depName dep depPath =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> rejectArtifactDepPath depName depPath
+      _ -> return ()
+
+validateLocalDepPath :: String -> FilePath -> IO ()
+validateLocalDepPath depName depPath = do
     exists <- doesDirectoryExist depPath
     unless exists $
       throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depPath ++ "\n"
@@ -4972,8 +5082,15 @@ validateDepOverridePath depName depPath = do
                          ++ "Hint: Local dependency paths must point to an Acton project root\n"
                          ++ "(directory with src/ and Build.act).")
 
-fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> IO ()
-fetchDependencies gopts paths depOverrides = do
+rejectArtifactDepPath :: String -> FilePath -> IO ()
+rejectArtifactDepPath depName depPath = do
+    isArtifactRoot <- isActonArtifactOnlyRoot depPath
+    when isArtifactRoot $
+      throwProjectError ("Dependency " ++ depName ++ " path points to an Acton output artifact: " ++ depPath ++ "\n"
+                         ++ "Hint: Use --artifact-repo to search output artifacts; local dependency paths are not artifact roots.")
+
+fetchDependencies :: C.GlobalOptions -> Paths -> [(String, FilePath)] -> [String] -> IO ()
+fetchDependencies gopts paths depOverrides artifactRepos = do
     if isTmp paths
       then return ()
       else do
@@ -5007,7 +5124,7 @@ fetchDependencies gopts paths depOverrides = do
           selectedDeps <- forM (M.toList (BuildSpec.dependencies spec)) $
             selectDependency rootPins projAbs
           let pkgFetches = catMaybes
-                [ mkPkgFetch cacheDir zigExe globalCache name dep | (name, dep) <- selectedDeps ]
+                [ mkPkgFetch cacheDir zigExe globalCache depsCache name dep | (name, dep) <- selectedDeps ]
               zigFetches = catMaybes
                 [ mkZigFetch cacheDir zigExe globalCache name dep
                 | (name, dep) <- M.toList (BuildSpec.zig_dependencies spec)
@@ -5064,16 +5181,17 @@ fetchDependencies gopts paths depOverrides = do
                                     ++ "(directory with src/ and Build.act).")
                _ -> return seen
         else do
+          validateDependencyPath depName dep depAbs
           depSpec0 <- loadBuildSpec depAbs
           depSpec <- applyDepOverrides depAbs depOverrides depSpec0
           walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen seen depAbs depSpec
 
-    mkPkgFetch cacheDir zigExe globalCache name dep =
+    mkPkgFetch cacheDir zigExe globalCache depsCache name dep =
       case BuildSpec.path dep of
         Just p | not (null p) -> Nothing
         _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
                (Just u, Just h) ->
-                 Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
+                 Just (fetchPkg name dep u h cacheDir zigExe globalCache depsCache)
                (Just _, Nothing) ->
                  Just (return (Left ("Dependency " ++ name ++ " is missing hash")))
                _ -> Nothing
@@ -5160,6 +5278,229 @@ fetchDependencies gopts paths depOverrides = do
     -- Atomically record a key; returns True the first time it is seen.
     claimVisited ref key = atomicModifyIORef' ref $ \s ->
       if Data.Set.member key s then (s, False) else (Data.Set.insert key s, True)
+
+    -- Passing --artifact-repo opts in to artifact consumption: a valid output
+    -- artifact is then preferred over already-cached source. Without it cached
+    -- source always wins, so ordinary builds never retry artifact pulls for
+    -- deps they already have. The opt-in matters on any host that has run
+    -- 'acton artifact hash/push': producing seeds the caches with the
+    -- producer's own source, which would otherwise shadow the artifact forever.
+    preferArtifacts = not (null artifactRepos)
+
+    fetchPkg name dep url h cacheDir zigExe globalCache depsCache = do
+      let dst = joinPath [depsCache, name ++ "-" ++ h]
+      present <- doesDirectoryExist dst
+      if present
+        then do
+          cachedArtifact <- validateCachedArtifactDir name h dst
+          case cachedArtifact of
+            Left err -> return (Left err)
+            Right True -> useCachedArtifact name h dst
+            Right False -> do
+              stillPresent <- doesDirectoryExist dst
+              if stillPresent
+                then usePkgOrPreferredArtifact name dep h dst depsCache
+                else fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst
+        else fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst
+
+    -- dst holds a cached source checkout. With artifact consumption enabled,
+    -- try to replace it with the matching output artifact (tryArtifactRefs
+    -- swaps dst in place); on a miss keep building from the cached source.
+    usePkgOrPreferredArtifact name dep h dst depsCache
+      | not preferArtifacts = useCachedPkg name h dst
+      | otherwise = do
+          artifact <- fetchPkgArtifact name dep h dst depsCache
+          case artifact of
+            Left err -> return (Left err)
+            Right True -> return (Right h)
+            Right False -> useCachedPkg name h dst
+
+    useCachedArtifact name h _dst = do
+      unless (C.quiet gopts) $
+        putStrLn ("Using cached Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
+      return (Right h)
+
+    useCachedPkg name h _dst = do
+      unless (C.quiet gopts) $
+        putStrLn ("Using cached pkg dependency " ++ name ++ " (" ++ h ++ ")")
+      return (Right h)
+
+    fetchPkgFresh name dep url h cacheDir zigExe globalCache depsCache dst = do
+      sourcePresent <- cacheEntryExists cacheDir h
+      if sourcePresent && not preferArtifacts
+        then fetchOne "pkg" name url (Just h) cacheDir zigExe globalCache
+        else do
+          artifact <- fetchPkgArtifact name dep h dst depsCache
+          case artifact of
+            Left err -> return (Left err)
+            Right True -> return (Right h)
+            Right False -> fetchOne "pkg" name url (Just h) cacheDir zigExe globalCache
+
+    validateCachedArtifactDir name h dst = do
+      artifactRoot <- isActonArtifactOnlyRoot dst
+      if not artifactRoot
+        then return (Right False)
+        else do
+          valid <- validateArtifactDir name h dst
+          case valid of
+            Right () -> return (Right True)
+            Left err -> do
+              when (C.verbose gopts) $
+                putStrLn ("Ignoring cached Acton artifact for " ++ name ++ ": " ++ err)
+              rm <- try (removePathForcibly dst) :: IO (Either IOException ())
+              case rm of
+                Right _ -> return (Right False)
+                Left ex -> return (Left ("Failed to remove stale Acton artifact " ++ dst ++ ": " ++ displayException ex))
+
+    fetchPkgArtifact name dep h dst depsCache = do
+      refs <- artifactRefs dep h
+      case refs of
+        Left err -> return (Left err)
+        Right allRefs -> tryArtifactRefs name h dst depsCache (localArtifactRefs allRefs ++ remoteArtifactRefs allRefs)
+
+    localArtifactRefs refs = filter Artifact.ociRefIsLocal refs
+
+    remoteArtifactRefs refs = filter (not . Artifact.ociRefIsLocal) refs
+
+    artifactRefs dep h =
+      let (repoErrors, repoRefs) = partitionEithers [ artifactRepoRef repo h | repo <- artifactRepos ]
+      in case repoErrors of
+           err:_ -> return (Left err)
+           [] -> return (Right (repoRefs ++ derivedArtifactRefs dep h))
+      where
+        artifactRepoRef repo h =
+          case Artifact.ociRefForRepository repo h of
+            Just ref -> Right ref
+            Nothing  -> Left ("Invalid Acton artifact repository " ++ repo)
+
+        derivedArtifactRefs dep h =
+          catMaybes [ BuildSpec.repo_url dep >>= \repoUrl -> Artifact.deriveOciRef repoUrl h ]
+
+    tryArtifactRefs name h dst depsCache refs =
+      case refs of
+        [] -> return (Right False)
+        ref:rest -> do
+          unless (C.quiet gopts) $
+            putStrLn ("Trying Acton artifact " ++ name ++ " from " ++ ref)
+          tmpRoot <- getTemporaryDirectory
+          nonce <- randomRIO (0, maxBound :: Int)
+          let tmpDir = joinPath [tmpRoot, "acton-oci-" ++ show nonce]
+              pullDir = joinPath [tmpDir, "pull"]
+              stageDir = joinPath [tmpDir, "stage"]
+              refArg = Artifact.ociRefOrasTarget ref
+              pullArgs = ["pull"] ++ Artifact.ociRefOrasOptions ref ++ [refArg, "--output", pullDir]
+          createDirectoryIfMissing True pullDir
+          pullRes <- runProcessCapture "oras" pullArgs Nothing
+          case pullRes of
+            Left _ -> cleanupTmp tmpDir >> tryArtifactRefs name h dst depsCache rest
+            Right (ExitFailure _, _, _) -> cleanupTmp tmpDir >> tryArtifactRefs name h dst depsCache rest
+            Right (ExitSuccess, _, _) -> do
+              let archive = pullDir </> Artifact.artifactArchiveFile
+              archiveExists <- doesFileExist archive
+              if not archiveExists
+                then do
+                  skipArtifact name h dst depsCache ref tmpDir rest ("did not contain " ++ Artifact.artifactArchiveFile)
+                else do
+                  createDirectoryIfMissing True stageDir
+                  extracted <- extractArtifactArchive ref archive stageDir
+                  case extracted of
+                    Left err -> skipArtifact name h dst depsCache ref tmpDir rest err
+                    Right () -> do
+                      valid <- validateArtifactDir name h stageDir
+                      case valid of
+                        Left err -> skipArtifact name h dst depsCache ref tmpDir rest err
+                        Right () -> do
+                          createDirectoryIfMissing True depsCache
+                          dstExists <- doesDirectoryExist dst
+                          materialized <- if dstExists
+                                            then try (removePathForcibly dst >> renameDirectory stageDir dst) :: IO (Either IOException ())
+                                            else try (renameDirectory stageDir dst) :: IO (Either IOException ())
+                          case materialized of
+                            Right _ -> do
+                              cleanupTmp tmpDir
+                              unless (C.quiet gopts) $
+                                putStrLn ("Using Acton artifact for dependency " ++ name ++ " (" ++ h ++ ")")
+                              return (Right True)
+                            Left ex -> do
+                              cleanupTmp tmpDir
+                              return (Left ("Failed to materialize Acton artifact " ++ ref ++ ": " ++ displayException ex))
+
+    skipArtifact name h dst depsCache ref tmpDir rest reason = do
+      when (C.verbose gopts) $
+        putStrLn ("Ignoring Acton artifact " ++ ref ++ ": " ++ reason)
+      cleanupTmp tmpDir
+      tryArtifactRefs name h dst depsCache rest
+
+    validateArtifactDir name h dir = do
+      manifestE <- Artifact.readManifest dir
+      case manifestE of
+        Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
+        Right manifest ->
+          case Artifact.validateManifest h manifest of
+            Left err -> return (Left ("Invalid Acton artifact manifest for " ++ name ++ ": " ++ err))
+            Right () -> do
+              hasBuildAct <- doesFileExist (dir </> "Build.act")
+              hasTypesDir <- doesDirectoryExist (dir </> "out" </> "types")
+              if hasBuildAct && hasTypesDir
+                then return (Right ())
+                else return (Left ("Acton artifact for " ++ name ++ " must contain Build.act and out/types"))
+
+    extractArtifactArchive ref archive stageDir = do
+      safe <- validateArtifactArchiveEntries archive
+      case safe of
+        Left err ->
+          return (Left ("Unsafe Acton artifact " ++ ref ++ ": " ++ err))
+        Right () -> do
+          extractRes <- runProcessCapture "tar" ["-xzf", archive, "-C", stageDir] Nothing
+          case extractRes of
+            Left ex ->
+              return (Left ("Failed to extract Acton artifact " ++ ref ++ ": " ++ displayException ex))
+            Right (ExitFailure _, _, err) ->
+              return (Left ("Failed to extract Acton artifact " ++ ref ++ ":\n" ++ err))
+            Right (ExitSuccess, _, _) -> return (Right ())
+
+    validateArtifactArchiveEntries archive = do
+      namesRes <- runProcessCapture "tar" ["-tzf", archive] Nothing
+      case namesRes of
+        Left ex -> return (Left ("failed to list archive entries: " ++ displayException ex))
+        Right (ExitFailure _, _, err) -> return (Left ("failed to list archive entries:\n" ++ err))
+        Right (ExitSuccess, out, _) -> do
+          let entries = filter (not . null) (lines out)
+              badPaths = filter (not . safeArtifactPath) entries
+          if not (null badPaths)
+            then return (Left ("invalid archive path " ++ head badPaths))
+            else do
+              typesRes <- runProcessCapture "tar" ["-tvzf", archive] Nothing
+              case typesRes of
+                Left ex -> return (Left ("failed to inspect archive entries: " ++ displayException ex))
+                Right (ExitFailure _, _, err) -> return (Left ("failed to inspect archive entries:\n" ++ err))
+                Right (ExitSuccess, typeOut, _) -> do
+                  let badTypes = filter (not . safeArtifactTypeLine) (filter (not . null) (lines typeOut))
+                  if null badTypes
+                    then return (Right ())
+                    else return (Left ("unsupported archive entry type " ++ take 1 (head badTypes)))
+
+    safeArtifactPath p =
+      not (isAbsolute p) &&
+      ".." `notElem` splitDirectories p &&
+      (p == Artifact.artifactManifestFile ||
+       p == "Build.act" ||
+       p == "out" ||
+       p == "out/types" ||
+       "out/types/" `isPrefixOf` p)
+
+    safeArtifactTypeLine [] = True
+    safeArtifactTypeLine (c:_) = c == '-' || c == 'd'
+
+    runProcessCapture exe args mcwd = do
+      let cmd = (proc exe args){ cwd = mcwd }
+      try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
+
+    cleanupTmp dir =
+      removePathForcibly dir `catch` ignoreCleanup
+
+    ignoreCleanup :: IOException -> IO ()
+    ignoreCleanup _ = return ()
 
     fetchOne kind name url mh cacheDir zigExe globalCache = do
       case mh of
@@ -5330,6 +5671,7 @@ collectDepTypePaths projDir overrides = do
                                     ++ "(directory with src/ and Build.act).")
                _ -> return (seen, fpMap, acc)
         else do
+          validateDependencyPath depName dep depAbs
           (depPath, fpMap') <- canonicalizeDep depAbs fpMap
           let typesDir = joinPath [depPath, "out", "types"]
           if Data.Set.member depPath seen

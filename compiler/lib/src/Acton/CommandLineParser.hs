@@ -53,6 +53,7 @@ data Command        = New NewOptions
                     | PkgUpgrade PkgUpgradeOptions
                     | PkgUpdate
                     | PkgSearch PkgSearchOptions
+                    | Artifact ArtifactCommand
                     | BuildSpecCmd BuildSpecCommand
                     | Cloud CloudOptions
                     | Doc DocOptions
@@ -90,6 +91,7 @@ data CompileOptions   = CompileOptions {
                          optimize    :: OptimizeMode,
                          only_build  :: Bool,
                          skip_build  :: Bool,
+                         skip_backpass :: Bool,
                          watch       :: Bool,
                          no_threads  :: Bool,
                          parse_serial :: Bool,
@@ -100,7 +102,8 @@ data CompileOptions   = CompileOptions {
                          cpu         :: String,
                          test        :: Bool,
                          searchpath  :: [String],
-                         dep_overrides :: [(String,String)]
+                         dep_overrides :: [(String,String)],
+                         artifact_repos :: [String]
                      } deriving Show
 
 data BuildOptions = BuildOptions
@@ -194,6 +197,25 @@ data PkgSearchOptions = PkgSearchOptions
     { pkgSearchTerms :: [String]
     } deriving Show
 
+data ArtifactCommand
+    = ArtifactPack ArtifactPackOptions
+    | ArtifactPush ArtifactPushOptions
+    | ArtifactHash ArtifactHashOptions
+    deriving Show
+
+data ArtifactPackOptions = ArtifactPackOptions
+    { artifactPackOutput     :: String
+    } deriving Show
+
+data ArtifactPushOptions = ArtifactPushOptions
+    { artifactPushRepoUrl      :: String
+    , artifactPushArtifactRepo :: String
+    } deriving Show
+
+data ArtifactHashOptions = ArtifactHashOptions
+    { artifactHashSourcePath :: String
+    } deriving Show
+
 data ZigPkgAddOptions = ZigPkgAddOptions
     { zigPkgAddUrl       :: String
     , zigPkgAddName      :: String
@@ -218,6 +240,7 @@ cmdLineParser       = hsubparser
                         <> command "repl"    (info (CmdOpt <$> globalOptions <*> (Repl <$> compileOptions)) (progDesc "Run an interactive Acton shell"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
                         <> command "pkg"     (info (CmdOpt <$> globalOptions <*> pkgSubcommands) (progDesc "Library package/dependency commands"))
+                        <> command "artifact" (info artifactSubcommands (progDesc "Build or publish Acton output artifacts"))
                         <> command "zig-pkg" (info (CmdOpt <$> globalOptions <*> zigPkgSubcommands) (progDesc "Zig package dependency commands"))
                         <> command "spec"    (info (CmdOpt <$> globalOptions <*> (BuildSpecCmd <$> buildSpecCommand)) (progDesc "Inspect or update build specification"))
                         <> command "cloud"   (info (CmdOpt <$> globalOptions <*> (Cloud <$> cloudOptions)) (progDesc "Run an Acton project in the cloud"))
@@ -336,6 +359,7 @@ sigCompileOptions = mkSigCompileOptions
         , optimize = Debug
         , only_build = False
         , skip_build = True
+        , skip_backpass = False
         , watch = False
         , no_threads = False
         , parse_serial = False
@@ -347,6 +371,7 @@ sigCompileOptions = mkSigCompileOptions
         , test = False
         , searchpath = search
         , dep_overrides = depOverrides
+        , artifact_repos = []
         }
 
 compileOptions = CompileOptions
@@ -373,6 +398,7 @@ compileOptions = CompileOptions
         <*> optimizeOption
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
+        <*> switch (long "skip-backpass" <> help "Skip back passes (no C code generation), only type check and write interfaces")
         <*> switch (long "watch"        <> help "Rebuild on file changes")
         <*> switch (long "no-threads"   <> help "Don't use threads")
         <*> switch (long "parse-serial" <> help "Use the serial whole-file parser")
@@ -387,6 +413,7 @@ compileOptions = CompileOptions
                (long "dep"
                 <> metavar "NAME=PATH"
                 <> help "Override dependency NAME with local PATH"))
+        <*> many (strOption (long "artifact-repo" <> metavar "OCI_REPO" <> help "Search OCI repository for Acton output artifacts"))
 
 pkgSubcommands :: Parser Command
 pkgSubcommands = hsubparser
@@ -428,6 +455,31 @@ pkgUpgradeOptions =
 pkgSearchOptions :: Parser PkgSearchOptions
 pkgSearchOptions =
     PkgSearchOptions <$> many (argument str (metavar "TERM" <> help "Search term (regex, ANDed)"))
+
+-- Global options are parsed by each leaf command, not at the "artifact"
+-- level: a nested hsubparser hands all remaining arguments to the leaf
+-- parser, so this is what lets "acton artifact pack --verbose" parse.
+artifactSubcommands :: Parser CmdLineOptions
+artifactSubcommands = hsubparser
+  (  command "pack" (artifactInfo (ArtifactPack <$> artifactPackOptions) "Pack out/types as an Acton artifact")
+  <> command "push" (artifactInfo (ArtifactPush <$> artifactPushOptions) "Pack and push an Acton artifact to OCI")
+  <> command "hash" (artifactInfo (ArtifactHash <$> artifactHashOptions) "Compute the Acton package source hash for a local path")
+  )
+  where
+    artifactInfo p desc = info (CmdOpt <$> globalOptions <*> (Artifact <$> p)) (progDesc desc)
+
+artifactPackOptions :: Parser ArtifactPackOptions
+artifactPackOptions = ArtifactPackOptions
+    <$> strOption (long "output" <> metavar "FILE" <> value "" <> help "Output archive (defaults to out/acton-out.tar.gz)")
+
+artifactPushOptions :: Parser ArtifactPushOptions
+artifactPushOptions = ArtifactPushOptions
+    <$> strOption (long "repo-url" <> metavar "URL" <> value "" <> help "Repository URL used to derive the OCI ref")
+    <*> strOption (long "artifact-repo" <> metavar "OCI_REPO" <> value "" <> help "OCI repository to push to")
+
+artifactHashOptions :: Parser ArtifactHashOptions
+artifactHashOptions =
+    ArtifactHashOptions <$> argument str (metavar "PATH" <> value "." <> help "Source package path")
 
 zigPkgSubcommands :: Parser Command
 zigPkgSubcommands = hsubparser
