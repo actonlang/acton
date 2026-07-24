@@ -1,8 +1,12 @@
 Building file test/syntaxerrors/err2.act using temporary scratch directory
-[error Context error]: actor declaration only allowed on the module top level
-     +--> err2.act@2:5-2:10
+[error Parse error]: unexpected "a()"
+                     expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+
+     +--> test/syntaxerrors/err2.act@2:11-2:12
      |
    2 |     actor a():
-     :     ^---- 
-     :     `- actor declaration only allowed on the module top level
+     :           ^ 
+     :           `- unexpected "a()"
+     :              expecting "%=", "&=", "**=", "*=", "+=", "-=", "//=", "/=", "<<=", ">>=", "@=", "^=", "|=", ':', '=', call arguments, slice/index expression, or comma
+     :              
 -----+
