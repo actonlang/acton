@@ -62,6 +62,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | InvalidModuleStatement
                       | InvalidTopLevelAssignmentPattern
                       | DuplicateTopLevelAssignment String
+                      | MisplacedImport
                       | CyclicTypedef [String]
                       -- String interpolation errors
                       | EmptyInterpolationExpression
@@ -93,6 +94,8 @@ instance ShowErrorComponent CustomParseError where
     "Module top-level assignments must bind at least one name"
   showErrorComponent (DuplicateTopLevelAssignment name) =
     "Module top-level name '" ++ name ++ "' cannot be assigned more than once"
+  showErrorComponent MisplacedImport =
+    "Import statements must appear at the beginning of a module, preceded only by a possible docstring"
   showErrorComponent (CyclicTypedef names) =
     "Type definitions " ++ show names ++ " are cyclically dependent"
   -- String interpolation errors
@@ -1205,7 +1208,7 @@ imports :: Parser [S.Import]
 imports = many (L.nonIndented sc2 import_stmt <* eol <* sc2 <* reportParseProgress)
 
 top_suite :: Parser S.Suite
-top_suite = concat <$> (many (L.nonIndented sc2 (stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
+top_suite = concat <$> (many (L.nonIndented sc2 (top_stmt <* reportParseProgress) <|> (newline1 <* reportParseProgress)))
 
 validateModuleSuite :: S.Suite -> Parser ()
 validateModuleSuite = go Set.empty
@@ -1757,18 +1760,26 @@ target = try $ do
 -- Statements ----------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 
-stmt, simple_stmt :: Parser [S.Stmt]
-stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> decl_group <|> simple_stmt <?> "statement"
+top_stmt :: Parser [S.Stmt]
+top_stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> decl_group <|> bad_import <|> simple_stmt <?> "top statement"
 
 top_chunk_stmt :: Parser [S.Stmt]
 top_chunk_stmt =
        ((:[]) <$> compound_stmt)
   <|> try ((:[]) <$> (signature <* newline1))
   <|> ((\d -> [S.Decl (loc d) [d]]) <$> decl)
+  <|> bad_import
   <|> simple_stmt
-  <?> "statement"
+  <?> "top statement"
 
+stmt :: Parser [S.Stmt]
+stmt = ((:[]) <$> compound_stmt)  <|> try ((:[]) <$> (signature <* newline1)) <|> def_group <|> simple_stmt <?> "statement"
+
+simple_stmt :: Parser [S.Stmt]
 simple_stmt = (small_stmt `sepEndBy1` semicolon) <* newline1 <?> "simple statement"
+
+bad_import = do i <- rwordLoc "import" <|> rwordLoc "from"
+                parseException (loc i) MisplacedImport
 
 --- Small statements ---------------------------------------------------------------------------------
 
@@ -1899,6 +1910,11 @@ decl_group = do p <- L.indentLevel
 decl :: Parser S.Decl
 decl = funcdef <|> classdef <|> protodef <|> typedef <|> extdef <|> actordef
 
+def_group :: Parser [S.Stmt]
+def_group = do p <- L.indentLevel
+               g <- some (atPos p funcdef)
+               return [ S.Decl (loc ds) ds | ds <- Names.splitDeclGroup g ]
+
 decorator :: Bool -> Parser S.Deco
 decorator sig = do
        p <- L.indentLevel
@@ -1965,13 +1981,13 @@ classdefGen k pname ctx con = addLoc $ do
                 (ss, docstring) <- suiteWithDocstring ctx s
                 return $ con NoLoc nm q cs ss docstring
 
-typedef = addLoc $ try $ do
+typedef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "type")
+                assertTop l "type"
                 nm <- name
                 q <- optbinds
                 equals
                 t <- ttype
-                assertTop l "type"
                 return $ S.Typedef NoLoc nm q t Nothing
 
 extdef = addLoc $ do
@@ -2110,7 +2126,7 @@ stmtWithDocstring :: Parser (S.Suite, Maybe String)
 stmtWithDocstring = (
     ((\s -> ([s], Nothing)) <$> compound_stmt)
     <|> try ((\s -> ([s], Nothing)) <$> (signature <* newline1))
-    <|> ((\s -> (s, Nothing)) <$> decl_group)
+    <|> ((\s -> (s, Nothing)) <$> def_group)
     <|> simple_stmt_with_docstring
   ) <?> "statement"
 
