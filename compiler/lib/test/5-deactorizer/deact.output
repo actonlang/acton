@@ -18,7 +18,7 @@ class Apa ($Actor, __builtin__.value):
     proc def computeG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
         v: __builtin__.int = $AWAITf@[__builtin__.int]((async cb)(W_Apa_39.__fromatom__(1)))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
+        m: __builtin__.Future[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
         N_tmp: __builtin__.int = W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
         return N_tmp
     proc def noticeG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
@@ -48,7 +48,7 @@ class main ($Actor, __builtin__.value):
     @property
     b : Bepa
     @property
-    x : __builtin__.Msg[__builtin__.int]
+    x : __builtin__.Future[__builtin__.int]
     @property
     r : __builtin__.int
     proc def __init__ (self : Self, env : __builtin__.Env) -> None:

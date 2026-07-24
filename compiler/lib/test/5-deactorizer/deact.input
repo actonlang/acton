@@ -15,7 +15,7 @@ actor Apa ():
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
         v: __builtin__.int = cb(W_Apa_39.__fromatom__(1))
-        m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
+        m: __builtin__.Future[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
         N_tmp: __builtin__.int = W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
         return N_tmp
     proc def notice (i : __builtin__.int) -> __builtin__.int:
@@ -40,7 +40,7 @@ actor main (env : __builtin__.Env):
     b: Bepa = Bepa()
     print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
     a.setup(a.notice)
-    x: __builtin__.Msg[__builtin__.int] = (async a.compute)(b.callback)
+    x: __builtin__.Future[__builtin__.int] = (async a.compute)(b.callback)
     r: __builtin__.int = await x
     print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), None, None, None, None)
     a.compute($WRAP@[(), (__builtin__.int,), __builtin__.int](self, myproc))

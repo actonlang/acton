@@ -136,17 +136,17 @@ $Actor DEQ_ready(int idx) {
 // return true if the queue was previously empty.
 bool ENQ_msg(B_Msg m, $Actor a) {
     bool did_enq = true;
-    spinlock_lock(&a->B_Msg_lock);
+    spinlock_lock(&a->$msg_lock);
     m->$next = NULL;
-    if (a->B_Msg_tail) {
-        a->B_Msg_tail->$next = m;
-        a->B_Msg_tail = m;
+    if (a->$msg_tail) {
+        a->$msg_tail->$next = m;
+        a->$msg_tail = m;
         did_enq = false;
     } else {
-        a->B_Msg = m;
-        a->B_Msg_tail = m;
+        a->$msg = m;
+        a->$msg_tail = m;
     }
-    spinlock_unlock(&a->B_Msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return did_enq;
 }
 
@@ -154,19 +154,19 @@ bool ENQ_msg(B_Msg m, $Actor a) {
 // return true if the queue still holds messages.
 bool DEQ_msg($Actor a) {
     bool has_more = false;
-    spinlock_lock(&a->B_Msg_lock);
-    B_Msg x = a->B_Msg;
+    spinlock_lock(&a->$msg_lock);
+    B_Msg x = a->$msg;
     if (x) {
-        a->B_Msg = x->$next;
+        a->$msg = x->$next;
         x->$next = NULL;
-        if (a->B_Msg == NULL) {
-            a->B_Msg_tail = NULL;
+        if (a->$msg == NULL) {
+            a->$msg_tail = NULL;
         }
-        has_more = a->B_Msg != NULL;
+        has_more = a->$msg != NULL;
     } else {
-        a->B_Msg_tail = NULL;
+        a->$msg_tail = NULL;
     }
-    spinlock_unlock(&a->B_Msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return has_more;
 }
 #else // MSGQ == 1
@@ -174,18 +174,18 @@ bool DEQ_msg($Actor a) {
 // return true if the queue was previously empty.
 bool ENQ_msg(B_Msg m, $Actor a) {
     bool did_enq = true;
-    spinlock_lock(&a->B_Msg_lock);
+    spinlock_lock(&a->$msg_lock);
     m->$next = NULL;
-    if (a->B_Msg) {
-        B_Msg x = a->B_Msg;
+    if (a->$msg) {
+        B_Msg x = a->$msg;
         while (x->$next)
             x = x->$next;
         x->$next = m;
         did_enq = false;
     } else {
-        a->B_Msg = m;
+        a->$msg = m;
     }
-    spinlock_unlock(&a->B_Msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return did_enq;
 }
 
@@ -193,14 +193,14 @@ bool ENQ_msg(B_Msg m, $Actor a) {
 // return true if the queue still holds messages.
 bool DEQ_msg($Actor a) {
     bool has_more = false;
-    spinlock_lock(&a->B_Msg_lock);
-    if (a->B_Msg) {
-        B_Msg x = a->B_Msg;
-        a->B_Msg = x->$next;
+    spinlock_lock(&a->$msg_lock);
+    if (a->$msg) {
+        B_Msg x = a->$msg;
+        a->$msg = x->$next;
         x->$next = NULL;
-        has_more = a->B_Msg != NULL;
+        has_more = a->$msg != NULL;
     }
-    spinlock_unlock(&a->B_Msg_lock);
+    spinlock_unlock(&a->$msg_lock);
     return has_more;
 }
 #endif // MSGQ

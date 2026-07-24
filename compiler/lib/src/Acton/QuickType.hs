@@ -190,10 +190,10 @@ instance QType Expr where
        where te                     = envOf ss
              (t,fx,e')              = qType (define te env) f e
     qType env f (Async l e)         = case expanded env t of
-                                        TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), fx, Async l e')
+                                        TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tFuture t'), fx, Async l e')
       where (t, fx, e')             = qType env f e
     qType env f (Await l e)         = case expanded env t of
-                                        TCon _ (TC c [t]) | c == qnMsg -> (t, fxProc, Await l e')
+                                        TCon _ (TC c [t]) | c == qnFuture -> (t, fxProc, Await l e')
       where (t, fx, e')             = qType env f e
     qType env f e@(BinOp l e1 op e2)
        | isUnboxedExpr e            = (t, fx, BinOp l e1' op e2')

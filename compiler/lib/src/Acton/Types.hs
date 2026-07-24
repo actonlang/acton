@@ -1989,9 +1989,9 @@ instance Infer Expr where
                                              t' <- newUnivar env
                                              let tf fx = tFun fx prow krow
                                              return (Cast (locinfo2 74 e) env t (tf fxAction t') :
-                                                     cs, tf fxProc (tMsg t'), Async l e)    -- produce a proc returning Msg[t']
+                                                     cs, tf fxProc (tFuture t'), Async l e)    -- produce a proc returning Future[t']
     infer env (Await l e)               = do t0 <- newUnivar env
-                                             (cs1,e') <- inferSub env (tMsg t0) e
+                                             (cs1,e') <- inferSub env (tFuture t0) e
                                              fx <- currFX
                                              return (Cast (locinfo2 75 e) env fxProc fx :
                                                      cs1, t0, Await l e')

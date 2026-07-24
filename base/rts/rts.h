@@ -81,7 +81,7 @@ struct wt_stat {
 };
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
-struct B_Msg;
+struct B_Future;
 struct $ConstCont;
 
 #ifdef ACTON_THREADS
@@ -99,9 +99,10 @@ extern pthread_cond_t work_to_do;
 
 extern $Actor self_actor;
 
-typedef struct B_Msg *B_Msg;
+typedef struct B_Future *B_Future;
 typedef struct $ConstCont *$ConstCont;
 
+extern struct B_FutureG_class B_FutureG_methods;
 extern struct B_MsgG_class B_MsgG_methods;
 extern struct $ActorG_class $ActorG_methods;
 extern struct $CatcherG_class $CatcherG_methods;
@@ -115,29 +116,71 @@ extern struct $ConstContG_class $ConstContG_methods;
 #define CLOS_HEADER             "Clos"
 
 /*       Defined in builtin/__builtin__.h with wrong type for __init__
+struct B_FutureG_class {
+    char *$GCINFO;
+    int $class_id;
+    $SuperG_class $superclass;
+    void (*__init__)(B_Future, $Actor, $Cont, time_t, $WORD);
+    void (*__serialize__)(B_Future, $Serial$state);
+    B_Future (*__deserialize__)(B_Future, $Serial$state);
+    B_bool (*__bool__)(B_Future);
+    B_str (*__str__)(B_Future);
+    B_str (*__repr__)(B_Future);
+};
+*/
+// An async call has two distinct objects with separate lifetimes:
+//
+//   - B_Msg: the transport envelope (RTS-internal). A message in flight to an
+//     actor: the dispatch loop runs $cont(value) and steps it; it is consumed when
+//     its turn ends.
+//
+//   - B_Future: the future/promise (the compiler-generated builtin behind the
+//     surface type Future[A]). The value an async call returns to its caller, which
+//     the caller awaits; the producing envelope delivers its result here. It is
+//     opaque to generated code (returned, stored, awaited; never field-accessed or
+//     sized), so its layout is ours. It lives as long as the caller holds it.
+//
+// $ASYNC/$AFTER allocate one of each and link them via env->$fut.
+
+// Method table (vtable) for B_Msg. Hand-written RTS type (cf. compiler-generated
+// B_FutureG_class). The serializable prefix ($GCINFO, $class_id, $superclass,
+// __init__, __serialize__, __deserialize__, ...) matches $SerializableG_class so
+// the generic serialization machinery can drive it.
 struct B_MsgG_class {
     char *$GCINFO;
     int $class_id;
     $SuperG_class $superclass;
-    void (*__init__)(B_Msg, $Actor, $Cont, time_t, $WORD);
+    void (*__init__)(B_Msg);
     void (*__serialize__)(B_Msg, $Serial$state);
     B_Msg (*__deserialize__)(B_Msg, $Serial$state);
-    B_bool (*__bool__)(B_Msg);
+    bool (*__bool__)(B_Msg);
     B_str (*__str__)(B_Msg);
     B_str (*__repr__)(B_Msg);
 };
-*/
 struct B_Msg {
     struct B_MsgG_class *$class;
-    B_Msg $next;
-    $Actor $to;
-    $Cont $cont;
-    $Actor $waiting;
-    time_t $baseline;
-    $Lock $wait_lock;
-    $WORD value;
-    $long $globkey;
+    B_Msg $next;             // mailbox / outgoing / timer linkage
+    $Actor $to;             // recipient actor
+    $Cont $cont;            // activation: continuation to run
+    time_t $baseline;       // logical delivery time (normal vs timer)
+    $WORD value;            // activation: continuation argument
+    B_Future $fut;          // the future this envelope fulfills
+    $long $globkey;         // identity (used for DB persistence)
 };
+
+struct B_Future {
+    struct B_FutureG_class *$class;
+    $Actor $waiting;        // head of waiting-actor list (waiters chained via their own $next)
+    $Lock $wait_lock;       // protects $waiting
+    $int64 $state;          // result state — 0=PENDING, 1=VALUE, 2=EXCEPTION (see FUT_* below)
+    $WORD value;            // the result
+    $long $globkey;         // identity (used for DB persistence)
+};
+
+// Result-state values for B_Future.$state.
+#define FUT_PENDING    0
+#define FUT_VALUE      1
+#define FUT_EXCEPTION  2
 
 struct $ActorG_class {
     char *$GCINFO;
@@ -152,18 +195,22 @@ struct $ActorG_class {
     B_NoneType (*__resume__)($Actor);
     B_NoneType (*__cleanup__)($Actor);
 };
+// The mailbox/outgoing fields below hold B_Msg envelopes (messages in flight to
+// this actor); $waitsfor is the future this actor is currently blocked on. The
+// compiler emits the matching actor header (see Prim.hs) with these as pointer
+// fields it never accesses, so the layout stays pointer-compatible.
 struct $Actor {
     struct $ActorG_class *$class;
-    $Actor $next;
-    B_Msg B_Msg;
-    B_Msg B_Msg_tail;
-    $Lock B_Msg_lock;
-    $int64 $affinity;
-    B_Msg $outgoing;
-    B_Msg $waitsfor;
-    $int64 $consume_hd;
-    $Catcher $catcher;
-    $long $globkey;
+    $Actor $next;          // ready-queue / waiter-list linkage
+    B_Msg $msg;             // mailbox head (envelope) — also the actor's current activation frame
+    B_Msg $msg_tail;        // mailbox tail (envelope)
+    $Lock $msg_lock;       // protects the mailbox
+    $int64 $affinity;      // worker thread this actor runs on
+    B_Msg $outgoing;        // buffered outgoing envelopes (flushed at turn end)
+    B_Future $waitsfor;    // the future this actor is awaiting (NULL if runnable)
+    $int64 $consume_hd;    // DB consume head
+    $Catcher $catcher;     // exception handler stack
+    $long $globkey;        // identity (used for DB persistence)
 };
 
 struct $CatcherG_class {
@@ -204,9 +251,10 @@ struct $ConstCont {
 };
 $Cont $CONSTCONT($WORD, $Cont);
 
-B_Msg $ASYNC($Actor, $Cont);
-B_Msg $AFTER(B_float, $Cont);
-$R $AWAIT($Cont, B_Msg);
+B_Future $ASYNC($Actor, $Cont);
+B_Future $AFTER(B_float, $Cont);
+$R $AWAIT($Cont, B_Future);
+B_Msg B_MsgG_newXX($Actor to, $Cont cont, time_t baseline, $WORD value);
 
 void init_db_queue(long);
 void register_actor(long key);
@@ -295,6 +343,13 @@ void $Actor$serialize($Actor, B_NoneType);
 void $Actor$deserialize($Actor, B_NoneType);
 B_NoneType $ActorD___cleanup__($Actor);
 
+bool B_FutureD___bool__(B_Future self);
+B_str B_FutureD___str__(B_Future self);
+B_str B_FutureD___repr__(B_Future self);
+void B_FutureD___serialize__(B_Future self, $Serial$state state);
+B_Future B_FutureD___deserialize__(B_Future res, $Serial$state state);
+
+void B_MsgD___init__(B_Msg self);
 bool B_MsgD___bool__(B_Msg self);
 B_str B_MsgD___str__(B_Msg self);
 B_str B_MsgD___repr__(B_Msg self);
