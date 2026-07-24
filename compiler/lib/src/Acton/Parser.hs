@@ -1992,10 +1992,10 @@ typedef = addLoc $ do
 
 extdef = addLoc $ do
                 (s,l) <- withPos (rwordLoc "extension")
+                assertTop l "extension"
                 (q,c) <- try head1 <|> try head2 <|> head3
                 cs <- optbounds
                 (ss, docstring) <- suiteWithDocstring EXT s
-                assertTop l "extension"
                 return $ S.Extension NoLoc q c cs ss docstring
   where head1 = do q <- binds
                    fatarrow
@@ -2126,7 +2126,7 @@ stmtWithDocstring :: Parser (S.Suite, Maybe String)
 stmtWithDocstring = (
     ((\s -> ([s], Nothing)) <$> compound_stmt)
     <|> try ((\s -> ([s], Nothing)) <$> (signature <* newline1))
-    <|> ((\s -> (s, Nothing)) <$> decl_group)
+    <|> ((\s -> (s, Nothing)) <$> def_group)
     <|> simple_stmt_with_docstring
   ) <?> "statement"
 
