@@ -791,6 +791,10 @@ solveMutAttr (wf,sc,dec) c@(Mut info env t1 n t2)
 -- are small and enumerated lazily, so we never force the whole, ever-growing
 -- proto-keyed list. Only the rare TFX goal falls back to the proto-keyed bucket.
 -- Imported witnesses are merged in lazily by witsByTName/witsByPName.
+-- An extension registers no witness for a protocol whose slots were finalized
+-- by an earlier witness (see the NExt finals field), so every registration is
+-- a genuine implementation and multiple matches mean rival extensions, which
+-- stay unresolved.
 findWitness                 :: Env -> Type -> PCon -> [Witness]
 findWitness env t p         = filter match $ candidates t
   where eqhead (TCon _ c) (TCon _ c')   = tcname c == tcname c'

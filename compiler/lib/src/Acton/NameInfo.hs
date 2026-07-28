@@ -57,7 +57,7 @@ data NameInfo           = NVar      Type
                         | NClass    QBinds [WTCon] TEnv (Maybe String)
                         | NProto    QBinds [WTCon] TEnv (Maybe String)
                         | NType     QBinds Type (Maybe String)
-                        | NExt      QBinds TCon [WTCon] TEnv [Name] (Maybe String)
+                        | NExt      QBinds TCon [WTCon] TEnv [Name] [QName] (Maybe String)
                         | NTVar     Kind CCon [PCon]
                         | NAlias    QName
                         | NReserved
@@ -83,7 +83,7 @@ stripDocsNI ni = case ni of
   NClass q cs te _    -> NClass q cs (map stripBind te) Nothing
   NProto q ps te _    -> NProto q ps (map stripBind te) Nothing
   NType q t _         -> NType q t Nothing
-  NExt q c ps te o _  -> NExt q c ps (map stripBind te) o Nothing
+  NExt q c ps te o fn _ -> NExt q c ps (map stripBind te) o fn Nothing
   NDef sc dec _       -> NDef sc dec Nothing
   NSig sc dec _       -> NSig sc dec Nothing
   other               -> other
@@ -108,8 +108,8 @@ stripLocsNI ni = case ni of
   NClass q cs te doc -> NClass (stripLocsQBinds q) (map stripLocsWTCon cs) (stripLocsTEnv te) doc
   NProto q ps te doc -> NProto (stripLocsQBinds q) (map stripLocsWTCon ps) (stripLocsTEnv te) doc
   NType q t doc      -> NType (stripLocsQBinds q) (stripLocsType t) doc
-  NExt q c ps te o doc ->
-    NExt (stripLocsQBinds q) (stripLocsTCon c) (map stripLocsWTCon ps) (stripLocsTEnv te) (map stripLocsName o) doc
+  NExt q c ps te o fn doc ->
+    NExt (stripLocsQBinds q) (stripLocsTCon c) (map stripLocsWTCon ps) (stripLocsTEnv te) (map stripLocsName o) (map stripLocsQName fn) doc
   NTVar k c ps       -> NTVar k (stripLocsTCon c) (map stripLocsTCon ps)
   NAlias qn          -> NAlias (stripLocsQName qn)
   NReserved          -> NReserved
@@ -206,11 +206,11 @@ instance Pretty (Name,NameInfo) where
                                 = text "protocol" <+> pretty n <> nonEmpty brackets commaList q <+>
                                   nonEmpty parens commaList us <> colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
     pretty (n, NType q t doc)   = text "type" <+> pretty n <> nonEmpty brackets commaList q <+> equals <+> pretty t $+$ nest 4 (prettyDocstring doc)
-    pretty (w, NExt [] c ps te opts doc)
+    pretty (w, NExt [] c ps te opts _ doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
-    pretty (w, NExt q c ps te opts doc)
+    pretty (w, NExt q c ps te opts _ doc)
                                 = {-pretty w  <+> colon <+> -}
                                   text "extension" <+> pretty q <+> text "=>" <+> pretty c <+> parens (commaList ps) <>
                                   colon $+$ nest 4 (prettyDocstring doc) $+$ (nest 4 $ prettyOrPass te)
@@ -236,7 +236,7 @@ instance VFree NameInfo where
     vfree (NClass q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NProto q us te _)    = (vfree q ++ vfree us ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NType q t _)         = (vfree q ++ vfree t) \\ qbound q
-    vfree (NExt q c ps te _ _)  = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
+    vfree (NExt q c ps te _ _ _) = (vfree q ++ vfree c ++ vfree ps ++ vfree te) \\ (tvSelf : qbound q)
     vfree (NTVar k c ps)        = vfree c ++ vfree ps
     vfree (NAlias qn)           = []
     vfree NReserved             = []
@@ -250,7 +250,7 @@ instance VSubst NameInfo where
     vsubst s (NClass q us te x) = NClass (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NProto q us te x) = NProto (vsubst s q) (vsubst s us) (vsubst s te) x
     vsubst s (NType q t x)      = NType (vsubst s q) (vsubst s t) x
-    vsubst s (NExt q c ps te opts x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts x
+    vsubst s (NExt q c ps te opts fn x) = NExt (vsubst s q) (vsubst s c) (vsubst s ps) (vsubst s te) opts fn x
     vsubst s (NTVar k c ps)        = NTVar k (vsubst s c) (vsubst s ps)
     vsubst s (NAlias qn)        = NAlias qn
     vsubst s NReserved          = NReserved
@@ -264,7 +264,7 @@ instance UFree NameInfo where
     ufree (NClass q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NProto q us te _)    = ufree q ++ ufree us ++ ufree te
     ufree (NType q t _)         = ufree q ++ ufree t
-    ufree (NExt q c ps te _ _)  = ufree q ++ ufree c ++ ufree ps ++ ufree te
+    ufree (NExt q c ps te _ _ _) = ufree q ++ ufree c ++ ufree ps ++ ufree te
     ufree (NTVar k c ps)        = ufree c ++ ufree ps
     ufree (NAlias qn)           = []
     ufree NReserved             = []
@@ -281,7 +281,7 @@ instance Polarity NameInfo where
     polvars (NClass q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NProto q us te _)  = polvars q `polcat` polvars us `polcat` polvars te
     polvars (NType q t _)       = polvars q `polcat` polvars t
-    polvars (NExt q c ps te _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
+    polvars (NExt q c ps te _ _ _) = polvars q `polcat` polvars c `polcat` polvars ps `polcat` polvars te
     polvars (NTVar k c ps)      = polvars c `polcat` polvars ps
     polvars _                   = ([],[])
 
@@ -297,7 +297,7 @@ wildargs i                      = [ tWild | _ <- nbinds i ]
     nbinds (NClass q _ _ _)     = q
     nbinds (NProto q _ _ _)     = q
     nbinds (NType q _ _)        = q
-    nbinds (NExt q _ _ _ _ _)   = q
+    nbinds (NExt q _ _ _ _ _ _) = q
 
 -- TEnv filters --------------------------------------------------------------------------------------------------------
 
@@ -397,7 +397,7 @@ instance Vars NameInfo where
       NClass q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
       NProto q ws te _ -> freeQ q ++ freeQ ws ++ freeQ te
       NType q t _ -> freeQ q ++ freeQ t
-      NExt q c ws te _ _ -> freeQ q ++ freeQ c ++ freeQ ws ++ freeQ te
+      NExt q c ws te _ fn _ -> freeQ q ++ freeQ c ++ freeQ ws ++ freeQ te ++ fn
       NTVar _ c ps -> freeQ c ++ freeQ ps
       NAlias qn -> freeQ qn
       NReserved -> []
@@ -410,7 +410,7 @@ instance Vars NameInfo where
     nmap f (NClass q ws te s)   = NClass (nmap f q) (nmap f ws) (nmap f te) s
     nmap f (NProto q ws te s)   = NProto (nmap f q) (nmap f ws) (nmap f te) s
     nmap f (NType q t s)        = NType (nmap f q) (nmap f t) s
-    nmap f (NExt q c ws te o s) = NExt (nmap f q) (nmap f c) (nmap f ws) (nmap f te) o s
+    nmap f (NExt q c ws te o fn s) = NExt (nmap f q) (nmap f c) (nmap f ws) (nmap f te) o fn s
     nmap f (NTVar k c ps)       = NTVar k (nmap f c) (nmap f ps)
     nmap f (NAlias n)           = NAlias (nmap f n)
     nmap f i                    = i

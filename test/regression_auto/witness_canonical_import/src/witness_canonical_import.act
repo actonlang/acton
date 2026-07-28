@@ -1,8 +1,7 @@
-# There is exactly one Eq[Pt] implementation, in points. Yet declaring the
-# Hashable extension makes every == involving Pt fail to resolve, here and
-# inside hashpt itself: hashpt's extension registers a second Eq witness for
-# Pt via its ancestry, and the solver requires a single candidate. This
-# build failure documents the deficiency the next commit removes.
+# There is exactly one Eq[Pt] implementation, in points. hashpt's Hashable
+# extension no longer registers a witness for the finalized Eq, so == on Pt
+# resolves to points' witness everywhere: inside hashpt and in this module,
+# which imports both.
 
 import points
 import hashpt

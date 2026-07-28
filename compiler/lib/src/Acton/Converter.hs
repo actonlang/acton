@@ -248,7 +248,7 @@ convEnvProtos env                       = convertModules convSources conv env
     conv m (n, NAct q p k te doc)       = [(n, NAct (noqual env q) (qualWRow env q p) k (concat $ map (conv m) te) doc)]
     conv m ni@(n, NProto q us te doc)
                                         = map (fromClass env) $ convProtocol (define [ni] env) n q us [] [] (fromTEnv te)
-    conv m ni@(n, NExt q c us te opts doc)
+    conv m ni@(n, NExt q c us te opts _ doc)
                                         = map (fromClass env) $ convExtension (define [ni] env) n c q us [] [] (fromTEnv te) opts
     conv m (n, NClass q us te doc)      = [(n, NClass (noqual env q) us (witSigs ++ convClassTEnv env q te) doc)]
       where witSigs                     = [ (w, NSig (monotype t) Property Nothing) | (w,t) <- qualWits env q ]

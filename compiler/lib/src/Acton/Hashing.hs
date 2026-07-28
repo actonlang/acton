@@ -706,9 +706,9 @@ feedNameInfo info sink = feedTag 249 sink >> case info of
   I.NClass q cs te _ -> feedTag 5 sink >> feedQBinds q sink >> feedList feedWTCon cs sink >> feedTEnv te sink
   I.NProto q ps te _ -> feedTag 6 sink >> feedQBinds q sink >> feedList feedWTCon ps sink >> feedTEnv te sink
   I.NType q t _      -> feedTag 10 sink >> feedQBinds q sink >> feedType t sink
-  I.NExt q c ps te o _ ->
+  I.NExt q c ps te o fnl _ ->
     feedTag 7 sink >> feedQBinds q sink >> feedTCon c sink >> feedList feedWTCon ps sink >>
-    feedTEnv te sink >> feedList feedName o sink
+    feedTEnv te sink >> feedList feedName o sink >> feedList feedQName fnl sink
   I.NTVar k c ps     -> feedTag 8 sink >> feedKind k sink >> feedTCon c sink >> feedList feedTCon ps sink
   I.NAlias qn        -> feedTag 9 sink >> feedQName qn sink
   I.NReserved        -> feedTag 12 sink
@@ -871,7 +871,7 @@ foldNameInfoDeps add info acc = case info of
   I.NClass q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
   I.NProto q ws te _   -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsList (foldDepsQBind add) q acc))
   I.NType q t _        -> foldDepsType add t (foldDepsList (foldDepsQBind add) q acc)
-  I.NExt q c ws te _ _ -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsTCon add c (foldDepsList (foldDepsQBind add) q acc)))
+  I.NExt q c ws te _ fnl _ -> foldDepsTEnv add te (foldDepsList (foldDepsWTCon add) ws (foldDepsTCon add c (foldDepsList (foldDepsQBind add) q (foldDepsList (\qn a -> add qn a) fnl acc))))
   I.NTVar _ c ps       -> foldDepsList (foldDepsTCon add) ps (foldDepsTCon add c acc)
   I.NAlias qn          -> add qn acc
   I.NReserved          -> acc

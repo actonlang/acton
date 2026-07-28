@@ -306,7 +306,7 @@ main = do
                 , (actorName, I.NAct [] S.posNil S.kwdNil [(actorAttr, I.NVar S.tWild)] Nothing)
                 , (protoName, I.NProto [] [] [(protoAttr, I.NVar S.tWild)] Nothing)
                 , (subProtoName, I.NProto [] [([], protoTC)] [] Nothing)
-                , (extName, I.NExt [] clsTC [([], protoTC)] [] [] Nothing)
+                , (extName, I.NExt [] clsTC [([], protoTC)] [] [] [] Nothing)
                 ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
@@ -577,6 +577,7 @@ main = do
                 , (S.name "field", I.NSig (S.tSchema [] depCType) S.NoDec Nothing)
                 , (S.name "unboxed_field", I.NSig (S.tSchema [] depDType) S.NoDec Nothing)
                 ]
+                []
                 []
                 Nothing
             infos = M.singleton hashTestName info

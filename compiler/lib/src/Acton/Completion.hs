@@ -847,7 +847,7 @@ docOfInfo info =
       I.NClass _ _ _ doc -> doc
       I.NProto _ _ _ doc -> doc
       I.NType _ _ doc -> doc
-      I.NExt _ _ _ _ _ doc -> doc
+      I.NExt _ _ _ _ _ _ doc -> doc
       _ -> Nothing
 
 typeDoc :: Env.Env0 -> S.Type -> Maybe String

@@ -1131,13 +1131,15 @@ instance InfEnv Decl where
                                              let te1 = unSig $ selfSubst n q asigs
                                                  te2 = te ++ te1
                                                  b2 = addImpl te1 b1
-                                             return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
+                                             return ([], [(extensionName us c, NExt q c ps te2 [] fnl ddoc)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ tydefineVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
             u                           = head us
             ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
+            covered                     = [ p | (_,p) <- tail ps, hasWitness env (tCon c) p ]
+            fnl                         = nub (map tcname covered)
+            final                       = concat [ conAttrs env (tcname p) | p <- covered ]
             te'                         = parentTEnv env ps
             q'                          = selfQuant n q
 
@@ -1831,10 +1833,11 @@ instance Check Decl where
                                              (cs1,eq1) <- markScoped env n' q' te (csu++csb)
                                              b' <- usubst b'
                                              return (cs1, convExtension env n' c q ps eq1 wmap b' [])
-      where env1                        = tydefineInst c ps thisKW' $ tydefineVars q' $ setInClass env
+      where env1                        = tydefineInst c ps' thisKW' $ tydefineVars q' $ setInClass env
+            ps'                         = [ (ws,p) | (ws,p) <- ps, tcname p `notElem` fnl ]
             n                           = tcname c
             n'                          = extensionName us c
-            NExt _ _ ps te _ _          = findName n' env
+            NExt _ _ ps te _ fnl _      = findName n' env
             te'                         = selfSubst n q te
             q'                          = selfQuant n q
             tc                          = TC n (map tVar $ qbound q)

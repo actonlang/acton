@@ -99,7 +99,7 @@ extractNameDocstring (NAct _ _ _ _ mdoc) = mdoc
 extractNameDocstring (NClass _ _ _ mdoc) = mdoc
 extractNameDocstring (NProto _ _ _ mdoc) = mdoc
 extractNameDocstring (NType _ _ mdoc) = mdoc
-extractNameDocstring (NExt _ _ _ _ _ mdoc) = mdoc
+extractNameDocstring (NExt _ _ _ _ _ _ mdoc) = mdoc
 extractNameDocstring _ = Nothing
 
 -- | Document a declaration in Markdown format with types

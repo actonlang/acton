@@ -1096,7 +1096,7 @@ extensionIndexFromNameInfo :: A.ModName -> I.NModule -> ExtensionIndex
 extensionIndexFromNameInfo mn (I.NModule _ te _) =
     foldl addExt emptyExtensionIndex te
   where
-    addExt acc (ext, I.NExt _ c ps _ _ _) =
+    addExt acc (ext, I.NExt _ c ps _ _ _ _) =
       let cls = localQName (A.tcname c)
           protos = [ p | (_, pcon) <- ps, Just p <- [localQName (A.tcname pcon)] ]
           withClass =
@@ -1254,8 +1254,8 @@ queryIndexes (I.NModule _ te _) = QueryIndexes (map fst pte) cons actors conattr
         conattrs               = indexMap [ (a, n) | (n, i) <- pte, isCon i, a <- attrs i ]
         protoattrs             = indexMap [ (a, n) | (n, i@I.NProto{}) <- pte, a <- attrs i ]
         descendants            = indexMap [ (A.tcname c, n) | (n, i) <- pte, (_, c) <- ancestry i ]
-        extprotos              = indexMap [ (A.tcname p, n) | (n, I.NExt _ _ ps _ _ _) <- pte, (_, p) <- ps ]
-        exttypes               = indexMap [ (A.tcname c, n) | (n, I.NExt _ c _ _ _ _) <- pte ]
+        extprotos              = indexMap [ (A.tcname p, n) | (n, I.NExt _ _ ps _ _ _ _) <- pte, (_, p) <- ps ]
+        exttypes               = indexMap [ (A.tcname c, n) | (n, I.NExt _ c _ _ _ _ _) <- pte ]
         isCons I.NClass{}      = True
         isCons I.NProto{}      = True
         isCons I.NAct{}        = True

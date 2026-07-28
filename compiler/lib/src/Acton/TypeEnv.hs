@@ -282,7 +282,7 @@ setupCons f te x                = foldl' (addconinfo f) x te
  
 setupWits                       :: (TypeX -> Witness -> TypeX) -> TEnv -> TypeX -> TypeX
 setupWits add te x              = foldl' add x wits
-  where wits                    = [ WClass q (tCon c) p (NoQ n) ws (length opts) | (n, NExt q c ps _ opts _) <- te, (ws,p) <- ps ]
+  where wits                    = [ WClass q (tCon c) p (NoQ n) ws (length opts) | (n, NExt q c ps _ opts fnl _) <- te, (ws,p) <- ps, tcname p `notElem` fnl ]
 
 addvarinfo x (tv, c, _)         = x{ tyids = Map.insert qn tid (tyids x),
                                      tyidHash = HashMap.insert qn tid (tyidHash x),
@@ -975,7 +975,7 @@ instance USubst NameInfo where
     usubstWith s (NClass q us te doc) = NClass (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NProto q us te doc) = NProto (usubstWith s q) (usubstWith s us) (usubstWith s te) doc
     usubstWith s (NType q t doc)       = NType (usubstWith s q) (usubstWith s t) doc
-    usubstWith s (NExt q c ps te opts doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts doc
+    usubstWith s (NExt q c ps te opts fnl doc) = NExt (usubstWith s q) (usubstWith s c) (usubstWith s ps) (usubstWith s te) opts fnl doc
     usubstWith s (NTVar k c ps)       = NTVar k (usubstWith s c) (usubstWith s ps)
     usubstWith s (NAlias qn)          = NAlias qn
     usubstWith s NReserved            = NReserved

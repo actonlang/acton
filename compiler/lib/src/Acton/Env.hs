@@ -268,7 +268,7 @@ moduleQNameKeys _ qn        = [qn]
 
 extWitnesses                :: ModName -> TEnv -> [Witness]
 extWitnesses m exts         = fst (foldl' add ([], Map.empty) wits)
-  where wits                = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps _ opts _) <- exts, (ws,p) <- ps ]
+  where wits                = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps _ opts fnl _) <- exts, (ws,p) <- ps, tcname p `notElem` fnl ]
         -- Duplicate checking scans only the (proto name, type name) bucket instead
         -- of every accumulated witness: `same` implies equal proto names and equal
         -- wtypes (hence equal type-name keys), so bucketing loses no duplicates,
@@ -392,7 +392,7 @@ instance Unalias NameInfo where
     unalias env (NClass q us te doc)= NClass (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NProto q us te doc)= NProto (unalias env q) (unalias env us) (unalias env te) doc
     unalias env (NType q t doc)     = NType (unalias env q) (unalias env t) doc
-    unalias env (NExt q c ps te opts doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts doc
+    unalias env (NExt q c ps te opts fnl doc)= NExt (unalias env q) (unalias env c) (unalias env ps) (unalias env te) opts (unalias env fnl) doc
     unalias env (NTVar k c ps)      = NTVar k (unalias env c) (unalias env ps)
     unalias env (NAlias qn)         = NAlias (unalias env qn)
     unalias env NReserved           = NReserved
@@ -829,7 +829,7 @@ findConName n env           = case findQName n env of
                                 NClass q us te _ -> (q, us, te)
                                 NProto q us te _ -> (q, us, te)
                                 NType q t _      -> (q, [], [])
-                                NExt q c us te _ _ -> (q, us, te)
+                                NExt q c us te _ _ _ -> (q, us, te)
                                 NReserved -> nameReserved n
                                 i -> err1 n ("findConName: Class or protocol name expected, got " ++ show i ++ " --- ")
 
@@ -1604,8 +1604,8 @@ instance Simp (Name, NameInfo) where
       where env'                    = defineTVars (stripQual q) env
     simp env (n, NType q t doc)     = (n, NType (simp env' q) (simp env' t) doc)
       where env'                    = defineTVars (stripQual q) env
-    simp env (n, NExt q c us te opts doc)
-                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts doc)
+    simp env (n, NExt q c us te opts fnl doc)
+                                    = (n, NExt q' (vsubst s $ simp env' c) (vsubst s $ simp env' us) (vsubst s $ simp env' te) opts fnl doc)
       where (q', s)                 = simpQuant env (simp env' q) (vfree c ++ vfree us ++ vfree te)
             env'                    = defineTVars (stripQual q) env
     simp env (n, NAct q p k te doc) = (n, NAct (simp env' q) (simp env' p) (simp env' k) (simp env' $ notHidden te) doc)
