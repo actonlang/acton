@@ -1,0 +1,25 @@
+W_check_18: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_check_26: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+pure def check (l : __builtin__.list[__builtin__.int]) -> __builtin__.bool:
+    W_check_6: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
+    W_check_21: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.OrdD_list@[__builtin__.int](W_check_26)
+    if W_check_21.__ne__([x for x: __builtin__.int in W_check_6.__iter__(l)], [W_check_18.__fromatom__(1), W_check_18.__fromatom__(2), W_check_18.__fromatom__(3)]):
+        return False
+    return True
+
+W_main_43: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_main_20: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
+
+W_main_70: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+W_main_31: __builtin__.Eq[__builtin__.list[__builtin__.int]] = __builtin__.OrdD_list@[__builtin__.int](W_main_70)
+
+W_main_12: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
+
+actor main (env : __builtin__.Env):
+    if W_main_31.__eq__([W_main_20.__mul__(x, W_main_43.__fromatom__(2)) for x: __builtin__.int in W_main_12.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])], [W_main_43.__fromatom__(2), W_main_43.__fromatom__(4)]):
+        env.exit(n = W_main_43.__fromatom__(0))
+    env.exit(n = W_main_43.__fromatom__(1))

@@ -1,0 +1,13 @@
+# A comprehension in a branch condition: the Normalizer must emit the
+# generated comprehension function before the if statement, in scope of the
+# call in the condition — not inside the branch body.
+
+def check(l: list[int]) -> bool:
+    if [x for x in l] != [1, 2, 3]:
+        return False
+    return True
+
+actor main(env):
+    if [x * 2 for x in [1, 2]] == [2, 4]:
+        env.exit(0)
+    env.exit(1)

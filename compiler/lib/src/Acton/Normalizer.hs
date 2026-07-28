@@ -102,10 +102,19 @@ normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Not
 
 -- Normalize terms ---------------------------------------------------------------------------------------
 
-normSuite env []                    = return []
-normSuite env (s : ss)              = do s' <- norm' env s
+-- Comprehensions deferred while normalizing an enclosing statement's expressions
+-- (e.g. a branch condition) must be materialized before that statement, not
+-- inside a nested suite of it, so shield any comprehensions pending on entry
+-- from the getComps drain below.
+normSuite env ss                    = do pending <- getComps
+                                         ss' <- normSuite' env ss
+                                         mapM_ addComp (reverse pending)
+                                         return ss'
+
+normSuite' env []                   = return []
+normSuite' env (s : ss)             = do s' <- norm' env s
                                          comps <- getComps
-                                         ss' <- normSuite (define (envOf s) env) ss
+                                         ss' <- normSuite' (define (envOf s) env) ss
                                          defs <- mapM mkCompFun comps
                                          return (concat defs ++ s' ++ ss')
   where mkCompFun (f,lambound,comp) = do w <- newName "w"
