@@ -1,0 +1,13 @@
+# The extending module: Hashable[Pt] leaves __eq__ to the imported Ord
+# witness. Since Eq was finalized elsewhere, this extension registers no
+# Eq witness of its own; uses here and in importing modules resolve to
+# points' canonical one.
+
+import points
+
+extension points.Pt (Hashable):
+    def hash(self, h):
+        self.x.hash(h)
+
+def same_here(a: points.Pt, b: points.Pt) -> bool:
+    return a == b

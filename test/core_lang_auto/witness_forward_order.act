@@ -1,0 +1,39 @@
+# Extension order decides the provider: here Hashable comes first and defines
+# __eq__ directly (deliberately as parity equality), so the later Ord extension
+# gets a forwarding __eq__ that must route to Hashable's direct implementation.
+# Direct implementations take precedence; forwarding only fills missing slots.
+
+class Par(object):
+    x: int
+    def __init__(self, x: int):
+        self.x = x
+
+extension Par (Hashable):
+    def __eq__(a: Par, b: Par) -> bool:
+        return a.x % 2 == b.x % 2
+    def hash(self, h):
+        (self.x % 2).hash(h)
+
+extension Par (Ord):
+    def __lt__(a: Par, b: Par) -> bool:
+        return a.x < b.x
+
+actor main(env):
+    # The canonical Eq witness is Hashable's direct (parity) implementation.
+    if not (Par(2) == Par(4)) or Par(2) == Par(3):
+        print("FAIL: language-level == must use the direct implementation")
+        await async env.exit(1)
+    # Ord's inherited __le__ default calls __lt__ and the forwarded __eq__:
+    # 3 < 1 is False, but 3 == 1 holds under parity equality.
+    if not (Par(3) <= Par(1)):
+        print("FAIL: __le__ default through Ord's forwarded __eq__")
+        await async env.exit(1)
+    if not (Par(1) < Par(2)) or Par(2) < Par(1):
+        print("FAIL: __lt__ through Ord witness")
+        await async env.exit(1)
+    d: dict[Par, str] = {}
+    d[Par(2)] = "even"
+    if Par(4) not in d or Par(5) in d:
+        print("FAIL: dict through direct parity __eq__")
+        await async env.exit(1)
+    await async env.exit(0)

@@ -1,0 +1,55 @@
+# Forwarding through a nested witness path: Coll is a second (sibling) base of
+# Seq2, so the provider for Cont's inherited Coll slots is the sibling witness
+# reached through Seq2$Vec's witness field. Covers an instance slot (total),
+# an inherited instance slot (Src.total via Coll) and a static slot with Self
+# in result position (make), both statically and through a generic witness
+# parameter.
+
+protocol Src:
+    total : () -> int
+
+protocol Coll (Src):
+    @staticmethod
+    make : (int) -> Self
+
+protocol Extra:
+    tag : () -> int
+
+protocol Seq2 (Extra, Coll):
+    step : () -> int
+
+protocol Cont (Coll):
+    has : (int) -> bool
+
+class Vec(object):
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Vec (Seq2):
+    def tag(self):
+        return 7
+    def step(self):
+        return 1
+    def total(self):
+        return self.n
+    @staticmethod
+    def make(k: int) -> Vec:
+        return Vec(k)
+
+extension Vec (Cont):
+    def has(self, i: int) -> bool:
+        return i < self.n
+
+def use_cont[T(Cont)](x: T) -> int:
+    y: T = Cont.make(x.total() + 1)
+    return y.total()
+
+actor main(env):
+    if use_cont(Vec(5)) != 6:
+        print("FAIL: forwarded slots through generic Cont witness")
+        await async env.exit(1)
+    if Cont.make(3).total() != 3:
+        print("FAIL: forwarded static make at concrete type")
+        await async env.exit(1)
+    await async env.exit(0)

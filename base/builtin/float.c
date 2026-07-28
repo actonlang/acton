@@ -221,14 +221,6 @@ bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
 
 // B_HashableD_float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_floatD___eq__(B_HashableD_float wit, B_float a, B_float b) {
-    return a->val == b->val;
-}
-
-bool B_HashableD_floatD___ne__(B_HashableD_float wit, B_float a, B_float b) {
-    return a->val != b->val;
-}
-
 B_NoneType B_HashableD_floatD_hash(B_HashableD_float wit, B_float a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a, 8));
     return B_None;

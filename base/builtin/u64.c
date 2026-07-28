@@ -259,14 +259,6 @@ bool B_OrdD_u64D___ge__ (B_OrdD_u64 wit, B_u64 a, B_u64 b) {
 
 // B_HashableD_u64 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_u64D___eq__(B_HashableD_u64 wit, B_u64 a, B_u64 b) {
-    return a->val == b->val;
-}
-
-bool B_HashableD_u64D___ne__(B_HashableD_u64 wit, B_u64 a, B_u64 b) {
-    return a->val != b->val;
-}
-
 B_NoneType B_HashableD_u64D_hash(B_HashableD_u64 wit, B_u64 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
     return B_None;

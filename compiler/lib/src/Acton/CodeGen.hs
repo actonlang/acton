@@ -17,7 +17,6 @@ module Acton.CodeGen where
 import qualified Data.Set
 import qualified Data.HashSet as HashSet
 import qualified Data.List
-import qualified Data.Map.Strict as Map
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -532,10 +531,8 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
 
 declDecl env (Class _ n q as b ddoc)
     | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      forwardDecls env1 n q $+$
                                       text "struct" <+> classname env n <+> methodtable env n <> semi
     | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      forwardDecls env1 n q $+$
                                       declSerialize env1 n c props sup_c $+$
                                       declDeserialize env1 n c props sup_c $+$
                                       declCleanup env1 n sup_c $+$
@@ -675,14 +672,12 @@ initGlobalDoc env s                 = genStmt1 env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ] $+$
-                                      vcat [ forward n | ForwardSlot n _ _ _ _ <- forwardSlots env c q ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
   where tc                          = TC (NoQ c) [ tVar v | QBind v _ <- q ]
         super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n
           | hasCDef                 = methodtable env c <> dot <> gen env n <+> equals <+> genTopName env (methodname c n) <> semi
           | otherwise               = methodtable env c <> dot <> gen env n <+> equals <+> inheritedCast n <> methodtable' env c' <> dot <> gen env n <> semi
-        forward n                   = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (forwardName c n) <> semi
         inheritedCast n             = case lookup n (fullAttrEnv env tc) of
                                         Just (NVar t) -> parens (gen env (vsubst [(tvSelf,tCon tc)] t))
                                         _             -> methodCast env c q n
@@ -715,201 +710,6 @@ methodCast env c q n                = case lookup n (fullAttrEnv env tc) of
                                         _                     -> empty
   where tc                          = TC (NoQ c) (map tVar $ qbound q)
         rt                          = B.rtypeOf env tc n
-
--- Protocol witness classes can inherit abstract slots through more than one
--- protocol path.  If the target witness does not implement such a slot itself
--- and normal inheritance did not fill it, generate a small forwarding wrapper
--- that calls the same slot on a concrete provider witness.  The wrapper keeps
--- the target table ABI while avoiding unsafe casts of the target witness to the
--- provider witness type.
-data ForwardSlot                    = ForwardSlot Name Type TCon Doc Type
-
-forwardName c n                     = Derived c (Derived (name "$forward") n)
-
-forwardDecls env c q                = vcat [ forwardDecl env c q f | f <- forwardSlots env c q ]
-
-forwardDecl env c q (ForwardSlot n targetSlot providerTc providerExpr providerSlot)
-                                    = text "static" <+> forwardResult env targetSlot <+> genTopName env (forwardName c n) <> parens (repPar env paramNames (posrow targetSlot)) <+> char '{' $+$
-                                      nest 4 (gen env (tCon providerTc) <+> gen env providerV <+> equals <+> providerValue <> semi $+$
-                                              text "return" <+> providerCall <> semi) $+$
-                                      char '}'
-  where paramNames                  = take (arity $ posrow targetSlot) forwardParamNames
-        providerArgs                = hsep $ punctuate comma $ map (gen env) (drop 1 paramNames)
-        providerValue               = parens (gen env (tCon providerTc)) <> parens providerExpr
-        providerCall                = parens (parens (funsig2 env Nothing providerSlot) <> gen env providerV <> text "->" <> gen env classKW <> text "->" <> gen env n) <>
-                                      parens (gen env providerV <> comma' providerArgs)
-
--- Missing slots are only forwarded for generated witness classes, and only
--- when the provider slot has the same ABI after removing the witness argument.
-forwardSlots env c q
-  | not $ forwardClass c            = []
-  | otherwise                       = [ ForwardSlot n targetSlot providerTc providerExpr providerSlot
-                                      | (n, i) <- fullAttrEnv env tc,
-                                        forwardTarget i,
-                                        forwardableSlot n,
-                                        n `notElem` inherited,
-                                        n `notElem` direct,
-                                        Just targetSlot <- [slotType env tc n],
-                                        Just (providerTc, providerExpr, providerSlot) <- [forwardProvider env providers tc n targetSlot] ]
-  where tc                          = TC (NoQ c) (map tVar $ qbound q)
-        inherited                   = [ n | (_, n) <- inheritedAttrs env (NoQ c) ]
-        direct                      = directNoDecMethods env (NoQ c)
-        providers                   = providerObjects env
-
-slotType env tc n                   = case lookup n (fullAttrEnv env tc) of
-                                        Just (NDef _ Static _) -> Just rt
-                                        Just (NSig _ Static _) -> Just rt
-                                        Just (NDef _ NoDec _)  -> Just $ vsubst [(tvSelf, tCon tc)] $ addSelf rt (Just NoDec)
-                                        Just (NSig _ NoDec _)  -> Just $ vsubst [(tvSelf, tCon tc)] $ addSelf rt (Just NoDec)
-                                        _                     -> Nothing
-  where rt                          = B.rtypeOf env tc n
-
--- Pick the first concrete witness that already provides the requested slot for
--- the same protocol/type owner.  This still permits a sibling witness such as
--- Ord[str] to fill an Eq[str] slot in Hashable[str], but excludes unrelated
--- classes that only happen to have the same method name and ABI.
-forwardProvider env providers targetTc n targetSlot
-                                    = first [ (providerTc, providerExpr, providerSlot)
-                                            | ownerTc <- slotOwners env targetTc n,
-                                              (providerTc, providerExpr) <- providers,
-                                              providerTc /= targetTc,
-                                              providerCoversOwner env providerTc ownerTc,
-                                              concreteProvider env providerTc n,
-                                              Just providerSlot <- [slotType env providerTc n],
-                                              compatibleSlots targetSlot providerSlot ]
-
-slotOwners env targetTc n           = [ ownerTc
-                                      | (_, ownerTc) <- tail (findAncestry env targetTc),
-                                        ownsSlotDirectly env ownerTc n ]
-
-ownsSlotDirectly env tc n           = case findAttrInfoIn n te of
-                                        Just NDef{}  -> True
-                                        Just NSig{}  -> True
-                                        Just NVar{}  -> True
-                                        Just NSVar{} -> True
-                                        _            -> False
-  where (_, te)                     = findCon env tc
-
-providerCoversOwner env providerTc ownerTc
-                                    = any ((== ownerTc) . snd) (findAncestry env providerTc)
-
-providerObjects env                 = concat [ providerRoot qn q | (qn, q) <- allClasses env, nullConArgs env qn ]
-  where providerRoot qn q           = walk [] rootExpr rootTc
-          where rootTc              = TC qn (map tVar $ qbound q)
-                rootExpr            = rootWitnessExpr env qn
-        walk seen expr tc
-          | tcname tc `elem` seen   = []
-          | otherwise               = (tc, expr) : concat [ walk (tcname tc : seen) (expr <> text "->" <> gen env w) tc'
-                                                          | (w, tc') <- witnessFields env tc ]
-
--- Not to intrude in Types.hs, we accept that we do not have the complete list of witnesses in Env
--- For completing method tables, we start with all classes in the program but filter to only consider ancestor witness classes.
-allClasses env                      = active ++ closed ++ mods
-  where active                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- activeNames env ]
-        closed                      = [ (NoQ n, q) | (n, NClass q _ _ _) <- closedNames env ]
-        -- modulePublicTEnv resolves through each module's lookup function, so
-        -- entries rewritten by earlier passes are seen in converted form.
-        mods                        = [ (GName m n, q) | (m, mi) <- Map.toList (modules env),
-                                                         (n, NClass q _ _ _) <- modulePublicTEnv mi ]
-
-nullConArgs env qn                  = case findQName qn env of
-                                        NClass _ _ te _ -> case lookup initKW te of
-                                                             Just (NDef sc _ _) -> initArity sc == 0
-                                                             Just (NSig sc _ _) -> initArity sc == 0
-                                                             _                  -> False
-                                        _               -> False
-  where initArity (TSchema _ _ (TFun _ _ r _ _)) = arity r
-        initArity _                              = 1
-
-rootWitnessExpr env (NoQ n)
-  | inBuiltin env                   = staticwitness env (gname env n)
-  | otherwise                       = newcon env n <> parens empty
-rootWitnessExpr env qn@(GName m n)
-  | m == mBuiltin                   = staticwitness env qn
-  | otherwise                       = newcon' env qn <> parens empty
-rootWitnessExpr env qn              = newcon' env qn <> parens empty
-
-witnessFields env tc                = [ (n, tc') | (n, i) <- fullAttrEnv env tc,
-                                                  isWitness n,
-                                                  TCon _ fieldTc <- [fieldType i],
-                                                  tc' <- witnessTargets env tc fieldTc ]
-  where fieldType (NDef sc Property _)  = sctype sc
-        fieldType (NSig sc Property _)  = sctype sc
-        fieldType (NVar t)              = t
-        fieldType (NSVar t)             = t
-        fieldType _                     = tWild
-
--- Witness fields are often typed as an abstract protocol witness.  Prefer the
--- concrete generated witness named by convention when it exists, but keep the
--- declared field type as a fallback.
-witnessTargets env ownerTc fieldTc  = case concreteWitnessTarget env ownerTc fieldTc of
-                                        Just tc -> [tc, fieldTc]
-                                        Nothing -> [fieldTc]
-
-concreteWitnessTarget env ownerTc fieldTc
-                                    = case classQBinds env qn of
-                                        Just q  -> Just $ TC qn (take (length $ qbound q) (tcargs ownerTc ++ tcargs fieldTc))
-                                        Nothing -> Nothing
-  where qn                          = derivedWitnessQName (tcname ownerTc) (tcname fieldTc)
-
-derivedWitnessQName (NoQ owner) field
-                                    = NoQ (Derived (noq field) owner)
-derivedWitnessQName (GName m owner) field
-                                    = GName m (Derived (noq field) owner)
-derivedWitnessQName (QName m owner) field
-                                    = GName m (Derived (noq field) owner)
-
-classQBinds env (NoQ n)             = case lookupName n env of
-                                        Just (NClass q _ _ _) -> Just q
-                                        _                     -> Nothing
-classQBinds env (GName m n)         = case lookupModuleInfo m env >>= \mi -> moduleLookupName mi n of
-                                        Just (NClass q _ _ _) -> Just q
-                                        _                     -> Nothing
-classQBinds env (QName m n)         = classQBinds env (GName m n)
-
-concreteProvider env tc n           = case lookup n (fullAttrEnv env tc) of
-                                        Just (NDef _ _ _) -> True
-                                        Just (NVar _) -> True
-                                        Just (NSVar _) -> True
-                                        _           -> False
-
-compatibleSlots (TFun _ fx1 p1 k1 t1) (TFun _ fx2 p2 k2 t2)
-                                    = fx1 == fx2 && k1 == k2 && t1 == t2 && dropFirstRow p1 == dropFirstRow p2
-compatibleSlots _ _                 = False
-
-dropFirstRow (TRow _ _ _ _ r)       = r
-dropFirstRow r                      = r
-
-forwardResult env (TFun _ fx _ _ t) = repType env (exposeMsg fx t)
-forwardResult _ _                   = empty
-
-repPar env (n : ns) (TRow _ _ _ t r@TRow{})
-                                    = repType env t <+> gen env n <> comma <+> repPar env ns r
-repPar env (n : _) (TRow _ _ _ t TNil{})
-                                    = repType env t <+> gen env n
-repPar env (n : _) (TRow _ _ _ t TVar{})
-                                    = repType env t <+> gen env n
-repPar _ _ TNil{}                   = empty
-repPar _ _ _                        = empty
-
-forwardTarget (NDef _ NoDec _)      = True
-forwardTarget (NSig _ NoDec _)      = True
-forwardTarget _                     = False
-
-forwardableSlot n                   = n `notElem` ([initKW, serializeKW, deserializeKW] ++ valueKWs)
-
-forwardClass Derived{}              = True
-forwardClass _                      = False
-
-directNoDecMethods env qn           = case findQName qn env of
-                                        NClass _ _ te _ -> [ n | (n, NDef _ NoDec _) <- te ]
-                                        _               -> []
-
-forwardParamNames                   = [ name ("fw_" ++ show i) | i <- [(0 :: Int)..] ]
-providerV                           = name "fw_provider"
-first (x:_)                         = Just x
-first []                            = Nothing
-
 
 initFlag                            = name "done$"
 
@@ -1501,21 +1301,6 @@ containsGeneratedMethodCallComp env (CompIf _ e c)
 containsGeneratedMethodCallComp _ NoComp
                                     = False
 
-genDirectMethodCall env targetTc n rt (PosArg w p)
-                                    = callee <> parens (witness <> comma' (genCallPosArgs env r p))
-  where TFun _ _ r _ _              = rt
-        slot                        = staticWitnessSlotType env targetTc n rt
-        witness                     = staticWitnessObject env targetTc w
-        callee                      = case staticWitnessMethodImpl env [] targetTc n of
-                                        Just implTc -> staticWitnessDirectCallee env slot implTc n
-                                        Nothing     -> staticWitnessTableCallee env slot witness n
-genDirectMethodCall _ _ n _ p       = error ("Internal error: direct witness call for " ++ show n ++ " has arguments " ++ show p)
-
-staticWitnessObject env tc e        = case staticWitnessName e of
-                                        (Just obj, path) -> parens (gen env (tCon tc)) <> foldl field (staticwitness env (unalias env obj)) path
-                                        _                -> error ("Internal error: direct witness call with non-static witness " ++ show e)
-  where field d n                   = d <> text "->" <> gen env n
-
 genGeneratedMethodCall env n ts (PosArg w p)
   | Just (tc, _) <- generatedMethodClass env n ts
                                     = gen env (generatedMethodQName n) <> parens (witness <> comma' (gen env p))
@@ -1527,47 +1312,6 @@ staticWitnessValue env e            = case staticWitnessName e of
                                         (Just obj, path) -> foldl field (staticwitness env (unalias env obj)) path
                                         _                -> gen env e
   where field d n                   = d <> text "->" <> gen env n
-
--- Direct witness calls name the target table slot.  Defaults may be supplied
--- by an ancestor protocol class, so the concrete implementation is resolved
--- here and cast back to the target slot ABI.
-staticWitnessSlotType env tc n rt
-  | Just slot <- slotType env tc n   = slot
-  | otherwise                       = addWitness rt
-  where addWitness (TFun l fx r k t)= TFun l fx (posRow (tCon tc) r) k t
-        addWitness t                = t
-
-staticWitnessDirectCallee env slot implTc n
-                                    = parens (parens (funsig2 env Nothing slot) <> staticWitnessMethodName env implTc n)
-
-staticWitnessTableCallee env slot witness n
-                                    = parens (parens (funsig2 env Nothing slot) <> parens witness <> text "->" <> gen env classKW <> text "->" <> gen env n)
-
-staticWitnessMethodName env (TC (GName m c) _) n
-                                    = gen env (GName m (methodname c n))
-staticWitnessMethodName env (TC (QName m c) _) n
-                                    = gen env (GName m (methodname c n))
-staticWitnessMethodName env (TC (NoQ c) _) n
-                                    = genTopName env (methodname c n)
-
-staticWitnessMethodImpl env seen tc n
-  | tcname tc `elem` seen           = Nothing
-  | directMethodImpl env (tcname tc) n
-                                    = Just tc
-  | otherwise                       = do provider <- first [ provider | (provider, n') <- inheritedAttrs env (tcname tc), n' == n ]
-                                         staticWitnessMethodImpl env (tcname tc : seen) (schematicClass env provider) n
-
-directMethodImpl env qn n           = case findQName qn env of
-                                        NClass _ _ te _ -> direct te
-                                        NProto _ _ te _ -> direct te
-                                        _               -> False
-  where direct te                   = case findAttrInfoIn n te of
-                                        Just NDef{} -> True
-                                        _           -> False
-
-schematicClass env qn               = case classQBinds env qn of
-                                        Just q  -> TC qn (map tVar $ qbound q)
-                                        Nothing -> TC qn []
 
 -- Compute the C-facing callable type used for argument rendering.  Public
 -- polymorphic callables are matched against a wildcard instantiation so

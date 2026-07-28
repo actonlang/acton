@@ -38,10 +38,19 @@ class PBD_Thing (PB[Thing], PA[Thing], __builtin__.value):
         N_1tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int 1)
         return (UNBOX __builtin__.int N_1tmp)
 class PCD_Thing (PC[Thing], PA[Thing], __builtin__.value):
+    @property
+    W_PA_34 : PA[Thing]
     pure def __init__ (W_self : PCD_Thing) -> None:
+        W_self.W_PA_34 = PBD_Thing()
         PC.__init__@[Thing](W_self)
         return None
     pure def gamma (W_self : PCD_Thing, self : Thing) -> UNBOXED __builtin__.int:
         N_2tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int 2)
         return (UNBOX __builtin__.int N_2tmp)
+    pure def total (W_self : PCD_Thing, G_1p : Thing) -> UNBOXED __builtin__.int:
+        N_3tmp: UNBOXED __builtin__.int = W_self.W_PA_34.total(G_1p)
+        return (UNBOX __builtin__.int N_3tmp)
+    pure def same (W_self : PCD_Thing, G_1p : Thing, G_2p : Thing) -> UNBOXED __builtin__.bool:
+        N_4tmp: UNBOXED __builtin__.bool = W_self.W_PA_34.same(G_1p, G_2p)
+        return (UNBOX __builtin__.bool N_4tmp)
 # (recursive group)

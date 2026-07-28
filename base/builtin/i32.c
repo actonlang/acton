@@ -266,14 +266,6 @@ bool B_OrdD_i32D___ge__ (B_OrdD_i32 wit, B_i32 a, B_i32 b) {
 
 // B_HashableD_i32 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_i32D___eq__(B_HashableD_i32 wit, B_i32 a, B_i32 b) {
-    return a->val == b->val;
-}
-
-bool B_HashableD_i32D___ne__(B_HashableD_i32 wit, B_i32 a, B_i32 b) {
-    return a->val != b->val;
-}
-
 B_NoneType B_HashableD_i32D_hash(B_HashableD_i32 wit, B_i32 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a), 4));
     return B_None;

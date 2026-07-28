@@ -1,0 +1,13 @@
+# The provider module: defines the class and its Ord extension. An importing
+# module's Hashable extension must forward __eq__ to this witness.
+
+class Pt(object):
+    x: int
+    def __init__(self, x: int):
+        self.x = x
+
+extension Pt (Ord):
+    def __eq__(a: Pt, b: Pt) -> bool:
+        return a.x == b.x
+    def __lt__(a: Pt, b: Pt) -> bool:
+        return a.x < b.x

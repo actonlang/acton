@@ -1,0 +1,27 @@
+# A third module importing both the provider (points: class + Ord) and the
+# extender (hashpt: Hashable, with __eq__ finalized by points). Eq[Pt] must
+# resolve to points' canonical witness here even though hashpt's extension
+# also covers Eq through its ancestry.
+
+import points
+import hashpt
+
+actor main(env):
+    a = points.Pt(1)
+    b = points.Pt(1)
+    if not (a == b) or a == points.Pt(2):
+        print("FAIL: == through the imported Ord witness")
+        await async env.exit(1)
+    if not hashpt.same_here(a, b):
+        print("FAIL: == inside the extending module")
+        await async env.exit(1)
+    d: dict[points.Pt, str] = {}
+    d[a] = "one"
+    if b not in d or points.Pt(7) in d:
+        print("FAIL: dict through __eq__ forwarded to the imported witness")
+        await async env.exit(1)
+    l = sorted([points.Pt(3), points.Pt(1), points.Pt(2)])
+    if l[0].x != 1 or l[1].x != 2 or l[2].x != 3:
+        print("FAIL: sorted through the imported Ord witness")
+        await async env.exit(1)
+    await async env.exit(0)

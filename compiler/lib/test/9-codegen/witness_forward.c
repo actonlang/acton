@@ -140,6 +140,7 @@ witness_forwardQ_PBD_Thing witness_forwardQ_PBD_ThingG_new() {
 }
 struct witness_forwardQ_PBD_ThingG_class witness_forwardQ_PBD_ThingG_methods;
 B_NoneType witness_forwardQ_PCD_ThingD___init__ (witness_forwardQ_PCD_Thing W_self) {
+    ((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34 = ((witness_forwardQ_PA)witness_forwardQ_PBD_ThingG_new());
     ((B_NoneType (*) (witness_forwardQ_PC))witness_forwardQ_PCG_methods.__init__)(((witness_forwardQ_PC)W_self));
     return B_None;
 }
@@ -149,15 +150,16 @@ int64_t witness_forwardQ_PCD_ThingD_gamma (witness_forwardQ_PCD_Thing W_self, wi
     #line 33 "test/src/witness_forward.act"
     return N_2tmp;
 }
-static bool witness_forwardQ_PCD_ThingD_$forwardD_same(witness_forwardQ_PCD_Thing fw_0, witness_forwardQ_Thing fw_1, witness_forwardQ_Thing fw_2) {
-    witness_forwardQ_PBD_Thing fw_provider = (witness_forwardQ_PBD_Thing)(witness_forwardQ_PBD_ThingG_new());
-    return ((bool (*) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing))fw_provider->$class->same)(fw_provider, fw_1, fw_2);
+int64_t witness_forwardQ_PCD_ThingD_total (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p) {
+    int64_t N_3tmp = ((int64_t (*) ($WORD, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34))->$class->total)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34, G_1p);
+    return N_3tmp;
 }
-static int64_t witness_forwardQ_PCD_ThingD_$forwardD_total(witness_forwardQ_PCD_Thing fw_0, witness_forwardQ_Thing fw_1) {
-    witness_forwardQ_PBD_Thing fw_provider = (witness_forwardQ_PBD_Thing)(witness_forwardQ_PBD_ThingG_new());
-    return ((int64_t (*) (witness_forwardQ_PBD_Thing, witness_forwardQ_Thing))fw_provider->$class->total)(fw_provider, fw_1);
+bool witness_forwardQ_PCD_ThingD_same (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p, witness_forwardQ_Thing G_2p) {
+    bool N_4tmp = ((bool (*) ($WORD, witness_forwardQ_Thing, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34))->$class->same)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34, G_1p, G_2p);
+    return N_4tmp;
 }
 void witness_forwardQ_PCD_ThingD___serialize__ (witness_forwardQ_PCD_Thing self, $Serial$state state) {
+    $step_serialize(self->W_PA_34, state);
 }
 witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingD___deserialize__ (witness_forwardQ_PCD_Thing self, $Serial$state state) {
     $WORD $tmp;
@@ -169,7 +171,14 @@ witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingD___deserialize__ (witness_
         }
         self = $DNEW(witness_forwardQ_PCD_Thing, state);
     }
+    self->W_PA_34 = $step_deserialize(state);
     return self;
+}
+witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingG_new() {
+    witness_forwardQ_PCD_Thing $tmp = acton_malloc(sizeof(struct witness_forwardQ_PCD_Thing));
+    $tmp->$class = &witness_forwardQ_PCD_ThingG_methods;
+    witness_forwardQ_PCD_ThingG_methods.__init__($tmp);
+    return $tmp;
 }
 struct witness_forwardQ_PCD_ThingG_class witness_forwardQ_PCD_ThingG_methods;
 int witness_forwardQ_done$ = 0;
@@ -242,10 +251,10 @@ void witness_forwardQ___init__ () {
         witness_forwardQ_PCD_ThingG_methods.__bool__ = (bool (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__bool__;
         witness_forwardQ_PCD_ThingG_methods.__str__ = (B_str (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__str__;
         witness_forwardQ_PCD_ThingG_methods.__repr__ = (B_str (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__repr__;
-        witness_forwardQ_PCD_ThingG_methods.same = (bool (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_$forwardD_same;
-        witness_forwardQ_PCD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_$forwardD_total;
         witness_forwardQ_PCD_ThingG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PCD_Thing))witness_forwardQ_PCD_ThingD___init__;
         witness_forwardQ_PCD_ThingG_methods.gamma = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_gamma;
+        witness_forwardQ_PCD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_total;
+        witness_forwardQ_PCD_ThingG_methods.same = (bool (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_same;
         witness_forwardQ_PCD_ThingG_methods.__serialize__ = witness_forwardQ_PCD_ThingD___serialize__;
         witness_forwardQ_PCD_ThingG_methods.__deserialize__ = witness_forwardQ_PCD_ThingD___deserialize__;
         $register(&witness_forwardQ_PCD_ThingG_methods);

@@ -648,14 +648,6 @@ bool B_OrdD_bigintD___ge__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
 
 // B_HashableD_bigint ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_bigintD___eq__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
-    return zz_equal(&a->val,&b->val);
-}
-
-bool B_HashableD_bigintD___ne__(B_HashableD_bigint wit, B_bigint a, B_bigint b) {
-    return !zz_equal(&a->val,&b->val);
-}
-
 B_NoneType B_HashableD_bigintD_hash(B_HashableD_bigint wit, B_bigint a, B_hasher h) {
     long sz = a->val.size;
     unsigned long data;
