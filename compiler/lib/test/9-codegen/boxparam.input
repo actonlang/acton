@@ -24,12 +24,13 @@ class Deriv (Base[__builtin__.int], __builtin__.object, __builtin__.value):
         Base.G_init@[__builtin__.int](self)
         return None
     pure def cmp (self : Deriv, x : __builtin__.int) -> UNBOXED __builtin__.bool:
-        N_tmp: UNBOXED __builtin__.bool = (x > (UNBOX __builtin__.int 3))
+        N_tmp: UNBOXED __builtin__.bool = ((UNBOX __builtin__.int x) > (UNBOX __builtin__.int 3))
         return (UNBOX __builtin__.bool N_tmp)
-    pure def bump (self : Deriv, x : __builtin__.int) -> __builtin__.int:
-        x += (UNBOX __builtin__.int 1)
+    pure def bump (self : Deriv, xD_boxed : __builtin__.int) -> __builtin__.int:
+        x: UNBOXED __builtin__.int = (UNBOX __builtin__.int xD_boxed)
+        (UNBOX __builtin__.int x) += (UNBOX __builtin__.int 1)
         return (BOX __builtin__.int x)
     pure def fwd (self : Deriv, x : __builtin__.int) -> __builtin__.int:
-        N_1tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int self.bump((BOX __builtin__.int x)))
+        N_1tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int self.bump(x))
         return (BOX __builtin__.int N_1tmp)
 # (recursive group)

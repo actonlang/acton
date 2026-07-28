@@ -12,6 +12,7 @@ import Acton.Subst
 import Pretty
 import Utils
 import Debug.Trace
+import Data.Maybe (isJust)
 import qualified Data.HashSet as HashSet
 import Control.Monad.State.Strict
 import Control.Monad.Except
@@ -30,6 +31,7 @@ data BoxX                          = BoxX { inClassX :: Maybe (TCon, TEnv)
                                           , inActionX :: Bool
                                           , returnTypeX :: Maybe Type
                                           , staticWitnessesX :: M.HashMap Name StaticWitness
+                                          , boxedParamsX :: HashSet.HashSet Name
                                           }
 
 
@@ -38,12 +40,33 @@ boxEnv env0                        = setX env0 BoxX{ inClassX = Nothing
                                                    , inActionX = False
                                                    , returnTypeX = Nothing
                                                    , staticWitnessesX = M.empty
+                                                   , boxedParamsX = HashSet.empty
                                                    }
 
 
 setInClass mtc env                  = modX env $ \x -> x{ inClassX = mtc }
 
 getInClass env                      = inClassX $ envX env
+
+-- A class method slot whose type is generic in the oldest superclass keeps its
+-- boxed ABI even when instantiated at an unboxable type (see rtypeOf), so such
+-- parameters hold boxed values, unlike every other unboxable-typed local.
+setBoxedParams ns env               = modX env $ \x -> x{ boxedParamsX = HashSet.fromList ns }
+
+isBoxedParam env n                  = n `HashSet.member` boxedParamsX (envX env)
+
+boxedPars                           :: PosPar -> [(Name, Type)]
+boxedPars (PosPar n (Just t) _ p)
+  | isUnboxable t                   = (n, t) : boxedPars p
+boxedPars (PosPar _ _ _ p)          = boxedPars p
+boxedPars _                         = []
+
+boxedPar n                          = Derived n (name "boxed")
+
+renamePars ns (PosPar n a e p)
+  | n `elem` ns                     = PosPar (boxedPar n) a e (renamePars ns p)
+  | otherwise                       = PosPar n a e (renamePars ns p)
+renamePars ns p                     = p
 
 setInAction b env                   = modX env $ \x -> x{ inActionX = b }
 
@@ -577,6 +600,7 @@ instance {-# OVERLAPS #-} Boxing ([Stmt]) where
 instance Boxing Expr where
     boxing env e@(Var _ (NoQ n))
        | isWitness n                = return (HashSet.singleton n, e)
+       | isBoxedParam env n         = return (HashSet.empty, e)
        | isUnboxable t              = return (HashSet.empty, Box t e)
        where t                      = typeOf env e
     -- Qualified imported constants such as math.pi need the same boxed read
@@ -830,8 +854,8 @@ instance Boxing Decl where
               env1                  = defineTVars q env
               env2                  = Acton.Boxing.setInClass (Just(c,findAttrSchemas env1 (NoQ n))) env1
     boxing env f@(Def l n q p KwdNIL t ss dec fx ddoc)
-                                    = do (ws2,ss') <- boxing env1 ss
-                                         return (ws2, Def l n q pFinal KwdNIL (Just t') ss' dec fx ddoc)
+                                    = do (ws2,ss') <- boxing env1 (copies ++ ss)
+                                         return (ws2, Def l n q pDone KwdNIL (Just t') ss' dec fx ddoc)
       where ft                      = tFun fx (prowOf p) kwdNil (fromJust t)
             (pFinal, t0@(TFun _ _ _ _ t'))
                                     = case getInClass env of
@@ -844,8 +868,15 @@ instance Boxing Decl where
             keepSelf (PosPar a b c p') r
                                     = PosPar a b c (fixpars p' r)
             keepSelf p r            = fixpars p r
-            te                      = envOf pFinal
-            env1                    = setReturnType (Just t') $ setInAction (fx == fxAction) $ define te env
+            bps                     = if isJust (getInClass env) then boxedPars pFinal else []
+            -- A boxed parameter the body assigns is renamed aside and copied
+            -- into an ordinary raw local up front, so stores follow the
+            -- standard raw convention and the caller's box is never written.
+            rebound                 = [ pn | (pn, _) <- bps, pn `elem` assigned ss ]
+            pDone                   = renamePars rebound pFinal
+            copies                  = [ sAssign (pVar pn pt) (eVar (boxedPar pn)) | (pn, pt) <- bps, pn `elem` rebound ]
+            te                      = envOf pDone
+            env1                    = setBoxedParams (map fst (boxedPars pDone)) $ setReturnType (Just t') $ setInAction (fx == fxAction) $ define te env
     boxing env d@Typedef{}          = return (HashSet.empty, d)
   
 instance Boxing Branch where

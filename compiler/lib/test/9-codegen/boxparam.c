@@ -62,19 +62,20 @@ B_NoneType boxparamQ_DerivG_init (boxparamQ_Deriv self) {
 }
 #line 15 "test/src/boxparam.act"
 bool boxparamQ_DerivD_cmp (boxparamQ_Deriv self, B_int x) {
-    bool N_tmp = (x > 3LL);
+    bool N_tmp = (((B_int)x)->val > 3LL);
     #line 16 "test/src/boxparam.act"
     return N_tmp;
 }
 #line 17 "test/src/boxparam.act"
-B_int boxparamQ_DerivD_bump (boxparamQ_Deriv self, B_int x) {
+B_int boxparamQ_DerivD_bump (boxparamQ_Deriv self, B_int xD_boxed) {
+    int64_t x = ((B_int)xD_boxed)->val;
     x += 1LL;
     #line 19 "test/src/boxparam.act"
-    return toB_int(((B_int)x)->val);
+    return toB_int(x);
 }
 #line 20 "test/src/boxparam.act"
 B_int boxparamQ_DerivD_fwd (boxparamQ_Deriv self, B_int x) {
-    int64_t N_1tmp = ((B_int)((B_int (*) ($WORD, B_int))((boxparamQ_Deriv)(self))->$class->bump)(self, toB_int(((B_int)x)->val)))->val;
+    int64_t N_1tmp = ((B_int)((B_int (*) ($WORD, B_int))((boxparamQ_Deriv)(self))->$class->bump)(self, x))->val;
     #line 21 "test/src/boxparam.act"
     return toB_int(N_1tmp);
 }

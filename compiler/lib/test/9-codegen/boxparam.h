@@ -58,6 +58,6 @@ B_NoneType boxparamQ_DerivD___init__(boxparamQ_Deriv G_1p);
 B_value boxparamQ_DerivD___get_attr__(boxparamQ_Deriv self, B_str name);
 B_NoneType boxparamQ_DerivG_init(boxparamQ_Deriv self);
 bool boxparamQ_DerivD_cmp(boxparamQ_Deriv self, B_int x);
-B_int boxparamQ_DerivD_bump(boxparamQ_Deriv self, B_int x);
+B_int boxparamQ_DerivD_bump(boxparamQ_Deriv self, B_int xD_boxed);
 B_int boxparamQ_DerivD_fwd(boxparamQ_Deriv self, B_int x);
 void boxparamQ___init__ ();
