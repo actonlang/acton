@@ -2095,12 +2095,14 @@ main = do
 
     describe "Pass 8: Boxing" $ do
       testBoxing env0 ["deact"]
+      testBoxing env0 ["boxparam"]
 
     describe "Pass 9: CodeGen" $ do
       testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
       testCodeGen env0 ["chunking"]
+      testCodeGen env0 ["boxparam"]
       -- A local that is live across a for-loop must be emitted as `volatile` so it
       -- survives the loop's StopIteration setjmp/longjmp under optimization.
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]

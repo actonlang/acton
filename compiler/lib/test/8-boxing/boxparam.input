@@ -1,0 +1,40 @@
+W_Base_30: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_Base_32: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+# recursive group:
+class Base[T] (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    pure def __init__ (self : Self) -> None:
+        pass
+        return None
+    pure def cmp (self : Self, x : T) -> __builtin__.bool:
+        return True
+    pure def bump (self : Self, x : T) -> T:
+        return x
+    pure def fwd (self : Self, x : T) -> T:
+        return x
+class Deriv (Base[__builtin__.int], __builtin__.object, __builtin__.value):
+    pure def __init__ (G_1p : Self) -> None:
+        Base.__init__@[__builtin__.int](G_1p)
+        return None
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        Base.G_init@[__builtin__.int](self)
+        return None
+    pure def cmp (self : Self, x : __builtin__.int) -> __builtin__.bool:
+        N_tmp: __builtin__.bool = W_Base_32.__gt__(x, W_Base_30.__fromatom__(3))
+        return N_tmp
+    pure def bump (self : Self, x : __builtin__.int) -> __builtin__.int:
+        W_Base_39: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+        x = W_Base_39.__iadd__(x, W_Base_30.__fromatom__(1))
+        return x
+    pure def fwd (self : Self, x : __builtin__.int) -> __builtin__.int:
+        N_1tmp: __builtin__.int = self.bump(x)
+        return N_1tmp
+# (recursive group)

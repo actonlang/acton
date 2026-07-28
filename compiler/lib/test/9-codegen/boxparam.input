@@ -1,0 +1,35 @@
+# recursive group:
+class Base[T] (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Base[T], name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Base[T]) -> None:
+        pass
+        return None
+    pure def __init__ (self : Base[T]) -> None:
+        pass
+        return None
+    pure def cmp (self : Base[T], x : T) -> UNBOXED __builtin__.bool:
+        return (UNBOX __builtin__.bool True)
+    pure def bump (self : Base[T], x : T) -> T:
+        return x
+    pure def fwd (self : Base[T], x : T) -> T:
+        return x
+class Deriv (Base[__builtin__.int], __builtin__.object, __builtin__.value):
+    pure def __init__ (G_1p : Deriv) -> None:
+        Base.__init__@[__builtin__.int](G_1p)
+        return None
+    pure def __get_attr__ (self : Deriv, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Deriv) -> None:
+        Base.G_init@[__builtin__.int](self)
+        return None
+    pure def cmp (self : Deriv, x : __builtin__.int) -> UNBOXED __builtin__.bool:
+        N_tmp: UNBOXED __builtin__.bool = (x > (UNBOX __builtin__.int 3))
+        return (UNBOX __builtin__.bool N_tmp)
+    pure def bump (self : Deriv, x : __builtin__.int) -> __builtin__.int:
+        x += (UNBOX __builtin__.int 1)
+        return (BOX __builtin__.int x)
+    pure def fwd (self : Deriv, x : __builtin__.int) -> __builtin__.int:
+        N_1tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int self.bump((BOX __builtin__.int x)))
+        return (BOX __builtin__.int N_1tmp)
+# (recursive group)
