@@ -1,0 +1,16 @@
+# Two independent modules each implement Pick for Box through their own child
+# protocol; neither saw the other, so both registrations carry genuine rival
+# implementations reached through ancestry. Resolving Pick[Box[Both]] must be
+# rejected as ambiguous, never silently decided by import or path shape.
+
+from model import Box, Both, Pick
+import provider_a
+import provider_b
+
+def choose[T(Pick)](x: T) -> int:
+    return x.pick()
+
+actor main(env):
+    if choose(Box(Both())) == 2:
+        await async env.exit(0)
+    await async env.exit(1)
