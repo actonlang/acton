@@ -1,0 +1,47 @@
+# A comprehension in a branch or loop condition is deferred by the Normalizer
+# to a generated function (compfun), whose def must be emitted before the
+# statement owning the condition. It used to be drained by the branch body's
+# suite instead, placing the def out of scope of the call in the condition
+# ("Back pass failed: NameNotFound (Internal NormPass compfun 0)").
+
+def check_if(l: list[int]) -> bool:
+    if [x for x in l] != [1, 2, 3]:
+        return False
+    return True
+
+def check_elif(l: list[int]) -> int:
+    if len(l) == 0:
+        return 0
+    elif [x for x in l] != [1, 2, 3]:
+        return 1
+    else:
+        return 2
+
+def count_while(l: list[int]) -> int:
+    n = 0
+    while [x for x in l if x > n] != []:
+        n += 1
+    return n
+
+actor main(env):
+    l = sorted([3, 1, 2])
+    if [x for x in l] != [1, 2, 3]:
+        await async env.exit(1)
+    if not check_if(l):
+        await async env.exit(2)
+    if check_elif(l) != 2:
+        await async env.exit(3)
+    if count_while(l) != 3:
+        await async env.exit(4)
+    d: dict[int, str] = {}
+    d[1] = "one"
+    if {k: v for k, v in d.items()} != {1: "one"}:
+        await async env.exit(5)
+    if {x for x in l} != {1, 2, 3}:
+        await async env.exit(6)
+    if [y + 1 for y in [x * 2 for x in l]] != [3, 5, 7]:
+        await async env.exit(7)
+    for i in [0, 1]:
+        if [x for x in l] != [1, 2, 3]:
+            await async env.exit(8)
+    await async env.exit(0)
