@@ -969,7 +969,7 @@ mkCident (c:s)
 unCkeyword str
   | str `Data.Set.member` rws       = preEscape str
   | otherwise                       = str
-  where rws                         = Data.Set.fromDistinctAscList [
+  where rws                         = Data.Set.fromList [
                                         "alignas",
                                         "alignof",
                                         "auto",
@@ -1009,7 +1009,7 @@ unCkeyword str
                                         "true",
                                         "typedef",
                                         "typeof",
-                                        "typeof_unequal",
+                                        "typeof_unqual",
                                         "union",
                                         "unsigned",
                                         "void",

@@ -2098,6 +2098,9 @@ main = do
       testBoxing env0 ["deact"]
 
     describe "Pass 9: CodeGen" $ do
+      it "escapes C keywords" $
+        map Acton.CodeGen.unCkeyword ["switch", "typeof_unqual", "_Alignas"] `shouldBe`
+          ["A_switch", "A_typeof_unqual", "A__Alignas"]
       testCodeGen env0 ["ints"]
       testCodeGen env0 ["deact"]
       testCodeGen env0 ["lines"]
