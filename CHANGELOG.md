@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Language
+- Complete soft-keyword parsing for declaration words such as `actor`,
+  `class`, `extension`, `from`, `import`, `protocol`, and `type`, keeping them
+  usable as names inside functions, classes, protocols, extensions, and actors
+  while reporting imports after module definitions as a clear parse error.
+  [#3038]
+
+### Compiler & Build
+- Preserve hidden protocol-witness fields when importing constrained generic
+  classes, fixing subclass layout corruption and serialization round-trips for
+  generic classes subclassed from another module. [#3037]
+- Compile list, set, and dict comprehensions used in `if`, `elif`, and `while`
+  conditions without moving the generated comprehension helper out of scope.
+  [#3041]
+
+### Testing & CI
+- Add core-language regression tests for `await` values, exceptions, chaining,
+  fan-in, fan-out, queued messages, timers, and mixed outcomes, pinning the
+  observable semantics before runtime future/message handling is reworked.
+  [#3034]
+
 ## [0.29.1] - 2026-07-22
 
 ### Language
@@ -4671,6 +4694,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3027]: https://github.com/actonlang/acton/pull/3027
 [#3030]: https://github.com/actonlang/acton/pull/3030
 [#3031]: https://github.com/actonlang/acton/pull/3031
+[#3034]: https://github.com/actonlang/acton/pull/3034
+[#3037]: https://github.com/actonlang/acton/pull/3037
+[#3038]: https://github.com/actonlang/acton/pull/3038
+[#3041]: https://github.com/actonlang/acton/pull/3041
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -4816,6 +4843,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.28.2]: https://github.com/actonlang/acton/compare/v0.28.1...v0.28.2
 [0.28.3]: https://github.com/actonlang/acton/compare/v0.28.2...v0.28.3
 [0.29.0]: https://github.com/actonlang/acton/compare/v0.28.3...v0.29.0
+[0.29.1]: https://github.com/actonlang/acton/compare/v0.29.0...v0.29.1
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
