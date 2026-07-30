@@ -172,6 +172,16 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
 
 B_list jsonQ_decode_arr(yyjson_val *);
 
+static B_value jsonQ_decode_integer(yyjson_val *val) {
+    if (yyjson_get_subtype(val) == YYJSON_SUBTYPE_UINT) {
+        uint64_t number = yyjson_get_uint(val);
+        if (number > INT64_MAX)
+            return (B_value)toB_u64(number);
+        return (B_value)toB_int((int64_t)number);
+    }
+    return (B_value)toB_int(yyjson_get_sint(val));
+}
+
 B_dict jsonQ_decode_obj(yyjson_val *obj) {
 
     B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
@@ -194,10 +204,8 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
             case YYJSON_TYPE_NUM:;
                 switch (yyjson_get_subtype(val)) {
                     case YYJSON_SUBTYPE_UINT:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
-                        break;
                     case YYJSON_SUBTYPE_SINT:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_int(yyjson_get_int(val)));
+                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), jsonQ_decode_integer(val));
                         break;
                     case YYJSON_SUBTYPE_REAL:;
                         B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$float(yyjson_get_real(val)));
@@ -242,10 +250,8 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
             case YYJSON_TYPE_NUM:;
                 switch (yyjson_get_subtype(val)) {
                     case YYJSON_SUBTYPE_UINT:;
-                        wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
-                        break;
                     case YYJSON_SUBTYPE_SINT:;
-                        wit->$class->append(wit, res, toB_int(yyjson_get_int(val)));
+                        wit->$class->append(wit, res, jsonQ_decode_integer(val));
                         break;
                     case YYJSON_SUBTYPE_REAL:;
                         wit->$class->append(wit, res, to$float(yyjson_get_real(val)));
