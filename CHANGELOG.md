@@ -19,6 +19,14 @@
 - Escape generated C identifiers that match C keywords using order-independent
   lookup, including underscore-prefixed keywords and C23 `typeof_unqual`, so
   generated code avoids reserved-word collisions. [#3044]
+- Compile base, std, and generated project C with `-fwrapv`, making fixed-size
+  signed integer arithmetic wrap consistently in debug and release builds,
+  including overflowing left shifts. [#3050]
+
+### Runtime & Standard Library
+- Decode JSON integers with 64-bit signed and unsigned yyjson accessors,
+  preserving large signed values and positive values above `int64` instead of
+  truncating them through a 32-bit C `int`. [#3047]
 
 ### Testing & CI
 - Add core-language regression tests for `await` values, exceptions, chaining,
@@ -4702,6 +4710,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3038]: https://github.com/actonlang/acton/pull/3038
 [#3041]: https://github.com/actonlang/acton/pull/3041
 [#3044]: https://github.com/actonlang/acton/pull/3044
+[#3047]: https://github.com/actonlang/acton/pull/3047
+[#3050]: https://github.com/actonlang/acton/pull/3050
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
