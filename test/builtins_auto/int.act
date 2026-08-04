@@ -204,6 +204,9 @@ def test_int():
         raise ValueError("unexpected: int(x) != 0")
     if int(2**63-1) + 1 != -2**63:
         raise ValueError("int wraparound failed")
+    shift_value: int = 9000000000000000000
+    if shift_value << 8 != -1843009213693952000:
+        raise ValueError("int left shift wraparound failed")
     return True
 
 def test_u1():

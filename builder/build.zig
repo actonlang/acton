@@ -212,7 +212,7 @@ pub fn build(b: *std.Build) void {
     }
 
     flags.appendSlice(b.allocator, &.{
-        "-fno-sanitize=signed-integer-overflow",
+        "-fwrapv",
     }) catch unreachable;
 
     for (c_files.items) |entry| {
