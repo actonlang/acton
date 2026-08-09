@@ -29,6 +29,8 @@ def _test_std_namespace_data_modules():
     testing.assertTrue(isinstance(json_bigint, bigint), "std.json bigint decoded with the wrong type")
     if isinstance(json_bigint, bigint):
         testing.assertEqual(json_bigint, bigint("-18446744073709551617"))
+    testing.assertEqual(json.encode({"value": json_bigint}), r"""{"value":-18446744073709551617}""")
+    testing.assertEqual(json.encode({"value": json_bigint}, bigint_as_string=True), r"""{"value":"-18446744073709551617"}""")
     testing.assertEqual(xml.encode(xml.Node("a", text="hello")), "<a>hello</a>")
     testing.assertEqual(snappy.decompress(snappy.compress(b"hello hello hello")), b"hello hello hello")
     testing.assertEqual(md5.hash(b"abc"), b"\x90\x01\x50\x98\x3c\xd2\x4f\xb0\xd6\x96\x3f\x7d\x28\xe1\x7f\x72")

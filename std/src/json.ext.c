@@ -24,8 +24,15 @@ void stdQ_jsonQ___ext_init__() {
     stdQ_jsonQ_acton_alc.free = my_free;
 }
 
-void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data);
-void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data) {
+static yyjson_mut_val *stdQ_jsonQ_encode_bigint(yyjson_mut_doc *doc, B_bigint value, bool as_string) {
+    char *number = get_str(&value->val);
+    if (as_string)
+        return yyjson_mut_str(doc, number);
+    return yyjson_mut_raw(doc, number);
+}
+
+void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data, bool bigint_as_string);
+void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data, bool bigint_as_string) {
     B_IteratorD_dict_items iter = $NEW(B_IteratorD_dict_items, data);
     B_tuple item;
 
@@ -47,15 +54,18 @@ void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict da
                 case STR_ID:;
                     yyjson_mut_obj_add_str(doc, node, key,  (char *)fromB_str((B_str)v));
                     break;
+                case BIGINT_ID:;
+                    yyjson_mut_obj_add_val(doc, node, key, stdQ_jsonQ_encode_bigint(doc, (B_bigint)v, bigint_as_string));
+                    break;
                 case LIST_ID:;
                     yyjson_mut_val *l = yyjson_mut_arr(doc);
                     yyjson_mut_obj_add_val(doc, node, key, l);
-                    stdQ_jsonQ_encode_list_into(doc, l, (B_list)v);
+                    stdQ_jsonQ_encode_list_into(doc, l, (B_list)v, bigint_as_string);
                     break;
                 case DICT_ID:;
                     yyjson_mut_val *d = yyjson_mut_obj(doc);
                     yyjson_mut_obj_add_val(doc, node, key, d);
-                    stdQ_jsonQ_encode_dict(doc, d, (B_dict)v);
+                    stdQ_jsonQ_encode_dict(doc, d, (B_dict)v, bigint_as_string);
                     break;
                 case I8_ID:;
                     yyjson_mut_obj_add_int(doc, node, key, ((B_i8)v)->val);
@@ -97,7 +107,7 @@ void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict da
     }
 }
 
-void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data) {
+void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list data, bool bigint_as_string) {
     for (int i = 0; i < data->length; i++) {
         B_value v = data->data[i];
         if (v) {
@@ -114,10 +124,13 @@ void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_li
                 case STR_ID:;
                     yyjson_mut_arr_add_str(doc, node,  (char *)fromB_str((B_str)v));
                     break;
+                case BIGINT_ID:;
+                    yyjson_mut_arr_add_val(node, stdQ_jsonQ_encode_bigint(doc, (B_bigint)v, bigint_as_string));
+                    break;
                 case LIST_ID:;
                     yyjson_mut_val *l = yyjson_mut_arr_add_arr(doc, node);
                     if (l) {
-                        stdQ_jsonQ_encode_list_into(doc, l, (B_list)v);
+                        stdQ_jsonQ_encode_list_into(doc, l, (B_list)v, bigint_as_string);
                     } else {
                         // TODO: raise exception
                     }
@@ -125,7 +138,7 @@ void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_li
                 case DICT_ID:;
                     yyjson_mut_val *d = yyjson_mut_arr_add_obj(doc, node);
                     if (d) {
-                        stdQ_jsonQ_encode_dict(doc, d, (B_dict)v);
+                        stdQ_jsonQ_encode_dict(doc, d, (B_dict)v, bigint_as_string);
                     } else {
                         // TODO: raise exception
                     }
@@ -337,20 +350,17 @@ B_list stdQ_jsonQ__decode_list (B_str data) {
     return res;
 }
 
-B_str stdQ_jsonQ__encode (B_dict data, B_bool pretty) {
-    if (pretty == NULL)
-        pretty = B_False;
-
+B_str stdQ_jsonQ__encode (B_dict data, bool pretty, bool bigint_as_string) {
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(&stdQ_jsonQ_acton_alc);
     yyjson_mut_val *root = yyjson_mut_obj(doc);
     yyjson_mut_doc_set_root(doc, root);
 
-    stdQ_jsonQ_encode_dict(doc, root, data);
+    stdQ_jsonQ_encode_dict(doc, root, data, bigint_as_string);
 
     yyjson_write_err err;
     int flags = 0;
-    if (pretty == B_True)
+    if (pretty)
         flags += YYJSON_WRITE_PRETTY;
 
     char *json = yyjson_mut_write_opts(doc, flags, &stdQ_jsonQ_acton_alc, NULL, &err);
@@ -358,20 +368,17 @@ B_str stdQ_jsonQ__encode (B_dict data, B_bool pretty) {
     return to$str(json);
 }
 
-B_str stdQ_jsonQ__encode_list (B_list data, B_bool pretty) {
-    if (pretty == NULL)
-        pretty = B_False;
-
+B_str stdQ_jsonQ__encode_list (B_list data, bool pretty, bool bigint_as_string) {
     // Create JSON document
     yyjson_mut_doc *doc = yyjson_mut_doc_new(&stdQ_jsonQ_acton_alc);
     yyjson_mut_val *root = yyjson_mut_arr(doc);
     yyjson_mut_doc_set_root(doc, root);
 
-    stdQ_jsonQ_encode_list_into(doc, root, data);
+    stdQ_jsonQ_encode_list_into(doc, root, data, bigint_as_string);
 
     yyjson_write_err err;
     int flags = 0;
-    if (pretty == B_True)
+    if (pretty)
         flags += YYJSON_WRITE_PRETTY;
 
     char *json = yyjson_mut_write_opts(doc, flags, &stdQ_jsonQ_acton_alc, NULL, &err);

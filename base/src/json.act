@@ -4,10 +4,10 @@ def _decode(data: str) -> dict[str, ?value]:
 def _decode_list(data: str) -> list[?value]:
     NotImplemented
 
-def _encode(data: dict[str, ?value], pretty=False) -> str:
+def _encode(data: dict[str, ?value], pretty: bool, bigint_as_string: bool) -> str:
     NotImplemented
 
-def _encode_list(data: list[?value], pretty=False) -> str:
+def _encode_list(data: list[?value], pretty: bool, bigint_as_string: bool) -> str:
     NotImplemented
 
 
@@ -21,15 +21,21 @@ def decode_list(data: str) -> list[?value]:
     """
     return _decode_list(data)
 
-def encode(data: dict[str, ?value], pretty=False) -> str:
+def encode(data: dict[str, ?value], pretty=False, bigint_as_string=False) -> str:
     """Encode a dictionary into a JSON string
-    """
-    return _encode(data, pretty)
 
-def encode_list(data: list[?value], pretty=False) -> str:
-    """Encode a list into a JSON array string
+    Values of type bigint are encoded as JSON numbers by default. Set
+    bigint_as_string to encode them as JSON strings instead.
     """
-    return _encode_list(data, pretty)
+    return _encode(data, pretty, bigint_as_string)
+
+def encode_list(data: list[?value], pretty=False, bigint_as_string=False) -> str:
+    """Encode a list into a JSON array string
+
+    Values of type bigint are encoded as JSON numbers by default. Set
+    bigint_as_string to encode them as JSON strings instead.
+    """
+    return _encode_list(data, pretty, bigint_as_string)
 
 
 actor Json():
@@ -50,8 +56,8 @@ actor Json():
     action def decode_list(data: str) -> list[?value]:
         return _decode_list(data)
 
-    action def encode(data: dict[str, ?value], pretty=False) -> str:
-        return _encode(data, pretty)
+    action def encode(data: dict[str, ?value], pretty=False, bigint_as_string=False) -> str:
+        return _encode(data, pretty, bigint_as_string)
 
-    action def encode_list(data: list[?value], pretty=False) -> str:
-        return _encode_list(data, pretty)
+    action def encode_list(data: list[?value], pretty=False, bigint_as_string=False) -> str:
+        return _encode_list(data, pretty, bigint_as_string)
