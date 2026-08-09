@@ -7,7 +7,7 @@ static void *my_malloc(void *ctx, size_t size) {
     return acton_malloc(size);
 }
 
-static void *my_realloc(void *ctx, void *ptr, size_t size) {
+static void *my_realloc(void *ctx, void *ptr, size_t old_size, size_t size) {
     return acton_realloc(ptr, size);
 }
 
