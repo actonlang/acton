@@ -40,6 +40,62 @@ def _test_json_list_decode():
         testing.assertNotNone(e, "json.encode_list() returned None")
         testing.assertEqual(s, e, "JSON array roundtrip does not match")
 
+def _test_json_bigint_decode():
+    source = r"""{"foo":-18446744073709551617,"bar":18446744073709551616}"""
+    obj = json.decode(source)
+    foo = obj["foo"]
+    bar = obj["bar"]
+    testing.assertTrue(isinstance(foo, bigint), "negative JSON bigint decoded with the wrong type")
+    testing.assertTrue(isinstance(bar, bigint), "positive JSON bigint decoded with the wrong type")
+    if isinstance(foo, bigint):
+        testing.assertEqual(foo, bigint("-18446744073709551617"))
+    if isinstance(bar, bigint):
+        testing.assertEqual(bar, bigint("18446744073709551616"))
+    testing.assertEqual(json.encode(obj), source)
+
+    values = json.decode_list(r"""[-9223372036854775809,123456789012345678901234567890]""")
+    first = values[0]
+    second = values[1]
+    testing.assertTrue(isinstance(first, bigint), "JSON array bigint decoded with the wrong type")
+    testing.assertTrue(isinstance(second, bigint), "large JSON array bigint decoded with the wrong type")
+    if isinstance(first, bigint):
+        testing.assertEqual(first, bigint("-9223372036854775809"))
+    if isinstance(second, bigint):
+        testing.assertEqual(second, bigint("123456789012345678901234567890"))
+
+    real_values = json.decode_list(r"""[18446744073709551616.0,-18446744073709551617e0]""")
+    testing.assertTrue(isinstance(real_values[0], float), "large JSON decimal decoded with the wrong type")
+    testing.assertTrue(isinstance(real_values[1], float), "large JSON exponent decoded with the wrong type")
+
+    try:
+        json.decode_list(r"""[1e999]""")
+        testing.assertTrue(False, "out-of-range JSON float did not raise ValueError")
+    except ValueError:
+        pass
+
+def _test_json_bigint_encode():
+    positive = bigint("123456789012345678901234567890")
+    negative = bigint("-18446744073709551617")
+    obj = {"positive": positive, "nested": [negative]}
+    testing.assertEqual(
+        json.encode(obj),
+        r"""{"positive":123456789012345678901234567890,"nested":[-18446744073709551617]}"""
+    )
+    testing.assertEqual(
+        json.encode(obj, bigint_as_string=True),
+        r"""{"positive":"123456789012345678901234567890","nested":["-18446744073709551617"]}"""
+    )
+
+    values = [positive, {"negative": negative}]
+    testing.assertEqual(
+        json.encode_list(values),
+        r"""[123456789012345678901234567890,{"negative":-18446744073709551617}]"""
+    )
+    testing.assertEqual(
+        json.encode_list(values, bigint_as_string=True),
+        r"""["123456789012345678901234567890",{"negative":"-18446744073709551617"}]"""
+    )
+
 def _test_json_encode_fixed_size_int():
     d = {
         "int": 4,
@@ -73,5 +129,11 @@ actor _test_json_actor(t: testing.AsyncT):
     testing.assertNotNone(decoded_list, "Json actor decode_list() returned None")
     encoded_list = await async j.encode_list(decoded_list)
     testing.assertEqual(arr, encoded_list, "Json actor list round-trip mismatch")
+
+    bigint_obj = {"value": bigint("18446744073709551616")}
+    encoded_bigint = await async j.encode(bigint_obj)
+    testing.assertEqual(r"""{"value":18446744073709551616}""", encoded_bigint, "Json actor bigint encoding mismatch")
+    encoded_bigint_string = await async j.encode(bigint_obj, False, True)
+    testing.assertEqual(r"""{"value":"18446744073709551616"}""", encoded_bigint_string, "Json actor bigint string encoding mismatch")
 
     t.success()
