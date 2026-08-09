@@ -173,6 +173,18 @@ void stdQ_jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_li
 B_list stdQ_jsonQ_decode_arr(yyjson_val *);
 
 static B_value stdQ_jsonQ_decode_integer(yyjson_val *val) {
+    if (yyjson_is_raw(val)) {
+        size_t len = yyjson_get_len(val);
+        const char *raw = yyjson_get_raw(val);
+        for (size_t i = 0; i < len; i++) {
+            if (raw[i] == '.' || raw[i] == 'e' || raw[i] == 'E')
+                $RAISE((B_BaseException)B_ValueErrorG_new(to$str("JSON floating-point number is out of range")));
+        }
+        char *number = acton_malloc_atomic(len + 1);
+        memcpy(number, raw, len);
+        number[len] = '\0';
+        return (B_value)toB_bigint2(number);
+    }
     if (yyjson_get_subtype(val) == YYJSON_SUBTYPE_UINT) {
         uint64_t number = yyjson_get_uint(val);
         if (number > INT64_MAX)
@@ -194,6 +206,9 @@ B_dict stdQ_jsonQ_decode_obj(yyjson_val *obj) {
 
         switch (yyjson_get_type(val)) {
             case YYJSON_TYPE_NONE:;
+                break;
+            case YYJSON_TYPE_RAW:;
+                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), stdQ_jsonQ_decode_integer(val));
                 break;
             case YYJSON_TYPE_NULL:;
                 B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), B_None);
@@ -241,6 +256,9 @@ B_list stdQ_jsonQ_decode_arr(yyjson_val *arr) {
         switch (yyjson_get_type(val)) {
             case YYJSON_TYPE_NONE:
                 break;
+            case YYJSON_TYPE_RAW:;
+                wit->$class->append(wit, res, stdQ_jsonQ_decode_integer(val));
+                break;
             case YYJSON_TYPE_NULL:;
                 wit->$class->append(wit, res, B_None);
                 break;
@@ -280,7 +298,7 @@ B_list stdQ_jsonQ_decode_arr(yyjson_val *arr) {
 B_dict stdQ_jsonQ__decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &stdQ_jsonQ_acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
     B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
@@ -301,7 +319,7 @@ B_dict stdQ_jsonQ__decode (B_str data) {
 B_list stdQ_jsonQ__decode_list (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), 0, &stdQ_jsonQ_acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
     if (!doc) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
