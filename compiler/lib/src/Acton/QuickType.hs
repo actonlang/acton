@@ -46,6 +46,20 @@ expTypeOf env x                     = expanded env (typeOf env x)
 fxOf env x                          = fx
   where (t, fx, x')                 = qType env accept x
 
+-- Effects of the bound statements of a Let expression. Let suites are built
+-- internally (e.g. by the OptChain elimination in Types), so only the statement
+-- forms that can occur there are handled.
+fxSuite                             :: EnvF x -> Suite -> [Type]
+fxSuite env []                      = []
+fxSuite env (s : ss)                = fxStmt env s : fxSuite (define (envOf s) env) ss
+
+fxStmt                              :: EnvF x -> Stmt -> Type
+fxStmt env (Assign _ _ e)           = fxOf env e
+fxStmt env (MutAssign _ tg e)       = upbound env [fxMut, fxOf env tg, fxOf env e]
+fxStmt env (AugAssign _ tg _ e)     = upbound env [fxMut, fxOf env tg, fxOf env e]
+fxStmt env (Expr _ e)               = fxOf env e
+fxStmt env (Pass _)                 = fxPure
+
 typeInstOf env ts e                 = t
   where (t, fx, e')                 = qInst env accept ts e
 
@@ -186,7 +200,7 @@ instance QType Expr where
             (p, fxp, ps')           = qType env f ps
             (k, fxk, ks')           = qType env f ks
             fx'                     = upbound env [fx,fxp,fxk,effect t]
-    qType env f (Let l ss e)        = (t, fx, Let l ss e')
+    qType env f (Let l ss e)        = (t, upbound env (fx : fxSuite env ss), Let l ss e')
        where te                     = envOf ss
              (t,fx,e')              = qType (define te env) f e
     qType env f (Async l e)         = case expanded env t of

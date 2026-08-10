@@ -1,0 +1,19 @@
+# Postfix ! on an actor method call inside dict/list/set comprehensions.
+# https://github.com/actonlang/acton/issues/3056: the ! desugar binds the call
+# in a Let whose statement effects were dropped, so the generated comprehension
+# function was declared direct-style while its body was CPS-transformed, and
+# the emitted C failed to compile ($R returned as B_dict).
+
+actor Child():
+    def get_data() -> ?int:
+        return 42
+
+actor main(env):
+    children = {"a": Child()}
+    dres = {tag: c.get_data()! for tag, c in children.items()}
+    lres = [c.get_data()! for c in children.values()]
+    sres = {c.get_data()! for c in children.values()}
+    if dres["a"] == 42 and lres[0] == 42 and 42 in sres:
+        env.exit(0)
+    else:
+        env.exit(1)
