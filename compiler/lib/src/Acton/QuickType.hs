@@ -11,6 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
+{-# LANGUAGE FlexibleInstances #-}
 module Acton.QuickType where
 
 import Acton.Syntax
@@ -46,25 +47,12 @@ expTypeOf env x                     = expanded env (typeOf env x)
 fxOf env x                          = fx
   where (t, fx, x')                 = qType env accept x
 
--- Effects of the bound statements of a Let expression. Let suites are built
--- internally (e.g. by the OptChain elimination in Types), so only the statement
--- forms that can occur there are handled.
-fxSuite                             :: EnvF x -> Suite -> [Type]
-fxSuite env []                      = []
-fxSuite env (s : ss)                = fxStmt env s : fxSuite (define (envOf s) env) ss
-
-fxStmt                              :: EnvF x -> Stmt -> Type
-fxStmt env (Assign _ _ e)           = fxOf env e
-fxStmt env (MutAssign _ tg e)       = upbound env [fxMut, fxOf env tg, fxOf env e]
-fxStmt env (AugAssign _ tg _ e)     = upbound env [fxMut, fxOf env tg, fxOf env e]
-fxStmt env (Expr _ e)               = fxOf env e
-fxStmt env (Pass _)                 = fxPure
-
 typeInstOf env ts e                 = t
   where (t, fx, e')                 = qInst env accept ts e
 
 schemaOf env e                      = (sc, dec)
   where (sc, fx, dec, e')           = qSchema env accept e
+
 
 closedType                          :: EnvF x -> Expr -> Bool
 closedType env (Var _ n)            = isClosed $ findQName n env
@@ -200,9 +188,10 @@ instance QType Expr where
             (p, fxp, ps')           = qType env f ps
             (k, fxk, ks')           = qType env f ks
             fx'                     = upbound env [fx,fxp,fxk,effect t]
-    qType env f (Let l ss e)        = (t, upbound env (fx : fxSuite env ss), Let l ss e')
+    qType env f (Let l ss e)        = (t, upbound env [fx1, fx2], Let l ss' e')
        where te                     = envOf ss
-             (t,fx,e')              = qType (define te env) f e
+             (t,fx1,e')             = qType (define te env) f e
+             (_,fx2,ss')            = qType env f ss
     qType env f (Async l e)         = case expanded env t of
                                         TFun _ (TFX _ FXAction) p k t' -> (tFun fxProc p k (tMsg t'), fx, Async l e')
       where (t, fx, e')             = qType env f e
@@ -364,6 +353,29 @@ instance QType Comp where
     qType env f NoComp              = (tNone, fxPure, NoComp)
 
     qMatch f t t' c                 = c
+
+instance QType [Stmt] where
+    qType env f []                  = (tNone, fxPure, [])
+    qType env f (s:ss)              = (t, upbound env [fx1,fx2], s':ss')
+      where (_,fx1,s')              = qType env f s
+            (t,fx2,ss')             = qType (define (envOf s) env) f ss
+
+    qMatch f t t' ss                = ss
+
+instance QType Stmt where
+    qType env f (Assign l ps e)     = (tNone, fx, Assign l ps e')
+      where (_, fx, e')             = qType env f e
+    qType env f (MutAssign l tg e)  = (tNone, upbound env [fx1,fx2], MutAssign l tg' e')
+      where (_, fx1, e')            = qType env f e
+            (_, fx2, tg')           = qType env f tg
+    qType env f (AugAssign l tg o e) = (tNone, upbound env [fx1,fx2], AugAssign l tg' o e')
+      where (_, fx1, e')            = qType env f e
+            (_, fx2, tg')           = qType env f tg
+    qType env f (Expr l e)          = (tNone, fx, Expr l e')
+      where (_, fx, e')             = qType env f e
+    qType env f s                   = (tNone, fxPure, s)
+
+    qMatch f t t' s                 = s
 
 
 
