@@ -1,0 +1,54 @@
+# Forced unwrapping (!) and optional chaining (?) on optional named tuples,
+# in particular `!` chained directly into a tuple field selection, which used
+# to crash the compiler ("Non-exhaustive patterns" in QuickType upbound).
+
+def force_key(x: ?(key: bytes, value: bytes)) -> bytes:
+    return x!.key
+
+def opt_key(x: ?(key: bytes, value: bytes)) -> ?bytes:
+    return x?.key
+
+def nested(x: ?(a: (b: int, c: str), d: str)) -> int:
+    return x!.a.b
+
+def plain_unwrap(x: ?(key: bytes, value: bytes)) -> (key: bytes, value: bytes):
+    return x!
+
+def force_pos(x: ?(int, str)) -> int:
+    return x!.0
+
+def opt_pos(x: ?(int, str)) -> ?str:
+    return x?.1
+
+actor main(env):
+    if force_key((key=b"k", value=b"v")) != b"k":
+        print("force_key is wrong")
+        env.exit(1)
+    if opt_key((key=b"o", value=b"v")) != b"o":
+        print("opt_key is wrong")
+        env.exit(1)
+    if opt_key(None) is not None:
+        print("opt_key(None) is wrong")
+        env.exit(1)
+    if nested((a=(b=42, c="x"), d="y")) != 42:
+        print("nested is wrong")
+        env.exit(1)
+    if plain_unwrap((key=b"p", value=b"q")).key != b"p":
+        print("plain_unwrap is wrong")
+        env.exit(1)
+    if force_pos((7, "s")) != 7:
+        print("force_pos is wrong")
+        env.exit(1)
+    if opt_pos((7, "s")) != "s":
+        print("opt_pos is wrong")
+        env.exit(1)
+    if opt_pos(None) is not None:
+        print("opt_pos(None) is wrong")
+        env.exit(1)
+    try:
+        force_key(None)
+        print("force_key(None) did not raise")
+        env.exit(1)
+    except ValueError:
+        pass
+    env.exit(0)

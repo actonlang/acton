@@ -2213,7 +2213,7 @@ instance Infer Expr where
                                             let env1 = define [(x,NVar te)] env
                                             (cs2,t,e2') <- infer env1 e2
                                             y <- newTmp
-                                            (cs3,t',e3) <- alt t te b
+                                            (cs3,t',e3) <- alt t b
                                             return (cs1++cs2++cs3,
                                                      t', eLet [sAssign (pVar y (tOpt te)) e1']
                                                                            (eCond (termsubst [(x,eCAST (tOpt te) te (eVar y))] e2')
@@ -2221,14 +2221,17 @@ instance Infer Expr where
                                                                                   e3))
       where split x (Opt l e b)         = (b, e, eVar x)
             split x (Dot l e n)         = (b, e1,Dot l e2 n) where (b,e1,e2) = split x e
+            split x (DotI l e i)        = (b, e1,DotI l e2 i) where (b,e1,e2) = split x e
+            split x (Rest l e n)        = (b, e1,Rest l e2 n) where (b,e1,e2) = split x e
+            split x (RestI l e i)       = (b, e1,RestI l e2 i) where (b,e1,e2) = split x e
             split x (Call l f ps ks)    = (b, e1,Call l e2 ps ks) where (b,e1,e2) = split x f
             split x (Index l e ix)      = (b, e1,Index l e2 ix) where (b,e1,e2) = split x e
             split x (Slice l e sz)      = (b, e1,Slice l e2 sz) where (b,e1,e2) = split x e
-            alt t te True               = do w <- newWitness
+            alt t True                  = do w <- newWitness
                                              w1 <- newWitness
                                              t1 <- newUnivar env
                                              return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
-            alt t te False              = return ([],t,eCall (tApp (eQVar primRaiseValueError) [te]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
+            alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
  
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
