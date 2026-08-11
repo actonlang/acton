@@ -1,0 +1,9 @@
+Building file test/typeerrors/narrowing_escape_isinstance.act using temporary scratch directory
+   narrowing_escape_isinstance  Parse done                                                               0.000 s
+[error]: Attribute not found hello
+     +--> narrowing_escape_isinstance.act@23:28-23:33
+     |
+  23 |                 return obj.hello()
+     :                            ^---- 
+     :                            `- Attribute not found hello
+-----+

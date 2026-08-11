@@ -1,0 +1,13 @@
+Building file test/typeerrors/narrowing_escape_def.act using temporary scratch directory
+   narrowing_escape_def  Parse done                                                               0.000 s
+[error]: Constraint violation
+     +--> narrowing_escape_def.act@15:24-15:39
+     |
+   5 | def want_str(s: str) -> str:
+     :     ^------- 
+     :     `- want_str is defined here
+     :
+  15 |                 return want_str(state)
+     :                        ^--------------
+     :                        `- Type incompatibility between definition of and call of want_str (?__builtin__.str must be a subclass of __builtin__.str)
+-----+

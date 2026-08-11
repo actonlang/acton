@@ -31,8 +31,15 @@ termred eq s                            = --trace ("### equations:\n" ++ render 
                                           trans env0{ eqns = eq } s
 
 termsubst                               :: (Transform a) => [(Name,Expr)] -> a -> a
-termsubst [] x                          = x
-termsubst s x                           = trans (finalize $ extsubst s env0) x
+termsubst                               = termsubstFenced []
+
+-- Like termsubst, but entries for the names in ns are dropped when the
+-- traversal enters a def or a lambda. Type inference uses this for narrowing
+-- casts on mutable state variables, whose narrowing does not extend into
+-- closures (see unNarrow in Acton.TypeEnv).
+termsubstFenced                         :: (Transform a) => [Name] -> [(Name,Expr)] -> a -> a
+termsubstFenced ns [] x                 = x
+termsubstFenced ns s x                  = trans (finalize $ extsubst s env0{ fenced = ns }) x
 
 class Transform a where
     trans                               :: TransEnv -> a -> a
@@ -43,10 +50,13 @@ data TransEnv                           = TransEnv {
                                             eqns     :: Equations,                  -- Top-level constraint solutions
                                             trsubst  :: TSubst,                     -- Inlineable assignments and scope blockers
                                             witscope :: [(Name,Type,Expr)],         -- Preserved witness bindings in scope, for the purpose of duplicate removals
+                                            fenced   :: [Name],                     -- Substitutions dropped when entering a def or lambda
                                             final    :: Bool
                                           }
 
-env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = [], final = False }
+env0                                    = TransEnv{ eqns = [], trsubst = M.empty, witscope = [], fenced = [], final = False }
+
+enterFenced env                         = env{ trsubst = foldr M.delete (trsubst env) (fenced env), fenced = [] }
 
 blockscope ns env                       = env{ trsubst = foldr (`M.insert` Nothing) (trsubst env) ns }
 
@@ -119,9 +129,9 @@ instance Transform Stmt where
 instance Transform Decl where
     trans env (Def l n q p k t b d fx doc)
                                         = Def l n q (trans env1 p) (trans env1 k) t (wtrans env1 b) d fx doc
-      where env1                        = blockscope (bound p ++ bound k) env
+      where env1                        = blockscope (bound p ++ bound k) (enterFenced env)
     trans env (Actor l n q p k b doc)   = Actor l n q (trans env1 p) (trans env1 k) (wtrans env1 b) doc
-      where env1                        = blockscope (bound p ++ bound k) env
+      where env1                        = blockscope (bound p ++ bound k) (enterFenced env)
     trans env (Class l n q us b doc)    = Class l n q us (wtrans env b) doc
     trans env (Protocol l n q us b doc) = Protocol l n q us (wtrans env b) doc
     trans env (Typedef l n q t doc)     = Typedef l n q t doc
@@ -188,7 +198,7 @@ instance Transform Expr where
       | otherwise                       = eta $ Lambda l (trans env1 $ prename s p) (trans env1 $ krename s k) (trans env1 $ erename s e) fx
       where fvs                         = free e
             bvs                         = bound p ++ bound k
-            env1                        = limsubst bvs env
+            env1                        = limsubst bvs (enterFenced env)
             clash                       = bvs `intersect` free (trfinds fvs env1)
             s                           = clash `zip` (yNames \\ (fvs++bvs))
             e1                          = Lambda l (prename s p) (krename s k) (erename s e) fx

@@ -769,7 +769,7 @@ instance InfEnv Stmt where
     infEnv env (While l e b els)        = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te1,b') <- infSuiteEnv env' b
                                              (cs3,te2,els') <- infSuiteEnv env els
-                                             return (cs1++cs2++cs3, [], While l e' (termsubst s b') els')
+                                             return (cs1++cs2++cs3, [], While l e' (narrowsubst env' s b') els')
     infEnv env (For l p e b els)
       | nodup p                         = do (te,t1,p') <- infEnvT env p
                                              t2 <- newUnivar env
@@ -1758,7 +1758,7 @@ instance Check Decl where
                                              let body = bindWits eq1 ++ defaultsP p' ++ defaultsK k' ++ b'
                                              (cs1,def) <- matchDefAssumption env cs0 (Def l n q p' k' (Just t) body dec fx' ddoc)
                                              return (cs1, def{ pos = noDefaultsP (pos def), kwd = noDefaultsK (kwd def) })
-      where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ tydefineVars q env
+      where env1                        = reserve (bound (p,k) ++ assigned b \\ stateScope env) $ tydefineVars q $ unNarrow env
             fx'                         = fxUnwrap env fx
 
     checkEnv env (Actor l n q p k b ddoc)
@@ -1901,7 +1901,7 @@ noDefaultsK k                           = k
 instance InfEnv Branch where
     infEnv env (Branch e b)             = do (cs1,env',s,_,e') <- inferTest env e
                                              (cs2,te,b') <- infEnv env' b
-                                             return (cs1++cs2, te, Branch e' (termsubst s b'))
+                                             return (cs1++cs2, te, Branch e' (narrowsubst env' s b'))
 
 instance InfEnv WithItem where
     infEnv env (WithItem e Nothing)     = do (cs,t,e') <- infer env e
@@ -2012,7 +2012,7 @@ instance Infer Expr where
                                              (cs0,env',s,_,e') <- inferTest env e
                                              (cs1,e1') <- inferSub env' t0 e1
                                              (cs2,e2') <- inferSub env t0 e2
-                                             return (cs0++cs1++cs2, t0, Cond l (termsubst s e1') e' e2')
+                                             return (cs0++cs1++cs2, t0, Cond l (narrowsubst env' s e1') e' e2')
     infer env (IsInstance l e c)        = case findQName c env of
                                              NClass q _ _ _ -> do
                                                 (cs,t,e') <- infer env e
@@ -2257,7 +2257,7 @@ instance Infer Expr where
                                              popFX
                                              return (cs0++cs1++cs2, tFun fx (prowOf p') (krowOf k') t, Lambda l (noDefaultsP p') (noDefaultsK k') e' fx)
                                                      -- TODO: replace defaulted params with Conds
-      where env1                        = reserve (bound (p,k)) env
+      where env1                        = reserve (bound (p,k)) (unNarrow env)
     infer env e@Yield{}                 = notYetExpr e
     infer env e@YieldFrom{}             = notYetExpr e
     infer env (Tuple l pargs kargs)     = do (cs1,prow,pargs') <- infer env pargs
@@ -2271,7 +2271,7 @@ instance Infer Expr where
                                              t0 <- newUnivar env
                                              (cs2,es) <- infElems env' [e] t0
                                              let [e'] = es
-                                             return (cs1++cs2, tList t0, ListComp l (termsubst s e') co')
+                                             return (cs1++cs2, tList t0, ListComp l (narrowsubst env' s e') co')
     infer env (Set l es)                = do t0 <- newUnivar env
                                              (cs,es')  <- infElems env es t0
                                              w <- newWitness
@@ -2283,7 +2283,7 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Elem v = head es
                                                  e' = Elem (annot (tHashableW t0) (eVar w) t0 v)
-                                             return (Proto (locinfo l 89) env w t0 pHashable : cs1++cs2, tSet t0, SetComp l (termsubst s e') co')
+                                             return (Proto (locinfo l 89) env w t0 pHashable : cs1++cs2, tSet t0, SetComp l (narrowsubst env' s e') co')
     infer env (Dict l as)               = do tk <- newUnivar env
                                              tv <- newUnivar env
                                              (cs,as') <- infAssocs env as tk tv
@@ -2297,7 +2297,7 @@ instance Infer Expr where
                                              w <- newWitness
                                              let Assoc k v = head as
                                                  a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
-                                             return (Proto (locinfo l 90) env w tk pHashable : cs1++cs2, tDict tk tv, DictComp l (termsubst s a') co')
+                                             return (Proto (locinfo l 90) env w tk pHashable : cs1++cs2, tDict tk tv, DictComp l (narrowsubst env' s a') co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
@@ -2362,7 +2362,7 @@ inferTest env (BinOp l e1 And e2)       = do (cs1,env1,s1,t1,e1') <- inferTest e
                                              w1 <- newWitness
                                              w2 <- newWitness
                                              return (Sub (locinfo' l 91 e1) env w1 t1 t : Sub (locinfo' l 92 e2) env w2 t2 t :
-                                                     cs1++cs2, env2, s1++s2, t, BinOp l (eCall (eVar w1) [e1']) And (eCall (eVar w2) [termsubst s1 e2']))
+                                                     cs1++cs2, env2, s1++s2, t, BinOp l (eCall (eVar w1) [e1']) And (eCall (eVar w2) [narrowsubst env1 s1 e2']))
 inferTest env (BinOp l e1 Or e2)        = do (cs1,_,_,t1,e1') <- inferTest env e1
                                              (cs2,_,_,t2,e2') <- inferTest env e2
                                              t <- newUnivar env
@@ -2378,7 +2378,7 @@ inferTest env (CompOp l e [OpArg IsNot None{}])
                                              let e' = eCall (tApp (eQVar primISNOTNONE) [t]) [e1]
                                              case e of
                                                Var _ (NoQ n) ->
-                                                  return (cs1, define [(n,NVar t)] env, sCast n (tOpt t) t, tBool, e')
+                                                  return (cs1, narrowName n (NVar t) env, sCast n (tOpt t) t, tBool, e')
                                                _ ->
                                                  return (cs1, env, [], tBool, e')
 inferTest env (CompOp l e [OpArg Is None{}])
@@ -2391,7 +2391,7 @@ inferTest env (IsInstance l e@(Var _ (NoQ n)) c)
                                                 (cs,t,e') <- infer env e
                                                 ts <- newUnivars env [ tvkind v | v <- qbound q ]
                                                 let tc = tCon (TC c ts)
-                                                return (cs, define [(n,NVar tc)] env, sCast n t tc, tBool, IsInstance l e' c)
+                                                return (cs, narrowName n (NVar tc) env, sCast n t tc, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
 inferTest env (Paren l e)               = do (cs,env',s,t,e') <- inferTest env e
                                              return (cs, env', s, t, Paren l e')
@@ -2400,6 +2400,12 @@ inferTest env e                         = do (cs,t,e') <- infer env e
 
 
 sCast n t t'                            = [(n, eCAST t t' (eVar n))]
+
+-- Apply the narrowing substitution s to x. Entries for mutable state
+-- variables are fenced off from def bodies and lambdas, whose inference
+-- restores the un-narrowed bindings (see unNarrow in Acton.TypeEnv).
+narrowsubst env s x                     = termsubstFenced [ n | (n,_) <- s, n `elem` ns ] s x
+  where ns                              = dom (narrowedSVars env)
 
 inferSlice env (Sliz l e1 e2 e3)        = do (cs1,e1') <- inferSub env tInt e1
                                              (cs2,e2') <- inferSub env tInt e2
@@ -2484,7 +2490,7 @@ instance Infer KwdArg where
 infComp env NoComp                      = return ([], env, [], NoComp)
 infComp env (CompIf l e c)              = do (cs1,env1,s,_,e') <- inferTest env e
                                              (cs2,env2,s',c') <- infComp env1 c
-                                             return (cs1++cs2, env2, s++s', CompIf l e' (termsubst s c'))
+                                             return (cs1++cs2, env2, s++s', CompIf l e' (narrowsubst env1 s c'))
 infComp env (CompFor l p e c)           = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p
                                              t2 <- newUnivar env
                                              (cs2,e') <- inferSub env t2 e

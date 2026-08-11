@@ -46,6 +46,34 @@ def residence_name(person: ?Person) -> ?str:
 Each access is guarded by a test that rules out `None` before the next
 access.
 
+Narrowing of a mutable actor variable (`var`) does not extend into
+nested function definitions. A nested `def` reads the actor variable at
+the time it is called, and by then the value may have changed, so the
+test that guarded the definition says nothing about the value the
+function will actually see. Inside the nested function the variable
+keeps its declared optional type. When the function needs the tested
+value, bind it to a local name inside the branch and use that instead:
+a local is captured by value when the nested function is created.
+
+```python
+actor Cache(env):
+    var current: ?str = None
+    var render: ?proc() -> str = None
+
+    def install() -> None:
+        if current is not None:
+            value = current
+            def render_current() -> str:
+                return value.upper()
+            render = render_current
+```
+
+Using `current` directly inside `render_current` is a compile-time
+error: `current` still has type `?str` there. The local `value` holds
+the string the test actually saw, and it does not change even if
+`current` is later reset to `None`. The same rule applies to
+`isinstance` narrowing of actor variables.
+
 ## Optional chaining
 
 Optional chaining is a shorter way to keep `None` flowing through a

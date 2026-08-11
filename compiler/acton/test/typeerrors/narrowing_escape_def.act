@@ -1,0 +1,24 @@
+# A nested def reads a mutable actor variable at call time, so the narrowing
+# from the enclosing test must not apply inside it: the closure can escape the
+# branch and run after the variable was reset to None.
+
+def want_str(s: str) -> str:
+    return s
+
+actor main(env):
+    var state: ?str = None
+    var saved_cb: ?proc() -> str = None
+
+    def m() -> None:
+        if state is not None:
+            def cb() -> str:
+                return want_str(state)
+            saved_cb = cb
+
+    state = "hi"
+    m()
+    state = None
+    cb1 = saved_cb
+    if cb1 is not None:
+        print(cb1())
+    env.exit(0)

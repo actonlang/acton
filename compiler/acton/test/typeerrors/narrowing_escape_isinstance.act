@@ -1,0 +1,32 @@
+# isinstance narrowing of a mutable actor variable must not extend into a
+# nested def either: the variable may be rebound to a value of another class
+# before the closure runs, so treating it as the refined class inside the
+# closure is unsound (calling a method the object does not have).
+
+class Base(object):
+    def __init__(self):
+        pass
+
+class Derived(Base):
+    def __init__(self):
+        pass
+    def hello(self) -> str:
+        return "Derived"
+
+actor main(env):
+    var obj: Base = Base()
+    var saved: ?proc() -> str = None
+
+    def m() -> None:
+        if isinstance(obj, Derived):
+            def cb() -> str:
+                return obj.hello()
+            saved = cb
+
+    obj = Derived()
+    m()
+    obj = Base()
+    cb1 = saved
+    if cb1 is not None:
+        print(cb1())
+    env.exit(0)

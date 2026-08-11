@@ -1,0 +1,55 @@
+# Narrowing of a mutable actor variable ('var') does not extend into nested
+# defs: a nested def reads the variable at call time, so a closure created
+# under 'x is not None' could otherwise observe a later reset to None while
+# typed non-optional (see typeerrors/narrowing_escape_def.act for the
+# rejected form). This test pins the forms that must keep working:
+#  - straight-line use of the narrowed variable in the guarded branch,
+#    including comprehensions and conditional expressions
+#  - the snapshot pattern: bind the narrowed value to a local inside the
+#    branch and close over the local, which is captured by value at closure
+#    creation and keeps its value when the state variable is reset
+#  - narrowing established inside the closure body itself
+
+def want_str(s: str) -> str:
+    return s
+
+def check_equal(env: Env, a: str, b: str) -> None:
+    if a != b:
+        print(a, "is not equal to", b)
+        env.exit(1)
+
+actor main(env):
+    var state: ?str = None
+    var saved_cb: ?proc() -> str = None
+
+    def make_cb() -> None:
+        if state is not None:
+            check_equal(env, want_str(state), "hi")
+            parts = [want_str(state) + str(i) for i in range(2)]
+            check_equal(env, parts[0], "hi0")
+            check_equal(env, parts[1], "hi1")
+            cond = want_str(state) if state is not None else "none"
+            check_equal(env, cond, "hi")
+            s = state
+            def cb() -> str:
+                return want_str(s)
+            saved_cb = cb
+
+    def renarrow() -> str:
+        # A fresh test inside the def body runs in the same activation as the
+        # use, so narrowing inside the body itself is fine.
+        if state is not None:
+            return want_str(state)
+        return "gone"
+
+    state = "hi"
+    make_cb()
+    state = None
+    check_equal(env, renarrow(), "gone")
+    cb1 = saved_cb
+    if cb1 is not None:
+        # The snapshot local was captured while state was "hi"; resetting the
+        # state variable afterwards must not reach the closure.
+        check_equal(env, cb1(), "hi")
+        env.exit(0)
+    env.exit(1)

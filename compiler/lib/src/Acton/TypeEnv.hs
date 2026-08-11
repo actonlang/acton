@@ -66,7 +66,8 @@ data TypeX                      = TypeX {
                                     typrotos    :: IntSet,
                                     tyactors    :: IntSet,
                                     tyconAttrs  :: TyAttrMap,
-                                    typrotoAttrs:: TyAttrMap
+                                    typrotoAttrs:: TyAttrMap,
+                                    narrowed    :: TEnv
                                   }
 
 data TyInfo                     = TyInfo {
@@ -102,7 +103,8 @@ initTypeEnv env0                = setX env0 x0
                                     typrotos    = IntSet.empty,
                                     tyactors    = IntSet.empty,
                                     tyconAttrs  = Map.empty,
-                                    typrotoAttrs= Map.empty
+                                    typrotoAttrs= Map.empty,
+                                    narrowed    = []
                                   }
 
 
@@ -124,6 +126,28 @@ tyinfos0                        = IntMap.fromDistinctAscList pairs
         wFun                    = tFun tWild tWild tWild tWild
         wTuple                  = tTuple tWild tWild
         wOpt                    = tOpt tWild
+
+-- A narrowing test ('x is not None', 'isinstance(x,C)') rebinds x to its
+-- narrowed type for the duration of the guarded code. When x is a mutable
+-- state variable its original binding is recorded in 'narrowed' as well:
+-- def bodies and lambdas read state variables by live reference at call
+-- time, so a narrowing established outside them cannot be trusted inside,
+-- and inference of such scopes restores the recorded bindings (unNarrow).
+
+narrowedSVars                   :: Env -> TEnv
+narrowedSVars env               = narrowed (envX env)
+
+narrowName                      :: Name -> NameInfo -> Env -> Env
+narrowName n ni env             = case findName n env of
+                                    ni0@NSVar{} | n `notElem` dom (narrowedSVars env)
+                                                -> define [(n,ni)] (modX env $ \x -> x{ narrowed = (n,ni0) : narrowed x })
+                                    _           -> define [(n,ni)] env
+
+unNarrow                        :: Env -> Env
+unNarrow env
+  | null te                     = env
+  | otherwise                   = define te (modX env $ \x -> x{ narrowed = [] })
+  where te                      = narrowedSVars env
 
 instance Show TypeX where
     show _                      = ""
