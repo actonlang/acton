@@ -191,7 +191,7 @@ struct udp_send_req_state {
 };
 
 static void udp_call_receive($WORD cb, $WORD actor, B_bytes data, B_str address, B_int port) {
-    ((B_Msg (*)($WORD, $WORD, $WORD, $WORD, $WORD))(($action)cb)->$class->__asyn__)(cb, actor, data, address, port);
+    ((B_Future (*)($WORD, $WORD, $WORD, $WORD, $WORD))(($action)cb)->$class->__asyn__)(cb, actor, data, address, port);
 }
 
 static int sockaddr_to_addr_port(const struct sockaddr *addr, char *addrbuf, size_t addrbuf_len, int *port) {

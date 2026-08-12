@@ -21,7 +21,7 @@ class Apa ($Actor, __builtin__.value):
         print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
         proc def C_3cont (C_4res : __builtin__.int) -> $R:
             v: __builtin__.int = C_4res
-            m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
+            m: __builtin__.Future[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
             N_tmp: __builtin__.int = W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
             return $R_CONTc@[__builtin__.int](C_cont, N_tmp)
         return $AWAITc@[__builtin__.int](C_3cont, (async cb)(W_Apa_39.__fromatom__(1)))
@@ -53,7 +53,7 @@ class main ($Actor, __builtin__.value):
     @property
     b : Bepa
     @property
-    x : __builtin__.Msg[__builtin__.int]
+    x : __builtin__.Future[__builtin__.int]
     @property
     r : __builtin__.int
     proc def __init__ (self : Self, C_cont : proc(None) -> $R, env : __builtin__.Env) -> $R:

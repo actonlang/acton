@@ -26,7 +26,7 @@
 #define BYTEARRAY_ID 12
 #define BYTES_ID 13
 #define ITEM_ID 14
-#define MSG_ID 15
+#define FUTURE_ID 15
 #define ACTOR_ID 16
 #define CATCHER_ID 17
 #define SLICE_ID 18   // Adding SLICE_ID by using a gap in the numbering...
@@ -90,13 +90,15 @@
 #define WEQNONE_ID 68
 #define IDENTITYACTOR_ID 69
 
-#define PREASSIGNED 72
+#define MSG_ID 72     // transport envelope B_Msg (RTS-internal, see rts.h)
+
+#define PREASSIGNED 73
 
 
 /*
- * Register the builtin classes (those with the above class id's except MSG_ID  -- CONSTCONT_ID).
+ * Register the builtin classes (those with the above class id's except FUTURE_ID  -- CONSTCONT_ID and MSG_ID).
  * This must be the first registration call, since it also initializes the data structures containing the mapping.
- * This call does *not* register the rts class id's MSG_ID  -- CONSTCONT_ID, which must be registered by
+ * This call does *not* register the rts class id's FUTURE_ID  -- CONSTCONT_ID and MSG_ID, which must be registered by
  * a call to register_rts in rts.h.
  */
 

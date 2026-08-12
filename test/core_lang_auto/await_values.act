@@ -12,10 +12,11 @@
 #    itself — a rewrite that ships results as messages must not confuse a
 #    None payload with "no result yet"; that confusion parks main at this
 #    await and is bounded by the Watchdog actor.
-#  - Effect visibility: bump() and effects_seen() are tail-appended to
-#    Prod's FIFO mailbox across two successive parks of main, so
-#    effects_seen() must observe bump()'s write (n == 1) — mailbox FIFO
-#    ordering across await boundaries.
+#  - Effect visibility: effects_seen() must observe bump()'s write (n == 1).
+#    The guarantee is completion-before-wake: the $RDONE wake fires only
+#    after bump's turn (and its effect) completed, and main issues the
+#    effects_seen envelope only after that wake — the two envelopes are
+#    never both pending in Prod's mailbox.
 
 actor Watchdog(env):
     after 10.0: env.exit(1)

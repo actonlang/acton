@@ -4,16 +4,18 @@
 #
 # RTS coverage:
 #  - Deterministic pending registration at every level: each sync call
-#    ($ASYNCf+$AWAITf -> $RWAIT) runs ADD_waiting BEFORE
-#    reverse_outgoing_queue/FLUSH_outgoing_local, so the caller is on the
-#    callee message's waiter list before the callee can possibly run: no
-#    interleaving reaches the frozen arms here.
+#    ($ASYNCf+$AWAITf -> $RWAIT) runs ADD_waiting on the call's future BEFORE
+#    FLUSH_outgoing_local delivers the buffered envelopes (reverse_outgoing_queue
+#    only restores program order first), so the caller is on the future's
+#    waiter list before the callee can possibly run: no interleaving reaches
+#    the frozen arms here.
 #  - Simultaneous park chain: while Leaf computes, main->$waitsfor,
 #    Top->$waitsfor and Mid->$waitsfor are all set; Top and Mid are each at
-#    once ON a waiter list (of their callee's message) and HOLDING a waiter
-#    list (on their own in-progress message) — the dual role an owner-local
+#    once ON a waiter list (of their callee call's future) and HOLDING a
+#    waiter list (on the future their own in-progress envelope fulfills) — the
+#    dual role an owner-local
 #    waiter redesign must preserve.
-#  - Unwind: three $RDONE freeze+single-waiter-wake sequences in strict LIFO
+#  - Unwind: three $RDONE future-freeze+single-waiter-wake sequences in strict LIFO
 #    order, each writing its value into the next parked frame's value slot
 #    and ENQ_readying exactly one actor. The +1 per hop makes any
 #    wrong-frame value write (cross-wiring) visible in the final sum.

@@ -1,13 +1,13 @@
 # The $RFAIL waiter propagation loop with SEVERAL registered waiters: one
-# failing message, three pending waiters, each woken with the exception
+# failing call's future, three pending waiters, each woken with the exception
 # exactly once and each catching it independently.
 #
 # RTS coverage:
 #  - Registration as in await_fan_in: trivial-init Waiters, go() fired async,
 #    three ADD_waiting pending registrations building a 3-deep waiter chain
-#    on boom()'s message (spin margin keeps it unresolved).
+#    on boom()'s future (spin margin keeps it PENDING).
 #  - Target path: boom() raises -> $R_FAIL -> $RFAIL no-catcher arm freezes
-#    the message as an exception and the propagation loop walks all three
+#    the future as FUT_EXCEPTION and the propagation loop walks all three
 #    waiters, writing $Fail$instance + the exception into each parked go
 #    frame and ENQ_readying each. This is the only test where that loop
 #    iterates more than once. No "Unhandled exception" notice: waiters exist.

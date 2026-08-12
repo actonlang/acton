@@ -350,7 +350,7 @@ instance Lift Expr where
       | closedType env e                = do e <- ll env e
                                              let vts = restrict (locals env) (free e)
                                                  call = Call l0 (eDot e attr_asyn_) (pArg par) KwdNil
-                                             closureConvert env (Lambda l0 par KwdNIL call fxProc) (tMsg t) vts (map (eVar . fst) vts)
+                                             closureConvert env (Lambda l0 par KwdNIL call fxProc) (tFuture t) vts (map (eVar . fst) vts)
       | otherwise                       = do e <- ll env e
                                              return $ Async l e
       where par                         = pPar paramNames p

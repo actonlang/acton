@@ -1,4 +1,4 @@
-# The N-waiter wake loop: four actors registered on ONE unresolved message,
+# The N-waiter wake loop: four actors registered on ONE pending future,
 # all woken by a single completion, each exactly once.
 #
 # RTS coverage:
@@ -6,10 +6,10 @@
 #    __init__ (newact = $ASYNCf(init)+$AWAITf), so the inits are kept trivial
 #    and go() is fired with `async`, letting all four go() turns run
 #    concurrently. Each takes the $RWAIT pending arm: ADD_waiting pushes the
-#    waiter onto the message's singly-linked waiter list (linked through the
-#    waiters' own $next fields), guarded by the message's wait lock; the spin
-#    margin keeps produce unresolved throughout.
-#  - Target path: produce's $RDONE runs FREEZE_waiting once and the wake loop
+#    waiter onto the future's singly-linked waiter list (linked through the
+#    waiters' own $next fields), guarded by the future's $wait_lock; the spin
+#    margin keeps the future PENDING throughout.
+#  - Target path: produce's $RDONE freezes the future (FUT_VALUE) once and the wake loop
 #    walks the 4-deep waiter chain: for each waiter it writes 42 into the
 #    waiter's parked go frame, clears $waitsfor, and ENQ_readys it. This is
 #    the only test where that loop iterates more than once for a value.

@@ -265,7 +265,7 @@ decl env (Class _ n q a b ddoc)     = (text "struct" <+> classname env n <+> cha
                                       char '}' <> semi
         initNotImpl                 = any hasNotImpl [ b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
-                                    = repType env (exposeMsg fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
+                                    = repType env (exposeFuture fx t) <+> genTopName env n <+> parens (repParams env $ prowOf p) <> semi
 decl env Typedef{}                  = empty
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
@@ -296,7 +296,7 @@ methodDefStub env (Def _ n q p KwdNIL (Just t) _ d fx _)
             NClass q _ _ _ <- findQName (NoQ c) env
                                     = Just $ B.rtypeOf env (TC (NoQ c) (map tVar $ qbound q)) n0
         methodType n                = B.generalType env (methnm n)
-        t2                          = exposeMsg fx t
+        t2                          = exposeFuture fx t
         t3                          = settype env (rawReturn (restype t1)) t2
         rawReturn TUnboxed{}        = True
         rawReturn _                 = False
@@ -317,14 +317,14 @@ funsig env n (TFun _ _ r _ t)       = repType env t <+> parens (char '*' <> gen 
 funsig env n t                      = varsig env n t
 
 funsig2 :: GenEnv -> Maybe Name -> Type -> Doc
-funsig2 env mbn (TFun _ fx p _ t)   = repType env (exposeMsg fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env p)
+funsig2 env mbn (TFun _ fx p _ t)   = repType env (exposeFuture fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env p)
 
-methsig env c n (TFun _ fx r _ t)   = repType env (exposeMsg fx t) <+> parens (char '*' <> gen env n) <+> parens (repParams env $ posRow (tCon c) r)
+methsig env c n (TFun _ fx r _ t)   = repType env (exposeFuture fx t) <+> parens (char '*' <> gen env n) <+> parens (repParams env $ posRow (tCon c) r)
 methsig env c n t                   = varsig env n t
 
 methsig2 :: GenEnv -> TCon -> Maybe Name -> Type -> Doc
 methsig2 env c mbn (TFun _ fx p _ t)
-                                    = repType env (exposeMsg fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env (posRow (tCon c) p))         
+                                    = repType env (exposeFuture fx t) <+> parens (char '*' <> maybe empty (gen env) mbn) <+> parens (repParams env (posRow (tCon c) p))
 
 {-
 params env (TNil _ _)               = empty
@@ -334,10 +334,10 @@ params env (TRow _ _ _ t TVar{})    = gen env t                                 
 params env t                        = error ("codegen unexpected row: " ++ prstr t)
 -}
 
-exposeMsg fx t                      = if fx == fxAction then tMsg t else t
+exposeFuture fx t                   = if fx == fxAction then tFuture t else t
 
-exposeMsg' t@TFun{}                 = t{ restype = exposeMsg (effect t) (restype t) }
-exposeMsg' t                        = t
+exposeFuture' t@TFun{}              = t{ restype = exposeFuture (effect t) (restype t) }
+exposeFuture' t                     = t
 
 varsig env n t                      = storageType env t <+> gen env n
 
@@ -524,7 +524,7 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
                                       nest 4 ss' $+$ 
                                       char '}'
         env1                        = setRet t2 $ ldefine (envOf p) $ defineTVars q env
-        t2                          = exposeMsg fx t
+        t2                          = exposeFuture fx t
         t3                          = genVolatile env n <+> settype env (rawReturn (restype t1)) t2
         rawReturn TUnboxed{}        = True
         rawReturn _                 = False
@@ -880,7 +880,7 @@ compatibleSlots _ _                 = False
 dropFirstRow (TRow _ _ _ _ r)       = r
 dropFirstRow r                      = r
 
-forwardResult env (TFun _ fx _ _ t) = repType env (exposeMsg fx t)
+forwardResult env (TFun _ fx _ _ t) = repType env (exposeFuture fx t)
 forwardResult _ _                   = empty
 
 repPar env (n : ns) (TRow _ _ _ t r@TRow{})
@@ -1394,7 +1394,7 @@ generatedClass env qn n ts
 
 directMethodCallResult env (Call _ f _ KwdNil)
                                     = case directMethodCallableType env f of
-                                        Just (TFun _ fx _ _ t) -> Just (exposeMsg fx t)
+                                        Just (TFun _ fx _ _ t) -> Just (exposeFuture fx t)
                                         _                     -> Nothing
 directMethodCallResult _ _          = Nothing
 
@@ -1684,9 +1684,9 @@ dotCast env ent ts e n
                                          TTuple{}  -> ([], cValue, cValue)
         (sc, dec)                   = findAttr' env c0 n
         t                           = vsubst fullsubst $ if ent then addSelf t1 dec else t1
-        t1                          = exposeMsg' (sctype sc)
+        t1                          = exposeFuture' (sctype sc)
         t' sc'                      = if ent then addSelf (t1' sc') dec else t1' sc'
-        t1' sc'                     = exposeMsg' (sctype sc')
+        t1' sc'                     = exposeFuture' (sctype sc')
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
         te                          = findAttrSchemas env (tcname c0)
         gen_t
@@ -1696,7 +1696,7 @@ dotCast env ent ts e n
                                         Just (NSig sc' _ _) -> gen env (B.matchTypes t (t' sc'))
                                         Just (NVar t) -> gen env t
                                         ni  -> error ("Internal error in CodeGen.dotCast: looking for NameInfo for " ++ show n ++ ", found "++ show ni)
-        rt                          = exposeMsg' (B.rtypeOf env rtc n)
+        rt                          = exposeFuture' (B.rtypeOf env rtc n)
 
 needsPrimCallableCast (TCon _ (TC q _)) n
   | q == primCont                   = n == attr_call_

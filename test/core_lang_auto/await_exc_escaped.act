@@ -5,8 +5,9 @@
 # RTS coverage:
 #  - Producer failure: boom()'s raise longjmps to the worker's jump buffer;
 #    wt_work_cb's exceptional path converts it to $R_FAIL. Prod has no
-#    catcher, so the $RFAIL no-catcher arm runs: the message is frozen as an
-#    exception (FREEZE_waiting) and — because Rel IS registered — the waiter
+#    catcher, so the $RFAIL no-catcher arm runs: the exception is delivered
+#    into the envelope's future, which is frozen (FREEZE_waiting(fut,
+#    FUT_EXCEPTION)), and — because Rel IS registered — the waiter
 #    propagation loop writes $Fail$instance into Rel's parked consume frame's
 #    cont slot plus the exception as its value, clears $waitsfor, and
 #    ENQ_readys Rel. A registered waiter suppresses the "Unhandled exception"
