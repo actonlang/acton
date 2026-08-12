@@ -247,3 +247,331 @@ actor _test_HttpsClientServer(t: testing.EnvT):
     )
     after 0.05: _start_client()
     after 10: _timeout()
+
+
+actor _test_HttpClientAwaitInCallbacks(t: testing.EnvT):
+    """Client callbacks may await calls back into the Client actor
+
+    The client must not park itself while a user callback runs: a callback
+    that awaits a call back into the client (here: issuing the next request
+    and awaiting its completion) would deadlock with a parked client.
+    """
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_accept(server):
+        server.cb_install(_on_request, _on_server_error)
+
+    def _on_request(server, request, respond):
+        respond(200, {}, "Hello " + request.path)
+
+    def _on_server_error(server, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_connect(c):
+        await async c.get("/first", _on_response1)
+
+    def _on_response1(c, r):
+        if r.status != 200 or r.body != b"Hello /first":
+            _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
+            return
+        await async c.get("/second", _on_response2)
+
+    def _on_response2(c, r):
+        if r.status != 200 or r.body != b"Hello /second":
+            _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_accept, _on_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, deadlock between client and callback actor?")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerAwaitRespond(t: testing.EnvT):
+    """Server request handlers may await the respond callback
+
+    The server must not park itself while the user's request handler runs: a
+    handler that awaits the respond callback (an action of the server actor)
+    would deadlock with a parked server.
+    """
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_accept(server):
+        server.cb_install(_on_request, _on_server_error)
+
+    def _on_request(server, request, respond):
+        await async respond(200, {}, "Hello, awaited!")
+
+    def _on_server_error(server, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_connect(c):
+        c.get("/", _on_response)
+
+    def _on_response(c, r):
+        if r.status != 200 or r.body != b"Hello, awaited!":
+            _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_accept, _on_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, deadlock between server and handler actor?")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerDeferredCbInstall(t: testing.EnvT):
+    """Requests received before cb_install are dispatched on install
+
+    If the accept callback installs the request handler only later, requests
+    that arrive in the meantime are buffered by the server and must be
+    dispatched once the handler is installed.
+    """
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_accept(server):
+        def _install():
+            server.cb_install(_on_request, _on_server_error)
+        after 0.2: _install()
+
+    def _on_request(server, request, respond):
+        respond(200, {}, "Hello, late!")
+
+    def _on_server_error(server, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_connect(c):
+        c.get("/", _on_response)
+
+    def _on_response(c, r):
+        if r.status != 200 or r.body != b"Hello, late!":
+            _finish_failure("Unexpected response: " + str(r.status) + " " + str(r.body))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_accept, _on_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, buffered request dropped by cb_install?")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpServerResponseOrder(t: testing.EnvT):
+    """Responses are sent in request order even when respond is called out of order
+
+    Two pipelined requests are sent in a single write. The handler withholds
+    the response to the first request until the second has been responded to,
+    so the server must buffer the second response and send both in request
+    order on the connection.
+    """
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var received = b""
+    var stored_respond: ?action(int, dict[str, str], str) -> None = None
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_accept(server):
+        server.cb_install(_on_request, _on_server_error)
+
+    def _on_request(server, request, respond):
+        if request.path == "/1":
+            # Withhold the first response until the second request arrives
+            stored_respond = respond
+        else:
+            respond(200, {}, "response-two")
+            sr = stored_respond
+            if sr is not None:
+                sr(200, {}, "response-one")
+            else:
+                _finish_failure("request /2 handled before request /1")
+
+    def _on_server_error(server, error):
+        _finish_failure("HTTP server error: " + error)
+
+    def _on_listen_error(listener, error):
+        if listen_attempts < 10:
+            listen_attempts += 1
+            port = random.randint(20000, 45000)
+            _start_listener()
+        else:
+            _finish_failure("HTTP listen failed: " + error)
+
+    def _on_raw_connect(c):
+        c.write(b"GET /1 HTTP/1.1\r\nHost: test\r\n\r\nGET /2 HTTP/1.1\r\nHost: test\r\n\r\n")
+
+    def _on_raw_receive(c, data):
+        received += data
+        pos_one = received.find(b"response-one", None, None)
+        pos_two = received.find(b"response-two", None, None)
+        if pos_one >= 0 and pos_two >= 0:
+            if pos_one < pos_two:
+                _finish_success()
+            else:
+                _finish_failure("responses out of order: " + str(received))
+
+    def _on_raw_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("TCP client error: " + errmsg)
+
+    def _start_client():
+        net.TCPConnection(conn_cap, "127.0.0.1", port, _on_raw_connect, _on_raw_receive, _on_raw_error, None)
+
+    def _start_listener():
+        server = http.Listener(serv_cap, "127.0.0.1", port, _on_accept, _on_listen_error)
+
+    def _timeout():
+        _finish_failure("timeout, response order machinery stuck? received: " + str(received))
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()

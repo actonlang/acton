@@ -350,7 +350,13 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
 
 
 actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
-    """Server serves a single client connection"""
+    """Server serves a single client connection
+
+    User callbacks are invoked asynchronously and must not be awaited by the
+    server, so a callback is free to call back into this actor. Responses are
+    sent on the connection in request order; a response to a later request is
+    buffered until responses to all earlier requests have been sent.
+    """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
     var on_error_cb: ?action(Server, str) -> None = None
@@ -359,70 +365,78 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
     var close_connection: bool = True
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_requests: dict[u64, Response] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
 
     def cb_install(new_on_request: action(Server, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(Server, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
-        if buf != b"":
-            req, buf = parse_request(buf, _log)
+        # Dispatch any requests that arrived before the callbacks were installed
+        _process_buf()
 
     def on_conn_receive(conn_obj, data: bytes) -> None:
-        # TODO: do we really need a buf?
-        if on_request_cb is None:
-            buf += data
-            return None
-        else:
-            if buf != b"":
-                data = buf + data
+        buf += data
+        if on_request_cb is not None:
+            _process_buf()
 
-        req, buf = parse_request(data, _log)
-        if req is not None:
-            if version is None:
-                version = req.version
-            elif version is not None and version != req.version:
-                _log.debug("Version mismatch", None)
-                conn.close()
-
-            if version is not None and version == b"1.0":
-                if "connection" in req.headers:
-                    if req.headers["connection"] == "close":
-                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
-                        close_connection = True
-                    else:
-                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
-                        _log.trace("connection header", {"connection": req.headers["connection"]})
-                else:
-                    close_connection = True
-            elif version is not None and version == b"1.1":
-                if "connection" in req.headers and req.headers["connection"] == "close":
-                    _log.debug("HTTP 1.1, closing connection...", None)
-                    close_connection = True
-                else:
-                    close_connection = False
-
-            query_count += 1
-            def respond(status_code: int, headers: dict[str, str], body: str):
-                _log.trace("Going to respond with query id", {"query_count": query_count})
-                if query_count == response_count + 1:
-                    # In order, send response immediately
-                    _log.trace("Sending response immediately", None)
-                    send_response(status_code, headers, body)
-                    response_count += 1
-                else:
-                    # Buffer up response
-                    _log.trace("Buffering response", None)
-                    # TODO: actually implement buffering?
-                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
-
-            if on_request_cb is not None:
-                response = on_request_cb(self, req, respond)
-                if response is not None:
-                    _log.trace("Sending response immediately", None)
-                else:
-                    _log.trace("Async response", None)
+    def _process_buf() -> None:
+        while True:
+            req, buf = parse_request(buf, _log)
+            if req is not None:
+                _handle_request(req)
             else:
-                _log.notice("No on_request callback set", None)
+                break
+
+    def _handle_request(req: Request) -> None:
+        if version is None:
+            version = req.version
+        elif version is not None and version != req.version:
+            _log.debug("Version mismatch", None)
+            conn.close()
+
+        if version is not None and version == b"1.0":
+            if "connection" in req.headers:
+                if req.headers["connection"] == "close":
+                    _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
+                    close_connection = True
+                else:
+                    _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
+                    _log.trace("connection header", {"connection": req.headers["connection"]})
+            else:
+                close_connection = True
+        elif version is not None and version == b"1.1":
+            if "connection" in req.headers and req.headers["connection"] == "close":
+                _log.debug("HTTP 1.1, closing connection...", None)
+                close_connection = True
+            else:
+                close_connection = False
+
+        query_count += 1
+        req_id = query_count
+        def respond(status_code: int, headers: dict[str, str], body: str):
+            _log.trace("Going to respond to query", {"query_id": req_id})
+            if req_id == response_count + 1:
+                # In order, send response immediately
+                _log.trace("Sending response immediately", None)
+                send_response(status_code, headers, body)
+                response_count += 1
+                # Send buffered responses that are next in line
+                while not close_connection and response_count + 1 in outstanding_responses:
+                    nxt = outstanding_responses[response_count + 1]
+                    del outstanding_responses[response_count + 1]
+                    send_response(nxt.0, nxt.1, nxt.2)
+                    response_count += 1
+            elif req_id > response_count + 1:
+                # Responses must go out in request order, so buffer this one
+                # until responses to all earlier requests have been sent
+                _log.trace("Buffering response", None)
+                outstanding_responses[req_id] = (status_code, headers, body)
+            else:
+                _log.notice("Duplicate response to query, ignoring", None)
+
+        if on_request_cb is not None:
+            on_request_cb(self, req, respond)
+        else:
+            _log.notice("No on_request callback set", None)
 
     def on_conn_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
@@ -441,7 +455,13 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
 
 
 actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler):
-    """Server serves a single TLS client connection"""
+    """Server serves a single TLS client connection
+
+    User callbacks are invoked asynchronously and must not be awaited by the
+    server, so a callback is free to call back into this actor. Responses are
+    sent on the connection in request order; a response to a later request is
+    buffered until responses to all earlier requests have been sent.
+    """
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
     var on_error_cb: ?action(TLSServer, str) -> None = None
@@ -450,70 +470,78 @@ actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> N
     var close_connection: bool = True
     var query_count: u64 = 0
     var response_count: u64 = 0
-    var outstanding_requests: dict[u64, Response] = {}
+    var outstanding_responses: dict[u64, (int, dict[str, str], str)] = {}
 
     def cb_install(new_on_request: action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None, new_on_error: action(TLSServer, str) -> None):
         on_request_cb = new_on_request
         on_error_cb = new_on_error
-        if buf != b"":
-            req, buf = parse_request(buf, _log)
+        # Dispatch any requests that arrived before the callbacks were installed
+        _process_buf()
 
     def on_conn_receive(conn_obj, data: bytes) -> None:
-        # TODO: do we really need a buf?
-        if on_request_cb is None:
-            buf += data
-            return None
-        else:
-            if buf != b"":
-                data = buf + data
+        buf += data
+        if on_request_cb is not None:
+            _process_buf()
 
-        req, buf = parse_request(data, _log)
-        if req is not None:
-            if version is None:
-                version = req.version
-            elif version is not None and version != req.version:
-                _log.debug("Version mismatch", None)
-                conn.close()
-
-            if version is not None and version == b"1.0":
-                if "connection" in req.headers:
-                    if req.headers["connection"] == "close":
-                        _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
-                        close_connection = True
-                    else:
-                        _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
-                        _log.trace("connection header", {"connection": req.headers["connection"]})
-                else:
-                    close_connection = True
-            elif version is not None and version == b"1.1":
-                if "connection" in req.headers and req.headers["connection"] == "close":
-                    _log.debug("HTTP 1.1, closing connection...", None)
-                    close_connection = True
-                else:
-                    close_connection = False
-
-            query_count += 1
-            def respond(status_code: int, headers: dict[str, str], body: str):
-                _log.trace("Going to respond with query id", {"query_count": query_count})
-                if query_count == response_count + 1:
-                    # In order, send response immediately
-                    _log.trace("Sending response immediately", None)
-                    send_response(status_code, headers, body)
-                    response_count += 1
-                else:
-                    # Buffer up response
-                    _log.trace("Buffering response", None)
-                    # TODO: actually implement buffering?
-                    #outstanding_requests[query_count] = Response("GABBA", version, status_code, headers, body.encode())
-
-            if on_request_cb is not None:
-                response = on_request_cb(self, req, respond)
-                if response is not None:
-                    _log.trace("Sending response immediately", None)
-                else:
-                    _log.trace("Async response", None)
+    def _process_buf() -> None:
+        while True:
+            req, buf = parse_request(buf, _log)
+            if req is not None:
+                _handle_request(req)
             else:
-                _log.notice("No on_request callback set", None)
+                break
+
+    def _handle_request(req: Request) -> None:
+        if version is None:
+            version = req.version
+        elif version is not None and version != req.version:
+            _log.debug("Version mismatch", None)
+            conn.close()
+
+        if version is not None and version == b"1.0":
+            if "connection" in req.headers:
+                if req.headers["connection"] == "close":
+                    _log.debug("HTTP 1.0 with connection: close, closing connection...", None)
+                    close_connection = True
+                else:
+                    _log.debug("HTTP 1.0 with connection header, not closing connection...", None)
+                    _log.trace("connection header", {"connection": req.headers["connection"]})
+            else:
+                close_connection = True
+        elif version is not None and version == b"1.1":
+            if "connection" in req.headers and req.headers["connection"] == "close":
+                _log.debug("HTTP 1.1, closing connection...", None)
+                close_connection = True
+            else:
+                close_connection = False
+
+        query_count += 1
+        req_id = query_count
+        def respond(status_code: int, headers: dict[str, str], body: str):
+            _log.trace("Going to respond to query", {"query_id": req_id})
+            if req_id == response_count + 1:
+                # In order, send response immediately
+                _log.trace("Sending response immediately", None)
+                send_response(status_code, headers, body)
+                response_count += 1
+                # Send buffered responses that are next in line
+                while not close_connection and response_count + 1 in outstanding_responses:
+                    nxt = outstanding_responses[response_count + 1]
+                    del outstanding_responses[response_count + 1]
+                    send_response(nxt.0, nxt.1, nxt.2)
+                    response_count += 1
+            elif req_id > response_count + 1:
+                # Responses must go out in request order, so buffer this one
+                # until responses to all earlier requests have been sent
+                _log.trace("Buffering response", None)
+                outstanding_responses[req_id] = (status_code, headers, body)
+            else:
+                _log.notice("Duplicate response to query, ignoring", None)
+
+        if on_request_cb is not None:
+            on_request_cb(self, req, respond)
+        else:
+            _log.notice("No on_request callback set", None)
 
     def on_conn_error(conn, error):
         # TODO: the conn should really be in here, but type error!?
@@ -547,8 +575,8 @@ actor Listener(cap: net.TCPListenCap, address: str, port: int, on_accept: action
 
     def on_listener_accept(conn):
         s = Server(conn, on_accept, log_handler)
-        await async on_accept(s)
-        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+        on_accept(s)
+        conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
     var _listener = net.TCPListener(cap, address, port, on_conn_listen, on_listener_accept)
 
@@ -569,8 +597,8 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
 
     def on_listener_accept(conn):
         s = TLSServer(conn, on_accept, log_handler)
-        await async on_accept(s)
-        await async conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
+        on_accept(s)
+        conn.cb_install(s.on_conn_receive, s.on_conn_error, None)
 
     var _listener = net.TLSListener(cap, address, port, cert_pem, key_pem, on_conn_listen, on_listener_accept)
 
@@ -581,6 +609,12 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
 
     scheme is either 'http' or 'https', the default is 'https'
     port is optional, if not provided, it will be inferred from the scheme where http=80 and https=443
+
+    User callbacks (on_connect, on_error and the per-request on_response) are
+    invoked asynchronously and are not awaited by the client, so a callback is
+    free to call back into this actor, e.g. to issue the next request.
+    Responses are delivered to each request's on_response callback in request
+    order.
     """
     _log = logging.Logger(log_handler)
     var _on_response: list[(bytes, action(Client, Response) -> None)] = []
@@ -603,10 +637,11 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
             raise ValueError(f"Only http and https schemes are supported. Unsupported scheme: {scheme}")
 
     def _on_conn_connect():
-        # If there are outstanding requests, it probably means we were
+        # If there are outstanding requests, the connection was probably lost
+        # and we just reconnected, so replay them on the new connection
         for r in _on_response:
             _conn_write(r.0)
-        await async on_connect(self)
+        on_connect(self)
 
     def _on_tcp_connect(conn: net.TCPConnection) -> None:
         _on_conn_connect()
@@ -639,8 +674,7 @@ actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) ->
                 outreq = _on_response[0]
                 del _on_response[0]
                 cb = outreq.1
-
-                await async cb(self, r)
+                cb(self, r)
             else:
                 break
 
