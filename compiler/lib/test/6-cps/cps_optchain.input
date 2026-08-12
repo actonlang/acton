@@ -9,9 +9,11 @@ class Cls (__builtin__.value):
         return None
 
 proc def maybe_log (c : ?Cls) -> None:
-    let:
-        V_maybe_log_9: ?Cls = c
-    in $CAST@[?Cls, Cls](V_maybe_log_9).f("\"boom\"") if $ISNOTNONE@[Cls](V_maybe_log_9) else None
+    V_maybe_log_9: ?Cls = c
+    if $ISNOTNONE@[Cls](V_maybe_log_9):
+        $CAST@[?Cls, Cls](V_maybe_log_9).f("\"boom\"")
+    else:
+        None
     return None
 
 # recursive group:
@@ -31,10 +33,14 @@ proc def LoggerG_newact () -> Logger:
 # (recursive group)
 
 action def must_log (a : ?Logger) -> None:
-    let:
-        V_must_log_9: ?Logger = a
-    in $AWAITf@[None]((async $CAST@[?Logger, Logger](V_must_log_9).log)("\"bang\"")) if $ISNOTNONE@[Logger](V_must_log_9) else $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
-    let:
-        V_must_log_17: ?Logger = a
-    in $AWAITf@[None]((async $CAST@[?Logger, Logger](V_must_log_17).log)("\"chain\"")) if $ISNOTNONE@[Logger](V_must_log_17) else None
+    V_must_log_9: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_9):
+        (async $CAST@[?Logger, Logger](V_must_log_9).log)("\"bang\"")
+    else:
+        $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
+    V_must_log_17: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_17):
+        (async $CAST@[?Logger, Logger](V_must_log_17).log)("\"chain\"")
+    else:
+        None
     return None
