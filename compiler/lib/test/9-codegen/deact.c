@@ -42,10 +42,10 @@ B_NoneType deactQ_L_4actionD___init__ (deactQ_L_4action L_self, deactQ_Apa L_3ob
     return B_None;
 }
 $R deactQ_L_4actionD___call__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_4actionD___exec__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_4actionD___asyn__ (deactQ_L_4action L_self, B_int G_1) {
     deactQ_Apa L_3obj = ((deactQ_L_4action)(L_self))->L_3obj;
@@ -276,10 +276,10 @@ B_NoneType deactQ_L_14actionD___init__ (deactQ_L_14action L_self, deactQ_Apa L_1
     return B_None;
 }
 $R deactQ_L_14actionD___call__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_14actionD___exec__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_14actionD___asyn__ (deactQ_L_14action L_self, B_int G_1) {
     deactQ_Apa L_13obj = ((deactQ_L_14action)(L_self))->L_13obj;
@@ -313,10 +313,10 @@ B_NoneType deactQ_L_16actionD___init__ (deactQ_L_16action L_self, deactQ_Bepa L_
     return B_None;
 }
 $R deactQ_L_16actionD___call__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_16actionD___exec__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_16actionD___asyn__ (deactQ_L_16action L_self, B_int G_1) {
     deactQ_Bepa L_15obj = ((deactQ_L_16action)(L_self))->L_15obj;
@@ -350,10 +350,10 @@ B_NoneType deactQ_L_19actionD___init__ (deactQ_L_19action L_self, deactQ_main L_
     return B_None;
 }
 $R deactQ_L_19actionD___call__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 $R deactQ_L_19actionD___exec__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, toB_int(((B_int)G_1)->val))));
+    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
 }
 B_Msg deactQ_L_19actionD___asyn__ (deactQ_L_19action L_self, B_int G_1) {
     deactQ_main L_18obj = ((deactQ_L_19action)(L_self))->L_18obj;

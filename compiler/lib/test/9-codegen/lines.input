@@ -32,12 +32,12 @@ class L_4action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin_
         return None
     # recursive group:
     proc def __call__ (L_self : L_4action, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
     proc def __exec__ (L_self : L_4action, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : L_4action, G_1 : __builtin__.int) -> __builtin__.int:
         L_3obj: Apa = L_self.L_3obj
-        return L_3obj.notice(G_1)
+        return L_3obj.notice((UNBOX __builtin__.int G_1))
     # (recursive group)
 proc def L_5C_3cont (cb : $action[(__builtin__.int,), __builtin__.int], C_cont : $Cont[__builtin__.int], C_4res : UNBOXED __builtin__.int) -> $R:
     v: UNBOXED __builtin__.int = (UNBOX __builtin__.int C_4res)
@@ -56,7 +56,7 @@ class L_6Cont ($Cont[__builtin__.int], __builtin__.value):
     proc def __call__ (L_self : L_6Cont, G_1 : __builtin__.int) -> $R:
         cb: $action[(__builtin__.int,), __builtin__.int] = L_self.cb
         C_cont: $Cont[__builtin__.int] = L_self.C_cont
-        return L_5C_3cont(cb, C_cont, G_1)
+        return L_5C_3cont(cb, C_cont, (UNBOX __builtin__.int G_1))
 class L_7proc ($proc[(), None], __builtin__.value):
     @property
     self : Apa
@@ -133,12 +133,12 @@ class L_14action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
         return None
     # recursive group:
     proc def __call__ (L_self : L_14action, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
     proc def __exec__ (L_self : L_14action, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : L_14action, G_1 : __builtin__.int) -> __builtin__.int:
         L_13obj: Apa = L_self.L_13obj
-        return L_13obj.notice(G_1)
+        return L_13obj.notice((UNBOX __builtin__.int G_1))
     # (recursive group)
 class L_16action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
@@ -148,12 +148,12 @@ class L_16action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
         return None
     # recursive group:
     proc def __call__ (L_self : L_16action, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
     proc def __exec__ (L_self : L_16action, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : L_16action, G_1 : __builtin__.int) -> __builtin__.int:
         L_15obj: Bepa = L_self.L_15obj
-        return L_15obj.callback(G_1)
+        return L_15obj.callback((UNBOX __builtin__.int G_1))
     # (recursive group)
 class L_19action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin__.int,), __builtin__.int], __builtin__.value):
     @property
@@ -163,12 +163,12 @@ class L_19action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
         return None
     # recursive group:
     proc def __call__ (L_self : L_19action, L_cont : $Cont[__builtin__.int], G_1 : __builtin__.int) -> $R:
-        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $AWAIT@[__builtin__.int](L_cont, L_self.__asyn__(G_1))
     proc def __exec__ (L_self : L_19action, L_cont : $Cont[__builtin__.value], G_1 : __builtin__.int) -> $R:
-        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__((BOX __builtin__.int G_1)))
+        return $R_CONT@[__builtin__.value](L_cont, L_self.__asyn__(G_1))
     action def __asyn__ (L_self : L_19action, G_1 : __builtin__.int) -> __builtin__.int:
         L_18obj: main = L_self.L_18obj
-        return L_18obj.myproc(G_1)
+        return L_18obj.myproc((UNBOX __builtin__.int G_1))
     # (recursive group)
 class L_20proc ($proc[(), __builtin__.int], __builtin__.value):
     @property
@@ -269,7 +269,7 @@ class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
     proc def __call__ (L_self : L_21Cont, G_1 : __builtin__.int) -> $R:
         self: main = L_self.self
         C_cont: $Cont[None] = L_self.C_cont
-        return L_17C_9cont(self, C_cont, G_1)
+        return L_17C_9cont(self, C_cont, (UNBOX __builtin__.int G_1))
 proc def L_12C_7cont (self : main, C_cont : $Cont[None], C_8res : Bepa) -> $R:
     self.b = C_8res
     print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)

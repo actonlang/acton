@@ -1,0 +1,21 @@
+# Deriv overrides methods from Base[int]. The methods are generic in Base,
+# so their arguments always arrive boxed, even though Deriv takes plain ints.
+
+class Base[T](object):
+    def __init__(self):
+        pass
+    def cmp(self, x: T) -> bool:
+        return True
+    def bump(self, x: T) -> T:
+        return x
+    def fwd(self, x: T) -> T:
+        return x
+
+class Deriv(Base[int]):
+    def cmp(self, x: int) -> bool:
+        return x > 3
+    def bump(self, x: int) -> int:
+        x += 1
+        return x
+    def fwd(self, x: int) -> int:
+        return self.bump(x)

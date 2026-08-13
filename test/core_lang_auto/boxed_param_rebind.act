@@ -1,0 +1,54 @@
+# Deriv overrides methods from Base[int]. The methods are generic in Base,
+# so their arguments always arrive boxed, even though Deriv takes plain
+# ints. Reads of such a parameter unbox it. Assignments are different: a
+# raw store into the boxed variable would corrupt later reads, and updating
+# the box in place would be visible to the caller. So when a body assigns a
+# boxed parameter, Boxing copies it into a raw local at function entry, and
+# the body uses only that local.
+#
+# This test checks the behavior: the caller's value must not change, and
+# rebinding must work through plain assignment, augmented assignment,
+# for-loop targets, and calls through the generic base type.
+
+class Base[T](object):
+    def __init__(self):
+        pass
+    def get(self, x: T) -> T:
+        return x
+    def bump(self, x: T) -> T:
+        return x
+    def last(self, x: T) -> T:
+        return x
+
+class Deriv(Base[int]):
+    def get(self, x: int) -> int:
+        x = x + 1
+        return x
+    def bump(self, x: int) -> int:
+        x += 41
+        return x
+    def last(self, x: int) -> int:
+        for x in [10, 20, 30]:
+            pass
+        return x
+
+actor main(env):
+    d = Deriv()
+    l = [7]
+    if d.bump(l[0]) != 48:
+        print("FAIL: augmented assignment of a boxed parameter")
+        await async env.exit(1)
+    if l[0] != 7:
+        print("FAIL: caller's box mutated by augmented assignment")
+        await async env.exit(1)
+    if d.get(1) != 2:
+        print("FAIL: rebound boxed parameter")
+        await async env.exit(1)
+    if d.last(5) != 30:
+        print("FAIL: for-loop rebinding of a boxed parameter")
+        await async env.exit(1)
+    b: Base[int] = d
+    if b.get(5) != 6 or b.bump(1) != 42:
+        print("FAIL: rebinding through the generic slot")
+        await async env.exit(1)
+    await async env.exit(0)
