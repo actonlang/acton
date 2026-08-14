@@ -1,0 +1,40 @@
+# recursive group:
+class PA[G_self] (__builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+    same : (G_self, G_self) -> __builtin__.bool
+    total : (G_self) -> __builtin__.int
+class PB[G_self] (PA[G_self], __builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+        PA.__init__@[G_self](W_self)
+    beta : (G_self) -> __builtin__.int
+class PC[G_self] (PA[G_self], __builtin__.value):
+    pure def __init__ (W_self : Self) -> None:
+        PA.__init__@[G_self](W_self)
+    gamma : (G_self) -> __builtin__.int
+class Thing (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Self, n : __builtin__.int) -> None:
+        self.n = n
+class PBD_Thing (PB[Thing], PA[Thing], __builtin__.value):
+    W_PA_26: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def __init__ (W_self : Self) -> None:
+        PB.__init__@[Thing](W_self)
+    pure def same (W_self : Self, a : Thing, b : Thing) -> __builtin__.bool:
+        W_PA_15: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+        return W_PA_15.__eq__(a.n, b.n)
+    pure def total (W_self : Self, self : Thing) -> __builtin__.int:
+        return self.n
+    pure def beta (W_self : Self, self : Thing) -> __builtin__.int:
+        return W_PA_26.__fromatom__(1)
+class PCD_Thing (PC[Thing], PA[Thing], __builtin__.value):
+    W_PA_30: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    pure def __init__ (W_self : Self) -> None:
+        PC.__init__@[Thing](W_self)
+    pure def gamma (W_self : Self, self : Thing) -> __builtin__.int:
+        return W_PA_30.__fromatom__(2)
+# (recursive group)

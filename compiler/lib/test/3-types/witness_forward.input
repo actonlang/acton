@@ -1,0 +1,25 @@
+# recursive group:
+protocol PA:
+    @static
+    same : (Self, Self) -> __builtin__.bool
+    total : () -> __builtin__.int
+protocol PB (PA):
+    beta : () -> __builtin__.int
+protocol PC (PA):
+    gamma : () -> __builtin__.int
+class Thing (__builtin__.object):
+    n : __builtin__.int
+    T_13w def __init__ (self : T_5w, n : __builtin__.int) -> T_9w:
+        self.n = n
+extension Thing (PB):
+    @static
+    T_17w def same (a : Thing, b : Thing) -> __builtin__.bool:
+        return a.n == b.n
+    T_29w def total (self : T_21w) -> T_25w:
+        return self.n
+    T_41w def beta (self : T_33w) -> T_37w:
+        return 1
+extension Thing (PC):
+    T_53w def gamma (self : T_45w) -> T_49w:
+        return 2
+# (recursive group)

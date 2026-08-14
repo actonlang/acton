@@ -1,0 +1,47 @@
+# recursive group:
+class PA[G_self] (__builtin__.value):
+    pure def __init__ (W_self : PA[G_self]) -> None:
+        return None
+    same : (G_self, G_self) -> __builtin__.bool
+    total : (G_self) -> __builtin__.int
+class PB[G_self] (PA[G_self], __builtin__.value):
+    pure def __init__ (W_self : PB[G_self]) -> None:
+        PA.__init__@[G_self](W_self)
+        return None
+    beta : (G_self) -> __builtin__.int
+class PC[G_self] (PA[G_self], __builtin__.value):
+    pure def __init__ (W_self : PC[G_self]) -> None:
+        PA.__init__@[G_self](W_self)
+        return None
+    gamma : (G_self) -> __builtin__.int
+class Thing (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Thing, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Thing) -> None:
+        pass
+        return None
+    @property
+    n : __builtin__.int
+    pure def __init__ (self : Thing, n : UNBOXED __builtin__.int) -> None:
+        self.n = (UNBOX __builtin__.int n)
+        return None
+class PBD_Thing (PB[Thing], PA[Thing], __builtin__.value):
+    pure def __init__ (W_self : PBD_Thing) -> None:
+        PB.__init__@[Thing](W_self)
+        return None
+    pure def same (W_self : PBD_Thing, a : Thing, b : Thing) -> UNBOXED __builtin__.bool:
+        N_tmp: UNBOXED __builtin__.bool = (a.n == b.n)
+        return (UNBOX __builtin__.bool N_tmp)
+    pure def total (W_self : PBD_Thing, self : Thing) -> UNBOXED __builtin__.int:
+        return self.n
+    pure def beta (W_self : PBD_Thing, self : Thing) -> UNBOXED __builtin__.int:
+        N_1tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int 1)
+        return (UNBOX __builtin__.int N_1tmp)
+class PCD_Thing (PC[Thing], PA[Thing], __builtin__.value):
+    pure def __init__ (W_self : PCD_Thing) -> None:
+        PC.__init__@[Thing](W_self)
+        return None
+    pure def gamma (W_self : PCD_Thing, self : Thing) -> UNBOXED __builtin__.int:
+        N_2tmp: UNBOXED __builtin__.int = (UNBOX __builtin__.int 2)
+        return (UNBOX __builtin__.int N_2tmp)
+# (recursive group)
