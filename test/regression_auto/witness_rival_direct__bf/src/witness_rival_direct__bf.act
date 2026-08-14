@@ -1,0 +1,15 @@
+# Two independent modules each declare a conditional Pick extension for Box.
+# Neither shadows the other, so any use of a Pick[Box[...]] witness is
+# ambiguous and must be rejected regardless of import order.
+
+from model import Box, OnlyB, Pick
+import provider_a
+import provider_b
+
+def choose[T(Pick)](x: T) -> int:
+    return x.pick()
+
+actor main(env):
+    if choose(Box(OnlyB())) == 2:
+        await async env.exit(0)
+    await async env.exit(1)

@@ -1,0 +1,5 @@
+from model import Box, NeedB, Pick
+
+extension Box[Y(NeedB)] (Pick):
+    def pick(self) -> int:
+        return 2
