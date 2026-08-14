@@ -473,7 +473,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) gc.lto = .full;
+    if (enable_lto) gc.lto = .thin;
     gc.root_module.addCSourceFiles(.{
         .files = source_files.items,
         .flags = flags.items,
@@ -492,7 +492,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }),
         });
-        if (enable_lto) gccpp.lto = .full;
+        if (enable_lto) gccpp.lto = .thin;
         gccpp.root_module.addCSourceFiles(.{
             .files = &.{
                 "gc_badalc.cc",
@@ -513,7 +513,7 @@ pub fn build(b: *std.Build) void {
                     .optimize = optimize,
                 }),
             });
-            if (enable_lto) gctba.lto = .full;
+            if (enable_lto) gctba.lto = .thin;
             gctba.root_module.addCSourceFiles(.{
                 .files = &.{
                     "gc_badalc.cc",
@@ -536,7 +536,7 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             })
         });
-        if (enable_lto) cord.lto = .full;
+        if (enable_lto) cord.lto = .thin;
         cord.root_module.addCSourceFiles(.{
             .files = &.{
                 "cord/cordbscs.c",
@@ -675,7 +675,7 @@ fn addTestExt(b: *std.Build, gc: *std.Build.Step.Compile,
             .target = gc.root_module.resolved_target.?,
         }),
     });
-    if (gc.root_module.optimize.? != .Debug and gc.root_module.resolved_target.?.result.os.tag != .macos) test_exe.lto = .full;
+    if (gc.root_module.optimize.? != .Debug and gc.root_module.resolved_target.?.result.os.tag != .macos) test_exe.lto = .thin;
     test_exe.root_module.addCSourceFile(.{
         .file = b.path(filename),
         .flags = flags.items

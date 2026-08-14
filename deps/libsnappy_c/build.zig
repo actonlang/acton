@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
     lib.root_module.addIncludePath(b.path("."));
 
     //const libsnappy_version = "1.1.10";

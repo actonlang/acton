@@ -94,7 +94,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libactondb.lto = .full;
+    if (enable_lto) libactondb.lto = .thin;
     libactondb.root_module.addCSourceFiles(.{
         .files = &libactondb_sources,
         .flags = flags.items
@@ -118,7 +118,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) actondb.lto = .full;
+    if (enable_lto) actondb.lto = .thin;
     actondb.root_module.addCSourceFile(.{ .file = b.path("actondb.c"), .flags = &[_][]const u8{
         "-fno-sanitize=undefined",
     }});

@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);

@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
     lib.root_module.addIncludePath(b.path("include"));
 
     const libxml_version = "2.12.0";

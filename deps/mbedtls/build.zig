@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libcrypto.lto = .full;
+    if (enable_lto) libcrypto.lto = .thin;
 
     const libx509 = b.addLibrary(.{
         .name = "mbedx509",
@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libx509.lto = .full;
+    if (enable_lto) libx509.lto = .thin;
 
     const libtls = b.addLibrary(.{
         .name = "mbedtls",
@@ -34,7 +34,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libtls.lto = .full;
+    if (enable_lto) libtls.lto = .thin;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
