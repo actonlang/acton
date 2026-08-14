@@ -186,7 +186,7 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
                               }
   where pte                 = publicTEnv te
         hte                 = M.fromList pte
-        wits                = extWitnesses m [ ni | ni@(_,NExt{}) <- pte ]
+        wits                = extWitnesses (GName m) (const False) [ ni | ni@(_,NExt{}) <- pte ]
         witprotos           = indexMap [ (tcname $ proto w, w) | w <- wits ]
         wittypes            = indexMap [ (qn, w) | w <- wits, Just qn <- [witnessTypeQName w] ]
         conattrs            = indexMap [ (a, moduleTCon m ni) | ni@(_,i) <- pte, isCon i, a <- dom (conTE i) ]
@@ -247,11 +247,11 @@ mkTyFileModuleInfo m ms mdoc db
         -- The proto index stores extension records; one extension can carry
         -- witnesses for several protocols, so keep only the indexed protocol.
         witsByProto qn       = concat [ filter ((== qn') . tcname . proto) $
-                                          extWitnesses m $
+                                          extWitnesses (GName m) (const False) $
                                           unsafePerformIO $
                                           InterfaceFiles.readInterfaceDBExtByProto db qn'
                                       | qn' <- moduleQNameKeys m qn ]
-        witsByType qn        = concat [ extWitnesses m $ unsafePerformIO $ InterfaceFiles.readInterfaceDBExtByType db qn' | qn' <- moduleQNameKeys m qn ]
+        witsByType qn        = concat [ extWitnesses (GName m) (const False) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBExtByType db qn' | qn' <- moduleQNameKeys m qn ]
 
 moduleTCon                  :: ModName -> (Name, NameInfo) -> TCon
 moduleTCon m (n, i)         = TC (GName m n) (wildargs i)
@@ -266,19 +266,20 @@ moduleQNameKeys m qn@(QName m' n)
   | m == m'                 = [qn, NoQ n]
 moduleQNameKeys _ qn        = [qn]
 
-extWitnesses                :: ModName -> TEnv -> [Witness]
-extWitnesses m exts         = fst (foldl' add ([], Map.empty) wits)
-  where wits                = [ WClass q (tCon c) p (GName m n) ws (length opts) | (n, NExt q c ps _ opts _) <- exts, (ws,p) <- ps ]
-        -- Duplicate checking scans only the (proto name, type name) bucket instead
-        -- of every accumulated witness: `same` implies equal proto names and equal
-        -- wtypes (hence equal type-name keys), so bucketing loses no duplicates,
-        -- while a linear `any (same w)` scan is quadratic in the witness count --
-        -- a 65k-extension generated module would spend hours in eqString here.
+sameWitness w w'            = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
+
+extWitnesses                :: (Name->QName) -> (Witness->Bool) -> TEnv -> [Witness]
+extWitnesses mkQ skip exts  = fst (foldl' add ([], Map.empty) wits)
+  where wits                = [ WClass q (tCon c) p (mkQ n) ws (length opts) | (n, NExt q c ps _ opts _) <- exts, (ws,p) <- ps ]
+        -- `skip` handles duplicates already visible outside this batch. For
+        -- duplicates generated within this call, scan only the (proto name,
+        -- type name) bucket; `sameWitness` cannot match outside that bucket.
         add (ws, seen) w
-          | any (same w) bucket = (ws, seen)
-          | otherwise           = (w : ws, Map.insertWith (++) k [w] seen)
-          where k               = (tcname (proto w), witnessTypeQName w)
-                bucket          = Map.findWithDefault [] k seen
+          | skip w || any (sameWitness w) bucket
+                            = (ws, seen)
+          | otherwise       = (w : ws, Map.insertWith (++) k [w] seen)
+          where k           = (tcname (proto w), witnessTypeQName w)
+                bucket      = Map.findWithDefault [] k seen
         same w w'           = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 witnessTypeQName            :: Witness -> Maybe QName

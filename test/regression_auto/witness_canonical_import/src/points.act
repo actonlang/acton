@@ -1,0 +1,13 @@
+# The providing module: declares the class and extends it with Ord, which
+# covers Eq, so this module owns the one Eq[Pt] implementation.
+
+class Pt(object):
+    x: int
+    def __init__(self, x: int):
+        self.x = x
+
+extension Pt (Ord):
+    def __eq__(a: Pt, b: Pt) -> bool:
+        return a.x == b.x
+    def __lt__(a: Pt, b: Pt) -> bool:
+        return a.x < b.x

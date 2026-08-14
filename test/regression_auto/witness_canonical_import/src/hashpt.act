@@ -1,0 +1,11 @@
+# The extending module: Hashable inherits Eq, but Eq[Pt] was finalized by
+# points' Ord extension, so this extension implements none of Eq.
+
+import points
+
+extension points.Pt (Hashable):
+    def hash(self, h):
+        self.x.hash(h)
+
+def same_here(a: points.Pt, b: points.Pt) -> bool:
+    return a == b

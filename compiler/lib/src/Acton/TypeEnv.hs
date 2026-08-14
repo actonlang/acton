@@ -270,18 +270,22 @@ tyactorsAll env                 = [ c | tid <- IntSet.toAscList (tyactors x), Ju
 
 
 tydefine                        :: TEnv -> Env -> Env
-tydefine te env                 = modX (define te env) (setupCons f te . setupWits addActiveWit te)
+tydefine te env                 = modX (define te env) (setupCons f te . setupWits (hasVisibleWit env) addActiveWit te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
 
 tydefineClosed                  :: TEnv -> Env -> Env
-tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits addClosedWit te)
+tydefineClosed te env           = modX (defineClosed te env) (setupCons f te . setupWits (hasVisibleWit env) addClosedWit te)
   where f                       = if inBuiltin env then GName mBuiltin else NoQ
+
+hasVisibleWit env wit           = any (sameWitness wit) $ case wtypeKey (wtype wit) of
+                                                            Just n -> witsByTName env n
+                                                            Nothing -> witsByPName env (tcname $ proto wit)
 
 setupCons                       :: (Name -> QName) -> TEnv -> TypeX -> TypeX
 setupCons f te x                = foldl' (addconinfo f) x te
  
-setupWits                       :: (TypeX -> Witness -> TypeX) -> TEnv -> TypeX -> TypeX
-setupWits add te x              = foldl' add x wits
+setupWits                       :: (Witness -> Bool) -> (TypeX -> Witness -> TypeX) -> TEnv -> TypeX -> TypeX
+setupWits skip add te x         = foldl' add x (extWitnesses NoQ skip te)
   where wits                    = [ WClass q (tCon c) p (NoQ n) ws (length opts) | (n, NExt q c ps _ opts _) <- te, (ws,p) <- ps ]
 
 addvarinfo x (tv, c, _)         = x{ tyids = Map.insert qn tid (tyids x),

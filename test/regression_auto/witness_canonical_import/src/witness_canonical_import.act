@@ -1,0 +1,22 @@
+# There is exactly one Eq[Pt] implementation, in points. hashpt's Hashable
+# extension no longer registers a witness for the finalized Eq, so == on Pt
+# resolves to points' witness everywhere: inside hashpt and in this module,
+# which imports both.
+
+import points
+import hashpt
+
+actor main(env):
+    a = points.Pt(1)
+    b = points.Pt(1)
+    if not (a == b) or a == points.Pt(2):
+        print("FAIL: == through the imported Ord witness")
+        await async env.exit(1)
+    if not hashpt.same_here(a, b):
+        print("FAIL: == inside the extending module")
+        await async env.exit(1)
+    l = sorted([points.Pt(3), points.Pt(1), points.Pt(2)])
+    if l[0].x != 1 or l[1].x != 2 or l[2].x != 3:
+        print("FAIL: sorted through the imported Ord witness")
+        await async env.exit(1)
+    await async env.exit(0)

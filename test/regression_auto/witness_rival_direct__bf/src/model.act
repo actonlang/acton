@@ -1,0 +1,21 @@
+protocol NeedA:
+    a : () -> int
+
+protocol NeedB:
+    b : () -> int
+
+protocol Pick:
+    pick : () -> int
+
+class Box[X](object):
+    item: X
+    def __init__(self, item: X):
+        self.item = item
+
+class OnlyB(object):
+    def __init__(self):
+        pass
+
+extension OnlyB (NeedB):
+    def b(self) -> int:
+        return 2
