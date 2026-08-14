@@ -244,7 +244,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libActon.lto = .full;
+    if (enable_lto) libActon.lto = .thin;
     for (c_files.items) |entry| {
         libActon.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
     }
@@ -326,7 +326,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) base_tests.lto = .full;
+    if (enable_lto) base_tests.lto = .thin;
     base_tests.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
     base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     base_tests.root_module.linkLibrary(dep_libgc.artifact("gc"));

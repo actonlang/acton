@@ -46,7 +46,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
 
     lib.root_module.addCSourceFiles(.{ .files = &.{
         "argp-ba.c",

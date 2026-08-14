@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
             .link_libc = true,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
 
     if (linkage == .static) {
         try lib.root_module.c_macros.append(b.allocator, "-DPCRE2_STATIC");

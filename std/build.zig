@@ -177,7 +177,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) libActonProject.lto = .full;
+    if (enable_lto) libActonProject.lto = .thin;
 
     for (c_files.items) |entry| {
         libActonProject.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });

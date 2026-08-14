@@ -14,7 +14,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-    if (enable_lto) lib.lto = .full;
+    if (enable_lto) lib.lto = .thin;
 
     const source_files = [_][]const u8{
         "src/clear.c",
