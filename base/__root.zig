@@ -3,27 +3,21 @@ const std = @import("std");
 const acton = @import("acton.zig");
 const gc = @import("rts/gc.zig");
 
+// Both base64 functions build their result with acton.new_bytes so that it
+// looks exactly like bytes built by the C runtime: NUL-terminated payload,
+// and a real (non-dangling) buffer even when the output is empty.
 export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
-    const alloc = gc.allocator();
     const encoder = std.base64.standard.Encoder;
     // For possible Unicode input, bytes and chars may not be 1:1
     const data_len: usize = @intCast(data.nbytes);
     const out_len = encoder.calcSize(data_len);
-    const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
-    const data_slice = data.str[0..data_len];
-    const encoded = encoder.encode(buffer, data_slice);
-
-    const res = alloc.create(acton.bytes) catch @panic("OOM");
-    res.* = .{
-        .class = data.class,
-        .nbytes = @intCast(out_len),
-        .str = @as([*:0]const u8, @ptrCast(encoded.ptr))
-    };
+    const res = acton.new_bytes(data.class, out_len);
+    const buffer: []u8 = @constCast(res.str[0..out_len]);
+    _ = encoder.encode(buffer, data.str[0..data_len]);
     return res;
 }
 
 export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
-    const alloc = gc.allocator();
     const decoder = std.base64.standard.Decoder;
     // Convert null-terminated string to slice for decoder
     const data_len: usize = @intCast(data.nbytes);
@@ -33,15 +27,9 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
         acton.raise_ValueError("Invalid base64 input data");
         unreachable; // raise above does longjmp so this is unreachable
     };
-    const buffer = alloc.alloc(u8, out_len) catch @panic("OOM");
+    const res = acton.new_bytes(data.class, out_len);
+    const buffer: []u8 = @constCast(res.str[0..out_len]);
     decoder.decode(buffer, data_slice) catch unreachable;
-
-    const res = alloc.create(acton.bytes) catch @panic("OOM");
-    res.* = .{
-        .class = data.class,
-        .nbytes = @intCast(out_len),
-        .str = @as([*:0]const u8, @ptrCast(buffer.ptr))
-    };
     return res;
 }
 
