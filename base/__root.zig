@@ -29,7 +29,13 @@ export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
     };
     const res = acton.new_bytes(data.class, out_len);
     const buffer: []u8 = @constCast(res.str[0..out_len]);
-    decoder.decode(buffer, data_slice) catch unreachable;
+    // calcSizeForSlice only validates the length and trailing padding, so
+    // decode can still fail on characters outside the alphabet or on
+    // misplaced padding.
+    decoder.decode(buffer, data_slice) catch {
+        acton.raise_ValueError("Invalid base64 input data");
+        unreachable;
+    };
     return res;
 }
 

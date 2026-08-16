@@ -54,3 +54,14 @@ def _test_base64_decode_garbage():
         testing.assertEqual(str(e), "ValueError: Invalid base64 input data")
     else:
         raise Exception("Expected ValueError")
+
+def _test_base64_decode_invalid_chars():
+    # Input of a valid length but with characters outside the alphabet or
+    # misplaced padding must raise ValueError, not abort the process.
+    for i in [b"!!!!", b"Zm9v=mFy", b"Zm9vYm=y", b"Zm9v\x00YmFy"]:
+        try:
+            d = base64.decode(i)
+        except ValueError as e:
+            testing.assertEqual(str(e), "ValueError: Invalid base64 input data")
+        else:
+            raise Exception("Expected ValueError for " + repr(i))
