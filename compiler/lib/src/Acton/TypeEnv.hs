@@ -332,7 +332,7 @@ hasWit                          :: TypeX -> Witness -> Bool
 hasWit x wit                     = any same $ case wtypeKey (wtype wit) of
                                       Just n  -> witsByTNameX x n
                                       Nothing -> witsByPNameX x (tcname $ proto wit)
-  where same w                   = tcname (proto w) == tcname (proto wit) && wtype w == wtype wit
+  where same w                   = tcname (proto w) == tcname (proto wit) && (schematic $ wtype w) == (schematic $ wtype wit)
 
 -- Witness buckets are kept in insertion (oldest-first) order, the order in
 -- which consumers want to enumerate them, so queries need no reversal of the

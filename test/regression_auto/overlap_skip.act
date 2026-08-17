@@ -1,0 +1,18 @@
+class Apa[X](object):
+    item: X
+    def __init__(self, item: X):
+        self.item = item
+
+extension Apa[A(Eq)] (Eq):
+    def __eq__(a, b) -> bool:
+        return a.item == b.item
+
+extension Apa[B(Eq)] (Hashable):
+    def hash(self, h):
+        pass
+
+def eq(x: Apa[int], y: Apa[int]) -> bool:
+    return x == y
+
+actor main(env):
+    env.exit(0)

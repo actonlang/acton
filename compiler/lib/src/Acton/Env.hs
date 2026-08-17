@@ -280,7 +280,6 @@ extWitnesses mkQ skip exts  = fst (foldl' add ([], Map.empty) wits)
           | otherwise       = (w : ws, Map.insertWith (++) k [w] seen)
           where k           = (tcname (proto w), witnessTypeQName w)
                 bucket      = Map.findWithDefault [] k seen
-        same w w'           = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 witnessTypeQName            :: Witness -> Maybe QName
 witnessTypeQName w          = nameOf (wtype w)
