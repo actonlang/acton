@@ -101,6 +101,53 @@ def _test_http_parser(st: testing.SyncT):
             if req is not None:
                 testing.assertEqual(expected, req, "Parsed request does not match expected")
 
+def _test_http_parse_response_rest(st: testing.SyncT):
+    """parse_response returns the bytes after the first complete response
+
+    Client feeds the remainder straight back into parse_response, so when
+    several pipelined responses arrive in one TCP read the second one must
+    come back as the rest, byte for byte, rather than be discarded together
+    with the first.
+    """
+    log = logging.Logger(st.log_handler)
+
+    # Content-Length framed
+    first = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
+    second = b"HTTP/1.1 404 Not Found\r\nContent-Length: 12\r\n\r\nresponse-two"
+    resp, rest = http.parse_response(first + second, log)
+    testing.assertEqual(http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one"), resp, "First content-length framed response")
+    testing.assertEqual(second, rest, "Rest after content-length framed response")
+    resp, rest = http.parse_response(rest, log)
+    testing.assertEqual(http.Response(b"1.1", 404, {"content-length": "12"}, b"response-two"), resp, "Second content-length framed response")
+    testing.assertEqual(b"", rest, "Rest after last content-length framed response")
+
+    # chunked Transfer-Encoding
+    first = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n"
+    second = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nfoo\r\n0\r\n\r\n"
+    resp, rest = http.parse_response(first + second, log)
+    testing.assertEqual(http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"Wikipedia"), resp, "First chunked response")
+    testing.assertEqual(second, rest, "Rest after chunked response")
+    resp, rest = http.parse_response(rest, log)
+    testing.assertEqual(http.Response(b"1.1", 200, {"transfer-encoding": "chunked"}, b"foo"), resp, "Second chunked response")
+    testing.assertEqual(b"", rest, "Rest after last chunked response")
+
+    # A 204 carries neither body nor framing headers, it ends at the empty line
+    first = b"HTTP/1.1 204 No Content\r\n\r\n"
+    second = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"
+    resp, rest = http.parse_response(first + second, log)
+    testing.assertEqual(http.Response(b"1.1", 204, {}, b""), resp, "First bodyless response")
+    testing.assertEqual(second, rest, "Rest after bodyless response")
+
+    # An incomplete second response stays in the rest, untouched
+    first = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
+    partial = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nrespon"
+    resp, rest = http.parse_response(first + partial, log)
+    testing.assertEqual(http.Response(b"1.1", 200, {"content-length": "12"}, b"response-one"), resp, "Response ahead of a partial one")
+    testing.assertEqual(partial, rest, "Partial second response kept as rest")
+    resp, rest = http.parse_response(rest, log)
+    testing.assertNone(resp, "Partial response must not parse")
+    testing.assertEqual(partial, rest, "Partial response returned as-is")
+
 actor _test_HttpClientServer(t: testing.EnvT):
     """HTTP client/server roundtrip over TCP"""
     log = logging.Logger(t.log_handler)
@@ -169,6 +216,111 @@ actor _test_HttpClientServer(t: testing.EnvT):
 
     def _timeout():
         _finish_failure("timeout")
+
+    _start_listener()
+    after 0.05: _start_client()
+    after 10: _timeout()
+
+
+actor _test_HttpClientPipelinedResponses(t: testing.EnvT):
+    """Client delivers pipelined responses that arrive in one TCP read
+
+    The client pipelines: it writes each request as soon as it is issued and
+    matches responses to callbacks in order. A raw TCP server waits for both
+    requests and then writes both responses in a single write, so they reach
+    the client in one receive event. Both callbacks must fire, in order; a
+    client that discards what follows the first parsed response loses the
+    second one and its callback never fires.
+    """
+    log = logging.Logger(t.log_handler)
+    var done = False
+    var attempts = 0
+    var listen_attempts = 0
+    var port = random.randint(20000, 45000)
+    var server = None
+    var received = b""
+    var responded = False
+    var got_first = False
+
+    serv_cap = net.TCPListenCap(net.TCPCap(net.NetCap(t.env.cap)))
+    conn_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(t.env.cap)))
+
+    def _finish_success():
+        if done:
+            return
+        done = True
+        t.success()
+
+    def _finish_failure(msg: str):
+        if done:
+            return
+        done = True
+        t.failure(AssertionError(msg))
+
+    def _on_raw_listen(listener, error):
+        if error is not None:
+            if listen_attempts < 10:
+                listen_attempts += 1
+                port = random.randint(20000, 45000)
+                _start_listener()
+            else:
+                _finish_failure("TCP listen failed: " + error)
+
+    def _on_raw_accept(conn):
+        received = b""
+        responded = False
+        conn.cb_install(_on_raw_receive, _on_raw_error, None)
+
+    def _on_raw_receive(conn, data):
+        received += data
+        if responded:
+            return
+        # Each GET request ends in an empty line. Once both have arrived,
+        # answer both in a single write so the responses coalesce into one
+        # receive event on the client side.
+        if received.count(b"\r\n\r\n") >= 2:
+            responded = True
+            responses = b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-one"
+            responses += b"HTTP/1.1 200 OK\r\nContent-Length: 12\r\n\r\nresponse-two"
+            conn.write(responses)
+
+    def _on_raw_error(conn, errmsg):
+        _finish_failure("TCP server connection error: " + errmsg)
+
+    def _on_connect(c):
+        c.get("/1", _on_response1)
+        c.get("/2", _on_response2)
+
+    def _on_response1(c, r):
+        if r.status != 200 or r.body != b"response-one":
+            _finish_failure("Unexpected first response: " + str(r.status) + " " + str(r.body))
+            return
+        got_first = True
+
+    def _on_response2(c, r):
+        if not got_first:
+            _finish_failure("Second response delivered before the first")
+            return
+        if r.status != 200 or r.body != b"response-two":
+            _finish_failure("Unexpected second response: " + str(r.status) + " " + str(r.body))
+            return
+        _finish_success()
+
+    def _on_client_error(c, errmsg):
+        if attempts < 5:
+            attempts += 1
+            after 0.1: _start_client()
+        else:
+            _finish_failure("HTTP client error: " + errmsg)
+
+    def _start_client():
+        http.Client(conn_cap, "127.0.0.1", _on_connect, _on_client_error, scheme="http", port=port)
+
+    def _start_listener():
+        server = net.TCPListener(serv_cap, "127.0.0.1", port, _on_raw_listen, _on_raw_accept)
+
+    def _timeout():
+        _finish_failure("timeout waiting for the second pipelined response, server received: " + str(received))
 
     _start_listener()
     after 0.05: _start_client()
