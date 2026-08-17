@@ -345,7 +345,7 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
             return None, b""
         else:
             resp = Response(version, status, msg.headers, msg.body)
-            return resp, b""
+            return resp, rest
     return None, i
 
 
