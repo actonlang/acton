@@ -641,6 +641,7 @@ reduce' eq c@(Proto _ env w t@(TCon _ tc) p)
                                                  return (mkEqn env w (proto2type t p) e : eq)
   | [wit] <- witSearch                      = do (eq',cs) <- solveProto env wit w t p
                                                  reduce (eq'++eq) cs
+--  | w1:w2:_ <- witSearch                    = error ("###### AMBIGUOUS: " ++ prstr c ++ " (" ++ prstrs [w1,w2] ++ ")") c w1
   | Just t' <- tExpand env tc               = reduce' eq c{ type1 = t' }
   where witSearch                           = findWitness env t p
 
