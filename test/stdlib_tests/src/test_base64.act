@@ -16,6 +16,35 @@ def _test_base64():
     d = base64.decode(e)
     testing.assertEqual(h, d)
 
+def _test_base64_empty():
+    # The base64 encoding of empty input is empty. Both directions must hand
+    # back a proper bytes value that the bytes methods can work on;
+    # encode(b"") used to return a dangling buffer that made decode() crash.
+    e = base64.encode(b"")
+    testing.assertEqual(e, b"")
+    testing.assertEqual(len(e), 0)
+    testing.assertEqual(e.decode(), "")
+    testing.assertEqual(e + b"x", b"x")
+    d = base64.decode(e)
+    testing.assertEqual(d, b"")
+    testing.assertEqual(len(d), 0)
+    testing.assertEqual(d.decode(), "")
+    testing.assertEqual(base64.decode(b"").decode(), "")
+
+def _test_base64_roundtrip_lengths():
+    # Cover every output length residue: the encoded and decoded buffers are
+    # exactly sized, so decode() (a C string operation on the payload) needs
+    # the terminating NUL that all bytes values carry.
+    for n in range(0, 40):
+        s = "x" * n
+        i = s.encode()
+        e = base64.encode(i)
+        testing.assertEqual(len(e), (n + 2) // 3 * 4)
+        testing.assertEqual(len(e.decode()), len(e))
+        d = base64.decode(e)
+        testing.assertEqual(d, i)
+        testing.assertEqual(d.decode(), s)
+
 def _test_base64_decode_garbage():
     # Invalid base64
     i = b"garbage"
@@ -25,3 +54,14 @@ def _test_base64_decode_garbage():
         testing.assertEqual(str(e), "ValueError: Invalid base64 input data")
     else:
         raise Exception("Expected ValueError")
+
+def _test_base64_decode_invalid_chars():
+    # Input of a valid length but with characters outside the alphabet or
+    # misplaced padding must raise ValueError, not abort the process.
+    for i in [b"!!!!", b"Zm9v=mFy", b"Zm9vYm=y", b"Zm9v\x00YmFy"]:
+        try:
+            d = base64.decode(i)
+        except ValueError as e:
+            testing.assertEqual(str(e), "ValueError: Invalid base64 input data")
+        else:
+            raise Exception("Expected ValueError for " + repr(i))

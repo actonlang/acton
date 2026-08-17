@@ -10,6 +10,8 @@ extern fn to_str_noc(str: [*:0]u8) B_str;
 extern fn B_ValueErrorG_new(B_str) ?*B_ValueError;
 extern fn B_MemoryErrorG_new(B_str) ?*B_MemoryError;
 extern fn @"$RAISE"(?*B_BaseException) void;
+extern fn acton_malloc(size: usize) ?*anyopaque;
+extern fn acton_malloc_atomic(size: usize) ?*anyopaque;
 
 // B_bytes
 pub const bytes = extern struct {
@@ -17,6 +19,33 @@ pub const bytes = extern struct {
     nbytes: i32,              // length of str in bytes
     str: [*]const u8            // str is UTF-8 encoded.
 };
+
+// Allocate a bytes object with room for nbytes payload bytes, the same way
+// NEW_UNFILLED_BYTES in builtin/str.c does it: the object comes from
+// acton_malloc (scanned, it holds the str pointer), the payload from
+// acton_malloc_atomic (pointer-free) and is nbytes + 1 long with a
+// terminating NUL at str[nbytes]. bytes methods like decode() and endswith()
+// rely on that terminator. Since at least one byte is always allocated, an
+// empty result gets a real buffer instead of the dangling pointer a
+// zero-length Zig allocation yields. The caller fills str[0..nbytes]; class
+// is normally taken from an existing bytes value.
+pub fn new_bytes(class: usize, nbytes: usize) *bytes {
+    const res: *bytes = @ptrCast(@alignCast(acton_malloc(@sizeOf(bytes)) orelse {
+        raise_MemoryError("OOM while allocating bytes");
+        unreachable;
+    }));
+    const buf: [*]u8 = @ptrCast(acton_malloc_atomic(nbytes + 1) orelse {
+        raise_MemoryError("OOM while allocating bytes");
+        unreachable;
+    });
+    buf[nbytes] = 0;
+    res.* = .{
+        .class = class,
+        .nbytes = @intCast(nbytes),
+        .str = buf,
+    };
+    return res;
+}
 
 // B_NoneType
 pub const none = extern struct {
