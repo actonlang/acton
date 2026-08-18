@@ -121,8 +121,9 @@ data UninstallOptions = UninstallOptions
     } deriving Show
 
 data SigOptions = SigOptions
-    { sigCompile :: CompileOptions
-    , sigTarget  :: String
+    { sigCompile      :: CompileOptions
+    , sigReachability :: Bool
+    , sigTarget       :: Maybe String
     } deriving Show
 
 
@@ -213,7 +214,7 @@ cmdLineParser       = hsubparser
                         <> command "build"   (info (CmdOpt <$> globalOptions <*> (Build <$> buildOptions)) (progDesc "Build an Acton project"))
                         <> command "install" (info (CmdOpt <$> globalOptions <*> (Install <$> installOptions)) (progDesc "Install an Acton application package"))
                         <> command "uninstall" (info (CmdOpt <$> globalOptions <*> (Uninstall <$> uninstallOptions)) (progDesc "Uninstall an Acton application package"))
-                        <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred type signatures"))
+                        <> command "sig"     (info (CmdOpt <$> globalOptions <*> (Sig <$> sigOptions)) (progDesc "Show inferred signatures or reachability"))
                         <> command "test"    (info (CmdOpt <$> globalOptions <*> (Test <$> testCommand)) (progDesc "Build and run project tests"))
                         <> command "repl"    (info (CmdOpt <$> globalOptions <*> (Repl <$> compileOptions)) (progDesc "Run an interactive Acton shell"))
                         <> command "fetch"   (info (CmdOpt <$> globalOptions <*> pure Fetch) (progDesc "Fetch project dependencies (offline prep)"))
@@ -298,7 +299,10 @@ uninstallOptions =
 sigOptions :: Parser SigOptions
 sigOptions = SigOptions
         <$> sigCompileOptions
-        <*> argument str (metavar "TARGET" <> help "Module or module.name to show, e.g. foo.bar")
+        <*> switch (long "reachability" <> help "Show the project selection or cached module reachability")
+        <*> optional (argument str
+              (metavar "TARGET" <>
+               help "Module or module.name; omit with --reachability for the project"))
 
 sigCompileOptions :: Parser CompileOptions
 sigCompileOptions = mkSigCompileOptions

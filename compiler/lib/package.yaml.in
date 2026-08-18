@@ -91,6 +91,7 @@ library:
     - Acton.Printer
     - Acton.QuickType
     - Acton.Reachability
+    - Acton.ReachabilityPrinter
     - Acton.ReachabilityRows
     - Acton.Solver
     - Acton.SourceProvider
