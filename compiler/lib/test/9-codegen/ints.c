@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #include "rts/common.h"
 #include "out/types/ints.h"
 int64_t intsQ_int64_min;

@@ -11,7 +11,7 @@
 -- THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
-{-# LANGUAGE DeriveGeneric, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingStrategies, ScopedTypeVariables #-}
 -- Acton Interface (.tydb) Files
 --
 -- Purpose
@@ -45,36 +45,50 @@
 --     "constructors"   :: [A.Name]                    -- public class/protocol/actor names
 --     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
+--     "stmt-mandatory" :: [Int]                       -- ownerless top-level statement indexes
 --     "stmt-has-not-impl" :: Bool                     -- any statement contains NotImplemented
+--     "module-hash"    :: ModuleHashInfo              -- ownerless module-init hash and deps
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
 --
 --   Per-name keys (NameInfo / TEnv, one set per name):
---     "name-order/<NNN>"   :: ByteString              -- name-key suffix, in TEnv order (NNN = padIndex)
---     "name-info/<suffix>" :: (A.Name, I.NameInfo)    -- the name and its type/name environment entry
+--     "name-order/<NNN>"       :: ByteString           -- exact ordered-row key (NNN = padIndex)
+--     "name-info/order/<NNN>"  :: (A.Name, I.NameInfo) -- every TEnv occurrence, preserving order
+--     "name-info/<suffix>"     :: (A.Name, I.NameInfo) -- last occurrence for direct lookup
 --     "name-hash/<suffix>" :: NameHashInfo            -- per-name src/pub/impl hashes + local deps
 --                                                     -- + owned statement indexes
 --
 --   Per-dependency keys:
 --     "deps/<module>"          :: [DepNameInfo]        -- dependency names with pub/impl hashes
---     "deps/<module>/<suffix>" :: DepUsers             -- local names that use one dependency name
+--     "deps/name/<hash>"       :: DepUsers             -- local names that use one dependency name;
+--                                                     -- hash covers the complete module/name pair
 --
 --   Per-extension keys:
 --     "ext-by-class/<suffix>"       :: (A.Name, [A.Name]) -- class name to extension names
 --     "ext-by-protocol/<suffix>"    :: (A.Name, [A.Name]) -- protocol name to extension names
 --
 --   Per-query index keys:
---     "con-attr/<suffix>"     :: [A.Name]             -- class/actor names declaring an attribute
---     "proto-attr/<suffix>"   :: [A.Name]             -- protocol names declaring an attribute
---     "descendants/<suffix>"  :: [A.Name]             -- class/protocol names below a constructor
---     "ext-proto/<suffix>"    :: [A.Name]             -- extension names implementing a protocol
---     "ext-type/<suffix>"     :: [A.Name]             -- extension names for a type/class
+--     "con-attr/<suffix>"     :: (A.Name, [A.Name])    -- class/actor names declaring an attribute
+--     "proto-attr/<suffix>"   :: (A.Name, [A.Name])    -- protocol names declaring an attribute
+--     "descendants/<suffix>"  :: (A.QName, [A.Name])   -- class/protocol names below a constructor
+--     "ext-proto/<suffix>"    :: (A.QName, [A.Name])   -- extension names implementing a protocol
+--     "ext-type/<suffix>"     :: (A.QName, [A.Name])   -- extension names for a type/class
 --
---   Per-statement keys (typed Module body):
---     "stmt/<NNN>"     :: A.Stmt                      -- one typed top-level statement (NNN = padIndex)
+--   Typed module content keys:
+--     "stmt/<NNN>"          :: StoredStmt             -- ordered top-level row (NNN = padIndex)
+--     "shape/<suffix>"      :: ContainerShape         -- compact container header/ABI slots
+--     "body/member/<owner-hash>/<member-hash>"
+--                            :: MemberContentRow       -- independently addressable method/attribute content
+--     "reach/top/<top-hash>" :: ReachTopRow
+--     "reach/module/<module-hash>" :: ReachModuleRow
+--     "reach/member/<top-hash>/<member-hash>" :: ReachMemberRow
+--     "reach/shape/<top-hash>" :: ReachShapeRow
+--     "reach/slot/<top-hash>/<member-ref-hash>" :: ReachSlotRow
+--     "reach/reflection/<top-hash>" :: ReachReflectionRow
 --
--- <suffix> encodes the semantic name: "p/<text>" for plain safe names (used as
--- the key verbatim) or "h/<sha256hex>" for long or unsafe names. See nameKeySuffix.
+-- Name and QName suffixes hash a location-free structural encoding. Module
+-- suffixes use their readable path when it is short and LMDB-safe, and a hash
+-- otherwise.
 --
 -- Rationale for the keyed layout
 -- - Keep the small validity/header fields (version, meta, dependency hashes, roots, tests,
@@ -92,11 +106,19 @@ module InterfaceFiles
   , DepModuleInfo(..)
   , DepNameInfo(..)
   , DepUsers(..)
+  , ModuleHashInfo(..)
+  , emptyModuleHashInfo
+  , ImplRefreshInput(..)
+  , ImplRefreshOutput(..)
+  , ImplRefreshStale(..)
   , SourceFileMeta(..)
+  , InterfaceContents(..)
+  , InterfaceSummary(..)
   , TyFile
   , TyHeader
   , TyHeaderSummary
   , InterfaceDB
+  , InterfaceReadSession
   , interfaceExt
   , interfacePath
   , interfaceExists
@@ -107,13 +129,26 @@ module InterfaceFiles
   , registerSystemTypeRoots
   , keyNameInfo
   , keyNameHash
+  , keyContainerShape
+  , keyMemberBody
+  , keyReachModule
+  , keyReachTop
+  , keyReachMember
+  , keyReachShape
+  , keyReachSlot
+  , keyReachReflection
   , readDepNames
   , readDepUsers
   , readNameHashMaybe
+  , readMemberContent
+  , readReachabilityRows
   , readModuleHashesMaybe
+  , readInterfaceSummaryMaybe
+  , readImplRefreshInput
   , readFile
   , readModuleIface
   , readNameHashes
+  , readModuleHashInfo
   , readStmtHasNotImpl
   , readHeader
   , readHeaderSummary
@@ -125,6 +160,18 @@ module InterfaceFiles
   , readHeaderSummaryMaybe
   , openInterfaceDB
   , openInterfaceDBMaybe
+  , withInterfaceReadSession
+  , readInterfaceSessionNameHashMaybe
+  , readInterfaceSessionReachSummaries
+  , readInterfaceSessionReachTop
+  , readInterfaceSessionReachTopMaybe
+  , readInterfaceSessionReachMemberMaybe
+  , readInterfaceSessionReachShapeMaybe
+  , readInterfaceSessionReachSlotMaybe
+  , readInterfaceSessionReachSlots
+  , readInterfaceSessionReachReflectionMaybe
+  , readInterfaceSessionSelection
+  , readInterfaceDBIface
   , readInterfaceDBModuleInfo
   , readInterfaceDBNameInfoMaybe
   , readInterfaceDBPublicNames
@@ -135,13 +182,14 @@ module InterfaceFiles
   , readInterfaceDBDescendants
   , readInterfaceDBExtByProto
   , readInterfaceDBExtByType
-  , readSelectedModule
   , TyDbWriteProgress(..)
   , writeFile
-  , writeFileWithProgress
-  , writeFileWithVersion
+  , writeVersionedFile
   , updateSourceMeta
+  , updateSourceHashAndNameHashes
   , updateImplRefresh
+  , isImplRefreshStale
+  , updateVersion
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -150,25 +198,32 @@ import qualified Control.Exception as E
 import Control.Concurrent (getNumCapabilities, runInBoundThread, threadDelay)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Concurrent.MVar (MVar, modifyMVar, modifyMVar_, newMVar, withMVar)
-import Control.Monad (forM, forM_, unless, when)
+import Control.Monad (foldM, forM, forM_, replicateM, unless, when)
 import Data.IORef (atomicModifyIORef', newIORef)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.List
-import qualified Data.Set
 import Data.List (foldl')
 import qualified Data.IntSet as IntSet
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
 import qualified Data.Set as Set
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
+import Acton.InterfaceRows
+  ( MemberKey(..)
+  , MemberContent(..)
+  , ContainerShape(..)
+  , StoredStmt(..)
+  , StoredDecl(..)
+  , InterfaceRows(..)
+  )
+import qualified Acton.InterfaceRows as Rows
 import qualified Acton.NameInfo as I
+import qualified Acton.ReachabilityRows as ReachRows
 import Acton.Names (isPublicName)
 import qualified Acton.Names as Names
 import Utils (SrcLoc(NoLoc), chunksOf)
@@ -182,6 +237,7 @@ import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (deviceID, fileAccess, fileID, getFileStatus, modificationTimeHiRes, setFileMode)
+import System.Random (randomIO)
 
 data NameHashInfo = NameHashInfo
   { nhName     :: A.Name
@@ -199,38 +255,71 @@ data NameHashInfo = NameHashInfo
   , nhImplDeps :: [(A.QName, BS.ByteString)]
   , nhStmtIndices :: [Int]
   } deriving (Show, Eq, Generic)
-
-instance Persist.Persist NameHashInfo
-instance NFData NameHashInfo
+    deriving anyclass (Persist.Persist, NFData)
 
 data DepModuleInfo = DepModuleInfo
   { dmiModule   :: A.ModName
   , dmiPubHash  :: BS.ByteString
   , dmiImplHash :: BS.ByteString
   } deriving (Show, Eq, Generic)
-
-instance Persist.Persist DepModuleInfo
-instance NFData DepModuleInfo
+    deriving anyclass (Persist.Persist, NFData)
 
 data DepNameInfo = DepNameInfo
   { dniName     :: A.Name
   , dniPubHash  :: BS.ByteString
   , dniImplHash :: BS.ByteString
   } deriving (Show, Eq, Generic)
-
-instance Persist.Persist DepNameInfo
-instance NFData DepNameInfo
+    deriving anyclass (Persist.Persist, NFData)
 
 data DepUsers = DepUsers
   { duPubUsers  :: [A.Name]
   , duImplUsers :: [A.Name]
   } deriving (Show, Eq, Generic)
-
-instance Persist.Persist DepUsers
-instance NFData DepUsers
+    deriving anyclass (Persist.Persist, NFData)
 
 emptyDepUsers :: DepUsers
 emptyDepUsers = DepUsers [] []
+
+-- | The implementation component owned by the module rather than a top-level
+-- name. The compact statement-owner schedule preserves initialization order
+-- across independently hashed names; mandatory ownerless statements keep
+-- their own structural hash and exact dependency rows. Together these rows
+-- are sufficient for an implementation refresh without loading typed syntax.
+data ModuleHashInfo = ModuleHashInfo
+  { mhOwnImplHash    :: BS.ByteString
+  , mhStatementOwners :: [[A.Name]]
+  , mhImplHash       :: BS.ByteString
+  , mhImplLocalDeps  :: [A.Name]
+  , mhPubDeps        :: [(A.QName, BS.ByteString)]
+  , mhImplDeps       :: [(A.QName, BS.ByteString)]
+  } deriving (Show, Eq, Generic)
+    deriving anyclass (Persist.Persist, NFData)
+
+emptyModuleHashInfo :: ModuleHashInfo
+emptyModuleHashInfo = ModuleHashInfo BS.empty [] BS.empty [] [] []
+
+-- | The complete stored input to an implementation-only hash refresh. All
+-- fields are captured in one read transaction and the identity fields are
+-- checked again by 'updateImplRefresh' before it mutates the interface.
+data ImplRefreshInput = ImplRefreshInput
+  { iriGeneration         :: BS.ByteString
+  , iriSourceHash         :: BS.ByteString
+  , iriPublicHash         :: BS.ByteString
+  , iriImplementationHash :: BS.ByteString
+  , iriModuleHashInfo     :: ModuleHashInfo
+  , iriDependencies       :: [DepModuleInfo]
+  , iriNameHashes         :: [NameHashInfo]
+  , iriRoots              :: [A.Name]
+  , iriHasNotImpl         :: Bool
+  } deriving (Show, Eq)
+
+-- | Newly computed hash rows for an implementation-only refresh.
+data ImplRefreshOutput = ImplRefreshOutput
+  { iroImplementationHash :: BS.ByteString
+  , iroModuleHashInfo     :: ModuleHashInfo
+  , iroDependencies       :: [DepModuleInfo]
+  , iroNameHashes         :: [NameHashInfo]
+  } deriving (Show, Eq)
 
 data ExtensionIndex = ExtensionIndex
   { extByClass      :: Map.Map A.Name [A.Name]
@@ -244,9 +333,24 @@ data SourceFileMeta = SourceFileMeta
   , sfmDevice  :: Maybe Integer
   , sfmInode   :: Maybe Integer
   } deriving (Show, Eq, Generic)
+    deriving anyclass (Persist.Persist, NFData)
 
-instance Persist.Persist SourceFileMeta
-instance NFData SourceFileMeta
+data InterfaceContents = InterfaceContents
+  { ifcSourceHash         :: BS.ByteString
+  , ifcPublicHash         :: BS.ByteString
+  , ifcImplementationHash :: BS.ByteString
+  , ifcModuleHashInfo     :: ModuleHashInfo
+  , ifcSourceMeta         :: Maybe SourceFileMeta
+  , ifcImports            :: [(A.ModName, BS.ByteString)]
+  , ifcDependencies       :: [DepModuleInfo]
+  , ifcNameHashes         :: [NameHashInfo]
+  , ifcRoots              :: [A.Name]
+  , ifcTests              :: [String]
+  , ifcDoc                :: Maybe String
+  , ifcModule             :: I.NModule
+  , ifcRows               :: InterfaceRows
+  , ifcReachabilityRows   :: ReachRows.ReachabilityRows
+  }
 
 data TyDbWriteProgress = TyDbWriteProgress
   { tyDbWriteProgressLabel :: String
@@ -302,6 +406,21 @@ type TyMeta =
   , BS.ByteString
   )
 
+-- | The small interface facts needed to prepare a
+-- deferred back pass. Source imports reconstruct ModuleInfo, while closure
+-- imports include implicit dependencies such as __builtin__.
+data InterfaceSummary = InterfaceSummary
+  { summarySourceHash     :: BS.ByteString
+  , summaryPublicHash     :: BS.ByteString
+  , summaryImplementationHash :: BS.ByteString
+  , summaryModuleName     :: A.ModName
+  , summarySourceImports  :: [A.ModName]
+  , summaryClosureImports :: [A.ModName]
+  , summaryRoots          :: [A.Name]
+  , summaryHasNotImpl     :: Bool
+  , summaryDoc            :: Maybe String
+  } deriving (Show, Eq)
+
 -- | A handle for selective per-name and per-index lookups in one module's
 -- .tydb: the version is validated once at open, and each lookup runs a short
 -- read transaction on the shared per-path environment.
@@ -309,6 +428,19 @@ newtype InterfaceDB = InterfaceDB FilePath
 
 instance Show InterfaceDB where
     show (InterfaceDB path) = "InterfaceDB " ++ path
+
+interfaceDBPath :: InterfaceDB -> FilePath
+interfaceDBPath (InterfaceDB path) = path
+
+-- | A read transaction shared by a group of exact-key
+-- lookups. Selective compilation keeps one session per participating module,
+-- so a huge interface is mapped and entered once without loading unrelated
+-- rows.
+data InterfaceReadSession = InterfaceReadSession
+  FilePath LMDB.MDB_txn LMDB.MDB_dbi
+
+interfaceReadSessionPath :: InterfaceReadSession -> FilePath
+interfaceReadSessionPath (InterfaceReadSession path _ _) = path
 
 -- Note: tests are stored in the header to support listing without compiling
 --       or executing test binaries.
@@ -404,10 +536,20 @@ copyInterface src dst = do
     runInLmdbThread $
       withEnv src True mapSize $ \env ->
         LMDB.mdb_env_copy env dst
+    renewInterfaceGeneration dst
+    removeFile (lockFilePath dst) `E.catch` ignoreMissing
     setReadableInterfacePermissions dst
   where
     ignoreMissing :: E.IOException -> IO ()
     ignoreMissing _ = return ()
+
+renewInterfaceGeneration :: FilePath -> IO ()
+renewInterfaceGeneration f = do
+    generation <- newInterfaceGeneration
+    size <- readMapSize f
+    withWriteTxn f size $ \txn dbi -> do
+      validateVersion txn dbi
+      putValue txn dbi keyGeneration (encodeStrict generation)
 
 listInterfaceDirsRecursive :: FilePath -> IO [FilePath]
 listInterfaceDirsRecursive root = do
@@ -431,6 +573,16 @@ newtype TyCacheInvalid = TyCacheInvalid String deriving Show
 
 instance E.Exception TyCacheInvalid
 
+newtype ImplRefreshStale = ImplRefreshStale String deriving Show
+
+instance E.Exception ImplRefreshStale
+
+isImplRefreshStale :: E.SomeException -> Bool
+isImplRefreshStale err =
+    case E.fromException err :: Maybe ImplRefreshStale of
+      Just _  -> True
+      Nothing -> False
+
 versionMismatch :: [Int] -> IO a
 versionMismatch vs =
     E.throwIO (TyCacheInvalid (".tydb version mismatch: file has " ++ show vs ++ ", expected " ++ show A.version))
@@ -447,8 +599,9 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyModuleHeader :: BS.ByteString
+keyVersion, keyGeneration, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtMandatory, keyStmtHasNotImpl, keyModuleHash, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
+keyGeneration   = key "generation"
 keyMeta         = key "meta"
 keyImports      = key "imports"
 keyDeps         = key "deps"
@@ -460,46 +613,37 @@ keyPublicNames  = key "public-names"
 keyConstructors = key "constructors"
 keyActors       = key "actors"
 keyStmtCount    = key "stmt-count"
+keyStmtMandatory = key "stmt-mandatory"
 keyStmtHasNotImpl = key "stmt-has-not-impl"
+keyModuleHash   = key "module-hash"
 keyModuleHeader = key "module-header"
+
+-- Every semantic commit receives a fresh nonce.  Unlike content hashes this
+-- changes across an A -> B -> A rewrite, so selective readers can detect that
+-- separate LMDB read transactions did not observe one committed generation.
+newInterfaceGeneration :: IO BS.ByteString
+newInterfaceGeneration = BS.pack <$> replicateM 32 randomIO
 
 padIndex :: Int -> String
 padIndex i =
     let s = show i
     in replicate (12 - length s) '0' ++ s
 
-plainNameKeyLimit :: Int
-plainNameKeyLimit = 400
-
-plainKeyRaw :: BS.ByteString -> Bool
-plainKeyRaw raw =
-    BS.length raw <= plainNameKeyLimit && BS.all safe raw
-  where
-    safe w =
-        w > 32 && w < 127 && w /= 47
-
-safeKeySuffix :: BS.ByteString -> BS.ByteString
-safeKeySuffix raw =
-    if plainKeyRaw raw
-      then B.concat [key "p/", raw]
-      else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
-
+-- rawstr is a C-symbol rendering, not a one-to-one semantic encoding: a plain
+-- source name can spell the same text as a Derived name.  Direct indexes must
+-- therefore key the location-free Name structure itself.
 nameKeySuffix :: A.Name -> BS.ByteString
 nameKeySuffix n =
-    safeKeySuffix (TE.encodeUtf8 (T.pack (A.rawstr n)))
+    B.concat [key "h/", semanticDigest (stripNameKeyLocs n)]
 
 moduleKeySuffix :: A.ModName -> BS.ByteString
-moduleKeySuffix mn =
-    let raw = TE.encodeUtf8 (T.pack (Data.List.intercalate "." (A.modPath mn)))
-    in if plainKeyRaw raw
-         then raw
-         else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
+moduleKeySuffix = semanticDigest . stripModNameKeyLocs
 
 keyNameInfo :: A.Name -> BS.ByteString
 keyNameInfo n = B.concat [key "name-info/", nameKeySuffix n]
 
-keyNameInfoSuffix :: BS.ByteString -> BS.ByteString
-keyNameInfoSuffix suffix = B.concat [key "name-info/", suffix]
+keyNameInfoOrder :: Int -> BS.ByteString
+keyNameInfoOrder i = B.pack ("name-info/order/" ++ padIndex i)
 
 keyNameOrder :: Int -> BS.ByteString
 keyNameOrder i = B.pack ("name-order/" ++ padIndex i)
@@ -510,11 +654,77 @@ keyNameHashPrefix = key "name-hash/"
 keyNameHash :: A.Name -> BS.ByteString
 keyNameHash n = B.concat [keyNameHashPrefix, nameKeySuffix n]
 
+keyContainerShape :: A.Name -> BS.ByteString
+keyContainerShape n = B.concat [key "shape/", nameKeySuffix n]
+
+keyMemberBodyPrefix :: A.Name -> BS.ByteString
+keyMemberBodyPrefix owner =
+    B.concat [key "body/member/", semanticDigest (stripNameKeyLocs owner), key "/"]
+
+semanticDigest :: Persist.Persist a => a -> BS.ByteString
+semanticDigest = Base16.encode . SHA256.hash . encodeStrict
+
+keyMemberBody :: A.Name -> MemberKey -> BS.ByteString
+keyMemberBody owner member =
+    B.concat [keyMemberBodyPrefix owner, semanticDigest (stripMemberKeyLocs member)]
+
+stripMemberKeyLocs :: MemberKey -> MemberKey
+stripMemberKeyLocs (Method n)       = Method (stripNameKeyLocs n)
+stripMemberKeyLocs (Attr n)         = Attr (stripNameKeyLocs n)
+stripMemberKeyLocs (StaticInit n)   = StaticInit (stripNameKeyLocs n)
+stripMemberKeyLocs (InstanceInit n) = InstanceInit (stripNameKeyLocs n)
+stripMemberKeyLocs InitRest         = InitRest
+
+stripTopKeyLocs :: ReachRows.TopKey -> ReachRows.TopKey
+stripTopKeyLocs (ReachRows.TopKey mn n) =
+    ReachRows.TopKey (stripModNameKeyLocs mn) (stripNameKeyLocs n)
+
+stripMemberRefLocs :: ReachRows.MemberRef -> ReachRows.MemberRef
+stripMemberRefLocs (ReachRows.MethodRef n) = ReachRows.MethodRef (stripNameKeyLocs n)
+stripMemberRefLocs (ReachRows.AttrRef n)   = ReachRows.AttrRef (stripNameKeyLocs n)
+
+reachOwnerPrefix :: BS.ByteString -> ReachRows.TopKey -> BS.ByteString
+reachOwnerPrefix prefix owner =
+    B.concat [prefix, semanticDigest (stripTopKeyLocs owner), key "/"]
+
+keyReachTop :: ReachRows.TopKey -> BS.ByteString
+keyReachTop owner =
+    B.concat [key "reach/top/", semanticDigest (stripTopKeyLocs owner)]
+
+keyReachMember :: ReachRows.TopKey -> MemberKey -> BS.ByteString
+keyReachMember owner member =
+    B.concat
+      [ reachOwnerPrefix (key "reach/member/") owner
+      , semanticDigest (stripMemberKeyLocs member)
+      ]
+
+keyReachModule :: A.ModName -> BS.ByteString
+keyReachModule mn =
+    B.concat [key "reach/module/", semanticDigest (stripModNameKeyLocs mn)]
+
+keyReachShape :: ReachRows.TopKey -> BS.ByteString
+keyReachShape owner =
+    B.concat [key "reach/shape/", semanticDigest (stripTopKeyLocs owner)]
+
+keyReachSlot :: ReachRows.TopKey -> ReachRows.MemberRef -> BS.ByteString
+keyReachSlot owner member =
+    B.concat
+      [ reachOwnerPrefix (key "reach/slot/") owner
+      , semanticDigest (stripMemberRefLocs member)
+      ]
+
+keyReachReflection :: ReachRows.TopKey -> BS.ByteString
+keyReachReflection owner =
+    B.concat [key "reach/reflection/", semanticDigest (stripTopKeyLocs owner)]
+
 keyDepModule :: A.ModName -> BS.ByteString
 keyDepModule mn = B.concat [key "deps/", moduleKeySuffix mn]
 
 keyDepName :: A.ModName -> A.Name -> BS.ByteString
-keyDepName mn n = B.concat [keyDepModule mn, key "/", nameKeySuffix n]
+keyDepName mn n = B.concat
+    [ key "deps/name/"
+    , semanticDigest (stripModNameKeyLocs mn, stripNameKeyLocs n)
+    ]
 
 keyExtByClassPrefix, keyExtByProtocolPrefix :: BS.ByteString
 keyExtByClassPrefix      = key "ext-by-class/"
@@ -799,6 +1009,12 @@ openInterfaceDBMaybe = readTyMaybe openInterfaceDB
 withInterfaceDBReadTxn :: InterfaceDB -> (LMDB.MDB_txn -> LMDB.MDB_dbi -> IO a) -> IO a
 withInterfaceDBReadTxn (InterfaceDB path) action = withReadTxn path action
 
+withInterfaceReadSession :: FilePath -> (InterfaceReadSession -> IO a) -> IO a
+withInterfaceReadSession path action =
+    withReadTxn path $ \txn dbi -> do
+      validateVersion txn dbi
+      action (InterfaceReadSession path txn dbi)
+
 -- The raw LMDB binding requires transaction setup from a bound thread; this
 -- applies to reads too because of its Haskell-side lock guard.
 runInLmdbThread :: IO a -> IO a
@@ -840,8 +1056,11 @@ getMaybeValue label txn dbi k = do
       Nothing -> return Nothing
       Just v -> Just <$> (copyVal v >>= decodeStrict label)
 
-getValuesWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [BS.ByteString]
-getValuesWithPrefix txn dbi prefix =
+getEntriesWithPrefix :: LMDB.MDB_txn
+                     -> LMDB.MDB_dbi
+                     -> BS.ByteString
+                     -> IO [(BS.ByteString, BS.ByteString)]
+getEntriesWithPrefix txn dbi prefix =
     E.bracket (LMDB.mdb_cursor_open txn dbi) LMDB.mdb_cursor_close $ \cursor ->
       withVal prefix $ \start ->
         withVal BS.empty $ \empty ->
@@ -857,7 +1076,11 @@ getValuesWithPrefix txn dbi prefix =
         else do
           v <- peek vp >>= copyVal
           found <- LMDB.mdb_cursor_get LMDB.MDB_NEXT cursor kp vp
-          (v :) <$> go cursor kp vp found
+          ((k, v) :) <$> go cursor kp vp found
+
+getKeysWithPrefix :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [BS.ByteString]
+getKeysWithPrefix txn dbi prefix =
+    map fst <$> getEntriesWithPrefix txn dbi prefix
 
 putValue :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> BS.ByteString -> IO ()
 putValue txn dbi k v =
@@ -865,6 +1088,12 @@ putValue txn dbi k v =
       withVal v $ \vv -> do
         _ <- LMDB.mdb_put (LMDB.compileWriteFlags []) txn dbi kv vv
         return ()
+
+deleteValue :: LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO ()
+deleteValue txn dbi k =
+    withVal k $ \kv -> do
+      _ <- LMDB.mdb_del txn dbi kv Nothing
+      return ()
 
 isMapFull :: E.SomeException -> Bool
 isMapFull err =
@@ -889,6 +1118,7 @@ writeEntries = writeEntriesWithProgress (\_ -> return ())
 
 writeEntriesWithProgress :: (Double -> IO ()) -> FilePath -> [(BS.ByteString, BS.ByteString)] -> IO ()
 writeEntriesWithProgress onProgress path entries = do
+    validateEntryKeys entries
     fileExists <- doesFileExist path
     when fileExists (removeFile path)
     createDirectoryIfMissing True path
@@ -918,6 +1148,27 @@ writeEntriesWithProgress onProgress path entries = do
           when (i == total || i `mod` step == 0) $
             onProgress (fromIntegral i / fromIntegral total)
 
+lmdbKeyLimit :: Int
+lmdbKeyLimit = 511
+
+validateEntryKeys :: [(BS.ByteString, BS.ByteString)] -> IO ()
+validateEntryKeys entries = do
+    let keys = map fst entries
+        tooLong = filter ((> lmdbKeyLimit) . BS.length) keys
+        counts = Map.fromListWith (+) [ (k,1 :: Int) | k <- keys ]
+        duplicates = [ (k,n) | (k,n) <- Map.toAscList counts, n > 1 ]
+    unless (null tooLong) $
+      invalidModuleRows
+        ("LMDB key exceeds " ++ show lmdbKeyLimit ++ " bytes: " ++
+         show (maximum $ map BS.length tooLong))
+    unless (null duplicates) $
+      invalidModuleRows
+        ("storage keys are not globally unique: " ++
+         Data.List.intercalate ", "
+           [ show (B.unpack k) ++ " (" ++ show n ++ " entries)"
+           | (k,n) <- duplicates
+           ])
+
 setReadableInterfacePermissions :: FilePath -> IO ()
 setReadableInterfacePermissions path = do
     setFileMode path 0o755
@@ -935,6 +1186,8 @@ validateVersion :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ()
 validateVersion txn dbi = do
     vs <- getValue "version" txn dbi keyVersion
     unless (vs == A.version) (versionMismatch vs)
+    _ <- getValue "module-hash" txn dbi keyModuleHash :: IO ModuleHashInfo
+    return ()
 
 readMeta :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO TyMeta
 readMeta txn dbi = do
@@ -948,6 +1201,90 @@ readModuleHashes f =
       traceTydbRead "module-hashes" f "meta"
       return (moduleSrcBytesHash, modulePubHash, moduleImplHash)
 
+readInterfaceSummary :: FilePath -> IO InterfaceSummary
+readInterfaceSummary f =
+    withReadTxn f $ \txn dbi -> do
+      (_sourceMeta, srcHash, pubHash, implHash) <- readMeta txn dbi
+      hashedImports <- getValue "imports" txn dbi keyImports ::
+        IO [(A.ModName, BS.ByteString)]
+      roots <- getValue "roots" txn dbi keyRoots
+      hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+      (moduleName, imports, sourceDoc) <-
+        getValue "module-header" txn dbi keyModuleHeader
+      doc <- getValue "doc" txn dbi keyDoc
+      traceTydbRead "interface-summary" f "meta imports"
+      return InterfaceSummary
+        { summarySourceHash = srcHash
+        , summaryPublicHash = pubHash
+        , summaryImplementationHash = implHash
+        , summaryModuleName = moduleName
+        , summarySourceImports = A.importsOf (A.Module moduleName imports sourceDoc [])
+        , summaryClosureImports = map fst hashedImports
+        , summaryRoots = roots
+        , summaryHasNotImpl = hasNotImpl
+        , summaryDoc = doc
+        }
+
+-- | Read every row used to recompute implementation hashes in one committed
+-- interface generation. Typed declarations and statement bodies stay lazy.
+readImplRefreshInput :: FilePath -> IO ImplRefreshInput
+readImplRefreshInput f =
+    withReadTxn f $ \txn dbi -> do
+      (_sourceMeta, srcHash, pubHash, implHash) <- readMeta txn dbi
+      generation <- getValue "generation" txn dbi keyGeneration
+      moduleHashInfo <- getValue "module-hash" txn dbi keyModuleHash
+      dependencies <- getValue "deps" txn dbi keyDeps
+      storedNameHashes <- readNameHashEntries txn dbi
+      nameHashes <- restoreNameHashDeps txn dbi dependencies storedNameHashes
+      roots <- getValue "roots" txn dbi keyRoots
+      hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+      traceTydbRead "impl-refresh" f
+        ("generation names " ++ show (length nameHashes))
+      return ImplRefreshInput
+        { iriGeneration = generation
+        , iriSourceHash = srcHash
+        , iriPublicHash = pubHash
+        , iriImplementationHash = implHash
+        , iriModuleHashInfo = moduleHashInfo
+        , iriDependencies = dependencies
+        , iriNameHashes = nameHashes
+        , iriRoots = roots
+        , iriHasNotImpl = hasNotImpl
+        }
+
+-- Per-name rows omit external deps; restore them from the dependency indexes
+-- while the caller's read transaction still pins the interface generation.
+restoreNameHashDeps :: LMDB.MDB_txn
+                    -> LMDB.MDB_dbi
+                    -> [DepModuleInfo]
+                    -> [NameHashInfo]
+                    -> IO [NameHashInfo]
+restoreNameHashDeps txn dbi depModules nameHashes = do
+    (pubByOwner, implByOwner) <- foldM addModule (Map.empty, Map.empty) depModules
+    return
+      [ nh { nhPubDeps = Data.List.sortOn fst (Map.findWithDefault [] (nhName nh) pubByOwner)
+           , nhImplDeps = Data.List.sortOn fst (Map.findWithDefault [] (nhName nh) implByOwner)
+           }
+      | nh <- nameHashes
+      ]
+  where
+    addModule acc depInfo = do
+      let depMn = dmiModule depInfo
+      depNames <- readDepNameEntries txn dbi depMn
+      foldM (addName depMn) acc depNames
+
+    addName depMn (pubAcc, implAcc) depInfo = do
+      users <- readDepUsersEntry txn dbi depMn (dniName depInfo)
+      let mkDep h = (A.GName depMn (dniName depInfo), h)
+          addUser dep m user = Map.insertWith (++) user [dep] m
+          pubAcc'
+            | BS.null (dniPubHash depInfo) = pubAcc
+            | otherwise = foldl' (addUser (mkDep $ dniPubHash depInfo)) pubAcc (duPubUsers users)
+          implAcc'
+            | BS.null (dniImplHash depInfo) = implAcc
+            | otherwise = foldl' (addUser (mkDep $ dniImplHash depInfo)) implAcc (duImplUsers users)
+      return (pubAcc', implAcc')
+
 readNameEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO ([(A.Name, I.NameInfo)], [NameHashInfo])
 readNameEntries txn dbi = do
     te <- readNameInfoEntries txn dbi
@@ -958,17 +1295,27 @@ readNameInfoEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [(A.Name, I.NameInfo)]
 readNameInfoEntries txn dbi = do
     nameCount <- getValue "name-count" txn dbi keyNameCount
     forM [0 .. nameCount - 1] $ \i -> do
-      suffix <- getValue ("name-order " ++ show i) txn dbi (keyNameOrder i)
-      getValue ("name-info " ++ show i) txn dbi (keyNameInfoSuffix suffix)
+      rowKey <- getValue ("name-order " ++ show i) txn dbi (keyNameOrder i)
+      unless (rowKey == keyNameInfoOrder i) $
+        invalidContentRow ("name-info order/key mismatch at " ++ show i)
+      getValue ("name-info " ++ show i) txn dbi rowKey
 
 readNameInfoEntryMaybe :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
-readNameInfoEntryMaybe txn dbi n =
-    getMaybeValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+readNameInfoEntryMaybe txn dbi n = do
+    entry <- getMaybeValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+    forM_ entry $ \(stored,_) ->
+      unless (stored == n) $
+        invalidContentRow ("name-info key/value mismatch for " ++ A.rawstr n)
+    return entry
 
 readNameInfoEntriesByNames :: LMDB.MDB_txn -> LMDB.MDB_dbi -> [A.Name] -> IO I.TEnv
 readNameInfoEntriesByNames txn dbi ns =
-    forM ns $ \n ->
-      getValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+    forM ns $ \n -> do
+      entry@(stored,_) <-
+        getValue ("name-info " ++ A.nstr n) txn dbi (keyNameInfo n)
+      unless (stored == n) $
+        invalidContentRow ("name-info key/value mismatch for " ++ A.rawstr n)
+      return entry
 
 readInterfaceDBModuleInfo :: InterfaceDB -> IO ([A.ModName], Maybe String)
 readInterfaceDBModuleInfo db =
@@ -977,139 +1324,410 @@ readInterfaceDBModuleInfo db =
       doc <- getValue "doc" txn dbi keyDoc
       return (A.importsOf (A.Module tmn timps tdoc []), doc)
 
+readInterfaceDBIface :: InterfaceDB -> IO ([A.ModName], I.NModule)
+readInterfaceDBIface db = do
+    result@(_, I.NModule _ te _) <-
+      withInterfaceDBReadTxn db readModuleIfaceEntries
+    traceTydbRead "iface" (interfaceDBPath db) ("names " ++ show (length te))
+    return result
+
 readInterfaceDBNameInfoMaybe :: InterfaceDB -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
-readInterfaceDBNameInfoMaybe db@(InterfaceDB path) n = do
+readInterfaceDBNameInfoMaybe db n = do
     mi <- withInterfaceDBReadTxn db $ \txn dbi ->
             readNameInfoEntryMaybe txn dbi n
-    traceTydbRead (case mi of Just _ -> "name-hit"; Nothing -> "name-miss") path (A.nstr n)
+    traceTydbRead (case mi of Just _ -> "name-hit"; Nothing -> "name-miss")
+      (interfaceDBPath db) (A.nstr n)
     return mi
 
 readInterfaceDBPublicNames :: InterfaceDB -> IO [A.Name]
-readInterfaceDBPublicNames db@(InterfaceDB path) = do
+readInterfaceDBPublicNames db = do
     ns <- withInterfaceDBReadTxn db $ \txn dbi ->
             getValue "public-names" txn dbi keyPublicNames
-    traceTydbRead "public-names" path (show (length ns))
+    traceTydbRead "public-names" (interfaceDBPath db) (show (length ns))
     return ns
 
 readInterfaceDBConstructors :: InterfaceDB -> IO I.TEnv
-readInterfaceDBConstructors db@(InterfaceDB path) = do
+readInterfaceDBConstructors db = do
     te <- withInterfaceDBReadTxn db $ \txn dbi -> do
             ns <- getValue "constructors" txn dbi keyConstructors
             readNameInfoEntriesByNames txn dbi ns
-    traceTydbRead "constructors" path (show (length te))
+    traceTydbRead "constructors" (interfaceDBPath db) (show (length te))
     return te
 
 readInterfaceDBActors :: InterfaceDB -> IO I.TEnv
-readInterfaceDBActors db@(InterfaceDB path) = do
+readInterfaceDBActors db = do
     te <- withInterfaceDBReadTxn db $ \txn dbi -> do
             ns <- getValue "actors" txn dbi keyActors
             readNameInfoEntriesByNames txn dbi ns
-    traceTydbRead "actors" path (show (length te))
+    traceTydbRead "actors" (interfaceDBPath db) (show (length te))
     return te
 
 readInterfaceDBConAttr :: InterfaceDB -> A.Name -> IO I.TEnv
 readInterfaceDBConAttr db n =
-    readTEnvIndex db ("con-attr " ++ A.nstr n) (keyConAttr n)
+    readNameTEnvIndex db ("con-attr " ++ A.nstr n) (keyConAttr n) n
 
 readInterfaceDBProtoAttr :: InterfaceDB -> A.Name -> IO I.TEnv
 readInterfaceDBProtoAttr db n =
-    readTEnvIndex db ("proto-attr " ++ A.nstr n) (keyProtoAttr n)
+    readNameTEnvIndex db ("proto-attr " ++ A.nstr n) (keyProtoAttr n) n
 
 readInterfaceDBDescendants :: InterfaceDB -> A.QName -> IO I.TEnv
 readInterfaceDBDescendants db qn =
-    readTEnvIndex db ("descendants " ++ show qn) (keyDescendants qn)
+    readQNameTEnvIndex db ("descendants " ++ show qn) (keyDescendants qn) qn
 
 readInterfaceDBExtByProto :: InterfaceDB -> A.QName -> IO I.TEnv
 readInterfaceDBExtByProto db qn =
-    readTEnvIndex db ("ext-proto " ++ show qn) (keyExtProto qn)
+    readQNameTEnvIndex db ("ext-proto " ++ show qn) (keyExtProto qn) qn
 
 readInterfaceDBExtByType :: InterfaceDB -> A.QName -> IO I.TEnv
 readInterfaceDBExtByType db qn =
-    readTEnvIndex db ("ext-type " ++ show qn) (keyExtType qn)
+    readQNameTEnvIndex db ("ext-type " ++ show qn) (keyExtType qn) qn
 
-readTEnvIndex :: InterfaceDB -> String -> BS.ByteString -> IO I.TEnv
-readTEnvIndex db@(InterfaceDB path) label k = do
+readNameTEnvIndex :: InterfaceDB -> String -> BS.ByteString -> A.Name -> IO I.TEnv
+readNameTEnvIndex db label k expected = do
     te <- withInterfaceDBReadTxn db $ \txn dbi -> do
-            ns <- maybe [] id <$> getMaybeValue label txn dbi k
+            entry <- getMaybeValue label txn dbi k :: IO (Maybe (A.Name, [A.Name]))
+            ns <- case entry of
+              Nothing -> return []
+              Just (stored,names)
+                | stored == expected -> return names
+                | otherwise -> invalidContentRow (label ++ " key/value mismatch")
             readNameInfoEntriesByNames txn dbi ns
-    traceTydbRead "index" path (label ++ " " ++ show (length te))
+    traceTydbRead "index" (interfaceDBPath db) (label ++ " " ++ show (length te))
+    return te
+
+readQNameTEnvIndex :: InterfaceDB -> String -> BS.ByteString -> A.QName -> IO I.TEnv
+readQNameTEnvIndex db label k expected = do
+    te <- withInterfaceDBReadTxn db $ \txn dbi -> do
+            entry <- getMaybeValue label txn dbi k :: IO (Maybe (A.QName, [A.Name]))
+            ns <- case entry of
+              Nothing -> return []
+              Just (stored,names)
+                | stored == stripQNameKeyLocs expected -> return names
+                | otherwise -> invalidContentRow (label ++ " key/value mismatch")
+            readNameInfoEntriesByNames txn dbi ns
+    traceTydbRead "index" (interfaceDBPath db) (label ++ " " ++ show (length te))
     return te
 
 readNameHashEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [NameHashInfo]
-readNameHashEntries txn dbi = do
-    vals <- getValuesWithPrefix txn dbi keyNameHashPrefix
-    infos <- forM (zip [0..] vals) $ \(i, v) ->
-      decodeStrict ("name-hash " ++ show (i :: Int)) v
-    return (Data.List.sortOn (A.nstr . nhName) infos)
+readNameHashEntries txn dbi =
+    map snd <$> getRowsAt rowNameHash "all" txn dbi keyNameHashPrefix
+
+invalidContentRow :: String -> IO a
+invalidContentRow msg =
+    E.throwIO (TyCacheInvalid ("Invalid .tydb content row: " ++ msg))
+
+rowsIO :: Rows.RowResult a -> IO a
+rowsIO result =
+    case result of
+      Left (Rows.RowError msg) -> invalidContentRow msg
+      Right value              -> return value
+
+memberLabel :: A.Name -> MemberKey -> String
+memberLabel owner member = A.rawstr owner ++ "." ++ Rows.memberLabel member
+
+topKeyLabel :: ReachRows.TopKey -> String
+topKeyLabel (ReachRows.TopKey mn name) =
+    Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr name
+
+memberRefLabel :: ReachRows.MemberRef -> String
+memberRefLabel (ReachRows.MethodRef name) = "method:" ++ A.rawstr name
+memberRefLabel (ReachRows.AttrRef name)   = "attr:" ++ A.rawstr name
+
+-- Generic identity-validated rows ------------------------------------------------------------------------
+--
+-- Every keyed content row follows one pattern: an exact semantic key, a stored
+-- copy of the identity inside the encoded row, and a payload.  A RowKind
+-- bundles the key builder, the wrapper codec and the label rendering; the
+-- generic accessors below derive the point read, the optional read, the
+-- owner-scoped enumeration, the traced session read and the write entry
+-- uniformly, with one identity validation for all of them.
+
+data RowKind k v = RowKind
+  { rkLabel :: String
+  , rkTrace :: String
+  , rkName  :: k -> String
+  , rkKey   :: k -> BS.ByteString
+  , rkEnc   :: k -> v -> BS.ByteString
+  , rkDec   :: String -> BS.ByteString -> IO (k, v)
+  , rkValid :: k -> v -> Bool
+  }
+
+-- Rows are stored as the (key, payload) pair itself; the stored key copy is
+-- what makes every row self-validating.  Single-constructor Persist rows have
+-- no constructor tag, so this is byte-identical to the previous per-row
+-- wrapper types.
+rowKind :: (Persist.Persist k, Persist.Persist v)
+        => String -> String -> (k -> String) -> (k -> BS.ByteString) -> RowKind k v
+rowKind label trace name keyOf = RowKind
+  { rkLabel = label
+  , rkTrace = trace
+  , rkName  = name
+  , rkKey   = keyOf
+  , rkEnc   = \k v -> encodeStrict (k, v)
+  , rkDec   = decodeStrict
+  , rkValid = \_ _ -> True
+  }
+
+rowMismatch :: RowKind k v -> k -> IO a
+rowMismatch kind k =
+    invalidContentRow (rkLabel kind ++ " key/value mismatch for " ++ rkName kind k)
+
+getRow :: Eq k => RowKind k v -> LMDB.MDB_txn -> LMDB.MDB_dbi -> k -> IO v
+getRow kind txn dbi k = do
+    row <- getRowMaybe kind txn dbi k
+    case row of
+      Nothing -> E.throwIO (TyCacheInvalid
+        ("Missing .tydb key: " ++ rkLabel kind ++ " " ++ rkName kind k))
+      Just v -> return v
+
+getRowMaybe :: Eq k => RowKind k v -> LMDB.MDB_txn -> LMDB.MDB_dbi -> k -> IO (Maybe v)
+getRowMaybe kind txn dbi k = do
+    mv <- withVal (rkKey kind k) (LMDB.mdb_get txn dbi)
+    case mv of
+      Nothing -> return Nothing
+      Just val -> do
+        bytes <- copyVal val
+        (stored, v) <- rkDec kind (rkLabel kind ++ " " ++ rkName kind k) bytes
+        if stored == k && rkValid kind k v
+          then return (Just v)
+          else rowMismatch kind k
+
+getRowsAt :: Ord k => RowKind k v -> String -> LMDB.MDB_txn -> LMDB.MDB_dbi -> BS.ByteString -> IO [(k, v)]
+getRowsAt kind ctx txn dbi prefix = do
+    rows <- getEntriesWithPrefix txn dbi prefix
+    entries <- forM (zip [0 :: Int ..] rows) $ \(i, (storedKey, bytes)) -> do
+      row@(stored, v) <- rkDec kind (rkLabel kind ++ " " ++ ctx ++ " #" ++ show i) bytes
+      unless (storedKey == rkKey kind stored && rkValid kind stored v) $
+        rowMismatch kind stored
+      return row
+    let keyed = Map.fromList entries
+    when (length entries /= Map.size keyed) $
+      invalidContentRow ("duplicate " ++ rkLabel kind ++ " rows for " ++ ctx)
+    return (Map.toAscList keyed)
+
+getOwnedRows :: (Ord a, Ord o) => RowKind (o, a) v -> (o -> String) -> (o -> BS.ByteString)
+             -> LMDB.MDB_txn -> LMDB.MDB_dbi -> o -> IO [(a, v)]
+getOwnedRows kind name prefixOf txn dbi owner = do
+    entries <- getRowsAt kind (name owner) txn dbi (prefixOf owner)
+    forM entries $ \((stored, sub), v) -> do
+      unless (stored == owner) $
+        invalidContentRow ("foreign " ++ rkLabel kind ++ " row for " ++ name owner)
+      return (sub, v)
+
+rowEntry :: RowKind k v -> k -> v -> (BS.ByteString, BS.ByteString)
+rowEntry kind k v = (rkKey kind k, rkEnc kind k v)
+
+sessionRow :: Eq k => RowKind k v -> InterfaceReadSession -> k -> IO v
+sessionRow kind session@(InterfaceReadSession _ txn dbi) k = do
+    v <- getRow kind txn dbi k
+    traceTydbRead (rkTrace kind) (interfaceReadSessionPath session) (rkName kind k)
+    return v
+
+sessionRowMaybe :: Eq k => RowKind k v -> InterfaceReadSession -> k -> IO (Maybe v)
+sessionRowMaybe kind session@(InterfaceReadSession _ txn dbi) k = do
+    v <- getRowMaybe kind txn dbi k
+    traceTydbRead (maybe (rkTrace kind ++ "-miss") (const $ rkTrace kind) v)
+      (interfaceReadSessionPath session) (rkName kind k)
+    return v
+
+modNameLabel :: A.ModName -> String
+modNameLabel = Data.List.intercalate "." . A.modPath
+
+rowContainerShape :: RowKind A.Name ContainerShape
+rowContainerShape = (rowKind "shape" "shape" A.rawstr keyContainerShape)
+  { rkEnc = \_ shape -> encodeStrict shape
+  , rkDec = \ctx bytes -> do
+      shape <- decodeStrict ctx bytes
+      return (shapeName shape, shape)
+  }
+
+rowNameHash :: RowKind A.Name NameHashInfo
+rowNameHash = (rowKind "name-hash" "name-hash" A.rawstr keyNameHash)
+  { rkEnc = \_ info -> encodeStrict (stripExternalDeps info)
+  , rkDec = \ctx bytes -> do
+      info <- decodeStrict ctx bytes
+      return (nhName info, info)
+  }
+
+rowMemberContent :: RowKind (A.Name, MemberKey) MemberContent
+rowMemberContent = rowKind "body/member" "body-member" (uncurry memberLabel)
+    (uncurry keyMemberBody)
+
+rowReachModule :: RowKind A.ModName (ReachRows.ReachSummary, ReachRows.ReachSummary)
+rowReachModule = rowKind "reach/module" "reach-module" modNameLabel keyReachModule
+
+rowReachTop :: RowKind ReachRows.TopKey ReachRows.TopInfo
+rowReachTop = rowKind "reach/top" "reach-top" topKeyLabel keyReachTop
+
+rowReachMember :: RowKind (ReachRows.TopKey, MemberKey) ReachRows.MemberInfo
+rowReachMember = rowKind "reach/member" "reach-member"
+    (\(owner, member) -> topKeyLabel owner ++ "." ++ Rows.memberLabel member)
+    (uncurry keyReachMember)
+
+rowReachShape :: RowKind ReachRows.TopKey ReachRows.ShapeInfo
+rowReachShape = (rowKind "reach/shape" "reach-shape" topKeyLabel keyReachShape)
+    { rkValid = \owner info -> ReachRows.shapeName info == owner }
+
+rowReachSlot :: RowKind (ReachRows.TopKey, ReachRows.MemberRef) ReachRows.SlotInfo
+rowReachSlot = rowKind "reach/slot" "reach-slot"
+    (\(owner, member) -> topKeyLabel owner ++ "." ++ memberRefLabel member)
+    (uncurry keyReachSlot)
+
+rowReachReflection :: RowKind ReachRows.TopKey ReachRows.ReflectableAttrs
+rowReachReflection = rowKind "reach/reflection" "reach-reflection" topKeyLabel keyReachReflection
+
+readReachMembersEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> ReachRows.TopKey -> IO [(MemberKey, ReachRows.MemberInfo)]
+readReachMembersEntry =
+    getOwnedRows rowReachMember topKeyLabel (reachOwnerPrefix (key "reach/member/"))
+
+readReachSlotsEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> ReachRows.TopKey -> IO [(ReachRows.MemberRef, ReachRows.SlotInfo)]
+readReachSlotsEntry =
+    getOwnedRows rowReachSlot topKeyLabel (reachOwnerPrefix (key "reach/slot/"))
+
+readReachTopRowsEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.ModName -> IO [(ReachRows.TopKey, ReachRows.TopInfo)]
+readReachTopRowsEntry txn dbi moduleName = do
+    tops <- getRowsAt rowReachTop (modNameLabel moduleName) txn dbi (key "reach/top/")
+    forM_ tops $ \(owner@(ReachRows.TopKey storedModule _), _) ->
+      unless (storedModule == moduleName) $
+        invalidContentRow
+          ("foreign reach/top row " ++ topKeyLabel owner ++ " in " ++ modNameLabel moduleName)
+    return tops
+
+readContainerEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO A.Decl
+readContainerEntry txn dbi name = do
+    shape <- getRow rowContainerShape txn dbi name
+    members <- Map.fromList <$>
+      getOwnedRows rowMemberContent A.rawstr keyMemberBodyPrefix txn dbi name
+    rowsIO (Rows.restoreExactContainer shape members)
+
+readSelectedContainerEntry :: LMDB.MDB_txn
+                           -> LMDB.MDB_dbi
+                           -> A.Name
+                           -> Set.Set MemberKey
+                           -> IO A.Decl
+readSelectedContainerEntry txn dbi name requested = do
+    shape <- getRow rowContainerShape txn dbi name
+    members <- Map.fromList <$> mapM loadOne (Set.toAscList requested)
+    rowsIO (Rows.restoreSelectedContainer shape members requested)
+  where
+    loadOne member = do
+      content <- getRow rowMemberContent txn dbi (name, member)
+      return (member,content)
+
+restoreStoredStmt :: LMDB.MDB_txn
+                  -> LMDB.MDB_dbi
+                  -> Maybe (Set.Set A.Name)
+                  -> StoredStmt
+                  -> IO (Maybe A.Stmt)
+restoreStoredStmt _ _ _ (StoredWhole _ stmt) = return (Just stmt)
+restoreStoredStmt txn dbi selected (StoredDecls loc decls) = do
+    restored <- forM decls $ \stored ->
+      case stored of
+        StoredInline decl
+          | wanted (Names.dname' decl) -> return (Just decl)
+          | otherwise                  -> return Nothing
+        StoredContainer name
+          | wanted name -> Just <$> readContainerEntry txn dbi name
+          | otherwise   -> return Nothing
+    case [ decl | Just decl <- restored ] of
+      [] -> return Nothing
+      kept -> return (Just (A.Decl loc kept))
+  where
+    wanted name = maybe True (Set.member name) selected
+
+restoreSelectedStoredStmt :: LMDB.MDB_txn
+                          -> LMDB.MDB_dbi
+                          -> Set.Set A.Name
+                          -> Map.Map A.Name (Set.Set MemberKey)
+                          -> StoredStmt
+                          -> IO (Maybe A.Stmt)
+restoreSelectedStoredStmt _ _ _ _ (StoredWhole _ stmt) = return (Just stmt)
+restoreSelectedStoredStmt txn dbi selected interests (StoredDecls loc decls) = do
+    restored <- forM decls $ \stored ->
+      case stored of
+        StoredInline decl
+          | Set.member (Names.dname' decl) selected -> return (Just decl)
+          | otherwise -> return Nothing
+        StoredContainer name
+          | Set.member name selected ->
+              Just <$> readSelectedContainerEntry txn dbi name
+                (Map.findWithDefault Set.empty name interests)
+          | otherwise -> return Nothing
+    case [ decl | Just decl <- restored ] of
+      [] -> return Nothing
+      kept -> return (Just (A.Decl loc kept))
+
+readStoredStmtEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> Int -> IO StoredStmt
+readStoredStmtEntry txn dbi i =
+    getValue ("stmt " ++ show i) txn dbi (keyStmt i)
 
 readStmtEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [A.Stmt]
 readStmtEntries txn dbi = do
     count <- getValue "stmt-count" txn dbi keyStmtCount
-    forM [0 .. count - 1] $ \i ->
-      getValue ("stmt " ++ show i) txn dbi (keyStmt i)
+    rows <- mapM (readStoredStmtEntry txn dbi) [0 .. count - 1]
+    restored <- mapM (restoreStoredStmt txn dbi Nothing) rows
+    return [ stmt | Just stmt <- restored ]
 
--- | Reconstruct a typed module containing only the statements owned by the
--- selected names. Returns Nothing when the cache predates statement
--- ownership, when ownership is missing for a selected name, or when the
--- module contains NotImplemented hooks (whose native-extension pairing needs
--- the whole module); callers then fall back to a full read.
-readSelectedModule :: FilePath -> [NameHashInfo] -> Set.Set A.Name -> IO (Maybe A.Module)
-readSelectedModule f nameHashes selected =
-    withReadTxn f $ \txn dbi -> do
-      validateVersion txn dbi
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
-      mHasNotImpl <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
-      case mHasNotImpl of
-        Nothing -> do
-          traceTydbRead "stmt-index-miss" f "stmt-has-not-impl"
-          return Nothing
-        Just True -> do
-          traceTydbRead "stmt-fallback" f "not-impl"
-          return Nothing
-        Just False -> do
-          let names = Set.toList selected
-              stmtMap = Map.fromList [ (nhName nh, nhStmtIndices nh) | nh <- nameHashes ]
-              owners = [ (n, Map.lookup n stmtMap) | n <- names ]
-              unusable = [ n | (n, mis) <- owners, maybe True null mis ]
-          if not (null unusable)
-            then do
-              traceTydbRead "stmt-index-miss" f (Data.List.intercalate "," (map A.nstr unusable))
-              return Nothing
-            else do
-              -- Selected names can cover most of a large module; dedup the
-              -- pooled statement indices with an IntSet (O(n log n)) rather than
-              -- Data.List.nub (O(n^2)). toAscList also yields them sorted.
-              let indices = IntSet.toAscList $ IntSet.fromList $ concat [ is | (_, Just is) <- owners ]
-              stmts <- forM indices $ \i ->
-                getValue ("stmt " ++ show i) txn dbi (keyStmt i)
-              traceTydbRead "stmts" f ("selected " ++ show (length names) ++ " -> " ++ show (length stmts))
-              return $ Just (A.Module tmn timps tdoc stmts)
+-- | Materialize the exact top/member projection selected by reachability.
+-- Only the requested member rows are read; method ABI
+-- slots come from the compact shape, and attribute declarations remain
+-- distinct from the constructor initializers activated for them.
+readInterfaceSessionSelection :: InterfaceReadSession
+                              -> [NameHashInfo]
+                              -> Set.Set A.Name
+                              -> Map.Map A.Name (Set.Set MemberKey)
+                              -> IO A.Module
+readInterfaceSessionSelection session@(InterfaceReadSession _ txn dbi) =
+    readSelectedModuleEntry (interfaceReadSessionPath session) txn dbi
 
-emptyExtensionIndex :: ExtensionIndex
-emptyExtensionIndex =
-    ExtensionIndex
-      { extByClass = Map.empty
-      , extByProtocol = Map.empty
-      }
+readSelectedModuleEntry :: FilePath
+                        -> LMDB.MDB_txn
+                        -> LMDB.MDB_dbi
+                        -> [NameHashInfo]
+                        -> Set.Set A.Name
+                        -> Map.Map A.Name (Set.Set MemberKey)
+                        -> IO A.Module
+readSelectedModuleEntry f txn dbi nameHashes selected interests = do
+    (moduleName, imports, doc) <- getValue "module-header" txn dbi keyModuleHeader
+    hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+    mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory
+    when hasNotImpl $
+      invalidModuleRows "native module requested through selective materialization"
+    let stmtMap = Map.fromList [ (nhName nh, nhStmtIndices nh) | nh <- nameHashes ]
+        owners = [ (name, Map.lookup name stmtMap) | name <- Set.toAscList selected ]
+        unusable = [ name | (name, indices) <- owners, maybe True null indices ]
+    unless (null unusable) $
+      invalidModuleRows
+        ("selected names have no statement rows: " ++
+         Data.List.intercalate ", " (map A.rawstr unusable))
+    let indices = IntSet.toAscList $ IntSet.fromList $
+          mandatory ++ concat [ owned | (_, Just owned) <- owners ]
+    stored <- mapM (readStoredStmtEntry txn dbi) indices
+    restored <- mapM
+      (restoreSelectedStoredStmt txn dbi selected interests)
+      stored
+    let statements = [ stmt | Just stmt <- restored ]
+    traceTydbRead "selection" f
+      (show (Set.size selected) ++ " tops, " ++
+       show (sum (map Set.size (Map.elems interests))) ++ " members")
+    return (A.Module moduleName imports doc statements)
 
 extensionIndexFromNameInfo :: A.ModName -> I.NModule -> ExtensionIndex
 extensionIndexFromNameInfo mn (I.NModule _ te _) =
-    foldl addExt emptyExtensionIndex te
+    ExtensionIndex
+      { extByClass = Map.map Set.toAscList classes
+      , extByProtocol = Map.map Set.toAscList protocols
+      }
   where
-    addExt acc (ext, I.NExt _ c ps _ _ _) =
+    (classes,protocols) = foldl' addExt (Map.empty,Map.empty) te
+
+    addExt (classes0,protocols0) (ext, I.NExt _ c ps _ _ _) =
       let cls = localQName (A.tcname c)
           protos = [ p | (_, pcon) <- ps, Just p <- [localQName (A.tcname pcon)] ]
-          withClass =
-            case cls of
-              Nothing -> acc
-              Just n -> acc { extByClass = insertMany n [ext] (extByClass acc) }
-          withProtos =
-            foldl
-              (\idx p -> idx { extByProtocol = insertMany p [ext] (extByProtocol idx) })
-              withClass
-              protos
-      in withProtos
-    addExt acc _ = acc
+          classes1 = maybe classes0 (\n -> insert n ext classes0) cls
+          protocols1 = foldl' (\index p -> insert p ext index) protocols0 protos
+      in classes1 `seq` protocols1 `seq` (classes1,protocols1)
+    addExt indexes _ = indexes
 
     localQName qn =
       case qn of
@@ -1118,11 +1736,7 @@ extensionIndexFromNameInfo mn (I.NModule _ te _) =
         A.GName m n | m == mn -> Just n
         _ -> Nothing
 
-    insertMany n exts =
-      Map.insertWith unionNames n (sortNames exts)
-
-    unionNames xs ys = sortNames (xs ++ ys)
-    sortNames = Data.List.sortOn A.nstr . Data.List.nub
+    insert name ext = Map.insertWith Set.union name (Set.singleton ext)
 
 extensionIndexEntries :: ExtensionIndex -> [(BS.ByteString, BS.ByteString)]
 extensionIndexEntries index =
@@ -1164,8 +1778,8 @@ stripExternalDeps :: NameHashInfo -> NameHashInfo
 stripExternalDeps nh =
     nh { nhPubDeps = [], nhImplDeps = [] }
 
-depIndexEntries :: [DepModuleInfo] -> [NameHashInfo] -> [(BS.ByteString, BS.ByteString)]
-depIndexEntries depModules nameHashes =
+depIndexEntries :: [DepModuleInfo] -> [NameHashInfo] -> ModuleHashInfo -> [(BS.ByteString, BS.ByteString)]
+depIndexEntries depModules nameHashes moduleHash =
     (keyDeps, encodeStrict depModules)
     : [ (keyDepModule mn, encodeStrict infos)
       | (mn, infos) <- moduleRows
@@ -1175,11 +1789,9 @@ depIndexEntries depModules nameHashes =
     | ((mn, n), users) <- userRows
     ]
   where
-    moduleNameKey = A.modPath
-    nameKey = A.nstr
-    sortModRows = Data.List.sortOn (moduleNameKey . fst)
-    sortNameInfos = Data.List.sortOn (nameKey . dniName)
-    sortUserRows = Data.List.sortOn (\((mn, n), _) -> (moduleNameKey mn, nameKey n))
+    sortModRows = Data.List.sortOn fst
+    sortNameInfos = Data.List.sortOn dniName
+    sortUserRows = Data.List.sortOn fst
 
     depTarget qn =
       case qn of
@@ -1198,11 +1810,34 @@ depIndexEntries depModules nameHashes =
             else (Nothing, Just h, Set.empty, Set.singleton owner)
         addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
           if isPub
-            then (Just h, implH, Set.insert owner pubUsers, implUsers)
-            else (pubH, Just h, pubUsers, Set.insert owner implUsers)
+            then (mergeHash "pub" qn pubH h, implH, Set.insert owner pubUsers, implUsers)
+            else (pubH, mergeHash "impl" qn implH h, pubUsers, Set.insert owner implUsers)
+
+    addModuleDep isPub acc (qn, h) =
+      case depTarget qn of
+        Nothing -> acc
+        Just key' -> Map.alter (Just . addToEntry) key' acc
+      where
+        addToEntry Nothing =
+          if isPub
+            then (Just h, Nothing, Set.empty, Set.empty)
+            else (Nothing, Just h, Set.empty, Set.empty)
+        addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
+          if isPub
+            then (mergeHash "pub" qn pubH h, implH, pubUsers, implUsers)
+            else (pubH, mergeHash "impl" qn implH h, pubUsers, implUsers)
+
+    mergeHash _ _ Nothing h = Just h
+    mergeHash label qn (Just old) h
+      | old == h = Just old
+      | otherwise = error ("Inconsistent " ++ label ++ " dependency hashes for " ++ show qn)
 
     depMap =
-      foldl' addInfo Map.empty nameHashes
+      foldl' (addModuleDep False)
+        (foldl' (addModuleDep True)
+          (foldl' addInfo Map.empty nameHashes)
+          (mhPubDeps moduleHash))
+        (mhImplDeps moduleHash)
 
     addInfo acc nh =
       let owner = nhName nh
@@ -1224,7 +1859,7 @@ depIndexEntries depModules nameHashes =
             ]
       ]
 
-    cleanNames = Data.List.sortOn nameKey . Set.toList
+    cleanNames = Set.toList
 
     userRows =
       sortUserRows
@@ -1281,54 +1916,148 @@ queryIndexEntries nmod =
     , (keyConstructors, encodeStrict (qiConstructors ix))
     , (keyActors, encodeStrict (qiActors ix))
     ]
-    ++ [ (keyConAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiConAttrs ix) ]
-    ++ [ (keyProtoAttr n, encodeStrict ns) | (n, ns) <- Map.toList (qiProtoAttrs ix) ]
-    ++ [ (keyDescendants qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiDescendants ix) ]
-    ++ [ (keyExtProto qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtProtos ix) ]
-    ++ [ (keyExtType qn, encodeStrict ns) | (qn, ns) <- Map.toList (qiExtTypes ix) ]
+    ++ [ (keyConAttr n, encodeStrict (n,ns)) | (n, ns) <- Map.toList (qiConAttrs ix) ]
+    ++ [ (keyProtoAttr n, encodeStrict (n,ns)) | (n, ns) <- Map.toList (qiProtoAttrs ix) ]
+    ++ [ (keyDescendants qn, encodeStrict (stripQNameKeyLocs qn,ns)) | (qn, ns) <- Map.toList (qiDescendants ix) ]
+    ++ [ (keyExtProto qn, encodeStrict (stripQNameKeyLocs qn,ns)) | (qn, ns) <- Map.toList (qiExtProtos ix) ]
+    ++ [ (keyExtType qn, encodeStrict (stripQNameKeyLocs qn,ns)) | (qn, ns) <- Map.toList (qiExtTypes ix) ]
   where ix = queryIndexes nmod
 
--- Statement ownership: each top-level name records the indexes of the typed
--- statements that declare it, so a statement-selective reader can fetch just
--- the stmt/<NNN> rows for a selected name set.
-addStmtIndices :: [A.Stmt] -> [NameHashInfo] -> [NameHashInfo]
-addStmtIndices body nameHashes =
+-- Statement ownership is prepared before container declarations are replaced
+-- by shape references. Each top-level name records the indexes of its original
+-- typed statements, preserving the existing atomicity of multi-name rows.
+addStmtIndices :: [[A.Name]] -> [NameHashInfo] -> [NameHashInfo]
+addStmtIndices stmtOwners nameHashes =
     [ nh { nhStmtIndices = Map.findWithDefault [] (nhName nh) owners }
     | nh <- nameHashes
     ]
   where
-    owners = Map.map (Data.List.sort . Data.List.nub) $
-             foldl' addStmt Map.empty (zip [0..] body)
-    addStmt acc (i, stmt) = foldl' (\m n -> Map.insertWith (++) n [i] m) acc (stmtTopNames stmt)
+    owners = Map.map IntSet.toAscList $
+             foldl' addStmt Map.empty (zip [0..] stmtOwners)
+    addStmt acc (i, ns) =
+      foldl' (\m n -> Map.insertWith IntSet.union n (IntSet.singleton i) m) acc ns
 
-stmtTopNames :: A.Stmt -> [A.Name]
-stmtTopNames stmt =
-    case stmt of
-      A.Decl _ ds          -> [ Names.dname' d | d <- ds ]
-      A.Signature _ ns _ _ -> ns
-      A.Assign _ ps _      -> Data.List.nub (Names.bound ps)
-      A.VarAssign _ ps _   -> Data.List.nub (Names.bound ps)
-      _                    -> []
+invalidModuleRows :: String -> IO a
+invalidModuleRows msg =
+    E.throwIO (E.ErrorCall ("Invalid prepared .tydb rows: " ++ msg))
 
-interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
-interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
+validateModuleRows :: [NameHashInfo] -> InterfaceRows -> IO ()
+validateModuleRows nameHashes rows = do
+    let bodyMembers =
+          [ (owner, member)
+          | (owner, members) <- Map.toList (rowMembers rows)
+          , member <- Map.keys members
+          ]
+        shapeStorageKeys = map keyContainerShape (Map.keys (rowShapes rows))
+        memberStorageKeys = [ keyMemberBody owner member | (owner, member) <- bodyMembers ]
+    when (length shapeStorageKeys /= Set.size (Set.fromList shapeStorageKeys)) $
+      invalidModuleRows "semantic container shape keys collide in storage"
+    when (length memberStorageKeys /= Set.size (Set.fromList memberStorageKeys)) $
+      invalidModuleRows "semantic member keys collide in storage"
+    let hashNames = Set.fromList (map nhName nameHashes)
+        ownerNames = Set.fromList (concatMap Rows.storedStmtNames (rowStatements rows))
+        unknown = Set.toAscList (ownerNames `Set.difference` hashNames)
+    unless (null unknown) $
+      invalidModuleRows
+        ("statement owners have no name hash: " ++
+         Data.List.intercalate ", " (map A.rawstr unknown))
+
+reachRowOwners :: ReachRows.ReachabilityRows -> [ReachRows.TopKey]
+reachRowOwners rows =
+    Map.keys (ReachRows.reachTopRows rows) ++
+    [ owner | (owner, _) <- Map.keys (ReachRows.reachMemberRows rows) ] ++
+    Map.keys (ReachRows.reachShapeRows rows) ++
+    [ owner | (owner, _) <- Map.keys (ReachRows.reachSlotRows rows) ] ++
+    Map.keys (ReachRows.reachReflectableRows rows)
+
+reachStorageKeys :: A.ModName -> ReachRows.ReachabilityRows -> [BS.ByteString]
+reachStorageKeys moduleName rows =
+    keyReachModule moduleName :
+    [ keyReachTop owner
+    | owner <- Map.keys (ReachRows.reachTopRows rows)
+    ] ++
+    [ keyReachMember owner member
+    | (owner, member) <- Map.keys (ReachRows.reachMemberRows rows)
+    ] ++
+    [ keyReachShape owner
+    | owner <- Map.keys (ReachRows.reachShapeRows rows)
+    ] ++
+    [ keyReachSlot owner member
+    | (owner, member) <- Map.keys (ReachRows.reachSlotRows rows)
+    ] ++
+    [ keyReachReflection owner
+    | owner <- Map.keys (ReachRows.reachReflectableRows rows)
+    ]
+
+validateReachabilityRows :: [NameHashInfo]
+                         -> A.ModName
+                         -> ReachRows.ReachabilityRows
+                         -> IO ()
+validateReachabilityRows nameHashes moduleName rows = do
+    let owners = Set.fromList (reachRowOwners rows)
+        foreignOwners =
+          [ owner
+          | owner@(ReachRows.TopKey ownerModule _) <- Set.toAscList owners
+          , ownerModule /= moduleName
+          ]
+        knownNames = Set.fromList (map nhName nameHashes)
+        unknownOwners =
+          [ owner
+          | owner@(ReachRows.TopKey _ name) <- Set.toAscList owners
+          , not (Set.member name knownNames)
+          ]
+        storageKeys = reachStorageKeys moduleName rows
+    unless (null foreignOwners) $
+      invalidModuleRows
+        ("reachability rows belong to another module: " ++
+         Data.List.intercalate ", " (map topKeyLabel foreignOwners))
+    unless (null unknownOwners) $
+      invalidModuleRows
+        ("reachability owners have no name hash: " ++
+         Data.List.intercalate ", " (map topKeyLabel unknownOwners))
+    forM_ (Map.toList (ReachRows.reachShapeRows rows)) $ \(owner, info) ->
+      unless (ReachRows.shapeName info == owner) $
+        invalidModuleRows ("reachability shape owner mismatch for " ++ topKeyLabel owner)
+    when (length storageKeys /= Set.size (Set.fromList storageKeys)) $
+      invalidModuleRows "semantic reachability keys collide in storage"
+
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> InterfaceContents -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries onProgress version contents = do
+    validateModuleRows nameHashes rows
+    validateReachabilityRows nameHashes (rowModuleName rows) reachRows
+    generation <- newInterfaceGeneration
     caps <- getNumCapabilities
     let header =
           [ (keyVersion, encodeStrict version)
+          , (keyGeneration, encodeStrict generation)
           , (keyMeta, encodeStrict (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash))
           , (keyImports, encodeStrict imps)
           , (keyRoots, encodeStrict roots)
           , (keyTests, encodeStrict tests)
           , (keyDoc, encodeStrict mdoc)
           , (keyNameCount, encodeStrict (length te))
-          , (keyStmtCount, encodeStrict (length body))
-          , (keyStmtHasNotImpl, encodeStrict (A.hasNotImpl body))
+          , (keyStmtCount, encodeStrict (length statements))
+          , (keyStmtMandatory, encodeStrict mandatoryStatementIndices)
+          , (keyStmtHasNotImpl, encodeStrict (rowHasNotImpl rows))
+          , (keyModuleHash, encodeStrict moduleHashInfo)
           , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
           ]
         nameChunks = entryChunks caps (zip [0..] te)
-        nameHashChunks = entryChunks caps (addStmtIndices body nameHashes)
-        stmtChunks = entryChunks caps (zip [0..] body)
-        totalPrep = 4 + length nameChunks + length nameHashChunks + length stmtChunks
+        nameHashChunks = entryChunks caps (addStmtIndices (map Rows.storedStmtNames statements) nameHashes)
+        shapeChunks = entryChunks caps (Map.elems (rowShapes rows))
+        memberBodyChunks = entryChunks caps memberContents
+        reachTopChunks = entryChunks caps (Map.toList (ReachRows.reachTopRows reachRows))
+        reachMemberChunks = entryChunks caps (Map.toList (ReachRows.reachMemberRows reachRows))
+        reachShapeChunks = entryChunks caps (Map.toList (ReachRows.reachShapeRows reachRows))
+        reachSlotChunks = entryChunks caps (Map.toList (ReachRows.reachSlotRows reachRows))
+        reachReflectionChunks = entryChunks caps (Map.toList (ReachRows.reachReflectableRows reachRows))
+        stmtChunks = entryChunks caps (zip [0..] statements)
+        totalPrep = 5 + length nameChunks + length nameHashChunks
+                      + length shapeChunks + length memberBodyChunks
+                      + length reachTopChunks
+                      + length reachMemberChunks
+                      + length reachShapeChunks + length reachSlotChunks
+                      + length reachReflectionChunks + length stmtChunks
     prepDone <- newIORef (0 :: Int)
     let mark label = do
           done <- atomicModifyIORef' prepDone $ \n ->
@@ -1337,30 +2066,88 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     onProgress "Preparing .tydb" 0
     headerEntries <- forceEntries header
     mark "Preparing .tydb header"
-    depEntries <- forceEntries (depIndexEntries depModules nameHashes)
+    depEntries <- forceEntries (depIndexEntries depModules nameHashes moduleHashInfo)
     mark "Preparing .tydb deps"
     queryEntries <- forceEntries (queryIndexEntries nmod)
     mark "Preparing .tydb query indexes"
+    reachModuleEntries <- forceEntries
+      [rowEntry rowReachModule tmn
+        (ReachRows.reachModuleSummary reachRows, ReachRows.reachWholeSummary reachRows)]
+    mark "Preparing .tydb module reachability"
     nameEntries <- parallelEntries mark "Preparing .tydb names" nameInfoEntries nameChunks
     nameHashEntries <- parallelEntries mark "Preparing .tydb hashes" nameHashEntry nameHashChunks
+    shapeEntries <- parallelEntries mark "Preparing .tydb shapes" shapeEntry shapeChunks
+    memberBodyEntries <- parallelEntries mark "Preparing .tydb member bodies" memberBodyEntry memberBodyChunks
+    reachTopEntries <- parallelEntries mark "Preparing .tydb reachability tops" reachTopEntry reachTopChunks
+    reachMemberEntries <- parallelEntries mark "Preparing .tydb reachability members" reachMemberEntry reachMemberChunks
+    reachShapeEntries <- parallelEntries mark "Preparing .tydb reachability shapes" reachShapeEntry reachShapeChunks
+    reachSlotEntries <- parallelEntries mark "Preparing .tydb reachability slots" reachSlotEntry reachSlotChunks
+    reachReflectionEntries <- parallelEntries mark "Preparing .tydb reachability reflection" reachReflectionEntry reachReflectionChunks
     extEntries <- forceEntries (extensionIndexEntries (extensionIndexFromNameInfo tmn nmod))
     mark "Preparing .tydb extensions"
     stmtEntries <- parallelEntries mark "Preparing .tydb statements" stmtEntry stmtChunks
-    return (headerEntries ++ depEntries ++ queryEntries ++ nameEntries ++ nameHashEntries ++ extEntries ++ stmtEntries)
+    return (headerEntries ++ depEntries ++ queryEntries ++ nameEntries ++ nameHashEntries
+            ++ shapeEntries ++ memberBodyEntries
+            ++ reachModuleEntries ++ reachTopEntries
+            ++ reachMemberEntries ++ reachShapeEntries
+            ++ reachSlotEntries ++ reachReflectionEntries
+            ++ extEntries ++ stmtEntries)
   where
+    moduleSrcBytesHash = ifcSourceHash contents
+    modulePubHash = ifcPublicHash contents
+    moduleImplHash = ifcImplementationHash contents
+    moduleHashInfo = ifcModuleHashInfo contents
+    sourceMeta = ifcSourceMeta contents
+    imps = ifcImports contents
+    depModules = ifcDependencies contents
+    nameHashes = ifcNameHashes contents
+    roots = ifcRoots contents
+    tests = ifcTests contents
+    mdoc = ifcDoc contents
+    nmod = ifcModule contents
+    rows = ifcRows contents
+    reachRows = ifcReachabilityRows contents
     I.NModule _ te _ = nmod
-    A.Module tmn timps tdoc body = tchecked
-    nameInfoEntries (i, (n, info)) =
-      [ (keyNameOrder i, encodeStrict suffix)
-      , (keyNameInfoSuffix suffix, encodeStrict (n, info))
+    tmn = rowModuleName rows
+    timps = rowImports rows
+    tdoc = rowDoc rows
+    statements = rowStatements rows
+    mandatoryStatementIndices :: [Int]
+    mandatoryStatementIndices =
+      [ i
+      | (i, StoredWhole owners _) <- zip [0..] statements
+      , null owners
+      ]
+    memberContents =
+      [ (owner, member, content)
+      | (owner, members) <- Map.toList (rowMembers rows)
+      , (member, content) <- Map.toList members
+      ]
+    -- ModuleInfo's keyed environment, like the previous LMDB overwrite
+    -- layout, gives the last top-level occurrence precedence.  Keep the
+    -- direct index identical while the ordered rows preserve every
+    -- signature/definition occurrence for full reconstruction.
+    primaryNameIndices = Map.fromListWith max
+      [ (name,i) | (i,(name,_)) <- zip [0..] te ]
+    nameInfoEntries (i, entry@(n, _)) =
+      [ (keyNameOrder i, encodeStrict rowKey)
+      , (rowKey, encodeStrict entry)
+      ] ++
+      [ (keyNameInfo n, encodeStrict entry)
+      | Map.lookup n primaryNameIndices == Just i
       ]
       where
-        suffix = nameKeySuffix n
-    nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh))]
+        rowKey = keyNameInfoOrder i
+    nameHashEntry nh = [rowEntry rowNameHash (nhName nh) nh]
+    shapeEntry shape = [rowEntry rowContainerShape (shapeName shape) shape]
+    memberBodyEntry (owner, member, content) =
+      [rowEntry rowMemberContent (owner, member) content]
+    reachTopEntry (owner, info) = [rowEntry rowReachTop owner info]
+    reachMemberEntry (ownerMember, info) = [rowEntry rowReachMember ownerMember info]
+    reachShapeEntry (owner, info) = [rowEntry rowReachShape owner info]
+    reachSlotEntry (ownerMember, info) = [rowEntry rowReachSlot ownerMember info]
+    reachReflectionEntry (owner, attrs) = [rowEntry rowReachReflection owner attrs]
     stmtEntry (i, stmt) = [(keyStmt i, encodeStrict stmt)]
-
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFile = writeFileWithVersion A.version
 
 -- | Update only the cached source-file metadata in the header, leaving every
 -- other row (name hashes, dep index rows, statements) untouched. Rewriting the
@@ -1377,6 +2164,56 @@ updateSourceMeta f sourceMeta = do
       (_oldMeta, srcH, pubH, implH) <- readMeta txn dbi
       putValue txn dbi keyMeta (encodeStrict (sourceMeta, srcH, pubH, implH))
 
+-- | Update the source hash and its complete per-name dependency/hash rows
+-- without rewriting typed content. The semantic name set must stay unchanged:
+-- this operation deliberately updates metadata for existing content rather
+-- than pretending a different module body is stored under the same interface.
+updateSourceHashAndNameHashes :: FilePath
+                              -> BS.ByteString
+                              -> [DepModuleInfo]
+                              -> [NameHashInfo]
+                              -> IO ()
+updateSourceHashAndNameHashes f moduleSrcBytesHash depModules nameHashes = do
+    moduleHashInfo <- readModuleHashInfo f
+    update moduleHashInfo
+  where
+    update moduleHashInfo = do
+      validateEntryKeys (depEntries ++ nameEntries)
+      generation <- newInterfaceGeneration
+      extra <- entryMapSize (depEntries ++ nameEntries)
+      existing <- readMapSize f
+      go generation (existing + extra)
+      where
+        depPrefix = key "deps/"
+        depEntries = depIndexEntries depModules nameHashes moduleHashInfo
+        desiredDepKeys = Set.fromList
+          [ k | (k, _) <- depEntries, depPrefix `BS.isPrefixOf` k ]
+        nameEntries =
+          [ (keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh))
+          | nh <- nameHashes
+          ]
+        desiredNameKeys = Set.fromList (map fst nameEntries)
+
+        go generation size = do
+          res <- E.try $ withWriteTxn f size $ \txn dbi -> do
+            validateVersion txn dbi
+            existingNameKeys <- Set.fromList <$> getKeysWithPrefix txn dbi keyNameHashPrefix
+            unless (existingNameKeys == desiredNameKeys) $
+              invalidModuleRows "source-hash refresh changes the semantic name set"
+            existingDepKeys <- Set.fromList <$> getKeysWithPrefix txn dbi depPrefix
+            let staleDepKeys = Set.toAscList (existingDepKeys `Set.difference` desiredDepKeys)
+            (sourceMeta, _oldSrcH, pubH, implH) <- readMeta txn dbi
+            putValueIfChanged txn dbi keyMeta
+              (encodeStrict (sourceMeta :: Maybe SourceFileMeta, moduleSrcBytesHash, pubH, implH))
+            mapM_ (deleteValue txn dbi) staleDepKeys
+            mapM_ (uncurry (putValueIfChanged txn dbi)) depEntries
+            mapM_ (uncurry (putValueIfChanged txn dbi)) nameEntries
+            putValue txn dbi keyGeneration (encodeStrict generation)
+          case res of
+            Right () -> return ()
+            Left err | isMapFull err -> go generation (size * 2)
+            Left (err :: E.SomeException) -> E.throwIO err
+
 -- | Apply an impl-hash refresh surgically: update the meta row, upsert the
 -- dependency index rows and rewrite only the per-name rows whose stored
 -- encoding actually changed. Everything else (module header, statements,
@@ -1385,24 +2222,62 @@ updateSourceMeta f sourceMeta = do
 -- generated modules -- is pure waste. The dep index row KEYS are stable here
 -- (the module's own source is unchanged, so it depends on the same names);
 -- only hash values inside the rows move, hence upserting is complete.
-updateImplRefresh :: FilePath -> BS.ByteString -> [DepModuleInfo] -> [NameHashInfo] -> IO ()
-updateImplRefresh f moduleImplHash depModules nameHashes = do
-    extra <- entryMapSize (depEntries ++ nameEntries)
+updateImplRefresh :: FilePath -> ImplRefreshInput -> ImplRefreshOutput -> IO ()
+updateImplRefresh f input output = do
+    validateEntryKeys updatedEntries
+    generation <- newInterfaceGeneration
+    extra <- entryMapSize updatedEntries
     existing <- readMapSize f
-    go (existing + extra)
+    go generation (existing + extra)
   where
-    depEntries = depIndexEntries depModules nameHashes
+    moduleImplHash = iroImplementationHash output
+    moduleHashInfo = iroModuleHashInfo output
+    depModules = iroDependencies output
+    nameHashes = iroNameHashes output
+    updatedEntries = (keyModuleHash, encodeStrict moduleHashInfo) : depEntries ++ nameEntries
+    depEntries = depIndexEntries depModules nameHashes moduleHashInfo
     nameEntries = [ (keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh)) | nh <- nameHashes ]
-    go size = do
+    go generation size = do
       res <- E.try $ withWriteTxn f size $ \txn dbi -> do
-        validateVersion txn dbi
-        (oldMeta, srcH, pubH, _oldImplH) <- readMeta txn dbi
+        (oldMeta, srcH, pubH, oldImplH) <- readMeta txn dbi
+        oldGeneration <- getValue "generation" txn dbi keyGeneration
+        unless (oldGeneration == iriGeneration input
+                && srcH == iriSourceHash input
+                && pubH == iriPublicHash input
+                && oldImplH == iriImplementationHash input) $
+          E.throwIO (ImplRefreshStale
+            "Interface changed while implementation hashes were refreshed")
         putValue txn dbi keyMeta (encodeStrict (oldMeta :: Maybe SourceFileMeta, srcH, pubH, moduleImplHash))
+        putValueIfChanged txn dbi keyModuleHash (encodeStrict moduleHashInfo)
         mapM_ (uncurry (putValueIfChanged txn dbi)) depEntries
         mapM_ (uncurry (putValueIfChanged txn dbi)) nameEntries
+        putValue txn dbi keyGeneration (encodeStrict generation)
       case res of
         Right () -> return ()
-        Left err | isMapFull err -> go (size * 2)
+        Left err | isMapFull err -> go generation (size * 2)
+        Left (err :: E.SomeException) -> E.throwIO err
+
+-- | Change the cache format version and generation marker, preserving every
+-- semantic content and index row. This is intentionally narrow and primarily
+-- useful to verify stale-file handling without materializing and rewriting a
+-- potentially huge interface.
+updateVersion :: FilePath -> [Int] -> IO ()
+updateVersion f version = do
+    generation <- newInterfaceGeneration
+    extra <- entryMapSize [versionEntry,generationEntry generation]
+    existing <- readMapSize f
+    go generation (existing + extra)
+  where
+    versionEntry = (keyVersion, encodeStrict version)
+    generationEntry generation = (keyGeneration, encodeStrict generation)
+    go generation size = do
+      res <- E.try $ withWriteTxn f size $ \txn dbi -> do
+        validateVersion txn dbi
+        uncurry (putValueIfChanged txn dbi) versionEntry
+        uncurry (putValue txn dbi) (generationEntry generation)
+      case res of
+        Right () -> return ()
+        Left err | isMapFull err -> go generation (size * 2)
         Left (err :: E.SomeException) -> E.throwIO err
 
 -- | Write a row only when its bytes differ from what is stored, keeping
@@ -1415,13 +2290,15 @@ putValueIfChanged txn dbi k v = do
       Just old -> (/= v) <$> copyVal old
     when changed (putValue txn dbi k v)
 
-writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
-    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
+writeFile :: (TyDbWriteProgress -> IO ()) -> FilePath -> InterfaceContents -> IO ()
+writeFile onProgress = writeFileVersioned onProgress A.version
 
-writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
-    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
+writeVersionedFile :: [Int] -> FilePath -> InterfaceContents -> IO ()
+writeVersionedFile = writeFileVersioned (\_ -> return ())
+
+writeFileVersioned :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> InterfaceContents -> IO ()
+writeFileVersioned onProgress version f contents = do
+    entries <- interfaceEntries prepProgress version contents
     writeProgress 0
     writeEntriesWithProgress writeProgress f entries
   where
@@ -1436,6 +2313,8 @@ readFile :: FilePath -> IO TyFile
 readFile f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
+      _mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory :: IO [Int]
+      _hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl :: IO Bool
       imps <- getValue "imports" txn dbi keyImports
       depModules <- getValue "deps" txn dbi keyDeps
       roots <- getValue "roots" txn dbi keyRoots
@@ -1456,9 +2335,9 @@ readStmtHasNotImpl :: FilePath -> IO Bool
 readStmtHasNotImpl f =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mv <- getMaybeValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
-      traceTydbRead "stmt-has-not-impl" f (show mv)
-      return (maybe False id mv)
+      hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl
+      traceTydbRead "stmt-has-not-impl" f (show hasNotImpl)
+      return hasNotImpl
 
 -- | Read every per-name hash row of a module (its own rows, not a
 -- dependency's) without touching the interface or statement rows.
@@ -1470,6 +2349,16 @@ readNameHashes f =
       traceTydbRead "name-hash-all" f (show (length nameHashes))
       return nameHashes
 
+-- | Read the mandatory module-initialization hash component without loading
+-- any typed statement or per-name hash rows.
+readModuleHashInfo :: FilePath -> IO ModuleHashInfo
+readModuleHashInfo f =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      info <- getValue "module-hash" txn dbi keyModuleHash
+      traceTydbRead "module-hash" f "cached"
+      return info
+
 -- | Read a module's interface (imports and name infos) without decoding the
 -- typed statement rows -- for consumers that only need the NModule, an eager
 -- readFile pays for deserializing the entire typed module.
@@ -1477,12 +2366,21 @@ readModuleIface :: FilePath -> IO ([A.ModName], I.NModule)
 readModuleIface f =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mdoc <- getValue "doc" txn dbi keyDoc
-      (te, _nameHashes) <- readNameEntries txn dbi
-      (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+      result@(_, I.NModule _ te _) <- readModuleIfaceEntries txn dbi
       traceTydbRead "iface" f ("names " ++ show (length te))
-      let sourceImps = A.importsOf (A.Module tmn timps tdoc [])
-      return (sourceImps, I.NModule sourceImps te mdoc)
+      return result
+
+readModuleIfaceEntries :: LMDB.MDB_txn
+                       -> LMDB.MDB_dbi
+                       -> IO ([A.ModName], I.NModule)
+readModuleIfaceEntries txn dbi = do
+    _mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory :: IO [Int]
+    _hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl :: IO Bool
+    mdoc <- getValue "doc" txn dbi keyDoc
+    (te, _nameHashes) <- readNameEntries txn dbi
+    (tmn, timps, tdoc) <- getValue "module-header" txn dbi keyModuleHeader
+    let sourceImps = A.importsOf (A.Module tmn timps tdoc [])
+    return (sourceImps, I.NModule sourceImps te mdoc)
 
 -- Read only cached header fields from .tydb. This avoids decoding the large
 -- NameInfo and typed Module statement sections and is much faster than readFile
@@ -1496,6 +2394,8 @@ readHeader f =
       roots <- getValue "roots" txn dbi keyRoots
       tests <- getValue "tests" txn dbi keyTests
       doc <- getValue "doc" txn dbi keyDoc
+      _mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory :: IO [Int]
+      _hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl :: IO Bool
       nameHashes <- readNameHashEntries txn dbi
       traceTydbRead "header" f "cached"
       traceTydbRead "name-hash-all" f (show (length nameHashes))
@@ -1513,6 +2413,8 @@ readHeaderSummary f =
       tests <- getValue "tests" txn dbi keyTests
       doc <- getValue "doc" txn dbi keyDoc
       nameCount <- getValue "name-count" txn dbi keyNameCount
+      _mandatory <- getValue "stmt-mandatory" txn dbi keyStmtMandatory :: IO [Int]
+      _hasNotImpl <- getValue "stmt-has-not-impl" txn dbi keyStmtHasNotImpl :: IO Bool
       traceTydbRead "header" f "cached"
       return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, doc)
 
@@ -1526,52 +2428,185 @@ readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mDeps <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
-      let deps = maybe [] id mDeps
+      deps <- readDepNameEntries txn dbi mn
       traceTydbRead "dep-names" f (Data.List.intercalate "." (A.modPath mn) ++ " " ++ show (length deps))
       return deps
+
+readDepNameEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.ModName -> IO [DepNameInfo]
+readDepNameEntries txn dbi mn = do
+    mDeps <- getMaybeValue
+      ("deps/" ++ Data.List.intercalate "." (A.modPath mn))
+      txn dbi (keyDepModule mn)
+    return (maybe [] id mDeps)
 
 readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
 readDepUsers f mn n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
+      users <- readDepUsersEntry txn dbi mn n
       traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr n)
-      return (maybe emptyDepUsers id mUsers)
+      return users
+
+readDepUsersEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.ModName -> A.Name -> IO DepUsers
+readDepUsersEntry txn dbi mn n = do
+    mUsers <- getMaybeValue
+      ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n)
+      txn dbi (keyDepName mn n)
+    return (maybe emptyDepUsers id mUsers)
 
 readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHash f n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
+      mInfo <- readNameHashEntry txn dbi n
       traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.rawstr n)
       return mInfo
+
+readNameHashEntry :: LMDB.MDB_txn -> LMDB.MDB_dbi -> A.Name -> IO (Maybe NameHashInfo)
+readNameHashEntry = getRowMaybe rowNameHash
 
 readNameHashMaybe :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHashMaybe f n =
     readNameHash f n `E.catch` tyCacheMiss
 
+readInterfaceSessionNameHashMaybe :: InterfaceReadSession
+                                  -> A.Name
+                                  -> IO (Maybe NameHashInfo)
+readInterfaceSessionNameHashMaybe session@(InterfaceReadSession _ txn dbi) n = do
+    mInfo <- readNameHashEntry txn dbi n
+    traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" })
+      (interfaceReadSessionPath session) (A.rawstr n)
+    return mInfo
+
+readMemberContent :: FilePath -> A.Name -> MemberKey -> IO MemberContent
+readMemberContent f owner member =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      content <- getRow rowMemberContent txn dbi (owner, member)
+      traceTydbRead "body-member" f (memberLabel owner member)
+      return content
+
+readInterfaceSessionReachSummaries :: InterfaceReadSession
+                                      -> A.ModName
+                                      -> IO (ReachRows.ReachSummary, ReachRows.ReachSummary)
+readInterfaceSessionReachSummaries = sessionRow rowReachModule
+
+readInterfaceSessionReachTop :: InterfaceReadSession
+                             -> ReachRows.TopKey
+                             -> IO ReachRows.TopInfo
+readInterfaceSessionReachTop = sessionRow rowReachTop
+
+readInterfaceSessionReachTopMaybe :: InterfaceReadSession
+                                  -> ReachRows.TopKey
+                                  -> IO (Maybe ReachRows.TopInfo)
+readInterfaceSessionReachTopMaybe = sessionRowMaybe rowReachTop
+
+readInterfaceSessionReachMemberMaybe :: InterfaceReadSession
+                                     -> ReachRows.TopKey
+                                     -> MemberKey
+                                     -> IO (Maybe ReachRows.MemberInfo)
+readInterfaceSessionReachMemberMaybe session owner member =
+    sessionRowMaybe rowReachMember session (owner, member)
+
+readInterfaceSessionReachShapeMaybe :: InterfaceReadSession
+                                    -> ReachRows.TopKey
+                                    -> IO (Maybe ReachRows.ShapeInfo)
+readInterfaceSessionReachShapeMaybe = sessionRowMaybe rowReachShape
+
+readInterfaceSessionReachSlotMaybe :: InterfaceReadSession
+                                   -> ReachRows.TopKey
+                                   -> ReachRows.MemberRef
+                                   -> IO (Maybe ReachRows.SlotInfo)
+readInterfaceSessionReachSlotMaybe session owner member =
+    sessionRowMaybe rowReachSlot session (owner, member)
+
+readInterfaceSessionReachSlots :: InterfaceReadSession
+                               -> ReachRows.TopKey
+                               -> IO [(ReachRows.MemberRef, ReachRows.SlotInfo)]
+readInterfaceSessionReachSlots session@(InterfaceReadSession _ txn dbi) owner = do
+    slots <- readReachSlotsEntry txn dbi owner
+    traceTydbRead "reach-slots" (interfaceReadSessionPath session) (topKeyLabel owner)
+    return slots
+
+readInterfaceSessionReachReflectionMaybe :: InterfaceReadSession
+                                         -> ReachRows.TopKey
+                                         -> IO (Maybe ReachRows.ReflectableAttrs)
+readInterfaceSessionReachReflectionMaybe = sessionRowMaybe rowReachReflection
+
+-- | Read the persisted reachability analysis for a module or one exact
+-- top-level name. This is an explicit inspection path; normal selection keeps
+-- using the exact-key readers above and never enumerates unrelated rows.
+readReachabilityRows :: FilePath
+                     -> A.ModName
+                     -> Maybe A.Name
+                     -> IO ReachRows.ReachabilityRows
+readReachabilityRows f moduleName target =
+    withReadTxn f $ \txn dbi -> do
+      validateVersion txn dbi
+      (moduleSummary,wholeSummary) <- getRow rowReachModule txn dbi moduleName
+      tops <- case target of
+        Nothing -> readReachTopRowsEntry txn dbi moduleName
+        Just name -> do
+          let owner = ReachRows.TopKey moduleName name
+          info <- getRowMaybe rowReachTop txn dbi owner
+          return [ (owner,found) | Just found <- [info] ]
+      let owners = map fst tops
+      members <- fmap concat $ forM owners $ \owner -> do
+        entries <- readReachMembersEntry txn dbi owner
+        return [ ((owner,member),info) | (member,info) <- entries ]
+      shapes <- forM owners $ \owner -> do
+        info <- getRowMaybe rowReachShape txn dbi owner
+        return [ (owner,found) | Just found <- [info] ]
+      slots <- fmap concat $ forM owners $ \owner -> do
+        entries <- readReachSlotsEntry txn dbi owner
+        return [ ((owner,member),info) | (member,info) <- entries ]
+      reflected <- forM owners $ \owner -> do
+        attrs <- getRowMaybe rowReachReflection txn dbi owner
+        return [ (owner,found) | Just found <- [attrs] ]
+      traceTydbRead "reachability" f
+        (Data.List.intercalate "." (A.modPath moduleName) ++
+         maybe "" (("." ++) . A.rawstr) target)
+      return ReachRows.ReachabilityRows
+        { ReachRows.reachModuleSummary = moduleSummary
+        , ReachRows.reachWholeSummary = wholeSummary
+        , ReachRows.reachTopRows = Map.fromList tops
+        , ReachRows.reachMemberRows = Map.fromList members
+        , ReachRows.reachShapeRows = Map.fromList (concat shapes)
+        , ReachRows.reachSlotRows = Map.fromList slots
+        , ReachRows.reachReflectableRows = Map.fromList (concat reflected)
+        }
+
 readModuleHashesMaybe :: FilePath -> IO (Maybe (BS.ByteString, BS.ByteString, BS.ByteString))
 readModuleHashesMaybe =
     readTyMaybe readModuleHashes
+
+readInterfaceSummaryMaybe :: FilePath -> IO (Maybe InterfaceSummary)
+readInterfaceSummaryMaybe =
+    readTyMaybe readInterfaceSummary
 
 readExtensionsByClass :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByClass f n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
       entry <- getMaybeValue "ext-by-class" txn dbi (keyExtByClass n) :: IO (Maybe (A.Name, [A.Name]))
-      return $ case entry of
-        Nothing -> []
-        Just (_, exts) -> exts
+      case entry of
+        Nothing -> return []
+        Just (stored, exts)
+          | stored == n -> return exts
+          | otherwise -> invalidContentRow
+              ("ext-by-class key/value mismatch for " ++ A.rawstr n)
 
 readExtensionsByProtocol :: FilePath -> A.Name -> IO [A.Name]
 readExtensionsByProtocol f n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
       entry <- getMaybeValue "ext-by-protocol" txn dbi (keyExtByProtocol n) :: IO (Maybe (A.Name, [A.Name]))
-      return $ case entry of
-        Nothing -> []
-        Just (_, exts) -> exts
+      case entry of
+        Nothing -> return []
+        Just (stored, exts)
+          | stored == n -> return exts
+          | otherwise -> invalidContentRow
+              ("ext-by-protocol key/value mismatch for " ++ A.rawstr n)
 
 -- Interface files are caches for most callers. If a file is missing,
 -- unreadable, corrupt, or from a different compiler interface version, the

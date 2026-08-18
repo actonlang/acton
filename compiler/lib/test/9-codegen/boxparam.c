@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #include "rts/common.h"
 #include "out/types/boxparam.h"
 B_value boxparamQ_BaseD___get_attr__ (boxparamQ_Base self, B_str name) {

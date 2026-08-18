@@ -90,6 +90,8 @@ library:
     - Acton.Parser
     - Acton.Printer
     - Acton.QuickType
+    - Acton.Reachability
+    - Acton.ReachabilityRows
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
