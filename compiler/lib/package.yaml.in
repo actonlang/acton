@@ -93,6 +93,7 @@ library:
     - Acton.Reachability
     - Acton.ReachabilityPrinter
     - Acton.ReachabilityRows
+    - Acton.SelectiveBack
     - Acton.Solver
     - Acton.SourceProvider
     - Acton.Syntax
