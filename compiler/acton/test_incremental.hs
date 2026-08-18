@@ -2042,11 +2042,10 @@ p38_project_lock_blocks_build =
       let outH = requirePipe "stdout" mOut
           errH = requirePipe "stderr" mErr
       (do
-          threadDelay 500000
-          mExit <- getProcessExitCode ph
-          case mExit of
-            Nothing -> pure ()
-            Just ec -> assertFailure ("build should have blocked on .acton.lock, exited early with " ++ show ec)
+          waited <- timeout 10000000 (waitForLockNotice outH)
+          case waited of
+            Nothing -> assertFailure "build did not wait for .acton.lock"
+            Just () -> pure ()
           pure (ph, outH, errH))
         `E.onException` do
           terminateProcess ph
@@ -2056,11 +2055,15 @@ p38_project_lock_blocks_build =
     ec <- waitForProcess ph
     out <- T.hGetContents outH
     err <- T.hGetContents errH
-    assertEqual "build should succeed after lock is released" ExitSuccess ec
-    let combined = out <> err
-    assertBool ("expected wait message while build was blocked\n" ++ T.unpack combined)
-      (T.isInfixOf "Waiting for compiler lock in" combined)
+    assertEqual ("build should succeed after lock is released\n" ++ T.unpack (out <> err))
+      ExitSuccess ec
   where
+    waitForLockNotice :: Handle -> IO ()
+    waitForLockNotice h = do
+      line <- T.hGetLine h
+      unless (T.isInfixOf "Waiting for compiler lock in" line) $
+        waitForLockNotice h
+
     requirePipe :: String -> Maybe Handle -> Handle
     requirePipe label =
       maybe (error ("missing " ++ label ++ " pipe for lock wait test")) id
