@@ -450,6 +450,29 @@ instance EnvOf Decl where
             wrap (n, NDef sc dec doc) = (n, NDef (wrapFX sc) dec doc)
             wrap (n, i)             = (n, i)
             wrapFX (TSchema l q t)  = TSchema l q (if effect t == fxProc then t{ effect = fxAction } else t)
+    envOf Protocol{}                = []
+    envOf Extension{}               = []
+
+-- Actor lowering promotes exactly these initializer bindings to state.  Keep
+-- the classification beside envOf, which supplies the inferred initializer
+-- names, so row construction and reachability consume the same decision as
+-- Deactorizer instead of reproducing its liveness rules.
+actorBindings                      :: PosPar -> KwdPar -> Suite -> ([Name],[Name])
+actorBindings p k body              = (live,deferred)
+  where (decls,statements)          = partition isDecl body
+        inits                       = filter (not . isSig) statements
+        params                      = bound (p,k)
+        initNames                   = dom (envOf inits)
+        usedByActor                 = statevars body ++ free decls
+        live
+          | hasNotImpl body         = uniqueNames (params ++ initNames)
+          | otherwise               = uniqueNames $
+                                        params `intersect` free decls ++
+                                        [ n | n <- initNames
+                                            , not (isHidden n) || n `elem` usedByActor ]
+        deferred                    = [ n | n <- uniqueNames (assigned inits)
+                                         , n `notElem` live ]
+
 
 dropDefSelf (n, NDef (TSchema l q t) dec doc)
                                     = (n, NDef (TSchema l q (dropSelf t dec)) dec doc)
