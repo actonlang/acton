@@ -13,7 +13,7 @@ struct B_tupleG_class {
 struct B_tuple {
     struct B_tupleG_class *$class;
     int size;
-    $WORD *components;
+    $WORD components[];
 };
 
 extern struct B_tupleG_class B_tupleG_methods;

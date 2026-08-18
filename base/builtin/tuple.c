@@ -18,7 +18,6 @@ B_NoneType B_tupleD___init__(B_tuple self,int size ,...) {
     va_list args;
     va_start(args,size);
     self->size = size;
-    self->components = acton_malloc(size*sizeof($WORD));
     for (int i=0; i<size; i++)
         self->components[i] = va_arg(args,$WORD);
     va_end(args);
@@ -66,9 +65,8 @@ B_tuple B_tupleD___deserialize__(B_tuple self, $Serial$state state) {
         return (B_tuple)B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
     } else {
         int len = (int)(long)this->blob[0];
-        B_tuple res = acton_malloc(sizeof(struct B_tuple));
+        B_tuple res = acton_malloc(sizeof(struct B_tuple) + len*sizeof($WORD));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
-        res->components = acton_malloc(len * sizeof($WORD));
         res->$class = &B_tupleG_methods;
         res->size = len;
         for (int i = 0; i < len; i++) 
