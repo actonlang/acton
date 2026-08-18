@@ -73,6 +73,7 @@ library:
     - Acton.Completion
     - Acton.Compile
     - Acton.CommandLineParser
+    - Acton.Converter
     - Acton.Deactorizer
     - Acton.Diagnostics
     - Acton.DocPrinter
@@ -80,6 +81,7 @@ library:
     - Acton.Fingerprint
     - Acton.Hashing
     - Acton.HttpFetch
+    - Acton.InterfaceRows
     - Acton.Kinds
     - Acton.LambdaLifter
     - Acton.NameInfo
