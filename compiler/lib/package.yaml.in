@@ -119,7 +119,6 @@ tests:
       - -rtsopts
       - -with-rtsopts=-N
       - -Wno-x-partial
-
 executables:
   compiler-bench:
     main: CompilerBench.hs
