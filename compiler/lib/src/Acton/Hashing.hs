@@ -1,15 +1,24 @@
 module Acton.Hashing
   ( TopLevelItem(..)
   , topLevelItems
+  , sourceTopLevelItems
+  , typedTopLevelOwners
   , NameHashInputs(..)
     -- Production hashing pipeline
   , prepareNameHashInputs
   , assembleNameHashes
   , mergePubDeps
+  , publicImplDeps
   , refreshImplHashes
   , moduleHashesFromHashMaps
   , modulePubHashFromIface
   , moduleImplHashFromNameHashes
+  , codegenIdentity
+  , wholeCodegenHash
+  , moduleOwnImplHash
+  , moduleImplSplitDeps
+  , finishModuleHash
+  , moduleProjectionHash
     -- Benchmarks and tests use these to compare individual stages.
   , nameHashesFromItems
   , pubSigDepsFromNameInfoMap
@@ -35,6 +44,7 @@ import qualified Acton.Env as Env
 import qualified Acton.NameInfo as I
 import qualified Acton.Names as Names
 import Acton.Prim (mPrim)
+import qualified Acton.QuickType as QuickType
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import Utils (chunksOf)
@@ -50,7 +60,7 @@ import qualified Data.HashSet as HashSet
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
 import Control.Concurrent.Async (mapConcurrently)
 import GHC.Conc (getNumCapabilities)
-import Data.List (foldl', intercalate, nub)
+import Data.List (foldl', intercalate)
 import qualified Data.List
 import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
@@ -61,6 +71,7 @@ import Foreign.Ptr (Ptr, castPtr)
 import Foreign.Storable (peek, peekByteOff, poke, pokeByteOff)
 import GHC.Float (castDoubleToWord64)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Environment (getExecutablePath)
 
 
 data TopLevelItem = TLDecl A.Name A.Decl | TLStmt A.Name A.Stmt
@@ -78,11 +89,12 @@ data NameHashInputs = NameHashInputs
   , nhiImplExtDeps     :: M.Map A.Name [A.QName]
   }
 
--- | Render a local name as a stable string key.
+-- | Render a local name for diagnostics. Semantic ordering and hashing use
+-- the constructor-tagged Name directly.
 nameKey :: A.Name -> String
 nameKey = A.nstr
 
--- | Render a qualified name as a stable string key.
+-- | Render a qualified name for diagnostics.
 qnameKey :: A.QName -> String
 qnameKey qn = case qn of
   A.GName m n -> modNameToString m ++ "." ++ A.nstr n
@@ -93,20 +105,43 @@ qnameKey qn = case qn of
 modNameToString :: A.ModName -> String
 modNameToString m = intercalate "." (A.modPath m)
 
--- | Extract hashable top-level items from a module.
-topLevelItems :: A.Module -> [TopLevelItem]
-topLevelItems (A.Module _ _ _ suite) = concatMap items suite
+-- | Source trees precede the transformations performed by Kinds and Types,
+-- so their top-level statement positions cannot be paired with the typed
+-- tree. Hash the bindings visible directly in the source syntax; typed items
+-- independently supply the authoritative post-front ownership domain.
+sourceTopLevelItems :: A.Module -> [TopLevelItem]
+sourceTopLevelItems (A.Module _ _ _ suite) = concatMap items suite
   where
     items stmt = case stmt of
-      A.Decl _ ds ->
-        [ TLDecl (Names.dname' d) d | d <- ds ]
-      A.Signature _ ns _ _ ->
-        [ TLStmt n stmt | n <- ns ]
-      A.Assign _ ps _ ->
-        [ TLStmt n stmt | n <- nub (Names.bound ps) ]
-      A.VarAssign _ ps _ ->
-        [ TLStmt n stmt | n <- nub (Names.bound ps) ]
+      A.Decl _ decls -> [ TLDecl (Names.dname' decl) decl | decl <- decls ]
+      A.Signature _ names _ _ -> [ TLStmt name stmt | name <- names ]
+      A.Assign _ patterns _ ->
+        [ TLStmt name stmt | name <- Env.uniqueNames (Names.bound patterns) ]
+      A.VarAssign _ patterns _ ->
+        [ TLStmt name stmt | name <- Env.uniqueNames (Names.bound patterns) ]
       _ -> []
+
+-- | Partition a module with the exact owners established from its typed
+-- interface rows. Source and typed fragments must share the same top-level
+-- statement structure; disagreement is an internal compiler error rather
+-- than a reason to widen ownership.
+topLevelItems :: [[A.Name]] -> A.Module -> [TopLevelItem]
+topLevelItems owners (A.Module _ _ _ suite)
+  | length owners /= length suite =
+      error "topLevelItems: statement count mismatch"
+  | otherwise = concat (zipWith items owners suite)
+  where
+    items expected stmt = case stmt of
+      A.Decl _ decls
+        | length expected == length decls -> zipWith TLDecl expected decls
+        | otherwise -> error "topLevelItems: declaration count mismatch"
+      _ -> [ TLStmt name stmt | name <- expected ]
+
+typedTopLevelOwners :: A.Module -> [[A.Name]]
+typedTopLevelOwners (A.Module _ _ _ suite) = map owners suite
+  where
+    owners (A.Decl _ decls) = map Names.dname' decls
+    owners stmt = Env.uniqueNames (map fst (QuickType.envOf stmt))
 
 -- The feed-operation format is versioned: small buffered writes, bulk hash
 -- bytes, and little-endian words are distinct operations by design. Changing
@@ -772,7 +807,7 @@ hashCycleGroupFromWith sink selfHashes lookupLocal locals externals =
 hashCycleMemberWith :: HashSink -> B.ByteString -> B.ByteString -> A.Name -> IO B.ByteString
 hashCycleMemberWith sink self groupHash n =
   hashFeedWith sink $ \sink' ->
-    feedTag 254 sink' >> feedTag 2 sink' >> feedHashBytes self sink' >> feedHashBytes groupHash sink' >> feedString (nameKey n) sink'
+    feedTag 254 sink' >> feedTag 2 sink' >> feedHashBytes self sink' >> feedHashBytes groupHash sink' >> feedName n sink'
 
 hashNameHashEntries :: Int -> [(String, B.ByteString)] -> B.ByteString
 hashNameHashEntries tag entries =
@@ -792,7 +827,7 @@ hashNameHashEntriesWith tag entries feedEntry =
 hashNameHashMapEntriesForNames :: Int -> M.Map A.Name B.ByteString -> [A.Name] -> B.ByteString
 hashNameHashMapEntriesForNames tag hashes names =
   hashNameHashEntriesWith tag names $ \n sink ->
-    feedString (nameKey n) sink >> feedHashBytes (M.findWithDefault B.empty n hashes) sink
+    feedName n sink >> feedHashBytes (M.findWithDefault B.empty n hashes) sink
 
 pubSigDepsFromNameInfoMap :: M.Map A.Name I.NameInfo -> M.Map A.Name [A.QName]
 pubSigDepsFromNameInfoMap nameInfoMap =
@@ -845,6 +880,9 @@ isDerivedQName qn = case qn of
   A.GName _ n -> isDerivedName n
   A.QName _ n -> isDerivedName n
   A.NoQ n     -> isDerivedName n
+
+publicImplDeps :: [A.QName] -> [A.QName]
+publicImplDeps = filter (not . isDerivedQName)
 
 -- | Public hashes include signature deps plus implementation deps, but derived
 -- implementation names are internal and should not require public hashes.
@@ -1070,6 +1108,8 @@ unionDepSplit (ls, es) (ls', es') =
   (HashSet.union ls ls', HashSet.union es es')
 
 insertQNameDep :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> NameSet -> A.QName -> DepSplit -> DepSplit
+insertQNameDep _ _ _ _ (A.NoQ n) acc
+  | n == Names.selfKW' = acc
 insertQNameDep mn env localNames bound qn@(A.NoQ n) acc
   | Data.Set.member n bound = acc
   | otherwise = addSplitDepHash mn env localNames acc qn
@@ -1112,8 +1152,16 @@ implSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
 implItemSplitDeps :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> TopLevelItem -> (A.Name, DepSplit)
 implItemSplitDeps mn env localNames item =
   case item of
-    TLDecl name decl -> (name, splitDeclDirect Data.Set.empty decl emptyDepSplitDirect)
-    TLStmt name stmt -> (name, splitStmtDirect Data.Set.empty stmt emptyDepSplitDirect)
+    TLDecl name decl -> (name, implFragmentSplitDeps mn env localNames (ImplDecl decl))
+    TLStmt name stmt -> (name, implFragmentSplitDeps mn env localNames (ImplStmt stmt))
+
+data ImplFragment = ImplDecl A.Decl | ImplStmt A.Stmt
+
+implFragmentSplitDeps :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> ImplFragment -> DepSplit
+implFragmentSplitDeps mn env localNames fragment =
+  case fragment of
+    ImplDecl decl -> splitDeclDirect Data.Set.empty decl emptyDepSplitDirect
+    ImplStmt stmt -> splitStmtDirect Data.Set.empty stmt emptyDepSplitDirect
   where
     splitQName = insertQNameDep mn env localNames
 
@@ -1320,6 +1368,23 @@ implItemSplitDeps mn env localNames item =
       A.TFX{}            -> acc
       A.TUnboxed _ ty    -> splitTypeDirect bound ty acc
 
+-- | Dependencies of statements emitted as mandatory module initialization,
+-- using the same scope-aware walker as name-owned implementation fragments.
+moduleImplSplitDeps :: A.ModName
+                    -> Env.Env0
+                    -> Data.Set.Set A.Name
+                    -> [A.Stmt]
+                    -> ([A.Name], [A.QName])
+moduleImplSplitDeps mn env localNames statements =
+  ( Data.List.sort (HashSet.toList locals)
+  , Data.List.sort (HashSet.toList externals)
+  )
+  where
+    (locals, externals) = foldl' unionDepSplit emptyDepSplitDirect
+      [ implFragmentSplitDeps mn env localNames (ImplStmt stmt)
+      | stmt <- statements
+      ]
+
 -- | Split deps into locals and external qualified names for hashing.
 splitDeps :: A.ModName
           -> Env.Env0
@@ -1382,10 +1447,10 @@ finishHashSplitDeps pairs =
   , M.map (Data.List.sort . HashSet.toList . snd) pairs
   )
 
--- | Collect referenced external modules from dependency lists.
-externalModules :: M.Map A.Name [A.QName] -> Data.Set.Set A.ModName
+-- | Collect referenced external modules from dependency names.
+externalModules :: [A.QName] -> Data.Set.Set A.ModName
 externalModules deps =
-  Data.Set.fromList $ mapMaybe modOf (concat (M.elems deps))
+  Data.Set.fromList $ mapMaybe modOf deps
   where
     modOf qn = case qn of
       A.GName m _ -> Just m
@@ -1476,7 +1541,7 @@ computeHashesSortedDeps selfHashes localDeps extDeps =
           pure (M.insert n finalHash acc)
       CyclicSCC ns ->
         let nsSet = Data.Set.fromList ns
-            selfHashesSorted = [ selfHashes M.! n | n <- Data.List.sortOn nameKey ns ]
+            selfHashesSorted = [ selfHashes M.! n | n <- Data.List.sort ns ]
             outsideDeps = Data.Set.toList $ Data.Set.fromList
               [ d | n <- ns, d <- M.findWithDefault [] n localDeps, Data.Set.notMember d nsSet ]
             externalDeps = Data.Set.toList $ Data.Set.fromList (concat [ M.findWithDefault [] n extDeps | n <- ns ])
@@ -1569,8 +1634,8 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> [InterfaceFiles.NameHashInfo]
 assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
-  let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
-      localDeps m n = Data.List.sortOn nameKey (M.findWithDefault [] n m)
+  let namesSorted = Data.List.sort (Data.Set.toList nameKeys)
+      localDeps m n = Data.List.sort (M.findWithDefault [] n m)
   in
     [ InterfaceFiles.NameHashInfo
         { InterfaceFiles.nhName = n
@@ -1622,7 +1687,7 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
     -- and its pub/impl deps must keep their places in the regenerated rows.
     [ if M.member n nameImplHashes
         then nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
-                , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (M.findWithDefault [] n implLocalDeps)
+                , InterfaceFiles.nhImplLocalDeps = Data.List.sort (M.findWithDefault [] n implLocalDeps)
                 , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
                 }
         else nh
@@ -1630,14 +1695,59 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
     , let n = InterfaceFiles.nhName nh
     ]
 
+-- | Structural implementation hash for the ordered imports and ownerless
+-- statements emitted by module initialization.
+moduleOwnImplHash :: [A.ModName] -> [A.Stmt] -> B.ByteString
+moduleOwnImplHash imports statements =
+  hashFeed $ \sink -> do
+    feedTag 254 sink
+    feedTag 7 sink
+    feedList feedModName imports sink
+    feedList feedTLStmt statements sink
+
+-- | Finish the module-owned implementation component after name hashes and
+-- external dependency hashes have been resolved.
+finishModuleHash :: M.Map A.Name B.ByteString
+                 -> B.ByteString
+                 -> [[A.Name]]
+                 -> [A.Name]
+                 -> [(A.QName, B.ByteString)]
+                 -> [(A.QName, B.ByteString)]
+                 -> InterfaceFiles.ModuleHashInfo
+finishModuleHash implHashes ownHash statementOwners localDeps pubDeps implDeps
+  | null missing = InterfaceFiles.ModuleHashInfo
+      { InterfaceFiles.mhOwnImplHash = ownHash
+      , InterfaceFiles.mhStatementOwners = statementOwners
+      , InterfaceFiles.mhImplHash = componentHash
+      , InterfaceFiles.mhImplLocalDeps = locals
+      , InterfaceFiles.mhPubDeps = pubs
+      , InterfaceFiles.mhImplDeps = impls
+      }
+  | otherwise = error ("finishModuleHash: missing local implementation hashes for " ++
+                       Data.List.intercalate ", " (map A.nstr missing))
+  where
+    locals = Data.List.sort localDeps
+    pubs = Data.List.sortOn fst pubDeps
+    impls = Data.List.sortOn fst implDeps
+    missing = filter (`M.notMember` implHashes) locals
+    componentHash = hashFeed $ \sink -> do
+      feedTag 254 sink
+      feedTag 8 sink
+      feedHashBytes ownHash sink
+      feedList (feedList feedName) statementOwners sink
+      feedResolvedDepHashes (`M.lookup` implHashes) locals impls sink
+
 -- | Hash module-level pub/impl summaries from the final per-name hash maps.
 moduleHashesFromHashMaps :: I.NModule
+                         -> InterfaceFiles.ModuleHashInfo
                          -> Data.Set.Set A.Name
                          -> M.Map A.Name B.ByteString
                          -> M.Map A.Name B.ByteString
                          -> (B.ByteString, B.ByteString)
-moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes =
-  (modulePubHashFromHashMap nmod pubHashes, moduleImplHashFromHashMap nameKeys implHashes)
+moduleHashesFromHashMaps nmod moduleHashInfo nameKeys pubHashes implHashes =
+  ( modulePubHashFromHashMap nmod pubHashes
+  , moduleImplHashFromHashMap moduleHashInfo nameKeys implHashes
+  )
 
 -- | Hash the module public interface entries.
 modulePubHashFromIface :: I.NModule -> [InterfaceFiles.NameHashInfo] -> B.ByteString
@@ -1652,19 +1762,114 @@ modulePubHashFromHashMap :: I.NModule -> M.Map A.Name B.ByteString -> B.ByteStri
 modulePubHashFromHashMap nmod pubHashes =
   let I.NModule _ iface _ = nmod
       pubNamesSorted =
-        Data.List.sortOn nameKey [ n | (n, _) <- iface, Names.isPublicName n ]
+        Data.List.sort [ n | (n, _) <- iface, Names.isPublicName n ]
   in hashNameHashMapEntriesForNames 3 pubHashes pubNamesSorted
 
 -- | Hash the module impl entries from per-name impl hashes.
-moduleImplHashFromNameHashes :: [InterfaceFiles.NameHashInfo] -> B.ByteString
-moduleImplHashFromNameHashes infos =
-  hashNameHashEntriesWith 4 infosSorted $ \nh sink ->
-    feedString (nameKey (InterfaceFiles.nhName nh)) sink >>
-    feedHashBytes (InterfaceFiles.nhImplHash nh) sink
+moduleImplHashFromNameHashes :: InterfaceFiles.ModuleHashInfo
+                             -> [InterfaceFiles.NameHashInfo]
+                             -> B.ByteString
+moduleImplHashFromNameHashes moduleHashInfo infos =
+  hashModuleImplEntries (InterfaceFiles.mhImplHash moduleHashInfo) infosSorted $ \nh sink ->
+    feedName (InterfaceFiles.nhName nh) sink >> feedHashBytes (InterfaceFiles.nhImplHash nh) sink
   where
-    infosSorted = Data.List.sortOn (nameKey . InterfaceFiles.nhName) infos
+    infosSorted = Data.List.sortOn InterfaceFiles.nhName infos
 
-moduleImplHashFromHashMap :: Data.Set.Set A.Name -> M.Map A.Name B.ByteString -> B.ByteString
-moduleImplHashFromHashMap nameKeys implHashes =
-  let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
-  in hashNameHashMapEntriesForNames 4 implHashes namesSorted
+-- | Identity of the compiler binary performing the back passes. Interface
+-- compatibility controls typed-cache reuse; generated C/H must additionally
+-- change whenever the actual Normalizer-to-CodeGen implementation changes.
+-- Long-lived compiler entry points force this value at process startup, before
+-- an on-disk executable can be replaced underneath the running image.
+codegenIdentity :: B.ByteString
+codegenIdentity = unsafePerformIO $ do
+  executable <- getExecutablePath
+  SHA256.hash <$> B.readFile executable
+{-# NOINLINE codegenIdentity #-}
+
+-- | Whole-module output includes source-derived line directives in addition
+-- to semantic implementation. Keep those mappings and the line-emission mode
+-- in the generated-code key without making raw source bytes invalidate
+-- selective projections.
+wholeCodegenHash :: Bool -> B.ByteString -> B.ByteString -> B.ByteString
+wholeCodegenHash emitLines implHash sourceHash =
+  hashFeed $ \sink -> do
+    feedTag 254 sink
+    feedTag 9 sink
+    feedHashBytes codegenIdentity sink
+    feedList feedInt A.version sink
+    feedBool emitLines sink
+    feedHashBytes implHash sink
+    feedHashBytes sourceHash sink
+
+hashModuleImplEntries :: B.ByteString -> [a] -> (a -> HashFeed) -> B.ByteString
+hashModuleImplEntries moduleHash entries feedEntry =
+  hashFeed $ \sink -> do
+    feedTag 254 sink
+    feedTag 4 sink
+    feedTag 6 sink
+    feedHashBytes moduleHash sink
+    feedTag 4 sink
+    mapM_ (\entry -> feedEntry entry sink) entries
+    feedTag 5 sink
+
+-- | Hash the exact typed module and type environment consumed by the back
+-- passes. Source locations, docstrings and comments are deliberately absent
+-- from the structural feed. Canonical module/import identities, every
+-- materialized statement and the projected container ABI/layout all
+-- participate.
+moduleProjectionHash :: A.Module -> I.TEnv -> B.ByteString
+moduleProjectionHash module0 te = hashFeed $ \sink -> do
+  feedTag 200 sink
+  feedModName (A.modname m) sink
+  feedList feedModName (A.importsOf m) sink
+  feedSuite (A.mbody m) sink
+  feedTag 201 sink
+  feedTEnv te sink
+  where m = stripProjectionDocs module0
+
+-- Documentation is retained in .tydb for tooling, but it is not consumed by
+-- any back pass and therefore must not invalidate generated code.  Nested
+-- declarations in ordinary suites are stripped along with top-level ones.
+stripProjectionDocs :: A.Module -> A.Module
+stripProjectionDocs (A.Module mn imps _ suite) =
+  A.Module mn imps Nothing (map stripStmtDocs suite)
+
+stripStmtDocs :: A.Stmt -> A.Stmt
+stripStmtDocs stmt = case stmt of
+  A.If l branches els -> A.If l (map stripBranchDocs branches) (map stripStmtDocs els)
+  A.While l e body els -> A.While l e (map stripStmtDocs body) (map stripStmtDocs els)
+  A.For l p e body els -> A.For l p e (map stripStmtDocs body) (map stripStmtDocs els)
+  A.Try l body handlers els fin ->
+    A.Try l (map stripStmtDocs body) (map stripHandlerDocs handlers)
+      (map stripStmtDocs els) (map stripStmtDocs fin)
+  A.With l items body -> A.With l items (map stripStmtDocs body)
+  A.Data l pattern body -> A.Data l pattern (map stripStmtDocs body)
+  A.Decl l decls -> A.Decl l (map stripDeclDocs decls)
+  _ -> stmt
+
+stripBranchDocs :: A.Branch -> A.Branch
+stripBranchDocs (A.Branch e body) = A.Branch e (map stripStmtDocs body)
+
+stripHandlerDocs :: A.Handler -> A.Handler
+stripHandlerDocs (A.Handler ex body) = A.Handler ex (map stripStmtDocs body)
+
+stripDeclDocs :: A.Decl -> A.Decl
+stripDeclDocs decl = case decl of
+  A.Def l n q p k result body dec fx _ ->
+    A.Def l n q p k result (map stripStmtDocs body) dec fx Nothing
+  A.Actor l n q p k body _ ->
+    A.Actor l n q p k (map stripStmtDocs body) Nothing
+  A.Class l n q bases body _ ->
+    A.Class l n q bases (map stripStmtDocs body) Nothing
+  A.Protocol l n q bases body _ ->
+    A.Protocol l n q bases (map stripStmtDocs body) Nothing
+  A.Extension l q target bases body _ ->
+    A.Extension l q target bases (map stripStmtDocs body) Nothing
+  A.Typedef l n q typ _ ->
+    A.Typedef l n q typ Nothing
+
+moduleImplHashFromHashMap :: InterfaceFiles.ModuleHashInfo -> Data.Set.Set A.Name -> M.Map A.Name B.ByteString -> B.ByteString
+moduleImplHashFromHashMap moduleHashInfo nameKeys implHashes =
+  let namesSorted = Data.List.sort (Data.Set.toList nameKeys)
+  in hashModuleImplEntries (InterfaceFiles.mhImplHash moduleHashInfo) namesSorted $ \name sink ->
+       feedName name sink >> feedHashBytes (M.findWithDefault B.empty name implHashes) sink

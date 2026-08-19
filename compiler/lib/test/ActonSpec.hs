@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import Control.Concurrent (newEmptyMVar, putMVar, takeMVar, threadDelay)
+import Control.Concurrent (newEmptyMVar, putMVar, runInBoundThread, takeMVar, threadDelay)
 import Control.Concurrent.Async (async, mapConcurrently_, wait)
 import Data.Char (toLower, isAlphaNum)
 
@@ -30,6 +30,11 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified Acton.Hashing as Hashing
+import qualified Acton.Names as Names
+import qualified Acton.InterfaceRows as InterfaceRows
+import qualified Acton.Reachability as Reachability
+import qualified Acton.ReachabilityPrinter as ReachabilityPrinter
+import qualified Acton.ReachabilityRows as ReachRows
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -40,12 +45,13 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
-import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.List (isInfixOf, isPrefixOf, nub, sort, sortOn)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as Set
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
+import Data.Functor.Identity (runIdentity)
 import qualified Data.ByteString.Base16 as Base16
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
@@ -65,6 +71,8 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
 import qualified System.IO.Unsafe
+import qualified Database.LMDB.Raw as LMDB
+import Foreign.Ptr (castPtr)
 
 
 nameHash :: S.Name -> B8.ByteString -> B8.ByteString -> B8.ByteString -> InterfaceFiles.NameHashInfo
@@ -81,6 +89,179 @@ nameHash n src pub impl =
     , InterfaceFiles.nhImplDeps = []
     , InterfaceFiles.nhStmtIndices = []
     }
+
+interfaceContents :: I.NModule -> InterfaceRows.InterfaceRows -> InterfaceFiles.InterfaceContents
+interfaceContents nmod rows =
+  InterfaceFiles.InterfaceContents
+    { InterfaceFiles.ifcSourceHash = "src"
+    , InterfaceFiles.ifcPublicHash = "pub"
+    , InterfaceFiles.ifcImplementationHash = "impl"
+    , InterfaceFiles.ifcModuleHashInfo = InterfaceFiles.emptyModuleHashInfo
+    , InterfaceFiles.ifcSourceMeta = Nothing
+    , InterfaceFiles.ifcImports = []
+    , InterfaceFiles.ifcDependencies = []
+    , InterfaceFiles.ifcNameHashes = []
+    , InterfaceFiles.ifcRoots = []
+    , InterfaceFiles.ifcTests = []
+    , InterfaceFiles.ifcDoc = Nothing
+    , InterfaceFiles.ifcModule = nmod
+    , InterfaceFiles.ifcRows = rows
+    , InterfaceFiles.ifcReachabilityRows = ReachRows.emptyReachabilityRows
+    }
+
+moduleRowsFor :: Acton.Env.Env0 -> S.Module -> InterfaceRows.InterfaceRows
+moduleRowsFor env tmod =
+  case Reachability.prepareInterfaceRows env tmod of
+    Left err -> error (show err)
+    Right rows -> rows
+
+rowShapesList :: InterfaceRows.InterfaceRows -> [InterfaceRows.ContainerShape]
+rowShapesList = M.elems . InterfaceRows.rowShapes
+
+rowMemberEntries :: InterfaceRows.InterfaceRows -> [(S.Name, InterfaceRows.MemberKey, InterfaceRows.MemberContent)]
+rowMemberEntries rows =
+  [ (owner, key, content)
+  | (owner, members) <- M.toList (InterfaceRows.rowMembers rows)
+  , (key, content) <- M.toList members
+  ]
+
+initBodyEntries :: InterfaceRows.MemberContent -> [(Int, S.Stmt)]
+initBodyEntries content =
+  [ (i, stmt)
+  | InterfaceRows.ConstructorFragment i stmt <- initializers content
+  ]
+  where
+    initializers (InterfaceRows.InitializerContent inits) = inits
+    initializers InterfaceRows.InitRestContent{InterfaceRows.restInitializers=inits} = inits
+    initializers _ = []
+
+initSuiteEntries :: InterfaceRows.MemberContent -> [(Int, S.Stmt)]
+initSuiteEntries content =
+  [ (hole, stmt)
+  | InterfaceRows.SuiteFragment hole stmt <- initializers content
+  ]
+  where
+    initializers (InterfaceRows.InitializerContent inits) = inits
+    initializers InterfaceRows.InitRestContent{InterfaceRows.restInitializers=inits} = inits
+    initializers _ = []
+
+methodBodies :: InterfaceRows.MemberContent -> [S.Suite]
+methodBodies (InterfaceRows.MethodContent methods) = map S.dbody methods
+methodBodies _ = []
+
+data SelectionIndex = SelectionIndex
+  { selectionTops        :: M.Map ReachRows.TopKey ReachRows.TopInfo
+  , selectionMembers     :: M.Map (ReachRows.TopKey,InterfaceRows.MemberKey) ReachRows.MemberInfo
+  , selectionShapes      :: M.Map ReachRows.TopKey ReachRows.ShapeInfo
+  , selectionSlots       :: M.Map (ReachRows.TopKey,ReachRows.MemberRef) ReachRows.SlotInfo
+  , selectionReflections :: M.Map ReachRows.TopKey ReachRows.ReflectableAttrs
+  }
+
+data SelectionFixture = SelectionFixture
+  { fixtureShape :: ReachRows.ShapeInfo
+  , fixtureSlots :: [(ReachRows.MemberRef,ReachRows.SlotInfo)]
+  }
+
+selectionClass :: ReachRows.TopKey
+               -> [ReachRows.TopKey]
+               -> [(ReachRows.MemberRef,ReachRows.SlotInfo)]
+               -> SelectionFixture
+selectionClass owner lineage slots = SelectionFixture shape slots
+  where
+    shape = ReachRows.ShapeInfo owner ReachRows.ClassShape lineage
+      (Just (owner,ReachRows.StoredConstructor mempty))
+      [ ref | (ref,ReachRows.SlotInfo _ ReachRows.AbstractSlot) <- slots ]
+
+selectionIndex :: [SelectionFixture]
+               -> [(ReachRows.TopKey,InterfaceRows.MemberKey,ReachRows.MemberInfo)]
+               -> [(ReachRows.TopKey,ReachRows.ReachSummary)]
+               -> SelectionIndex
+selectionIndex fixtures givenMembers plain = SelectionIndex
+  { selectionTops = M.fromList
+      ([ (ReachRows.shapeName shape,ReachRows.LocalTop Nothing mempty) | shape <- shapes ] ++
+       [ (owner,ReachRows.LocalTop Nothing summary) | (owner,summary) <- plain ])
+  , selectionMembers = M.fromList
+      [ ((owner,key),info) | (owner,key,info) <- givenMembers ++ constructors ]
+  , selectionShapes = M.fromList [ (ReachRows.shapeName shape,shape) | shape <- shapes ]
+  , selectionSlots = M.fromList
+      [ ((ReachRows.shapeName $ fixtureShape fixture,ref),slot)
+      | fixture <- fixtures
+      , (ref,slot) <- fixtureSlots fixture
+      ]
+  , selectionReflections = M.fromList
+      [ ( ReachRows.shapeName $ fixtureShape fixture
+        , ReachRows.ReflectableAttrs
+            [ name | (ReachRows.AttrRef name,_) <- fixtureSlots fixture ]
+        )
+      | fixture <- fixtures
+      ]
+  }
+  where
+    shapes = map fixtureShape fixtures
+    supplied = Set.fromList [ (owner,key) | (owner,key,_) <- givenMembers ]
+    constructors =
+      [ (owner,InterfaceRows.InitRest,ReachRows.MemberInfo mempty Nothing Nothing)
+      | shape <- shapes
+      , Just (owner,ReachRows.StoredConstructor _) <- [ReachRows.shapeConstructor shape]
+      , Set.notMember (owner,InterfaceRows.InitRest) supplied
+      ]
+
+selectionLookup :: Applicative m => SelectionIndex -> Reachability.ReachLookup m
+selectionLookup index = Reachability.ReachLookup
+  { Reachability.lookupTopRow = \key -> pure $ M.lookup key (selectionTops index)
+  , Reachability.lookupMemberRow = \owner member ->
+      pure $ M.lookup (owner,member) (selectionMembers index)
+  , Reachability.lookupShapeRow = \key -> pure $ M.lookup key (selectionShapes index)
+  , Reachability.lookupSlotRow = \owner ref ->
+      pure $ M.lookup (owner,ref) (selectionSlots index)
+  , Reachability.lookupSurfaceSlots = \owner -> pure
+      [ (ref,slot) | ((owner',ref),slot) <- M.toAscList (selectionSlots index), owner == owner' ]
+  , Reachability.lookupReflectableAttrs = \owner ->
+      pure $ M.lookup owner (selectionReflections index)
+  }
+
+data SelectionCounts = SelectionCounts
+  { countTops        :: M.Map ReachRows.TopKey Int
+  , countMembers     :: M.Map (ReachRows.TopKey,InterfaceRows.MemberKey) Int
+  , countShapes      :: M.Map ReachRows.TopKey Int
+  , countSlots       :: M.Map (ReachRows.TopKey,ReachRows.MemberRef) Int
+  , countSurfaces    :: M.Map ReachRows.TopKey Int
+  , countReflections :: M.Map ReachRows.TopKey Int
+  } deriving (Eq,Show)
+
+emptySelectionCounts :: SelectionCounts
+emptySelectionCounts = SelectionCounts M.empty M.empty M.empty M.empty M.empty M.empty
+
+countedSelectionLookup :: SelectionIndex -> Reachability.ReachLookup (St.State SelectionCounts)
+countedSelectionLookup index = Reachability.ReachLookup
+  { Reachability.lookupTopRow = \key -> count countTops setTops key $
+      M.lookup key (selectionTops index)
+  , Reachability.lookupMemberRow = \owner member -> count countMembers setMembers
+      (owner,member) (M.lookup (owner,member) $ selectionMembers index)
+  , Reachability.lookupShapeRow = \key -> count countShapes setShapes key $
+      M.lookup key (selectionShapes index)
+  , Reachability.lookupSlotRow = \owner ref -> count countSlots setSlots
+      (owner,ref) (M.lookup (owner,ref) $ selectionSlots index)
+  , Reachability.lookupSurfaceSlots = \owner -> count countSurfaces setSurfaces owner
+      [ (ref,slot) | ((owner',ref),slot) <- M.toAscList (selectionSlots index), owner == owner' ]
+  , Reachability.lookupReflectableAttrs = \owner -> count countReflections setReflections owner $
+      M.lookup owner (selectionReflections index)
+  }
+  where
+    count field set key value = do
+      St.modify' (\counts -> set (M.insertWith (+) key 1 $ field counts) counts)
+      return value
+    setTops rows counts = counts{countTops=rows}
+    setMembers rows counts = counts{countMembers=rows}
+    setShapes rows counts = counts{countShapes=rows}
+    setSlots rows counts = counts{countSlots=rows}
+    setSurfaces rows counts = counts{countSurfaces=rows}
+    setReflections rows counts = counts{countReflections=rows}
+
+selectFixture :: SelectionIndex
+              -> [ReachRows.ReachEdge]
+              -> Either Reachability.SelectionError Reachability.Selection
+selectFixture index = runIdentity . Reachability.selectProgram (selectionLookup index)
 
 hashTestName :: S.Name
 hashTestName = S.name "value"
@@ -106,6 +287,49 @@ sourceHashFor decl =
   case M.lookup hashTestName (Hashing.nameHashesFromItems [Hashing.TLDecl hashTestName decl]) of
     Just h  -> h
     Nothing -> error "missing source hash"
+
+withInterfaceSession :: FilePath -> (InterfaceFiles.InterfaceReadSession -> IO a) -> IO a
+withInterfaceSession = InterfaceFiles.withInterfaceReadSession
+
+deleteInterfaceEntry :: FilePath -> B8.ByteString -> IO ()
+deleteInterfaceEntry path entry = runInBoundThread $ do
+  env <- LMDB.mdb_env_create
+  E.bracket_
+    (LMDB.mdb_env_open env path [])
+    (LMDB.mdb_env_close env)
+    (E.mask $ \restore -> do
+      txn <- LMDB.mdb_txn_begin env Nothing False
+      restore
+        (do dbi <- LMDB.mdb_dbi_open txn Nothing []
+            B8.useAsCStringLen entry $ \(ptr,len) -> do
+              _ <- LMDB.mdb_del txn dbi
+                (LMDB.MDB_val (fromIntegral len) (castPtr ptr)) Nothing
+              return ())
+        `E.onException` LMDB.mdb_txn_abort txn
+      LMDB.mdb_txn_commit txn)
+
+copyInterfaceEntry :: FilePath -> B8.ByteString -> B8.ByteString -> IO ()
+copyInterfaceEntry path source destination = runInBoundThread $ do
+  env <- LMDB.mdb_env_create
+  E.bracket_
+    (LMDB.mdb_env_open env path [])
+    (LMDB.mdb_env_close env)
+    (E.mask $ \restore -> do
+      txn <- LMDB.mdb_txn_begin env Nothing False
+      restore
+        (do dbi <- LMDB.mdb_dbi_open txn Nothing []
+            B8.useAsCStringLen source $ \(sourcePtr,sourceLen) -> do
+              value <- LMDB.mdb_get txn dbi
+                (LMDB.MDB_val (fromIntegral sourceLen) (castPtr sourcePtr))
+              case value of
+                Nothing -> expectationFailure "source interface entry is missing"
+                Just bytes ->
+                  B8.useAsCStringLen destination $ \(destinationPtr,destinationLen) -> do
+                    _ <- LMDB.mdb_put (LMDB.compileWriteFlags []) txn dbi
+                      (LMDB.MDB_val (fromIntegral destinationLen) (castPtr destinationPtr)) bytes
+                    return ())
+        `E.onException` LMDB.mdb_txn_abort txn
+      LMDB.mdb_txn_commit txn)
 
 implSplitDepSetMaps :: Acton.Env.Env0
                     -> S.ModName
@@ -148,6 +372,7 @@ main :: IO ()
 main = do
   let sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
   env0 <- Acton.Env.initEnv sysTypesPath False
+  let moduleRows = moduleRowsFor env0
 
   sydTest $ do
     describe "Zon (build.zig.zon reader)" $ do
@@ -222,6 +447,223 @@ main = do
           got <- Zon.readZonDependencies p
           got `shouldBe` Right [ ("a", Zon.ZonDep (Just "u") (Just "h") Nothing False) ]
     sequential $ describe "InterfaceFiles" $ do
+      it "preserves ownerless whole statements and typed variable rows" $ do
+        let mn = S.modName ["iface_owned_tops"]
+            ownerlessStmt = S.Expr NoLoc (S.Int NoLoc 1 "1")
+            ownerlessModule = S.Module mn [] Nothing [ownerlessStmt]
+            ownerlessRows = InterfaceRows.InterfaceRows
+              { InterfaceRows.rowModuleName = mn
+              , InterfaceRows.rowImports = []
+              , InterfaceRows.rowDoc = Nothing
+              , InterfaceRows.rowHasNotImpl = False
+              , InterfaceRows.rowStatements = [InterfaceRows.StoredWhole [] ownerlessStmt]
+              , InterfaceRows.rowShapes = M.empty
+              , InterfaceRows.rowMembers = M.empty
+              }
+            name = S.name "value"
+            variableStmt = S.VarAssign NoLoc
+              [S.PVar NoLoc name (Just S.tWild)] (S.Int NoLoc 1 "1")
+            variableModule = S.Module mn [] Nothing [variableStmt]
+        case Reachability.prepareInterfaceRows env0 ownerlessModule of
+          Left err -> expectationFailure (show err)
+          Right rows -> do
+            InterfaceRows.rowStatements rows `shouldBe`
+              [InterfaceRows.StoredWhole [] ownerlessStmt]
+            InterfaceRows.restoreInterfaceRows rows `shouldBe` Right ownerlessModule
+        InterfaceRows.restoreInterfaceRows ownerlessRows `shouldBe` Right ownerlessModule
+        case Reachability.prepareInterfaceRows env0 variableModule of
+          Left err -> expectationFailure (show err)
+          Right rows -> InterfaceRows.restoreInterfaceRows rows `shouldBe` Right variableModule
+
+      it "owns and hashes bindings from compound top-level statements" $ do
+        withSystemTempDirectory "acton-iface-compound-top" $ \dir -> do
+          let mn = S.modName ["iface_compound_top_binding"]
+              tyPath = dir </> "iface_compound_top_binding.tydb"
+              value = S.name "value"
+              assign n = S.Assign NoLoc
+                [S.PVar NoLoc value (Just Builtin.tInt)] (S.Int NoLoc n (show n))
+              conditional = S.If NoLoc
+                [S.Branch (S.Bool NoLoc True) [assign 1]] [assign 2]
+              typed = S.Module mn [] Nothing [conditional]
+              nmod = I.NModule [] [(value,I.NVar Builtin.tInt)] Nothing
+              hashes = Hashing.nameHashesFromItems
+                (Hashing.topLevelItems (Hashing.typedTopLevelOwners typed) typed)
+              rows = moduleRows typed
+          map InterfaceRows.storedStmtNames (InterfaceRows.rowStatements rows)
+            `shouldBe` [[value]]
+          M.member value hashes `shouldBe` True
+          InterfaceRows.restoreInterfaceRows rows `shouldBe` Right typed
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = [nameHash value "src" "pub" "impl"] }
+          (_mods,_nmod,restored,_sourceMeta,_srcHash,_pubHash,_implHash,
+            _imps,_deps,_hashes,_roots,_tests,_doc) <- InterfaceFiles.readFile tyPath
+          restored `shouldBe` typed
+
+      it "loads mandatory ownerless statements for an empty projection" $ do
+        withSystemTempDirectory "acton-iface-mandatory-statements" $ \dir -> do
+          let mn = S.modName ["iface_mandatory_statements"]
+              tyPath = dir </> "iface_mandatory_statements.tydb"
+              stmt = S.Expr NoLoc (S.Int NoLoc 1 "1")
+              tmod = S.Module mn [] Nothing [stmt]
+              nmod = I.NModule [] [] Nothing
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath (interfaceContents nmod (moduleRows tmod))
+          withInterfaceSession tyPath $ \session ->
+            InterfaceFiles.readInterfaceSessionSelection
+              session [] Set.empty M.empty
+              `shouldReturn` tmod
+
+      it "round-trips the module-owned hash and dependency rows" $ do
+        withSystemTempDirectory "acton-iface-module-hash" $ \dir -> do
+          let mn = S.modName ["iface_module_hash"]
+              depMn = S.modName ["dependency"]
+              depName = S.name "value"
+              dep = S.GName depMn depName
+              tyPath = dir </> "iface_module_hash.tydb"
+              moduleHash = InterfaceFiles.ModuleHashInfo
+                { InterfaceFiles.mhOwnImplHash = "module-own"
+                , InterfaceFiles.mhStatementOwners = []
+                , InterfaceFiles.mhImplHash = "module-impl"
+                , InterfaceFiles.mhImplLocalDeps = []
+                , InterfaceFiles.mhPubDeps = [(dep,"dep-pub")]
+                , InterfaceFiles.mhImplDeps = [(dep,"dep-impl")]
+                }
+              depModule = InterfaceFiles.DepModuleInfo depMn "module-pub" "module-impl"
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module mn [] Nothing []
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcModuleHashInfo = moduleHash
+              , InterfaceFiles.ifcDependencies = [depModule]
+              }
+          InterfaceFiles.readModuleHashInfo tyPath `shouldReturn` moduleHash
+          InterfaceFiles.readDepNames tyPath depMn `shouldReturn`
+            [InterfaceFiles.DepNameInfo depName "dep-pub" "dep-impl"]
+          InterfaceFiles.readDepUsers tyPath depMn depName `shouldReturn`
+            InterfaceFiles.DepUsers [] []
+
+      it "refreshes the module-owned hash without rewriting typed content" $ do
+        withSystemTempDirectory "acton-iface-module-hash-refresh" $ \dir -> do
+          let mn = S.modName ["iface_module_hash_refresh"]
+              depMn = S.modName ["dependency"]
+              depName = S.name "value"
+              dep = S.GName depMn depName
+              tyPath = dir </> "iface_module_hash_refresh.tydb"
+              stmt = S.Expr NoLoc (S.Int NoLoc 1 "1")
+              tmod = S.Module mn [] Nothing [stmt]
+              nmod = I.NModule [] [] Nothing
+              moduleHash implHash = InterfaceFiles.ModuleHashInfo
+                { InterfaceFiles.mhOwnImplHash = "module-own"
+                , InterfaceFiles.mhStatementOwners = [[]]
+                , InterfaceFiles.mhImplHash = "module-component-" <> implHash
+                , InterfaceFiles.mhImplLocalDeps = []
+                , InterfaceFiles.mhPubDeps = [(dep,"dep-pub")]
+                , InterfaceFiles.mhImplDeps = [(dep,implHash)]
+                }
+              initialHash = moduleHash "dep-impl-1"
+              refreshedHash = moduleHash "dep-impl-2"
+              initialDep = InterfaceFiles.DepModuleInfo depMn "module-pub" "module-impl-1"
+              refreshedDep = InterfaceFiles.DepModuleInfo depMn "module-pub" "module-impl-2"
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcImplementationHash = "aggregate-1"
+              , InterfaceFiles.ifcModuleHashInfo = initialHash
+              , InterfaceFiles.ifcDependencies = [initialDep]
+              }
+          refreshInput <- InterfaceFiles.readImplRefreshInput tyPath
+          InterfaceFiles.updateImplRefresh tyPath refreshInput
+            InterfaceFiles.ImplRefreshOutput
+              { InterfaceFiles.iroImplementationHash = "aggregate-2"
+              , InterfaceFiles.iroModuleHashInfo = refreshedHash
+              , InterfaceFiles.iroDependencies = [refreshedDep]
+              , InterfaceFiles.iroNameHashes = []
+              }
+          InterfaceFiles.readModuleHashInfo tyPath `shouldReturn` refreshedHash
+          InterfaceFiles.readModuleHashesMaybe tyPath `shouldReturn`
+            Just ("src","pub","aggregate-2")
+          InterfaceFiles.readDepNames tyPath depMn `shouldReturn`
+            [InterfaceFiles.DepNameInfo depName "dep-pub" "dep-impl-2"]
+          (_mods, _nmod, restored, _sourceMeta, _srcHash, _pubHash, _implHash,
+            _imps, _depModules, _nameHashes, _roots, _tests, _doc) <-
+              InterfaceFiles.readFile tyPath
+          restored `shouldBe` tmod
+
+      it "rejects an implementation refresh planned from stale rows" $ do
+        withSystemTempDirectory "acton-iface-stale-impl-refresh" $ \dir -> do
+          let mn = S.modName ["iface_stale_impl_refresh"]
+              tyPath = dir </> "iface_stale_impl_refresh.tydb"
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module mn [] Nothing []
+              output implHash = InterfaceFiles.ImplRefreshOutput
+                { InterfaceFiles.iroImplementationHash = implHash
+                , InterfaceFiles.iroModuleHashInfo = InterfaceFiles.emptyModuleHashInfo
+                , InterfaceFiles.iroDependencies = []
+                , InterfaceFiles.iroNameHashes = []
+                }
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcImplementationHash = "impl-1" }
+          initial <- InterfaceFiles.readImplRefreshInput tyPath
+          InterfaceFiles.updateImplRefresh tyPath initial (output "impl-2")
+          InterfaceFiles.updateImplRefresh tyPath initial (output "stale")
+            `shouldThrow` InterfaceFiles.isImplRefreshStale
+          current <- InterfaceFiles.readImplRefreshInput tyPath
+          let wrongInputs =
+                [ current { InterfaceFiles.iriGeneration = "wrong" }
+                , current { InterfaceFiles.iriSourceHash = "wrong" }
+                , current { InterfaceFiles.iriPublicHash = "wrong" }
+                , current { InterfaceFiles.iriImplementationHash = "wrong" }
+                ]
+          forM_ wrongInputs $ \wrong ->
+            InterfaceFiles.updateImplRefresh tyPath wrong (output "stale")
+              `shouldThrow` InterfaceFiles.isImplRefreshStale
+          InterfaceFiles.readModuleHashesMaybe tyPath `shouldReturn`
+            Just ("src","pub","impl-2")
+          InterfaceFiles.updateImplRefresh tyPath current (output "impl-3")
+          InterfaceFiles.readModuleHashesMaybe tyPath `shouldReturn`
+            Just ("src","pub","impl-3")
+
+      it "keeps structurally distinct module-name dependency rows separate" $ do
+        withSystemTempDirectory "acton-iface-module-keys" $ \dir -> do
+          let mn = S.modName ["iface_module_keys"]
+              plain = S.name "ownerD_part"
+              derived = S.Derived (S.name "owner") (S.name "part")
+              plainMn = S.ModName [plain]
+              derivedMn = S.ModName [derived]
+              depName = S.name "value"
+              plainDep = S.GName plainMn depName
+              derivedDep = S.GName derivedMn depName
+              tyPath = dir </> "iface_module_keys.tydb"
+              moduleHash = InterfaceFiles.ModuleHashInfo
+                { InterfaceFiles.mhOwnImplHash = "module-own"
+                , InterfaceFiles.mhStatementOwners = []
+                , InterfaceFiles.mhImplHash = "module-impl"
+                , InterfaceFiles.mhImplLocalDeps = []
+                , InterfaceFiles.mhPubDeps =
+                    [(plainDep,"plain-pub"),(derivedDep,"derived-pub")]
+                , InterfaceFiles.mhImplDeps =
+                    [(plainDep,"plain-impl"),(derivedDep,"derived-impl")]
+                }
+              depModules =
+                [ InterfaceFiles.DepModuleInfo plainMn "plain-module-pub" "plain-module-impl"
+                , InterfaceFiles.DepModuleInfo derivedMn "derived-module-pub" "derived-module-impl"
+                ]
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module mn [] Nothing []
+          S.nstr plain `shouldBe` S.nstr derived
+          compare plain derived `shouldNotBe` EQ
+          S.modPath plainMn `shouldBe` S.modPath derivedMn
+          compare plainMn derivedMn `shouldNotBe` EQ
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcModuleHashInfo = moduleHash
+              , InterfaceFiles.ifcDependencies = depModules
+              }
+          InterfaceFiles.readDepNames tyPath plainMn `shouldReturn`
+            [InterfaceFiles.DepNameInfo depName "plain-pub" "plain-impl"]
+          InterfaceFiles.readDepNames tyPath derivedMn `shouldReturn`
+            [InterfaceFiles.DepNameInfo depName "derived-pub" "derived-impl"]
+
       it "round-trips payloads and preserves ordered name entries" $ do
         withSystemTempDirectory "acton-iface" $ \dir -> do
           let mn = S.modName ["iface"]
@@ -250,12 +692,20 @@ main = do
               tests = ["test_second", "test_first"]
               nmod = I.NModule [] iface (Just "module docs")
               tmod = S.Module mn [] (Just "typed docs") []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes roots tests (Just "module docs") nmod tmod
-          InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcNameHashes = nameHashes
+              , InterfaceFiles.ifcRoots = roots
+              , InterfaceFiles.ifcTests = tests
+              , InterfaceFiles.ifcDoc = Just "module docs"
+              }
+          InterfaceFiles.keyNameInfo firstName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
           InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
-          InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
-          InterfaceFiles.keyNameInfo sourcePlainName `shouldBe` "name-info/p/foo_bar"
-          InterfaceFiles.keyNameInfo derivedName `shouldBe` "name-info/p/encodeD_witness"
+          InterfaceFiles.keyNameHash secondName `shouldSatisfy` B8.isPrefixOf "name-hash/h/"
+          InterfaceFiles.keyNameInfo sourcePlainName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
+          InterfaceFiles.keyNameInfo derivedName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
+          InterfaceFiles.keyNameInfo sourcePlainName `shouldNotBe`
+            InterfaceFiles.keyNameInfo derivedName
           InterfaceFiles.keyNameInfo longName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
           (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes', roots', tests', doc') <-
             InterfaceFiles.readFile tyPath
@@ -266,7 +716,7 @@ main = do
           (srcHash, pubHash, implHash) `shouldBe` ("src", "pub", "impl")
           imps `shouldBe` []
           depModules `shouldBe` []
-          nameHashes' `shouldBe` nameHashes
+          nameHashes' `shouldBe` sortOn InterfaceFiles.nhName nameHashes
           roots' `shouldBe` roots
           tests' `shouldBe` tests
           doc' `shouldBe` Just "module docs"
@@ -277,10 +727,121 @@ main = do
           (srcHashH, pubHashH, implHashH) `shouldBe` ("src", "pub", "impl")
           impsH `shouldBe` []
           depModulesH `shouldBe` []
-          nameHashesH `shouldBe` nameHashes
+          nameHashesH `shouldBe` sortOn InterfaceFiles.nhName nameHashes
           rootsH `shouldBe` roots
           testsH `shouldBe` tests
           docH `shouldBe` Just "module docs"
+
+      it "preserves repeated signature and definition name occurrences" $ do
+        withSystemTempDirectory "acton-iface-name-occurrences" $ \dir -> do
+          let mn = S.modName ["iface_name_occurrences"]
+              tyPath = dir </> "iface_name_occurrences.tydb"
+              value = S.name "value"
+              signature = I.NSig (S.monotype Builtin.tInt) S.NoDec Nothing
+              definition = I.NVar Builtin.tInt
+              iface = [(value,signature),(value,definition)]
+              nmod = I.NModule [] iface Nothing
+              rows = moduleRows (S.Module mn [] Nothing [])
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = [nameHash value "src" "pub" "impl"] }
+          (_mods,I.NModule _ restored _,_typed,_sourceMeta,_srcHash,_pubHash,
+            _implHash,_imps,_depModules,_nameHashes,_roots,_tests,_doc) <-
+              InterfaceFiles.readFile tyPath
+          restored `shouldBe` iface
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          InterfaceFiles.readInterfaceDBNameInfoMaybe db value
+            `shouldReturn` Just (value,definition)
+
+      it "stores and reads exact reachability rows independently" $ do
+        withSystemTempDirectory "acton-iface-reachability" $ \dir -> do
+          let mn = S.modName ["iface_reachability"]
+              depMn = S.modName ["dependency"]
+              tyPath = dir </> "iface_reachability.tydb"
+              owner = S.name "Payload"
+              member = S.name "value"
+              self = S.name "self"
+              topKey = ReachRows.TopKey mn owner
+              memberKey = InterfaceRows.Method member
+              memberRef = ReachRows.MethodRef member
+              missingTop = ReachRows.TopKey mn (S.name "Missing")
+              summary = ReachRows.reachSummaryFromEdges
+                [ReachRows.Direct depMn (S.name "Other") (ReachRows.AttrRef (S.name "field"))]
+              topInfo = ReachRows.LocalTop Nothing summary
+              memberInfo = ReachRows.MemberInfo summary Nothing (Just mempty)
+              shapeInfo = ReachRows.ShapeInfo
+                topKey ReachRows.ClassShape [topKey] Nothing []
+              slotInfo = ReachRows.SlotInfo topKey (ReachRows.StoredSlot memberKey)
+              reflection = ReachRows.ReflectableAttrs [member]
+              reachRows = ReachRows.ReachabilityRows
+                { ReachRows.reachModuleSummary = summary
+                , ReachRows.reachWholeSummary = summary <> summary
+                , ReachRows.reachTopRows = M.singleton topKey topInfo
+                , ReachRows.reachMemberRows = M.singleton (topKey, memberKey) memberInfo
+                , ReachRows.reachShapeRows = M.singleton topKey shapeInfo
+                , ReachRows.reachSlotRows = M.singleton (topKey, memberRef) slotInfo
+                , ReachRows.reachReflectableRows = M.singleton topKey reflection
+                }
+              method = S.Def NoLoc member []
+                (S.PosPar self Nothing Nothing S.PosNIL) S.KwdNIL Nothing
+                [S.Return NoLoc Nothing] S.NoDec S.fxPure Nothing
+              classDecl = S.Class NoLoc owner [] [] [S.Decl NoLoc [method]] Nothing
+              tmod = S.Module mn [] Nothing [S.Decl NoLoc [classDecl]]
+              nmod = I.NModule [] [(owner, I.NClass [] [] [] Nothing)] Nothing
+              nameHashes = [nameHash owner "src" "pub" "impl"]
+              withSession = InterfaceFiles.withInterfaceReadSession tyPath
+          InterfaceFiles.keyReachMember topKey (InterfaceRows.Method member)
+            `shouldNotBe` InterfaceFiles.keyReachMember topKey (InterfaceRows.Attr member)
+          InterfaceFiles.keyReachSlot topKey (ReachRows.MethodRef member)
+            `shouldNotBe` InterfaceFiles.keyReachSlot topKey (ReachRows.AttrRef member)
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcNameHashes = nameHashes
+              , InterfaceFiles.ifcReachabilityRows = reachRows
+              }
+          withSession $ \session -> do
+            InterfaceFiles.readInterfaceSessionReachSummaries session mn
+              `shouldReturn` (summary,summary <> summary)
+            InterfaceFiles.readInterfaceSessionReachTop session topKey
+              `shouldReturn` topInfo
+            InterfaceFiles.readInterfaceSessionReachMemberMaybe session topKey memberKey
+              `shouldReturn` Just memberInfo
+            InterfaceFiles.readInterfaceSessionReachShapeMaybe session topKey
+              `shouldReturn` Just shapeInfo
+            InterfaceFiles.readInterfaceSessionReachSlotMaybe session topKey memberRef
+              `shouldReturn` Just slotInfo
+            InterfaceFiles.readInterfaceSessionReachSlots session topKey
+              `shouldReturn` [(memberRef,slotInfo)]
+            InterfaceFiles.readInterfaceSessionReachReflectionMaybe session topKey
+              `shouldReturn` Just reflection
+            InterfaceFiles.readInterfaceSessionReachTopMaybe session missingTop
+              `shouldReturn` Nothing
+            InterfaceFiles.readInterfaceSessionReachMemberMaybe
+              session topKey (InterfaceRows.Attr member) `shouldReturn` Nothing
+            InterfaceFiles.readInterfaceSessionReachShapeMaybe session missingTop
+              `shouldReturn` Nothing
+            InterfaceFiles.readInterfaceSessionReachSlotMaybe
+              session topKey (ReachRows.AttrRef member) `shouldReturn` Nothing
+            InterfaceFiles.readInterfaceSessionReachReflectionMaybe session missingTop
+              `shouldReturn` Nothing
+          InterfaceFiles.readReachabilityRows tyPath mn Nothing `shouldReturn` reachRows
+          InterfaceFiles.readReachabilityRows tyPath mn (Just owner) `shouldReturn` reachRows
+          let printed = ReachabilityPrinter.prettyRows mn (Just owner) reachRows
+          printed `shouldSatisfy` isInfixOf "class Payload"
+          printed `shouldSatisfy`
+            isInfixOf "direct dependency.Other.attr field"
+          InterfaceFiles.updateSourceHashAndNameHashes tyPath "src-2" [] nameHashes
+          (_sourceMeta, sourceHash, _pubHash, _implHash, _imports,
+            _depModules, _storedNameHashes, _roots, _tests, _doc) <-
+              InterfaceFiles.readHeader tyPath
+          sourceHash `shouldBe` "src-2"
+          withSession $ \session ->
+            InterfaceFiles.readInterfaceSessionReachSlotMaybe session topKey memberRef
+              `shouldReturn` Just slotInfo
+          InterfaceFiles.updateVersion tyPath S.version
+          withSession $ \session ->
+            InterfaceFiles.readInterfaceSessionReachReflectionMaybe session topKey
+              `shouldReturn` Just reflection
 
       it "reads module query indexes independently" $ do
         withSystemTempDirectory "acton-iface-indexes" $ \dir -> do
@@ -311,7 +872,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
               names = sort . map fst
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath (interfaceContents nmod (moduleRows tmod))
           db <- InterfaceFiles.openInterfaceDB tyPath
           (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
               InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
@@ -327,12 +888,34 @@ main = do
               names <$> InterfaceFiles.readInterfaceDBExtByType db (S.NoQ clsName) `shouldReturn` [extName]
               fst <$> InterfaceFiles.readInterfaceDBModuleInfo db `shouldReturn` [])
 
+      it "keeps query indexes exact for structurally distinct names" $ do
+        withSystemTempDirectory "acton-iface-exact-indexes" $ \dir -> do
+          let mn = S.modName ["iface_exact_indexes"]
+              tyPath = dir </> "iface_exact_indexes.tydb"
+              plainAttr = S.name "ownerD_part"
+              derivedAttr = S.Derived (S.name "owner") (S.name "part")
+              plainOwner = S.name "PlainOwner"
+              derivedOwner = S.name "DerivedOwner"
+              iface =
+                [ (plainOwner,I.NClass [] [] [(plainAttr,I.NVar S.tWild)] Nothing)
+                , (derivedOwner,I.NClass [] [] [(derivedAttr,I.NVar S.tWild)] Nothing)
+                ]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+              names = map fst
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath (interfaceContents nmod (moduleRows tmod))
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          names <$> InterfaceFiles.readInterfaceDBConAttr db plainAttr
+            `shouldReturn` [plainOwner]
+          names <$> InterfaceFiles.readInterfaceDBConAttr db derivedAttr
+            `shouldReturn` [derivedOwner]
+
       it "keeps lock files free of named-semaphore state" $ do
         withSystemTempDirectory "acton-iface-lockfmt" $ \dir -> do
           let tyPath = dir </> "lockfmt.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module (S.modName ["lockfmt"]) [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath (interfaceContents nmod (moduleRows tmod))
           -- liblmdb's lock table must use process-shared mutexes, which live
           -- inside lock.mdb, on every platform. Its POSIX-semaphore variant
           -- (upstream's default on macOS) stores "/MDB[rw]..." names here
@@ -349,7 +932,9 @@ main = do
               tyPath = dir </> "iface_rewrite.tydb"
               vName = S.name "v"
               wName = S.name "w"
-              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+              write iface = InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+                interfaceContents (I.NModule [] iface Nothing)
+                  (moduleRows $ S.Module mn [] Nothing [])
           write [(vName, I.NVar S.tWild)]
           db <- InterfaceFiles.openInterfaceDB tyPath
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
@@ -359,30 +944,332 @@ main = do
           InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Nothing
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db wName `shouldReturn` Just wName
 
-      it "reads selected statements by ownership" $ do
-        withSystemTempDirectory "acton-iface-stmts" $ \dir -> do
-          let mn = S.modName ["iface_stmts"]
-              tyPath = dir </> "iface_stmts.tydb"
-              aName = S.name "a"
-              bName = S.name "b"
-              cName = S.name "c"
-              stmtFor n v = S.Assign NoLoc [S.pVar' n] (S.eInt v)
-              body = [stmtFor aName 1, stmtFor bName 2, stmtFor cName 3]
-              iface = [ (n, I.NVar S.tWild) | n <- [aName, bName, cName] ]
-              nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
-              nmod = I.NModule [] iface Nothing
-              tmod = S.Module mn [] Nothing body
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] Nothing nmod tmod
-          (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
-            InterfaceFiles.readHeader tyPath
-          [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
-            `shouldBe` [[1]]
-          selected <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [aName, cName])
-          case selected of
-            Just (S.Module _ _ _ stmts) -> stmts `shouldBe` [stmtFor aName 1, stmtFor cName 3]
-            Nothing -> expectationFailure "expected selected statements"
-          missing <- InterfaceFiles.readSelectedModule tyPath nameHashesH (Set.fromList [S.name "nope"])
-          missing `shouldBe` Nothing
+      it "does not load unused top or member content rows" $ do
+        withSystemTempDirectory "acton-iface-exact-selection-reads" $ \dir -> do
+          let mn = S.modName ["iface_exact_selection_reads"]
+              selected = S.name "Selected"
+              unused = S.name "Unused"
+              keep = S.name "keep"
+              drop = S.name "drop"
+              self = S.name "self"
+              method name value = S.Def NoLoc name []
+                (S.PosPar self (Just S.tSelf) Nothing S.PosNIL) S.KwdNIL
+                (Just Builtin.tInt)
+                [S.Return NoLoc $ Just $ S.Int NoLoc value (show value)]
+                S.NoDec S.fxPure Nothing
+              selectedDecl = S.Class NoLoc selected [] []
+                [S.Decl NoLoc [method keep 1,method drop 2]] Nothing
+              unusedDecl = S.Class NoLoc unused [] []
+                [S.Decl NoLoc [method keep 3]] Nothing
+              tmod = S.Module mn [] Nothing
+                [S.Decl NoLoc [selectedDecl,unusedDecl]]
+              rows = moduleRows tmod
+              nmod = I.NModule []
+                [ (selected,I.NClass [] [] [] Nothing)
+                , (unused,I.NClass [] [] [] Nothing)
+                ] Nothing
+              tyPath = dir </> "iface_exact_selection_reads.tydb"
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes =
+                  [ nameHash selected "src-selected" "pub-selected" "impl-selected"
+                  , nameHash unused "src-unused" "pub-unused" "impl-unused"
+                  ]
+              }
+          deleteInterfaceEntry tyPath (InterfaceFiles.keyContainerShape unused)
+          deleteInterfaceEntry tyPath
+            (InterfaceFiles.keyMemberBody selected $ InterfaceRows.Method drop)
+          hashes <- InterfaceFiles.readNameHashes tyPath
+          projected <- withInterfaceSession tyPath $ \session ->
+            InterfaceFiles.readInterfaceSessionSelection session hashes
+              (Set.singleton selected)
+              (M.singleton selected $ Set.singleton $ InterfaceRows.Method keep)
+          case projected of
+            S.Module _ _ _ [S.Decl _ [S.Class _ name _ _ body _]] -> do
+              name `shouldBe` selected
+              let declarations =
+                    [ S.dname decl
+                    | S.Decl _ decls <- body
+                    , decl <- decls
+                    ]
+              declarations `shouldBe` [keep,drop]
+            other -> expectationFailure ("unexpected exact projection: " ++ show other)
+          deleteInterfaceEntry tyPath
+            (InterfaceFiles.keyMemberBody selected $ InterfaceRows.Method keep)
+          missing <- E.try
+            (withInterfaceSession tyPath $ \session ->
+              InterfaceFiles.readInterfaceSessionSelection session hashes
+                (Set.singleton selected)
+                (M.singleton selected $ Set.singleton $ InterfaceRows.Method keep))
+            :: IO (Either E.SomeException S.Module)
+          case missing of
+            Left _ -> return ()
+            Right fallback -> expectationFailure
+              ("missing selected content produced a fallback projection: " ++ show fallback)
+
+      it "bounds composite member keys for long generated names" $ do
+        withSystemTempDirectory "acton-iface-long-member" $ \dir -> do
+          let mn = S.modName ["iface_long_member"]
+              tyPath = dir </> "iface_long_member.tydb"
+              owner = S.name (replicate 400 'o')
+              member = S.name (replicate 400 'm')
+              self = S.name "self"
+              methodDef = S.Def NoLoc member []
+                (S.PosPar self Nothing Nothing S.PosNIL) S.KwdNIL Nothing
+                [S.Return NoLoc Nothing] S.NoDec S.fxPure Nothing
+              classDecl = S.Class NoLoc owner [] [] [S.Decl NoLoc [methodDef]] Nothing
+              tmod = S.Module mn [] Nothing [S.Decl NoLoc [classDecl]]
+              rows = moduleRows tmod
+              nmod = I.NModule [] [] Nothing
+              nameHashes = [nameHash owner "src" "pub" "impl"]
+              shapeKey = InterfaceFiles.keyContainerShape owner
+              memberKey = InterfaceFiles.keyMemberBody owner (InterfaceRows.Method member)
+          B8.length shapeKey `shouldSatisfy` (<= 511)
+          B8.length memberKey `shouldSatisfy` (<= 511)
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = nameHashes }
+          InterfaceFiles.readMemberContent tyPath owner (InterfaceRows.Method member)
+            >>= (`shouldSatisfy` ((== [[S.Return NoLoc Nothing]]) . methodBodies))
+
+      it "bounds composite dependency-name keys" $ do
+        withSystemTempDirectory "acton-iface-long-dependency" $ \dir -> do
+          let mn = S.modName ["iface_long_dependency"]
+              tyPath = dir </> "iface_long_dependency.tydb"
+              owner = S.name "owner"
+              depModule = S.modName [replicate 400 'm']
+              depName = S.name (replicate 400 'n')
+              ownerHash = (nameHash owner "src" "pub" "impl")
+                { InterfaceFiles.nhPubDeps = [(S.GName depModule depName,"dep-pub")]
+                }
+              depInfo = InterfaceFiles.DepModuleInfo depModule "module-pub" "module-impl"
+              nmod = I.NModule [] [(owner,I.NVar S.tWild)] Nothing
+              rows = moduleRows (S.Module mn [] Nothing [])
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcDependencies = [depInfo]
+              , InterfaceFiles.ifcNameHashes = [ownerHash]
+              }
+          users <- InterfaceFiles.readDepUsers tyPath depModule depName
+          InterfaceFiles.duPubUsers users `shouldBe` [owner]
+
+      it "distinguishes plain and derived names with the same symbol spelling" $ do
+        withSystemTempDirectory "acton-iface-name-keys" $ \dir -> do
+          let mn = S.modName ["iface_name_keys"]
+              tyPath = dir </> "iface_name_keys.tydb"
+              plain = S.name "ownerD_part"
+              derived = S.Derived (S.name "owner") (S.name "part")
+              nmod = I.NModule []
+                [(plain,I.NVar S.tWild),(derived,I.NVar S.tWild)] Nothing
+              nameHashes =
+                [ nameHash plain "src-plain" "pub-plain" "impl-plain"
+                , nameHash derived "src-derived" "pub-derived" "impl-derived"
+                ]
+              rows = moduleRows (S.Module mn [] Nothing [])
+          InterfaceFiles.keyNameInfo plain
+            `shouldNotBe` InterfaceFiles.keyNameInfo derived
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = nameHashes }
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          InterfaceFiles.readInterfaceDBNameInfoMaybe db plain
+            `shouldReturn` Just (plain,I.NVar S.tWild)
+          InterfaceFiles.readInterfaceDBNameInfoMaybe db derived
+            `shouldReturn` Just (derived,I.NVar S.tWild)
+
+      it "distinguishes container shapes whose names have the same symbol spelling" $ do
+        withSystemTempDirectory "acton-iface-shape-keys" $ \dir -> do
+          let mn = S.modName ["iface_shape_keys"]
+              tyPath = dir </> "iface_shape_keys.tydb"
+              plain = S.name "ownerD_part"
+              derived = S.Derived (S.name "owner") (S.name "part")
+              classDecl name = S.Class NoLoc name [] [] [] Nothing
+              tmod = S.Module mn [] Nothing
+                [S.Decl NoLoc [classDecl plain, classDecl derived]]
+              rows = moduleRows tmod
+              nmod = I.NModule [] [] Nothing
+              nameHashes =
+                [ nameHash plain "src-plain" "pub-plain" "impl-plain"
+                , nameHash derived "src-derived" "pub-derived" "impl-derived"
+                ]
+          InterfaceFiles.keyContainerShape plain
+            `shouldNotBe` InterfaceFiles.keyContainerShape derived
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = nameHashes }
+          (_mods, _nmod, restored, _sourceMeta, _srcHash, _pubHash, _implHash,
+            _imps, _depModules, _storedHashes, _roots, _tests, _doc) <-
+              InterfaceFiles.readFile tyPath
+          restored `shouldBe` tmod
+
+      it "partitions final typed generic constructor calls" $ do
+        let parentSource = unlines
+              [ "class Base[T]:"
+              , "    x: T"
+              , "    def __init__(self, value: T):"
+              , "        self.x = value"
+              , ""
+              , "class Child[T](Base[T]):"
+              , "    y: T"
+              , "    def __init__(self, value: T):"
+              , "        Base.__init__(self, value)"
+              , "        self.y = value"
+              ]
+            nativeSource = unlines
+              [ "class Native(object):"
+              , "    y: int"
+              , "    def __init__(self):"
+              , "        self.setup(1)"
+              , "        self.y = 2"
+              , "    def setup[T](self, value: T) -> None:"
+              , "        NotImplemented"
+              ]
+            selectedAttr owner attr rows =
+              [ initBodyEntries content
+              | (owner', InterfaceRows.InstanceInit attr', content) <- rowMemberEntries rows
+              , owner' == owner
+              , attr' == attr
+              ]
+        parentTyped <- typecheckSource env0 "typed_parent_init_rows" parentSource
+        nativeTyped <- typecheckSource env0 "typed_native_init_rows" nativeSource
+        selectedAttr (S.name "Child") (S.name "y") (moduleRows parentTyped)
+          `shouldSatisfy` (not . null)
+        selectedAttr (S.name "Native") (S.name "y") (moduleRows nativeTyped)
+          `shouldSatisfy` (not . null)
+
+      it "keeps augmented attribute initialization in the declarative prefix" $ do
+        let source = unlines
+              [ "class Payload(object):"
+              , "    value: int"
+              , "    def __init__(self):"
+              , "        self.value = 1"
+              , "        self.value += 2"
+              ]
+            owner = S.name "Payload"
+            attr = S.name "value"
+        typed <- typecheckSource env0 "typed_augmented_init_rows" source
+        let rows = moduleRows typed
+            initBodies =
+              [ map snd (initBodyEntries content)
+              | (owner', InterfaceRows.InstanceInit attr', content) <- rowMemberEntries rows
+              , owner' == owner
+              , attr' == attr
+              ]
+            restBodies =
+              [ map snd (initBodyEntries content)
+              | (owner', InterfaceRows.InitRest, content) <- rowMemberEntries rows
+              , owner' == owner
+              ]
+            isAugment (S.MutAssign _ _ (S.Call _ (S.Dot _ _ name) _ _)) =
+              name == Builtin.iaddKW
+            isAugment _ = False
+        initBodies `shouldSatisfy` \bodies ->
+          case bodies of
+            [body] -> any isAugment body
+            _ -> False
+        concat restBodies `shouldSatisfy` (not . any isAugment)
+
+      it "loads attribute declarations without sibling or initializer rows" $ do
+        let source = unlines
+              [ "class Pair(object):"
+              , "    first, second: int"
+              , "    def __init__(self):"
+              , "        self.first = 1"
+              , "        self.second = 2"
+              ]
+        typed <- typecheckSource env0 "iface_exact_attr_rows" source
+        withSystemTempDirectory "acton-iface-exact-attr-rows" $ \dir -> do
+          let tyPath = dir </> "iface_exact_attr_rows.tydb"
+              rows = moduleRows typed
+              owner = head [ name | name <- M.keys (InterfaceRows.rowShapes rows)
+                                  , S.rawstr name == "Pair" ]
+              attrs = [ name | (_,InterfaceRows.Attr name,_) <- rowMemberEntries rows ]
+              first = head [ name | name <- attrs, S.rawstr name == "first" ]
+              second = head [ name | name <- attrs, S.rawstr name == "second" ]
+              nmod = I.NModule [] [(owner,I.NClass [] [] [] Nothing)] Nothing
+              hashes = [nameHash owner "src" "pub" "impl"]
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = hashes }
+          forM_
+            [ InterfaceRows.Attr second
+            , InterfaceRows.InstanceInit first
+            , InterfaceRows.InstanceInit second
+            ] $ \member ->
+              deleteInterfaceEntry tyPath (InterfaceFiles.keyMemberBody owner member)
+          storedHashes <- InterfaceFiles.readNameHashes tyPath
+          projected <- withInterfaceSession tyPath $ \session ->
+            InterfaceFiles.readInterfaceSessionSelection session storedHashes
+              (Set.singleton owner)
+              (M.singleton owner $ Set.singleton $ InterfaceRows.Attr first)
+          let propertyNames =
+                [ names
+                | S.Module _ _ _ [S.Decl _ [S.Class _ _ _ _ body _]] <- [projected]
+                , S.Signature _ names _ S.Property <- body
+                ]
+          propertyNames `shouldBe` [[first]]
+          missing <- E.try
+            (withInterfaceSession tyPath $ \session ->
+              InterfaceFiles.readInterfaceSessionSelection session storedHashes
+                (Set.singleton owner)
+                (M.singleton owner $ Set.fromList
+                  [InterfaceRows.Attr first,InterfaceRows.InstanceInit first]))
+            :: IO (Either E.SomeException S.Module)
+          case missing of
+            Left _ -> return ()
+            Right fallback -> expectationFailure
+              ("missing selected initializer produced a fallback projection: " ++ show fallback)
+
+      it "keeps conditional attribute initializer rows branch-exact" $ do
+        let source = unlines
+              [ "def choose() -> bool:"
+              , "    return True"
+              , ""
+              , "def first_value() -> int:"
+              , "    return 1"
+              , ""
+              , "def second_value() -> int:"
+              , "    return 2"
+              , ""
+              , "actor Pair():"
+              , "    first = 0"
+              , "    second = 0"
+              , "    if choose():"
+              , "        first = first_value()"
+              , "    else:"
+              , "        second = second_value()"
+              ]
+        typed <- typecheckSource env0 "iface_conditional_attr_rows" source
+        withSystemTempDirectory "acton-iface-conditional-attr-rows" $ \dir -> do
+          let tyPath = dir </> "iface_conditional_attr_rows.tydb"
+              rows = moduleRows typed
+              owner = head [ name | name <- M.keys (InterfaceRows.rowShapes rows)
+                                  , S.rawstr name == "Pair" ]
+              attrs = [ name | (_,InterfaceRows.Attr name,_) <- rowMemberEntries rows ]
+              first = head [ name | name <- attrs, S.rawstr name == "first" ]
+              second = head [ name | name <- attrs, S.rawstr name == "second" ]
+              nmod = I.NModule [] [(owner,I.NAct [] S.posNil S.kwdNil [] Nothing)] Nothing
+              hashes =
+                [ nameHash name "src" "pub" "impl"
+                | name <- concatMap InterfaceRows.storedStmtNames
+                    (InterfaceRows.rowStatements rows)
+                ]
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod rows)
+              { InterfaceFiles.ifcNameHashes = hashes }
+          deleteInterfaceEntry tyPath
+            (InterfaceFiles.keyMemberBody owner $ InterfaceRows.InstanceInit second)
+          storedHashes <- InterfaceFiles.readNameHashes tyPath
+          projected <- withInterfaceSession tyPath $ \session ->
+            InterfaceFiles.readInterfaceSessionSelection session storedHashes
+              (Set.singleton owner)
+              (M.singleton owner $ Set.fromList
+                [InterfaceRows.Attr first,InterfaceRows.InstanceInit first])
+          let S.Module _ _ _ body = projected
+              free = map S.rawstr (Names.free body)
+          free `shouldSatisfy` elem "choose"
+          free `shouldSatisfy` elem "first_value"
+          free `shouldSatisfy` not . elem "second_value"
 
       it "supports concurrent read-only access to one interface" $ do
         withSystemTempDirectory "acton-iface-concurrent" $ \dir -> do
@@ -393,7 +1280,9 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcNameHashes = nameHashes }
           mapConcurrently_
             (\_ -> do
                 (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
@@ -412,7 +1301,9 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile (\_ -> return ()) srcPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcNameHashes = nameHashes }
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
@@ -432,7 +1323,9 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcNameHashes = nameHashes }
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
           (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
@@ -461,11 +1354,150 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeVersionedFile (map (+ 1) S.version) tyPath $
+            (interfaceContents nmod (moduleRows tmod))
+              { InterfaceFiles.ifcSourceHash = ""
+              , InterfaceFiles.ifcPublicHash = ""
+              , InterfaceFiles.ifcImplementationHash = ""
+              }
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
+      it "treats missing required current-version rows as cache misses" $ do
+        withSystemTempDirectory "acton-iface-required-rows" $ \dir -> do
+          let mn = S.modName ["iface_required_rows"]
+              nmod = I.NModule [] [] Nothing
+              tmod = S.Module mn [] Nothing []
+              rows = moduleRows tmod
+              checkMissing entry = do
+                let tyPath = dir </> (B8.unpack entry ++ ".tydb")
+                InterfaceFiles.writeFile (\_ -> return ()) tyPath $
+                  (interfaceContents nmod rows)
+                    { InterfaceFiles.ifcSourceHash = ""
+                    , InterfaceFiles.ifcPublicHash = ""
+                    , InterfaceFiles.ifcImplementationHash = ""
+                    }
+                deleteInterfaceEntry tyPath entry
+                InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
+                InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
+          checkMissing "stmt-has-not-impl"
+          checkMissing "stmt-mandatory"
+          checkMissing "module-hash"
+
+    describe "Reachability selection" $ do
+      let mn = S.modName ["selection"]
+          top name = ReachRows.TopKey mn (S.name name)
+          a = top "A"
+          b = top "B"
+          c = top "C"
+          d = top "D"
+          run = S.name "run"
+          method owner name =
+            ( ReachRows.MethodRef name
+            , ReachRows.SlotInfo owner $ ReachRows.StoredSlot $ InterfaceRows.Method name
+            )
+          attr owner name =
+            (ReachRows.AttrRef name,ReachRows.SlotInfo owner ReachRows.AttributeSlot)
+          methodInfo owner name =
+            (owner,InterfaceRows.Method name,ReachRows.MemberInfo mempty Nothing Nothing)
+          edge constructor (ReachRows.TopKey moduleName name) = constructor moduleName name
+          selected index edges = case selectFixture index edges of
+            Left err -> expectationFailure ("selection failed: " ++ show err) >> return Reachability.emptySelection
+            Right result -> return result
+
+      it "keeps same-named methods on unrelated classes separate" $ do
+        let index = selectionIndex
+              [ selectionClass a [a] [method a run]
+              , selectionClass b [b] [method b run]
+              ]
+              [methodInfo a run,methodInfo b run]
+              []
+        result <- selected index
+          [ edge (\moduleName name -> ReachRows.Dispatch moduleName name $ ReachRows.MethodRef run) a
+          , edge ReachRows.Construct a
+          ]
+        Set.member (a,InterfaceRows.Method run) (Reachability.selectedMembers result)
+          `shouldBe` True
+        Set.member (b,InterfaceRows.Method run) (Reachability.selectedMembers result)
+          `shouldBe` False
+
+      it "is independent of dispatch and construction discovery order" $ do
+        let index = selectionIndex
+              [ selectionClass b [b] [method b run]
+              , selectionClass d [d,b] [method d run]
+              ]
+              [methodInfo b run,methodInfo d run]
+              []
+            dispatch = edge
+              (\moduleName name -> ReachRows.Dispatch moduleName name $ ReachRows.MethodRef run) b
+            construct = edge ReachRows.Construct d
+        forward <- selected index [dispatch,construct]
+        backward <- selected index [construct,dispatch]
+        forward `shouldBe` backward
+        Set.member (d,InterfaceRows.Method run) (Reachability.selectedMembers forward)
+          `shouldBe` True
+
+      it "activates the exact instance initializer of a used attribute" $ do
+        let field = S.name "field"
+            dependency = top "InitializerDependency"
+            initializer = ReachRows.reachSummaryFromEdges [edge ReachRows.Need dependency]
+            index = selectionIndex
+              [selectionClass c [c] [attr c field]]
+              [(c,InterfaceRows.Attr field,ReachRows.MemberInfo mempty Nothing $ Just initializer)]
+              [(dependency,mempty)]
+        result <- selected index
+          [edge (\moduleName name -> ReachRows.Direct moduleName name $ ReachRows.AttrRef field) c]
+        Set.member (c,field) (Reachability.selectedInstanceInitializers result)
+          `shouldBe` True
+        Set.member dependency (Reachability.selectedTops result) `shouldBe` True
+
+      it "is independent of reflection and construction discovery order" $ do
+        let field = S.name "field"
+            index = selectionIndex
+              [ selectionClass b [b] [attr b field]
+              , selectionClass d [d,b] [attr b field]
+              ]
+              [(b,InterfaceRows.Attr field,ReachRows.MemberInfo mempty Nothing Nothing)]
+              []
+            reflect = edge ReachRows.Reflect b
+            construct = edge ReachRows.Construct d
+        forward <- selected index [reflect,construct]
+        backward <- selected index [construct,reflect]
+        forward `shouldBe` backward
+        Set.member (b,field) (Reachability.selectedAttrs forward) `shouldBe` True
+
+      it "reads every reached row once and no unused rows" $ do
+        let unused = S.name "unused"
+            index = selectionIndex
+              [selectionClass c [c] [method c run,attr c unused]]
+              [ methodInfo c run
+              , (c,InterfaceRows.Attr unused,ReachRows.MemberInfo mempty Nothing Nothing)
+              ]
+              []
+            direct = edge
+              (\moduleName name -> ReachRows.Direct moduleName name $ ReachRows.MethodRef run) c
+            (outcome,counts) = St.runState
+              (Reachability.selectProgram (countedSelectionLookup index) $ replicate 3 direct)
+              emptySelectionCounts
+        case outcome of
+          Left err -> expectationFailure ("selection failed: " ++ show err)
+          Right _ -> return ()
+        countTops counts `shouldBe` M.singleton c 1
+        countMembers counts `shouldBe` M.singleton (c,InterfaceRows.Method run) 1
+        countSlots counts `shouldBe` M.singleton (c,ReachRows.MethodRef run) 1
+        countShapes counts `shouldBe` M.empty
+        countSurfaces counts `shouldBe` M.empty
+        countReflections counts `shouldBe` M.empty
+
     describe "Hashing" $ do
+      it "binds generated output to compiler identity and line mode" $ do
+        let impl = B8.pack "impl"
+            source = B8.pack "source"
+            withLines = Hashing.wholeCodegenHash True impl source
+            withoutLines = Hashing.wholeCodegenHash False impl source
+        Hashing.codegenIdentity `shouldSatisfy` (not . B8.null)
+        withLines `shouldNotBe` withoutLines
+
       it "keeps public hashes independent of docs and source locations" $ do
         let infoA = I.NDef (S.TSchema (Loc 1 3) [] (locatedType (Loc 4 5))) S.NoDec (Just "old docs")
             infoB = I.NDef (S.TSchema (Loc 50 60) [] (locatedType (Loc 70 80))) S.NoDec (Just "new docs")
@@ -638,6 +1670,40 @@ main = do
         Hashing.computeHashes selfHashes M.empty extDepsA `shouldBe`
           Hashing.computeHashes selfHashes M.empty extDepsB
 
+      it "hashes ownerless statements and their final local implementations" $ do
+        let stmt value = S.Expr NoLoc (S.Int NoLoc value (show value))
+            moduleHash statements implHashes localDeps =
+              Hashing.finishModuleHash implHashes
+                (Hashing.moduleOwnImplHash [] statements)
+                (replicate (length statements) []) localDeps [] []
+            ownerlessA = moduleHash [stmt 1] M.empty []
+            ownerlessB = moduleHash [stmt 2] M.empty []
+            aggregate info = Hashing.moduleImplHashFromNameHashes info []
+            local = S.name "local_value"
+            localStmt = S.Expr NoLoc (S.Var NoLoc (S.NoQ local))
+            localA = moduleHash [localStmt] (M.singleton local "impl-1") [local]
+            localB = moduleHash [localStmt] (M.singleton local "impl-2") [local]
+        aggregate ownerlessA `shouldNotBe` aggregate ownerlessB
+        InterfaceFiles.mhImplHash localA `shouldNotBe`
+          InterfaceFiles.mhImplHash localB
+
+      it "preserves initialization order across independently hashed names" $ do
+        let a = S.name "a"
+            b = S.name "b"
+            implHashes = M.fromList [(a,"a-impl"),(b,"b-impl")]
+            moduleHash owners = Hashing.finishModuleHash
+              implHashes (Hashing.moduleOwnImplHash [] []) owners [] [] []
+        InterfaceFiles.mhImplHash (moduleHash [[a],[b]]) `shouldNotBe`
+          InterfaceFiles.mhImplHash (moduleHash [[b],[a]])
+
+      it "preserves source import order in the module implementation hash" $ do
+        let a = S.modName ["a"]
+            b = S.modName ["b"]
+            moduleHash imports = Hashing.finishModuleHash M.empty
+              (Hashing.moduleOwnImplHash imports []) [] [] [] []
+        InterfaceFiles.mhImplHash (moduleHash [a,b]) `shouldNotBe`
+          InterfaceFiles.mhImplHash (moduleHash [b,a])
+
       it "hashes module summaries from maps like assembled name hashes" $ do
         let publicName = S.name "public_value"
             privateName = S.name "__private_value"
@@ -657,9 +1723,9 @@ main = do
               , nameHash privateName "src-private" "pub-private" "impl-private"
               , nameHash missingImplName "src-missing" "pub-missing" ""
               ]
-        Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes `shouldBe`
+        Hashing.moduleHashesFromHashMaps nmod InterfaceFiles.emptyModuleHashInfo nameKeys pubHashes implHashes `shouldBe`
           ( Hashing.modulePubHashFromIface nmod nameHashes
-          , Hashing.moduleImplHashFromNameHashes nameHashes
+          , Hashing.moduleImplHashFromNameHashes InterfaceFiles.emptyModuleHashInfo nameHashes
           )
 
       it "hashes public interface names outside implementation keys" $ do
@@ -676,7 +1742,7 @@ main = do
             pubHashes = M.fromList [(publicName, "pub-public"), (ifaceOnlyName, "pub-iface-only")]
             implHashes = M.singleton publicName "impl-public"
             (modulePubHash, moduleImplHash) =
-              Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
+              Hashing.moduleHashesFromHashMaps nmod InterfaceFiles.emptyModuleHashInfo nameKeys pubHashes implHashes
             publicNameHashes =
               [ nameHash publicName "src-public" "pub-public" "impl-public"
               , nameHash ifaceOnlyName "" "pub-iface-only" ""
@@ -686,7 +1752,8 @@ main = do
         modulePubHash `shouldBe` Hashing.modulePubHashFromIface nmod publicNameHashes
         modulePubHash `shouldNotBe`
           Hashing.modulePubHashFromIface nmod implNameHashes
-        moduleImplHash `shouldBe` Hashing.moduleImplHashFromNameHashes implNameHashes
+        moduleImplHash `shouldBe`
+          Hashing.moduleImplHashFromNameHashes InterfaceFiles.emptyModuleHashInfo implNameHashes
 
       it "merges canonical dependency lists without rebuilding sets" $ do
         let a = S.name "a"
@@ -851,6 +1918,18 @@ main = do
         snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
           M.singleton value []
 
+      it "keeps the knot-tied current witness out of impl dependencies" $ do
+        let value = hashTestName
+            mn = S.modName ["hash_witness_self"]
+            target = S.GName (S.modName ["dep"]) (S.name "Target")
+            env = Acton.Env.setMod mn env0
+            decl = S.Extension NoLoc [] (S.TC target []) []
+              [S.Expr NoLoc $ S.Var NoLoc $ S.NoQ Names.selfKW'] Nothing
+            items = [Hashing.TLDecl value decl]
+            localNames = Set.singleton value
+        snd (Hashing.implSplitDepsFromItems mn env localNames items) `shouldBe`
+          M.singleton value [target]
+
       it "keeps enclosing bindings across nested declarations" $ do
         let value = hashTestName
             inner = S.name "inner"
@@ -893,17 +1972,110 @@ main = do
           M.singleton value []
 
     describe "CompileScheduler" $ do
-      it "waits for canceled generation cleanup before launching the replacement" $ do
-        let gopts = C.GlobalOptions
-              { C.color = C.Never
-              , C.quiet = True
-              , C.noProgress = False
-              , C.timing = False
-              , C.tty = False
-              , C.verbose = False
-              , C.verboseZig = False
-              , C.jobs = 1
+      let gopts = C.GlobalOptions
+            { C.color = C.Never
+            , C.quiet = True
+            , C.noProgress = False
+            , C.timing = False
+            , C.tty = False
+            , C.verbose = False
+            , C.verboseZig = False
+            , C.jobs = 1
+            }
+          backJob dir mn =
+            let out = dir </> "out"
+                types = out </> "types"
+                paths = Compile.Paths
+                  { Compile.searchPath = []
+                  , Compile.sysPath = ""
+                  , Compile.sysTypes = ""
+                  , Compile.projPath = dir
+                  , Compile.projOut = out
+                  , Compile.projTypes = types
+                  , Compile.binDir = out </> "bin"
+                  , Compile.srcDir = dir </> "src"
+                  , Compile.isTmp = False
+                  , Compile.fileExt = ".act"
+                  , Compile.modName = mn
+                  , Compile.projName = "queue_test"
+                  }
+                input = Compile.BackInput
+                  { Compile.biTypeEnv = Acton.Env.setMod mn env0
+                  , Compile.biTypedMod = S.Module mn [] Nothing []
+                  , Compile.biDeclarations = []
+                  , Compile.biSrc = Just ""
+                  , Compile.biCodegenHash = B8.replicate 32 '0'
+                  }
+            in Compile.BackJob paths Compile.defaultCompileOptions input
+          isBackFailure (Just (Just _)) = True
+          isBackFailure _               = False
+
+      it "keeps workers alive and drains jobs when callbacks throw" $ do
+        sched <- Compile.newCompileScheduler gopts 1
+        gen1 <- Compile.startCompile sched 0 $ \_ -> return ()
+        firstDone <- newEmptyMVar
+        let mn1 = S.modName ["callback_failure"]
+            callbacks1 = Compile.defaultBackJobCallbacks
+              { Compile.bjcOnStart = \_ -> E.throwIO $ userError "start callback failed"
+              , Compile.bjcOnDone = \_ _ -> do
+                  putMVar firstDone ()
+                  E.throwIO $ userError "done callback failed"
               }
+        Compile.backQueueEnqueue (Compile.csBackQueue sched) gen1
+          (backJob "." mn1) callbacks1 `shouldReturn` True
+        timeout 1000000 (Compile.backQueueWait (Compile.csBackQueue sched) gen1)
+          >>= (`shouldSatisfy` isBackFailure)
+        timeout 1000000 (takeMVar firstDone) `shouldReturn` Just ()
+
+        gen2 <- Compile.startCompile sched 0 $ \_ -> return ()
+        secondStarted <- newEmptyMVar
+        let mn2 = S.modName ["worker_survived"]
+            callbacks2 = Compile.defaultBackJobCallbacks
+              { Compile.bjcOnStart = \_ -> do
+                  putMVar secondStarted ()
+                  E.throwIO $ userError "second callback failed"
+              }
+        Compile.backQueueEnqueue (Compile.csBackQueue sched) gen2
+          (backJob "." mn2) callbacks2 `shouldReturn` True
+        timeout 1000000 (takeMVar secondStarted) `shouldReturn` Just ()
+        timeout 1000000 (Compile.backQueueWait (Compile.csBackQueue sched) gen2)
+          >>= (`shouldSatisfy` isBackFailure)
+
+      it "does not start a new generation during a guarded output write" $ do
+        withSystemTempDirectory "acton-generation-lock" $ \dir -> do
+          let mn = S.modName ["guarded_write"]
+              job = backJob dir mn
+              types = Compile.projTypes (Compile.bjPaths job)
+          createDirectoryIfMissing True types
+          sched <- Compile.newCompileScheduler gopts 1
+          gen <- Compile.startCompile sched 0 $ \_ -> return ()
+          writeStarted <- newEmptyMVar
+          releaseWrite <- newEmptyMVar
+          nextStarted <- newEmptyMVar
+          let callbacks = Compile.defaultBackJobCallbacks
+                { Compile.bjcOnProgress = \_ progress ->
+                    case progress of
+                      Compile.BackPassStarted Compile.BackPassWrite _ _ -> do
+                        putMVar writeStarted ()
+                        takeMVar releaseWrite
+                      _ -> return ()
+                }
+          Compile.backQueueEnqueue (Compile.csBackQueue sched) gen job callbacks
+            `shouldReturn` True
+          timeout 1000000 (takeMVar writeStarted) `shouldReturn` Just ()
+          nextCompile <- async $
+            Compile.startCompile sched 0 $ \_ -> putMVar nextStarted ()
+          E.finally
+            (timeout 100000 (takeMVar nextStarted) `shouldReturn` Nothing)
+            (putMVar releaseWrite ())
+          nextGen <- wait nextCompile
+          nextGen `shouldBe` gen + 1
+          timeout 1000000 (takeMVar nextStarted) `shouldReturn` Just ()
+          doesFileExist (types </> "guarded_write.c") `shouldReturn` True
+          timeout 1000000 (Compile.backQueueWait (Compile.csBackQueue sched) gen)
+            `shouldReturn` Just Nothing
+
+      it "waits for canceled generation cleanup before launching the replacement" $ do
         sched <- Compile.newCompileScheduler gopts 1
         oldStarted <- newEmptyMVar
         oldCleanupStarted <- newEmptyMVar
@@ -933,37 +2105,33 @@ main = do
               directIface = I.NModule [] iface Nothing
               directModule = S.Module directMod [] Nothing []
               env1 = Acton.Env.addMod directMod [] iface Nothing env0
-          InterfaceFiles.writeFile
-            directTy
-            B8.empty
-            B8.empty
-            B8.empty
-            Nothing
-            []
-            []
-            []
-            []
-            []
-            Nothing
-            directIface
-            directModule
+          InterfaceFiles.writeFile (\_ -> return ()) directTy $
+            (interfaceContents directIface (moduleRows directModule))
+              { InterfaceFiles.ifcSourceHash = B8.empty
+              , InterfaceFiles.ifcPublicHash = B8.empty
+              , InterfaceFiles.ifcImplementationHash = B8.empty
+              }
           (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <-
             InterfaceFiles.readFile directTy
-          InterfaceFiles.writeFileWithVersion
+          InterfaceFiles.writeVersionedFile
             (map (+ 1) S.version)
             directTy
-            srcHash
-            pubHash
-            implHash
-            sourceMeta
-            imps
-            depModules
-            nameHashes
-            roots
-            tests
-            mdoc
-            nmod
-            tmod
+            InterfaceFiles.InterfaceContents
+              { InterfaceFiles.ifcSourceHash = srcHash
+              , InterfaceFiles.ifcPublicHash = pubHash
+              , InterfaceFiles.ifcImplementationHash = implHash
+              , InterfaceFiles.ifcModuleHashInfo = InterfaceFiles.emptyModuleHashInfo
+              , InterfaceFiles.ifcSourceMeta = sourceMeta
+              , InterfaceFiles.ifcImports = imps
+              , InterfaceFiles.ifcDependencies = depModules
+              , InterfaceFiles.ifcNameHashes = nameHashes
+              , InterfaceFiles.ifcRoots = roots
+              , InterfaceFiles.ifcTests = tests
+              , InterfaceFiles.ifcDoc = mdoc
+              , InterfaceFiles.ifcModule = nmod
+              , InterfaceFiles.ifcRows = moduleRows tmod
+              , InterfaceFiles.ifcReachabilityRows = ReachRows.emptyReachabilityRows
+              }
           (_env2, mi) <- Acton.Env.doImp [dir] env1 directMod
           map fst (Acton.Env.modulePublicTEnv mi) `shouldBe` [valueName]
 
@@ -1345,20 +2513,13 @@ main = do
             createDirectoryIfMissing True dir
             createDirectoryIfMissing True staleTy
             B8.writeFile (staleTy </> "data.mdb") "not a current ty db"
-            InterfaceFiles.writeFile
-              directTy
-              B8.empty
-              B8.empty
-              B8.empty
-              Nothing
-              [(staleMod, B8.empty)]
-              []
-              []
-              []
-              []
-              Nothing
-              directIface
-              directModule
+            InterfaceFiles.writeFile (\_ -> return ()) directTy $
+              (interfaceContents directIface (moduleRows directModule))
+                { InterfaceFiles.ifcSourceHash = B8.empty
+                , InterfaceFiles.ifcPublicHash = B8.empty
+                , InterfaceFiles.ifcImplementationHash = B8.empty
+                , InterfaceFiles.ifcImports = [(staleMod, B8.empty)]
+                }
             items <- Completion.memberCompletions env0 [dir] (S.modName ["rfs"]) "rfs.act" src cursor
             map Completion.completionLabel items `shouldSatisfy` elem "local_field"
 
@@ -3196,7 +4357,7 @@ testCodeGen env0 modulePaths = do
           let act_file = "test" </> "src" </> modulePath ++ ".act"
           srcText <- readFile act_file
           let srcbase = "test" </> "src" </> modulePath
-          (n,h,c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+          (n,h,c) <- Acton.CodeGen.generate liftEnv [] srcbase srcText True boxed "test-hash"
           let newAccEnv = Acton.Env.addMod (S.modname parsed) imps tenv mdoc accEnv
           return (newAccEnv, accModules ++ [(takeFileName modulePath, boxed, n, h, c)])
 
@@ -3234,7 +4395,7 @@ testCodeGenContains env0 modulePath expected = do
     let act_file = "test" </> "src" </> modulePath ++ ".act"
     srcText <- readFile act_file
     let srcbase = "test" </> "src" </> modulePath
-    (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+    (_, _, c) <- Acton.CodeGen.generate liftEnv [] srcbase srcText True boxed "test-hash"
     return c
 
   describe modulePath $
@@ -3378,6 +4539,285 @@ testDocstrings env0 testname = do
 testAttributesInitialization :: Acton.Env.Env0 -> Spec
 testAttributesInitialization env0 = do
   describe "Class Attribute Initialization Check" $ do
+    it "exposes the declarative constructor prefix at the self-escape boundary" $ do
+      let self = S.name "self"
+          tmp = S.name "tmp"
+          x = S.name "x"
+          y = S.name "y"
+          publish = S.name "publish"
+          local = S.Assign NoLoc [S.PVar NoLoc tmp Nothing] (S.Int NoLoc 1 "1")
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX = set x (S.Var NoLoc (S.NoQ tmp))
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            S.PosNil
+            S.KwdNil
+          setY = set y (S.Int NoLoc 2 "2")
+          body = [local, setX, escape, setY]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 2
+
+    it "counts structured initialization as one top-level constructor statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          z = S.name "z"
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX value = set x (S.Int NoLoc value (show value))
+          branches = [S.Branch (S.Bool NoLoc True) [setX 1]]
+          conditional = S.If NoLoc branches [setX 2]
+          setY = set y (S.Int NoLoc 3 "3")
+          body = [conditional, setY, S.Return NoLoc Nothing, set z (S.Int NoLoc 4 "4")]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x, y]
+      prefixLength `shouldBe` 2
+
+    it "does not cross a self escape nested in a structured statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          publish = S.name "publish"
+          set attr value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr) value
+          setX value = set x (S.Int NoLoc value (show value))
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            S.PosNil
+            S.KwdNil
+          branches = [S.Branch (S.Bool NoLoc True) [setX 1, escape]]
+          conditional = S.If NoLoc branches [setX 2]
+          body = [conditional, set y (S.Int NoLoc 3 "3")]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 0
+
+    it "does not cross a return nested in a structured statement" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          branches = [S.Branch (S.Bool NoLoc True) [S.Return NoLoc Nothing]]
+          conditional = S.If NoLoc branches [S.Pass NoLoc]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "checks branch conditions for constructor-boundary escapes" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          publish = S.name "publish"
+          condition = S.Call NoLoc (S.Var NoLoc (S.NoQ publish))
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setX value = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc value (show value))
+          conditional = S.If NoLoc [S.Branch condition [setX 1]] [setX 2]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX 3]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "checks both sides of non-attribute mutations for self escapes" $ do
+      let self = S.name "self"
+          sink = S.name "sink"
+          value = S.name "value"
+          x = S.name "x"
+          leak = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ sink)) value)
+            (S.Var NoLoc (S.NoQ self))
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [leak, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not cross a return nested in a loop" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          loop = S.While NoLoc (S.Bool NoLoc True) [S.Return NoLoc Nothing] []
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [loop, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "treats raising an exception containing self as a boundary" $ do
+      let self = S.name "self"
+          errorName = S.name "Error"
+          x = S.name "x"
+          exception = S.Call NoLoc (S.Var NoLoc (S.NoQ errorName))
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          conditional = S.If NoLoc
+            [S.Branch (S.Bool NoLoc True) [S.Raise NoLoc exception]]
+            [S.Pass NoLoc]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [conditional, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not let finally initialize an attribute used by try" $ do
+      let self = S.name "self"
+          publish = S.name "publish"
+          x = S.name "x"
+          y = S.name "y"
+          selfAttr attr = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr
+          publishX = S.Expr NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ publish))
+            (S.PosArg (selfAttr x) S.PosNil)
+            S.KwdNil
+          set attr value = S.MutAssign NoLoc (selfAttr attr) value
+          setX = set x (S.Int NoLoc 1 "1")
+          setY = set y (S.Int NoLoc 2 "2")
+          guarded = S.Try NoLoc [publishX] [] [] [setX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded, setY]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "makes completed try assignments visible to its else block" $ do
+      let self = S.name "self"
+          x = S.name "x"
+          y = S.name "y"
+          selfAttr attr = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) attr
+          set attr value = S.MutAssign NoLoc (selfAttr attr) value
+          setX = set x (S.Int NoLoc 1 "1")
+          setY = set y (selfAttr x)
+          guarded = S.Try NoLoc [setX] [] [setY] []
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded]
+      attrs `shouldBe` [x, y]
+      prefixLength `shouldBe` 1
+
+    it "looks through typed expression wrappers for self escapes" $ do
+      let self = S.name "self"
+          publish = S.name "publish"
+          x = S.name "x"
+          wrapped = S.TApp NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish)
+            [S.tWild]
+          escape = S.Expr NoLoc $ S.Call NoLoc wrapped S.PosNil S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [escape, setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "recognizes typed parent constructor calls in the declarative prefix" $ do
+      let self = S.name "self"
+          parent = S.name "Parent"
+          y = S.name "y"
+          env = Acton.Env.define [(parent, I.NClass [] [] [] Nothing)] env0
+          parentInit = S.Expr NoLoc $ S.Call NoLoc
+            (S.TApp NoLoc
+              (S.Dot NoLoc (S.Var NoLoc (S.NoQ parent)) Builtin.initKW)
+              [S.tWild])
+            (S.PosArg (S.Var NoLoc (S.NoQ self)) S.PosNil)
+            S.KwdNil
+          setY = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) y)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) =
+            Acton.Types.scanInitPrefix env self [] [parentInit, setY]
+      attrs `shouldBe` [y]
+      prefixLength `shouldBe` 2
+
+    it "recognizes typed NotImplemented self calls in the declarative prefix" $ do
+      let self = S.name "self"
+          native = S.name "native"
+          y = S.name "y"
+          nativeDef = S.Def NoLoc native []
+            (S.PosPar self Nothing Nothing S.PosNIL) S.KwdNIL Nothing
+            [S.Expr NoLoc (S.NotImplemented NoLoc)]
+            S.NoDec S.fxPure Nothing
+          nativeCall = S.Expr NoLoc $ S.Call NoLoc
+            (S.TApp NoLoc
+              (S.Dot NoLoc
+                (S.TApp NoLoc (S.Var NoLoc (S.NoQ self)) [S.tWild])
+                native)
+              [S.tWild])
+            S.PosNil S.KwdNil
+          setY = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) y)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix
+            env0 self [S.Decl NoLoc [nativeDef]] [nativeCall, setY]
+      attrs `shouldBe` [y]
+      prefixLength `shouldBe` 2
+
+    it "detects aliased constructor receivers captured by nested actors" $ do
+      let receiver = S.name "me"
+          actorName = S.name "Nested"
+          x = S.name "x"
+          nested = S.Actor NoLoc actorName [] S.PosNIL S.KwdNIL
+            [S.Expr NoLoc (S.Var NoLoc (S.NoQ receiver))] Nothing
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ receiver)) x)
+            (S.Int NoLoc 1 "1")
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix
+            env0 receiver [] [S.Decl NoLoc [nested], setX]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "does not expose try assignments to finally" $ do
+      let self = S.name "self"
+          f = S.name "f"
+          publish = S.name "publish"
+          x = S.name "x"
+          selfX = S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x
+          setX = S.MutAssign NoLoc selfX $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ f)) S.PosNil S.KwdNil
+          publishX = S.Expr NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ publish)) (S.PosArg selfX S.PosNil) S.KwdNil
+          guarded = S.Try NoLoc [setX] [] [] [publishX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded]
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
+    it "ignores an unreachable else boundary after an unconditional raise" $ do
+      let self = S.name "self"
+          errorName = S.name "Error"
+          publish = S.name "publish"
+          x = S.name "x"
+          raiseError = S.Raise NoLoc $ S.Call NoLoc
+            (S.Var NoLoc (S.NoQ errorName)) S.PosNil S.KwdNil
+          escape = S.Expr NoLoc $ S.Call NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) publish) S.PosNil S.KwdNil
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          guarded = S.Try NoLoc [raiseError] [] [escape] []
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] [guarded, setX]
+      attrs `shouldBe` [x]
+      prefixLength `shouldBe` 2
+
+    it "checks nested declaration defaults before parameter shadowing" $ do
+      let self = S.name "self"
+          nested = S.name "nested"
+          x = S.name "x"
+          declaration = S.Def NoLoc nested []
+            (S.PosPar self Nothing (Just (S.Var NoLoc (S.NoQ self))) S.PosNIL)
+            S.KwdNIL
+            Nothing
+            [S.Pass NoLoc]
+            S.NoDec
+            S.fxPure
+            Nothing
+          setX = S.MutAssign NoLoc
+            (S.Dot NoLoc (S.Var NoLoc (S.NoQ self)) x)
+            (S.Int NoLoc 1 "1")
+          body = [S.Decl NoLoc [declaration], setX]
+          (attrs, prefixLength) = Acton.Types.scanInitPrefix env0 self [] body
+      attrs `shouldBe` []
+      prefixLength `shouldBe` 0
+
     testTypeSuccess env0 "class_init_attrs/init_basic"
     testTypeSuccess env0 "class_init_attrs/init_inferred_only"
     testTypeError   env0 "class_init_attrs/uninit_basic"

@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #include "rts/common.h"
 #include "out/types/witness_forward.h"
 B_NoneType witness_forwardQ_PAD___init__ (witness_forwardQ_PA W_self) {

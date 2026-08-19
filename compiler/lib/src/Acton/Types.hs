@@ -12,7 +12,7 @@
 --
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts #-}
-module Acton.Types(reconstruct, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
+module Acton.Types(reconstruct, scanInitPrefix, showTyFile, prettySigs, TypeError(..), TypeErrors(..), TypeProgressCallback, TypeInferredCallback) where
 
 import Control.Concurrent.Async
 import Control.Concurrent.Chan
@@ -1352,9 +1352,15 @@ stripTypeApps f                         = f
 -- attributes since we cannot statically determine if the loop executes. The
 -- loop is scanned to ensure `self` does not escape.
 scanSelfAssigns :: Env -> Name -> Suite -> Suite -> [Name]
-scanSelfAssigns env self classBody stmts = attrs
+scanSelfAssigns env self classBody stmts = fst (scanInitPrefix env self classBody stmts)
+
+-- | The attributes initialized by the declarative prefix of __init__ and the
+-- number of leading statements that prefix covers. Row partitioning splits
+-- the prefix by attribute and keeps the rest of the constructor whole.
+scanInitPrefix :: EnvF x -> Name -> Suite -> Suite -> ([Name], Int)
+scanInitPrefix env self classBody stmts = (attrs, count)
   where
-    (attrs, _, _)                       = scanSuite [] stmts
+    (attrs, count, _)                  = scanSuite [] stmts
 
     continue assigns crossesBoundary seen rest
       | crossesBoundary                 = (assigns, 0, True)

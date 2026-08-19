@@ -1,4 +1,4 @@
-/* Acton impl hash: test-hash */
+/* Acton codegen hash: test-hash */
 #include "rts/common.h"
 #include "out/types/chunking.h"
 int64_t chunkingQ_c000;

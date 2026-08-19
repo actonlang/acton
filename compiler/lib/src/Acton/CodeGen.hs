@@ -37,14 +37,14 @@ import Numeric
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
 
-generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
-generate env srcbase srcText emitLines m hash = do return (n, h, c)
+generate                            :: Acton.Env.Env0 -> [Name] -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
+generate env declarations srcbase srcText emitLines m@(Module mn _ _ _) hash = do return (n, h, c)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
-        hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
-        h                           = render $ hashComment $+$ hModule env0 m
+        hashComment                 = text "/* Acton codegen hash:" <+> text hash <+> text "*/"
+        h                           = render $ hashComment $+$ hModule env0 declarations m
         c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
-        env0                        = genEnv $ setMod (modname m) env
+        env0                        = genEnv $ setMod mn env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
 genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
@@ -220,16 +220,23 @@ storageType env t                   = rawType env t
 
 -- Header -------------------------------------------------------------------------------------------
 
-hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
+hModule env declarations (Module m imps _ stmts)
+                                    = text "#pragma" <+> text "once" $+$
                                       (if inBuiltin env
                                        then empty
                                        else text "#include \"builtin/builtin.h\"" $+$ -- TODO: can we include out/types/__builtin__.h instead?
                                             include env "rts" (modName ["rts"])) $+$
                                       vcat (map (include env "out/types") $ modNames imps) $+$
+                                      vcat (map (compactDeclaration env) declarationOnly) $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
   where env1                        = classdefine stmts env
+        classNames                  = [ n | (n,NClass{}) <- envOf stmts ]
+        declarationOnly             = uniqueNames [ n | n <- declarations, n `notElem` classNames ]
+
+compactDeclaration env n           = text "struct" <+> genTopName env n <> semi $+$
+                                      text "typedef" <+> text "struct" <+> genTopName env n <+> char '*' <> genTopName env n <> semi
 
 
 hSuite phase env []                 = empty
@@ -306,7 +313,9 @@ fields env c                        = map field (vsubst [(tvSelf,tCon c)] te)
         field (n, NDef sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NDef sc NoDec _)  
                                     = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
-        field (n, NVar t)           = varsig env n t <> semi
+        field (n, NVar t)
+          | isWitness n             = empty
+          | otherwise               = varsig env n t <> semi
         field (n, NSig sc Static _) = funsig2 env (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc NoDec _)  = methsig2 env c (Just n) (B.rtypeOf env c n) <> semi
         field (n, NSig sc Property _)
@@ -672,7 +681,7 @@ initGlobalDoc env s                 = genStmt1 env s $+$
 
 initClassBase env c q as hasCDef    = methodtable env c <> dot <> gen env gcinfoKW <+> equals <+> doubleQuotes (genTopName env c) <> semi $+$
                                       methodtable env c <> dot <> gen env superclassKW <+> equals <+> super <> semi $+$
-                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c) ]
+                                      vcat [ inherit c' n | (c',n) <- inheritedAttrs env (NoQ c), not (isWitness n) ]
   where tc                          = TC (NoQ c) [ tVar v | QBind v _ <- q ]
         super                       = if null as then text "NULL" else parens (gen env qnSuperClass) <> text "&" <> methodtable' env (tcname $ head as)
         inherit c' n
@@ -692,7 +701,8 @@ initClass env c q (Signature{} : ss) b = initClass env c q ss b
 initClass env c q (s : ss) b
   | isNotImpl s                     = initClass env c q ss b
   | otherwise                       = genStmt1 env s $+$
-                                      vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi | (n,_) <- te ] $+$
+                                      vcat [ genTopName env c <> dot <> gen env n <+> equals <+> gen env n <> semi
+                                           | (n,_) <- te, not (isWitness n) ] $+$
                                       initClass env1 c q ss b
   where te                          = excludeDefined env (envOf s)
         env1                        = ldefine te env

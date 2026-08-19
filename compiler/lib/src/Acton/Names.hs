@@ -427,6 +427,257 @@ instance Vars Pattern where
     bound (PParen _ p)              = bound p
     bound (PData _ n ixs)           = [n]
 
+-- Env-threaded reference walks ----
+
+-- A Walk is the hook record for one env-threaded traversal of the typed AST.
+-- The structural recursion is written once, in the Summ instances below; a
+-- client starts from plainWalk and overrides only the hooks its analysis
+-- needs.  The env and result types are parameters, so clients thread
+-- environments this module knows nothing about.  Env hooks advance the
+-- environment at binder points; result hooks contribute extra facts at
+-- reference points.  wDot owns its receiver: the fold does not descend into
+-- it, so the hook decides how (and whether) the receiver is walked.
+
+data Walk env r                     = Walk {
+                                        wSeq       :: env -> Stmt -> env,             -- past one suite statement
+                                        wSuiteEnv  :: env -> Suite -> env,            -- past a whole suite (try/else)
+                                        wDecls     :: env -> [Decl] -> env,           -- into a mutually recursive group
+                                        wDecl      :: env -> Decl -> (r, env),        -- decl header facts + body env
+                                        wLocal     :: env -> env,                     -- into a local scope
+                                        wLet       :: env -> Suite -> env,            -- past a let suite
+                                        wPar       :: env -> Name -> Maybe Type -> env,
+                                        wPat       :: env -> Pattern -> env,          -- loop/comprehension binder
+                                        wItem      :: env -> WithItem -> env,
+                                        wExcept    :: env -> Except -> env,
+                                        wQBinds    :: env -> QBinds -> env,
+                                        wAssignRhs :: env -> [Pattern] -> env,        -- into an assignment rhs
+                                        wVar       :: env -> QName -> r,
+                                        wDot       :: env -> Expr -> Name -> r,       -- owns the receiver
+                                        wCall      :: env -> Expr -> r,               -- extra facts for a callee
+                                        wCond      :: env -> Expr -> r,               -- extra facts for a condition
+                                        wIter      :: env -> Expr -> r,               -- extra facts for an iteratee
+                                        wTarg      :: env -> Pattern -> r,            -- extra facts for a target
+                                        wTCon      :: env -> QName -> r,              -- type constructor reference
+                                        wTypeName  :: env -> QName -> r }             -- type name in a dynamic check
+
+plainWalk                           :: Monoid r => Walk env r
+plainWalk                           = Walk {
+                                        wSeq       = const,
+                                        wSuiteEnv  = const,
+                                        wDecls     = const,
+                                        wDecl      = \env _ -> (mempty, env),
+                                        wLocal     = id,
+                                        wLet       = const,
+                                        wPar       = \env _ _ -> env,
+                                        wPat       = const,
+                                        wItem      = const,
+                                        wExcept    = const,
+                                        wQBinds    = const,
+                                        wAssignRhs = const,
+                                        wVar       = none,
+                                        wDot       = \_ _ _ -> mempty,
+                                        wCall      = none,
+                                        wCond      = none,
+                                        wIter      = none,
+                                        wTarg      = none,
+                                        wTCon      = none,
+                                        wTypeName  = none }
+  where none _ _                    = mempty
+
+class Summ a where
+    summ                            :: Monoid r => Walk env r -> env -> a -> r
+
+summSuite                           :: Monoid r => Walk env r -> env -> Suite -> r
+summSuite w env []                  = mempty
+summSuite w env (s:ss)              = summ w env s <> summSuite w (wSeq w env s) ss
+
+summWithItems                       :: Monoid r => Walk env r -> env -> [WithItem] -> (r, env)
+summWithItems w env []              = (mempty, env)
+summWithItems w env (item:items)    = (summ w env item <> more, env')
+  where (more, env')                = summWithItems w (wItem w env item) items
+
+summPosPar                          :: Monoid r => Walk env r -> env -> PosPar -> (r, env)
+summPosPar w env (PosPar n t e p)   = (summ w env t <> summ w env e <> more, env')
+  where (more, env')                = summPosPar w (wPar w env n t) p
+summPosPar w env (PosSTAR n t)      = (summ w env t, wPar w env n t)
+summPosPar w env PosNIL             = (mempty, env)
+
+summKwdPar                          :: Monoid r => Walk env r -> env -> KwdPar -> (r, env)
+summKwdPar w env (KwdPar n t e k)   = (summ w env t <> summ w env e <> more, env')
+  where (more, env')                = summKwdPar w (wPar w env n t) k
+summKwdPar w env (KwdSTAR n t)      = (summ w env t, wPar w env n t)
+summKwdPar w env KwdNIL             = (mempty, env)
+
+summComp                            :: Monoid r => Walk env r -> env -> Comp -> (r, env)
+summComp w env (CompFor _ p e c)    = (summ w env e <> wIter w env e <> summ w env p <> more, env')
+  where (more, env')                = summComp w (wPat w env p) c
+summComp w env (CompIf _ e c)       = (summ w env e <> wCond w env e <> more, env')
+  where (more, env')                = summComp w env c
+summComp w env NoComp               = (mempty, env)
+
+instance Summ a => Summ [a] where
+    summ w env                      = mconcat . map (summ w env)
+
+instance Summ a => Summ (Maybe a) where
+    summ w env                      = maybe mempty (summ w env)
+
+instance Summ Stmt where
+    summ w env (Expr _ e)           = summ w env e
+    summ w env (Assign _ ps e)      = mconcat [ summ w env p <> wTarg w env p | p <- ps ] <>
+                                      summ w (wAssignRhs w env ps) e
+    summ w env (MutAssign _ t e)    = summ w env t <> summ w env e
+    summ w env (AugAssign _ t _ e)  = summ w env t <> summ w env e
+    summ w env (Assert _ e mbe)     = summ w env e <> wCond w env e <> summ w env mbe
+    summ w env (Pass _)             = mempty
+    summ w env (Delete _ t)         = summ w env t
+    summ w env (Return _ mbe)       = summ w env mbe
+    summ w env (Raise _ e)          = summ w env e
+    summ w env (Break _)            = mempty
+    summ w env (Continue _)         = mempty
+    summ w env (If _ bs els)        = summ w env bs <> summSuite w env els
+    summ w env (While _ e b els)    = summ w env e <> wCond w env e <> summSuite w env b <>
+                                      summSuite w env els
+    summ w env (For _ p e b els)    = summ w env p <> wTarg w env p <> summ w env e <> wIter w env e <>
+                                      summSuite w (wPat w env p) b <> summSuite w env els
+    summ w env (Try _ b hs els fin) = summSuite w env b <> summ w env hs <>
+                                      summSuite w (wSuiteEnv w env b) els <> summSuite w env fin
+    summ w env (With _ items b)     = itemRefs <> summSuite w env' b
+      where (itemRefs, env')        = summWithItems w env items
+    summ w env (Data _ mbp b)       = summ w env mbp <> summSuite w env b
+    summ w env (VarAssign _ ps e)   = mconcat [ summ w env p <> wTarg w env p | p <- ps ] <> summ w env e
+    summ w env (After _ e e')       = summ w env e <> summ w env e'
+    summ w env (Signature _ _ sc _) = summ w env sc
+    summ w env (Decl _ ds)          = mconcat [ decl d | d <- ds ]
+      where env'                    = wDecls w env ds
+            decl d                  = hdr <> summSuite w benv (declbody d)
+              where (hdr, benv)     = wDecl w env' d
+
+instance Summ Branch where
+    summ w env (Branch e ss)        = summ w env e <> wCond w env e <> summSuite w env ss
+
+instance Summ Handler where
+    summ w env (Handler ex ss)      = summ w env ex <> summSuite w (wExcept w env ex) ss
+
+instance Summ Except where
+    summ w env (ExceptAll _)        = mempty
+    summ w env (Except _ qn)        = wTypeName w env qn
+    summ w env (ExceptAs _ qn _)    = wTypeName w env qn
+
+instance Summ WithItem where
+    summ w env (WithItem e p)       = summ w env e <> summ w env p
+
+instance Summ Expr where
+    summ w env (Var _ n)            = wVar w env n
+    summ w env (Int _ _ _)          = mempty
+    summ w env (Float _ _ _)        = mempty
+    summ w env (Imaginary _ _ _)    = mempty
+    summ w env (Bool _ _)           = mempty
+    summ w env (None _)             = mempty
+    summ w env (NotImplemented _)   = mempty
+    summ w env (Ellipsis _)         = mempty
+    summ w env (Strings _ _)        = mempty
+    summ w env (BStrings _ _)       = mempty
+    summ w env (Call _ f ps ks)     = summ w env f <> summ w env ps <> summ w env ks <> wCall w env f
+    summ w env (Let _ ss e)         = summSuite w env' ss <> summ w (wLet w env' ss) e
+      where env'                    = wLocal w env
+    summ w env (TApp _ f ts)        = summ w env f <> summ w env ts
+    summ w env (Async _ e)          = summ w env e
+    summ w env (Await _ e)          = summ w env e
+    summ w env (Index _ e ix)       = summ w env e <> summ w env ix
+    summ w env (Slice _ e sl)       = summ w env e <> summ w env sl
+    summ w env (Cond _ e1 c e2)     = summ w env e1 <> summ w env c <> wCond w env c <> summ w env e2
+    summ w env (IsInstance _ e c)   = summ w env e <> wTypeName w env c
+    summ w env (BinOp _ l _ r)      = summ w env l <> summ w env r
+    summ w env (CompOp _ e ops)     = summ w env e <> summ w env ops
+    summ w env (UnOp _ Not e)       = summ w env e <> wCond w env e
+    summ w env (UnOp _ _ e)         = summ w env e
+    summ w env (Dot _ e n)          = wDot w env e n
+    summ w env (Rest _ e _)         = summ w env e
+    summ w env (DotI _ e _)         = summ w env e
+    summ w env (RestI _ e _)        = summ w env e
+    summ w env (Opt _ e _)          = summ w env e
+    summ w env (OptChain _ e)       = summ w env e
+    summ w env (Lambda _ p k e fx)  = parRefs <> kwdRefs <> summ w benv e <> summ w env fx
+      where (parRefs, envP)         = summPosPar w (wLocal w env) p
+            (kwdRefs, benv)         = summKwdPar w envP k
+    summ w env (Yield _ mbe)        = summ w env mbe
+    summ w env (YieldFrom _ e)      = summ w env e
+    summ w env (Tuple _ ps ks)      = summ w env ps <> summ w env ks
+    summ w env (List _ es)          = summ w env es
+    summ w env (ListComp _ e c)     = refs <> summ w env' e
+      where (refs, env')            = summComp w (wLocal w env) c
+    summ w env (Dict _ as)          = summ w env as
+    summ w env (DictComp _ a c)     = refs <> summ w env' a
+      where (refs, env')            = summComp w (wLocal w env) c
+    summ w env (Set _ es)           = summ w env es
+    summ w env (SetComp _ e c)      = refs <> summ w env' e
+      where (refs, env')            = summComp w (wLocal w env) c
+    summ w env (Paren _ e)          = summ w env e
+    summ w env (Box t e)            = summ w env t <> summ w env e
+    summ w env (UnBox t e)          = summ w env t <> summ w env e
+
+instance Summ Elem where
+    summ w env (Elem e)             = summ w env e
+    summ w env (Star e)             = summ w env e
+
+instance Summ Assoc where
+    summ w env (Assoc k v)          = summ w env k <> summ w env v
+    summ w env (StarStar e)         = summ w env e
+
+instance Summ OpArg where
+    summ w env (OpArg _ e)          = summ w env e
+
+instance Summ Sliz where
+    summ w env (Sliz _ e1 e2 e3)    = summ w env e1 <> summ w env e2 <> summ w env e3
+
+instance Summ PosArg where
+    summ w env (PosArg e p)         = summ w env e <> summ w env p
+    summ w env (PosStar e)          = summ w env e
+    summ w env PosNil               = mempty
+
+instance Summ KwdArg where
+    summ w env (KwdArg _ e k)       = summ w env e <> summ w env k
+    summ w env (KwdStar e)          = summ w env e
+    summ w env KwdNil               = mempty
+
+instance Summ PosPat where
+    summ w env (PosPat p ps)        = summ w env p <> summ w env ps
+    summ w env (PosPatStar p)       = summ w env p
+    summ w env PosPatNil            = mempty
+
+instance Summ KwdPat where
+    summ w env (KwdPat _ p ps)      = summ w env p <> summ w env ps
+    summ w env (KwdPatStar p)       = summ w env p
+    summ w env KwdPatNil            = mempty
+
+instance Summ Pattern where
+    summ w env (PWild _ t)          = summ w env t
+    summ w env (PVar _ _ t)         = summ w env t
+    summ w env (PParen _ p)         = summ w env p
+    summ w env (PTuple _ ps ks)     = summ w env ps <> summ w env ks
+    summ w env (PList _ ps p)       = summ w env ps <> summ w env p
+    summ w env (PData _ n ixs)      = wTypeName w env (NoQ n) <> summ w env ixs
+
+instance Summ TSchema where
+    summ w env (TSchema _ q t)      = summ w env q <> summ w (wQBinds w env q) t
+
+instance Summ QBind where
+    summ w env (QBind _ cs)         = summ w env cs
+
+instance Summ TCon where
+    summ w env (TC qn ts)           = wTCon w env qn <> summ w env ts
+
+instance Summ Type where
+    summ w env (TCon _ tc)          = summ w env tc
+    summ w env (TFun _ fx p k t)    = summ w env fx <> summ w env p <> summ w env k <> summ w env t
+    summ w env (TTuple _ p k)       = summ w env p <> summ w env k
+    summ w env (TOpt _ t)           = summ w env t
+    summ w env (TRow _ _ _ t r)     = summ w env t <> summ w env r
+    summ w env (TStar _ _ r)        = summ w env r
+    summ w env (TUnboxed _ t)       = summ w env t
+    summ w env _                    = mempty
+
+
 instance Vars ModuleItem where
     bound (ModuleItem qn Nothing)   = free qn
     bound (ModuleItem qn (Just n))  = free n
