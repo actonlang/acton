@@ -140,7 +140,7 @@ witness_forwardQ_PBD_Thing witness_forwardQ_PBD_ThingG_new() {
 }
 struct witness_forwardQ_PBD_ThingG_class witness_forwardQ_PBD_ThingG_methods;
 B_NoneType witness_forwardQ_PCD_ThingD___init__ (witness_forwardQ_PCD_Thing W_self) {
-    ((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34 = ((witness_forwardQ_PA)witness_forwardQ_PBD_ThingG_new());
+    ((witness_forwardQ_PCD_Thing)(W_self))->W_PA_43 = ((witness_forwardQ_PA)witness_forwardQ_PBD_ThingG_new());
     ((B_NoneType (*) (witness_forwardQ_PC))witness_forwardQ_PCG_methods.__init__)(((witness_forwardQ_PC)W_self));
     return B_None;
 }
@@ -150,16 +150,16 @@ int64_t witness_forwardQ_PCD_ThingD_gamma (witness_forwardQ_PCD_Thing W_self, wi
     #line 33 "test/src/witness_forward.act"
     return N_2tmp;
 }
-int64_t witness_forwardQ_PCD_ThingD_total (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p) {
-    int64_t N_3tmp = ((int64_t (*) ($WORD, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34))->$class->total)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34, G_1p);
+bool witness_forwardQ_PCD_ThingD_same (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p, witness_forwardQ_Thing G_2p) {
+    bool N_3tmp = ((bool (*) ($WORD, witness_forwardQ_Thing, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_43))->$class->same)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_43, G_1p, G_2p);
     return N_3tmp;
 }
-bool witness_forwardQ_PCD_ThingD_same (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p, witness_forwardQ_Thing G_2p) {
-    bool N_4tmp = ((bool (*) ($WORD, witness_forwardQ_Thing, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34))->$class->same)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_34, G_1p, G_2p);
+int64_t witness_forwardQ_PCD_ThingD_total (witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p) {
+    int64_t N_4tmp = ((int64_t (*) ($WORD, witness_forwardQ_Thing))((witness_forwardQ_PA)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_43))->$class->total)(((witness_forwardQ_PCD_Thing)(W_self))->W_PA_43, G_1p);
     return N_4tmp;
 }
 void witness_forwardQ_PCD_ThingD___serialize__ (witness_forwardQ_PCD_Thing self, $Serial$state state) {
-    $step_serialize(self->W_PA_34, state);
+    $step_serialize(self->W_PA_43, state);
 }
 witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingD___deserialize__ (witness_forwardQ_PCD_Thing self, $Serial$state state) {
     $WORD $tmp;
@@ -171,7 +171,7 @@ witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingD___deserialize__ (witness_
         }
         self = $DNEW(witness_forwardQ_PCD_Thing, state);
     }
-    self->W_PA_34 = $step_deserialize(state);
+    self->W_PA_43 = $step_deserialize(state);
     return self;
 }
 witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingG_new() {
@@ -253,8 +253,8 @@ void witness_forwardQ___init__ () {
         witness_forwardQ_PCD_ThingG_methods.__repr__ = (B_str (*) (witness_forwardQ_PCD_Thing))B_valueG_methods.__repr__;
         witness_forwardQ_PCD_ThingG_methods.__init__ = (B_NoneType (*) (witness_forwardQ_PCD_Thing))witness_forwardQ_PCD_ThingD___init__;
         witness_forwardQ_PCD_ThingG_methods.gamma = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_gamma;
-        witness_forwardQ_PCD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_total;
         witness_forwardQ_PCD_ThingG_methods.same = (bool (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_same;
+        witness_forwardQ_PCD_ThingG_methods.total = (int64_t (*) (witness_forwardQ_PCD_Thing, witness_forwardQ_Thing))witness_forwardQ_PCD_ThingD_total;
         witness_forwardQ_PCD_ThingG_methods.__serialize__ = witness_forwardQ_PCD_ThingD___serialize__;
         witness_forwardQ_PCD_ThingG_methods.__deserialize__ = witness_forwardQ_PCD_ThingD___deserialize__;
         $register(&witness_forwardQ_PCD_ThingG_methods);

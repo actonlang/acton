@@ -114,7 +114,7 @@ struct witness_forwardQ_PCD_ThingG_class {
 };
 struct witness_forwardQ_PCD_Thing {
     struct witness_forwardQ_PCD_ThingG_class *$class;
-    witness_forwardQ_PA W_PA_34;
+    witness_forwardQ_PA W_PA_43;
 };
 extern struct witness_forwardQ_PAG_class witness_forwardQ_PAG_methods;
 B_NoneType witness_forwardQ_PAD___init__(witness_forwardQ_PA W_self);
@@ -137,6 +137,6 @@ extern struct witness_forwardQ_PCD_ThingG_class witness_forwardQ_PCD_ThingG_meth
 witness_forwardQ_PCD_Thing witness_forwardQ_PCD_ThingG_new();
 B_NoneType witness_forwardQ_PCD_ThingD___init__(witness_forwardQ_PCD_Thing W_self);
 int64_t witness_forwardQ_PCD_ThingD_gamma(witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing self);
-int64_t witness_forwardQ_PCD_ThingD_total(witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p);
 bool witness_forwardQ_PCD_ThingD_same(witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p, witness_forwardQ_Thing G_2p);
+int64_t witness_forwardQ_PCD_ThingD_total(witness_forwardQ_PCD_Thing W_self, witness_forwardQ_Thing G_1p);
 void witness_forwardQ___init__ ();

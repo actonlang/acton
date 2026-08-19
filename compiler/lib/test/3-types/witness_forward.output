@@ -32,14 +32,14 @@ class PBD_Thing (PB[Thing], PA[Thing], __builtin__.value):
     pure def beta (W_self : Self, self : Thing) -> __builtin__.int:
         return W_PA_26.__fromatom__(1)
 class PCD_Thing (PC[Thing], PA[Thing], __builtin__.value):
-    W_PA_34: PA[Thing] = PBD_Thing()
+    W_PA_43: PA[Thing] = PBD_Thing()
     W_PA_30: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
     pure def __init__ (W_self : Self) -> None:
         PC.__init__@[Thing](W_self)
     pure def gamma (W_self : Self, self : Thing) -> __builtin__.int:
         return W_PA_30.__fromatom__(2)
-    pure def total (W_self : Self, G_1p : Thing) -> __builtin__.int:
-        return W_PA_34.total(G_1p)
     pure def same (W_self : Self, G_1p : Thing, G_2p : Thing) -> __builtin__.bool:
-        return W_PA_34.same(G_1p, G_2p)
+        return W_PA_43.same(G_1p, G_2p)
+    pure def total (W_self : Self, G_1p : Thing) -> __builtin__.int:
+        return W_PA_43.total(G_1p)
 # (recursive group)
