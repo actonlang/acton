@@ -1053,7 +1053,7 @@ instance InfEnv Decl where
                                                                 else (te,b1)
                                                  return ([], [(n, NClass q as' (te0++te2) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ tydefineVars (stripQual q') $ setInClass env
+      where env1                        = define (toSigs te' `exclude` [initKW]) $ reserve (assigned b0) $ tydefineVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
@@ -1078,7 +1078,7 @@ instance InfEnv Decl where
             userMethods                 = [ dname d | Decl _ ds <- b, d@Def{} <- ds ]
             getAttrDef                  = sDef getAttrKW (pospar [(selfKW,tSelf),(nameKW,tStr)]) (tOpt tValue) [sReturn eNone] fxPure
             relayInit te b              = --trace ("####### Creating relayInit for class " ++ prstr n) $
-                                          case lookup initKW te' of
+                                          case lookup initKW (reverse te') of
                                             Just ni@(NDef sc _ _) ->
                                                 ((initKW,ni):te, sDecl [Def NoLoc initKW [] pp kp Nothing body NoDec fx Nothing]:b)
                                               where t  = addSelf (sctype sc) (Just NoDec)
@@ -1163,7 +1163,7 @@ checkAttributes final te' te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
         dupsigs                         = duplicates (dom sigs)
-        nterms                          = exclude terms (dom allsigs)
+        nterms                          = terms `exclude` dom allsigs
         misssigs                        = allsigs `exclude` dom allterms
         abssigs                         = misssigs `exclude` final
         finalsigs                       = misssigs `restrict` final

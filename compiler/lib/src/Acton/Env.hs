@@ -848,7 +848,7 @@ fullAttrEnv                 = attributes f
   where f wp i n            = Just (n,i)
 
 parentTEnv                  :: EnvF x -> [WTCon] -> TEnv
-parentTEnv env us           = [ (n,i) | (_,c) <- us, let (_,te) = findCon env c, (n,i) <- reverse te ]                                  -- in override order
+parentTEnv env us           = [ (n,i) | (_,c) <- reverse us, let (_,te) = findCon env c, (n,i) <- te ]                                  -- in program order
 
 findAttr                    :: EnvF x -> TCon -> Name -> Maybe (Expr->Expr, TSchema, Maybe Deco)
 findAttr env tc n           = go (findAncestry env tc)
