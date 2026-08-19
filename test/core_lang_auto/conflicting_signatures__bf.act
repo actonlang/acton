@@ -1,0 +1,10 @@
+# A slot inherited through two parents with incompatible signatures is rejected.
+
+protocol Alpha:
+    f : (int) -> int
+
+protocol Beta:
+    f : (str) -> str
+
+protocol AlphaBeta (Alpha, Beta):
+    pass

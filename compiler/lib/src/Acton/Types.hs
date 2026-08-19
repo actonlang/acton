@@ -1167,7 +1167,7 @@ checkAttributes final te' te
         misssigs                        = allsigs `exclude` dom allterms
         abssigs                         = misssigs `exclude` final
         finalsigs                       = misssigs `restrict` final
-        clashes                         = nub [ n | (n, NSig sc dec _) <- finalsigs, (n', NSig sc' dec' _) <- finalsigs,
+        clashes                         = nub [ n | (n, NSig sc dec _) <- sigs', n /= initKW, (n', NSig sc' dec' _) <- sigs',
                                                     n == n', sctype sc' /= sctype sc || dec' /= dec ]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final

@@ -1,0 +1,10 @@
+# A contradictory ancestry order is rejected.
+
+protocol Alpha:
+    f : (int) -> int
+
+protocol Beta (Alpha):
+    pass
+
+protocol AlphaBeta (Alpha, Beta):
+    pass
