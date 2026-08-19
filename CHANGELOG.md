@@ -13,9 +13,30 @@
 - Preserve hidden protocol-witness fields when importing constrained generic
   classes, fixing subclass layout corruption and serialization round-trips for
   generic classes subclassed from another module. [#3037]
+- Avoid duplicate visible protocol witnesses when importing and defining
+  extensions, keeping witness lookup canonical when the same protocol/type
+  pair is available through rival modules or ancestry paths. [#3061]
+- Use ThinLTO for non-debug Linux release builds, preserving cross-module
+  optimization while making final links faster and less memory intensive for
+  large projects. [#3060]
+- Keep scalar parameters boxed when overriding generic class methods, so calls
+  through the generic method slot unbox values inside the callee correctly and
+  parameter rebinding does not mutate the caller's box. [#3043]
 - Compile list, set, and dict comprehensions used in `if`, `elif`, and `while`
   conditions without moving the generated comprehension helper out of scope.
   [#3041]
+- Deduplicate protocol witnesses for parameterized extensions by comparing
+  their schematic types, so generic classes with equivalent constraints do not
+  lose needed witness lookups when type parameter names differ. [#3065]
+- Commit refreshed cached module interfaces before later compiler phases read
+  them, so incremental builds see a reliable front-end completion boundary and
+  keep progress reporting balanced. [#3068]
+- Compile postfix `!` on actor calls inside dict, list, and set comprehensions,
+  preserving effects and type conversions so generated C uses the correct
+  calling convention. [#3057]
+- Compile forced unwrap and optional chaining through named and positional tuple
+  selections, and report unsupported row-rest selectors normally instead of
+  crashing the compiler. [#3055]
 - Escape generated C identifiers that match C keywords using order-independent
   lookup, including underscore-prefixed keywords and C23 `typeof_unqual`, so
   generated code avoids reserved-word collisions. [#3044]
@@ -24,15 +45,24 @@
   including overflowing left shifts. [#3050]
 
 ### Runtime & Standard Library
-- Decode JSON integers with 64-bit signed and unsigned yyjson accessors,
-  preserving large signed values and positive values above `int64` instead of
-  truncating them through a 32-bit C `int`. [#3047]
+- Decode JSON integers into Acton `int` or `bigint` values without losing
+  precision, including oversized signed and unsigned tokens, and encode
+  `bigint` values as JSON numbers by default with a `bigint_as_string` option
+  for string-based consumers. [#3047] [#3053]
+- Return both coalesced HTTP responses to pipelined `http.Client` callbacks,
+  preserving the parser remainder so later responses stay matched to the
+  correct outstanding request. [#3067]
+- Fix `base64.encode()` and `base64.decode()` for empty byte strings, and make
+  invalid base64 input raise `ValueError` instead of aborting the process.
+  [#3066]
 
 ### Testing & CI
 - Add core-language regression tests for `await` values, exceptions, chaining,
   fan-in, fan-out, queued messages, timers, and mixed outcomes, pinning the
   observable semantics before runtime future/message handling is reworked.
   [#3034]
+- Stabilize the project-lock regression test by waiting for the child compiler
+  to report that it is blocked on the lock before releasing it. [#3069]
 
 ## [0.29.1] - 2026-07-22
 
@@ -4709,9 +4739,20 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3037]: https://github.com/actonlang/acton/pull/3037
 [#3038]: https://github.com/actonlang/acton/pull/3038
 [#3041]: https://github.com/actonlang/acton/pull/3041
+[#3043]: https://github.com/actonlang/acton/pull/3043
 [#3044]: https://github.com/actonlang/acton/pull/3044
 [#3047]: https://github.com/actonlang/acton/pull/3047
 [#3050]: https://github.com/actonlang/acton/pull/3050
+[#3053]: https://github.com/actonlang/acton/pull/3053
+[#3055]: https://github.com/actonlang/acton/pull/3055
+[#3057]: https://github.com/actonlang/acton/pull/3057
+[#3060]: https://github.com/actonlang/acton/pull/3060
+[#3061]: https://github.com/actonlang/acton/pull/3061
+[#3065]: https://github.com/actonlang/acton/pull/3065
+[#3066]: https://github.com/actonlang/acton/pull/3066
+[#3067]: https://github.com/actonlang/acton/pull/3067
+[#3068]: https://github.com/actonlang/acton/pull/3068
+[#3069]: https://github.com/actonlang/acton/pull/3069
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
