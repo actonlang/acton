@@ -1,0 +1,43 @@
+# Forwarding into a cyclic witness path: the Eq witnesses for Node and Edge
+# construct each other (a WitKnots cycle, broken with optional parameters),
+# and Hashable[Node] forwards __eq__ into that cyclic Eq witness.
+
+class Node(object):
+    v: int
+    r: ?Edge
+    def __init__(self, v: int, r: ?Edge):
+        self.v = v
+        self.r = r
+
+class Edge(object):
+    w: int
+    l: ?Node
+    def __init__(self, w: int, l: ?Node):
+        self.w = w
+        self.l = l
+
+extension Node (Eq):
+    def __eq__(a: Node, b: Node) -> bool:
+        return a.v == b.v and a.r == b.r
+
+extension Edge (Eq):
+    def __eq__(a: Edge, b: Edge) -> bool:
+        return a.w == b.w and a.l == b.l
+
+extension Node (Hashable):
+    def hash(self, h):
+        self.v.hash(h)
+
+actor main(env):
+    a = Node(1, Edge(2, None))
+    b = Node(1, Edge(2, None))
+    c = Node(1, Edge(3, None))
+    if a != b or a == c:
+        print("FAIL: cyclic Eq witnesses")
+        await async env.exit(1)
+    d: dict[Node, str] = {}
+    d[a] = "hit"
+    if b not in d or c in d:
+        print("FAIL: dict through __eq__ forwarded into a cyclic witness")
+        await async env.exit(1)
+    await async env.exit(0)

@@ -1,0 +1,35 @@
+# A slot inherited through two parents with agreeing signatures must produce
+# exactly one forwarding method per generated witness class (main and
+# sibling), routed to the extension that implements it.
+
+protocol Alpha:
+    f : (int) -> int
+
+protocol Beta:
+    f : (int) -> int
+
+protocol AlphaBeta (Alpha, Beta):
+    pass
+
+class Thing(object):
+    def __init__(self):
+        pass
+
+extension Thing (Alpha):
+    def f(self, x: int) -> int:
+        return x
+
+extension Thing (AlphaBeta):
+    pass
+
+def via_beta[T(Beta)](x: T, k: int) -> int:
+    return Beta.f(x, k)
+
+actor main(env):
+    if AlphaBeta.f(Thing(), 1) != 1:
+        print("FAIL: forwarded diamond slot in the main witness class")
+        await async env.exit(1)
+    if via_beta(Thing(), 5) != 5:
+        print("FAIL: forwarded diamond slot in the sibling witness class")
+        await async env.exit(1)
+    await async env.exit(0)

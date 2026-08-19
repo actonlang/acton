@@ -266,14 +266,6 @@ bool B_OrdD_i8D___ge__ (B_OrdD_i8 wit, B_i8 a, B_i8 b) {
 
 // B_HashableD_i8 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_i8D___eq__(B_HashableD_i8 wit, B_i8 a, B_i8 b) {
-    return a->val == b->val;
-}
-
-bool B_HashableD_i8D___ne__(B_HashableD_i8 wit, B_i8 a, B_i8 b) {
-    return a->val != b->val;
-}
-
 B_NoneType B_HashableD_i8D_hash(B_HashableD_i8 wit, B_i8 a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a), 4));
     return B_None;

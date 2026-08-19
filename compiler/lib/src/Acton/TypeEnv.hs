@@ -312,7 +312,8 @@ tydefineVars q env              = modX env1 (\x -> foldl' addvarinfo x tvs)
 
 tydefineInst                    :: TCon -> [WTCon] -> Name -> Env -> Env
 tydefineInst c ps w env         = modX env (\x -> foldl' addActiveWit x wits)
-  where wits                    = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
+  where wits                    = [ wit | wit <- wits0, not (hasVisibleWit env wit) ]
+        wits0                   = [ WInst [] (tCon c) p (NoQ w) ws | (ws,p) <- ps ]
 
 addActiveWit                    :: TypeX -> Witness -> TypeX
 addActiveWit x wit

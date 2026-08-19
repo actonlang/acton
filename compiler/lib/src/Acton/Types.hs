@@ -23,7 +23,7 @@ import Control.Monad
 import Control.Monad.Except (runExceptT)
 import Control.Monad.State.Strict (runState)
 import Data.Maybe (isJust)
-import Data.List (nub, intersect, sort)
+import Data.List (nub, nubBy, intersect, sort)
 import Pretty
 import qualified Control.Exception
 import Debug.Trace
@@ -1047,13 +1047,13 @@ instance InfEnv Decl where
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated class syntax"
                                                  checkClassAttributesInitialized n l env as' b
-                                                 (nterms,asigs,_) <- checkAttributes [] te' te
+                                                 (nterms,asigs,_,_) <- checkAttributes [] te' te
                                                  let (te2,b2) = if notImplBody b then let te1 = unSig asigs in (te++te1, addImpl te1 b1)
                                                                 else if null asigs && initKW `notElem` dom te then relayInit te b1
                                                                 else (te,b1)
                                                  return ([], [(n, NClass q as' (te0++te2) ddoc)], Class l n q us (props te0 ++ b2) ddoc)
                                              _ -> illegalRedef n
-      where env1                        = define (exclude (toSigs te') [initKW]) $ reserve (assigned b0) $ tydefineVars (stripQual q') $ setInClass env
+      where env1                        = define (toSigs te' `exclude` [initKW]) $ reserve (assigned b0) $ tydefineVars (stripQual q') $ setInClass env
             (as,ps)                     = mro2 env us
             as'                         = if null as && not (inBuiltin env && n == nValue) then leftpath [cValue] else as
             te'                         = parentTEnv env as'
@@ -1078,7 +1078,7 @@ instance InfEnv Decl where
             userMethods                 = [ dname d | Decl _ ds <- b, d@Def{} <- ds ]
             getAttrDef                  = sDef getAttrKW (pospar [(selfKW,tSelf),(nameKW,tStr)]) (tOpt tValue) [sReturn eNone] fxPure
             relayInit te b              = --trace ("####### Creating relayInit for class " ++ prstr n) $
-                                          case lookup initKW te' of
+                                          case lookup initKW (reverse te') of
                                             Just ni@(NDef sc _ _) ->
                                                 ((initKW,ni):te, sDecl [Def NoLoc initKW [] pp kp Nothing body NoDec fx Nothing]:b)
                                               where t  = addSelf (sctype sc) (Just NoDec)
@@ -1095,7 +1095,7 @@ instance InfEnv Decl where
                                                  (cs,te,b') <- infEnv env1 b
                                                  popFX
                                                  when (not $ null cs) $ err (loc n) "Deprecated protocol syntax"
-                                                 (nterms,_,sigs) <- checkAttributes [] te' te
+                                                 (nterms,_,_,sigs) <- checkAttributes [] te' te
                                                  let noself = [ n | (n, NSig sc Static _) <- te, tvSelf `notElem` vfree sc ]
                                                  when (notImplBody b) $ err0 (notImpls b) "A protocol body cannot be NotImplemented"
                                                  when (not $ null nterms) $ err2 (dom nterms) "Method/attribute lacks signature:"
@@ -1124,22 +1124,32 @@ instance InfEnv Decl where
                                              (cs,te,b1) <- infEnv env1 b
                                              popFX
                                              when (not $ null cs) $ err (loc n) "Deprecated extension syntax"
-                                             (nterms,asigs,sigs) <- checkAttributes final te' te
+                                             (nterms,asigs,fsigs,sigs) <- checkAttributes (dom finals) te' te
                                              when (not $ null nterms) $ err2 (dom nterms) "Method/attribute not in listed protocols:"
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
                                              let te1 = unSig $ selfSubst n q asigs
-                                                 te2 = te ++ te1
-                                                 b2 = addImpl te1 b1
+                                                 fwds = selfSubst n q $ nubBy (\a b -> fst a == fst b) $ reverse fsigs
+                                                 te2 = te ++ te1 ++ unSig fwds
+                                                 b2 = addImpl te1 b1 ++ map fwdDef fwds
                                              return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
       where TC n ts                     = c
             env1                        = define (toSigs te') $ reserve (assigned b) $ tydefineVars (stripQual q') $ setInClass env
             witsearch                   = findWitness env (tCon c) u
             u                           = head us
             ps                          = selfSubst n q $ mro1 env us -- TODO: check that ps doesn't contradict any previous extension mro for c
-            final                       = concat [ conAttrs env (tcname p) | (_,p) <- tail ps, hasWitness env (tCon c) p ]
+            finals                      = [ (a, p) | (_,p) <- tail ps, hasWitness env (tCon c) p, a <- conAttrs env (tcname p) ]
             te'                         = parentTEnv env ps
             q'                          = selfQuant n q
+            -- A final slot is already implemented by an earlier witness for its protocol.
+            -- It becomes a method that calls the slot through that protocol, which the type
+            -- checker resolves to the covering witness like any other call.
+            fwdDef (a, NSig sc dec _)   = sDecl [Def NoLoc a (scbind sc) pp kp (Just $ restype t) [sReturn call] dec (effect t) Nothing]
+              where t                   = addSelf (sctype sc) (Just dec)
+                    pp                  = pPar pNames $ posrow t
+                    kp                  = kPar attrKW $ kwdrow t
+                    Just owner          = lookup a finals
+                    call                = Call NoLoc (eDot (eQVar $ tcname owner) a) (pArg pp) (kArg kp)
 
 --------------------------------------------------------------------------------------------------------------------------
 
@@ -1147,13 +1157,18 @@ checkAttributes final te' te
   | not $ null dupsigs                  = err2 dupsigs "Duplicate signatures for"
   | not $ null props                    = err2 props "Property attributes cannot have class-level definitions:"
   | not $ null nodef                    = err2 nodef "Methods finalized in a previous extension cannot be overridden:"
-  | otherwise                           = return (nterms, abssigs, dom sigs)
+  | not $ null clashes                  = err2 clashes "Conflicting inherited signatures for"
+  | otherwise                           = return (nterms, abssigs, finalsigs, dom sigs)
   where (sigs,terms)                    = sigTerms te
         (sigs',terms')                  = sigTerms te'
         (allsigs,allterms)              = (sigs ++ sigs', terms ++ terms')
         dupsigs                         = duplicates (dom sigs)
-        nterms                          = exclude terms (dom allsigs)
-        abssigs                         = allsigs `exclude` (dom allterms ++ final)
+        nterms                          = terms `exclude` dom allsigs
+        misssigs                        = allsigs `exclude` dom allterms
+        abssigs                         = misssigs `exclude` final
+        finalsigs                       = misssigs `restrict` final
+        clashes                         = nub [ n | (n, NSig sc dec _) <- sigs', n /= initKW, (n', NSig sc' dec' _) <- sigs',
+                                                    n == n', sctype sc' /= sctype sc || dec' /= dec ]
         props                           = dom terms `intersect` dom (propSigs allsigs)
         nodef                           = dom terms `intersect` final
 
@@ -1822,7 +1837,7 @@ instance Check Decl where
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
+      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n' ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us

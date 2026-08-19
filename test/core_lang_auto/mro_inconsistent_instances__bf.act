@@ -1,0 +1,13 @@
+# A common ancestor inherited via differently instantiated paths is rejected.
+
+protocol Zero[T]:
+    f : (T) -> T
+
+protocol Alpha (Zero[int]):
+    pass
+
+protocol Beta (Zero[str]):
+    pass
+
+protocol AlphaBeta (Alpha, Beta):
+    pass

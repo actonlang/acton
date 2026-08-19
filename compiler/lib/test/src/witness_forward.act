@@ -1,0 +1,33 @@
+# Extensions leaving inherited protocol slots to another witness: the
+# converted witness classes must contain ordinary forwarding methods (see
+# Converter.fwdImpl). PC$Thing gets forwarding defs for PA's static 'same'
+# and instance 'total', routed to the earlier PB extension's witness.
+
+protocol PA:
+    @staticmethod
+    same : (Self,Self) -> bool
+    total : () -> int
+
+protocol PB (PA):
+    beta : () -> int
+
+protocol PC (PA):
+    gamma : () -> int
+
+class Thing(object):
+    n: int
+    def __init__(self, n: int):
+        self.n = n
+
+extension Thing (PB):
+    @staticmethod
+    def same(a: Thing, b: Thing) -> bool:
+        return a.n == b.n
+    def total(self):
+        return self.n
+    def beta(self):
+        return 1
+
+extension Thing (PC):
+    def gamma(self):
+        return 2

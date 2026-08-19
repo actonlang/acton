@@ -1851,6 +1851,7 @@ main = do
     describe "Pass 3: Types" $ do
       testTypes env0 ["deact"]
       testTypes env0 ["test_discovery"]
+      testTypes env0 ["witness_forward"]
 
       testAttributesInitialization env0
 
@@ -2107,6 +2108,7 @@ main = do
       testCodeGen env0 ["lines"]
       testCodeGen env0 ["chunking"]
       testCodeGen env0 ["boxparam"]
+      testCodeGen env0 ["witness_forward"]
       -- A local that is live across a for-loop must be emitted as `volatile` so it
       -- survives the loop's StopIteration setjmp/longjmp under optimization.
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]

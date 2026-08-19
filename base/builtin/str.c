@@ -1599,14 +1599,6 @@ bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
 
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_strD___eq__ (B_HashableD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) == 0;
-}
-
-bool B_HashableD_strD___ne__ (B_HashableD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) != 0;
-}
-
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytes((char *)a->str));
     return B_None;
@@ -2668,18 +2660,6 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     B_IteratorD_bytearrayD_next
 };
 
-B_Iterator B_ContainerD_bytearrayD___iter__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return (B_Iterator)$NEW(B_IteratorD_bytearray,str);
-}
-
-B_bytearray B_ContainerD_bytearrayD___fromiter__ (B_ContainerD_bytearray wit, B_Iterable wit2, $WORD iter) {
-    return B_bytearrayD_join(toB_bytearray(""),wit2,iter);
-}
-
-int64_t B_ContainerD_bytearrayD___len__ (B_ContainerD_bytearray wit, B_bytearray str) {
-    return (int64_t)str->nbytes;
-}
-
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
     bool res = false;
     for (int i=0; i < self->nbytes; i++) {
@@ -2761,7 +2741,7 @@ B_NoneType B_SequenceD_bytearrayD_reverse(B_SequenceD_bytearray wit, B_bytearray
 B_Iterator B_SequenceD_bytearrayD___reversed__(B_SequenceD_bytearray wit, B_bytearray self) {
     B_bytearray copy = B_bytearrayD_copy(self);
     B_SequenceD_bytearrayD_reverse(wit,copy);
-    return B_ContainerD_bytearrayD___iter__ (NULL, copy);
+    return (B_Iterator)$NEW(B_IteratorD_bytearray,copy);
 }
 
 B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
@@ -3900,19 +3880,6 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 
 // Hashable
 
-
-bool B_HashableD_bytesD___eq__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    if (a->nbytes != b->nbytes)
-        return false;
-    for (int i=0; i < a->nbytes; i++)
-        if (a->str[i] != b->str[i])
-            return false;
-    return true;
-}
-
-bool B_HashableD_bytesD___ne__ (B_HashableD_bytes wit, B_bytes a, B_bytes b) {
-    return  !B_HashableD_bytesD___eq__(wit,a,b);
-}
 
 B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher, a);

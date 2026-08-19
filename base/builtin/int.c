@@ -269,14 +269,6 @@ bool B_OrdD_intD___ge__ (B_OrdD_int wit, B_int a, B_int b) {
 
 // B_HashableD_int ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool B_HashableD_intD___eq__(B_HashableD_int wit, B_int a, B_int b) {
-    return a->val == b->val;
-}
-
-bool B_HashableD_intD___ne__(B_HashableD_int wit, B_int a, B_int b) {
-    return a->val != b->val;
-}
-
 B_NoneType B_HashableD_intD_hash(B_HashableD_int wit, B_int a, B_hasher h) {
     zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
     return B_None;

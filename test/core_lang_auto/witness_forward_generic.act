@@ -1,0 +1,36 @@
+# Forwarding between generic extensions: Hashable[Box[A]] forwards __eq__ to
+# Ord[Box[A]]. Generic slots pass boxed arguments, and the witness class must
+# come out complete enough to instantiate for dict keys.
+
+class Box[X](object):
+    item: X
+    def __init__(self, item: X):
+        self.item = item
+
+extension Box[A(Ord)] (Ord):
+    def __eq__(a: Box[A], b: Box[A]) -> bool:
+        return a.item == b.item
+    def __lt__(a: Box[A], b: Box[A]) -> bool:
+        return a.item < b.item
+
+extension Box[A(Ord,Hashable)] (Hashable):
+    def hash(self, h):
+        self.item.hash(h)
+
+actor main(env):
+    d: dict[Box[int], str] = {}
+    d[Box(1)] = "one"
+    d[Box(2)] = "two"
+    if d[Box(1)] != "one" or Box(2) not in d or Box(3) in d:
+        print("FAIL: dict through forwarded generic __eq__")
+        await async env.exit(1)
+    l = sorted([Box(3), Box(1), Box(2)])
+    if l[0].item != 1 or l[1].item != 2 or l[2].item != 3:
+        print("FAIL: sorted through generic Ord witness")
+        await async env.exit(1)
+    s: dict[Box[str], int] = {}
+    s[Box("a")] = 1
+    if Box("a") not in s:
+        print("FAIL: str instantiation of forwarded generic __eq__")
+        await async env.exit(1)
+    await async env.exit(0)
