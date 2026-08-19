@@ -1129,7 +1129,7 @@ instance InfEnv Decl where
                                              when (not $ null sigs) $ err2 sigs "Extension with new methods/attributes not supported"
                                              when (not (null asigs || notImplBody b)) $ err3 l (dom asigs) "Protocol method/attribute lacks implementation:"
                                              let te1 = unSig $ selfSubst n q asigs
-                                                 fwds = selfSubst n q $ nubBy (\a b -> fst a == fst b) fsigs
+                                                 fwds = selfSubst n q $ nubBy (\a b -> fst a == fst b) $ reverse fsigs
                                                  te2 = te ++ te1 ++ unSig fwds
                                                  b2 = addImpl te1 b1 ++ map fwdDef fwds
                                              return ([], [(extensionName us c, NExt q c ps te2 [] ddoc)], Extension l q c us b2 ddoc)
@@ -1837,7 +1837,7 @@ instance Check Decl where
     checkEnv' env (Extension l q c us b ddoc)
       | isActor env n                   = notYet (loc n) "Extension of an actor"
       | isProto env n                   = notYet (loc n) "Extension of a protocol"
-      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n ++ "(" ++ prstrs us ++ ")")
+      | otherwise                       = do --traceM ("## checkEnv extension " ++ prstr n' ++ "(" ++ prstrs us ++ ")")
                                              pushFX fxPure tNone
                                              wellformed env1 q
                                              (csu,wmap) <- wellformedProtos env1 us
