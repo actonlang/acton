@@ -1,0 +1,8 @@
+class Holder(object):
+    first: int
+    second: int
+    def __init__(self):
+        try:
+            self.first = self.second + 1
+        finally:
+            self.second = 2

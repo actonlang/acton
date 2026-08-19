@@ -1,0 +1,20 @@
+Building file test/typeerrors/init_try_finally_order.act using temporary scratch directory
+   init_try_finally_order  Parse done                                                               0.000 s
+[error Type error]: Attribute 'first' is not initialized in Holder.__init__
+     +--> init_try_finally_order.act@4:5-8:1
+     |
+   1 |    class Holder(object):
+     :    ^--------------------
+     :    `- In class Holder
+   2 |        first: int
+     :        ^---- 
+     :        `- Attribute 'first' is defined here
+     :
+   4 | +>     def __init__(self):
+   5 | |          try:
+   6 | |              self.first = self.second + 1
+   7 | |          finally:
+   8 | |>             self.second = 2
+     : | 
+     : `- Attribute 'first' is not initialized in __init__
+-----+
