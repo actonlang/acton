@@ -67,6 +67,8 @@ data EnvF x                 = EnvF {
                                 qualifiers          :: [ModName],               -- The actual names m in 'import m' or 'import _ as m'
                                 modules             :: Map ModName ModuleInfo,
                                 transModules        :: [ModuleInfo],            -- cached importedModuleInfos; every writer of 'imports' or 'modules' must reapply cacheTransModules
+                                importedConAttrs    :: AttrMemo,                -- cached importedConAttr, rebuilt by cacheTransModules
+                                importedProtoAttrs  :: AttrMemo,                -- cached importedProtoAttr, rebuilt by cacheTransModules
                                 thismod             :: Maybe ModName,
                                 context             :: [EnvCtx],
                                 qlevel              :: Int,
@@ -75,6 +77,12 @@ data EnvF x                 = EnvF {
 
 type Env0                   = EnvF ()
 type LocEnv                 = M.HashMap Name SrcLoc
+
+-- Memoized per-import-closure attribute lookup; opaque so EnvF can derive Show.
+newtype AttrMemo            = AttrMemo (Name -> [TCon])
+
+instance Show AttrMemo where
+    show _                  = "<attr-memo>"
 
 -- activeNames may contain live unification variables; closedNames must not.
 -- hnames is the full active-over-closed lookup index, while closedHNames is
@@ -88,7 +96,9 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      activeStateNames = activeStateNames env,
                                      activeTypeVars = activeTypeVars env,
                                      imports = imports env, qualifiers = qualifiers env,
-                                     modules = modules env, transModules = transModules env, thismod = thismod env,
+                                     modules = modules env, transModules = transModules env,
+                                     importedConAttrs = importedConAttrs env, importedProtoAttrs = importedProtoAttrs env,
+                                     thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -431,6 +441,8 @@ initEnv path True          = return $ cacheTransModules $ EnvF{ activeNames = []
                                             qualifiers = [],
                                             modules = Map.singleton mPrim (mkModuleInfo mPrim [] primEnv Nothing),
                                             transModules = [],
+                                            importedConAttrs = AttrMemo (const []),
+                                            importedProtoAttrs = AttrMemo (const []),
                                             thismod = Nothing,
                                             context = [],
                                             qlevel = 0,
@@ -453,6 +465,8 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                                  qualifiers = [],
                                                  modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
                                                  transModules = [],
+                                                 importedConAttrs = AttrMemo (const []),
+                                                 importedProtoAttrs = AttrMemo (const []),
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
@@ -463,13 +477,22 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
 env `withModulesFrom` env'  = cacheTransModules env{modules = modules env'}
 
--- Refresh the cached transitive-import ModuleInfos. The field is lazy, so
--- writers pay nothing until importedModuleInfos is next demanded.
+-- Refresh the cached transitive-import ModuleInfos and the attribute-owner
+-- lookups derived from them. The fields are lazy, so writers pay nothing
+-- until importedModuleInfos / importedConAttr is next demanded.
 cacheTransModules           :: EnvF x -> EnvF x
-cacheTransModules env       = env{ transModules = infos }
+cacheTransModules env       = env{ transModules = infos,
+                                   importedConAttrs = AttrMemo (memoLookup conAttr),
+                                   importedProtoAttrs = AttrMemo (memoLookup protoAttr) }
   where infos
           | inBuiltin env   = []
           | otherwise       = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
+        conOwners n         = concat [ moduleConAttr mi n | mi <- infos ]
+        protoOwners n       = concat [ moduleProtoAttr mi n | mi <- infos ]
+        conAttr n           = nubBy (\c c' -> tcname c == tcname c') (conOwners n ++ inherited)
+          where inherited   = concat [ moduleDescendants mi (tcname o) | o <- conOwners n ++ protoOwners n, mi <- infos ]
+        protoAttr n         = nubBy (\p p' -> tcname p == tcname p') (protoOwners n ++ inherited)
+          where inherited   = concat [ moduleProtoDescendants mi (tcname o) | o <- protoOwners n, mi <- infos ]
 
 hnamesFrom                  :: TEnv -> HTEnv
 hnamesFrom te               = extendNames te M.empty
@@ -973,11 +996,8 @@ importedActors env          = concatMap moduleActors (importedModuleInfos env)
 -- completed with the descendants of every declaring constructor (inheriting an
 -- attribute means having a declaring ancestor).
 importedConAttr             :: EnvF x -> Name -> [TCon]
-importedConAttr env n       = nubBy (\c c' -> tcname c == tcname c') (conOwners ++ inherited)
-  where mis                 = importedModuleInfos env
-        conOwners           = concat [ moduleConAttr mi n | mi <- mis ]
-        protoOwners         = concat [ moduleProtoAttr mi n | mi <- mis ]
-        inherited           = concat [ moduleDescendants mi (tcname o) | o <- conOwners ++ protoOwners, mi <- mis ]
+importedConAttr env n       = f n
+  where AttrMemo f          = importedConAttrs env
 
 allConAttr                  :: EnvF x -> Name -> [TCon]
 allConAttr env n            = importedConAttr env n ++ [ tc | tc <- localCons env, hasAttr env tc n ]
@@ -999,10 +1019,8 @@ activeCons env              = [ TC (localQName x) (wildargs i) | (x,i) <- active
 
 -- Protocols carrying an attribute, declared in imported modules.
 importedProtoAttr           :: EnvF x -> Name -> [PCon]
-importedProtoAttr env n     = nubBy (\p p' -> tcname p == tcname p') (owners ++ inherited)
-  where mis                 = importedModuleInfos env
-        owners              = concat [ moduleProtoAttr mi n | mi <- mis ]
-        inherited           = concat [ moduleProtoDescendants mi (tcname o) | o <- owners, mi <- mis ]
+importedProtoAttr env n     = f n
+  where AttrMemo f          = importedProtoAttrs env
 
 allPConAttr                 :: EnvF x -> Name -> [PCon]
 allPConAttr env n           = importedProtoAttr env n ++ [ p | p <- localProtos env, hasAttr env p n ]
