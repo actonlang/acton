@@ -129,11 +129,9 @@ data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix Strin
 nloc (Name l _) = l
 nloc _          = NoLoc
 
-nstr (Name _ s)             = esc s
-  where esc (c:'_':s)
-          | isUpper c       = c : {- 'X' : -} '_' : esc s
-        esc (c:s)           = c : esc s
-        esc ""              = ""
+-- NB: escaping of '_' is currently off (see 267147c5); if it is ever
+-- re-enabled, Eq/Ord Name and Ord ModName must be kept consistent with it.
+nstr (Name _ s)             = s
 nstr (Derived n s)
   | Internal{} <- s         = nstr n ++ nstr s
   | otherwise               = nstr n ++ "D_" ++ nstr s
