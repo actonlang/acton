@@ -168,7 +168,7 @@ modPath (ModName ns) = map nstr ns
 modCat (ModName ns) n = ModName (ns++[n])
 
 instance Ord ModName where
-    compare a b = compare (modPath a) (modPath b)
+    compare (ModName a) (ModName b) = compare a b
 
 instance Data.Hashable.Hashable ModName where
     hashWithSalt s (ModName ns) = Data.Hashable.hashWithSalt s ns
