@@ -66,6 +66,7 @@ data EnvF x                 = EnvF {
                                 imports             :: [ModName],               -- The canoncal names m in 'import m', 'import m as _' or 'from m import _'
                                 qualifiers          :: [ModName],               -- The actual names m in 'import m' or 'import _ as m'
                                 modules             :: Map ModName ModuleInfo,
+                                transModules        :: [ModuleInfo],            -- cached importedModuleInfos; every writer of 'imports' or 'modules' must reapply cacheTransModules
                                 thismod             :: Maybe ModName,
                                 context             :: [EnvCtx],
                                 qlevel              :: Int,
@@ -87,7 +88,7 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      activeStateNames = activeStateNames env,
                                      activeTypeVars = activeTypeVars env,
                                      imports = imports env, qualifiers = qualifiers env,
-                                     modules = modules env, thismod = thismod env,
+                                     modules = modules env, transModules = transModules env, thismod = thismod env,
                                      context = context env, qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
@@ -126,7 +127,7 @@ convertModules1             :: ((Name,NameInfo) -> (Name,NameInfo)) -> Env0 -> E
 convertModules1 f env       = convertModules (const []) (\_ ni -> [f ni]) env
 
 convertModules              :: (Name -> [Name]) -> (ModName -> (Name,NameInfo) -> TEnv) -> Env0 -> Env0
-convertModules sources f env= env{ modules = Map.mapWithKey convMod (modules env) }
+convertModules sources f env= cacheTransModules env{ modules = Map.mapWithKey convMod (modules env) }
   where convMod _ mi
           | moduleName mi == mPrim
                             = mi
@@ -416,7 +417,7 @@ publicTEnv                 :: TEnv -> TEnv
 publicTEnv                 = filter (isPublicName . fst)
 
 initEnv                    :: FilePath -> Bool -> IO Env0
-initEnv path True          = return $ EnvF{ activeNames = [],
+initEnv path True          = return $ cacheTransModules $ EnvF{ activeNames = [],
                                             closedNames = [],
                                             hnames = hnamesFrom [],
                                             closedHNames = hnamesFrom [],
@@ -429,6 +430,7 @@ initEnv path True          = return $ EnvF{ activeNames = [],
                                             imports = [],
                                             qualifiers = [],
                                             modules = Map.singleton mPrim (mkModuleInfo mPrim [] primEnv Nothing),
+                                            transModules = [],
                                             thismod = Nothing,
                                             context = [],
                                             qlevel = 0,
@@ -437,7 +439,7 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
                                     initialNames = []
-                                    env0 = EnvF{ activeNames = [],
+                                    env0 = cacheTransModules $ EnvF{ activeNames = [],
                                                  closedNames = initialNames,
                                                  hnames = hnamesFrom initialNames,
                                                  closedHNames = hnamesFrom initialNames,
@@ -450,6 +452,7 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                                  imports = [],
                                                  qualifiers = [],
                                                  modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
+                                                 transModules = [],
                                                  thismod = Nothing,
                                                  context = [],
                                                  qlevel = 0,
@@ -458,7 +461,15 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
-env `withModulesFrom` env'  = env{modules = modules env'}
+env `withModulesFrom` env'  = cacheTransModules env{modules = modules env'}
+
+-- Refresh the cached transitive-import ModuleInfos. The field is lazy, so
+-- writers pay nothing until importedModuleInfos is next demanded.
+cacheTransModules           :: EnvF x -> EnvF x
+cacheTransModules env       = env{ transModules = infos }
+  where infos
+          | inBuiltin env   = []
+          | otherwise       = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
 
 hnamesFrom                  :: TEnv -> HTEnv
 hnamesFrom te               = extendNames te M.empty
@@ -551,7 +562,7 @@ defineClosed te env
 addImport                   :: ModName -> EnvF x -> EnvF x
 addImport m env
   | m `elem` imports env    = env
-  | otherwise               = env{ imports = m : imports env }
+  | otherwise               = cacheTransModules env{ imports = m : imports env }
 
 addQualifier                :: ModName -> ModuleInfo -> Maybe ModName -> EnvF x -> EnvF x
 addQualifier m _ Nothing env
@@ -561,10 +572,10 @@ addQualifier _ mi (Just a) env
   | a `elem` qualifiers env = duplicateAlias a
   | a `elem` imports env    = illegalAlias a
   | otherwise               = env'{ qualifiers = a : qualifiers env }
-  where env'                = env{ modules = Map.insert a mi (modules env) }
+  where env'                = cacheTransModules env{ modules = Map.insert a mi (modules env) }
 
 addImportAlias              :: ModName -> ModuleInfo -> EnvF x -> EnvF x
-addImportAlias m mi env     = env{ modules = Map.insert m mi (modules env) }
+addImportAlias m mi env     = cacheTransModules env{ modules = Map.insert m mi (modules env) }
 
 
 defineTVars                 :: QBinds -> EnvF x -> EnvF x
@@ -586,7 +597,7 @@ addMod                      :: ModName -> [ModName] -> TEnv -> Maybe String -> E
 addMod m ms newte mdoc env  = addModuleInfo m (mkModuleInfo m ms newte mdoc) env
 
 addModuleInfo               :: ModName -> ModuleInfo -> EnvF x -> EnvF x
-addModuleInfo m mi env      = env{ modules = Map.insert m mi (modules env) }
+addModuleInfo m mi env      = cacheTransModules env{ modules = Map.insert m mi (modules env) }
 
 
 -- General Env queries -----------------------------------------------------------------------------------------------------------
@@ -793,9 +804,7 @@ allDescendants env tc       = concatMap imported (importedModuleInfos env) ++ lo
         local               = [ schematic' c | c <- localCons env, hasAncestor' env (tcname c) (tcname tc) ]
 
 importedModuleInfos         :: EnvF x -> [ModuleInfo]
-importedModuleInfos env
-  | inBuiltin env           = []
-  | otherwise               = [ mi | m <- transitiveImports env, Just mi <- [lookupModuleInfo m env] ]
+importedModuleInfos env     = transModules env
 
 localCons                   :: EnvF x -> [TCon]
 localCons env               = local (reverse (closedNames env)) ++ local (reverse (activeNames env))
