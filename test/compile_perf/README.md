@@ -17,6 +17,17 @@ after acton-yang#472 ("Use generic MKeyedList with tuple keys for adata lists").
 The module imports a large transitive closure of generated YANG-style data
 classes.
 
+**The main finding: the cause is in the compiler, not in the acton-yang
+change.** acton-yang#472 changed two things. Lists became subclasses of a
+generic base class, and compound keys became named tuples. Neither
+ingredient causes the slowdown. The generic base class has no measurable
+effect at all. Compound keys cost the same moderate factor on the old and
+the fixed compiler, with both key representations. The section "Generics
+vs tuple keys" below has the numbers. The cause is that the typechecker
+recomputed large attribute-owner candidate lists on every solver step.
+Almost any change to this quantity of generated code could have made that
+visible. Branch `typecheck-env-caching` removes the recomputation.
+
 ### The mechanism
 
 The constraint solver ranks each `Sel`/`Mut` constraint whose receiver is
@@ -215,8 +226,7 @@ Three conclusions follow:
 - The branch gives the same speedup in every cell. The caching fix is
   independent of both acton-yang#472 ingredients.
 
-In this synthetic form, neither generics nor tuple keys is the primary
-reason for the slowdown. The primary reason is the compiler-side
+These measurements are the basis for the main finding at the top of this
+section: the primary reason for the slowdown is the compiler-side
 recomputation of the attribute-owner candidate lists, and the size of
-those lists. acton-yang#472 changed the constraint workload on top of a
-badly scaling compiler path, and made the existing problem visible.
+those lists.
