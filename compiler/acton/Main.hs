@@ -161,6 +161,7 @@ main = do
           C.CmdOpt gopts (C.PkgUpgrade opts) -> PkgCommands.pkgUpgradeCommand gopts opts
           C.CmdOpt gopts C.PkgUpdate         -> PkgCommands.pkgUpdateCommand gopts
           C.CmdOpt gopts (C.PkgSearch opts)  -> PkgCommands.pkgSearchCommand gopts opts
+          C.CmdOpt gopts (C.Artifact opts)   -> artifactCommand gopts opts
           C.CmdOpt gopts (C.BuildSpecCmd o)   -> buildSpecCommand o
           C.CmdOpt gopts (C.Cloud opts)       -> undefined
           C.CmdOpt gopts (C.Doc opts)         -> printDocs gopts opts
@@ -510,6 +511,26 @@ withProjectLockForGen gopts sched gen projDir action =
     whenCurrentGen sched gen $
       withProjectLockNotice gopts projDir $
         whenCurrentGen sched gen action
+
+artifactCommand :: C.GlobalOptions -> C.ArtifactCommand -> IO ()
+artifactCommand gopts cmd =
+    case cmd of
+      C.ArtifactHash _ ->
+        PkgCommands.artifactCommand gopts cmd
+      _ -> do
+        -- Artifacts ship interfaces (.tydb) only; code generation is deferred
+        -- to the consuming build, so the back passes are skipped here.
+        let opts = defaultCompileOptions { C.skip_build = True, C.skip_backpass = True }
+            sp = Source.diskSourceProvider
+        paths <- loadProjectPaths opts
+        let projDir = projPath paths
+        withProjectLockNotice gopts projDir $ do
+          unless (C.quiet gopts) $
+            putStrLn ("Building project in " ++ projDir)
+          srcFiles <- projectSourceFiles paths
+          compileFiles sp gopts opts srcFiles True
+          generateProjectDocIndex sp gopts opts paths srcFiles
+          PkgCommands.artifactCommand gopts cmd
 
 requireProjectLayout :: Paths -> IO ()
 requireProjectLayout paths = do
@@ -947,7 +968,7 @@ runWatchFile gopts absFile sched runOnce = do
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
     paths <- loadProjectPaths defaultCompileOptions
-    res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
+    res <- try (fetchDependencies gopts paths [] []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
       Right () ->
@@ -973,7 +994,7 @@ sigCommand gopts sigOpts = do
     rootProj <- normalizePathSafe (projPath paths)
     sysAbs <- normalizePathSafe (sysPath paths)
     withProjectLockNotice queryGopts rootProj $ do
-      fetchDependencies queryGopts paths depOverrides
+      fetchDependencies queryGopts paths depOverrides (C.artifact_repos opts)
       projMap <- discoverProjects queryGopts sysAbs rootProj depOverrides
       target <- resolveSigTarget opts paths rootProj projMap (C.sigTarget sigOpts)
       tyFile <- case target of
@@ -1015,7 +1036,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
           , ccOnBackJob = \_ -> return ()
           }
-    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    compileRes <- compileTasks sp queryGopts opts' (ccPathsRoot cctx') (ccRootProj cctx') (cpNeededTasks plan) (cpDbpBlocked plan) (cpPrebuiltRoots plan) callbacks
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure
@@ -2074,7 +2095,7 @@ runCliPostCompile cliHooks gopts plan env = do
           cchFinalStart cliHooks
           action `onException` cchFinalDone cliHooks False
           cchFinalDone cliHooks True
-    if C.skip_build opts'
+    if C.skip_build opts' || C.skip_backpass opts'
       then
         logLine "  Skipping final build step"
       else
