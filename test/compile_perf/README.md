@@ -1,0 +1,179 @@
+# Compile-time performance tests
+
+This directory contains manual tests that measure compiler performance on
+synthetic projects. No test here runs in `make test` or in CI. The
+interesting configurations are deliberately slow on unfixed compilers, and
+the results change from machine to machine. Use these tests to:
+
+- show a compile-time slowdown
+- compare two compiler builds on the same input
+- get a starting point for profiling `actonc`
+
+## attr_lookup_repro: attribute-owner enumeration in the solver
+
+`gen.py` and `run.sh` reproduce a typechecker slowdown seen in a user project.
+The `test_service_discovery` module became several times slower to typecheck
+after acton-yang#472 ("Use generic MKeyedList with tuple keys for adata lists").
+The module imports a large transitive closure of generated YANG-style data
+classes.
+
+### The mechanism
+
+The constraint solver ranks each `Sel`/`Mut` constraint whose receiver is
+still a unification variable. To rank it, the solver collects every
+candidate type that has the selected attribute name (`allClassAttr` and
+`allProtoAttr` in `compiler/lib/src/Acton/Solver.hs`). Before the fix, each
+of these calls computed two things again from scratch:
+
+- the transitive import closure (`transitiveImports`, then
+  `lookupModuleInfo` for each module)
+- `importedConAttr` / `importedProtoAttr`: every imported class that
+  declares the attribute name, plus every descendant of every declaring
+  class (`moduleDescendants` for each owner in each module), made unique
+  with a pairwise `nubBy`
+
+The solver ranks every remaining constraint at every iteration. A function
+with S attribute selections therefore computes these candidate lists up to
+S x iterations times. Generated YANG data code also makes each candidate
+list large. Hundreds of classes share the method names `get`, `create`,
+`copy` and `to_gdata`, and the YANG leaf names `name`, `address`, `port`
+and so on. With the acton-yang#472 shape, every generated list class is
+also a descendant of the one generic `MKeyedList` base that declares
+`.get()`.
+
+The fix is on branch `typecheck-env-caching`. It caches the
+transitive-import `ModuleInfo` list in the environment. It memoizes
+`importedConAttr` / `importedProtoAttr` per attribute name. It computes
+both again only when the import closure changes. It also makes
+`Ord ModName` compare name components directly, and it removes a no-op
+string copy in `nstr`. The scans above did many comparisons through these
+two functions.
+
+### The generated project
+
+```
+yadata.act        The MNode / MList / MKeyedList base classes and the
+                  Iterable / Indexed extensions. Copied from the relevant
+                  part of yang.adata.
+schema_NNN.act    Generated "YANG schema" modules. Each list gets an MNode
+                  entry class and a keyed-list class. The entry classes
+                  take their leaf attributes from a shared name pool. Each
+                  module imports its predecessor, so the consumer sees a
+                  deep transitive closure.
+consume.act       A consumer in the style of test_service_discovery. It
+                  iterates over keyed lists, filters on leaf values, and
+                  copies entries into another tree with .get() and
+                  .create().
+```
+
+The default configuration has the same shape as the user project: few
+modules, each with a large number of classes, like generated device schema
+modules. The default is 6 schema modules x 2 containers x 20 lists =
+240 keyed lists (about 500 classes, about 2300 lines per module). The
+class count (`--lists`) is the dimension that matters most here. See
+"Module count vs module size" below for the measurements that separate the
+two dimensions.
+
+`--style keyed` (the default) makes each list a subclass of the generic
+`MKeyedList[K, T]`, as acton-yang does after #472. `--style old` makes
+each list a subclass of `MList` with a per-class `get()` and a per-class
+`Indexed` extension, as acton-yang did before #472. In this synthetic form,
+both styles cause the same slow path. The owner-plus-descendant candidate
+list has about the same size in both styles. The test therefore shows the
+compiler-side problem, not the acton-yang change itself.
+
+### Usage
+
+```sh
+# measure the compiler in ../../dist/bin/acton
+./run.sh
+
+# more classes in the same few modules (the dimension that hurts)
+./run.sh --lists 40
+
+# compare with a second compiler build
+ACTON_BASELINE=/path/to/other/dist/bin/acton ./run.sh
+```
+
+The metric is the typecheck time of `consume.act` on a rebuild after a
+comment-only edit. This is the edit-recompile cycle of the consumer module.
+All schema modules are already compiled, and the compiler reads them from
+`.tydb`. `run.sh` also prints the wall time of the initial full build.
+
+To build a pre-fix compiler for the comparison:
+
+```sh
+git worktree add /tmp/acton-baseline <commit>
+cd /tmp/acton-baseline
+ln -s /path/to/main/checkout/deps-download deps-download   # reuse dep tarballs
+make dist/bin/acton dist/base dist/std -j8
+```
+
+### Reference numbers
+
+Measured on Apple M-series macOS, 2026-08-21. `branch` is
+`typecheck-env-caching` (fc930bd0). `baseline` is its merge-base with main
+(69bc98af). The consumer has 8 functions x 12 blocks, about 1700 lines.
+Times are the `consume.act` rebuild typecheck unless noted.
+
+| configuration (6 modules)                | baseline | branch | speedup |
+|------------------------------------------|----------|--------|---------|
+| default: 240 lists (~500 classes)        | 56.5 s   | 14.6 s | 3.9x    |
+| --lists 40: 480 lists (~980 classes)     | 148.1 s  | 51.3 s | 2.9x    |
+| full build, default shape                | 37 s     | 16 s   | 2.3x    |
+
+In this few-modules, many-classes shape, the remaining branch cost is the
+class-count term. The speedup is therefore 3-4x here. The module-count
+term, which the branch removes completely, is small at 6 modules. Wide
+closures with many modules show speedups up to about 9x. Note that the
+branch time still grows superlinearly with the class count: 14.6 s to
+51.3 s for 2x the classes.
+
+The rebuild typecheck of `consume.act` is slower than the same typecheck
+during a full build. The rebuild reads the imported modules from `.tydb`,
+and the repeated candidate-list computations then also amplify the
+on-demand interface reads.
+
+### Module count vs module size
+
+To separate the two dimensions, keep the total class count constant and
+change the number of modules that contain it. Then keep the module count
+constant and change the per-module size. Times are `consume.act` rebuild
+typecheck seconds.
+
+240 lists in total, divided over M modules (`--modules M --lists L`):
+
+| M x L(per container) | baseline | branch |
+|----------------------|----------|--------|
+| 5 x 24               | 51.2     | 14.6   |
+| 10 x 12              | 66.1     | 13.4   |
+| 20 x 6               | 97.7     | 12.4   |
+| 40 x 3               | 167.5    | 13.0   |
+
+10 modules, with increasing per-module size:
+
+| total lists | baseline | branch |
+|-------------|----------|--------|
+| 120         | 23.8     | 4.1    |
+| 240         | 66.1     | 13.4   |
+| 480         | 170.4    | 44.7   |
+
+On the baseline, both dimensions matter. At a constant total class count,
+the time closely fits T = 34.5 s + 3.33 s x modules. The linear per-module
+term comes from three sources, each paid on every ranking call:
+
+- the `transitiveImports` walk
+- the M per-module index lookups behind every owner scan
+- the owners x modules `moduleDescendants` completion
+
+The constant part is the class-count base: the owner-list sizes and the
+pairwise `nubBy`. From about 10 modules up, the per-module term dominates
+on the baseline.
+
+The branch removes the per-module term completely. Its time is flat from
+5 to 40 modules at a constant total. The branch also makes the class-count
+term about 4x smaller. The remaining time scales only with the total class
+count. The memoized owner lists are computed once per attribute name, but
+the solver still traverses them at each ranking step. Improvement beyond
+the caching fix is therefore possible. To make this test heavier, increase
+the class count (`--lists`), not the module count.
