@@ -17,16 +17,18 @@ after acton-yang#472 ("Use generic MKeyedList with tuple keys for adata lists").
 The module imports a large transitive closure of generated YANG-style data
 classes.
 
-**The main finding: the cause is in the compiler, not in the acton-yang
-change.** acton-yang#472 changed two things. Lists became subclasses of a
-generic base class, and compound keys became named tuples. Neither
-ingredient causes the slowdown. The generic base class has no measurable
-effect at all. Compound keys cost the same moderate factor on the old and
-the fixed compiler, with both key representations. The section "Generics
-vs tuple keys" below has the numbers. The cause is that the typechecker
-recomputed large attribute-owner candidate lists on every solver step.
-Almost any change to this quantity of generated code could have made that
-visible. Branch `typecheck-env-caching` removes the recomputation.
+**The main finding: acton-yang#472 gives the solver moderately more work,
+and the pre-fix compiler amplified that work by two orders of magnitude.**
+Measured on the real project at the exact dependency bump (see "Real-world
+measurements" below), the consumer rebuild went from 2.7 s to 429.5 s
+(157x) on the pre-fix compiler, but only from 1.7 s to 8.2 s (4.9x) on the
+fixed compiler. So the extra solver work from #472 is real but moderate
+(about 5x). The two-orders-of-magnitude part was the compiler's own
+amplification: it recomputed large attribute-owner candidate lists on
+every solver step, so every extra solver iteration paid the full closure
+cost again. Branch `typecheck-env-caching` removes that recomputation.
+One compound-key call site with a named-tuple literal accounted for 208 s
+of the 429.5 s on its own (2.4 s of the 8.2 s on the fixed compiler).
 
 ### The mechanism
 
@@ -226,7 +228,46 @@ Three conclusions follow:
 - The branch gives the same speedup in every cell. The caching fix is
   independent of both acton-yang#472 ingredients.
 
-These measurements are the basis for the main finding at the top of this
-section: the primary reason for the slowdown is the compiler-side
-recomputation of the attribute-owner candidate lists, and the size of
-those lists.
+These synthetic measurements show that the class shape alone does not
+change the lookup cost. The real project regresses anyway, because the
+solver takes more iterations there. The synthetic consumer resolves its
+receiver types quickly and therefore does not reproduce that iteration
+multiplier. See "Real-world measurements" below.
+
+### Real-world measurements
+
+The user project pins acton-yang in one dependency-bump commit. The parent
+of that commit uses acton-yang before #472. The commit itself uses
+acton-yang after #472 and regenerates all schema modules. The consumer
+module changes by one call site: two positional key arguments become one
+named-tuple literal. This isolates the acton-yang change while the
+consumer code stays constant.
+
+Method: check out both revisions into worktrees. Compile the consumer
+module once with `actonc <consumer>.act --skip-build`. Append a comment
+and compile again. Read the consumer typecheck time. Times below are from
+2026-08-21, on the same machine as the tables above.
+
+| consumer rebuild typecheck        | baseline | branch |
+|-----------------------------------|----------|--------|
+| before #472                       | 2.7 s    | 1.7 s  |
+| after #472                        | 429.5 s  | 8.2 s  |
+| after #472, minus the one named-tuple create call | 221.8 s | 5.8 s |
+
+Three observations follow:
+
+- The regenerated modules multiply the solver work for unchanged consumer
+  code by about 3.4x (1.7 s to 5.8 s on the fixed compiler, with the
+  changed call site removed). The probable cause: get/create calls now
+  resolve through the generic base class, which gives the solver more
+  type variables and more iterations per call site. This is not confirmed
+  at the constraint level.
+- One compound-key call site is very expensive on its own: 2.4 s on the
+  fixed compiler, 208 s on the pre-fix compiler. The call passes a
+  named-tuple literal to `create()` on a receiver at the end of a long
+  attribute chain, so the tuple type stays unresolved for many solver
+  iterations.
+- The pre-fix compiler amplifies each unit of extra solver work by one to
+  two orders of magnitude. The fix removes the amplification, not the
+  extra work. Reducing the remaining 5x workload is possible future work,
+  in the compiler or in the acton-yang output.

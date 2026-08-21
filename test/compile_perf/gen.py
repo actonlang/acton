@@ -48,10 +48,12 @@ acton-yang did before #472.
 (name, port) key: a named tuple with --style keyed, or one argument per key
 leaf with --style old (which then also gets no Indexed extension).
 
-Measured result: the style has no effect, and compound keys cost about 1.5x
-with both key representations, on both compiler generations. Neither
-acton-yang#472 ingredient causes the slowdown. See README.md for the
-numbers.
+Measured result: in this synthetic form the style has no effect, and
+compound keys cost about 1.5x with both key representations, on both
+compiler generations. The real project regresses more, because its solver
+takes more iterations (the synthetic consumer resolves receiver types too
+quickly to reproduce that). See README.md for the numbers, including the
+real-world before/after measurements.
 
 Measure with run.sh, or by hand:
 
