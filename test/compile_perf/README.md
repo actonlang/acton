@@ -77,10 +77,19 @@ two dimensions.
 `--style keyed` (the default) makes each list a subclass of the generic
 `MKeyedList[K, T]`, as acton-yang does after #472. `--style old` makes
 each list a subclass of `MList` with a per-class `get()` and a per-class
-`Indexed` extension, as acton-yang did before #472. In this synthetic form,
-both styles cause the same slow path. The owner-plus-descendant candidate
-list has about the same size in both styles. The test therefore shows the
-compiler-side problem, not the acton-yang change itself.
+`Indexed` extension, as acton-yang did before #472.
+
+`--keys scalar` (the default) gives each list a `str` key. `--keys
+compound` gives each list a (name, port) key. With `--style keyed` the
+compound key is a named tuple, as acton-yang uses after #472. With
+`--style old` the compound `get()`/`create()` take one argument per key
+leaf, and there is no `Indexed` extension, as acton-yang generated before
+#472.
+
+These two knobs isolate the two ingredients of the acton-yang#472 change.
+See "Generics vs tuple keys" below for the result: neither ingredient
+causes the slowdown. The test shows a compiler-side problem, not a problem
+in the acton-yang change itself.
 
 ### Usage
 
@@ -177,3 +186,37 @@ count. The memoized owner lists are computed once per attribute name, but
 the solver still traverses them at each ranking step. Improvement beyond
 the caching fix is therefore possible. To make this test heavier, increase
 the class count (`--lists`), not the module count.
+
+### Generics vs tuple keys
+
+acton-yang#472 changed two things in the generated code. Lists became
+subclasses of a generic base class (`MKeyedList[K, T]`). Compound keys
+became named tuples. The `--style` and `--keys` knobs test each ingredient
+separately. All 8 cells below come from one measurement session, at the
+default shape. Times are `consume.act` rebuild typecheck seconds.
+(Run-to-run variance is about 5 percent, so the scalar cells differ a
+little from the reference table above.)
+
+| style x keys          | baseline | branch | speedup |
+|-----------------------|----------|--------|---------|
+| keyed, scalar         | 52.9     | 13.9   | 3.8x    |
+| old, scalar           | 52.9     | 13.9   | 3.8x    |
+| keyed, compound       | 78.7     | 20.5   | 3.8x    |
+| old, compound         | 78.6     | 21.7   | 3.6x    |
+
+Three conclusions follow:
+
+- The style has no effect in any cell. The generic base class is not the
+  cause of the slowdown.
+- Compound keys cost about 1.5x in every cell, on both compilers. The cost
+  is the same with a named tuple and with plain per-leaf arguments. The
+  extra cost therefore comes from the second key leaf (more constraints
+  per call site), not from the tuple representation.
+- The branch gives the same speedup in every cell. The caching fix is
+  independent of both acton-yang#472 ingredients.
+
+In this synthetic form, neither generics nor tuple keys is the primary
+reason for the slowdown. The primary reason is the compiler-side
+recomputation of the attribute-owner candidate lists, and the size of
+those lists. acton-yang#472 changed the constraint workload on top of a
+badly scaling compiler path, and made the existing problem visible.

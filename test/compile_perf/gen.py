@@ -2,7 +2,7 @@
 """Generate a synthetic Acton project with slow typechecking.
 
 The project reproduces a real case. The test_service_discovery module in a user
-projecrt became several times slower to typecheck after acton-yang#472 ("Use
+project became several times slower to typecheck after acton-yang#472 ("Use
 generic MKeyedList with tuple keys for adata lists"). The module imports a large
 closure of generated YANG-style data classes. Profiles showed the time in the
 constraint solver. For each Sel/Mut constraint whose receiver is still a
@@ -42,9 +42,16 @@ The generated project has the same shape as acton-yang output:
 --style keyed makes each list a subclass of the generic MKeyedList[K, T],
 as acton-yang does after #472. --style old makes each list a subclass of
 MList with a per-class get() and a per-class Indexed extension, as
-acton-yang did before #472. In this synthetic form, both styles cause the
-same slow path. The owner-plus-descendant candidate list has about the same
-size in both styles.
+acton-yang did before #472.
+
+--keys scalar gives each list a str key. --keys compound gives each list a
+(name, port) key: a named tuple with --style keyed, or one argument per key
+leaf with --style old (which then also gets no Indexed extension).
+
+Measured result: the style has no effect, and compound keys cost about 1.5x
+with both key representations, on both compiler generations. Neither
+acton-yang#472 ingredient causes the slowdown. See README.md for the
+numbers.
 
 Measure with run.sh, or by hand:
 
@@ -75,15 +82,34 @@ def leaf_count_for(mod_idx: int, c: int, l: int) -> int:
     return 4 + (mod_idx + c + l) % (len(LEAF_POOL) - 3)
 
 
-def entry_class(qname: str, leaf_count: int) -> list[str]:
-    """MNode entry class in the style of acton-yang generated adata."""
+def leaves_for(leaf_count: int, keys: str) -> list:
+    """The leaf list for one entry class.
+
+    With compound keys, the key is (name, port), so port becomes a required
+    u64 instead of an optional one.
+    """
     leaves = LEAF_POOL[:leaf_count]
+    if keys == "compound":
+        leaves = [(n, "u64" if n == "port" else t) for n, t in leaves]
+    return leaves
+
+
+def is_required(t: str) -> bool:
+    return not t.startswith("?")
+
+
+def entry_class(qname: str, leaf_count: int, keys: str) -> list[str]:
+    """MNode entry class in the style of acton-yang generated adata."""
+    leaves = leaves_for(leaf_count, keys)
     out = []
     out.append(f"class {qname}_entry(yadata.MNode):")
     for n, t in leaves:
         out.append(f"    {n}: {t}")
     out.append("")
-    args = ", ".join(f"{n}: {t}" + ("" if t == "str" else "=None") for n, t in leaves)
+    # required leaves first, then the optional ones with a None default
+    ordered = [x for x in leaves if is_required(x[1])] + \
+              [x for x in leaves if not is_required(x[1])]
+    args = ", ".join(f"{n}: {t}" + ("" if is_required(t) else "=None") for n, t in ordered)
     out.append(f"    mut def __init__(self, {args}) -> None:")
     for n, _ in leaves:
         out.append(f"        self.{n} = {n}")
@@ -98,41 +124,66 @@ def entry_class(qname: str, leaf_count: int) -> list[str]:
     return out
 
 
-def list_class(qname: str, leaf_count: int, style: str) -> list[str]:
+def list_class(qname: str, leaf_count: int, style: str, keys: str) -> list[str]:
     """List class in the style of acton-yang generated adata.
 
     style "keyed": subclass of the generic MKeyedList[K, T] which declares
     .get() and carries the Indexed extension (acton-yang after #472).
     style "old": subclass of MList[T] with a generated per-class .get() and
     per-class Indexed extension (acton-yang before #472).
+
+    keys "scalar": the key is the name leaf (a str).
+    keys "compound": the key is (name, port). With style keyed, get/create
+    take a named tuple, as acton-yang does after #472. With style old,
+    get/create take one argument per key leaf, as acton-yang did before
+    #472 (which also generated no Indexed extension for compound keys).
     """
-    leaves = LEAF_POOL[:leaf_count]
+    leaves = leaves_for(leaf_count, keys)
+    compound = keys == "compound"
+    key_type = "(name: str, port: u64)" if compound else "str"
     out = []
     if style == "keyed":
-        out.append(f"class {qname}(yadata.MKeyedList[str, {qname}_entry]):")
+        match = "e.name == k.name and e.port == k.port" if compound else "e.name == k"
+        out.append(f"class {qname}(yadata.MKeyedList[{key_type}, {qname}_entry]):")
         out.append(f"    mut def __init__(self, elements: list[{qname}_entry]=[]) -> None:")
-        out.append("        yadata.MKeyedList.__init__(self, lambda e, k: e.name == k, elements)")
+        out.append(f"        yadata.MKeyedList.__init__(self, lambda e, k: {match}, elements)")
         out.append("")
     else:
         out.append(f"class {qname}(yadata.MList[{qname}_entry]):")
         out.append(f"    mut def __init__(self, elements: list[{qname}_entry]=[]) -> None:")
         out.append("        self.elements = elements")
         out.append("")
-        out.append(f"    pure def get(self, key: str) -> ?{qname}_entry:")
-        out.append("        for e in self:")
-        out.append("            if e.name == key:")
-        out.append("                return e")
+        if compound:
+            out.append(f"    pure def get(self, name: str, port: u64) -> ?{qname}_entry:")
+            out.append("        for e in self:")
+            out.append("            if e.name == name and e.port == port:")
+            out.append("                return e")
+        else:
+            out.append(f"    pure def get(self, key: str) -> ?{qname}_entry:")
+            out.append("        for e in self:")
+            out.append("            if e.name == key:")
+            out.append("                return e")
         out.append("")
-    opt_leaves = [(n, t) for n, t in leaves if t != "str"]
+    opt_leaves = [(n, t) for n, t in leaves if not is_required(t)]
     create_args = ", ".join(f"{n}: {t}=None" for n, t in opt_leaves)
-    out.append(f"    mut def create(self, key: str, {create_args}) -> {qname}_entry:")
-    out.append("        e = self.get(key)")
+    if compound and style == "old":
+        out.append(f"    mut def create(self, name: str, port: u64, {create_args}) -> {qname}_entry:")
+        out.append("        e = self.get(name, port)")
+    elif compound:
+        out.append(f"    mut def create(self, key_: {key_type}, {create_args}) -> {qname}_entry:")
+        out.append("        e = self.get(key_)")
+    else:
+        out.append(f"    mut def create(self, key: str, {create_args}) -> {qname}_entry:")
+        out.append("        e = self.get(key)")
     out.append("        if e is not None:")
     for n, _ in opt_leaves:
         out.append(f"            if {n} is not None:")
         out.append(f"                e.{n} = {n}")
     out.append("            return e")
-    out.append("        name = key")
+    if compound and style == "keyed":
+        out.append("        (name=name, port=port) = key_")
+    elif not compound:
+        out.append("        name = key")
     ctor_args = ", ".join(f"{n}={n}" for n, _ in leaves)
     out.append(f"        res = {qname}_entry({ctor_args})")
     out.append("        self.elements.append(res)")
@@ -144,7 +195,7 @@ def list_class(qname: str, leaf_count: int, style: str) -> list[str]:
     out.append("            copied_elements.append(e.copy())")
     out.append(f"        return {qname}(elements=copied_elements)")
     out.append("")
-    if style == "old":
+    if style == "old" and keys == "scalar":
         out.append(f"extension {qname}(Indexed[str, {qname}_entry]):")
         out.append(f"    def __getitem__(self, k: str) -> {qname}_entry:")
         out.append("        e = self.get(k)")
@@ -192,7 +243,7 @@ def container_class(qname: str, list_names: list[str]) -> list[str]:
     return out
 
 
-def schema_module(mod_idx: int, containers: int, lists: int, style: str) -> str:
+def schema_module(mod_idx: int, containers: int, lists: int, style: str, keys: str) -> str:
     out = []
     out.append('"""Generated schema module (mimics acton-yang adata output)."""')
     out.append("")
@@ -207,8 +258,8 @@ def schema_module(mod_idx: int, containers: int, lists: int, style: str) -> str:
         for l in range(lists):
             lq = f"{cq}__lst{l}"
             leaf_count = leaf_count_for(mod_idx, c, l)
-            out.extend(entry_class(lq, leaf_count))
-            out.extend(list_class(lq, leaf_count, style))
+            out.extend(entry_class(lq, leaf_count, keys))
+            out.extend(list_class(lq, leaf_count, style, keys))
             list_names.append(lq)
         out.extend(container_class(cq, list_names))
         container_names.append(cq)
@@ -297,9 +348,10 @@ extension MKeyedList[K(Eq), T(MNode)](Indexed[K, T]):
 
 
 def consumer_func(fn_idx: int, src_mod: int, dst_mod: int, containers: int,
-                  lists: int, blocks: int) -> list[str]:
+                  lists: int, blocks: int, style: str, keys: str) -> list[str]:
     """A service-discovery style transform: walk keyed lists in the source
     tree, filter on leaf values, mirror entries into the destination tree."""
+    compound = keys == "compound"
     out = []
     out.append(f"def _extract_{fn_idx:02d}(dev: schema_{src_mod:03d}.root, out: schema_{dst_mod:03d}.root) -> None:")
     for b in range(blocks):
@@ -312,16 +364,28 @@ def consumer_func(fn_idx: int, src_mod: int, dst_mod: int, containers: int,
         n_common = min(leaf_count_for(src_mod, dc, dl), leaf_count_for(dst_mod, dc, dl))
         extras = [n for n, _ in LEAF_POOL[4:n_common]]
         v = f"b{b}"
+        if compound and style == "keyed":
+            key_args = f"(name={v}.name, port={v}.port)"
+        elif compound:
+            key_args = f"{v}.name, {v}.port"
+        else:
+            key_args = f"{v}.name"
         out.append(f"    for {v} in dev.c{c}.lst{l}:")
         out.append(f"        if {v}.name == \"skip\":")
         out.append(f"            continue")
         out.append(f"        {v}_addr = {v}.address")
-        out.append(f"        {v}_port = {v}.port")
-        out.append(f"        if {v}_addr is None or {v}_port is None:")
-        out.append(f"            continue")
-        out.append(f"        {v}_peer = dev.c{dc}.lst{dl}.get({v}.name)")
+        if compound:
+            out.append(f"        if {v}_addr is None:")
+            out.append(f"            continue")
+            create_extra = f"address={v}_addr"
+        else:
+            out.append(f"        {v}_port = {v}.port")
+            out.append(f"        if {v}_addr is None or {v}_port is None:")
+            out.append(f"            continue")
+            create_extra = f"address={v}_addr, port={v}_port"
+        out.append(f"        {v}_peer = dev.c{dc}.lst{dl}.get({key_args})")
         out.append(f"        if {v}_peer is not None and {v}_peer.enabled is not None:")
-        out.append(f"            {v}_e = out.c{dc}.lst{dl}.create({v}.name, address={v}_addr, port={v}_port)")
+        out.append(f"            {v}_e = out.c{dc}.lst{dl}.create({key_args}, {create_extra})")
         out.append(f"            {v}_e.enabled = {v}_peer.enabled")
         if extras:
             extra = extras[b % len(extras)]
@@ -329,15 +393,16 @@ def consumer_func(fn_idx: int, src_mod: int, dst_mod: int, containers: int,
             out.append(f"            if {v}_x is not None:")
             out.append(f"                {v}_e.{extra} = {v}_x")
         out.append(f"        else:")
-        out.append(f"            {v}_new = out.c{dc}.lst{dl}.create({v}.name)")
+        out.append(f"            {v}_new = out.c{dc}.lst{dl}.create({key_args})")
         out.append(f"            {v}_new.address = {v}_addr")
-        out.append(f"            {v}_new.port = {v}_port")
+        if not compound:
+            out.append(f"            {v}_new.port = {v}_port")
     out.append("")
     return out
 
 
 def consumer_module(modules: int, containers: int, lists: int, funcs: int,
-                    blocks: int) -> str:
+                    blocks: int, style: str, keys: str) -> str:
     out = []
     out.append('"""Consumer in the style of test_service_discovery."""')
     out.append("")
@@ -351,7 +416,8 @@ def consumer_module(modules: int, containers: int, lists: int, funcs: int,
     for f in range(funcs):
         src_mod = imported[f % len(imported)]
         dst_mod = imported[(f + 1) % len(imported)]
-        out.extend(consumer_func(f, src_mod, dst_mod, containers, lists, blocks))
+        out.extend(consumer_func(f, src_mod, dst_mod, containers, lists, blocks,
+                                 style, keys))
     # a root actor so the project has an executable root
     out.append("actor main(env):")
     out.append(f"    dev = schema_{top:03d}.root()")
@@ -376,6 +442,10 @@ def main() -> None:
     ap.add_argument("--blocks", type=int, default=12, help="statement blocks per function")
     ap.add_argument("--style", choices=["keyed", "old"], default="keyed",
                     help="keyed: generic MKeyedList base (acton-yang#472); old: per-class get/Indexed")
+    ap.add_argument("--keys", choices=["scalar", "compound"], default="scalar",
+                    help="scalar: str key (name); compound: (name, port) key -- "
+                         "a named tuple with --style keyed, one argument per "
+                         "key leaf with --style old")
     args = ap.parse_args()
 
     src = os.path.join(args.out, "src")
@@ -392,15 +462,17 @@ def main() -> None:
 
     for m in range(args.modules):
         with open(os.path.join(src, f"schema_{m:03d}.act"), "w") as f:
-            f.write(schema_module(m, args.containers, args.lists, args.style))
+            f.write(schema_module(m, args.containers, args.lists, args.style,
+                                  args.keys))
 
     with open(os.path.join(src, "consume.act"), "w") as f:
         f.write(consumer_module(args.modules, args.containers, args.lists,
-                                args.funcs, args.blocks))
+                                args.funcs, args.blocks, args.style, args.keys))
 
     n_lists = args.modules * args.containers * args.lists
     print(f"generated {args.modules} schema modules, {n_lists} {args.style} lists "
-          f"({2 * n_lists + args.modules * (args.containers + 1)} classes) in {args.out}")
+          f"({args.keys} keys, "
+          f"{2 * n_lists + args.modules * (args.containers + 1)} classes) in {args.out}")
 
 
 if __name__ == "__main__":
