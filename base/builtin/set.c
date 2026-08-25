@@ -26,7 +26,9 @@ static $WORD _dummy;
 
 static void B_set_insert_clean(B_setentry *table, long mask, $WORD *key, long hash) {
     B_setentry *entry;
-    long perturb = hash;
+    // perturb is unsigned so >>= is logical: a signed high-bit hash would
+    // sign-extend, never reach 0, and let the probe loop forever (#2552).
+    uint64_t perturb = hash;
     long i = hash & mask;
     long j;
 
@@ -90,7 +92,7 @@ static int B_set_table_resize(B_set so, int minsize) {
 
 static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     B_setentry *entry;
-    long perturb;
+    uint64_t perturb;  // unsigned (#2552)
     long mask = set->mask;
     long i = hash & mask;
 
@@ -124,7 +126,7 @@ static bool B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, lon
 void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     B_setentry *freeslot;
     B_setentry *entry;
-    long perturb;
+    uint64_t perturb;  // unsigned (#2552)
     long mask;
     long i;
     mask = set->mask;
