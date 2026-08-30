@@ -13,10 +13,8 @@
  */
 
 
-#define DISCARD_NOTFOUND 0
-#define DISCARD_FOUND 1
 #define PERTURB_SHIFT 5
-#define MIN_SIZE 8
+#define MIN_SIZE UINT64_C(8)
 
 static $WORD _dummy;
 #define dummy (&_dummy)
@@ -24,92 +22,92 @@ static $WORD _dummy;
 
 // Auxiliary functions ///////////////////////////////////////////////////////////////////////////////
 
-static void B_set_insert_clean(B_setentry *table, long mask, $WORD *key, long hash) {
+static uint64_t B_set_next_probe(uint64_t index, uint64_t *perturb, uint64_t mask) {
+    *perturb >>= PERTURB_SHIFT;
+    return (index * UINT64_C(5) + UINT64_C(1) + *perturb) & mask;
+}
+
+static void B_set_insert_clean(B_setentry *table, uint64_t mask, $WORD key, uint64_t hash) {
     B_setentry *entry;
-    long perturb = hash;
-    long i = hash & mask;
-    long j;
+    uint64_t perturb = hash;
+    uint64_t i = hash & mask;
 
     while (1) {
         entry = &table[i];
         if (entry->key == NULL)
             goto found_null;
 
-        perturb >>= PERTURB_SHIFT;
-        i = (i * 5 + 1 + perturb) & mask;
+        i = B_set_next_probe(i, &perturb, mask);
     }
  found_null:
     entry->key = key;
     entry->hash = hash;
 }
 
-static int B_set_table_resize(B_set so, int minsize) {
+static void B_set_table_resize(B_set so, uint64_t minsize) {
     B_setentry *oldtable, *newtable, *entry;
-    long oldmask = so->mask;
-    long newmask;
+    uint64_t oldmask = so->mask;
 
     /* Find the smallest table size > minsize. */
-    long newsize = MIN_SIZE;
-    while (newsize <= (long)minsize) {
-        newsize <<= 1; // The largest possible value is PY_SSIZE_T_MAX + 1.
+    uint64_t newsize = MIN_SIZE;
+    while (newsize <= minsize) {
+        if (newsize > UINT64_MAX / UINT64_C(2))
+            $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("set table is too large")));
+        newsize <<= 1;
     }
+    if (newsize > SIZE_MAX / sizeof(B_setentry))
+        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("set table is too large")));
+
+    size_t table_size = (size_t)newsize * sizeof(B_setentry);
     /* Get space for a new table. */
     oldtable = so->table;
 
-    newtable = acton_malloc(sizeof(B_setentry) * newsize);
-    if (newtable == NULL) {
-        return -1;
-    }
+    newtable = acton_malloc(table_size);
+    if (newtable == NULL)
+        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
 
     /* Make the B_set empty, using the new table. */
-    memset(newtable, 0, sizeof(B_setentry) * newsize);
+    memset(newtable, 0, table_size);
     so->mask = newsize - 1;
     so->table = newtable;
 
     /* Copy the data over;
        dummy entries aren't copied over, of course */
-    newmask = (long)so->mask;
     if (so->fill == so->numelements) {
         for (entry = oldtable; entry <= oldtable + oldmask; entry++) {
             if (entry->key != NULL) {
-                B_set_insert_clean(newtable, newmask, entry->key, entry->hash);
+                B_set_insert_clean(newtable, so->mask, entry->key, entry->hash);
             }
         }
     } else {
         so->fill = so->numelements;
         for (entry = oldtable; entry <= oldtable + oldmask; entry++) {
             if (entry->key != NULL && entry->key != dummy) {
-                B_set_insert_clean(newtable, newmask, entry->key, entry->hash);
+                B_set_insert_clean(newtable, so->mask, entry->key, entry->hash);
             }
         }
     }
 
     acton_free(oldtable);
-    return 0;
 }
 
-static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long hash) {
+static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash) {
     B_setentry *entry;
-    long perturb;
-    long mask = set->mask;
-    long i = hash & mask;
+    uint64_t perturb = hash;
+    uint64_t mask = set->mask;
+    uint64_t i = hash & mask;
 
     entry = &set->table[i];
     if (entry->key == NULL)
         return entry;
 
-    perturb = hash;
-
     while (1) {
-        if (entry->hash == hash) {
-            $WORD *startkey = entry->key;
-            // startkey cannot be a dummy because the dummy hash field is -1
-            // assert(startkey != dummy);
+        $WORD startkey = entry->key;
+        if (startkey != dummy && entry->hash == hash) {
             if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
                 return entry;
         }
-        perturb >>= PERTURB_SHIFT;
-        i = (i * 5 + 1 + perturb) & mask;
+        i = B_set_next_probe(i, &perturb, mask);
 
         entry = &set->table[i];
         if (entry->key == NULL)
@@ -117,38 +115,35 @@ static B_setentry *B_set_lookkey(B_set set, B_Hashable hashwit, $WORD key, long 
     }
 }
 
-static bool B_set_contains_entry(B_set set,  B_Hashable hashwit, $WORD elem, long hash) {
-    return B_set_lookkey(set, hashwit, elem, hash)->key != NULL;
+static bool B_set_contains_entry(B_set set, B_Hashable hashwit, $WORD elem, uint64_t hash) {
+    B_setentry *entry = B_set_lookkey(set, hashwit, elem, hash);
+    return entry->key != NULL && entry->key != dummy;
 }
 
-void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
+void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash) {
     B_setentry *freeslot;
     B_setentry *entry;
-    long perturb;
-    long mask;
-    long i;
-    mask = set->mask;
-    i = hash & mask;
+    uint64_t perturb = hash;
+    uint64_t mask = set->mask;
+    uint64_t i = hash & mask;
 
     entry = &set->table[i];
     if (entry->key == NULL)
         goto found_unused;
 
     freeslot = NULL;
-    perturb = hash;
 
     while (1) {
-        if (entry->hash == hash) {
-            $WORD startkey = entry->key;
-            // startkey cannot be a dummy because the dummy hash field is -1
+        $WORD startkey = entry->key;
+        if (startkey == dummy) {
+            if (freeslot == NULL)
+                freeslot = entry;
+        } else if (entry->hash == hash) {
             if (startkey == key || hashwit->$class->__eq__(hashwit,startkey,key))
                 goto found_active;
         }
-        else if (entry->hash == -1)
-            freeslot = entry;
 
-        perturb >>= PERTURB_SHIFT;
-        i = (i * 5 + 1 + perturb) & mask;
+        i = B_set_next_probe(i, &perturb, mask);
 
         entry = &set->table[i];
         if (entry->key == NULL)
@@ -168,9 +163,12 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash) {
     set->numelements++;
     entry->key = key;
     entry->hash = hash;
-    if ((size_t)set->fill*5 < mask*3)
+    if (set->fill * UINT64_C(5) < mask * UINT64_C(3))
         return;
-    B_set_table_resize(set, set->numelements>50000 ? set->numelements*2 : set->numelements*4);
+    uint64_t growth = set->numelements > UINT64_C(50000) ? UINT64_C(2) : UINT64_C(4);
+    if (set->numelements > UINT64_MAX / growth)
+        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("set table is too large")));
+    B_set_table_resize(set, set->numelements * growth);
     return;
 
  found_active:
@@ -186,15 +184,15 @@ B_set B_set_copy(B_set set, B_Hashable hashwit) {
     return res;
 }
 
-static int B_set_discard_entry(B_set set, B_Hashable hashwit, $WORD elem, long hash) {
+static bool B_set_discard_entry(B_set set, B_Hashable hashwit, $WORD elem, uint64_t hash) {
     B_setentry *entry = B_set_lookkey(set,hashwit,elem, hash);
-    if (entry->key != NULL) {
+    if (entry->key != NULL && entry->key != dummy) {
         entry->key = dummy;
-        entry->hash = -1;
+        entry->hash = 0;
         set->numelements--;
-        return DISCARD_FOUND;
+        return true;
     } else
-        return DISCARD_NOTFOUND;
+        return false;
 }
 
 // General methods ///////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +236,7 @@ B_str B_setD___str__(B_set self) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     B_IteratorD_set iter = $NEW(B_IteratorD_set,self);
     B_value elem;
-    for (int i=0; i<self->numelements; i++) {
+    for (uint64_t i=0; i<self->numelements; i++) {
         elem = (B_value)iter->$class->__next__(iter);
         wit->$class->append(wit,s2,elem->$class->__repr__(elem));
     }
@@ -252,7 +250,7 @@ B_str B_setD___repr__(B_set self) {
 void B_setD___serialize__(B_set self, $Serial$state state) {
     B_int prevkey = (B_int)B_dictD_get(state->done,(B_Hashable)B_HashableD_WORDG_witness,self,NULL);
     if (prevkey) {
-        long pk = fromB_int(prevkey);
+        int64_t pk = fromB_int(prevkey);
         $val_serialize(-SET_ID,&pk,state);
         return;
     }
@@ -262,10 +260,17 @@ void B_setD___serialize__(B_set self, $Serial$state state) {
     row->blob[1] = ($WORD)self->fill;
     row->blob[2] = ($WORD)self->mask;
     row->blob[3] = ($WORD)self->finger;
-    for (long i=0; i<=self->mask; i++) {
+    /* Preserve the two serialized rows per slot without serializing dummy.
+       UINT64_MAX only marks a tombstone when paired with a NULL key. */
+    for (uint64_t i=0; i<=self->mask; i++) {
         B_setentry *entry = &self->table[i];
-        $step_serialize(toB_int(entry->hash),state);
-        $step_serialize(entry->key,state);
+        if (entry->key == dummy) {
+            $step_serialize(toB_u64(UINT64_MAX),state);
+            $step_serialize(NULL,state);
+        } else {
+            $step_serialize(toB_u64(entry->hash),state);
+            $step_serialize(entry->key,state);
+        }
     }
 }
 
@@ -274,24 +279,26 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
     state->row = this->next;
     state->row_no++;
     if (this->class_id < 0) {
-        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((long)this->blob[0]),NULL);
+        return B_dictD_get(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int((int64_t)(intptr_t)this->blob[0]),NULL);
     } else {
         if (!res)
             res = acton_malloc(sizeof(struct B_set));
         B_dictD_setitem(state->done,(B_Hashable)B_HashableD_intG_witness,toB_int(state->row_no-1),res);
         res->$class = &B_setG_methods;
-        res->numelements = (long)this->blob[0];
-        res->fill = (long)this->blob[1];
-        res->mask = (long)this->blob[2];
-        res->finger = (long)this->blob[3];
+        res->numelements = (uint64_t)(uintptr_t)this->blob[0];
+        res->fill = (uint64_t)(uintptr_t)this->blob[1];
+        res->mask = (uint64_t)(uintptr_t)this->blob[2];
+        res->finger = (uint64_t)(uintptr_t)this->blob[3];
         res->table = acton_malloc((res->mask+1)*sizeof(B_setentry));
         memset(res->table,0,(res->mask+1)*sizeof(B_setentry));
-        for (int i=0; i<=res->mask;i++) {
+        for (uint64_t i=0; i<=res->mask;i++) {
             B_setentry *entry = &res->table[i];
-            entry->hash = fromB_int((B_int)$step_deserialize(state));
+            entry->hash = fromB_u64((B_u64)$step_deserialize(state));
             entry->key = $step_deserialize(state);
-            if (entry->hash==-1)
+            if (entry->key == NULL && entry->hash == UINT64_MAX) {
                 entry->key = dummy;
+                entry->hash = 0;
+            }
         }
         return res;
     }
@@ -304,8 +311,8 @@ B_set B_setD___deserialize__ (B_set res, $Serial$state state) {
 
 static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
     B_setentry *table = self->src->table;
-    long n = self->src->mask;
-    long i = self->nxt;
+    uint64_t n = self->src->mask;
+    uint64_t i = self->nxt;
     while (i <= n) {
         B_setentry *entry = &table[i];
         if (entry->key != NULL && entry->key != dummy) {
@@ -355,14 +362,14 @@ B_str B_IteratorD_set_str(B_IteratorD_set self) {
 
 void B_IteratorD_set_serialize(B_IteratorD_set self, $Serial$state state) {
     $step_serialize(self->src,state);
-    $step_serialize(toB_int(self->nxt),state);
+    $step_serialize(toB_u64(self->nxt),state);
 }
 
 B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state state) {
     if (!res)
         res = $DNEW(B_IteratorD_set,state);
     res->src = (B_set)$step_deserialize(state);
-    res->nxt = fromB_int((B_int)$step_deserialize(state));
+    res->nxt = fromB_u64((B_u64)$step_deserialize(state));
     return res;
 }
 
@@ -400,7 +407,7 @@ B_set B_SetD_setD___fromiter__(B_SetD_set wit, B_Iterable wit2, $WORD iter) {
 }
 
 int64_t B_SetD_setD___len__ (B_SetD_set wit, B_set set) {
-    return set->numelements;
+    return (int64_t)set->numelements;
 }
 
 bool B_SetD_setD___contains__ (B_SetD_set wit, B_set set, $WORD val) {
@@ -420,7 +427,7 @@ bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
         return B_SetD_setD_isdisjoint(wit,other,set);
     B_Iterator iter = B_set_iter_entry(other);
     $WORD w;
-    long res = true;
+    bool res = true;
     while((w = $next(iter))){
         if(B_set_contains_entry(set, hashwit,((B_setentry*)w)->key, ((B_setentry*)w)->hash)) {
             res = false;
@@ -475,9 +482,9 @@ $WORD B_SetD_setD_pop (B_SetD_set wit, B_set set) {
     }
     res = entry->key;
     entry->key = dummy;
-    entry->hash = -1;
+    entry->hash = 0;
     set->numelements--;
-    set->finger = entry - set->table + 1;   // next place to start
+    set->finger = (uint64_t)(entry - set->table) + UINT64_C(1);   // next place to start
     return res;
 }
 
@@ -491,7 +498,7 @@ bool B_OrdD_SetD_setD___eq__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements != other->numelements)
         return false;
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < set->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
@@ -512,7 +519,7 @@ bool B_OrdD_SetD_setD___gt__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements <= other->numelements)
         return false;
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
@@ -529,7 +536,7 @@ bool B_OrdD_SetD_setD___ge__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     if (set->numelements < other->numelements)
         return false;
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         if(!B_set_contains_entry(set, hashwit, ((B_setentry*)w)->key, ((B_setentry*)w)->hash))
@@ -554,11 +561,11 @@ B_set B_MinusD_SetD_setD___sub__ (B_MinusD_SetD_set wit, B_set set, B_set other)
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     B_set res = B_set_copy(set,hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
-        long hash = ((B_setentry*)w)->hash;
+        uint64_t hash = ((B_setentry*)w)->hash;
         B_set_discard_entry(res,hashwit,key,hash);
         n++;
     }
@@ -574,11 +581,11 @@ B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set set, B_set oth
         return  B_LogicalD_SetD_setD___and__(wit,other,set);
     B_set res = $NEW(B_set,hashwit,NULL,NULL);
     B_Iterator iter = B_set_iter_entry(set);
-    long n = 0;
+    uint64_t n = 0;
     while(n < set->numelements) {
         $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
-        long hash = ((B_setentry*)w)->hash;
+        uint64_t hash = ((B_setentry*)w)->hash;
         if (B_set_contains_entry(other,hashwit,key,hash))
             B_set_add_entry(res,hashwit,key,hash);
         n++;
@@ -592,11 +599,11 @@ B_set B_LogicalD_SetD_setD___or__ (B_LogicalD_SetD_set wit, B_set set, B_set oth
         return B_LogicalD_SetD_setD___or__ (wit,other,set);
     B_set res = B_set_copy(set, hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
-        long hash = ((B_setentry*)w)->hash;
+        uint64_t hash = ((B_setentry*)w)->hash;
         B_set_add_entry(res,hashwit,key,hash);
         n++;
     }
@@ -607,11 +614,11 @@ B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set oth
     B_Hashable hashwit = ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set;
     B_set res = B_set_copy(set, hashwit);
     B_Iterator iter = B_set_iter_entry(other);
-    long n = 0;
+    uint64_t n = 0;
     while(n < other->numelements) {
         $WORD w = $next(iter);
         $WORD key = ((B_setentry*)w)->key;
-        long hash = ((B_setentry*)w)->hash;
+        uint64_t hash = ((B_setentry*)w)->hash;
         if(!B_set_discard_entry(res,hashwit,key,hash))
             B_set_add_entry(res,hashwit,key,hash);
         n++;

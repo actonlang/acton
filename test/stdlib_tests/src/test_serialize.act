@@ -117,6 +117,9 @@ def _test_dict():
 
 def _test_set():
     testing.assertTrue(roundtrips({1, 2, 3}), "set")
+    with_tombstone = {1, 2, 3}
+    with_tombstone.discard(2)
+    testing.assertTrue(roundtrips(with_tombstone), "set with tombstone")
 
 
 def _test_tuple():
