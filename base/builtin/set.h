@@ -1,16 +1,16 @@
 
 typedef struct {
     $WORD key;
-    long hash;    
+    uint64_t hash;
 } B_setentry;
 
 struct B_set {
     struct B_setG_class *$class;
-    long numelements;    // nr of elements in B_set
-    long fill;           // numelements + #dummy entries
-    long mask;
-    long finger;                       // Search finger for pop() 
-    B_setentry *table;                  // the hashtable
+    uint64_t numelements;    // nr of elements in B_set
+    uint64_t fill;           // numelements + #dummy entries
+    uint64_t mask;
+    uint64_t finger;         // Search finger for pop()
+    B_setentry *table;       // the hashtable
 };
 
 
@@ -34,10 +34,10 @@ struct B_IteratorD_setG_class {
 struct B_IteratorD_set {
     struct B_IteratorD_setG_class *$class;
     B_set src;
-    int nxt;
+    uint64_t nxt;
 };
 
 extern struct  B_IteratorD_setG_class  B_IteratorD_setG_methods;
 B_IteratorD_set B_IteratorD_setG_new(B_set);
 
-void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, long hash);
+void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash);

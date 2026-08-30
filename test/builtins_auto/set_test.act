@@ -32,11 +32,71 @@ def test_set_update_str():
     if s1 != sexp:
         raise ValueError("update() did not work correctly, result is " + str(s1))
 
+def test_set_lookup_high_bit_after_empty():
+    # This is the reproducer from #2552. Keep the hash premise explicit so a
+    # hash implementation change cannot silently make the regression vacuous.
+    value = 173418
+    if hash(value) < u64(0x8000000000000000):
+        raise ValueError("#2552 reproducer no longer has a high-bit hash")
+
+    s = {1, 2, 3}
+    s.pop()
+    s.pop()
+    s.pop()
+    if value in s:
+        raise ValueError("value should not be in an emptied set")
+
+def test_set_lookup_high_bit_delete_reinsert():
+    value = 173418
+    s = {value}
+    s.discard(value)
+    if value in s:
+        raise ValueError("value should be absent after discard")
+    s.add(value)
+    if value not in s:
+        raise ValueError("value should be present after re-add")
+
+def test_set_lookup_tombstone_heavy():
+    s = {0}
+    for i in range(200):
+        s.add(i)
+    for i in range(200):
+        s.discard(i)
+    if 173418 in s:
+        raise ValueError("value should not be in a tombstone-heavy set")
+
+def test_set_lookup_after_resize_then_empty():
+    s = {0}
+    for i in range(1000):
+        s.add(i)
+    for i in range(1000):
+        s.discard(i)
+    if 173418 in s:
+        raise ValueError("value should not be in an emptied resized set")
+
+def test_set_lookup_many_hashes():
+    s = {0}
+    for i in range(500):
+        s.add(i * 173418)
+    for i in range(500):
+        if i % 2 == 0:
+            s.discard(i * 173418)
+    for i in range(500):
+        if ((i * 173418) in s) != (i % 2 == 1):
+            raise ValueError("membership mismatch for " + str(i))
+    if 999999937 in s:
+        raise ValueError("unexpected membership in the mixed set")
+
 actor main(env):
     try:
         test_set_pop()
         test_set_update_int()
         test_set_update_str()
+        test_set_lookup_high_bit_after_empty()
+        test_set_lookup_high_bit_delete_reinsert()
+        test_set_lookup_tombstone_heavy()
+        test_set_lookup_after_resize_then_empty()
+        test_set_lookup_many_hashes()
     except Exception as e:
         print("Unexpected exception during testing:", e)
         await async env.exit(1)
