@@ -1,0 +1,312 @@
+import aon
+import json
+import testing
+
+
+def _field(table: dict[str, ?value], name: str) -> ?value:
+    try:
+        return table[name]
+    except KeyError:
+        raise ValueError(f"Missing AON field {repr(name)}")
+
+
+def _str_field(table: dict[str, ?value], name: str) -> str:
+    val = _field(table, name)
+    if isinstance(val, str):
+        return val
+    raise ValueError(f"AON field {repr(name)} is not a string")
+
+
+def _int_field(table: dict[str, ?value], name: str) -> int:
+    val = _field(table, name)
+    if isinstance(val, int):
+        return val
+    raise ValueError(f"AON field {repr(name)} is not an integer")
+
+
+def _float_field(table: dict[str, ?value], name: str) -> float:
+    val = _field(table, name)
+    if isinstance(val, float):
+        return val
+    raise ValueError(f"AON field {repr(name)} is not a float")
+
+
+def _bool_field(table: dict[str, ?value], name: str) -> bool:
+    val = _field(table, name)
+    if isinstance(val, bool):
+        return val
+    raise ValueError(f"AON field {repr(name)} is not a boolean")
+
+
+def _table_field(table: dict[str, ?value], name: str) -> dict[str, ?value]:
+    val = _field(table, name)
+    if isinstance(val, dict):
+        return val
+    raise ValueError(f"AON field {repr(name)} is not a named tuple")
+
+
+def _int_list_field(table: dict[str, ?value], name: str) -> list[int]:
+    val = _field(table, name)
+    result: list[int] = []
+    if isinstance(val, list):
+        for item in val:
+            if isinstance(item, int):
+                result.append(item)
+            else:
+                raise ValueError(f"AON field {repr(name)} is not an integer list")
+        return result
+    raise ValueError(f"AON field {repr(name)} is not an integer list")
+
+
+def _str_list_field(table: dict[str, ?value], name: str) -> list[str]:
+    val = _field(table, name)
+    result: list[str] = []
+    if isinstance(val, list):
+        for item in val:
+            if isinstance(item, str):
+                result.append(item)
+            else:
+                raise ValueError(f"AON field {repr(name)} is not a string list")
+        return result
+    raise ValueError(f"AON field {repr(name)} is not a string list")
+
+
+def _test_sections_and_scalar_values():
+    document = aon.decode(r'''
+name = "example"
+enabled = True
+limit = None
+
+network:
+    port = 830
+    ratio = 1.5
+    exponent = 1e3
+    mask = 0xdead_beef
+    capacity = 1_000
+    tls:
+        enabled = False
+
+"display name":
+    greeting = "hello\nworld"
+''', "settings.aon")
+
+    testing.assertEqual(_str_field(document, "name"), "example")
+    testing.assertEqual(_bool_field(document, "enabled"), True)
+    testing.assertTrue(_field(document, "limit") is None)
+    network = _table_field(document, "network")
+    testing.assertEqual(_int_field(network, "port"), 830)
+    testing.assertEqual(_float_field(network, "ratio"), 1.5)
+    testing.assertEqual(_float_field(network, "exponent"), 1000.0)
+    testing.assertEqual(_int_field(network, "mask"), 0xdeadbeef)
+    testing.assertEqual(_int_field(network, "capacity"), 1000)
+    tls = _table_field(network, "tls")
+    testing.assertEqual(_bool_field(tls, "enabled"), False)
+
+    display = _table_field(document, "display name")
+    testing.assertEqual(_str_field(display, "greeting"), "hello\nworld")
+
+
+def _test_lists_and_named_tuples():
+    document = aon.decode(r'''
+ports = [80, 443]
+peers = [
+    (host = "one", port = 830),
+    (
+        host = "two",
+        port = 831,
+        tags = ["edge", "backup"],
+    ),
+]
+''')
+
+    testing.assertEqual(_int_list_field(document, "ports"), [80, 443])
+    peers = _field(document, "peers")
+    if isinstance(peers, list):
+        testing.assertEqual(len(peers), 2)
+        first = peers[0]
+        second = peers[1]
+        if isinstance(first, dict) and isinstance(second, dict):
+            testing.assertEqual(_str_field(first, "host"), "one")
+            testing.assertEqual(_int_field(first, "port"), 830)
+            testing.assertEqual(_str_field(second, "host"), "two")
+            testing.assertEqual(_str_list_field(second, "tags"), ["edge", "backup"])
+        else:
+            raise ValueError("Expected named tuples in structured list")
+    else:
+        raise ValueError("Expected peers to be a list")
+
+    spaced = aon.decode_value(r'''(
+        newline
+        = 1,
+        commented # explanation
+        = 2,
+    )''')
+    if isinstance(spaced, dict):
+        testing.assertEqual(_int_field(spaced, "newline"), 1)
+        testing.assertEqual(_int_field(spaced, "commented"), 2)
+    else:
+        raise ValueError("Expected whitespace and comments inside a named tuple")
+
+
+def _test_standalone_values():
+    value = aon.decode_value('[(name = "one"), (name = "two")]')
+    if isinstance(value, list):
+        testing.assertEqual(len(value), 2)
+    else:
+        raise ValueError("Expected standalone AON list")
+
+    commented = aon.decode_value("[1, # inner comment\n2]")
+    if isinstance(commented, list):
+        testing.assertEqual(len(commented), 2)
+    else:
+        raise ValueError("Expected comments inside a standalone AON list")
+
+    try:
+        aon.decode_value("[1, 2] # trailing comment")
+    except aon.AonParseError:
+        pass
+    else:
+        raise ValueError("Expected trailing text after an AON value to fail")
+
+
+def _test_acton_string_escapes():
+    escaped = aon.decode_value(r'''"\a\v\x48\123"''')
+    continued = aon.decode_value('"one' + "\\" + "\n" + 'two"')
+    if isinstance(escaped, str) and isinstance(continued, str):
+        testing.assertEqual(escaped, "\a\vHS")
+        testing.assertEqual(continued, "onetwo")
+    else:
+        raise ValueError("Expected Acton string escapes to decode as a string")
+
+    for text in [r'''"\x4"''', r'''"\400"''']:
+        try:
+            aon.decode_value(text)
+        except aon.AonParseError:
+            pass
+        else:
+            raise ValueError(f"Expected invalid Acton escape to fail: {repr(text)}")
+
+
+def _test_deterministic_encoding_and_json_conversion():
+    json_text = r'''{"name":"example","enabled":true,"limit":null,"ratio":1.25,"network":{"port":830,"tls":false},"empty":{},"tags":["edge","backup"],"peers":[{"host":"one","port":830},{"host":"two","port":831}]}'''
+    document = json.decode(json_text)
+    encoded = aon.encode(document)
+    testing.assertEqual(encoded, '''name = "example"
+enabled = True
+limit = None
+ratio = 1.25
+network:
+    port = 830
+    tls = False
+empty = ()
+tags = ["edge", "backup"]
+peers = [
+    (
+        host = "one",
+        port = 830,
+    ),
+    (
+        host = "two",
+        port = 831,
+    ),
+]
+''')
+    testing.assertEqual(json.encode(aon.decode(encoded)), json_text)
+
+    aon_text = '''service:
+  name = "example"
+  ports = [80, 443]
+'''
+    testing.assertEqual(
+        aon.encode(json.decode(json.encode(aon.decode(aon_text))), indent=2),
+        aon_text
+    )
+
+    unusual_keys: dict[str, ?value] = {
+        "": 1,
+        "display name": 2,
+        'say"hi': 3,
+        "line\nbreak": 4,
+        "räksmörgås": 5,
+        "_bare9": 6,
+    }
+    encoded_keys = aon.encode(unusual_keys)
+    testing.assertEqual(encoded_keys, r'''"" = 1
+"display name" = 2
+"say\"hi" = 3
+"line\nbreak" = 4
+"räksmörgås" = 5
+_bare9 = 6
+''')
+    testing.assertEqual(json.encode(aon.decode(encoded_keys)), json.encode(unusual_keys))
+
+
+def _test_standalone_encoding():
+    text = "line\n\"quoted\"\\tab\t\x01"
+    encoded = aon.encode_value(text)
+    testing.assertEqual(encoded, r'''"line\n\"quoted\"\\tab\t\u0001"''')
+    decoded = aon.decode_value(encoded)
+    if isinstance(decoded, str):
+        testing.assertEqual(decoded, text)
+    else:
+        raise ValueError("Expected encoded AON string to round trip")
+
+    empty: dict[str, ?value] = {}
+    testing.assertEqual(aon.encode(empty), "")
+    testing.assertEqual(aon.encode_value(empty), "()")
+    testing.assertEqual(aon.encode_value([]), "[]")
+
+    testing.assertEqual(aon.encode_value(1.0), "1.0")
+    testing.assertEqual(aon.encode_value(-0.0), "-0.0")
+    precise = 1.2345678901234567
+    decoded_float = aon.decode_value(aon.encode_value(precise))
+    if isinstance(decoded_float, float):
+        testing.assertEqual(decoded_float, precise)
+    else:
+        raise ValueError("Expected encoded AON float to retain its type")
+
+
+def _test_encoding_rejects_unrepresentable_values():
+    try:
+        aon.encode_value(float("inf"))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Expected non-finite float encoding to fail")
+
+    try:
+        aon.encode_value(b"bytes")
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Expected unsupported value encoding to fail")
+
+    try:
+        aon.encode({}, indent=0)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Expected non-positive indentation to fail")
+
+
+def _test_invalid_layout_and_fields():
+    invalid = [
+        "  indented = 1\n",
+        "section:\nvalue = 1\n",
+        "section:\n\tvalue = 1\n",
+        "value = 1\nvalue = 2\n",
+        "items = [(a = 1, a = 2)]\n",
+        "value = _1\n",
+        "value = 1_\n",
+        "value = 1__0\n",
+        "value = 0x_FF\n",
+        "value = 1_e2\n",
+        "value = 1e309\n",
+    ]
+    for text in invalid:
+        try:
+            aon.decode(text, "invalid.aon")
+        except aon.AonParseError as error:
+            testing.assertTrue("invalid.aon:" in str(error))
+        else:
+            raise ValueError(f"Expected invalid AON to fail: {repr(text)}")
