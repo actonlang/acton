@@ -1,0 +1,603 @@
+"""Acton Object Notation encoding and decoding.
+
+AON is a small, human-facing data format shaped like Acton values. A document
+is an implicit named tuple: fields use `name = value`, while `name:` opens an
+indented nested tuple. Lists use brackets and structured list items are named
+tuples in parentheses.
+
+```text
+name = "example"
+
+network:
+    port = 830
+    tls = True
+
+peers = [
+    (host = "one", port = 830),
+    (host = "two", port = 831),
+]
+```
+
+Values are strings, integers, floats, booleans, `None`, lists, and named
+tuples. Comments start with `#`. Documents, sections, and named tuples decode
+to `dict[str, ?value]`; the dictionary representation is necessary because a
+decoded document has a dynamic shape while Acton named-tuple types are static.
+
+## Grammar
+
+```text
+document    = fields
+fields      = { field | blank | comment }
+field       = indent key "=" value newline
+            | indent key ":" newline indented-fields
+value       = string | number | "True" | "False" | "None" | list | tuple
+list        = "[" [ value { "," value } [ "," ] ] "]"
+tuple       = "(" [ key "=" value { "," key "=" value } [ "," ] ] ")"
+key         = identifier | string
+identifier  = ( letter | "_" ) { letter | digit | "_" }
+comment     = "#" { character } newline
+```
+
+Indentation uses spaces; every field in a block has the same indentation and
+a nested block must indent further than its parent. Inside lists and named
+tuples, whitespace and comments may occur between tokens, as in Acton source.
+Strings use single or double quotes with Acton escape sequences. Numbers use
+Acton decimal, hexadecimal, octal, and binary spellings; underscores are
+allowed only between digits.
+
+Encoding and decoding are pure; applications remain responsible for reading
+and writing files through their file capabilities.
+
+`encode()` writes dictionaries as AON documents, while `encode_value()` writes
+standalone values. The deterministic encoder preserves dictionary field order,
+uses sections for non-empty dictionaries in documents, uses named tuples for
+dictionaries inside values, and always ends a non-empty document with a
+newline.
+
+AON and JSON share the same dictionary/list/scalar representation, so no
+adapter is needed: `aon.encode(json.decode(json_text))` converts JSON to AON,
+and `json.encode(aon.decode(aon_text))` converts AON to JSON.
+"""
+
+
+def _is_identifier_start(char: str) -> bool:
+    return char != "" and char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
+
+
+def _is_identifier_continue(char: str) -> bool:
+    return _is_identifier_start(char) or (char != "" and char in "0123456789")
+
+
+def _is_identifier(text: str) -> bool:
+    if text == "" or not _is_identifier_start(text[0]):
+        return False
+    for char in text[1:]:
+        if not _is_identifier_continue(char):
+            return False
+    return True
+
+
+class AonParseError(ValueError):
+    """An AON syntax error with source location information."""
+
+    source: str
+    line: int
+    column: int
+
+    def __init__(self, message: str, source: str="<string>",
+                 line: int=1, column: int=1):
+        self.error_message = message
+        self.source = source
+        self.line = line
+        self.column = column
+
+    def __str__(self) -> str:
+        return f"{self.source}:{self.line}:{self.column}: {self.error_message}"
+
+    def __repr__(self) -> str:
+        return f"AonParseError({repr(self.error_message)}, {repr(self.source)}, {self.line}, {self.column})"
+
+
+class _Parser(object):
+    text: str
+    source: str
+    pos: int
+    line: int
+    column: int
+
+    def __init__(self, text: str, source: str):
+        self.text = text
+        self.source = source
+        self.pos = 0
+        self.line = 1
+        self.column = 1
+
+    def _error(self, message: str) -> AonParseError:
+        return AonParseError(message, self.source, self.line, self.column)
+
+    def _peek(self, offset: int=0) -> str:
+        p = self.pos + offset
+        if p < 0 or p >= len(self.text):
+            return ""
+        return self.text[p]
+
+    def _advance(self) -> str:
+        if self.pos >= len(self.text):
+            return ""
+        char = self.text[self.pos]
+        self.pos += 1
+        if char == "\n":
+            self.line += 1
+            self.column = 1
+        else:
+            self.column += 1
+        return char
+
+    def _consume(self, text: str):
+        if self.text[self.pos:self.pos+len(text)] != text:
+            raise self._error(f"Expected {repr(text)}")
+        for _ in range(len(text)):
+            self._advance()
+
+    def _consume_newline(self):
+        if self._peek() == "\n":
+            self._advance()
+        elif self._peek() == "\r":
+            self._advance()
+            if self._peek() != "\n":
+                raise self._error("Expected LF or CRLF newline")
+            self._advance()
+        else:
+            raise self._error("Expected newline")
+
+    def _skip_horizontal(self):
+        while self._peek() == " " or self._peek() == "\t":
+            self._advance()
+
+    def _skip_comment(self):
+        if self._peek() == "#":
+            while self._peek() != "" and self._peek() != "\r" and self._peek() != "\n":
+                self._advance()
+
+    def _line_end(self):
+        self._skip_horizontal()
+        self._skip_comment()
+        if self._peek() == "\r" or self._peek() == "\n":
+            self._consume_newline()
+        elif self._peek() != "":
+            raise self._error("Expected end of line")
+
+    def _entry_indent(self) -> ?int:
+        while True:
+            indent = 0
+            while self._peek() == " ":
+                indent += 1
+                self._advance()
+            if self._peek() == "\t":
+                raise self._error("Tabs are not allowed for indentation")
+            if self._peek() == "#":
+                self._skip_comment()
+            if self._peek() == "\r" or self._peek() == "\n":
+                self._consume_newline()
+            elif self._peek() == "":
+                return None
+            else:
+                return indent
+
+    def _skip_value_whitespace(self):
+        while self._peek() != "" and self._peek().isspace():
+            if self._peek() == "\r" or self._peek() == "\n":
+                self._consume_newline()
+            else:
+                self._advance()
+
+    def _skip_value_space(self):
+        while True:
+            self._skip_value_whitespace()
+            if self._peek() == "#":
+                self._skip_comment()
+            else:
+                return
+
+    def _hex_escape(self, digits: int) -> str:
+        raw = ""
+        for _ in range(digits):
+            char = self._peek()
+            if char == "" or char.lower() not in "0123456789abcdef":
+                raise self._error(f"Expected {digits} hexadecimal digits in escape sequence")
+            raw += self._advance()
+        codepoint = 0
+        for char in raw:
+            codepoint = codepoint * 16 + "0123456789abcdef".find(char.lower())
+        if 0xd800 <= codepoint and codepoint <= 0xdfff:
+            raise self._error("Unicode escape cannot encode a surrogate")
+        try:
+            return chr(codepoint)
+        except ValueError:
+            raise self._error("Unicode escape is outside the Unicode range")
+
+    def _string(self) -> str:
+        quote = self._advance()
+        parts: list[str] = []
+        escapes = {
+            "\\": "\\",
+            "'": "'",
+            '"': '"',
+            "a": "\a",
+            "b": "\b",
+            "f": "\f",
+            "n": "\n",
+            "r": "\r",
+            "t": "\t",
+            "v": "\v",
+        }
+        while True:
+            char = self._peek()
+            if char == "":
+                raise self._error("Unterminated string")
+            if char == quote:
+                self._advance()
+                return "".join(parts)
+            if char == "\r" or char == "\n":
+                raise self._error("Newline in string")
+            if char == "\\":
+                self._advance()
+                escaped = self._peek()
+                if escaped in escapes:
+                    parts.append(escapes[escaped])
+                    self._advance()
+                elif escaped == "x":
+                    self._advance()
+                    parts.append(self._hex_escape(2))
+                elif escaped == "u":
+                    self._advance()
+                    parts.append(self._hex_escape(4))
+                elif escaped == "U":
+                    self._advance()
+                    parts.append(self._hex_escape(8))
+                elif escaped != "" and escaped in "01234567":
+                    codepoint = 0
+                    for _ in range(3):
+                        digit = self._peek()
+                        if digit == "" or digit not in "01234567":
+                            break
+                        codepoint = codepoint * 8 + ord(self._advance()) - ord("0")
+                    if codepoint > 0xff:
+                        raise self._error("Octal escape is outside the byte range")
+                    parts.append(chr(codepoint))
+                elif escaped == "\r" or escaped == "\n":
+                    self._consume_newline()
+                else:
+                    raise self._error("Invalid escape sequence in string")
+            else:
+                if ord(char) < 0x20 or char == "\x7f":
+                    raise self._error("Control character in string")
+                parts.append(self._advance())
+        raise self._error("Unterminated string")
+
+    def _bare_key(self) -> str:
+        start = self.pos
+        char = self._peek()
+        if char == "" or not _is_identifier_start(char):
+            raise self._error("Expected an identifier or quoted field name")
+        self._advance()
+        while True:
+            char = self._peek()
+            if char != "" and _is_identifier_continue(char):
+                self._advance()
+            else:
+                break
+        return self.text[start:self.pos]
+
+    def _key(self) -> str:
+        if self._peek() == '"' or self._peek() == "'":
+            return self._string()
+        return self._bare_key()
+
+    def _valid_separators(self, text: str, digits: str) -> bool:
+        if len(text) == 0:
+            return False
+        for i in range(len(text)):
+            if text[i] == "_":
+                if i == 0 or i + 1 >= len(text):
+                    return False
+                if text[i-1] not in digits or text[i+1] not in digits:
+                    return False
+        return True
+
+    def _atom(self) -> ?value:
+        start = self.pos
+        while True:
+            char = self._peek()
+            if char == "" or char.isspace() or char in ",])#":
+                break
+            self._advance()
+        raw = self.text[start:self.pos]
+        if raw == "True":
+            return True
+        if raw == "False":
+            return False
+        if raw == "None":
+            return None
+        magnitude = raw[1:] if raw.startswith("+") or raw.startswith("-") else raw
+        lower = magnitude.lower()
+        if lower.startswith("0x"):
+            digits = "0123456789abcdefABCDEF"
+            if not self._valid_separators(magnitude[2:], digits):
+                raise self._error(f"Invalid hexadecimal integer {repr(raw)}")
+        elif lower.startswith("0o"):
+            if not self._valid_separators(magnitude[2:], "01234567"):
+                raise self._error(f"Invalid octal integer {repr(raw)}")
+        elif lower.startswith("0b"):
+            if not self._valid_separators(magnitude[2:], "01"):
+                raise self._error(f"Invalid binary integer {repr(raw)}")
+        elif not self._valid_separators(raw, "0123456789"):
+            raise self._error(f"Invalid number {repr(raw)}")
+        clean = raw.replace("_", "")
+        if lower.startswith("0x") or lower.startswith("0o") or lower.startswith("0b"):
+            try:
+                return int(clean)
+            except ValueError:
+                raise self._error(f"Invalid value {repr(raw)}")
+        if "." in clean or "e" in clean or "E" in clean:
+            try:
+                val = float(clean)
+            except ValueError:
+                raise self._error(f"Invalid value {repr(raw)}")
+            if val != val or val == float("inf") or val == float("-inf"):
+                raise self._error(f"Non-finite float {repr(raw)}")
+            return val
+        try:
+            return int(clean)
+        except ValueError:
+            raise self._error(f"Invalid value {repr(raw)}")
+
+    def _list(self) -> list[?value]:
+        self._consume("[")
+        result: list[?value] = []
+        self._skip_value_space()
+        if self._peek() == "]":
+            self._advance()
+            return result
+        while True:
+            result.append(self._value())
+            self._skip_value_space()
+            if self._peek() == "]":
+                self._advance()
+                return result
+            if self._peek() != ",":
+                raise self._error("Expected ',' or ']' in list")
+            self._advance()
+            self._skip_value_space()
+            if self._peek() == "]":
+                self._advance()
+                return result
+        raise self._error("Unterminated list")
+
+    def _named_tuple(self) -> dict[str, ?value]:
+        self._consume("(")
+        result: dict[str, ?value] = {}
+        self._skip_value_space()
+        if self._peek() == ")":
+            self._advance()
+            return result
+        while True:
+            key = self._key()
+            self._skip_value_space()
+            if self._peek() != "=":
+                raise self._error("Expected '=' after named tuple field")
+            self._advance()
+            self._skip_value_space()
+            if key in result:
+                raise self._error(f"Duplicate field {repr(key)}")
+            result[key] = self._value()
+            self._skip_value_space()
+            if self._peek() == ")":
+                self._advance()
+                return result
+            if self._peek() != ",":
+                raise self._error("Expected ',' or ')' in named tuple")
+            self._advance()
+            self._skip_value_space()
+            if self._peek() == ")":
+                self._advance()
+                return result
+        raise self._error("Unterminated named tuple")
+
+    def _value(self) -> ?value:
+        char = self._peek()
+        if char == '"' or char == "'":
+            return self._string()
+        if char == "[":
+            return self._list()
+        if char == "(":
+            return self._named_tuple()
+        return self._atom()
+
+    def _block(self, indent: int) -> (table: dict[str, ?value], next_indent: ?int):
+        table: dict[str, ?value] = {}
+        current = indent
+        while True:
+            if current < indent:
+                return (table=table, next_indent=current)
+            if current > indent:
+                raise self._error("Unexpected indentation")
+
+            key = self._key()
+            self._skip_horizontal()
+            if key in table:
+                raise self._error(f"Duplicate field {repr(key)}")
+            if self._peek() == "=":
+                self._advance()
+                self._skip_horizontal()
+                table[key] = self._value()
+                self._line_end()
+                next_indent = self._entry_indent()
+                if isinstance(next_indent, int):
+                    current = next_indent
+                else:
+                    return (table=table, next_indent=None)
+            elif self._peek() == ":":
+                self._advance()
+                self._line_end()
+                child_indent = self._entry_indent()
+                if isinstance(child_indent, int):
+                    if child_indent <= indent:
+                        raise self._error(f"Section {repr(key)} must contain an indented field")
+                    child = self._block(child_indent)
+                    table[key] = child.table
+                    next_indent = child.next_indent
+                    if isinstance(next_indent, int):
+                        current = next_indent
+                    else:
+                        return (table=table, next_indent=None)
+                else:
+                    raise self._error(f"Section {repr(key)} must contain an indented field")
+            else:
+                raise self._error("Expected '=' or ':' after field name")
+        return (table=table, next_indent=None)
+
+    def parse_value(self) -> ?value:
+        self._skip_value_space()
+        result = self._value()
+        self._skip_value_whitespace()
+        if self._peek() != "":
+            raise self._error("Unexpected text after value")
+        return result
+
+    def parse(self) -> dict[str, ?value]:
+        indent = self._entry_indent()
+        if indent is None:
+            return {}
+        if indent != 0:
+            raise self._error("Top-level fields must not be indented")
+        result = self._block(0)
+        if result.next_indent is not None:
+            raise self._error("Invalid dedent")
+        return result.table
+
+
+class _Encoder(object):
+    indent: int
+
+    def __init__(self, indent: int):
+        if indent <= 0:
+            raise ValueError("AON indentation must be positive")
+        self.indent = indent
+
+    def _padding(self, level: int) -> str:
+        return " " * (self.indent * level)
+
+    def _string(self, text: str) -> str:
+        escapes = {
+            '"': '\\"',
+            "\\": "\\\\",
+            "\b": "\\b",
+            "\f": "\\f",
+            "\n": "\\n",
+            "\r": "\\r",
+            "\t": "\\t",
+        }
+        parts = ['"']
+        for char in text:
+            if char in escapes:
+                parts.append(escapes[char])
+            elif ord(char) < 0x20 or char == "\x7f":
+                parts.append("\\u" + hex(ord(char))[2:].zfill(4))
+            else:
+                parts.append(char)
+        parts.append('"')
+        return "".join(parts)
+
+    def _key(self, key: str) -> str:
+        if _is_identifier(key):
+            return key
+        return self._string(key)
+
+    def _scalar(self, val: ?value) -> str:
+        if val is None:
+            return "None"
+        if isinstance(val, bool):
+            return "True" if val else "False"
+        if isinstance(val, int):
+            return str(val)
+        if isinstance(val, float):
+            if val != val or val == float("inf") or val == float("-inf"):
+                raise ValueError("AON cannot encode non-finite floats")
+            text = "%.17g" % val
+            if "." not in text and "e" not in text and "E" not in text:
+                text += ".0"
+            return text
+        if isinstance(val, str):
+            return self._string(val)
+        raise ValueError(f"AON cannot encode value {repr(val)}")
+
+    def _value(self, val: ?value, level: int) -> str:
+        if isinstance(val, list):
+            return self._list(val, level)
+        if isinstance(val, dict):
+            return self._tuple(val, level)
+        return self._scalar(val)
+
+    def _list(self, items: list[?value], level: int) -> str:
+        if len(items) == 0:
+            return "[]"
+        simple = True
+        for item in items:
+            if isinstance(item, list) or isinstance(item, dict):
+                simple = False
+        if simple:
+            encoded: list[str] = []
+            for item in items:
+                encoded.append(self._scalar(item))
+            return "[" + ", ".join(encoded) + "]"
+
+        parts = ["["]
+        for item in items:
+            parts.append(self._padding(level + 1) + self._value(item, level + 1) + ",")
+        parts.append(self._padding(level) + "]")
+        return "\n".join(parts)
+
+    def _tuple(self, fields: dict[str, ?value], level: int) -> str:
+        if len(fields) == 0:
+            return "()"
+        parts = ["("]
+        for key, val in fields.items():
+            parts.append(
+                self._padding(level + 1) + self._key(key)
+                + " = " + self._value(val, level + 1) + ","
+            )
+        parts.append(self._padding(level) + ")")
+        return "\n".join(parts)
+
+    def document(self, fields: dict[str, ?value], level: int=0) -> str:
+        parts: list[str] = []
+        for key, val in fields.items():
+            prefix = self._padding(level) + self._key(key)
+            if isinstance(val, dict) and len(val) > 0:
+                parts.append(prefix + ":")
+                parts.append(self.document(val, level + 1))
+            else:
+                parts.append(prefix + " = " + self._value(val, level))
+        return "\n".join(parts)
+
+
+def decode(data: str, source: str="<string>") -> dict[str, ?value]:
+    """Decode an AON document into nested dictionaries, lists, and values."""
+    return _Parser(data, source).parse()
+
+
+def decode_value(data: str, source: str="<string>") -> ?value:
+    """Decode one standalone AON value."""
+    return _Parser(data, source).parse_value()
+
+
+def encode(data: dict[str, ?value], indent: int=4) -> str:
+    """Encode a dictionary as a deterministic, order-preserving AON document."""
+    result = _Encoder(indent).document(data)
+    return result + "\n" if result != "" else ""
+
+
+def encode_value(data: ?value, indent: int=4) -> str:
+    """Encode one standalone AON value."""
+    return _Encoder(indent)._value(data, 0)
