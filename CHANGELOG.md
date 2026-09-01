@@ -16,6 +16,14 @@
 - Avoid duplicate visible protocol witnesses when importing and defining
   extensions, keeping witness lookup canonical when the same protocol/type
   pair is available through rival modules or ancestry paths. [#3061]
+- Cache imported module closures and attribute-owner lookups during type
+  checking, cutting repeated import and attribute scans so large generated
+  modules with many attribute selections type-check in seconds again instead
+  of minutes. [#3073]
+- Resolve inherited protocol-witness slots during type checking instead of
+  late C generation, making witness classes complete for diamond, generic,
+  cyclic, and imported extensions while reporting conflicting inherited
+  signatures as compiler errors. [#3049]
 - Use ThinLTO for non-debug Linux release builds, preserving cross-module
   optimization while making final links faster and less memory intensive for
   large projects. [#3060]
@@ -49,6 +57,16 @@
   precision, including oversized signed and unsigned tokens, and encode
   `bigint` values as JSON numbers by default with a `bigint_as_string` option
   for string-based consumers. [#3047] [#3053]
+- Add Acton Object Notation support through new `aon` modules, with
+  source-aware parsing, deterministic encoding, nested sections, lists, named
+  tuples, comments, and direct conversion through the same data representation
+  as JSON. [#3077]
+- Build tuples in one allocation by storing components inline with the tuple
+  object, reducing construction memory use and keeping deserialized tuples in
+  the same compact layout. [#3070]
+- Handle set elements whose hashes use the high bit without hanging lookups,
+  keeping membership, deletion, reinsertion, resizing, and serialized
+  tombstones consistent across supported target widths. [#3075]
 - Return both coalesced HTTP responses to pipelined `http.Client` callbacks,
   preserving the parser remainder so later responses stay matched to the
   correct outstanding request. [#3067]
@@ -4742,6 +4760,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3043]: https://github.com/actonlang/acton/pull/3043
 [#3044]: https://github.com/actonlang/acton/pull/3044
 [#3047]: https://github.com/actonlang/acton/pull/3047
+[#3049]: https://github.com/actonlang/acton/pull/3049
 [#3050]: https://github.com/actonlang/acton/pull/3050
 [#3053]: https://github.com/actonlang/acton/pull/3053
 [#3055]: https://github.com/actonlang/acton/pull/3055
@@ -4753,6 +4772,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3067]: https://github.com/actonlang/acton/pull/3067
 [#3068]: https://github.com/actonlang/acton/pull/3068
 [#3069]: https://github.com/actonlang/acton/pull/3069
+[#3070]: https://github.com/actonlang/acton/pull/3070
+[#3073]: https://github.com/actonlang/acton/pull/3073
+[#3075]: https://github.com/actonlang/acton/pull/3075
+[#3077]: https://github.com/actonlang/acton/pull/3077
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
