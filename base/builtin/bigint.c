@@ -409,18 +409,7 @@ B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
     }
     B_bigint res = malloc_bigint();
-    zz_ptr rval = &res->val;
-    long shw = bval/64;
-    long shb = bval%64;
-    long mres = labs(ma) - shw;
-    zz_malloc_fit(rval,mres);
-    unsigned long tmp[mres];
-    for (int i = 0; i < mres; i++)
-        tmp[i] = aval.n[i+shw];
-    word_t ci = nn_shr(rval->n, tmp, mres, shb);
-    mres = mres - (rval->n[mres-1]==0);
-    mres = ma<0?-mres:mres;
-    res->val.size = mres;
+    zz_div_2exp(&res->val, &aval, bval);
     return res; 
 }
  
