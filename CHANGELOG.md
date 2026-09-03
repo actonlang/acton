@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.30.0] - 2026-09-03
 
 ### Language
 - Complete soft-keyword parsing for declaration words such as `actor`,
@@ -73,6 +73,7 @@
 - Fix `base64.encode()` and `base64.decode()` for empty byte strings, and make
   invalid base64 input raise `ValueError` instead of aborting the process.
   [#3066]
+- Upgrade the bundled yyjson JSON library to 0.12.0. [#3052]
 
 ### Testing & CI
 - Add core-language regression tests for `await` values, exceptions, chaining,
@@ -4762,6 +4763,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3047]: https://github.com/actonlang/acton/pull/3047
 [#3049]: https://github.com/actonlang/acton/pull/3049
 [#3050]: https://github.com/actonlang/acton/pull/3050
+[#3052]: https://github.com/actonlang/acton/pull/3052
 [#3053]: https://github.com/actonlang/acton/pull/3053
 [#3055]: https://github.com/actonlang/acton/pull/3055
 [#3057]: https://github.com/actonlang/acton/pull/3057
@@ -4922,6 +4924,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.28.3]: https://github.com/actonlang/acton/compare/v0.28.2...v0.28.3
 [0.29.0]: https://github.com/actonlang/acton/compare/v0.28.3...v0.29.0
 [0.29.1]: https://github.com/actonlang/acton/compare/v0.29.0...v0.29.1
+[0.30.0]: https://github.com/actonlang/acton/compare/v0.29.1...v0.30.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
