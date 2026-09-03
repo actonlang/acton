@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.30.0] - 2026-09-03
 
 ### Language
 - Complete soft-keyword parsing for declaration words such as `actor`,
@@ -16,6 +16,14 @@
 - Avoid duplicate visible protocol witnesses when importing and defining
   extensions, keeping witness lookup canonical when the same protocol/type
   pair is available through rival modules or ancestry paths. [#3061]
+- Cache imported module closures and attribute-owner lookups during type
+  checking, cutting repeated import and attribute scans so large generated
+  modules with many attribute selections type-check in seconds again instead
+  of minutes. [#3073]
+- Resolve inherited protocol-witness slots during type checking instead of
+  late C generation, making witness classes complete for diamond, generic,
+  cyclic, and imported extensions while reporting conflicting inherited
+  signatures as compiler errors. [#3049]
 - Use ThinLTO for non-debug Linux release builds, preserving cross-module
   optimization while making final links faster and less memory intensive for
   large projects. [#3060]
@@ -49,12 +57,23 @@
   precision, including oversized signed and unsigned tokens, and encode
   `bigint` values as JSON numbers by default with a `bigint_as_string` option
   for string-based consumers. [#3047] [#3053]
+- Add Acton Object Notation support through new `aon` modules, with
+  source-aware parsing, deterministic encoding, nested sections, lists, named
+  tuples, comments, and direct conversion through the same data representation
+  as JSON. [#3077]
+- Build tuples in one allocation by storing components inline with the tuple
+  object, reducing construction memory use and keeping deserialized tuples in
+  the same compact layout. [#3070]
+- Handle set elements whose hashes use the high bit without hanging lookups,
+  keeping membership, deletion, reinsertion, resizing, and serialized
+  tombstones consistent across supported target widths. [#3075]
 - Return both coalesced HTTP responses to pipelined `http.Client` callbacks,
   preserving the parser remainder so later responses stay matched to the
   correct outstanding request. [#3067]
 - Fix `base64.encode()` and `base64.decode()` for empty byte strings, and make
   invalid base64 input raise `ValueError` instead of aborting the process.
   [#3066]
+- Upgrade the bundled yyjson JSON library to 0.12.0. [#3052]
 
 ### Testing & CI
 - Add core-language regression tests for `await` values, exceptions, chaining,
@@ -4742,7 +4761,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3043]: https://github.com/actonlang/acton/pull/3043
 [#3044]: https://github.com/actonlang/acton/pull/3044
 [#3047]: https://github.com/actonlang/acton/pull/3047
+[#3049]: https://github.com/actonlang/acton/pull/3049
 [#3050]: https://github.com/actonlang/acton/pull/3050
+[#3052]: https://github.com/actonlang/acton/pull/3052
 [#3053]: https://github.com/actonlang/acton/pull/3053
 [#3055]: https://github.com/actonlang/acton/pull/3055
 [#3057]: https://github.com/actonlang/acton/pull/3057
@@ -4753,6 +4774,10 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3067]: https://github.com/actonlang/acton/pull/3067
 [#3068]: https://github.com/actonlang/acton/pull/3068
 [#3069]: https://github.com/actonlang/acton/pull/3069
+[#3070]: https://github.com/actonlang/acton/pull/3070
+[#3073]: https://github.com/actonlang/acton/pull/3073
+[#3075]: https://github.com/actonlang/acton/pull/3075
+[#3077]: https://github.com/actonlang/acton/pull/3077
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -4899,6 +4924,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.28.3]: https://github.com/actonlang/acton/compare/v0.28.2...v0.28.3
 [0.29.0]: https://github.com/actonlang/acton/compare/v0.28.3...v0.29.0
 [0.29.1]: https://github.com/actonlang/acton/compare/v0.29.0...v0.29.1
+[0.30.0]: https://github.com/actonlang/acton/compare/v0.29.1...v0.30.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
