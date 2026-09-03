@@ -1127,6 +1127,10 @@ castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
         castable' FXProc   FXProc           = True
         castable' FXAction FXAction         = True
         castable' FXAction FXProc           = True
+
+        castable' FXMut    FXPure           = True      -- Hideous lies! But a temporarily justifiable deception.
+        castable' FXPure   FXAction         = True
+
         castable' fx1      fx2              = False
 
 castable env (TNil _ k1) (TNil _ k2)
