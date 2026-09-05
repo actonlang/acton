@@ -100,6 +100,7 @@
   - [Override Dependency](pkg/override_dependency.md)
   - [Remove Dependency](pkg/remove_dependency.md)
   - [Fetch Deps (Airplane mode)](pkg/fetch_dependencies.md)
+  - [Output Artifacts & Cache](output_artifacts.md)
   - [Zig / C / C++ dependencies](zig_dependencies.md)
 - [Security and Trust](security/intro.md)
 - [Working with Zig / C / C++](working_with_zig.md)

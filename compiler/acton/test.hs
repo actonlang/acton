@@ -1005,6 +1005,31 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
+  , testCase "build parser accepts artifact repositories" $ do
+      parsed <- parseArgs ["build", "--artifact-repo", "local-registry.local-domain.com/acton-out"]
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          assertEqual "artifact repos"
+            ["local-registry.local-domain.com/acton-out"]
+            (C.artifact_repos (C.buildCompile buildOpts))
+        _ ->
+          assertFailure "expected build command"
+  , testCase "artifact parser accepts top-level push command" $ do
+    parsed <- parseArgs ["artifact", "push", "--artifact-repo", "registry.local/acton-out"]
+    case parsed of
+      C.CmdOpt _ (C.Artifact (C.ArtifactPush opts)) -> do
+        assertEqual "artifact repo" "registry.local/acton-out" (C.artifactPushArtifactRepo opts)
+      _ ->
+        assertFailure "expected artifact push command"
+  , testCase "artifact parser rejects raw push refs" $ do
+      assertParseFails ["artifact", "push", "--ref", "registry.local/acton-out:anything"]
+  , testCase "artifact subcommands accept global options" $ do
+      parsed <- parseArgs ["artifact", "pack", "--verbose"]
+      case parsed of
+        C.CmdOpt gopts (C.Artifact (C.ArtifactPack _)) ->
+          assertBool "verbose should be set" (C.verbose gopts)
+        _ ->
+          assertFailure "expected artifact pack command"
   , testCase "build parser help includes --release alias" $ do
       helpText <- renderParserHelp ["build", "--help"]
       assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
@@ -1270,6 +1295,13 @@ parseFlagTests =
         OA.Failure failure -> do
           let (msg, _) = OA.renderFailure failure "acton"
           assertFailure ("parser failed for " ++ unwords args ++ ":\n" ++ msg)
+        OA.CompletionInvoked _ ->
+          assertFailure ("parser requested shell completion for " ++ unwords args)
+
+    assertParseFails args =
+      case OA.execParserPure OA.defaultPrefs parserInfo args of
+        OA.Failure _ -> return ()
+        OA.Success _ -> assertFailure ("parser unexpectedly accepted " ++ unwords args)
         OA.CompletionInvoked _ ->
           assertFailure ("parser requested shell completion for " ++ unwords args)
 
@@ -1597,31 +1629,82 @@ actonProjTests =
           assertBool "root build.zig should bind the colliding zig dep separately"
             ("const dep_shared_2 = b.dependency(\"acton_zig_shared_2\"" `isInfixOf` rootBuildZig)
   , testCase "dep override path must be an Acton project root" $ do
-        withSystemTempDirectory "acton-invalid-dep-override" $ \proj -> do
-          let srcDir = proj </> "src"
-              buildAct = proj </> "Build.act"
-              mainAct = srcDir </> "main.act"
-          createDirectoryIfMissing True srcDir
-          createDirectoryIfMissing True (proj </> "deps")
-          writeFile buildAct $ unlines
-            [ "name = \"invalid_dep_override\""
-            , "fingerprint = 0xb33bef4512345678"
-            , ""
-            , "dependencies = {"
-            , "  \"dep_a\": (path=\"deps/dep_a_missing\")"
-            , "}"
-            ]
-          writeFile mainAct $ unlines
-            [ "actor main(env):"
-            , "    print(\"hello\")"
-            , "    env.exit(0)"
-            ]
-          actonExe <- canonicalizePath "../../dist/bin/acton"
-          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=deps"]){ cwd = Just proj } ""
-          assertEqual "acton should fail for invalid --dep path" (ExitFailure 1) returnCode
-          assertBool "error should mention bad dependency path" ("Dependency dep_a path is not an Acton project root" `isInfixOf` cmdErr)
-          assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr)
-          assertBool "error should mention src requirement" ("src/" `isInfixOf` cmdErr)
+        withSystemTempDirectory "acton-invalid-dep-override" $ \proj ->
+          withSystemTempDirectory "acton-artifact-dep" $ \artifactDep -> do
+            let srcDir = proj </> "src"
+                buildAct = proj </> "Build.act"
+                mainAct = srcDir </> "main.act"
+                invalidDepDir = proj </> "not_a_project_root"
+            createDirectoryIfMissing True srcDir
+            createDirectoryIfMissing True invalidDepDir
+            createDirectoryIfMissing True (artifactDep </> "out" </> "types")
+            writeFile buildAct $ unlines
+              [ "name = \"invalid_dep_override\""
+              , "fingerprint = 0xb33bef4512345678"
+              , ""
+              , "dependencies = {"
+              , "  \"dep_a\": (path=\"deps/dep_a_missing\")"
+              , "}"
+              ]
+            writeFile mainAct $ unlines
+              [ "actor main(env):"
+              , "    print(\"hello\")"
+              , "    env.exit(0)"
+              ]
+            writeFile (artifactDep </> "Build.act") $ unlines
+              [ "name = \"artifact_dep\""
+              , "fingerprint = 0xa44bef4512345678"
+              , "dependencies = {}"
+              , "zig_dependencies = {}"
+              ]
+            writeFile (artifactDep </> "acton-artifact.json") "{}"
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--dep", "dep_a=not_a_project_root"]){ cwd = Just proj } ""
+            assertEqual "acton should fail for invalid --dep path" (ExitFailure 1) returnCode
+            assertBool "error should mention bad dependency path" ("Dependency dep_a path is not an Acton project root" `isInfixOf` cmdErr)
+            assertBool "error should mention required project files" ("Build.act" `isInfixOf` cmdErr)
+            assertBool "error should mention src requirement" ("src/" `isInfixOf` cmdErr)
+            (artifactReturnCode, _artifactOut, artifactErr) <- readCreateProcessWithExitCode
+              (proc actonExe ["build", "--dep", "dep_a=" ++ artifactDep]){ cwd = Just proj } ""
+            assertEqual "acton should reject artifact roots as --dep paths" (ExitFailure 1) artifactReturnCode
+            assertBool "artifact root should still be rejected as a local source dep"
+              ("Dependency dep_a path is not an Acton project root" `isInfixOf` artifactErr)
+            writeFile buildAct $ unlines
+              [ "name = \"invalid_dep_override\""
+              , "fingerprint = 0xb33bef4512345678"
+              , ""
+              , "dependencies = {"
+              , "  \"dep_a\": (path=" ++ show artifactDep ++ ")"
+              , "}"
+              ]
+            (pathReturnCode, _pathOut, pathErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just proj } ""
+            assertEqual "acton should reject artifact roots as Build.act paths" (ExitFailure 1) pathReturnCode
+            assertBool "path error should point users to artifact repos"
+              ("Use --artifact-repo to search output artifacts" `isInfixOf` pathErr)
+
+  -- Producing an artifact ships .tydb only, so the back passes must not run;
+  -- code generation is deferred to the build that consumes the artifact.
+  , testCase "artifact pack skips back passes" $ do
+        withSystemTempDirectory "acton-artifact-pack-nocodegen" $ \proj -> do
+            let srcDir = proj </> "src"
+            createDirectoryIfMissing True srcDir
+            writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"artifact_pack_nocodegen\""
+              , "fingerprint = 0xd51ea8e2a1b2c3d4"
+              ]
+            writeFile (srcDir </> "lib.act") $ unlines
+              [ "def greeting() -> str:"
+              , "    return \"hello\""
+              ]
+            actonExe <- canonicalizePath "../../dist/bin/acton"
+            (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["artifact", "pack"]){ cwd = Just proj } ""
+            assertEqual ("artifact pack should succeed: " ++ cmdErr) ExitSuccess returnCode
+            archiveExists <- doesFileExist (proj </> "out" </> "acton-out.tar.gz")
+            assertBool "artifact archive should be written" archiveExists
+            tydbExists <- doesDirectoryExist (proj </> "out" </> "types" </> "artifact_pack_nocodegen" </> "lib.tydb")
+            assertBool "artifact pack should write .tydb" tydbExists
+            cExists <- doesFileExist (proj </> "out" </> "types" </> "artifact_pack_nocodegen" </> "lib.c")
+            assertBool "artifact pack should not generate C code" (not cExists)
 
   -- Verify pruning keeps binaries for modules that still have roots across build / test runs.
   , testCase "executable pruning" $ do
@@ -1833,6 +1916,40 @@ pkgCliTests =
         case PkgCommands.decodePackageIndex (LBS.pack body) of
           Left _ -> return ()
           Right _ -> assertFailure "package index entry without kinds should fail"
+  , testCase "artifact hash only includes package inputs" $ do
+        withSystemTempDirectory "acton-artifact-hash-inputs" $ \tmp -> do
+          acton <- canonicalizePath "../../dist/bin/acton"
+          let clean = tmp </> "clean"
+              noisy = tmp </> "noisy"
+              writePkg dir body = do
+                createDirectoryIfMissing True (dir </> "src")
+                writeFile (dir </> "Build.act") $ unlines
+                  [ "name = \"hash_pkg\""
+                  , "fingerprint = 0xa33bef4512345678"
+                  , "dependencies = {}"
+                  , "zig_dependencies = {}"
+                  ]
+                writeFile (dir </> "src" </> "main.act") body
+              hashPath dir = do
+                (code, out, err) <- readCreateProcessWithExitCode
+                  (proc acton ["artifact", "hash", dir]) ""
+                assertEqual ("acton artifact hash should succeed\n" ++ err) ExitSuccess code
+                return (dropWhileEnd isSpace (dropWhile isSpace out))
+          writePkg clean "actor main(env):\n    env.exit(0)\n"
+          writePkg noisy "actor main(env):\n    env.exit(0)\n"
+          createDirectoryIfMissing True (noisy </> "out" </> "types")
+          createDirectoryIfMissing True (noisy </> ".build")
+          writeFile (noisy </> "README.md") "not a package input\n"
+          writeFile (noisy </> "out" </> "types" </> "ignored.ty") "ignored\n"
+          writeFile (noisy </> ".build" </> "ignored") "ignored\n"
+          writeFile (noisy </> "build.zig") "ignored\n"
+          writeFile (noisy </> "build.zig.zon") "ignored\n"
+          cleanHash <- hashPath clean
+          noisyHash <- hashPath noisy
+          assertEqual "non-package files should not affect artifact source hash" cleanHash noisyHash
+          writeFile (noisy </> "src" </> "main.act") "actor main(env):\n    print(\"changed\")\n    env.exit(0)\n"
+          changedHash <- hashPath noisy
+          assertBool "source files should affect artifact source hash" (cleanHash /= changedHash)
   ]
 
 -- Creates testgroup from .act files found in specified directory

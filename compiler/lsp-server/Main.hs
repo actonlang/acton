@@ -398,6 +398,11 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpGlobalTasks = globalTasks
         , Compile.cpNeededTasks = neededTasks
         , Compile.cpDbpBlocked = dbpBlocked
+        , Compile.cpPrebuiltRoots = Data.Set.fromList
+            [ Compile.projRoot pctx
+            | pctx <- M.elems (cachedProjectMap cache)
+            , Compile.projPrebuilt pctx
+            ]
         , Compile.cpRootTasks = rootTasks
         , Compile.cpRootPins = cachedRootPins cache
         , Compile.cpIncremental = True
