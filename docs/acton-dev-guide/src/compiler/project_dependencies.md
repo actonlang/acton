@@ -13,6 +13,15 @@ Project discovery in `Acton.Compile` only follows Acton package dependencies.
 Those edges determine the project graph used for module ordering, cache reuse,
 import visibility, and type-check planning.
 
+Concrete path and archive declarations determine version selection. A
+declaration such as `"seeds": (follows="garden.seeds")` contributes no
+root pin or version choice: after concrete dependency resolution and
+fingerprint deduplication, it points to the selected target of that dependency
+path. References are resolved in each declaring project's dependency scope;
+relative concrete paths retain their original declaring project as their base.
+Following chains are allowed, while missing targets and reference cycles fail
+before compilation.
+
 Zig dependencies are not Acton project edges. They do not contribute modules to
 the import graph and they are not used for project discovery.
 

@@ -2116,6 +2116,60 @@ main = do
 
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
+      let followsBuildAct fields = unlines
+            [ "name = \"demo\""
+            , "fingerprint = 0x1234abcd5678ef00"
+            , "dependencies = {\"yang\": (" ++ fields ++ ")}"
+            ]
+
+      it "preserves followed dependencies through JSON, rendering and updates" $ do
+        let buildAct = followsBuildAct "follows=\"stratoweave.yang\""
+        case BuildSpec.parseBuildAct buildAct of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            (BuildSpec.follows =<< M.lookup "yang" (BuildSpec.dependencies spec))
+              `shouldBe` Just "stratoweave.yang"
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            Ae.eitherDecode' json `shouldBe` Right spec
+            forM_ [ Right (BuildSpec.renderBuildAct spec)
+                  , BuildSpec.updateBuildActFromJSON buildAct json
+                  ] $ \result -> case result of
+              Left err -> expectationFailure err
+              Right rendered -> case BuildSpec.parseBuildAct rendered of
+                Left err -> expectationFailure err
+                Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "rejects malformed follows paths in Build.act and JSON" $ do
+        forM_ (["", "yang", ".yang", "stratoweave.", "stratoweave..yang", "stratoweave/yang", "stratoweave.1yang", "strato-weave.yang"] :: [String]) $ \ref -> do
+          case BuildSpec.parseBuildAct (followsBuildAct ("follows=" ++ show ref)) of
+            Left err -> err `shouldSatisfy` isInfixOf "follows must name a dependency"
+            Right _ -> expectationFailure ("Accepted malformed follows path: " ++ show ref)
+          let json = Ae.encode (Ae.object ["follows" Ae..= ref])
+          case Ae.eitherDecode' json :: Either String BuildSpec.PkgDep of
+            Left err -> err `shouldSatisfy` isInfixOf "follows must name a dependency"
+            Right _ -> expectationFailure ("Accepted malformed JSON follows path: " ++ show ref)
+
+      it "rejects non-string follows values" $ do
+        forM_ ["17", "None", "[\"stratoweave\", \"yang\"]", "\"{stratoweave}.yang\""] $ \value ->
+          case BuildSpec.parseBuildAct (followsBuildAct ("follows=" ++ value)) of
+            Left err -> err `shouldSatisfy` isInfixOf "follows must be a plain string literal"
+            Right _ -> expectationFailure ("Accepted non-string follows value: " ++ value)
+        forM_ ["17", "null", "[\"stratoweave\", \"yang\"]"] $ \value ->
+          case Ae.eitherDecode' (BL.fromStrict (B8.pack ("{\"follows\":" ++ value ++ "}"))) :: Either String BuildSpec.PkgDep of
+            Left _ -> pure ()
+            Right _ -> expectationFailure ("Accepted non-string JSON follows value: " ++ value)
+
+      it "rejects concrete source fields alongside follows" $ do
+        forM_ ["url", "hash", "path", "repo_url", "repo_ref"] $ \field -> do
+          let fields = "follows=\"stratoweave.yang\", " ++ field ++ "=\"value\""
+          case BuildSpec.parseBuildAct (followsBuildAct fields) of
+            Left err -> err `shouldSatisfy` isInfixOf "follows cannot be combined"
+            Right _ -> expectationFailure ("Accepted follows with " ++ field)
+          let json = BL.fromStrict (B8.pack ("{\"follows\":\"stratoweave.yang\", \"" ++ field ++ "\":null}"))
+          case Ae.eitherDecode' json :: Either String BuildSpec.PkgDep of
+            Left err -> err `shouldSatisfy` isInfixOf "follows cannot be combined"
+            Right _ -> expectationFailure ("Accepted JSON follows with " ++ field)
+
       it "parses canonical Build.act and dumps JSON" $ do
         let buildAct = unlines
               [ "# Canonical Build.act file"

@@ -199,6 +199,7 @@ module Acton.Compile
   , isAbsolutePath
   , collapseDots
   , rebasePath
+  , rebaseDepPath
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -688,7 +689,6 @@ data CompilePlan = CompilePlan
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
   , cpRootTasks :: [CompileTask]
-  , cpRootPins :: M.Map String BuildSpec.PkgDep
   , cpIncremental :: Bool
   , cpAllowPrune :: Bool
   , cpChangedPaths :: Maybe [FilePath]
@@ -739,7 +739,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     Just changed -> selectAffectedTasks rootProj opts' globalTasks dbpBlocked changed
   let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
-      rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
@@ -747,7 +746,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
     , cpRootTasks = rootTasks
-    , cpRootPins = rootPins
     , cpIncremental = incremental
     , cpAllowPrune = allowPrune'
     , cpChangedPaths = mChangedPaths
@@ -4419,9 +4417,10 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
     rootSpec0 <- loadBuildSpec rootAbs
     rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
-    let rootPins = BuildSpec.dependencies rootSpec
+    let rootPins = M.map (rebaseDepPath rootAbs) (BuildSpec.concreteDependencies rootSpec)
         (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
-    fst <$> go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    (projects, _) <- go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    resolveFollows projects
   where
     go root seen acc fpMap pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
@@ -4434,7 +4433,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           spec <- applyDepOverrides dirAbs depOverrides spec0
           let (_, fpMap1, _) = applyFingerprint dirAbs spec fpMap
           (deps, fpMap2) <- do
-            let depsList = M.toList (BuildSpec.dependencies spec)
+            let depsList = M.toList (BuildSpec.concreteDependencies spec)
             foldM (collectDep pins dirAbs) ([], fpMap1) depsList
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
@@ -4457,8 +4456,8 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
             case M.lookup depName pins of
               Nothing -> (dep, Nothing)
               Just pinDep ->
-                if pinDep == dep
-                  then (dep, Nothing)
+                if pinDep == rebaseDepPath base dep
+                  then (pinDep, Nothing)
                   else (pinDep, Just dep)
       when (isJust conflict) $
         unless (C.quiet gopts) $
@@ -4482,6 +4481,50 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 
     step root seen pins (acc, fpMap) (_, depBase, mSpec) =
       go root seen acc fpMap pins depBase mSpec
+
+-- | Bind passive dependency references after concrete selection and deduplication.
+-- A follows entry contributes neither a source nor a root pin. Every segment
+-- traverses the selected project's own dependency declarations.
+resolveFollows :: M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+resolveFollows projects = M.traverseWithKey resolveProject projects
+  where
+    resolveProject root ctx = do
+      deps <- forM (M.keys (BuildSpec.dependencies (projBuildSpec ctx))) $ \name -> do
+        target <- resolve [] root name
+        return (name, target)
+      return ctx { projDeps = deps }
+
+    resolve seen root name
+      | (root, name) `elem` seen =
+          throwProjectError ("Cyclic dependency follows: " ++ intercalate " -> "
+                             [ p ++ ":" ++ n | (p, n) <- reverse ((root, name) : seen) ])
+      | otherwise =
+          case M.lookup root projects of
+            Nothing -> throwProjectError ("Missing project for dependency follows: " ++ root)
+            Just ctx ->
+              case M.lookup name (BuildSpec.dependencies (projBuildSpec ctx)) of
+                Nothing -> throwProjectError ("Dependency follows target '" ++ name
+                                               ++ "' is not declared in " ++ root ++ "/Build.act")
+                Just dep ->
+                  case BuildSpec.follows dep of
+                    Nothing -> case lookup name (projDeps ctx) of
+                                 Just target -> return target
+                                 Nothing -> throwProjectError ("Unresolved dependency '" ++ name ++ "' in " ++ root)
+                    Just ref -> do
+                      target <- foldM (resolve ((root, name) : seen)) root (splitRef ref)
+                                `catch` \(ProjectError msg) ->
+                                  throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                                     ++ "' in " ++ root ++ "/Build.act:\n" ++ msg)
+                      let targetName = BuildSpec.specName (projBuildSpec (projects M.! target))
+                      unless (name == targetName) $
+                        throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                           ++ "', which resolves to project '" ++ targetName
+                                           ++ "'. Use the project name as the dependency name.")
+                      return target
+
+    splitRef ref = case break (== '.') ref of
+                     (name, []) -> [name]
+                     (name, _:rest) -> name : splitRef rest
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
@@ -4940,6 +4983,13 @@ rebasePath base p
   | isAbsolutePath p = normalise p
   | otherwise        = normalise (joinPath [base, p])
 
+-- | Keep a concrete source path relative to the project that declares it.
+rebaseDepPath :: FilePath -> BuildSpec.PkgDep -> BuildSpec.PkgDep
+rebaseDepPath base dep =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> dep { BuildSpec.path = Just (rebasePath base p) }
+      _ -> dep
+
 -- | Normalize --dep overrides relative to a base directory.
 -- Absolute override paths are kept, relative paths are rebased and normalized.
 normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
@@ -4960,6 +5010,7 @@ applyDepOverrides base overrides spec = do
     applyOne depsMap (depName, depPath) =
       case M.lookup depName depsMap of
         Nothing -> return depsMap
+        Just dep | isJust (BuildSpec.follows dep) -> return depsMap
         Just dep -> do
           let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
           absP <- normalizePathSafe absP0
@@ -5002,7 +5053,7 @@ fetchDependencies gopts paths depOverrides = do
         -- Tracks zig package dirs / hashes already pre-seeded, so the transitive
         -- walk over build.zig.zon files terminates on cycles and shared deps.
         zigSeen <- newIORef Data.Set.empty
-        let rootPins = BuildSpec.dependencies rootSpec
+        let rootPins = M.map (rebaseDepPath (projPath paths)) (BuildSpec.concreteDependencies rootSpec)
         _ <- walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen
                          Data.Set.empty (projPath paths) rootSpec
         return ()
@@ -5012,7 +5063,7 @@ fetchDependencies gopts paths depOverrides = do
       if Data.Set.member projAbs seen
         then return seen
         else do
-          selectedDeps <- forM (M.toList (BuildSpec.dependencies spec)) $
+          selectedDeps <- forM (M.toList (BuildSpec.concreteDependencies spec)) $
             selectDependency rootPins projAbs
           let pkgFetches = catMaybes
                 [ mkPkgFetch cacheDir zigExe globalCache name dep | (name, dep) <- selectedDeps ]
@@ -5051,8 +5102,8 @@ fetchDependencies gopts paths depOverrides = do
             case M.lookup depName rootPins of
               Nothing -> (dep, Nothing)
               Just pinDep ->
-                if pinDep == dep
-                  then (dep, Nothing)
+                if pinDep == rebaseDepPath base dep
+                  then (pinDep, Nothing)
                   else (pinDep, Just dep)
       when (isJust conflict) $
         unless (C.quiet gopts) $
@@ -5324,7 +5375,7 @@ collectDepTypePaths projDir overrides = do
     go seen fpMap dir spec0 = do
       spec <- applyDepOverrides dir overrides spec0
       let (_, fpMap1, _) = applyFingerprint dir spec fpMap
-      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
+      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.concreteDependencies spec))
 
     step base (seen, fpMap, acc) (depName, dep) = do
       depBase <- resolveDepBase base depName dep

@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 import Control.Monad
-import Data.Char (isAlphaNum, isSpace)
+import Data.Char (isAlphaNum, isSpace, toLower)
 import Data.List
 import Data.List.Split
 import Data.Maybe (catMaybes)
@@ -1301,7 +1301,9 @@ parseFlagTests =
 
 actonProjTests =
   testGroup "compiler project tests"
-  [ testCase "simple project" $ do
+  [ dependencyDeclarationTests
+
+  , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
         testBuild "" ExitSuccess False "test/project/simple"
 
@@ -1703,6 +1705,140 @@ actonProjTests =
         assertBool "bar root stub should be removed after source deletion" . not =<< doesFileExist barRoot
         assertBool "bar binary should be removed after source deletion" . not =<< doesFileExist barBin
   ]
+
+dependencyDeclarationTests =
+  testGroup "dependency declarations"
+  [ testCase "follows chains preserve dependency path ownership" $ withFixture $ \acton tmp app platform _ -> do
+      let adapter = tmp </> "deps" </> "adapter"
+      writeProject adapter "adapter" [("yang", pathDep "../../shared/yang")]
+      writeModule adapter "lib" answerSource
+      writeProject platform "platform"
+        [("adapter", pathDep "../adapter"), ("yang", followsDep "adapter.yang")]
+      writeModule app "main" "import yang.api\n\ndef answer() -> int:\n    return yang.api.answer()\n"
+      forM_ ["platform.yang", "platform.adapter.yang"] $ \ref -> do
+        writeProject app "app" [platformDep, ("yang", followsDep ref)]
+        expectSuccess ("following " ++ ref) =<< runBuild acton app
+
+  , testCase "follows leaves sibling version selection unchanged" $ withFixture $ \acton tmp app platform yang -> do
+      let first = tmp </> "first" </> "yang"
+          sibling = tmp </> "a"
+          concreteDeps = [("a", pathDep "../a"), platformDep]
+      writeProject first "yang" []
+      writeModule first "lib" answerSource
+      writeModule first "api" (answerSource ++ "\ndef first_only() -> int:\n    return 1\n")
+      writeProject sibling "a" [("yang", pathDep "../first/yang")]
+      writeModule sibling "lib" "import yang.api\n\ndef answer() -> int:\n    return yang.api.answer()\n"
+      writeProject app "app" concreteDeps
+      writeModule app "main" "import platform\n\ndef answer() -> int:\n    return platform.answer()\n"
+      expectSuccess "concrete graph with conflicting sibling versions" =<< runBuild acton app
+      doesDirectoryExist (first </> "out/types/yang/api.tydb")
+        >>= assertBool "the first concrete yang version should be selected"
+      doesDirectoryExist (yang </> "out/types/yang/api.tydb")
+        >>= assertBool "the later concrete yang version should be deduplicated" . not
+      writeProject app "app" (concreteDeps ++ [("yang", followsDep "platform.yang")])
+      writeModule app "main" "import yang.api\n\ndef answer() -> int:\n    return yang.api.first_only()\n"
+      result@(_, out, err) <- runBuild acton app
+      expectSuccess "follows binds the already selected sibling version" result
+      assertBool "follows should not introduce a root pin"
+        (not ("dependency 'yang'" `isInfixOf` (out ++ err)
+              && "overridden by root pin" `isInfixOf` (out ++ err)))
+      writeModule app "main" $ unlines
+        [ "import platform"
+        , "import yang.api"
+        , ""
+        , "actor main(env):"
+        , "    print(platform.answer() + yang.api.first_only())"
+        , "    env.exit(0)"
+        ]
+      expectSuccess "full build with the selected following dependency" =<<
+        readCreateProcessWithExitCode (proc acton ["build", "--color", "never"]){ cwd = Just app } ""
+      forM_ [app, platform] $ \dir -> do
+        zon <- readFile (dir </> "build.zig.zon")
+        assertBool (dir ++ " should use the selected yang path")
+          (any (`isInfixOf` zon) ["first/yang", "first\\\\yang"])
+        assertBool (dir ++ " should not use the discarded yang path")
+          (not (any (`isInfixOf` zon) ["shared/yang", "shared\\\\yang"]))
+      runResult@(_, runOut, _) <- readCreateProcessWithExitCode (proc (app </> "out/bin/main") []) ""
+      expectSuccess "following dependency binary" runResult
+      assertEqual "both imports should use the selected yang implementation" "43\n" runOut
+
+  , testCase "concrete root pins propagate through follows" $ withFixture $ \acton tmp app _ _ -> do
+      let pinned = tmp </> "pinned" </> "yang"
+          consumer = tmp </> "consumer"
+      writeProject pinned "yang" []
+      writeModule pinned "api" (answerSource ++ "\ndef pinned_only() -> int:\n    return 1\n")
+      writeProject consumer "consumer" [platformDep, ("yang", followsDep "platform.yang")]
+      writeModule consumer "lib" "import yang.api\n\ndef answer() -> int:\n    return yang.api.pinned_only()\n"
+      writeProject app "app"
+        [("consumer", pathDep "../consumer"), ("yang", pathDep "../pinned/yang")]
+      writeModule app "main" "import consumer\n\ndef answer() -> int:\n    return consumer.answer()\n"
+      expectSuccess "root pin selected through a downstream follows" =<< runBuild acton app
+
+  , testGroup "invalid follows references"
+      [ testCase ref $ withFixture $ \acton _ app _ _ -> do
+          writeProject app "app" [platformDep, ("yang", followsDep ref)]
+          writeModule app "main" answerSource
+          result@(_, out, err) <- runBuild acton app
+          expectFailure "missing follows target" ref result
+          assertBool "diagnostic should identify follows" ("follows" `isInfixOf` map toLower (out ++ err))
+      | ref <- ["missing.yang", "platform.missing", "platform.yang.missing"]
+      ]
+
+  , testCase "follows cycles fail with a diagnostic" $ withFixture $ \acton _ app platform _ -> do
+      writeProject app "app" [platformDep, ("yang", followsDep "platform.yang")]
+      writeProject platform "platform" [("app", pathDep "../../app"), ("yang", followsDep "app.yang")]
+      writeModule app "main" answerSource
+      result@(_, out, err) <- runBuild acton app
+      expectFailure "cyclic follows" "follows" result
+      assertBool "diagnostic should identify the cycle"
+        (any (`isInfixOf` map toLower (out ++ err)) ["cycle", "cyclic"])
+  ]
+  where
+    platformDep = ("platform", pathDep "../deps/platform")
+    pathDep path = "path=" ++ show path
+    followsDep ref = "follows=" ++ show ref
+    answerSource = "def answer() -> int:\n    return 42\n"
+
+    writeProject :: FilePath -> String -> [(String, String)] -> IO ()
+    writeProject dir name deps = do
+      createDirectoryIfMissing True (dir </> "src")
+      let fp = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+      writeFile (dir </> "Build.act") $ unlines
+        [ "name = " ++ show name
+        , "fingerprint = " ++ fp
+        , "dependencies = {"
+        , intercalate ",\n" ["    " ++ show dep ++ ": (" ++ fields ++ ")" | (dep, fields) <- deps]
+        , "}"
+        ]
+
+    writeModule dir name content = writeFile (dir </> "src" </> name <.> "act") content
+
+    withFixture action = withSystemTempDirectory "acton-dependency-declarations" $ \tmp -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      let app = tmp </> "app"
+          platform = tmp </> "deps" </> "platform"
+          yang = tmp </> "shared" </> "yang"
+      writeProject yang "yang" []
+      writeModule yang "lib" answerSource
+      writeModule yang "api" answerSource
+      writeProject platform "platform" [("yang", pathDep "../../shared/yang")]
+      writeModule platform "lib" "import yang.api\n\ndef answer() -> int:\n    return yang.api.answer()\n"
+      writeProject app "app" [platformDep]
+      action acton tmp app platform yang
+
+    runBuild = runBuildWith []
+
+    runBuildWith flags acton dir = readCreateProcessWithExitCode
+      (proc acton (["build", "--skip-build", "--color", "never"] ++ flags)){ cwd = Just dir } ""
+
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+
+    expectFailure label detail (code, out, err) = do
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) (ExitFailure 1) code
+      assertBool (label ++ ": expected diagnostic containing " ++ show detail ++ "\n" ++ out ++ err)
+        (detail `isInfixOf` (out ++ err))
 
 actonRootArgTests =
   testGroup "compiler acton --root tests"

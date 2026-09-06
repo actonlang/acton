@@ -97,6 +97,7 @@
   - [Fingerprint and Lineage](pkg/fingerprint.md)
   - [Add Dependency](pkg/add_dependency.md)
   - [Local Dependencies](pkg/local_dependencies.md)
+  - [Follow a Dependency](pkg/follow_dependency.md)
   - [Override Dependency](pkg/override_dependency.md)
   - [Remove Dependency](pkg/remove_dependency.md)
   - [Fetch Deps (Airplane mode)](pkg/fetch_dependencies.md)

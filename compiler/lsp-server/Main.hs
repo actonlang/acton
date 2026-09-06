@@ -32,7 +32,6 @@ import Language.LSP.Protocol.Types hiding (Diagnostic, Position)
 import qualified Language.LSP.Protocol.Types as LSP
 import Language.LSP.Server
 
-import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Completion as Completion
@@ -73,7 +72,6 @@ data ProjectBuildCache = ProjectBuildCache
   , cachedProjectMap :: M.Map FilePath Compile.ProjCtx
   , cachedGlobalTasks :: [Compile.GlobalTask]
   , cachedDbpBlocked :: Data.Set.Set Compile.TaskKey
-  , cachedRootPins :: M.Map String BuildSpec.PkgDep
   , cachedImportKeys :: HM.HashMap FilePath String
   }
 
@@ -281,7 +279,6 @@ cacheCompilePlan plan = do
         , cachedProjectMap = Compile.cpProjMap plan
         , cachedGlobalTasks = Compile.cpGlobalTasks plan
         , cachedDbpBlocked = Compile.cpDbpBlocked plan
-        , cachedRootPins = Compile.cpRootPins plan
         , cachedImportKeys = importKeys
         }
   atomicModifyIORef' projectBuildCachesRef $ \m ->
@@ -399,7 +396,6 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpNeededTasks = neededTasks
         , Compile.cpDbpBlocked = dbpBlocked
         , Compile.cpRootTasks = rootTasks
-        , Compile.cpRootPins = cachedRootPins cache
         , Compile.cpIncremental = True
         , Compile.cpAllowPrune = False
         , Compile.cpChangedPaths = Just [changedPath]

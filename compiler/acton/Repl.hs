@@ -287,6 +287,7 @@ renderReplBuildAct deps mproj =
               , BuildSpec.path = Just p
               , BuildSpec.repo_url = Nothing
               , BuildSpec.repo_ref = Nothing
+              , BuildSpec.follows = Nothing
               }
 
 replLoop :: MonadIO m => ReplShell m -> ReplContext -> ReplState -> m ()
