@@ -1093,24 +1093,14 @@ sigModuleIndex projMap rootProj = do
 
 sigProjectSearchOrder :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
 sigProjectSearchOrder projMap rootProj =
-    rootProj : snd (go (Data.Set.singleton rootProj) rootProj)
-  where
-    go seen root =
-      case M.lookup root projMap of
-        Nothing -> (seen, [])
-        Just ctx -> foldl' step (seen, []) (projDeps ctx)
-
-    step (seen, acc) (_, depRoot)
-      | Data.Set.member depRoot seen = (seen, acc)
-      | otherwise =
-          let seen' = Data.Set.insert depRoot seen
-              (seenNext, sub) = go seen' depRoot
-          in (seenNext, acc ++ [depRoot] ++ sub)
+    rootProj : maybe [] (map snd . projDeps) (M.lookup rootProj projMap)
 
 sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
 sigTySearchPath opts paths rootProj projMap =
     case M.lookup rootProj projMap of
-      Just rootCtx -> let ps = searchPathForProject opts projMap rootCtx
+      Just rootCtx -> let ps = [ projTypesDir ctx | root <- sigProjectSearchOrder projMap rootProj
+                                                        , Just ctx <- [M.lookup root projMap] ]
+                              ++ C.searchpath opts ++ systemTypePaths (sysPath paths) (sysTypes paths)
                       in ps ++ [projTypesDir rootCtx </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
       Nothing      -> searchPath paths
 

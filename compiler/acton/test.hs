@@ -1708,7 +1708,75 @@ actonProjTests =
 
 dependencyDeclarationTests =
   testGroup "dependency declarations"
-  [ testCase "follows chains preserve dependency path ownership" $ withFixture $ \acton tmp app platform _ -> do
+  [ testGroup "imports require direct declarations"
+      [ testCase label $ withFixture $ \acton _ app _ _ -> do
+          writeModule app "main" source
+          expectFailure "undeclared import" "yang" =<< runBuild acton app
+          writeProject app "app" [platformDep, ("yang", pathDep "../shared/yang")]
+          expectSuccess "direct dependency import" =<< runBuild acton app
+          expectSuccess "cached direct dependency import" =<< runBuild acton app
+          writeProject app "app" [platformDep]
+          expectFailure "cached undeclared import" "yang" =<< runBuild acton app
+          writeProject app "app" [platformDep, ("yang", followsDep "platform.yang")]
+          expectSuccess "following dependency import" =<< runBuild acton app
+      | (label, source) <-
+          [ ("bare", "import yang\n\ndef answer() -> int:\n    return yang.answer()\n")
+          , ("dotted", "import yang.api\n\ndef answer() -> int:\n    return yang.api.answer()\n")
+          , ("explicit lib", "import yang.lib\n\ndef answer() -> int:\n    return yang.lib.answer()\n")
+          , ("from bare", "from yang import answer\n\ndef value() -> int:\n    return answer()\n")
+          , ("from dotted", "from yang.api import answer\n\ndef value() -> int:\n    return answer()\n")
+          , ("from all", "from yang.api import *\n\ndef value() -> int:\n    return answer()\n")
+          ]
+      ]
+
+  , testGroup "cached dependency imports keep source spelling"
+      [ testCase label $ withFixture $ \acton _ app _ _ -> do
+          writeProject app "app" [platformDep, ("yang", followsDep "platform.yang")]
+          writeModule app "main" "import yang\n\ndef answer() -> int:\n    return yang.answer()\n"
+          expectSuccess "initial following dependency import" =<< runBuild acton app
+          writeProject app "app" [platformDep]
+          createDirectoryIfMissing True (takeDirectory (app </> "src" </> localModule <.> "act"))
+          writeModule app localModule answerSource
+          forM_ [("cached", []), ("rebuilt", ["--always-build"])] $ \(mode, flags) -> do
+            result <- runBuildWith flags acton app
+            if localImport
+              then expectSuccess (mode ++ " import of the replacement local module") result
+              else expectFailure (mode ++ " undeclared dependency import") "yang" result
+      | (label, localModule, localImport) <-
+          [ ("nested local lib is not a dependency declaration", "yang/lib", False)
+          , ("local module replaces dependency", "yang", True)
+          ]
+      ]
+
+  , testCase "root declarations do not authorize dependency imports" $ withFixture $ \acton _ app platform _ -> do
+      writeProject app "app" [platformDep, ("yang", pathDep "../shared/yang")]
+      writeProject platform "platform" []
+      writeModule app "main" "import platform\n\ndef answer() -> int:\n    return platform.answer()\n"
+      expectFailure "undeclared import in a dependency" "yang" =<< runBuild acton app
+
+  , testCase "dependency APIs retain transitive types" $ withFixture $ \acton _ app platform yang -> do
+      writeModule yang "api" $ unlines
+        [ "class Box(object):"
+        , "    value: int"
+        , "    def __init__(self, value: int):"
+        , "        self.value = value"
+        ]
+      writeModule platform "lib" $ unlines
+        [ "import yang.api"
+        , ""
+        , "def create() -> yang.api.Box:"
+        , "    return yang.api.Box(42)"
+        ]
+      writeModule app "main" $ unlines
+        [ "import platform"
+        , ""
+        , "def answer() -> int:"
+        , "    return platform.create().value"
+        ]
+      expectSuccess "transitive type in direct dependency API" =<< runBuild acton app
+      expectSuccess "cached transitive type in direct dependency API" =<< runBuild acton app
+
+  , testCase "follows chains preserve dependency path ownership" $ withFixture $ \acton tmp app platform _ -> do
       let adapter = tmp </> "deps" </> "adapter"
       writeProject adapter "adapter" [("yang", pathDep "../../shared/yang")]
       writeModule adapter "lib" answerSource

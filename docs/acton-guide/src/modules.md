@@ -27,6 +27,13 @@ dependency name comes from the key in the consuming project's
 Currently, that dependency name must match the dependency project's
 `name` field.
 
+To import modules from another package, declare that package in your
+project's `Build.act`. Builtins and the standard library are available
+without dependency declarations.
+
+Use a [following dependency](pkg/follow_dependency.md) to declare a package
+while sharing the version already selected through another dependency.
+
 Use modules to group code by responsibility. A good module has a clear
 job. For example:
 

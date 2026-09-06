@@ -167,6 +167,7 @@ module Acton.Compile
   , discoverProjects
   , pathsForModule
   , searchPathForProject
+  , systemTypePaths
   , moduleNameFromFile
   , enumerateProjectModules
   , normalizeDepOverrides
@@ -1538,6 +1539,26 @@ checkImportPrefixes key proj modSets imps
         Just mods0      = M.lookup p0 modSets
         prefixed        = [ mn | mn <- imps, Data.Set.member mn mods0 ]
 
+-- | Source imports may name only local modules or directly declared projects.
+-- Transitive interfaces remain available for types mentioned by imported APIs.
+checkImportDependencies :: Paths -> M.Map FilePath ProjCtx -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> IO ()
+checkImportDependencies paths projects modSets imps =
+    forM_ imps $ \mn ->
+      case A.modPath mn of
+        n:_ | Data.Set.member n projectNames
+            , n `notElem` directNames
+            , not (Data.Set.member (addProjPrefix paths mn) localMods) ->
+          throwProjectError ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths (modName paths)
+                             ++ " is not declared in " ++ projPath paths ++ "/Build.act.\n"
+                             ++ "Add a direct dependency, using follows to share another dependency's selection.")
+        _ -> return ()
+  where
+    projectNames = Data.Set.fromList [ BuildSpec.specName (projBuildSpec ctx) | ctx <- M.elems projects ]
+    directNames = "std" : [ BuildSpec.specName (projBuildSpec ctx)
+                          | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
+                          , Just ctx <- [M.lookup root projects] ]
+    localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
+
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
@@ -1597,7 +1618,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
         allDeps :: M.Map ProjDir (Data.Set.Set ProjName)
         allDeps = M.fromList [ (projRoot ctx, Data.Set.fromList (map fst $ projDeps ctx)) | (ctx,_) <- perProj ]
         orderCache :: M.Map ProjDir [ProjDir]
-        orderCache = M.fromList [ (projRoot ctx, projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : map snd (projDeps ctx)) | (ctx, _) <- perProj ]
         -- Declared modules in all reachable projects (paired with their project paths)
         allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
     seedKeys <- case mSeeds of
@@ -1619,11 +1640,19 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
             Just actFile -> do
               let ctx = projMap M.! tkProj k
               paths <- pathsForModule opts projMap ctx (tkMod k)
-              task  <- readModuleTask sp gopts opts paths actFile
+              task0 <- readModuleTask sp gopts opts paths actFile
+              -- Cached imports have canonical names: bare dep imports are stored
+              -- as dep.lib. If that namespace has become local, recover the
+              -- source spelling before resolving it and rebuild its interface.
+              task <- case task0 of
+                        TyTask{} | any (overlapsLocal paths modSets) (importsOf task0) ->
+                          materializeTask opts sp (tkMod k) actFile M.empty Nothing task0
+                        _ -> return task0
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
                   deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
                   imps = restoredImportsOf paths task
               checkImportPrefixes k (projName paths) modSets imps
+              checkImportDependencies paths projMap modSets imps
               let providers = resolveProviders k (projName paths) order modSets deps imps
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
@@ -1632,6 +1661,15 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
                                     , gtImportProviders = providers
                                     } : acc
               go modMaps modSets allDeps orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+
+
+    overlapsLocal paths modSets mn =
+      case A.modPath mn of
+        n:ns | n /= projName paths ->
+          any (`Data.Set.member` localMods)
+              (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
+        _ -> False
+      where localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
 
 
 -- | Select the subgraph needed for a given build request.
@@ -5473,17 +5511,3 @@ fmtTime t =
   where
     secs :: Float
     secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
-
--- | Topologically order projects so dependencies come first.
--- Used to build search paths and providers in dependency order.
-projDepClosure :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
-projDepClosure ctxs root = reverse (dfs Data.Set.empty [] root)
-  where
-    depsOf p = maybe [] (map snd . projDeps) (M.lookup p ctxs)
-
-    dfs seen acc node
-      | Data.Set.member node seen = acc
-      | otherwise =
-          let seen' = Data.Set.insert node seen
-              acc'  = foldl' (\a n -> dfs seen' a n) acc (depsOf node)
-          in node : acc'

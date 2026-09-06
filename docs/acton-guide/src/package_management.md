@@ -46,6 +46,7 @@ the same prefix, such as `import foo.parser` for `src/parser.act`.
 Currently, the dependency name must match the dependency project's
 `name` field.
 
+Each project must declare the packages it imports in its own `Build.act`.
 A [following dependency](pkg/follow_dependency.md) lets a declaration use
 the version selected through another dependency without adding a URL or
 content hash of its own.

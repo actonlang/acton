@@ -31,7 +31,7 @@ dependencies before later compile planning uses them.
 
 ## Acton import prefixes
 
-Each reachable Acton project contributes modules under the dependency name used
+Each directly declared Acton dependency contributes modules under the name used
 by its consumer. A dependency entry named `foo` therefore exposes that
 dependency's modules under the `foo` import prefix:
 
@@ -50,6 +50,16 @@ Currently, dependency entries must use the same name as the dependency
 project's `name` field. The import-prefix rule is still described in terms of
 the dependency entry name so the docs continue to match the public model when
 separate dependency aliases are supported.
+
+Source imports must refer to the current project's modules, its directly
+declared dependencies, or system modules. Following declarations count as
+direct declarations. This check also applies when compilation reuses cached
+interfaces; removing a declaration must not leave its imports available.
+
+The compiler still needs the complete transitive interface closure to resolve
+types appearing in dependency APIs and to generate code. Internal interface
+loading therefore retains access to transitive projects. This access does not
+authorize a source import from an undeclared package.
 
 ## Generated `build.zig` inputs
 

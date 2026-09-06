@@ -1,8 +1,9 @@
 # Follow a Dependency
 
-Sometimes another dependency already selects the package version you
-want to use. Declare `follows` to share that selection without specifying
-another archive URL, content hash, or local path.
+A project must declare every package whose modules it imports. Sometimes
+another dependency already selects the package version you want to use.
+Declare `follows` to share that selection without specifying another
+archive URL, content hash, or local path.
 
 For example, suppose a fictional `garden` package depends on a `seeds`
 package. An application that imports modules from both can use:
