@@ -75,7 +75,7 @@ acton test --name simple --watch
 acton test --module foo --name 'parse_.*'
 ```
 
-Name selection also limits compilation to modules that may contain matching tests and their imports. Tests within a selected module share its compiled code; imported test modules are compiled as dependencies but do not get test executables unless selected themselves.
+Name selection also limits compilation to modules that may contain matching tests and their imports. Add `--timing` to see how long source selection takes. Tests within a selected module share its compiled code; imported test modules are compiled as dependencies but do not get test executables unless selected themselves.
 
 Test builds follow the selected source files and their imports, and ignore the project's `libraries` groups in `Build.act`. This also applies when running all tests without selection flags. Application builds continue to honor those groups and their configured linkage.
 

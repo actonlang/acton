@@ -113,10 +113,15 @@ modulesOpt paths topts = [ proj ++ "." ++ m | m <- C.testModules topts ]
 -- import may change an inferred function type and make it eligible as a test.
 selectTestSources :: C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> [FilePath] -> IO [FilePath]
 selectTestSources gopts opts paths topts files = do
+    start <- getTime Monotonic
     regexes <- compileTestNameRegexes (C.testNames topts)
     let wanted = modulesOpt paths topts
         matches = not . null . filterTests regexes
-    filterM (selected wanted matches) files
+    sources <- filterM (selected wanted matches) files
+    when (C.timing gopts && not (quiet gopts opts)) $ do
+      end <- getTime Monotonic
+      putStrLn ("Timing: test source selection " ++ fmtTime (diffTimeSpec end start))
+    return sources
   where
     sp = Source.diskSourceProvider
     selected wanted matches file = do

@@ -1315,6 +1315,12 @@ parseFlagTests =
         assertFile "unselected actor module should not compile" False (cFile "actors")
         assertFile "unselected module's type error should not be compiled" False (cFile "broken")
         chosenTime <- getModificationTime (cFile "chosen")
+        forM_ [([], True), (["--quiet"], False), (["--json"], False), (["--types"], False)] $ \(outputFlags, visible) -> do
+          (timingCode, timingOut, timingErr) <- readCreateProcessWithExitCode
+            (proc acton (["test", "--name", "foo", "--timing", "--iter", "1"] ++ outputFlags)) { cwd = Just proj } ""
+          assertEqual ("timed selection failed:\n" ++ timingOut ++ timingErr) ExitSuccess timingCode
+          assertEqual "selection timing respects output mode" visible
+            ("Timing: test source selection " `isInfixOf` (timingOut ++ timingErr))
         (listCode, listOut, listErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "list", "--module", "chosen", "--name", "foo"]) { cwd = Just proj } ""
         assertEqual ("listing selected tests failed:\n" ++ listOut ++ listErr) ExitSuccess listCode
