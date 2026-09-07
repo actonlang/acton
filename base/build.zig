@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const shared = b.option(bool, "shared", "") orelse false;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -237,7 +238,7 @@ pub fn build(b: *std.Build) void {
 
     const libActon = b.addLibrary(.{
         .name = "Acton",
-        .linkage = .static,
+        .linkage = if (shared) .dynamic else .static,
         .root_module = b.createModule(.{
             .root_source_file = b.path("__root.zig"),
             .target = target,

@@ -47,15 +47,39 @@ generate env srcbase srcText emitLines m hash = do return (n, h, c)
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
-genRoot env0 qn@(GName m n)         = do return $ render (cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot)
+genRoot env0 qn@(GName m n)         = do return $ render (text "#ifdef ACTON_TEST_LAUNCHER" $+$ cLauncher $+$ text "#else" $+$
+                                                       cInclude $+$ cIncludeMods $+$ cInit $+$ cRoot $+$ cMain $+$ text "#endif")
   where env                         = genEnv $ setMod m env0
-        cInclude                    = text "#include \"rts/common.h\""
+        entry                       = gen env (GName m (Derived n (globalName "entry")))
+        cLauncher                   = vcat (map text
+                                       [ "#include <dlfcn.h>"
+                                       , "#include <stdio.h>"
+                                       , "int main(int argc, char **argv) {"
+                                       , "    void *lib = dlopen(ACTON_TEST_LIBRARY, RTLD_NOW);"
+                                       , "    if (!lib) {"
+                                       , "        fprintf(stderr, \"Cannot load test library %s: %s\\n\", ACTON_TEST_LIBRARY, dlerror());"
+                                       , "        return 1;"
+                                       , "    }"
+                                       , "    int (*entry)(int, char **) = (int (*)(int, char **))dlsym(lib, " ++ show (render entry) ++ ");"
+                                       , "    if (!entry) {"
+                                       , "        fprintf(stderr, \"Cannot load test entry %s: %s\\n\", " ++ show (render entry) ++ ", dlerror());"
+                                       , "        return 1;"
+                                       , "    }"
+                                       , "    return entry(argc, argv);"
+                                       , "}"
+                                       ])
+        cInclude                    = text "#include \"rts/rts.h\""
         cIncludeMods                = include env "out/types" m
-        cInit                       = (text "void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
+        cInit                       = (text "static void" <+> gen env primROOTINIT <+> parens empty <+> char '{') $+$
                                        nest 4 (gen env (GName m initKW) <> parens empty <> semi) $+$
                                        char '}'
-        cRoot                       = (gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
+        cRoot                       = (text "static" <+> gen env tActor <+> gen env primROOT <+> parens empty <+> char '{') $+$
                                        nest 4 (text "return" <+> parens (gen env tActor) <> gen env primNEWACTOR <> parens (gen env qn) <> semi) $+$
+                                       char '}'
+        cMain                       = text "#ifdef ACTON_TEST_SHARED" $+$
+                                       text "int" <+> entry <> text "(int argc, char **argv) {" $+$
+                                       text "#else" $+$ text "int main(int argc, char **argv) {" $+$ text "#endif" $+$
+                                       nest 4 (text "return acton_main" <> parens (hsep (punctuate comma [text "argc", text "argv", gen env primROOTINIT, gen env primROOT])) <> semi) $+$
                                        char '}'
 
 

@@ -1233,6 +1233,24 @@ parseFlagTests =
               (code, out, err) <- readCreateProcessWithExitCode (proc appBin []) ""
               assertEqual ("standalone application should run: " ++ err) ExitSuccess code
               assertEqual "standalone application output" "standalone app\n" out
+            checkLinks tool args = do
+              (code, out, err) <- readCreateProcessWithExitCode (proc tool (args ++ [testBin "chosen"])) ""
+              assertEqual ("could not inspect test linkage: " ++ err) ExitSuccess code
+              assertBool ("test launcher should load Acton libraries at runtime:\n" ++ out)
+                (not ("libActon" `isInfixOf` out))
+              libs <- listDirectory (proj </> "out" </> "lib")
+              let projectLibs = filter (\f -> "libActonProject." `isPrefixOf` f && takeExtension f `elem` [".so", ".dylib"]) libs
+              assertEqual "one shared project library should be installed" 1 (length projectLibs)
+              forM_ projectLibs $ \lib -> do
+                (libCode, libOut, libErr) <- readCreateProcessWithExitCode
+                  (proc tool (args ++ [proj </> "out" </> "lib" </> lib])) ""
+                assertEqual ("could not inspect project library linkage: " ++ libErr) ExitSuccess libCode
+                assertEqual ("project library should link the Acton runtime once:\n" ++ libOut)
+                  1 (length (filter (isInfixOf "libActon.") (lines libOut)))
+              (appCode, appOut, appErr) <- readCreateProcessWithExitCode (proc tool (args ++ [appBin])) ""
+              assertEqual ("could not inspect application linkage: " ++ appErr) ExitSuccess appCode
+              assertBool ("application should statically link Acton libraries:\n" ++ appOut)
+                (not ("libActon" `isInfixOf` appOut))
         createDirectoryIfMissing True srcDir
         writeFile (proj </> "Build.act") $ unlines
           [ "name = " ++ show name
@@ -1242,11 +1260,17 @@ parseFlagTests =
           , "}"
           ]
         writeFile (srcDir </> "chosen.act") $ unlines
-          [ "import std.math"
+          [ "import acton.rts"
+          , "import std.math"
           , "import testing"
           , "import provider"
           , ""
+          , "_kept = [\"kept\" * 100]"
+          , ""
           , "actor _test_foo(t: testing.EnvT):"
+          , "    acton.rts.gc(t.env.syscap)"
+          , "    acton.rts.gc(t.env.syscap)"
+          , "    assert _kept[0] == \"kept\" * 100"
           , "    assert provider.ready()"
           , "    t.success()"
           , ""
@@ -1322,6 +1346,19 @@ parseFlagTests =
           assertEqual ("timed selection failed:\n" ++ timingOut ++ timingErr) ExitSuccess timingCode
           assertEqual "selection timing respects output mode" visible
             ("Timing: test source selection " `isInfixOf` (timingOut ++ timingErr))
+#if defined(darwin_HOST_OS)
+        checkLinks "otool" ["-L"]
+#elif defined(linux_HOST_OS)
+        readelf <- findExecutable "readelf"
+        forM_ readelf $ \tool -> checkLinks tool ["-d"]
+#endif
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        testSize <- getFileSize (testBin "chosen")
+        appSize <- getFileSize appBin
+        assertBool "shared test executable should be smaller than standalone application"
+          (testSize < appSize)
+#endif
+
         (listCode, listOut, listErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "list", "--module", "chosen", "--name", "foo"]) { cwd = Just proj } ""
         assertEqual ("listing selected tests failed:\n" ++ listOut ++ listErr) ExitSuccess listCode
@@ -1341,11 +1378,52 @@ parseFlagTests =
         assertEqual "unchanged selected source should reuse its generated C"
           chosenTime =<< getModificationTime (cFile "chosen")
 
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        launcherTime <- getModificationTime (testBin "chosen")
+        launcher <- LBS.readFile (testBin "chosen")
+        assertBool "test launcher should not be empty" (LBS.length launcher > 0)
+        -- Change both the public interface and tests in the loaded library.
+        appendFile (srcDir </> "chosen.act") $ unlines
+          [ ""
+          , "def exported(value: int) -> int:"
+          , "    return value + 1"
+          , ""
+          , "def _test_reuse() -> None:"
+          , "    assert exported(41) == 42"
+          ]
+        checkTests ["--name", "reuse"] ["_test_reuse"]
+        assertEqual "interface changes should not relink the test launcher"
+          launcherTime =<< getModificationTime (testBin "chosen")
+        assertEqual "interface changes should not change test launcher contents"
+          launcher =<< LBS.readFile (testBin "chosen")
+        writeFile (srcDir </> "provider.act") $ unlines
+          [ "def ready() -> bool:"
+          , "    return False"
+          ]
+        (changedCode, _, _) <- runTest ["--name", "foo"]
+        assertBool "reused launcher should observe a failing implementation change"
+          (changedCode /= ExitSuccess)
+        assertEqual "implementation changes should not relink the test launcher"
+          launcherTime =<< getModificationTime (testBin "chosen")
+        assertEqual "implementation changes should not change test launcher contents"
+          launcher =<< LBS.readFile (testBin "chosen")
+        writeFile (srcDir </> "provider.act") $ unlines
+          [ "import testing"
+          , "def ready() -> bool:"
+          , "    return True"
+          , "def _test_provider() -> None:"
+          , "    pass"
+          ]
+#endif
         writeFile (srcDir </> "broken.act") $ unlines
           [ "def ready() -> bool:"
           , "    return True"
           ]
-        checkTests [] ["_test_foo_wrapper", "_test_foobar", "_test_provider", "_test_bar_wrapper", "_test_Foo"]
+        checkTests [] (["_test_foo_wrapper", "_test_foobar", "_test_provider", "_test_bar_wrapper", "_test_Foo"]
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+                       ++ ["_test_reuse"]
+#endif
+                      )
         assertFile "full selection should build the provider test executable" True (testBin "provider")
         checkApp
         assertEqual "test builds should preserve the standalone application"

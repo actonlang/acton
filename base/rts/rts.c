@@ -178,9 +178,6 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size, cpu_set_t *cpu_set
 }
 #endif
 
-extern void $ROOTINIT();
-extern $Actor $ROOT();
-
 struct mpmcq rqs[NUM_RQS];
 
 $Actor root_actor = NULL;
@@ -1533,7 +1530,7 @@ void serialize_state_shortcut($Actor a) {
 #endif
 }
 
-void BOOTSTRAP(int argc, char *argv[]) {
+void BOOTSTRAP(int argc, char *argv[], $Actor (*new_root)(void)) {
     B_list args = B_listG_new(NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< argc; i++)
@@ -1542,7 +1539,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
     env_actor->nr_wthreads = num_wthreads;
 
-    root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
+    root_actor = new_root();                        // Returns $NEWACTOR(X) for the selected root actor X
     time_t now = current_time();
     B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
 #ifdef ACTON_DB
@@ -2473,7 +2470,7 @@ void print_help(struct option *opt) {
 
 void DaveNull () {}
 
-int main(int argc, char **argv) {
+int acton_main(int argc, char **argv, void (*root_init)(void), $Actor (*new_root)(void)) {
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);
@@ -2879,7 +2876,7 @@ int main(int argc, char **argv) {
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
 
-    $ROOTINIT();
+    root_init();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
 
     unsigned int seed;
@@ -2939,12 +2936,12 @@ int main(int argc, char **argv) {
             db_schema_t* db_schema = db_create_schema(NULL, 1, indices, 1, indices, 0, indices, 0);
             create_db_queue(TIMER_QUEUE);
             timer_consume_hd = 0;
-            BOOTSTRAP(new_argc, new_argv);
+            BOOTSTRAP(new_argc, new_argv, new_root);
             log_info("Database intialization complete.");
         }
     } else {
 #endif
-        BOOTSTRAP(new_argc, new_argv);
+        BOOTSTRAP(new_argc, new_argv, new_root);
 #ifdef ACTON_DB
     }
 #endif

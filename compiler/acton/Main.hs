@@ -47,7 +47,7 @@ import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
-import FileUtil (readFile, writeFile, writeFileAtomic)
+import FileUtil (readFile, writeFile, writeFileAtomic, writeFileIfChanged)
 
 import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate)
@@ -649,13 +649,13 @@ runTests gopts cmd = do
 
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
-runTestsOnce gopts opts topts mode paths = do
-    modules <- withProjectLockNotice gopts (projPath paths) $ do
-      srcFiles <- projectSourceFiles paths
-      selected <- selectTestSources gopts opts paths topts srcFiles
-      unless (null selected) $
-        compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
-      mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
+runTestsOnce gopts opts topts mode paths = withProjectLockNotice gopts (projPath paths) $ do
+    -- Keep the installed test library stable until all test processes finish.
+    srcFiles <- projectSourceFiles paths
+    selected <- selectTestSources gopts opts paths topts srcFiles
+    unless (null selected) $
+      compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
+    modules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
     case mode of
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
@@ -2423,7 +2423,7 @@ writeRootC env gopts opts paths tasks binTask = do
             res <- (try :: IO a -> IO (Either SomeException a)) $ do
               c <- Acton.CodeGen.genRoot env qn
               createDirectoryIfMissing True (takeDirectory rootFile)
-              writeFile rootFile c
+              writeFileIfChanged rootFile c
             case res of
               Right _ -> return (Just binTask)
               Left _  -> return Nothing
@@ -2706,6 +2706,7 @@ genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
                  , "        .optimize = optimize,"
                  , "        .no_threads = no_threads,"
                  , "        .db = db,"
+                 , "        .shared_base = shared_base,"
                  , "        .acton_modules = " ++ show selectedCsv ++ ","
                  , "        .acton_root_stubs = \"\","
                  , "    });"
@@ -2865,6 +2866,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
                      , "-Dacton_libraries=" ++ buildLibrariesSpec
                      ]
         featureArgs = concat [ if C.db opts then ["-Ddb"] else []
+                             , if C.test opts && not (isWindowsOS (C.target opts)) then ["-Dtest_shared"] else []
                              , if no_threads then ["-Dno_threads"] else []
                              , if C.cpedantic opts then ["-Dcpedantic"] else []
                              ]
