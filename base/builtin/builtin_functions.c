@@ -185,7 +185,7 @@ B_Iterator B_filter(B_Iterable wit, $pure f, $WORD iter) {
 }
 
 // map ////////////////////////////////////////////////////////////////////////////////
-
+/*
 void B_IteratorD_map_init(B_IteratorD_map self, B_Iterator it, $pure f) {
     self->it = it;
     self->f = f;
@@ -227,7 +227,7 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
     B_Iterator it = wit->$class->__iter__(wit,iter);
     return (B_Iterator)B_IteratorD_mapG_new(it,f);
 }
-
+*/
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
 
@@ -339,7 +339,7 @@ B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
 }
 
 // sum /////////////////////////////////////////////////////////////////////////////////
-
+/*
 $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
     $WORD res = start;
@@ -363,7 +363,7 @@ $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
     }
     return res;
 }
-
+*/
 // zip ////////////////////////////////////////////////////////////////////////////////
 
 void B_IteratorD_zip_init(B_IteratorD_zip self, B_Iterator it1, B_Iterator it2) {

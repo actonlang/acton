@@ -978,8 +978,16 @@ def iter(x : Iterable[A]) -> Iterator[A]:
 def len(x : Collection[A]) -> int:
     return x.__len__()
 
-def map(function: (A) -> B, iterable: Iterable[A]) -> Iterator[B]:
-    NotImplemented
+class mapIterator[A,B](Iterator[B]):
+    def __init__(self, f: (A) -> B, it: Iterable[A]):
+        self.f = f
+        self.itr = iter(it)
+    def __next__(self):
+        return self.f(next(self.itr))
+    
+def map(f: (A) -> B, it: Iterable[A]) -> Iterator[B]:
+    it1: Iterator[B] = mapIterator(f, it)
+    return it1
 
 def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
     NotImplemented
@@ -1043,8 +1051,14 @@ def deserialize(data: bytes) -> value:
 def sorted [A(Ord)] (iter: Iterable[A]) -> list[A]:
     NotImplemented
 
-def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
-    NotImplemented
+def sum [A(Plus)] (it: Iterable[A], start: ?A) -> A:
+    if start is not None:
+        res = start
+    else:
+        res = Plus.__zero__()
+    for i in iter(it):
+        res += i
+    return res
 
 def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
     NotImplemented
