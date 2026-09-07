@@ -1448,15 +1448,14 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                         unless watchMode System.Exit.exitFailure
                 compileStart <- getTime Monotonic
                 compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                backFailure <- case compileRes of
+                  Right _ | not (C.only_build opts') -> backQueueWait (csBackQueue sched) gen
+                  _ -> return Nothing
+                logTiming gopts opts' logLine "Acton compilation" compileStart
                 case compileRes of
                   Left err ->
                     reportCompileError (compileFailureMessage err)
                   Right (env, hadErrors) -> do
-                    backFailure <-
-                      if C.only_build opts'
-                        then return Nothing
-                        else backQueueWait (csBackQueue sched) gen
-                    logTiming gopts opts' logLine "Acton compilation" compileStart
                     case backFailure of
                       Just failure ->
                         reportCompileError (backPassFailureMessage failure)

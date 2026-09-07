@@ -1441,6 +1441,18 @@ parseFlagTests =
              Left _ -> False)
         checkNoTiming =<< run ["build", "--timing", "--always-build", "--types", "src/main.act"]
         checkSummary =<< run ["build", "--timing", "--verbose-zig"]
+        -- Cyclic imports fail runCompilePlan itself, before normal type-error handling.
+        writeFile (proj </> "src" </> "cycle_a.act") "import cycle_b\n"
+        writeFile (proj </> "src" </> "cycle_b.act") "import cycle_a\n"
+        forM_ [([], True), (["--quiet"], False)] $ \(flags, visible) -> do
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton (["build", "--timing"] ++ flags)) { cwd = Just proj } ""
+          assertEqual ("cyclic imports should fail:\n" ++ out ++ err) (ExitFailure 1) code
+          assertBool ("failure should come from cyclic imports:\n" ++ out ++ err)
+            ("Cyclic imports:" `isInfixOf` (out ++ err))
+          assertEqual "failed compilation timing respects output mode" (if visible then 1 else 0)
+            (length (filter ("Timing: Acton compilation " `isPrefixOf`) (lines out)))
+          assertBool "failed Acton compilation should not run Zig" (not ("Timing: Zig build " `isInfixOf` out))
   , testCase "acton test reruns cached snapshot when expected file changes" $ do
       withSystemTempDirectory "acton-test-snapshot-cache" $ \proj -> do
         actonBinDir <- Paths_acton.getBinDir
