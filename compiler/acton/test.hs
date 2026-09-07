@@ -1483,6 +1483,7 @@ parseFlagTests =
         _ <- check "static native API application" ["build", "src/app.act"]
         (code, out, err) <- readCreateProcessWithExitCode (proc (proj </> "out/bin/app") []) ""
         assertEqual ("static native API application failed:\n" ++ out ++ err) ExitSuccess code
+        void $ check "native API database test library" ["build", "--test", "--db", "src/main.act"]
 #if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
         nm <- findExecutable "nm"
         forM_ nm $ \tool -> do

@@ -637,7 +637,7 @@ clean-rpm:
 #
 
 BACKEND_FILES = backend/Build.act backend/build.zig backend/build.zig.zon $(wildcard backend/*.c backend/*.h backend/failure_detector/*.c backend/failure_detector/*.h)
-DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/backend/deps dist/bin/actondb
+DIST_BACKEND_FILES = $(addprefix dist/,$(BACKEND_FILES)) dist/bin/actondb
 dist/backend%: backend/%
 	mkdir -p "$(dir $@)"
 	cp -a "$<" "$@"
