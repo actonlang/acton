@@ -5,22 +5,22 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .libargp = .{
-            .path = "deps/libargp/",
+            .path = "../deps/libargp/",
         },
         .libgc = .{
-            .path = "deps/libgc/",
+            .path = "../deps/libgc/",
         },
         .libnetstring = .{
-            .path = "deps/libnetstring/",
+            .path = "../deps/libnetstring/",
         },
         .libprotobuf_c = .{
-            .path = "deps/libprotobuf_c/",
+            .path = "../deps/libprotobuf_c/",
         },
         .libuuid = .{
-            .path = "deps/libuuid/",
+            .path = "../deps/libuuid/",
         },
         .libyyjson = .{
-            .path = "deps/libyyjson/",
+            .path = "../deps/libyyjson/",
         },
     },
     .paths = .{""},
