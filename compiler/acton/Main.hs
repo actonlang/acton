@@ -643,8 +643,12 @@ runTests gopts cmd = do
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
 runTestsOnce gopts opts topts mode paths = do
-    buildProjectOnce gopts opts
-    modules <- listTestModules opts paths
+    modules <- withProjectLockNotice gopts (projPath paths) $ do
+      srcFiles <- projectSourceFiles paths
+      selected <- selectTestSources gopts opts paths topts srcFiles
+      unless (null selected) $
+        compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
+      mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
     case mode of
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
@@ -669,9 +673,13 @@ runTestsWatch gopts opts topts mode paths = do
               withProjectLockForGen gopts sched gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir
                 srcFiles <- projectSourceFiles paths
-                hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
+                selected <- selectTestSources gopts opts paths topts srcFiles
+                -- Link the complete selected closure; cached modules still skip
+                -- unchanged compiler passes.
+                hadErrors <- if null selected then return False else
+                  compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (sched, gen)) (Just (progressUI, progressState))
                 unless hadErrors $ do
-                  testModules <- listTestModules opts paths
+                  testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
                   modulesToTest <- selectTestModules paths srcFiles mChanged testModules
                   unless (null modulesToTest) $
                     do
@@ -2046,7 +2054,9 @@ runCliPostCompile cliHooks gopts plan env = do
         preBinTasks
           | null (C.root opts') = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
           | otherwise        = [binTask]
-        preTestBinTasks = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True) rootTasks
+    requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (cpSrcFiles plan)
+    let preTestBinTasks = [ BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True
+                          | t <- rootTasks, name t `elem` requestedModules ]
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
         rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
