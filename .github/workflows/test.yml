@@ -215,14 +215,14 @@ jobs:
         if: github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'
         id: setmatrix_pr
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"ubuntu\",\"version\":\"20.04\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set Matrix for nightly run"
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         id: setmatrix_cron
         run: |
-          MATRIX_JSON='{\"include\":[{\"os\":\"debian\",\"version\":\"11\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
+          MATRIX_JSON='{\"include\":[{\"os\":\"ubuntu\",\"version\":\"20.04\",\"arch\":\"x86_64\",\"cache\":true},{\"os\":\"debian\",\"version\":\"12\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"debian\",\"version\":\"13\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"22.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"x86_64\",\"cache\":false},{\"os\":\"ubuntu\",\"version\":\"24.04\",\"arch\":\"arm64v8\",\"cache\":true}]}'
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
 
       - name: "Set final matrix output"
@@ -353,7 +353,7 @@ jobs:
           STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
           STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
           mkdir -p "${HOME}/.local/bin"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${STACK_URL}" -o /tmp/stack.tgz
+          curl -fsSL --retry 3 --retry-delay 5 "${STACK_URL}" -o /tmp/stack.tgz
           tar -xzf /tmp/stack.tgz -C /tmp
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
@@ -488,7 +488,7 @@ jobs:
           esac
           STACK_TAR="stack-${STACK_VERSION}-linux-${STACK_ARCH}.tar.gz"
           STACK_URL="https://github.com/commercialhaskell/stack/releases/download/v${STACK_VERSION}/${STACK_TAR}"
-          curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${STACK_URL}" -o /tmp/stack.tgz
+          curl -fsSL --retry 3 --retry-delay 5 "${STACK_URL}" -o /tmp/stack.tgz
           tar -xzf /tmp/stack.tgz -C /tmp
           install -m 0755 "/tmp/stack-${STACK_VERSION}-linux-${STACK_ARCH}/stack" "${HOME}/.local/bin/stack"
           echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
@@ -1209,10 +1209,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-x86_64
-      - name: "Download artifacts for Linux x86_64, built on Debian:11"
+      - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
-          name: acton-debian-11-x86_64
+          name: acton-ubuntu-20.04-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
         uses: actions/download-artifact@v8
         with:
@@ -1301,10 +1301,10 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: acton-macos-26-x86_64
-      - name: "Download artifacts for Linux x86_64, built on Debian:11"
+      - name: "Download artifacts for Linux x86_64, built on Ubuntu:20.04"
         uses: actions/download-artifact@v8
         with:
-          name: acton-debian-11-x86_64
+          name: acton-ubuntu-20.04-x86_64
       - name: "Download artifacts for Linux arm64, built on Ubuntu:24.04"
         uses: actions/download-artifact@v8
         with:
