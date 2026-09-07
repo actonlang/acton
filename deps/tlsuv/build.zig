@@ -88,6 +88,13 @@ pub fn build(b: *std.Build) void {
             lib.root_module.linkSystemLibrary("crypt32", .{});
             lib.root_module.linkSystemLibrary("ncrypt", .{});
         }
+    } else if (targetIsDarwin(t) or t.os.tag == .windows) {
+        // The generic keychain API expects a platform provider on these OSes.
+        const disabled_keychain = b.addWriteFiles().add("keychain_disabled.c",
+            \\#include <tlsuv/keychain.h>
+            \\keychain_t *platform_keychain(void) { return NULL; }
+        );
+        lib.root_module.addCSourceFile(.{ .file = disabled_keychain, .flags = cflags.items });
     }
 
     if (enable_http) {
@@ -139,9 +146,6 @@ pub fn build(b: *std.Build) void {
         const ssl_sources = [_][]const u8{
             "src/mbedtls/engine.c",
             "src/mbedtls/keys.c",
-            "src/mbedtls/mbed_p11.c",
-            "src/mbedtls/p11_ecdsa.c",
-            "src/mbedtls/p11_rsa.c",
         };
         lib.root_module.addCSourceFiles(.{
             .files = &ssl_sources,
