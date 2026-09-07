@@ -1435,6 +1435,68 @@ parseFlagTests =
         assertEqual ("production rebuild failed:\n" ++ productionOut ++ productionErr) ExitSuccess productionCode
         assertFile "production builds should restore declared library grouping" True productionLib
         checkApp
+  , testCase "shared tests retain native APIs used only by application extensions" $ do
+      withSystemTempDirectory "acton-test-native-api" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let srcDir = proj </> "src"
+            run args = readCreateProcessWithExitCode (proc acton args) { cwd = Just proj } ""
+            defines symbol fields = case reverse fields of
+              name:kind:_ -> dropWhile (== '_') name == symbol && kind /= "U"
+              _ -> False
+            check label args = do
+              (code, out, err) <- run args
+              assertEqual (label ++ " failed:\n" ++ out ++ err) ExitSuccess code
+              return out
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"native_api\""
+          , "fingerprint = 0x1c0b570600000001"
+          ]
+        writeFile (srcDir </> "native.act") $ unlines
+          [ "def check() -> int:"
+          , "    NotImplemented"
+          ]
+        writeFile (srcDir </> "native.ext.c") $ unlines
+          [ "#include <protobuf-c/protobuf-c.h>"
+          , "void native_apiQ_nativeQ___ext_init__(void) {}"
+          , "int64_t native_apiQ_nativeQ_check(void) {"
+          , "    return protobuf_c_empty_string[0] == 0 && protobuf_c_version_number() > 0;"
+          , "}"
+          ]
+        writeFile (srcDir </> "main.act") $ unlines
+          [ "import testing"
+          , "import native"
+          , "import std.re"
+          , "def _test_native() -> None:"
+          , "    assert native.check() == 1"
+          , "    assert std.re.match(\"foo[0-9]+\", \"foo123\") is not None"
+          ]
+        writeFile (srcDir </> "app.act") $ unlines
+          [ "import native"
+          , "actor main(env):"
+          , "    assert native.check() == 1"
+          , "    env.exit(0)"
+          ]
+        -- Neither protobuf symbol is referenced by the runtime itself.
+        testOut <- check "shared native API test" ["test", "--json", "--no-cache", "--iter", "1"]
+        assertBool ("native API test should execute:\n" ++ testOut) ("\"total\":1" `isInfixOf` testOut)
+        _ <- check "static native API application" ["build", "src/app.act"]
+        (code, out, err) <- readCreateProcessWithExitCode (proc (proj </> "out/bin/app") []) ""
+        assertEqual ("static native API application failed:\n" ++ out ++ err) ExitSuccess code
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        nm <- findExecutable "nm"
+        forM_ nm $ \tool -> do
+          libs <- listDirectory (proj </> "out/lib")
+          let projectLibs = filter (\f -> "libActonProject." `isPrefixOf` f && takeExtension f `elem` [".so", ".dylib"]) libs
+          assertEqual "one shared project library should be installed" 1 (length projectLibs)
+          forM_ projectLibs $ \lib -> do
+            (nmCode, symbols, nmErr) <- readCreateProcessWithExitCode
+              (proc tool ["-g", proj </> "out/lib" </> lib]) ""
+            assertEqual ("could not inspect native symbol ownership: " ++ nmErr) ExitSuccess nmCode
+            forM_ ["protobuf_c_empty_string", "GC_malloc", "pcre2_compile_8"] $ \symbol ->
+              assertBool ("project library must use the runtime's " ++ symbol)
+                (not (any (defines symbol . words) (lines symbols)))
+#endif
   , testCase "acton test discovers selected tests after an imported type changes" $ do
       withSystemTempDirectory "acton-test-selection-cache" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
