@@ -710,7 +710,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
       sysAbs = ccSysAbs ctx
       incremental = isJust mChangedPaths
       allowPrune' = allowPrune && not incremental
-  projMap <- if isTmp pathsRoot
+  projMap0 <- if isTmp pathsRoot
     then do
       let ctx' = ProjCtx
             { projRoot = rootProj
@@ -724,6 +724,11 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
             }
       return (M.singleton rootProj ctx')
     else discoverProjects gopts sysAbs rootProj depOverrides
+  -- Test selection follows imports, not production library membership.
+  -- Library groups must not pull unrelated test modules into compilation.
+  let projMap = if C.test opts'
+                  then M.adjust (\pctx -> pctx { projBuildSpec = (projBuildSpec pctx) { BuildSpec.libraries = M.empty } }) rootProj projMap0
+                  else projMap0
   -- Keep generated module artifacts in sync with source removals.
   -- For full builds, scan and prune all orphan outputs.
   -- For incremental builds, prune only modules whose changed .act paths are now missing.

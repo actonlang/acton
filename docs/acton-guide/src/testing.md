@@ -66,7 +66,18 @@ You can run tests from specific modules using the `--module` flag:
 acton test --module foo --module bar
 ```
 
-This will only run tests from the `foo` and `bar` modules, skipping all other test modules.
+This compiles the selected modules and their imports, and runs tests from `foo` and `bar`.
+
+Use `--name` to select tests by an anchored regular expression matching either the raw name (such as `_test_simple`) or its displayed name (`simple`). Repeat the option to select several patterns:
+
+```sh
+acton test --name simple --watch
+acton test --module foo --name 'parse_.*'
+```
+
+Name selection also limits compilation to modules that may contain matching tests and their imports. Tests within a selected module share its compiled code; imported test modules are compiled as dependencies but do not get test executables unless selected themselves.
+
+Test builds follow the selected source files and their imports, and ignore the project's `libraries` groups in `Build.act`. This also applies when running all tests without selection flags. Application builds continue to honor those groups and their configured linkage.
 
 ## Capability-gated tests
 

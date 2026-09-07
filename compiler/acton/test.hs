@@ -1203,6 +1203,186 @@ parseFlagTests =
       assertEqual "acton test --help stderr" "" cmdErr
       assertBool "acton test --help should include --no-cache" ("--no-cache" `isInfixOf` cmdOut)
       assertBool "acton test --help should include --tag" ("--tag" `isInfixOf` cmdOut)
+  , testCase "acton test compiles selected modules and their imports" $ do
+      withSystemTempDirectory "acton-test-selection" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_selection"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            cFile m = proj </> "out" </> "types" </> name </> m <.> "c"
+            testBin m = proj </> "out" </> "bin" </> (".test_" ++ m)
+            appBin = proj </> "out" </> "bin" </> "app"
+            runTest args = readCreateProcessWithExitCode
+              (proc acton (["test", "--json", "--no-cache", "--iter", "1"] ++ args)) { cwd = Just proj } ""
+            checkTests args expected = do
+              (code, out, err) <- runTest args
+              assertEqual ("acton test " ++ unwords args ++ " failed:\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err)
+                ExitSuccess code
+              assertBool ("unexpected test count for acton test " ++ unwords args ++ ":\n" ++ out)
+                (("\"total\":" ++ show (length expected)) `isInfixOf` out)
+              forM_ expected $ \raw ->
+                assertBool ("missing test " ++ raw ++ ":\n" ++ out)
+                  (("\"raw_name\":\"" ++ raw ++ "\"") `isInfixOf` out)
+            assertFile label expected file = do
+              exists <- doesFileExist file
+              assertEqual label expected exists
+            checkApp = do
+              (code, out, err) <- readCreateProcessWithExitCode (proc appBin []) ""
+              assertEqual ("standalone application should run: " ++ err) ExitSuccess code
+              assertEqual "standalone application output" "standalone app\n" out
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          , "libraries = {"
+          , "    \"production\": (modules=[\"chosen\", \"broken\"], linkage=\"static\")"
+          , "}"
+          ]
+        writeFile (srcDir </> "chosen.act") $ unlines
+          [ "import std.math"
+          , "import testing"
+          , "import provider"
+          , ""
+          , "actor _test_foo(t: testing.EnvT):"
+          , "    assert provider.ready()"
+          , "    t.success()"
+          , ""
+          , "def _test_foobar() -> None:"
+          , "    assert std.math.sqrt(9.0) == 3.0"
+          ]
+        writeFile (srcDir </> "provider.act") $ unlines
+          [ "import testing"
+          , ""
+          , "def ready() -> bool:"
+          , "    return True"
+          , ""
+          , "def _test_provider() -> None:"
+          , "    pass"
+          ]
+        writeFile (srcDir </> "actors.act") $ unlines
+          [ "import testing"
+          , ""
+          , "actor _test_bar():"
+          , "    pass"
+          ]
+        writeFile (srcDir </> "named.act") $ unlines
+          [ "import testing"
+          , ""
+          , "actor Foo(t: testing.EnvT):"
+          , "    t.success()"
+          ]
+        writeFile (srcDir </> "broken.act") $ unlines
+          [ "import testing"
+          , ""
+          , "def _test_broken() -> str:"
+          , "    return 42"
+          ]
+        writeFile (srcDir </> "app.act") $ unlines
+          [ "actor main(env):"
+          , "    print(\"standalone app\")"
+          , "    env.exit(0)"
+          ]
+
+        checkTests ["--name", "oo"] []
+        (invalidCode, invalidOut, invalidErr) <- runTest ["--name", "["]
+        assertBool "invalid regex should fail" (invalidCode /= ExitSuccess)
+        assertBool "invalid regex should report the pattern error"
+          ("Invalid regex" `isInfixOf` (invalidOut ++ invalidErr))
+        forM_ ["chosen", "provider", "actors", "named", "broken", "app"] $ \m -> do
+          assertFile "no match or invalid regex should not compile modules" False (cFile m)
+          assertFile "no match or invalid regex should not build executables" False (testBin m)
+
+        forM_ ["Foo", "_test_Foo"] $ \pattern -> do
+          checkTests ["--name", pattern] ["_test_Foo"]
+          assertFile "actor without a test prefix should be selected from source" True (cFile "named")
+          -- Exercise both names without a cached discovered-test list.
+          cleanOut proj
+
+        (appCode, appOut, appErr) <- readCreateProcessWithExitCode
+          (proc acton ["build", "src/app.act"]) { cwd = Just proj } ""
+        assertEqual ("application build failed:\nstdout:\n" ++ appOut ++ "\nstderr:\n" ++ appErr)
+          ExitSuccess appCode
+        checkApp
+        appTime <- getModificationTime appBin
+
+        checkTests ["--name", "foo"] ["_test_foo_wrapper"]
+        assertFile "selected module should compile" True (cFile "chosen")
+        assertFile "selected module's import should compile" True (cFile "provider")
+        assertFile "selected test executable should exist" True (testBin "chosen")
+        assertFile "imported test module should not get an executable" False (testBin "provider")
+        assertFile "unselected actor module should not compile" False (cFile "actors")
+        assertFile "unselected module's type error should not be compiled" False (cFile "broken")
+        chosenTime <- getModificationTime (cFile "chosen")
+        (listCode, listOut, listErr) <- readCreateProcessWithExitCode
+          (proc acton ["test", "list", "--module", "chosen", "--name", "foo"]) { cwd = Just proj } ""
+        assertEqual ("listing selected tests failed:\n" ++ listOut ++ listErr) ExitSuccess listCode
+        assertBool "listing should include the selected test" ("foo" `isInfixOf` listOut)
+        assertBool "listing should omit other tests in the module" (not ("foobar" `isInfixOf` listOut))
+        checkTests ["--module", "actors", "--name", "foo"] []
+        assertFile "disjoint module/name selection should not compile the module" False (cFile "actors")
+        checkTests ["--name", "_test_foobar", "--name", "_test_bar_wrapper"]
+          ["_test_foobar", "_test_bar_wrapper"]
+        assertFile "selected actor executable should exist" True (testBin "actors")
+        checkTests ["--module", "actors", "--name", "bar"] ["_test_bar_wrapper"]
+        checkTests ["--module", "actors"] ["_test_bar_wrapper"]
+        checkTests ["--name", "foo.*"] ["_test_foo_wrapper", "_test_foobar"]
+        assertFile "switching selection should preserve other generated modules" True (cFile "actors")
+        assertFile "switching selection should preserve other test executables" True (testBin "actors")
+        assertFile "imported test module should still have no executable" False (testBin "provider")
+        assertEqual "unchanged selected source should reuse its generated C"
+          chosenTime =<< getModificationTime (cFile "chosen")
+
+        writeFile (srcDir </> "broken.act") $ unlines
+          [ "def ready() -> bool:"
+          , "    return True"
+          ]
+        checkTests [] ["_test_foo_wrapper", "_test_foobar", "_test_provider", "_test_bar_wrapper", "_test_Foo"]
+        assertFile "full selection should build the provider test executable" True (testBin "provider")
+        checkApp
+        assertEqual "test builds should preserve the standalone application"
+          appTime =<< getModificationTime appBin
+        let productionLib = proj </> "out" </> "lib" </> "libproduction.a"
+        assertFile "test builds should not produce declared production libraries" False productionLib
+        (productionCode, productionOut, productionErr) <- readCreateProcessWithExitCode
+          (proc acton ["build"]) { cwd = Just proj } ""
+        assertEqual ("production rebuild failed:\n" ++ productionOut ++ productionErr) ExitSuccess productionCode
+        assertFile "production builds should restore declared library grouping" True productionLib
+        checkApp
+  , testCase "acton test discovers selected tests after an imported type changes" $ do
+      withSystemTempDirectory "acton-test-selection-cache" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_selection_cache"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            provider = srcDir </> "provider.act"
+            runTest = readCreateProcessWithExitCode
+              (proc acton ["test", "--json", "--no-cache", "--iter", "1", "--name", "discovered"]) { cwd = Just proj } ""
+            checkCount expected = do
+              (code, out, err) <- runTest
+              assertEqual ("selected test failed:\n" ++ out ++ err) ExitSuccess code
+              assertBool ("unexpected selected test count:\n" ++ out)
+                (("\"total\":" ++ show expected) `isInfixOf` out)
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (srcDir </> "chosen.act") $ unlines
+          [ "import testing"
+          , "import provider"
+          , "def _test_discovered():"
+          , "    return provider.value()"
+          ]
+        writeFile provider "def value():\n    return 42\n"
+        checkCount (0 :: Int)
+        -- The unchanged selected source has a cached interface with no tests.
+        -- Its inferred return type becomes eligible when the import changes.
+        writeFile provider "def value():\n    return None\n"
+        checkCount (1 :: Int)
   , testCase "acton test reruns cached snapshot when expected file changes" $ do
       withSystemTempDirectory "acton-test-snapshot-cache" $ \proj -> do
         actonBinDir <- Paths_acton.getBinDir

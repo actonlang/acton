@@ -1,14 +1,15 @@
 module TestRunner
   ( TestMode(..)
-  , listTestModules
   , listProjectTests
   , runProjectTests
+  , selectTestSources
   ) where
 
 import qualified Acton.CommandLineParser as C
 import Acton.Testing
 import Acton.Compile
 import qualified Acton.Syntax as A
+import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import TestFormat
 import TestUI
@@ -27,7 +28,7 @@ import qualified Data.Set as Set
 import System.Clock
 import System.Directory
 import System.Exit
-import System.FilePath ((</>), (<.>), joinPath, takeExtension)
+import System.FilePath ((</>), (<.>), joinPath)
 import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
 import System.Process
 import Text.Printf
@@ -87,16 +88,6 @@ printErrorAndExit msg = do
     errorWithoutStackTrace msg
     exitFailure
 
--- | List test modules by reading discovered tests from .tydb headers.
-listTestModules :: C.CompileOptions -> Paths -> IO [String]
-listTestModules _opts paths = do
-    srcFiles <- listActFilesRecursive (srcDir paths)
-    mods <- forM srcFiles $ \file -> do
-      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
-      tests <- readModuleTests paths mn
-      return $ if null tests then Nothing else Just (modNameToString mn)
-    return (Data.List.sort (catMaybes mods))
-
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
@@ -116,6 +107,47 @@ isWindowsTarget targetTriple =
 
 modulesOpt paths topts = [ proj ++ "." ++ m | m <- C.testModules topts ]
   where proj = projName paths
+
+-- | Select compilation roots without changing the contents of module caches.
+-- A cached test list can confirm a match, but cannot rule one out: a changed
+-- import may change an inferred function type and make it eligible as a test.
+selectTestSources :: C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> [FilePath] -> IO [FilePath]
+selectTestSources gopts opts paths topts files = do
+    regexes <- compileTestNameRegexes (C.testNames topts)
+    let wanted = modulesOpt paths topts
+        matches = not . null . filterTests regexes
+    filterM (selected wanted matches) files
+  where
+    sp = Source.diskSourceProvider
+    selected wanted matches file = do
+      mn <- moduleNameFromFile (srcDir paths) (projName paths) file
+      if not (null wanted) && modNameToString mn `notElem` wanted
+        then return False
+        else if null (C.testNames topts)
+          then return True
+          else do
+            task <- readModuleTask sp gopts opts paths { modName = mn } file
+            case task of
+              TyTask{ tyTests = names } | matches names -> return True
+              ParseTask{ src = source } -> fromSource mn matches file source
+              ParseErrorTask{} -> return True
+              _ -> Source.spReadFile sp file >>= fromSource mn matches file . Source.ssText
+    fromSource mn matches file source = do
+      parsed <- parseActSource opts mn file source Nothing
+      -- Let the normal compilation path report parse failures.
+      return $ either (const True) (matches . candidates . A.mbody) parsed
+    candidates = concatMap names
+    names (A.With _ _ ss) = candidates ss
+    names (A.Decl _ ds) = concatMap declNames ds
+    names _ = []
+    declNames d@A.Def{}
+      | "_test_" `isPrefixOf` A.nstr (A.dname d) = [A.nstr (A.dname d)]
+    -- Actor parameter types are resolved later. Include possible wrapper
+    -- names here and leave exact discovery to the type checker.
+    declNames d@A.Actor{} =
+      let n = A.nstr (A.dname d)
+      in [if "_test_" `isPrefixOf` n then n ++ "_wrapper" else "_test_" ++ n]
+    declNames _ = []
 
 -- | List tests for selected modules and print them in a stable order.
 listProjectTests :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO ()
@@ -593,21 +625,6 @@ splitOnChar :: Char -> String -> [String]
 splitOnChar ch input = case break (== ch) input of
   (chunk, []) -> [chunk]
   (chunk, _ : rest) -> chunk : splitOnChar ch rest
-
-listActFilesRecursive :: FilePath -> IO [FilePath]
-listActFilesRecursive dir = do
-    exists <- doesDirectoryExist dir
-    if not exists
-      then return []
-      else do
-        entries <- listDirectory dir
-        paths <- forM entries $ \entry -> do
-          let path = dir </> entry
-          isDir <- doesDirectoryExist path
-          if isDir
-            then listActFilesRecursive path
-            else return [path]
-        return (filter (\f -> takeExtension f == ".act") (concat paths))
 
 -- | Run a single test case and stream JSON updates.
 runModuleTestStreaming :: C.CompileOptions
