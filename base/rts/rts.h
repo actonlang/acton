@@ -277,7 +277,6 @@ void $RAISE(B_BaseException e);
 #define $PUSHF $PUSH
 
 extern pid_t pid;
-extern B_Msg timerQ;
 
 void wake_wt(int wtid);
 

@@ -186,8 +186,17 @@ struct mpmcq rqs[NUM_RQS];
 $Actor root_actor = NULL;
 B_Env env_actor = NULL;
 
-B_Msg timerQ = NULL;
-$Lock timerQ_lock;
+struct TimedMsg {
+    B_Msg msg;
+    uint64_t sequence;
+};
+
+// Stable min-heap.
+static struct TimedMsg *timerQ = NULL;
+static size_t timerQ_len = 0;
+static size_t timerQ_capacity = 0;
+static uint64_t timerQ_sequence = 0;
+static $Lock timerQ_lock;
 
 int64_t next_key = -10;
 $Lock next_key_lock;
@@ -729,26 +738,38 @@ $Actor FREEZE_waiting(B_Msg m, $Cont mark) {
     return res;
 }
 
+static bool timed_before(struct TimedMsg a, struct TimedMsg b) {
+    if (a.msg->$baseline != b.msg->$baseline)
+        return a.msg->$baseline < b.msg->$baseline;
+    return a.sequence < b.sequence;
+}
+
 // Atomically enqueue timed message "m" onto the global timer-queue, at position
 // given by "m->baseline".
 bool ENQ_timed(B_Msg m) {
-    time_t m_baseline = m->$baseline;
-    bool new_head = false;
     spinlock_lock(&timerQ_lock);
-    B_Msg x = timerQ;
-    if (x && x->$baseline <= m_baseline) {
-        B_Msg next = x->$next;
-        while (next && next->$baseline <= m_baseline) {
-            x = next;
-            next = x->$next;
+    bool new_head = timerQ_len == 0 || m->$baseline < timerQ[0].msg->$baseline;
+    if (timerQ_len == timerQ_capacity) {
+        size_t capacity = timerQ_capacity ? 2 * timerQ_capacity : 64;
+        struct TimedMsg *queue = GC_realloc(timerQ, capacity * sizeof(*timerQ));
+        if (!queue) {
+            log_fatal("Unable to grow timer queue");
+            exit(1);
         }
-        x->$next = m;
-        m->$next = next;
-    } else {
-        timerQ = m;
-        m->$next = x;
-        new_head = true;
+        timerQ = queue;
+        timerQ_capacity = capacity;
     }
+    struct TimedMsg entry = {m, timerQ_sequence++};
+    m->$next = NULL;
+    size_t pos = timerQ_len++;
+    while (pos > 0) {
+        size_t parent = (pos - 1) / 2;
+        if (!timed_before(entry, timerQ[parent]))
+            break;
+        timerQ[pos] = timerQ[parent];
+        pos = parent;
+    }
+    timerQ[pos] = entry;
     spinlock_unlock(&timerQ_lock);
     return new_head;
 }
@@ -757,13 +778,37 @@ bool ENQ_timed(B_Msg m) {
 // its baseline is less or equal to "now", else return NULL.
 B_Msg DEQ_timed(time_t now) {
     spinlock_lock(&timerQ_lock);
-    B_Msg res = timerQ;
-    if (res) {
-        if (res->$baseline <= now) {
-            timerQ = res->$next;
-            res->$next = NULL;
+    B_Msg res = NULL;
+    if (timerQ_len && timerQ[0].msg->$baseline <= now) {
+        res = timerQ[0].msg;
+        struct TimedMsg entry = timerQ[--timerQ_len];
+        // Drop GC references to delivered messages.
+        timerQ[timerQ_len] = (struct TimedMsg){0};
+        if (timerQ_len) {
+            size_t pos = 0;
+            while (2 * pos + 1 < timerQ_len) {
+                size_t child = 2 * pos + 1;
+                if (child + 1 < timerQ_len && timed_before(timerQ[child + 1], timerQ[child]))
+                    child++;
+                if (!timed_before(timerQ[child], entry))
+                    break;
+                timerQ[pos] = timerQ[child];
+                pos = child;
+            }
+            timerQ[pos] = entry;
         } else {
-            res = NULL;
+            timerQ_sequence = 0;
+        }
+        if (timerQ_capacity > 64 && timerQ_len <= timerQ_capacity / 4) {
+            size_t capacity = timerQ_capacity / 2;
+            // GC_realloc may not shrink the allocation.
+            struct TimedMsg *queue = GC_malloc(capacity * sizeof(*queue));
+            if (queue) {
+                memcpy(queue, timerQ, timerQ_len * sizeof(*queue));
+                GC_free(timerQ);
+                timerQ = queue;
+                timerQ_capacity = capacity;
+            }
         }
     }
     spinlock_unlock(&timerQ_lock);
@@ -1129,7 +1174,10 @@ void FLUSH_outgoing_local($Actor self) {
 }
 
 time_t next_timeout() {
-    return timerQ ? timerQ->$baseline : 0;
+    spinlock_lock(&timerQ_lock);
+    time_t next = timerQ_len ? timerQ[0].msg->$baseline : 0;
+    spinlock_unlock(&timerQ_lock);
+    return next;
 }
 
 void handle_timeout() {
