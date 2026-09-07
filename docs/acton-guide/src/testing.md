@@ -85,6 +85,8 @@ Name selection also limits compilation to modules that may contain matching test
 
 Test builds follow the selected source files and their imports, and ignore the project's `libraries` groups in `Build.act`. This also applies when running all tests without selection flags. Application builds continue to honor those groups and their configured linkage.
 
+`acton test --watch` waits for successful compilation and linking before running tests. If another edit interrupts a build or test run, the next run includes tests affected by both edits. Stopping watch mode also stops its compiler and test subprocesses.
+
 ## Capability-gated tests
 
 Some tests depend on external capabilities (for example network services, hardware, or system setup). In tests that receive a test context argument (`t`), use `t.require(...)` and pass available capabilities with `--tag`:
