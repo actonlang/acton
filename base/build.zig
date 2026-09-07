@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const shared = b.option(bool, "shared", "") orelse false;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -237,7 +238,7 @@ pub fn build(b: *std.Build) void {
 
     const libActon = b.addLibrary(.{
         .name = "Acton",
-        .linkage = .static,
+        .linkage = if (shared) .dynamic else .static,
         .root_module = b.createModule(.{
             .root_source_file = b.path("__root.zig"),
             .target = target,
@@ -317,6 +318,10 @@ pub fn build(b: *std.Build) void {
     libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
     libActon.root_module.link_libc = true;
+    if (shared) {
+        var modules = std.AutoHashMap(*std.Build.Module, *std.Build.Module).init(b.allocator);
+        libActon.root_module = sharedModule(libActon.root_module, &modules);
+    }
     b.installArtifact(libActon);
 
     const base_tests = b.addTest(.{
@@ -334,4 +339,31 @@ pub fn build(b: *std.Build) void {
     const run_base_tests = b.addRunArtifact(base_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_base_tests.step);
+}
+
+// Compile the complete native API into the shared runtime. Ordinary archive
+// linking only retains members used by the runtime itself, while application
+// extensions can also use the remaining API. Clone the modules so their static
+// artifacts keep their original inputs, and preserve each module's C settings.
+fn sharedModule(source: *std.Build.Module, modules: *std.AutoHashMap(*std.Build.Module, *std.Build.Module)) *std.Build.Module {
+    if (modules.get(source)) |module| return module;
+    const b = source.owner;
+    const module = b.allocator.create(std.Build.Module) catch @panic("OOM");
+    module.init(b, .{ .existing = source });
+    module.import_table = .empty;
+    module.link_objects = .empty;
+    module.cached_graph = .{ .modules = &.{}, .names = &.{} };
+    modules.put(source, module) catch @panic("OOM");
+    for (source.import_table.keys(), source.import_table.values()) |name, imported| {
+        module.addImport(name, sharedModule(imported, modules));
+    }
+    for (source.link_objects.items, 0..) |object, i| {
+        if (object == .other_step and object.other_step.isStaticLibrary()) {
+            const imported = sharedModule(object.other_step.root_module, modules);
+            module.addImport(b.fmt("acton_native_{d}", .{i}), imported);
+        } else {
+            module.link_objects.append(b.allocator, object) catch @panic("OOM");
+        }
+    }
+    return module;
 }

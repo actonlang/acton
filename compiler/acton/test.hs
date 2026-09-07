@@ -1233,6 +1233,24 @@ parseFlagTests =
               (code, out, err) <- readCreateProcessWithExitCode (proc appBin []) ""
               assertEqual ("standalone application should run: " ++ err) ExitSuccess code
               assertEqual "standalone application output" "standalone app\n" out
+            checkLinks tool args = do
+              (code, out, err) <- readCreateProcessWithExitCode (proc tool (args ++ [testBin "chosen"])) ""
+              assertEqual ("could not inspect test linkage: " ++ err) ExitSuccess code
+              assertBool ("test launcher should load Acton libraries at runtime:\n" ++ out)
+                (not ("libActon" `isInfixOf` out))
+              libs <- listDirectory (proj </> "out" </> "lib")
+              let projectLibs = filter (\f -> "libActonProject." `isPrefixOf` f && takeExtension f `elem` [".so", ".dylib"]) libs
+              assertEqual "one shared project library should be installed" 1 (length projectLibs)
+              forM_ projectLibs $ \lib -> do
+                (libCode, libOut, libErr) <- readCreateProcessWithExitCode
+                  (proc tool (args ++ [proj </> "out" </> "lib" </> lib])) ""
+                assertEqual ("could not inspect project library linkage: " ++ libErr) ExitSuccess libCode
+                assertEqual ("project library should link the Acton runtime once:\n" ++ libOut)
+                  1 (length (filter (isInfixOf "libActon.") (lines libOut)))
+              (appCode, appOut, appErr) <- readCreateProcessWithExitCode (proc tool (args ++ [appBin])) ""
+              assertEqual ("could not inspect application linkage: " ++ appErr) ExitSuccess appCode
+              assertBool ("application should statically link Acton libraries:\n" ++ appOut)
+                (not ("libActon" `isInfixOf` appOut))
         createDirectoryIfMissing True srcDir
         writeFile (proj </> "Build.act") $ unlines
           [ "name = " ++ show name
@@ -1242,11 +1260,17 @@ parseFlagTests =
           , "}"
           ]
         writeFile (srcDir </> "chosen.act") $ unlines
-          [ "import std.math"
+          [ "import acton.rts"
+          , "import std.math"
           , "import testing"
           , "import provider"
           , ""
+          , "_kept = [\"kept\" * 100]"
+          , ""
           , "actor _test_foo(t: testing.EnvT):"
+          , "    acton.rts.gc(t.env.syscap)"
+          , "    acton.rts.gc(t.env.syscap)"
+          , "    assert _kept[0] == \"kept\" * 100"
           , "    assert provider.ready()"
           , "    t.success()"
           , ""
@@ -1322,6 +1346,19 @@ parseFlagTests =
           assertEqual ("timed selection failed:\n" ++ timingOut ++ timingErr) ExitSuccess timingCode
           assertEqual "selection timing respects output mode" visible
             ("Timing: test source selection " `isInfixOf` (timingOut ++ timingErr))
+#if defined(darwin_HOST_OS)
+        checkLinks "otool" ["-L"]
+#elif defined(linux_HOST_OS)
+        readelf <- findExecutable "readelf"
+        forM_ readelf $ \tool -> checkLinks tool ["-d"]
+#endif
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        testSize <- getFileSize (testBin "chosen")
+        appSize <- getFileSize appBin
+        assertBool "shared test executable should be smaller than standalone application"
+          (testSize < appSize)
+#endif
+
         (listCode, listOut, listErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "list", "--module", "chosen", "--name", "foo"]) { cwd = Just proj } ""
         assertEqual ("listing selected tests failed:\n" ++ listOut ++ listErr) ExitSuccess listCode
@@ -1341,11 +1378,52 @@ parseFlagTests =
         assertEqual "unchanged selected source should reuse its generated C"
           chosenTime =<< getModificationTime (cFile "chosen")
 
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        launcherTime <- getModificationTime (testBin "chosen")
+        launcher <- LBS.readFile (testBin "chosen")
+        assertBool "test launcher should not be empty" (LBS.length launcher > 0)
+        -- Change both the public interface and tests in the loaded library.
+        appendFile (srcDir </> "chosen.act") $ unlines
+          [ ""
+          , "def exported(value: int) -> int:"
+          , "    return value + 1"
+          , ""
+          , "def _test_reuse() -> None:"
+          , "    assert exported(41) == 42"
+          ]
+        checkTests ["--name", "reuse"] ["_test_reuse"]
+        assertEqual "interface changes should not relink the test launcher"
+          launcherTime =<< getModificationTime (testBin "chosen")
+        assertEqual "interface changes should not change test launcher contents"
+          launcher =<< LBS.readFile (testBin "chosen")
+        writeFile (srcDir </> "provider.act") $ unlines
+          [ "def ready() -> bool:"
+          , "    return False"
+          ]
+        (changedCode, _, _) <- runTest ["--name", "foo"]
+        assertBool "reused launcher should observe a failing implementation change"
+          (changedCode /= ExitSuccess)
+        assertEqual "implementation changes should not relink the test launcher"
+          launcherTime =<< getModificationTime (testBin "chosen")
+        assertEqual "implementation changes should not change test launcher contents"
+          launcher =<< LBS.readFile (testBin "chosen")
+        writeFile (srcDir </> "provider.act") $ unlines
+          [ "import testing"
+          , "def ready() -> bool:"
+          , "    return True"
+          , "def _test_provider() -> None:"
+          , "    pass"
+          ]
+#endif
         writeFile (srcDir </> "broken.act") $ unlines
           [ "def ready() -> bool:"
           , "    return True"
           ]
-        checkTests [] ["_test_foo_wrapper", "_test_foobar", "_test_provider", "_test_bar_wrapper", "_test_Foo"]
+        checkTests [] (["_test_foo_wrapper", "_test_foobar", "_test_provider", "_test_bar_wrapper", "_test_Foo"]
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+                       ++ ["_test_reuse"]
+#endif
+                      )
         assertFile "full selection should build the provider test executable" True (testBin "provider")
         checkApp
         assertEqual "test builds should preserve the standalone application"
@@ -1357,6 +1435,69 @@ parseFlagTests =
         assertEqual ("production rebuild failed:\n" ++ productionOut ++ productionErr) ExitSuccess productionCode
         assertFile "production builds should restore declared library grouping" True productionLib
         checkApp
+  , testCase "shared tests retain native APIs used only by application extensions" $ do
+      withSystemTempDirectory "acton-test-native-api" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let srcDir = proj </> "src"
+            run args = readCreateProcessWithExitCode (proc acton args) { cwd = Just proj } ""
+            defines symbol fields = case reverse fields of
+              name:kind:_ -> dropWhile (== '_') name == symbol && kind /= "U"
+              _ -> False
+            check label args = do
+              (code, out, err) <- run args
+              assertEqual (label ++ " failed:\n" ++ out ++ err) ExitSuccess code
+              return out
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = \"native_api\""
+          , "fingerprint = 0x1c0b570600000001"
+          ]
+        writeFile (srcDir </> "native.act") $ unlines
+          [ "def check() -> int:"
+          , "    NotImplemented"
+          ]
+        writeFile (srcDir </> "native.ext.c") $ unlines
+          [ "#include <protobuf-c/protobuf-c.h>"
+          , "void native_apiQ_nativeQ___ext_init__(void) {}"
+          , "int64_t native_apiQ_nativeQ_check(void) {"
+          , "    return protobuf_c_empty_string[0] == 0 && protobuf_c_version_number() > 0;"
+          , "}"
+          ]
+        writeFile (srcDir </> "main.act") $ unlines
+          [ "import testing"
+          , "import native"
+          , "import std.re"
+          , "def _test_native() -> None:"
+          , "    assert native.check() == 1"
+          , "    assert std.re.match(\"foo[0-9]+\", \"foo123\") is not None"
+          ]
+        writeFile (srcDir </> "app.act") $ unlines
+          [ "import native"
+          , "actor main(env):"
+          , "    assert native.check() == 1"
+          , "    env.exit(0)"
+          ]
+        -- Neither protobuf symbol is referenced by the runtime itself.
+        testOut <- check "shared native API test" ["test", "--json", "--no-cache", "--iter", "1"]
+        assertBool ("native API test should execute:\n" ++ testOut) ("\"total\":1" `isInfixOf` testOut)
+        _ <- check "static native API application" ["build", "src/app.act"]
+        (code, out, err) <- readCreateProcessWithExitCode (proc (proj </> "out/bin/app") []) ""
+        assertEqual ("static native API application failed:\n" ++ out ++ err) ExitSuccess code
+        void $ check "native API database test library" ["build", "--test", "--db", "src/main.act"]
+#if defined(darwin_HOST_OS) || defined(linux_HOST_OS)
+        nm <- findExecutable "nm"
+        forM_ nm $ \tool -> do
+          libs <- listDirectory (proj </> "out/lib")
+          let projectLibs = filter (\f -> "libActonProject." `isPrefixOf` f && takeExtension f `elem` [".so", ".dylib"]) libs
+          assertEqual "one shared project library should be installed" 1 (length projectLibs)
+          forM_ projectLibs $ \lib -> do
+            (nmCode, symbols, nmErr) <- readCreateProcessWithExitCode
+              (proc tool ["-g", proj </> "out/lib" </> lib]) ""
+            assertEqual ("could not inspect native symbol ownership: " ++ nmErr) ExitSuccess nmCode
+            forM_ ["protobuf_c_empty_string", "GC_malloc", "pcre2_compile_8"] $ \symbol ->
+              assertBool ("project library must use the runtime's " ++ symbol)
+                (not (any (defines symbol . words) (lines symbols)))
+#endif
   , testCase "acton test discovers selected tests after an imported type changes" $ do
       withSystemTempDirectory "acton-test-selection-cache" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
@@ -2226,6 +2367,37 @@ crossCompileTests =
         runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-linux-musl --db" $ do
         runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../../test/compiler/hello/"
+  , testCase "musl test runners retain static linkage" $ do
+      withSystemTempDirectory "acton-test-musl" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "musl_tests"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            testBin = proj </> "out/bin/.test_main"
+        createDirectoryIfMissing True (proj </> "src")
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (proj </> "src/main.act") $ unlines
+          [ "import testing"
+          , "def _test_static() -> None:"
+          , "    assert 1 + 1 == 2"
+          ]
+        (code, out, err) <- readCreateProcessWithExitCode
+          (proc acton ["build", "--test", "--target", "aarch64-linux-musl", "src/main.act"]) { cwd = Just proj } ""
+        assertEqual ("musl test build failed:\n" ++ out ++ err) ExitSuccess code
+        assertBool "musl test executable should exist" =<< doesFileExist testBin
+        libs <- listDirectory (proj </> "out/lib")
+        assertBool "musl tests should not require shared project libraries"
+          (not (any ((== ".so") . takeExtension) libs))
+        readelf <- findExecutable "readelf"
+        forM_ readelf $ \tool -> do
+          (elfCode, headers, elfErr) <- readCreateProcessWithExitCode (proc tool ["-l", testBin]) ""
+          assertEqual ("could not inspect musl linkage: " ++ elfErr) ExitSuccess elfCode
+          assertBool "musl test executable should not require a dynamic loader"
+            (not (any (`isInfixOf` headers) ["INTERP", "DYNAMIC"]))
   , testCase "build helloworld --target x86_64-windows-gnu" $ do
         runActon "build --target x86_64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
   ]

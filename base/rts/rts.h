@@ -21,6 +21,8 @@
 #include "common.h"
 #include "../builtin/builtin.h"
 
+int acton_main(int argc, char **argv, void (*root_init)(void), $Actor (*new_root)(void));
+
 #define MSGQ 2
 #ifdef ACTON_THREADS
 #define MAX_WTHREADS 256

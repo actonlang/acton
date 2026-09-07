@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const shared_base = b.option(bool, "shared_base", "") orelse false;
 
     print("Acton Standard Library Builder\nBuilding in {s}\n", .{buildroot_path});
 
@@ -34,6 +35,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .no_threads = no_threads,
         .db = db,
+        .shared = shared_base,
     });
 
     const dep_libpcre2 = b.dependency("libpcre2", .{
@@ -186,11 +188,23 @@ pub fn build(b: *std.Build) void {
     libActonProject.root_module.addIncludePath(b.path("."));
     libActonProject.root_module.addIncludePath(b.path("../base"));
 
-    libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
-    libActonProject.root_module.linkLibrary(dep_libpcre2.artifact("pcre2-8"));
-    libActonProject.root_module.linkLibrary(dep_libsnappy_c.artifact("snappy-c"));
-    libActonProject.root_module.linkLibrary(dep_libxml2.artifact("xml2"));
-    libActonProject.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
+    if (shared_base) {
+        libActonProject.root_module.include_dirs.append(b.allocator, .{ .other_step = actonbase_dep.artifact("Acton") }) catch @panic("OOM");
+    } else {
+        libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
+    }
+    for ([_]*std.Build.Step.Compile{
+        dep_libpcre2.artifact("pcre2-8"),
+        dep_libsnappy_c.artifact("snappy-c"),
+        dep_libxml2.artifact("xml2"),
+        dep_libyyjson.artifact("yyjson"),
+    }) |native| {
+        if (shared_base) {
+            libActonProject.root_module.include_dirs.append(b.allocator, .{ .other_step = native }) catch @panic("OOM");
+        } else {
+            libActonProject.root_module.linkLibrary(native);
+        }
+    }
 
     libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 

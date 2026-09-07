@@ -40,6 +40,9 @@ pub fn build(b: *std.Build) void {
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    // Musl executables default to static libc, whose dlopen cannot load tests.
+    const test_shared = (b.option(bool, "test_shared", "") orelse false) and !target.result.isMuslLibC();
+    const shared_base = b.option(bool, "shared_base", "") orelse test_shared;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
         std.log.err("Missing required build option -Dacton_modules=...", .{});
@@ -57,6 +60,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .no_threads = no_threads,
         .db = db,
+        .shared = shared_base,
     });
 
     // Dependencies from Build.act
@@ -169,7 +173,7 @@ pub fn build(b: *std.Build) void {
 
     const libActonProject = b.addLibrary(.{
         .name = "ActonProject",
-        .linkage = .static,
+        .linkage = if (test_shared) .dynamic else .static,
         .root_module = b.createModule(.{
             .target = target,
             .optimize = optimize,
@@ -283,7 +287,11 @@ pub fn build(b: *std.Build) void {
 
     // lib: link with dependencies / get headers from Build.act
 
-    libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
+    if (shared_base and !test_shared) {
+        libActonProject.root_module.include_dirs.append(b.allocator, .{ .other_step = actonbase_dep.artifact("Acton") }) catch @panic("OOM");
+    } else {
+        libActonProject.root_module.linkLibrary(actonbase_dep.artifact("Acton"));
+    }
     libActonProject.root_module.link_libc = true;
     libActonProject.root_module.link_libcpp = true;
     b.installArtifact(libActonProject);
@@ -385,6 +393,30 @@ pub fn build(b: *std.Build) void {
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
             @memcpy(exe_rel_path[0..9], "out/types");
             @memcpy(exe_rel_path[9..], entry.file_path);
+            if (test_shared) {
+                // Keep the actor layout and startup code inside the shared library.
+                // The launcher only depends on a stable path and entry name, so
+                // changing project code does not recompile or relink it.
+                const root_flags = std.mem.concat(b.allocator, []const u8, &.{ flags.items, &.{"-DACTON_TEST_SHARED"} }) catch @panic("OOM");
+                libActonProject.root_module.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = root_flags });
+                const lib_path = b.getInstallPath(.lib, libActonProject.out_filename);
+                // Fixed-width C escapes also handle quotes and non-ASCII paths.
+                const define = "-DACTON_TEST_LIBRARY=\"";
+                const library_flag = b.allocator.alloc(u8, define.len + lib_path.len * 4 + 1) catch @panic("OOM");
+                @memcpy(library_flag[0..define.len], define);
+                for (lib_path, 0..) |byte, i|
+                    _ = std.fmt.bufPrint(library_flag[define.len + i * 4 ..][0..4], "\\{o:0>3}", .{byte}) catch unreachable;
+                library_flag[library_flag.len - 1] = '"';
+                executable.root_module.addCSourceFile(.{
+                    .file = b.path(exe_rel_path),
+                    .flags = &.{ "-DACTON_TEST_LAUNCHER", library_flag },
+                });
+                executable.root_module.link_libc = true;
+                if (target.result.os.tag == .linux)
+                    executable.root_module.linkSystemLibrary("dl", .{});
+                b.installArtifact(executable);
+                continue;
+            }
             executable.root_module.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
             executable.root_module.addIncludePath(b.path("."));
             executable.root_module.linkLibrary(libActonProject);

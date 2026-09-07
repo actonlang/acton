@@ -79,7 +79,8 @@ data TestResult = TestResult
   } deriving (Show)
 
 testCacheVersion :: Int
-testCacheVersion = 2
+-- Invalidate results and timings from statically linked test executables.
+testCacheVersion = 3
 
 data TestRunContext = TestRunContext
   { trcCompilerVersion :: String
