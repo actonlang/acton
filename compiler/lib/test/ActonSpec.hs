@@ -2109,6 +2109,7 @@ main = do
       testCodeGen env0 ["chunking"]
       testCodeGen env0 ["boxparam"]
       testCodeGen env0 ["witness_forward"]
+      testCodeGenContains env0 "protocol_generic_siblings" ["SecondD_InheritedD___init__"]
       -- A local that is live across a for-loop must be emitted as `volatile` so it
       -- survives the loop's StopIteration setjmp/longjmp under optimization.
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
