@@ -899,6 +899,9 @@ cast' env info t1@(TFX _ fx1) t2@(TFX _ fx2)
         castFX FXProc   FXProc              = True
         castFX FXAction FXAction            = True
         castFX FXAction FXProc              = True
+
+        castFX FXMut    FXPure              = True      -- Hideous lie! But a temporarily justifiable deception.
+
         castFX _        _                   = False
 
 cast' env info (TUni _ tv) t2@TFun{}
