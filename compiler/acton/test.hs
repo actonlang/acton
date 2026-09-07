@@ -7,6 +7,7 @@ import Data.List.Split
 import Data.Maybe (catMaybes)
 import Data.Ord
 import Data.Time.Clock.POSIX
+import qualified Data.Aeson as Ae
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Exception (catch, IOException)
@@ -1389,6 +1390,69 @@ parseFlagTests =
         -- Its inferred return type becomes eligible when the import changes.
         writeFile provider "def value():\n    return None\n"
         checkCount (1 :: Int)
+  , testCase "build and test timings respect output modes" $ do
+      withSystemTempDirectory "acton-build-timing" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "build_timing"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            run args = do
+              (code, out, err) <- readCreateProcessWithExitCode (proc acton args) { cwd = Just proj } ""
+              assertEqual ("acton " ++ unwords args ++ " failed:\n" ++ out ++ err) ExitSuccess code
+              return out
+            checkNoTiming out = do
+              assertBool "timing details should be omitted" (not ("Timing:" `isInfixOf` out))
+              assertBool "Zig summary should be omitted" (not ("Build Summary:" `isInfixOf` out))
+            checkSummary out = do
+              let summaries = filter ("Build Summary:" `isPrefixOf`) (lines out)
+              assertEqual "Zig summary should be printed once" 1 (length summaries)
+              assertBool "Zig summary should not contain terminal escapes"
+                (all (notElem '\ESC') summaries)
+        createDirectoryIfMissing True (proj </> "src")
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (proj </> "src" </> "main.act") $ unlines
+          [ "import testing"
+          , ""
+          , "def _test_ready():"
+          , "    testing.assertEqual(1, 1)"
+          , ""
+          , "actor main(env):"
+          , "    env.exit(0)"
+          ]
+        buildOut <- run ["build", "--timing", "--color", "always"]
+        forM_ [ "compile planning", "Acton compilation", "dependency build preparation"
+              , "root and build file preparation", "Zig build" ] $ \phase ->
+          assertBool ("missing timing phase: " ++ phase)
+            (("Timing: " ++ phase) `isInfixOf` buildOut)
+        checkSummary buildOut
+        testOut <- run ["test", "--timing", "--no-cache", "--iter", "1"]
+        assertBool "test execution should be timed" ("Timing: test execution and cache" `isInfixOf` testOut)
+        checkSummary testOut
+        checkNoTiming =<< run ["build", "--timing", "--quiet"]
+        jsonOut <- run ["test", "--timing", "--json", "--no-cache", "--iter", "1"]
+        checkNoTiming jsonOut
+        assertBool "JSON output should remain valid"
+          (case Ae.eitherDecode (LBS.pack jsonOut) :: Either String Ae.Value of
+             Right _ -> True
+             Left _ -> False)
+        checkNoTiming =<< run ["build", "--timing", "--always-build", "--types", "src/main.act"]
+        checkSummary =<< run ["build", "--timing", "--verbose-zig"]
+        -- Cyclic imports fail runCompilePlan itself, before normal type-error handling.
+        writeFile (proj </> "src" </> "cycle_a.act") "import cycle_b\n"
+        writeFile (proj </> "src" </> "cycle_b.act") "import cycle_a\n"
+        forM_ [([], True), (["--quiet"], False)] $ \(flags, visible) -> do
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton (["build", "--timing"] ++ flags)) { cwd = Just proj } ""
+          assertEqual ("cyclic imports should fail:\n" ++ out ++ err) (ExitFailure 1) code
+          assertBool ("failure should come from cyclic imports:\n" ++ out ++ err)
+            ("Cyclic imports:" `isInfixOf` (out ++ err))
+          assertEqual "failed compilation timing respects output mode" (if visible then 1 else 0)
+            (length (filter ("Timing: Acton compilation " `isPrefixOf`) (lines out)))
+          assertBool "failed Acton compilation should not run Zig" (not ("Timing: Zig build " `isInfixOf` out))
   , testCase "acton test reruns cached snapshot when expected file changes" $ do
       withSystemTempDirectory "acton-test-snapshot-cache" $ \proj -> do
         actonBinDir <- Paths_acton.getBinDir

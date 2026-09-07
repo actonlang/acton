@@ -58,6 +58,12 @@ Note that test input need to be contained within .act source code files in order
 
 Snapshot tests are the main exception: even when the test code hash matches the cache, `acton test` still checks the expected snapshot file on disk against the cached `snapshots/output/...` metadata. If the output snapshot is missing, the expected file changed, or Acton cannot cheaply prove the expected file is older than the last produced output, the test is rerun instead of trusting the cached result.
 
+## Build timings
+
+Use `acton test --timing` (also with `--watch`) to see wall times for compile planning, Acton compilation, build preparation, Zig build, and test execution/cache handling. `acton build --timing` reports the same compilation and build phases.
+
+Zig's build summary shows which libraries and executables were rebuilt or cached. Each build step includes its C compilation and linking; steps can run in parallel, so their durations do not add up to the overall Zig build time. Quiet and JSON output omit timing details.
+
 ## Module Filtering
 
 You can run tests from specific modules using the `--module` flag:

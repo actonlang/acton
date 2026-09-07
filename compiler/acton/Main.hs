@@ -236,6 +236,13 @@ fmtTimePrecise t =
     secs :: Float
     secs = (fromIntegral (sec t)) + (fromIntegral (nsec t) / 1000000000)
 
+-- | Report elapsed wall time; parallel compiler/build steps can overlap.
+logTiming :: C.GlobalOptions -> C.CompileOptions -> (String -> IO ()) -> String -> TimeSpec -> IO ()
+logTiming gopts opts logLine label start =
+    when (C.timing gopts && not (quiet gopts opts)) $ do
+      end <- getTime Monotonic
+      logLine ("Timing: " ++ label ++ " " ++ fmtTimePrecise (diffTimeSpec end start))
+
 -- | Format a TimeSpec with second granularity for compact narrow logs.
 fmtTimeCompact :: TimeSpec -> String
 fmtTimeCompact t =
@@ -655,7 +662,9 @@ runTestsOnce gopts opts topts mode paths = do
         maxParallel0 <- testMaxParallel gopts
         let maxParallel = if mode == TestModeStress then 1 else maxParallel0
         useColorOut <- useColor gopts
+        testStart <- getTime Monotonic
         exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel
+        logTiming gopts opts putStrLn "test execution and cache" testStart
         exitWithTestCode exitCode
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
@@ -679,12 +688,16 @@ runTestsWatch gopts opts topts mode paths = do
                 hadErrors <- if null selected then return False else
                   compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (sched, gen)) (Just (progressUI, progressState))
                 unless hadErrors $ do
+                  selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
                   modulesToTest <- selectTestModules paths srcFiles mChanged testModules
+                  logTiming gopts opts (progressLogLine progressUI) "affected test selection" selectStart
                   unless (null modulesToTest) $
                     do
                       useColorOut <- useColor gopts
+                      testStart <- getTime Monotonic
                       void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
+                      logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
         runWatchProject gopts projDir srcRoot sched runOnce
 
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
@@ -1406,8 +1419,10 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
     cleanupProgress
     let runCompile = do
           sp' <- overlayChangedPaths sp mChangedPaths
+          planStart <- getTime Monotonic
           planRes <- try $
             prepareCompilePlan sp' gopts sched opts srcFiles allowPrune mChangedPaths
+          logTiming gopts opts logLine "compile planning" planStart
           let reportPlanError (ProjectError msg) = do
                 if C.watch opts
                   then logLine msg
@@ -1431,15 +1446,16 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                     reportCompileErrors =
                       finalizeCompile $
                         unless watchMode System.Exit.exitFailure
+                compileStart <- getTime Monotonic
                 compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
+                backFailure <- case compileRes of
+                  Right _ | not (C.only_build opts') -> backQueueWait (csBackQueue sched) gen
+                  _ -> return Nothing
+                logTiming gopts opts' logLine "Acton compilation" compileStart
                 case compileRes of
                   Left err ->
                     reportCompileError (compileFailureMessage err)
                   Right (env, hadErrors) -> do
-                    backFailure <-
-                      if C.only_build opts'
-                        then return Nothing
-                        else backQueueWait (csBackQueue sched) gen
                     case backFailure of
                       Just failure ->
                         reportCompileError (backPassFailureMessage failure)
@@ -2030,6 +2046,7 @@ runCliPostCompile :: CliCompileHooks
                   -> Acton.Env.Env0
                   -> IO ()
 runCliPostCompile cliHooks gopts plan env = do
+    prepStart <- getTime Monotonic
     let logLine = cchLogLine cliHooks
     let cctx = cpContext plan
         opts' = ccOpts cctx
@@ -2080,6 +2097,7 @@ runCliPostCompile cliHooks gopts plan env = do
                 depPathOverrides = projectDepPathOverrides projMap p
             genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
           Nothing -> return ()
+    logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
           cchFinalStart cliHooks
           action `onException` cchFinalDone cliHooks False
@@ -2499,10 +2517,17 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) envWithZigCache)
         cpBase = (proc zigExe zigArgs){ cwd = wd, env = env2 }
         cp = if closeFds then cpBase else cpBase { close_fds = False }
+    zigStart <- getTime Monotonic
     (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
+    let logLine = maybe putStrLn progressLogLine mProgressUI
+    logTiming gopts opts logLine "Zig build" zigStart
     case returnCode of
         ExitSuccess -> do
           iff (C.verboseZig gopts) $ putStrLn zigStderr
+          when (C.timing gopts && not (quiet gopts opts) && not (C.verboseZig gopts)) $
+            -- Zig's summary includes cache hits and elapsed C/link build steps.
+            -- Their durations overlap when Zig runs them in parallel.
+            mapM_ logLine (dropWhile (not . isPrefixOf "Build Summary:") (lines zigStderr))
           return ()
         ExitFailure ret -> do
           printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
@@ -2789,6 +2814,7 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 -- | Run zig build for generated artifacts and prune stale outputs.
 zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO ()
 zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+    prepStart <- getTime Monotonic
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
 
@@ -2823,7 +2849,8 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
                             "--global-cache-dir", global_cache_dir] ++
-                   (if (C.verboseZig gopts) then ["--verbose"] else [])
+                   (if (C.verboseZig gopts) then ["--verbose"] else []) ++
+                   (if C.timing gopts && not (quiet gopts opts) then ["--summary", "all", "--color", "off"] else [])
         prefixArgs = ["--prefix", projOut paths, "--prefix-exe-dir", "bin"] ++
                      (if (C.verboseZig gopts) then ["--verbose"] else [])
         targetArgs = ["-Dtarget=" ++ C.target opts]
@@ -2850,6 +2877,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
                              ]
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs
 
+    logTiming gopts opts (maybe putStrLn progressLogLine mProgressUI) "root and build file preparation" prepStart
     runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (isTmp paths && not (null realBinTasks))
