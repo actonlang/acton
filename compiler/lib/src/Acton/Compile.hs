@@ -167,6 +167,7 @@ module Acton.Compile
   , discoverProjects
   , pathsForModule
   , searchPathForProject
+  , systemTypePaths
   , moduleNameFromFile
   , enumerateProjectModules
   , normalizeDepOverrides
@@ -199,6 +200,7 @@ module Acton.Compile
   , isAbsolutePath
   , collapseDots
   , rebasePath
+  , rebaseDepPath
   ) where
 
 import Prelude hiding (readFile, writeFile)
@@ -688,7 +690,6 @@ data CompilePlan = CompilePlan
   , cpNeededTasks :: [GlobalTask]
   , cpDbpBlocked :: Data.Set.Set TaskKey
   , cpRootTasks :: [CompileTask]
-  , cpRootPins :: M.Map String BuildSpec.PkgDep
   , cpIncremental :: Bool
   , cpAllowPrune :: Bool
   , cpChangedPaths :: Maybe [FilePath]
@@ -744,7 +745,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     Just changed -> selectAffectedTasks rootProj opts' globalTasks dbpBlocked changed
   let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
-      rootPins = maybe M.empty (BuildSpec.dependencies . projBuildSpec) (M.lookup rootProj projMap)
   return CompilePlan
     { cpContext = ctx
     , cpProjMap = projMap
@@ -752,7 +752,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     , cpNeededTasks = neededTasks
     , cpDbpBlocked = dbpBlocked
     , cpRootTasks = rootTasks
-    , cpRootPins = rootPins
     , cpIncremental = incremental
     , cpAllowPrune = allowPrune'
     , cpChangedPaths = mChangedPaths
@@ -1545,6 +1544,26 @@ checkImportPrefixes key proj modSets imps
         Just mods0      = M.lookup p0 modSets
         prefixed        = [ mn | mn <- imps, Data.Set.member mn mods0 ]
 
+-- | Source imports may name only local modules or directly declared projects.
+-- Transitive interfaces remain available for types mentioned by imported APIs.
+checkImportDependencies :: Paths -> M.Map FilePath ProjCtx -> M.Map FilePath (Data.Set.Set A.ModName) -> [A.ModName] -> IO ()
+checkImportDependencies paths projects modSets imps =
+    forM_ imps $ \mn ->
+      case A.modPath mn of
+        n:_ | Data.Set.member n projectNames
+            , n `notElem` directNames
+            , not (Data.Set.member (addProjPrefix paths mn) localMods) ->
+          throwProjectError ("Dependency '" ++ n ++ "' imported by " ++ srcFile paths (modName paths)
+                             ++ " is not declared in " ++ projPath paths ++ "/Build.act.\n"
+                             ++ "Add a direct dependency, using follows to share another dependency's selection.")
+        _ -> return ()
+  where
+    projectNames = Data.Set.fromList [ BuildSpec.specName (projBuildSpec ctx) | ctx <- M.elems projects ]
+    directNames = "std" : [ BuildSpec.specName (projBuildSpec ctx)
+                          | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
+                          , Just ctx <- [M.lookup root projects] ]
+    localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
+
 -- | Resolve imports to in-graph providers using project search order.
 -- This chooses the first project in the search order that declares the module,
 -- producing TaskKeys for dependency edges.
@@ -1604,7 +1623,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
         allDeps :: M.Map ProjDir (Data.Set.Set ProjName)
         allDeps = M.fromList [ (projRoot ctx, Data.Set.fromList (map fst $ projDeps ctx)) | (ctx,_) <- perProj ]
         orderCache :: M.Map ProjDir [ProjDir]
-        orderCache = M.fromList [ (projRoot ctx, projDepClosure projMap (projRoot ctx)) | (ctx, _) <- perProj ]
+        orderCache = M.fromList [ (projRoot ctx, projRoot ctx : map snd (projDeps ctx)) | (ctx, _) <- perProj ]
         -- Declared modules in all reachable projects (paired with their project paths)
         allKeys = [ TaskKey (projRoot ctx) mn | (ctx, mods) <- perProj, (_, mn) <- mods ]
     seedKeys <- case mSeeds of
@@ -1626,11 +1645,19 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
             Just actFile -> do
               let ctx = projMap M.! tkProj k
               paths <- pathsForModule opts projMap ctx (tkMod k)
-              task  <- readModuleTask sp gopts opts paths actFile
+              task0 <- readModuleTask sp gopts opts paths actFile
+              -- Cached imports have canonical names: bare dep imports are stored
+              -- as dep.lib. If that namespace has become local, recover the
+              -- source spelling before resolving it and rebuild its interface.
+              task <- case task0 of
+                        TyTask{} | any (overlapsLocal paths modSets) (importsOf task0) ->
+                          materializeTask opts sp (tkMod k) actFile M.empty Nothing task0
+                        _ -> return task0
               let order = M.findWithDefault [tkProj k] (tkProj k) orderCache
                   deps = M.findWithDefault Data.Set.empty (tkProj k) allDeps
                   imps = restoredImportsOf paths task
               checkImportPrefixes k (projName paths) modSets imps
+              checkImportDependencies paths projMap modSets imps
               let providers = resolveProviders k (projName paths) order modSets deps imps
                   newKeys = M.elems providers
                   acc' = GlobalTask { gtKey = k
@@ -1639,6 +1666,15 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
                                     , gtImportProviders = providers
                                     } : acc
               go modMaps modSets allDeps orderCache (Data.Set.insert k seen) (qs ++ newKeys) acc'
+
+
+    overlapsLocal paths modSets mn =
+      case A.modPath mn of
+        n:ns | n /= projName paths ->
+          any (`Data.Set.member` localMods)
+              (addProjPrefix paths mn : [ addProjPrefix paths (A.modName [n]) | ns == ["lib"] ])
+        _ -> False
+      where localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
 
 
 -- | Select the subgraph needed for a given build request.
@@ -4424,9 +4460,10 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
     rootSpec0 <- loadBuildSpec rootAbs
     rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
-    let rootPins = BuildSpec.dependencies rootSpec
+    let rootPins = M.map (rebaseDepPath rootAbs) (BuildSpec.concreteDependencies rootSpec)
         (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
-    fst <$> go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    (projects, _) <- go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    resolveFollows projects
   where
     go root seen acc fpMap pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
@@ -4439,7 +4476,7 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
           spec <- applyDepOverrides dirAbs depOverrides spec0
           let (_, fpMap1, _) = applyFingerprint dirAbs spec fpMap
           (deps, fpMap2) <- do
-            let depsList = M.toList (BuildSpec.dependencies spec)
+            let depsList = M.toList (BuildSpec.concreteDependencies spec)
             foldM (collectDep pins dirAbs) ([], fpMap1) depsList
           let outDir   = joinPath [dirAbs, "out"]
               typesDir = joinPath [outDir, "types"]
@@ -4462,8 +4499,8 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
             case M.lookup depName pins of
               Nothing -> (dep, Nothing)
               Just pinDep ->
-                if pinDep == dep
-                  then (dep, Nothing)
+                if pinDep == rebaseDepPath base dep
+                  then (pinDep, Nothing)
                   else (pinDep, Just dep)
       when (isJust conflict) $
         unless (C.quiet gopts) $
@@ -4487,6 +4524,50 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
 
     step root seen pins (acc, fpMap) (_, depBase, mSpec) =
       go root seen acc fpMap pins depBase mSpec
+
+-- | Bind passive dependency references after concrete selection and deduplication.
+-- A follows entry contributes neither a source nor a root pin. Every segment
+-- traverses the selected project's own dependency declarations.
+resolveFollows :: M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+resolveFollows projects = M.traverseWithKey resolveProject projects
+  where
+    resolveProject root ctx = do
+      deps <- forM (M.keys (BuildSpec.dependencies (projBuildSpec ctx))) $ \name -> do
+        target <- resolve [] root name
+        return (name, target)
+      return ctx { projDeps = deps }
+
+    resolve seen root name
+      | (root, name) `elem` seen =
+          throwProjectError ("Cyclic dependency follows: " ++ intercalate " -> "
+                             [ p ++ ":" ++ n | (p, n) <- reverse ((root, name) : seen) ])
+      | otherwise =
+          case M.lookup root projects of
+            Nothing -> throwProjectError ("Missing project for dependency follows: " ++ root)
+            Just ctx ->
+              case M.lookup name (BuildSpec.dependencies (projBuildSpec ctx)) of
+                Nothing -> throwProjectError ("Dependency follows target '" ++ name
+                                               ++ "' is not declared in " ++ root ++ "/Build.act")
+                Just dep ->
+                  case BuildSpec.follows dep of
+                    Nothing -> case lookup name (projDeps ctx) of
+                                 Just target -> return target
+                                 Nothing -> throwProjectError ("Unresolved dependency '" ++ name ++ "' in " ++ root)
+                    Just ref -> do
+                      target <- foldM (resolve ((root, name) : seen)) root (splitRef ref)
+                                `catch` \(ProjectError msg) ->
+                                  throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                                     ++ "' in " ++ root ++ "/Build.act:\n" ++ msg)
+                      let targetName = BuildSpec.specName (projBuildSpec (projects M.! target))
+                      unless (name == targetName) $
+                        throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                           ++ "', which resolves to project '" ++ targetName
+                                           ++ "'. Use the project name as the dependency name.")
+                      return target
+
+    splitRef ref = case break (== '.') ref of
+                     (name, []) -> [name]
+                     (name, _:rest) -> name : splitRef rest
 
 -- Given a FILE and optionally --syspath PATH:
 -- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
@@ -4945,6 +5026,13 @@ rebasePath base p
   | isAbsolutePath p = normalise p
   | otherwise        = normalise (joinPath [base, p])
 
+-- | Keep a concrete source path relative to the project that declares it.
+rebaseDepPath :: FilePath -> BuildSpec.PkgDep -> BuildSpec.PkgDep
+rebaseDepPath base dep =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> dep { BuildSpec.path = Just (rebasePath base p) }
+      _ -> dep
+
 -- | Normalize --dep overrides relative to a base directory.
 -- Absolute override paths are kept, relative paths are rebased and normalized.
 normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
@@ -4965,6 +5053,7 @@ applyDepOverrides base overrides spec = do
     applyOne depsMap (depName, depPath) =
       case M.lookup depName depsMap of
         Nothing -> return depsMap
+        Just dep | isJust (BuildSpec.follows dep) -> return depsMap
         Just dep -> do
           let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
           absP <- normalizePathSafe absP0
@@ -5007,7 +5096,7 @@ fetchDependencies gopts paths depOverrides = do
         -- Tracks zig package dirs / hashes already pre-seeded, so the transitive
         -- walk over build.zig.zon files terminates on cycles and shared deps.
         zigSeen <- newIORef Data.Set.empty
-        let rootPins = BuildSpec.dependencies rootSpec
+        let rootPins = M.map (rebaseDepPath (projPath paths)) (BuildSpec.concreteDependencies rootSpec)
         _ <- walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen
                          Data.Set.empty (projPath paths) rootSpec
         return ()
@@ -5017,7 +5106,7 @@ fetchDependencies gopts paths depOverrides = do
       if Data.Set.member projAbs seen
         then return seen
         else do
-          selectedDeps <- forM (M.toList (BuildSpec.dependencies spec)) $
+          selectedDeps <- forM (M.toList (BuildSpec.concreteDependencies spec)) $
             selectDependency rootPins projAbs
           let pkgFetches = catMaybes
                 [ mkPkgFetch cacheDir zigExe globalCache name dep | (name, dep) <- selectedDeps ]
@@ -5056,8 +5145,8 @@ fetchDependencies gopts paths depOverrides = do
             case M.lookup depName rootPins of
               Nothing -> (dep, Nothing)
               Just pinDep ->
-                if pinDep == dep
-                  then (dep, Nothing)
+                if pinDep == rebaseDepPath base dep
+                  then (pinDep, Nothing)
                   else (pinDep, Just dep)
       when (isJust conflict) $
         unless (C.quiet gopts) $
@@ -5329,7 +5418,7 @@ collectDepTypePaths projDir overrides = do
     go seen fpMap dir spec0 = do
       spec <- applyDepOverrides dir overrides spec0
       let (_, fpMap1, _) = applyFingerprint dir spec fpMap
-      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.dependencies spec))
+      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.concreteDependencies spec))
 
     step base (seen, fpMap, acc) (depName, dep) = do
       depBase <- resolveDepBase base depName dep
@@ -5427,17 +5516,3 @@ fmtTime t =
   where
     secs :: Float
     secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
-
--- | Topologically order projects so dependencies come first.
--- Used to build search paths and providers in dependency order.
-projDepClosure :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
-projDepClosure ctxs root = reverse (dfs Data.Set.empty [] root)
-  where
-    depsOf p = maybe [] (map snd . projDeps) (M.lookup p ctxs)
-
-    dfs seen acc node
-      | Data.Set.member node seen = acc
-      | otherwise =
-          let seen' = Data.Set.insert node seen
-              acc'  = foldl' (\a n -> dfs seen' a n) acc (depsOf node)
-          in node : acc'

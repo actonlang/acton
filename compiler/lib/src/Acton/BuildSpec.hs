@@ -5,6 +5,7 @@ module Acton.BuildSpec
   , ZigDep(..)
   , Library(..)
   , BuildSpec(..)
+  , concreteDependencies
   , encodeBuildSpecJSON
   , renderBuildAct
   , parseBuildAct
@@ -20,7 +21,7 @@ import qualified Data.Aeson as Ae
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Char (isSpace)
+import Data.Char (isAlpha, isAlphaNum, isSpace)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
 import qualified Control.Exception as E
@@ -34,6 +35,7 @@ import qualified Acton.Syntax as S
 import qualified Acton.Printer as Pr
 import Utils (SrcLoc(..))
 import qualified Data.Aeson.KeyMap as KM
+import qualified Data.Aeson.Key as K
 
 -- Acton build configuration data model
 
@@ -59,23 +61,30 @@ data PkgDep = PkgDep
   , path      :: Maybe String
   , repo_url  :: Maybe String
   , repo_ref  :: Maybe String
+  , follows   :: Maybe String
   } deriving (Eq, Show, Generic)
 
 instance FromJSON PkgDep where
-  parseJSON = Ae.withObject "PkgDep" $ \o ->
+  parseJSON = Ae.withObject "PkgDep" $ \o -> do
+    f <- if KM.member "follows" o then Just <$> o .: "follows" else pure Nothing
+    case f of
+      Just ref -> either fail pure (checkFollows ref (map K.toString (KM.keys o)))
+      Nothing -> pure ()
     PkgDep <$> o .:? "url"
            <*> o .:? "hash"
            <*> o .:? "path"
            <*> o .:? "repo_url"
            <*> o .:? "repo_ref"
+           <*> pure f
 
 instance ToJSON PkgDep where
-  toJSON (PkgDep u h p ru rr) = Ae.object $ catMaybes
+  toJSON (PkgDep u h p ru rr f) = Ae.object $ catMaybes
     [ ("url"      .=) <$> u
     , ("hash"     .=) <$> h
     , ("path"     .=) <$> p
     , ("repo_url" .=) <$> ru
     , ("repo_ref" .=) <$> rr
+    , ("follows"  .=) <$> f
     ]
 
 data ZigDep = ZigDep
@@ -129,11 +138,16 @@ data BuildSpec = BuildSpec
   , libraries        :: Map String Library
   } deriving (Eq, Show, Generic)
 
+-- | Dependencies that contribute a source to project selection.
+concreteDependencies :: BuildSpec -> Map String PkgDep
+concreteDependencies = Map.filter (isNothing . follows) . dependencies
+
 data BuildSpecParseError
   = ParseError String
   | MissingProjectName
   | MissingFingerprint String
   | InvalidFingerprint String String
+  | InvalidDependency String String
   | UnsupportedOptions String
   | UnsupportedOptionValue String String
   deriving (Eq, Show)
@@ -148,6 +162,8 @@ renderBuildSpecParseError err =
       "Invalid fingerprint " ++ raw ++ " (project name: " ++ show name ++ "). "
       ++ "Expected an unquoted 64-bit hex fingerprint like "
       ++ "0x1234abcd5678ef00"
+    InvalidDependency dep msg ->
+      "Invalid dependency " ++ show dep ++ ": " ++ msg
     UnsupportedOptions dep ->
       "Unsupported options for zig dependency " ++ show dep ++ ". "
       ++ "Expected a dict of plain string literals"
@@ -429,12 +445,12 @@ extractSpecFromModule (S.Module _ _ _ stmts) = do
                                           then mfpErr <|> Just (renderExpr expr)
                                           else mfpErr)
                 else (mfp, mfpErr)
-            deps'  = if "dependencies" `elem` names
-                       then fromMaybe deps (exprToPkgDeps expr)
-                       else deps
             libs'  = if "libraries" `elem` names
                        then fromMaybe libs (exprToLibraries expr)
                        else libs
+        deps' <- if "dependencies" `elem` names
+                   then fromMaybe deps <$> exprToPkgDeps expr
+                   else Right deps
         zigs' <- if "zig_dependencies" `elem` names
                    then fromMaybe zigs <$> exprToZigDeps expr
                    else Right zigs
@@ -575,13 +591,14 @@ renderExpr e = Pr.render (Pr.pretty e)
 --     key2="val2"
 -- )
 renderPkgTuple :: PkgDep -> String
-renderPkgTuple (PkgDep u h p ru rr) =
+renderPkgTuple (PkgDep u h p ru rr f) =
   let fields = catMaybes
         [ fmap (\x -> ("repo_url", mkStr x)) ru
         , fmap (\x -> ("repo_ref", mkStr x)) rr
         , fmap (\x -> ("url", mkStr x)) u
         , fmap (\x -> ("hash", mkStr x)) h
         , fmap (\x -> ("path", mkStr x)) p
+        , fmap (\x -> ("follows", mkStr x)) f
         ]
   in case fields of
        [] -> "()"
@@ -654,27 +671,48 @@ renderFingerprint fp
         '0':'X':_ -> Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
         _         -> Nothing
 
-exprToPkgDeps :: S.Expr -> Maybe (Map.Map String PkgDep)
-exprToPkgDeps (S.Dict _ assocs) = Just $ Map.fromList (mapMaybe assocToPkg assocs)
+exprToPkgDeps :: S.Expr -> Either BuildSpecParseError (Maybe (Map.Map String PkgDep))
+exprToPkgDeps (S.Dict _ assocs) = Just . Map.fromList . catMaybes <$> traverse assocToPkg assocs
   where
-    assocToPkg (S.Assoc k v) = do
-      key <- exprToSimpleString k
-      dep <- tupleToPkg v
-      pure (key, dep)
-    assocToPkg _ = Nothing
-exprToPkgDeps _ = Nothing
+    assocToPkg (S.Assoc k v)
+      | Just key <- exprToSimpleString k = fmap ((,) key) <$> tupleToPkg key v
+    assocToPkg _ = Right Nothing
+exprToPkgDeps _ = Right Nothing
 
-tupleToPkg :: S.Expr -> Maybe PkgDep
-tupleToPkg (S.Tuple _ _ kargs) =
+tupleToPkg :: String -> S.Expr -> Either BuildSpecParseError (Maybe PkgDep)
+tupleToPkg dep (S.Tuple _ _ kargs) = do
   let m = kwdToMap kargs
-  in Just PkgDep { url = Map.lookup "url" m >>= exprToSimpleString
-                 , hash = Map.lookup "hash" m >>= exprToSimpleString
-                 , path = Map.lookup "path" m >>= exprToSimpleString
-                 , repo_url = Map.lookup "repo_url" m >>= exprToSimpleString
-                 , repo_ref = Map.lookup "repo_ref" m >>= exprToSimpleString
-                 }
-tupleToPkg (S.Paren _ e) = tupleToPkg e
-tupleToPkg _ = Nothing
+  f <- case Map.lookup "follows" m of
+         Nothing -> Right Nothing
+         Just expr -> case exprToSimpleString expr of
+           Nothing -> Left (InvalidDependency dep "follows must be a plain string literal")
+           Just ref -> case checkFollows ref (Map.keys m) of
+             Left msg -> Left (InvalidDependency dep msg)
+             Right () -> Right (Just ref)
+  Right $ Just PkgDep { url = Map.lookup "url" m >>= exprToSimpleString
+                     , hash = Map.lookup "hash" m >>= exprToSimpleString
+                     , path = Map.lookup "path" m >>= exprToSimpleString
+                     , repo_url = Map.lookup "repo_url" m >>= exprToSimpleString
+                     , repo_ref = Map.lookup "repo_ref" m >>= exprToSimpleString
+                     , follows = f
+                     }
+tupleToPkg dep (S.Paren _ e) = tupleToPkg dep e
+tupleToPkg _ _ = Right Nothing
+
+checkFollows :: String -> [String] -> Either String ()
+checkFollows ref fields
+  | length names < 2 || not (all validName names) =
+      Left "follows must name a dependency through another dependency, for example \"stratoweave.yang\""
+  | any (`elem` fields) ["url", "hash", "path", "repo_url", "repo_ref"] =
+      Left "follows cannot be combined with url, hash, path, repo_url or repo_ref"
+  | otherwise = Right ()
+  where
+    names = split ref
+    split s = case break (== '.') s of
+                (n, []) -> [n]
+                (n, _:rest) -> n : split rest
+    validName (c:cs) = (isAlpha c || c == '_') && all (\c -> isAlphaNum c || c == '_') cs
+    validName [] = False
 
 exprToZigDeps :: S.Expr -> Either BuildSpecParseError (Maybe (Map.Map String ZigDep))
 exprToZigDeps (S.Dict _ assocs) = Just . Map.fromList . catMaybes <$> traverse assocToZig assocs

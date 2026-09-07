@@ -200,6 +200,7 @@ resolveLibraryDependency depName = do
       , BuildSpec.path = Nothing
       , BuildSpec.repo_url = Just repoUrl
       , BuildSpec.repo_ref = Nothing
+      , BuildSpec.follows = Nothing
       }
 
 pkgRemoveCommand :: C.GlobalOptions -> C.PkgRemoveOptions -> IO ()
@@ -223,7 +224,7 @@ pkgUpgradeCommand _ opts = do
     let deps = BuildSpec.dependencies spec
     manager <- newProxyManager
     token <- resolveGithubToken (normalizeMaybe (C.pkgUpgradeGithubToken opts))
-    resolved <- mapM (resolveDep manager token) (M.toList deps)
+    resolved <- mapM (resolveDep manager token) (M.toList (BuildSpec.concreteDependencies spec))
     let newUrls = M.fromList [ (n,u) | Just (n,u) <- resolved ]
     if M.null newUrls
       then putStrLn "No dependencies to upgrade"
@@ -497,7 +498,7 @@ upsertPkgDep :: BuildSpec.BuildSpec -> String -> String -> String -> Maybe Strin
 upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
     case M.lookup depName (BuildSpec.dependencies spec) of
       Just dep ->
-        let (msgs1, dep1) = updateUrl dep
+        let (msgs1, dep1) = updateUrl dep { BuildSpec.follows = Nothing }
             (msgs2, dep2) = updateHash dep1
             dep3 = case depRepoUrl of
                      Nothing -> dep2
@@ -511,6 +512,7 @@ upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
               , BuildSpec.path = Nothing
               , BuildSpec.repo_url = depRepoUrl
               , BuildSpec.repo_ref = depRepoRef
+              , BuildSpec.follows = Nothing
               }
             deps' = M.insert depName newDep (BuildSpec.dependencies spec)
         in (spec { BuildSpec.dependencies = deps' }, ["Added new package dependency " ++ depName ++ " with hash " ++ depHash])

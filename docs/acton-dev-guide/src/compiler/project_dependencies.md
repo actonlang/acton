@@ -13,6 +13,15 @@ Project discovery in `Acton.Compile` only follows Acton package dependencies.
 Those edges determine the project graph used for module ordering, cache reuse,
 import visibility, and type-check planning.
 
+Concrete path and archive declarations determine version selection. A
+declaration such as `"seeds": (follows="garden.seeds")` contributes no
+root pin or version choice: after concrete dependency resolution and
+fingerprint deduplication, it points to the selected target of that dependency
+path. References are resolved in each declaring project's dependency scope;
+relative concrete paths retain their original declaring project as their base.
+Following chains are allowed, while missing targets and reference cycles fail
+before compilation.
+
 Zig dependencies are not Acton project edges. They do not contribute modules to
 the import graph and they are not used for project discovery.
 
@@ -22,7 +31,7 @@ dependencies before later compile planning uses them.
 
 ## Acton import prefixes
 
-Each reachable Acton project contributes modules under the dependency name used
+Each directly declared Acton dependency contributes modules under the name used
 by its consumer. A dependency entry named `foo` therefore exposes that
 dependency's modules under the `foo` import prefix:
 
@@ -41,6 +50,16 @@ Currently, dependency entries must use the same name as the dependency
 project's `name` field. The import-prefix rule is still described in terms of
 the dependency entry name so the docs continue to match the public model when
 separate dependency aliases are supported.
+
+Source imports must refer to the current project's modules, its directly
+declared dependencies, or system modules. Following declarations count as
+direct declarations. This check also applies when compilation reuses cached
+interfaces; removing a declaration must not leave its imports available.
+
+The compiler still needs the complete transitive interface closure to resolve
+types appearing in dependency APIs and to generate code. Internal interface
+loading therefore retains access to transitive projects. This access does not
+authorize a source import from an undeclared package.
 
 ## Generated `build.zig` inputs
 

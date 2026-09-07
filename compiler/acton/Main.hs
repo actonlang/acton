@@ -1114,24 +1114,14 @@ sigModuleIndex projMap rootProj = do
 
 sigProjectSearchOrder :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
 sigProjectSearchOrder projMap rootProj =
-    rootProj : snd (go (Data.Set.singleton rootProj) rootProj)
-  where
-    go seen root =
-      case M.lookup root projMap of
-        Nothing -> (seen, [])
-        Just ctx -> foldl' step (seen, []) (projDeps ctx)
-
-    step (seen, acc) (_, depRoot)
-      | Data.Set.member depRoot seen = (seen, acc)
-      | otherwise =
-          let seen' = Data.Set.insert depRoot seen
-              (seenNext, sub) = go seen' depRoot
-          in (seenNext, acc ++ [depRoot] ++ sub)
+    rootProj : maybe [] (map snd . projDeps) (M.lookup rootProj projMap)
 
 sigTySearchPath :: C.CompileOptions -> Paths -> FilePath -> M.Map FilePath ProjCtx -> [FilePath]
 sigTySearchPath opts paths rootProj projMap =
     case M.lookup rootProj projMap of
-      Just rootCtx -> let ps = searchPathForProject opts projMap rootCtx
+      Just rootCtx -> let ps = [ projTypesDir ctx | root <- sigProjectSearchOrder projMap rootProj
+                                                        , Just ctx <- [M.lookup root projMap] ]
+                              ++ C.searchpath opts ++ systemTypePaths (sysPath paths) (sysTypes paths)
                       in ps ++ [projTypesDir rootCtx </> projName paths]        -- Add the prefixed type-dir as a last resort in case the source has been deleted
       Nothing      -> searchPath paths
 
@@ -1170,7 +1160,7 @@ pkgShow gopts = do
     curDir <- getCurrentDirectory
     _ <- requireProjectConfigPath curDir
     spec <- loadBuildSpec curDir
-    let rootPins = BuildSpec.dependencies spec
+    let rootPins = M.map (rebaseDepPath curDir) (BuildSpec.concreteDependencies spec)
     unless (C.quiet gopts) $
       putStrLn "Dependency tree (hash overrides shown):"
     partial <- showTree rootPins curDir spec 0
@@ -1195,11 +1185,17 @@ pkgShow gopts = do
       let deps = M.toList (BuildSpec.dependencies spec)
       foldM (step pins dir depth) False deps
 
-    step pins dir depth partial (depName, dep) = do
+    step pins dir depth partial (depName, dep)
+      | Just ref <- BuildSpec.follows dep = do
+          putStrLn (replicate (2*depth) ' ' ++ "- " ++ depName ++ " (follows=" ++ ref ++ ")")
+          return partial
+      | otherwise = showConcrete pins dir depth partial depName dep
+
+    showConcrete pins dir depth partial depName dep = do
       let (chosen, conflict) =
             case M.lookup depName pins of
               Nothing -> (dep, False)
-              Just pinDep -> if pinDep == dep then (dep, False) else (pinDep, True)
+              Just pinDep -> (pinDep, pinDep /= rebaseDepPath dir dep)
       depBase <- resolveDepBase dir depName chosen
       depExists <- doesDirectoryExist depBase
       let notFetched = isHashDep chosen && not depExists
@@ -2054,7 +2050,6 @@ runCliPostCompile cliHooks gopts plan env = do
         rootProj = ccRootProj cctx
         sysAbs = ccSysAbs cctx
         rootTasks = cpRootTasks plan
-        rootPins = cpRootPins plan
         allowPrune' = cpAllowPrune plan
         globalTasks = cpGlobalTasks plan
         neededTasks = cpNeededTasks plan
@@ -2095,7 +2090,7 @@ runCliPostCompile cliHooks gopts plan env = do
             dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
             let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
                 depPathOverrides = projectDepPathOverrides projMap p
-            genBuildZigFiles (projBuildSpec pctx) rootPins (ccDepOverrides cctx) dummyPaths depOpts depPathOverrides
+            genBuildZigFiles (projBuildSpec pctx) dummyPaths depOpts depPathOverrides
           Nothing -> return ()
     logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
@@ -2543,9 +2538,9 @@ generateFingerprint name = do
     return (Fingerprint.formatFingerprint fp)
 
 -- Render build.zig and build.zig.zon from templates and BuildSpec.
--- rootPins: dependency pins from the main project (applied to all deps, including transitive)
-genBuildZigFiles :: BuildSpec.BuildSpec -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
-genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides = do
+-- Dependency paths come from the selected, deduplicated project graph.
+genBuildZigFiles :: BuildSpec.BuildSpec -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
+genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
@@ -2557,7 +2552,7 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
     buildZonTemplate <- readFile distBuildZonPath
     let zonName = BuildSpec.specName spec
         fp = BuildSpec.fingerprint spec
-    (transPkgs, transZigs) <- collectDepsRecursive spec proj rootPins depOverrides
+    (transPkgs, transZigs) <- collectDepsRecursive spec proj depPathOverrides
     absSys <- canonicalizePath sys
     let relSys = relativeViaRoot projAbs absSys
     homeDir <- getHomeDirectory
@@ -2566,8 +2561,7 @@ genBuildZigFiles spec rootPins depOverrides paths depModuleOpts depPathOverrides
     let directZigs = [ ZigDepRef depName (rebaseZigDep projAbs proj dep)
                      | (depName, dep) <- M.toList (BuildSpec.zig_dependencies normalizedSpec)
                      ]
-        applyPins deps = M.mapWithKey (\n d -> M.findWithDefault d n rootPins) deps
-        mergedSpec0 = normalizedSpec { BuildSpec.dependencies = applyPins (BuildSpec.dependencies normalizedSpec) `M.union` transPkgs }
+        mergedSpec0 = normalizedSpec { BuildSpec.dependencies = BuildSpec.dependencies normalizedSpec `M.union` transPkgs }
         mergedSpec1 = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
         mergedSpec = addImplicitStdDependency absSys mergedSpec1
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
@@ -2582,7 +2576,7 @@ addImplicitStdDependency sys spec
   | otherwise = spec { BuildSpec.dependencies = M.insert "std" stdDep deps }
   where
     deps = BuildSpec.dependencies spec
-    stdDep = BuildSpec.PkgDep Nothing Nothing (Just (joinPath [sys, "std"])) Nothing Nothing
+    stdDep = BuildSpec.PkgDep Nothing Nothing (Just (joinPath [sys, "std"])) Nothing Nothing Nothing
 
 applyPkgDepPathOverrides :: FilePath -> M.Map String FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 applyPkgDepPathOverrides projRoot depPathOverrides spec =
@@ -2592,7 +2586,8 @@ applyPkgDepPathOverrides projRoot depPathOverrides spec =
       case M.lookup depName depPathOverrides of
         Nothing -> dep
         Just depPath ->
-          dep { BuildSpec.path = Just (collapseDots (makeRelativeOrAbsolute projRoot depPath)) }
+          dep { BuildSpec.path = Just (collapseDots (makeRelativeOrAbsolute projRoot depPath))
+              , BuildSpec.follows = Nothing }
 
 data ZigDepRef = ZigDepRef
   { zigDepRefName :: String
@@ -2837,14 +2832,12 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
     sysAbs  <- normalizePathSafe (sysPath paths)
-    depOverrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
     let sysRoot   = addTrailingPathSeparator sysAbs
         isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
 
     -- Generate build.zig and build.zig.zon directly from Build.act.
-    iff (not isSysProj) $ do
-      let pins = BuildSpec.dependencies rootSpec
-      genBuildZigFiles rootSpec pins depOverrides paths depModuleOpts depPathOverrides
+    iff (not isSysProj) $
+      genBuildZigFiles rootSpec paths depModuleOpts depPathOverrides
 
     let zigExe = zig paths
         baseArgs = ["build","--cache-dir", local_cache_dir,
@@ -2951,43 +2944,32 @@ relativeViaRoot baseAbs targetAbs
   where
     cleanParts = filter (\c -> not (null c) && c /= "/") . splitDirectories
 
--- | Walk BuildSpec dependencies to collect transitive packages and zig deps.
-collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String BuildSpec.PkgDep -> [(String, FilePath)] -> IO (M.Map String BuildSpec.PkgDep, [ZigDepRef])
-collectDepsRecursive rootSpec projDir pins overrides = do
+-- | Collect build inputs from the canonical paths selected during discovery.
+-- References and version conflicts have already been resolved in that graph.
+collectDepsRecursive :: BuildSpec.BuildSpec -> FilePath -> M.Map String FilePath -> IO (M.Map String BuildSpec.PkgDep, [ZigDepRef])
+collectDepsRecursive rootSpec projDir depPaths = do
   root <- normalizePathSafe projDir
-  spec <- applyDepOverrides root overrides rootSpec
-  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> foldM (step root root) (Data.Set.empty, M.empty, []) (M.toList (BuildSpec.dependencies spec))
+  (\(_, pkgs, zigs) -> (pkgs, zigs)) <$> foldM (step root)
+    (Data.Set.singleton root, M.empty, []) (M.toList (BuildSpec.dependencies rootSpec))
   where
-    go root seen dir mSpec = do
-      spec0 <- case mSpec of
-                 Just s -> return s
-                 Nothing -> loadBuildSpec dir
-      spec <- applyDepOverrides dir overrides spec0
-      let depsHere = BuildSpec.dependencies spec
-          zigsHere = [ ZigDepRef depName (rebaseZigDep root dir dep)
+    go root seen dir = do
+      spec <- loadBuildSpec dir
+      let zigsHere = [ ZigDepRef depName (rebaseZigDep root dir dep)
                      | (depName, dep) <- M.toList (BuildSpec.zig_dependencies spec)
                      ]
-      foldM (step root dir) (seen, M.empty, zigsHere) (M.toList depsHere)
+      foldM (step root) (seen, M.empty, zigsHere) (M.toList (BuildSpec.dependencies spec))
 
-    step root base (seen, pkgAcc, zigAcc) (depName, dep) = do
-      let depChosen = case M.lookup depName pins of
-                        Nothing   -> dep
-                        Just pdep -> pdep
-      depBase <- resolveDepBase base depName depChosen
-      let seen' = Data.Set.insert depBase seen
-          rebasePkgPath d =
-            case BuildSpec.path d of
-              Just p | not (null p) ->
-                let absP = rebasePath base p
-                    relP = makeRelativeOrAbsolute root absP
-                in d { BuildSpec.path = Just (collapseDots relP) }
-              _ -> d
-          dep' = rebasePkgPath depChosen
+    step root (seen, pkgAcc, zigAcc) (depName, dep) = do
+      depBase <- case M.lookup depName depPaths of
+                   Just dir -> return dir
+                   Nothing -> throwProjectError ("Missing selected dependency '" ++ depName ++ "' for " ++ root)
+      let dep' = dep { BuildSpec.path = Just (collapseDots (makeRelativeOrAbsolute root depBase))
+                     , BuildSpec.follows = Nothing }
+          pkgAcc' = M.insertWith (\_ old -> old) depName dep' pkgAcc
       if Data.Set.member depBase seen
-        then return (seen', pkgAcc, zigAcc)
+        then return (seen, pkgAcc', zigAcc)
         else do
-          (seenNext, subPkgs, subZigs) <- go root seen' depBase Nothing
-          let pkgAcc' = M.insertWith (\_ old -> old) depName dep' pkgAcc
+          (seenNext, subPkgs, subZigs) <- go root (Data.Set.insert depBase seen) depBase
           return (seenNext, pkgAcc' `M.union` subPkgs, zigAcc ++ subZigs)
 
 rebaseZigDep :: FilePath -> FilePath -> BuildSpec.ZigDep -> BuildSpec.ZigDep
