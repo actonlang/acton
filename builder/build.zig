@@ -40,7 +40,8 @@ pub fn build(b: *std.Build) void {
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
-    const test_shared = b.option(bool, "test_shared", "") orelse false;
+    // Musl executables default to static libc, whose dlopen cannot load tests.
+    const test_shared = (b.option(bool, "test_shared", "") orelse false) and !target.result.isMuslLibC();
     const shared_base = b.option(bool, "shared_base", "") orelse test_shared;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {

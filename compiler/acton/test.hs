@@ -2366,6 +2366,37 @@ crossCompileTests =
         runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-linux-musl --db" $ do
         runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../../test/compiler/hello/"
+  , testCase "musl test runners retain static linkage" $ do
+      withSystemTempDirectory "acton-test-musl" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "musl_tests"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            testBin = proj </> "out/bin/.test_main"
+        createDirectoryIfMissing True (proj </> "src")
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        writeFile (proj </> "src/main.act") $ unlines
+          [ "import testing"
+          , "def _test_static() -> None:"
+          , "    assert 1 + 1 == 2"
+          ]
+        (code, out, err) <- readCreateProcessWithExitCode
+          (proc acton ["build", "--test", "--target", "aarch64-linux-musl", "src/main.act"]) { cwd = Just proj } ""
+        assertEqual ("musl test build failed:\n" ++ out ++ err) ExitSuccess code
+        assertBool "musl test executable should exist" =<< doesFileExist testBin
+        libs <- listDirectory (proj </> "out/lib")
+        assertBool "musl tests should not require shared project libraries"
+          (not (any ((== ".so") . takeExtension) libs))
+        readelf <- findExecutable "readelf"
+        forM_ readelf $ \tool -> do
+          (elfCode, headers, elfErr) <- readCreateProcessWithExitCode (proc tool ["-l", testBin]) ""
+          assertEqual ("could not inspect musl linkage: " ++ elfErr) ExitSuccess elfCode
+          assertBool "musl test executable should not require a dynamic loader"
+            (not (any (`isInfixOf` headers) ["INTERP", "DYNAMIC"]))
   , testCase "build helloworld --target x86_64-windows-gnu" $ do
         runActon "build --target x86_64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
   ]

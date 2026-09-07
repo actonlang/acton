@@ -85,7 +85,7 @@ Name selection also limits compilation to modules that may contain matching test
 
 Test builds follow the selected source files and their imports, and ignore the project's `libraries` groups in `Build.act`. This also applies when running all tests without selection flags. Application builds continue to honor those groups and their configured linkage.
 
-On Linux and macOS, test executables load a shared project library and the Acton runtime. Changes rebuild the project library while reusing the small test launchers. These libraries are managed by `acton test`, including in watch mode. Ordinary application builds retain their configured linkage and remain statically linked by default.
+On Linux with glibc and on macOS, test executables load a shared project library and the Acton runtime. Windows and Linux musl targets retain statically linked test executables. Changes rebuild the project library while reusing the small test launchers. These libraries are managed by `acton test`, including in watch mode. Ordinary application builds retain their configured linkage and remain statically linked by default.
 
 Shared linking can also affect runtime and garbage-collection timings. Re-record existing performance baselines with `acton test perf --record` when switching from statically linked test executables.
 
