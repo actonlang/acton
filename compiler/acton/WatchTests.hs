@@ -77,7 +77,7 @@ watchProcessTests = testGroup "watch subprocesses"
   , testCase "failed final build skips retained test binary and recovers" $
       withProcessProject $ \acton proj system -> do
         writeFile (proj </> "fail-build") ""
-        writeExecutable (system </> "zig/zig")
+        writeZig (system </> "zig/zig")
           [ "touch build-started"
           , "while [ ! -e finish-build ]; do sleep 0.01; done"
           , "if [ -e fail-build ]; then exit 1; fi"
@@ -179,7 +179,7 @@ withProcessProject action =
       entries <- listDirectory dist
       forM_ (filter (/= "zig") entries) $ \entry ->
         createSymbolicLink (dist </> entry) (system </> entry)
-      writeExecutable (system </> "zig/zig") ["exit 0"]
+      writeZig (system </> "zig/zig") ["exit 0"]
       createDirectory (proj </> "src")
       writeFile (proj </> "Build.act") ("name = " ++ show name ++ "\nfingerprint = " ++ fingerprint ++ "\n")
       writeFile (proj </> "src/main.act") $ unlines
@@ -194,6 +194,21 @@ withProcessProject action =
           text <- readOutput (proj </> name)
           forM_ (readMaybe text :: Maybe ProcessID) $ \pid ->
             signalProcess sigKILL pid `catch` ignoreIO)
+
+writeZig :: FilePath -> [String] -> IO ()
+writeZig path body = writeExecutable path $
+    ["build() ("] ++ body ++
+    [ ")"
+    , "if [ -n \"$ACTON_ZIG_WATCH_TOKEN\" ]; then"
+    , "  printf '\\000ACTON_ZIG %s ready 1\\000' \"$ACTON_ZIG_WATCH_TOKEN\""
+    , "  while read command generation; do"
+    , "    if build; then result=ok; else result=failed; fi"
+    , "    printf '\\000ACTON_ZIG %s done %s %s\\000' \"$ACTON_ZIG_WATCH_TOKEN\" \"$generation\" \"$result\""
+    , "  done"
+    , "else"
+    , "  build"
+    , "fi"
+    ]
 
 writeExecutable :: FilePath -> [String] -> IO ()
 writeExecutable path body = do

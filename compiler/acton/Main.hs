@@ -47,6 +47,7 @@ import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
+import qualified ZigWatch
 import FileUtil (readFile, writeFile, writeFileIfChanged)
 
 import Control.Concurrent.MVar
@@ -604,6 +605,7 @@ data CliWatchContext = CliWatchContext
   { cwScheduler :: CompileScheduler
   , cwProgressUI :: ProgressUI
   , cwProgressState :: ProgressState
+  , cwZig :: ZigWatch.Session
   }
 
 withCompileWatchContext :: C.GlobalOptions -> (CliWatchContext -> IO a) -> IO a
@@ -616,11 +618,12 @@ withCompileWatchContext gopts action = do
     create = do
       maxParallel <- compileMaxParallel gopts
       CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
-                      <*> newProgressState
+                      <*> newProgressState <*> ZigWatch.newSession
     cleanup ctx = do
       modifyMVar_ (csAsyncRef (cwScheduler ctx)) $ \running -> do
         mapM_ Async.cancel running
         return Nothing
+      ZigWatch.stopSession (cwZig ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
 
 logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
@@ -801,7 +804,7 @@ watchProjectAt gopts opts projDir = do
                           withProjectLockForGen gopts sched gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
-                            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (watchCtx, gen))
+                            hadErrors <- compileFilesChanged sp gopts opts srcFiles True Nothing (Just (watchCtx, gen))
                             when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
                             return (not hadErrors)
@@ -856,8 +859,8 @@ watchFile gopts opts file = do
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
             let sched = cwScheduler watchCtx
-                runOnce gen mChanged = whenCurrentGen sched gen $
-                  void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (watchCtx, gen))
+                runOnce gen _ = whenCurrentGen sched gen $
+                  void $ compileFilesChanged sp gopts opts' [absFile] False Nothing (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
@@ -1497,7 +1500,7 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                             clearProgress
                             result <- newIORef False
                             whenCurrentGen sched gen $ do
-                              success <- runCliPostCompile cliHooks gopts plan env
+                              success <- runCliPostCompile cliHooks gopts plan env (fmap (cwZig . fst) mWatch) gen
                               writeIORef result success
                             not <$> readIORef result
           either reportPlanError runPlan planRes
@@ -2078,8 +2081,10 @@ runCliPostCompile :: CliCompileHooks
                   -> C.GlobalOptions
                   -> CompilePlan
                   -> Acton.Env.Env0
+                  -> Maybe ZigWatch.Session
+                  -> Int
                   -> IO Bool
-runCliPostCompile cliHooks gopts plan env = do
+runCliPostCompile cliHooks gopts plan env mSession gen = do
     prepStart <- getTime Monotonic
     let logLine = cchLogLine cliHooks
     let cctx = cpContext plan
@@ -2114,6 +2119,8 @@ runCliPostCompile cliHooks gopts plan env = do
         rootModuleEntries = excludeLibrarySources rootBuildLibraries rootSelectedModuleEntries
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
+        graphFiles = [p </> file | p <- M.keys projMap, file <- ["build.zig", "build.zig.zon"]]
+        watchBuild = fmap (\session -> (session, gen, graphFiles)) mSession
 
     -- Zig follows every declared dependency, including projects with no
     -- selected modules. Refresh their build files too so nested dependencies
@@ -2142,10 +2149,10 @@ runCliPostCompile cliHooks gopts plan env = do
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
             if altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)) watchBuild)
           else do
             if altOutput opts' then return True else
-              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
+              runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)) watchBuild)
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
 generateProjectDocIndex :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [String] -> IO ()
@@ -2416,9 +2423,9 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
-    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> Maybe (ZigWatch.Session, Int, [FilePath]) -> IO Bool
+compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI mWatch =
+    zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI mWatch
 
 printDiag :: C.GlobalOptions -> C.CompileOptions -> Diagnostic String -> IO ()
 printDiag gopts opts d = do
@@ -2500,8 +2507,11 @@ readProcessWithExitCodeCancelable cp onStart = mask $ \restore -> do
               err <- Async.wait errReader
               return (code, out, err)) `finally` stop
 
-runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
-    let display = showCommandForUser zigExe zigArgs
+runZig gopts opts zigExe zigArgs paths wd mProgressUI mWatch = do
+    let runnerDir = sysPath paths </> "zig" </> "lib" </> "compiler"
+        args = if isNothing mWatch then zigArgs else
+          zigArgs ++ ["--watch", "--watch-stdin", "--color", "off"]
+        display = showCommandForUser zigExe args
     iff (C.ccmd opts || C.verbose gopts) $ putStrLn ("zigCmd: " ++ display)
     env0 <- System.Environment.getEnvironment
     let ignoreIO :: IOException -> IO ()
@@ -2510,6 +2520,7 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
           Just ui -> withProgressLock ui
           Nothing -> \action -> action
         mTermProgress = do
+          guard (isNothing mWatch)
           ui <- mProgressUI
           let tp = puTermProgress ui
           if termProgressEnabled tp then Just tp else Nothing
@@ -2550,10 +2561,14 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
         env2 = case envOverride of
           Nothing -> Just envWithZigCache
           Just (k, v) -> Just ((k, v) : filter ((/= k) . fst) envWithZigCache)
-        cpBase = (proc zigExe zigArgs){ cwd = wd, env = env2 }
+        cpBase = (proc zigExe args){ cwd = wd, env = env2 }
         cp = if closeFds then cpBase else cpBase { close_fds = False }
     zigStart <- getTime Monotonic
-    (returnCode, zigStdout, zigStderr) <- readProcessWithExitCodeCancelable cp onStart `finally` onStop
+    (returnCode, zigStdout, zigStderr) <- case mWatch of
+      Nothing -> readProcessWithExitCodeCancelable cp onStart `finally` onStop
+      Just (session, gen, graphFiles) ->
+        ZigWatch.build session gen cp ((runnerDir </> "build_runner.zig") : (runnerDir </> "Watch.zig") : graphFiles)
+          `catch` \err -> return (ExitFailure 1, "", show (err :: IOException))
     let logLine = maybe putStrLn progressLogLine mProgressUI
     logTiming gopts opts logLine "Zig build" zigStart
     case returnCode of
@@ -2848,8 +2863,8 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
-zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> Maybe (ZigWatch.Session, Int, [FilePath]) -> IO Bool
+zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI mWatch = do
     prepStart <- getTime Monotonic
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
     let realBinTasks = catMaybes allBinTasks
@@ -2912,7 +2927,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs
 
     logTiming gopts opts (maybe putStrLn progressLogLine mProgressUI) "root and build file preparation" prepStart
-    success <- runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
+    success <- runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI mWatch
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (success && isTmp paths && not (null realBinTasks))
       then do

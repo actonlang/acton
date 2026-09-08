@@ -39,6 +39,8 @@ named `foo` exposes this project's `src/lib.act` root module as
 `import foo`, and exposes `src/parser.act` as `import foo.parser`.
 Currently, the dependency name must match this project's `name`.
 
+Use `acton build --watch` to rebuild after each edit. Zig stays running between edits, keeping unchanged build steps cached in the process. Acton publishes generated C and headers before requesting the next Zig build, and restarts Zig when the build configuration changes. This also applies when watching a single file.
+
 ## Build configuration and lineage
 
 Projects must include a `Build.act` file. Two common fields are `name` and `fingerprint`, where the fingerprint captures the project’s **lineage**:

@@ -87,6 +87,8 @@ Test builds follow the selected source files and their imports, and ignore the p
 
 `acton test --watch` waits for successful compilation and linking before running tests. If another edit interrupts a build or test run, the next run includes tests affected by both edits. Stopping watch mode also stops its compiler and test subprocesses.
 
+`acton test --watch` keeps a Zig build process running between edits. Acton requests a build after publishing generated C and headers, and waits for successful linking and installation before running tests. Changes to the selected module set or build configuration restart Zig automatically.
+
 ## Capability-gated tests
 
 Some tests depend on external capabilities (for example network services, hardware, or system setup). In tests that receive a test context argument (`t`), use `t.require(...)` and pass available capabilities with `--tag`:
