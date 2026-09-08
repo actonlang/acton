@@ -240,6 +240,8 @@ int64_t B_listD_count(B_list self, B_Eq W_EqD_B, $WORD val) {
 // B_OrdD_list ////////////////////////////////////////////////////////
 
 bool B_OrdD_listD___eq__ (B_OrdD_list w, B_list a, B_list b) {
+    if (a == b)
+        return true;
     if (a->length != b->length) return false;
     B_Ord w2 = w->W_OrdD_AD_OrdD_list;
     for (int i = 0; i<a->length; i++) {

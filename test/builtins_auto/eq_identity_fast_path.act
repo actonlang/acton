@@ -1,0 +1,79 @@
+def test_reflexive_builtin_aliases():
+    s = "abcdefghij" * 1000
+    s_alias = s
+    if not (s_alias == s) or s_alias != s:
+        raise ValueError("str alias comparison failed")
+
+    bs = b"abcdefghij" * 1000
+    bs_alias = bs
+    if not (bs_alias == bs) or bs_alias != bs:
+        raise ValueError("bytes alias comparison failed")
+
+    ba = bytearray(bs)
+    ba_alias = ba
+    if not (ba_alias == ba) or ba_alias != ba:
+        raise ValueError("bytearray alias comparison failed")
+
+    n: bigint = 10**1000
+    n_alias = n
+    if not (n_alias == n) or n_alias != n:
+        raise ValueError("bigint alias comparison failed")
+
+
+def test_distinct_equal_builtins():
+    s1 = "abcdefghij" * 1000
+    s2 = "abcdefghij" * 1000
+    if not (s1 == s2) or s1 != s2:
+        raise ValueError("distinct equal str comparison failed")
+
+    bs1 = b"abcdefghij" * 1000
+    bs2 = b"abcdefghij" * 1000
+    if not (bs1 == bs2) or bs1 != bs2:
+        raise ValueError("distinct equal bytes comparison failed")
+
+    ba1 = bytearray(b"abcdefghij")
+    ba2 = bytearray(b"abcdefghij")
+    if not (ba1 == ba2) or ba1 != ba2:
+        raise ValueError("distinct equal bytearray comparison failed")
+
+    n1 = bigint("1" * 1000)
+    n2 = bigint("1" * 1000)
+    if not (n1 == n2) or n1 != n2:
+        raise ValueError("distinct equal bigint comparison failed")
+
+
+def test_container_reflexivity_and_numeric_exceptions():
+    n = float("nan")
+    if n == n:
+        raise ValueError("float NaN became reflexive")
+
+    c = complex.from_real_imag(n, 0.0)
+    if c == c:
+        raise ValueError("complex NaN became reflexive")
+
+    ns = [n]
+    if not (ns == ns) or ns != ns:
+        raise ValueError("list alias comparison is not reflexive")
+
+    nt = (n,)
+    if not (nt == nt) or nt != nt:
+        raise ValueError("tuple alias comparison is not reflexive")
+
+    nd = {"nan": n}
+    if not (nd == nd) or nd != nd:
+        raise ValueError("dict alias comparison is not reflexive")
+
+    sn = {n}
+    if not (sn == sn) or sn != sn:
+        raise ValueError("set alias comparison is not reflexive")
+
+
+actor main(env):
+    try:
+        test_reflexive_builtin_aliases()
+        test_distinct_equal_builtins()
+        test_container_reflexivity_and_numeric_exceptions()
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

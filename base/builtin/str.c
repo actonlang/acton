@@ -1574,10 +1574,14 @@ B_str B_strD_zfill(B_str s, int64_t width) {
 // Thus they do not in general reflect locale-dependent order conventions.
 
 bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
+    if (a == b)
+        return true;
     return strcmp((char *)a->str,(char *)b->str) == 0;
 }
 
 bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
+    if (a == b)
+        return false;
     return strcmp((char *)a->str,(char *)b->str) != 0;
 }
 
@@ -2587,10 +2591,14 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
 
 
 bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
+    if (a == b)
+        return true;
     return strcmp((char *)a->str,(char *)b->str)==0;
 }
 
 bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
+    if (a == b)
+        return false;
     return strcmp((char *)a->str,(char *)b->str)!=0;
 }
 
@@ -3697,6 +3705,8 @@ B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
 
 
 bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
+    if (a == b)
+        return true;
     if (a->nbytes != b->nbytes)
         return false;
     for (int i=0; i < a->nbytes; i++)
