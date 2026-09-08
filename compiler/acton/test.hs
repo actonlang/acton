@@ -33,6 +33,7 @@ import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
+import qualified ZigWatchTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -76,6 +77,7 @@ main = do
       , typeErrorAutoTests
       , parseFlagTests
       , WatchTests.watchProcessTests
+      , ZigWatchTests.zigWatchTests
       , crossCompileTests
       , pkgCliTests
       ]
