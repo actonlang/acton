@@ -1357,6 +1357,101 @@ parseFlagTests =
         assertEqual ("production rebuild failed:\n" ++ productionOut ++ productionErr) ExitSuccess productionCode
         assertFile "production builds should restore declared library grouping" True productionLib
         checkApp
+  , testCase "acton test refreshes unselected dependency build inputs" $ do
+      withSystemTempDirectory "acton-test-dependency-inputs" $ \tmp -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let app = tmp </> "app"
+            dep = tmp </> "dep"
+            helper = tmp </> "helper"
+            writeProject :: FilePath -> String -> [(String, FilePath)] -> IO ()
+            writeProject dir name deps = do
+              createDirectoryIfMissing True (dir </> "src")
+              let fp = Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix
+                      (Fingerprint.fingerprintPrefixForName name) 1)
+              writeFile (dir </> "Build.act") $ unlines
+                [ "name = " ++ show name
+                , "fingerprint = " ++ fp
+                , "dependencies = {" ++ intercalate ", "
+                    [show n ++ ": (path=" ++ show p ++ ")" | (n, p) <- deps] ++ "}"
+                ]
+            writeSource dir name = writeFile (dir </> "src" </> name <.> "act") . unlines
+            run args = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton args) { cwd = Just app } ""
+              assertEqual ("acton " ++ unwords args ++ " failed:\n" ++ out ++ err) ExitSuccess code
+              return out
+            checkTest m raw = do
+              out <- run ["test", "--json", "--no-cache", "--iter", "1", "--module", m]
+              assertBool ("expected one selected test:\n" ++ out) ("\"total\":1" `isInfixOf` out)
+              assertBool ("missing selected test " ++ raw ++ ":\n" ++ out)
+                (("\"raw_name\":\"" ++ raw ++ "\"") `isInfixOf` out)
+        writeProject dep "header_dep" []
+        writeProject helper "header_helper" [("header_dep", "../dep")]
+        writeProject app "header_app" [("header_dep", "../dep"), ("header_helper", "../helper")]
+        writeSource dep "provider"
+          [ "class Box(value):"
+          , "    def __init__(self, x: int):"
+          , "        self.x = x"
+          , "    def get(self) -> int:"
+          , "        return self.x"
+          , ""
+          , "def make_box() -> Box:"
+          , "    return Box(42)"
+          , ""
+          , "def ready() -> int:"
+          , "    return 1"
+          ]
+        writeSource dep "consumer"
+          [ "import provider"
+          , ""
+          , "def box() -> provider.Box:"
+          , "    return provider.make_box()"
+          ]
+        writeSource dep "bridge"
+          [ "import provider"
+          , ""
+          , "def ready() -> int:"
+          , "    return provider.ready()"
+          ]
+        writeSource helper "api"
+          [ "import header_dep.consumer"
+          , ""
+          , "def value() -> int:"
+          , "    return header_dep.consumer.box().get()"
+          ]
+        writeSource app "main"
+          [ "import header_helper.api"
+          , ""
+          , "actor main(env):"
+          , "    assert header_helper.api.value() == 42"
+          , "    env.exit(0)"
+          ]
+        writeSource app "chosen"
+          [ "import testing"
+          , "import header_dep.bridge"
+          , ""
+          , "def _test_indirect() -> None:"
+          , "    assert header_dep.bridge.ready() == 1"
+          ]
+        writeSource app "other"
+          [ "import testing"
+          , "import header_helper.api"
+          , ""
+          , "def _test_box() -> None:"
+          , "    assert header_helper.api.value() == 42"
+          ]
+
+        -- The full build caches helper's dependency on consumer and its Box API.
+        -- Selecting chosen narrows provider while leaving helper unselected.
+        void $ run ["build"]
+        checkTest "chosen" "_test_indirect"
+        checkTest "chosen" "_test_indirect"
+        checkTest "other" "_test_box"
+        void $ run ["build"]
+        (appCode, appOut, appErr) <- readCreateProcessWithExitCode
+          (proc (app </> "out" </> "bin" </> "main") []) ""
+        assertEqual ("rebuilt application failed:\n" ++ appOut ++ appErr) ExitSuccess appCode
   , testCase "acton test discovers selected tests after an imported type changes" $ do
       withSystemTempDirectory "acton-test-selection-cache" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
