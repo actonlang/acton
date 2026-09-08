@@ -1,0 +1,52 @@
+actor Watchdog(env):
+    after 10.0: env.exit(1)
+
+actor TimerProducer(env, done: action() -> None):
+    groups = 257
+    ties = 3
+    rounds = 3
+    var round = 0
+    var received = [0 for i in range(groups)]
+
+    def tick(group: int, tie: int):
+        # Expiry can overlap enqueueing; only ties have a fixed order.
+        if tie != received[group]:
+            print("Timer tie mismatch:", group, tie, "expected", received[group])
+            env.exit(1)
+            return
+        received[group] += 1
+
+    def schedule():
+        received = [0 for i in range(groups)]
+        for group in range(groups - 1, -1, -1):
+            delay = 0.01 + float(group) / 100000.0
+            for tie in range(ties):
+                after delay: tick(group, tie)
+        after 0.02: finish_round()
+
+    def finish_round():
+        if received != [ties for i in range(groups)]:
+            print("Timer count mismatch:", received)
+            env.exit(1)
+            return
+        round += 1
+        if round == rounds:
+            done()
+        else:
+            schedule()
+
+    schedule()
+
+actor main(env):
+    wd = Watchdog(env)
+    var completed = 0
+    var producers: list[TimerProducer] = []
+
+    def done():
+        completed += 1
+        if completed == 4:
+            print("timers ok")
+            env.exit(0)
+
+    for i in range(4):
+        producers.append(TimerProducer(env, done))

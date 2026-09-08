@@ -1,0 +1,47 @@
+import testing
+
+
+actor TimerBatch(t: testing.AsyncT, count: int, order: int):
+    var received = 0
+
+    def tick():
+        received += 1
+        if received == count:
+            t.success()
+
+    # after 0 bypasses the timer queue.
+    for i in range(count):
+        delay = 0.000001
+        if order > 0:
+            delay = float(i + 1) / 1000000.0
+        elif order < 0:
+            delay = float(count - i) / 1000000.0
+        after delay: tick()
+
+
+actor _test_equal_1000(t: testing.AsyncT):
+    TimerBatch(t, 1000, 0)
+
+actor _test_equal_4000(t: testing.AsyncT):
+    TimerBatch(t, 4000, 0)
+
+actor _test_equal_16000(t: testing.AsyncT):
+    TimerBatch(t, 16000, 0)
+
+actor _test_increasing_1000(t: testing.AsyncT):
+    TimerBatch(t, 1000, 1)
+
+actor _test_increasing_4000(t: testing.AsyncT):
+    TimerBatch(t, 4000, 1)
+
+actor _test_increasing_16000(t: testing.AsyncT):
+    TimerBatch(t, 16000, 1)
+
+actor _test_decreasing_1000(t: testing.AsyncT):
+    TimerBatch(t, 1000, -1)
+
+actor _test_decreasing_4000(t: testing.AsyncT):
+    TimerBatch(t, 4000, -1)
+
+actor _test_decreasing_16000(t: testing.AsyncT):
+    TimerBatch(t, 16000, -1)
