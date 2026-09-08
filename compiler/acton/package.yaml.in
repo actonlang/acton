@@ -67,6 +67,7 @@ executables:
     other-modules:
       - FileUtil
       - ProcessUtil
+      - ZigWatch
       - PkgCommands
       - Repl
       - Paths_acton
