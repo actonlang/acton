@@ -2077,21 +2077,19 @@ runCliPostCompile cliHooks gopts plan env = do
         rootDepModuleOpts = M.findWithDefault M.empty rootProj depModuleOptsByProj
         rootDepPathOverrides = projectDepPathOverrides projMap rootProj
 
-    -- Generate build.zig(.zon) for dependencies too, to satisfy Zig builder links.
-    let projKeys = Data.Set.fromList (map (tkProj . gtKey) globalTasks)
-    forM_ (Data.Set.toList projKeys) $ \p -> do
+    -- Zig follows every declared dependency, including projects with no
+    -- selected modules. Refresh their build files too so nested dependencies
+    -- cannot retain module selections from an earlier build.
+    forM_ (M.toList projMap) $ \(p, pctx) -> do
       let isRootProj = p == rootProj
           isSysProj  = p == sysAbs || sysRoot `isPrefixOf` p
-      unless (isRootProj || isSysProj) $
-        case M.lookup p projMap of
-          Just pctx -> do
-            when (C.verbose gopts) $
-              logLine ("Generating build.zig for dependency project " ++ p)
-            dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
-            let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
-                depPathOverrides = projectDepPathOverrides projMap p
-            genBuildZigFiles (projBuildSpec pctx) dummyPaths depOpts depPathOverrides
-          Nothing -> return ()
+      unless (isRootProj || isSysProj) $ do
+        when (C.verbose gopts) $
+          logLine ("Generating build.zig for dependency project " ++ p)
+        dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
+        let depOpts = M.findWithDefault M.empty p depModuleOptsByProj
+            depPathOverrides = projectDepPathOverrides projMap p
+        genBuildZigFiles (projBuildSpec pctx) dummyPaths depOpts depPathOverrides
     logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
           cchFinalStart cliHooks
