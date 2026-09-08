@@ -2,7 +2,7 @@
 module ZigWatchTests (zigWatchTests) where
 
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async (withAsync, cancel)
+import Control.Concurrent.Async (withAsync, cancel, wait)
 import Control.Exception (catch, IOException, bracket)
 import Control.Monad
 import Data.List (isInfixOf)
@@ -20,7 +20,102 @@ import qualified ZigWatch
 
 zigWatchTests :: TestTree
 zigWatchTests = testGroup "Zig watch session"
-  [ testCase "reuses successful and failed generations and restarts changed graphs" $
+  [ testCase "real runner rebuilds and recovers without reloading its graph" $
+      withSystemTempDirectory "acton-zig-build" $ \dir -> do
+        zig <- canonicalizePath "../../dist/zig/zig"
+        let graph = dir </> "build.zig"
+            evaluated = dir </> "graph-evaluated"
+            source = dir </> "probe.c"
+            binary = dir </> "out" </> "bin" </> "probe"
+            cp = (proc zig ["build", "--watch", "--watch-stdin",
+                            "--prefix", dir </> "out", "--color", "off"]) { cwd = Just dir }
+            checkOutput expected = do
+              (result, _, _) <- readCreateProcessWithExitCode (proc binary []) ""
+              assertEqual "executable observes latest compiled code" (ExitFailure expected) result
+        writeFile graph $ unlines
+          [ "const std = @import(\"std\");"
+          , "pub fn build(b: *std.Build) void {"
+          , "    std.Io.Dir.cwd().writeFile(b.graph.io, .{ .sub_path = \"graph-evaluated\", .data = \"loaded\" }) catch @panic(\"write\");"
+          , "    const exe = b.addExecutable(.{ .name = \"probe\", .root_module = b.createModule(.{"
+          , "        .target = b.graph.host, .optimize = .Debug, .link_libc = true,"
+          , "    }) });"
+          , "    exe.root_module.addCSourceFile(.{ .file = b.path(\"probe.c\"), .flags = &.{} });"
+          , "    b.installArtifact(exe);"
+          , "    const diagnostic = b.addSystemCommand(&.{ \"sh\", \"-c\", \"printf 'native output: café ACTON_ZIG_DONE 1 ok'\" });"
+          , "    diagnostic.step.dependOn(&exe.step);"
+          , "    b.getInstallStep().dependOn(&diagnostic.step);"
+          , "    std.debug.print(\"graph output: café ACTON_ZIG_READY 99\", .{});"
+          , "}"
+          ]
+        bracket ZigWatch.newSession ZigWatch.stopSession $ \session -> do
+          let build generation expected = do
+                result@(_, _, output) <- ZigWatch.build session generation cp [graph]
+                assertEqual ("Zig build result:\n" ++ output) expected (code result)
+                when (generation == 1) $
+                  assertBool "retains unterminated UTF-8 graph diagnostics and protocol lookalikes"
+                    ("graph output: café ACTON_ZIG_READY 99" `isInfixOf` output)
+                when (expected == ExitSuccess) $
+                  assertBool "retains unterminated native command diagnostics"
+                    ("native output: café ACTON_ZIG_DONE 1 ok" `isInfixOf` output)
+          writeFile source "int main(void) { return 11; }\n"
+          build 1 ExitSuccess
+          initial <- getModificationTime evaluated
+          checkOutput 11
+          writeFile source "int main(void) { return 12; }\n"
+          build 2 ExitSuccess
+          checkOutput 12
+          writeFile source "#error deliberate watch build failure\n"
+          build 3 (ExitFailure 1)
+          writeFile source "int main(void) { return 13; }\n"
+          build 4 ExitSuccess
+          checkOutput 13
+          removeFile binary
+          build 5 ExitSuccess
+          checkOutput 13
+          assertEqual "all generations retain the same build graph" initial =<< getModificationTime evaluated
+  , testCase "revalidates inputs discovered during the first build" $
+      withSystemTempDirectory "acton-zig-first-inputs" $ \dir -> do
+        zig <- canonicalizePath "../../dist/zig/zig"
+        let graph = dir </> "build.zig"
+            source = dir </> "probe.c"
+            compiled = dir </> "compiled"
+            release = dir </> "release"
+            binary = dir </> "out" </> "bin" </> "probe"
+            cp = (proc zig ["build", "--watch", "--watch-stdin",
+                            "--prefix", dir </> "out", "--color", "off"]) { cwd = Just dir }
+            checkOutput expected = do
+              (result, _, _) <- readCreateProcessWithExitCode (proc binary []) ""
+              assertEqual "executable observes compiled code" (ExitFailure expected) result
+            awaitCompiled = do
+              exists <- doesFileExist compiled
+              unless exists (threadDelay 10000 >> awaitCompiled)
+        writeFile graph $ unlines
+          [ "const std = @import(\"std\");"
+          , "pub fn build(b: *std.Build) void {"
+          , "    const exe = b.addExecutable(.{ .name = \"probe\", .root_module = b.createModule(.{"
+          , "        .target = b.graph.host, .optimize = .Debug, .link_libc = true,"
+          , "    }) });"
+          , "    exe.root_module.addCSourceFile(.{ .file = b.path(\"probe.c\"), .flags = &.{} });"
+          , "    b.installArtifact(exe);"
+          , "    const hold = b.addSystemCommand(&.{ \"sh\", \"-c\", \"touch compiled; while [ ! -e release ]; do sleep 0.01; done\" });"
+          , "    hold.step.dependOn(&exe.step);"
+          , "    b.getInstallStep().dependOn(&hold.step);"
+          , "}"
+          ]
+        writeFile source "int main(void) { return 11; }\n"
+        bracket ZigWatch.newSession ZigWatch.stopSession $ \session -> do
+          withAsync (ZigWatch.build session 1 cp [graph]) $ \building -> do
+            ready <- Timeout.timeout (120 * 1000000) awaitCompiled
+            assertEqual "first build reaches the post-compile pause" (Just ()) ready
+            writeFile source "int main(void) { return 12; }\n"
+            writeFile release ""
+            first@(_, _, output) <- wait building
+            assertEqual ("first build succeeds:\n" ++ output) ExitSuccess (code first)
+          checkOutput 11
+          second@(_, _, output) <- ZigWatch.build session 2 cp [graph]
+          assertEqual ("second build succeeds:\n" ++ output) ExitSuccess (code second)
+          checkOutput 12
+  , testCase "reuses successful and failed generations and restarts changed graphs" $
       withRunner $ \session cp graph control -> do
         first <- ZigWatch.build session 1 cp [graph]
         assertEqual "initial build" ExitSuccess (code first)

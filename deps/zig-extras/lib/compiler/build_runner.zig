@@ -10,6 +10,7 @@ const process = std.process;
 const File = std.Io.File;
 const Step = std.Build.Step;
 const Watch = std.Build.Watch;
+const WatchStdin = @import("Watch.zig");
 const WebServer = std.Build.WebServer;
 const Allocator = std.mem.Allocator;
 const fatal = std.process.fatal;
@@ -124,6 +125,7 @@ pub fn main(init: process.Init.Minimal) !void {
     var steps_menu = false;
     var output_tmp_nonce: ?[16]u8 = null;
     var watch = false;
+    var watch_stdin = false;
     var fuzz: ?std.Build.Fuzz.Mode = null;
     var debounce_interval_ms: u16 = 50;
     var webui_listen: ?Io.net.IpAddress = null;
@@ -339,6 +341,8 @@ pub fn main(init: process.Init.Minimal) !void {
                 builder.verbose_cc = true;
             } else if (mem.eql(u8, arg, "--verbose-llvm-cpu-features")) {
                 builder.verbose_llvm_cpu_features = true;
+            } else if (mem.eql(u8, arg, "--watch-stdin")) {
+                watch_stdin = true;
             } else if (mem.eql(u8, arg, "--watch")) {
                 watch = true;
             } else if (mem.eql(u8, arg, "--time-report")) {
@@ -543,8 +547,11 @@ pub fn main(init: process.Init.Minimal) !void {
         else => |e| return e,
     };
 
+    if (watch_stdin and (!watch or graph.incremental == true or webui_listen != null))
+        fatal("--watch-stdin requires --watch without -fincremental or --webui", .{});
+
     var w: Watch = w: {
-        if (!watch) break :w undefined;
+        if (!watch or watch_stdin) break :w undefined;
         if (!Watch.have_impl) fatal("--watch not yet implemented for {t}", .{builtin.os.tag});
         break :w try .init(graph.cache.cwd);
     };
@@ -568,11 +575,25 @@ pub fn main(init: process.Init.Minimal) !void {
         ws.start() catch |err| fatal("failed to start web server: {t}", .{err});
     }
 
+    var watch_buffer: [128]u8 = undefined;
+    var watch_reader = File.stdin().reader(io, &watch_buffer);
+    var watch_generation: u64 = 0;
+    var watch_state: WatchStdin.State = .{};
+    defer watch_state.deinit(gpa);
+    const watch_token = if (watch_stdin) try WatchStdin.token(builder) else "";
+    if (watch_stdin) {
+        try WatchStdin.ready(io, watch_token);
+    }
+
     rebuild: while (true) : (if (run.error_style.clearOnUpdate()) {
         const stderr = try io.lockStderr(&stdio_buffer_allocation, graph.stderr_mode);
         defer io.unlockStderr();
         try stderr.file_writer.interface.writeAll("\x1B[2J\x1B[3J\x1B[H");
     }) {
+        if (watch_stdin) {
+            watch_generation = (try WatchStdin.request(&watch_reader.interface)) orelse process.exit(0);
+            try watch_state.prepare(gpa, run.step_stack.keys());
+        }
         if (run.web_server) |*ws| ws.startBuild();
 
         try runStepNames(
@@ -582,6 +603,12 @@ pub fn main(init: process.Init.Minimal) !void {
             &run,
             fuzz,
         );
+
+        if (watch_stdin) {
+            try watch_state.finish(gpa, run.step_stack.keys());
+            try WatchStdin.done(io, watch_token, watch_generation, run.step_stack.keys());
+            continue :rebuild;
+        }
 
         if (run.web_server) |*web_server| {
             if (fuzz) |mode| if (mode != .forever) fatal(

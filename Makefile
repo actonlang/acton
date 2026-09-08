@@ -705,11 +705,12 @@ else
 ZIG_DOWNLOAD_URL ?= $(patsubst %/,%,$(ZIG_DOWNLOAD_BASE_URL))/$(ZIG_TARBALL)
 endif
 
-dist/zig: deps-download/$(ZIG_TARBALL)
+dist/zig: deps-download/$(ZIG_TARBALL) $(shell find deps/zig-extras -type f)
 	mkdir -p "$@"
-	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
+	cd "$@" && tar Jx --strip-components=1 -f "../../$<"
 	rm -rf "$@/doc"
 	cp -a deps/zig-extras/* "$@"
+	touch "$@"
 
 
 # By default Zig downloads come from ziglang.org. CI can set
