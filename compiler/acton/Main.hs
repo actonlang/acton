@@ -50,8 +50,10 @@ import qualified Repl
 import FileUtil (readFile, writeFile, writeFileAtomic)
 
 import Control.Concurrent.MVar
-import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate)
-import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay)
+import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
+import qualified Control.Concurrent.Async as Async
+import ProcessUtil (stopProcessGroup)
+import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, throwTo)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
 import Data.Bits
@@ -94,6 +96,7 @@ import System.Info
 import System.Posix.Files
 import System.Posix.IO (createPipe, setFdOption, closeFd, FdOption(..))
 import System.Posix.Resource
+import System.Posix.Signals (installHandler, sigTERM, Handler(CatchOnce))
 import System.Process hiding (createPipe)
 import qualified System.FSNotify as FS
 import qualified System.Environment
@@ -512,11 +515,13 @@ withProjectLockNotice gopts projDir action =
       unless (C.quiet gopts) $
         putStrLn ("Waiting for compiler lock in " ++ projDir)
 
-withProjectLockForGen :: C.GlobalOptions -> CompileScheduler -> Int -> FilePath -> IO () -> IO ()
-withProjectLockForGen gopts sched gen projDir action =
+withProjectLockForGen :: C.GlobalOptions -> CompileScheduler -> Int -> FilePath -> IO Bool -> IO Bool
+withProjectLockForGen gopts sched gen projDir action = do
+    completed <- newIORef False
     whenCurrentGen sched gen $
       withProjectLockNotice gopts projDir $
-        whenCurrentGen sched gen action
+        whenCurrentGen sched gen (action >>= writeIORef completed)
+    readIORef completed
 
 requireProjectLayout :: Paths -> IO ()
 requireProjectLayout paths = do
@@ -595,13 +600,28 @@ withTempDirOpts opts action
   | otherwise = withScratchDirLock $ \scratchDir ->
       action opts { C.tempdir = scratchDir } True
 
-initCompileWatchContext :: C.GlobalOptions -> IO (CompileScheduler, ProgressUI, ProgressState)
-initCompileWatchContext gopts = do
-    maxParallel <- compileMaxParallel gopts
-    sched <- newCompileScheduler gopts maxParallel
-    progressUI <- initProgressUI gopts maxParallel
-    progressState <- newProgressState
-    return (sched, progressUI, progressState)
+data CliWatchContext = CliWatchContext
+  { cwScheduler :: CompileScheduler
+  , cwProgressUI :: ProgressUI
+  , cwProgressState :: ProgressState
+  }
+
+withCompileWatchContext :: C.GlobalOptions -> (CliWatchContext -> IO a) -> IO a
+withCompileWatchContext gopts action = do
+    owner <- myThreadId
+    bracket (installHandler sigTERM (CatchOnce (throwTo owner (ExitFailure 143))) Nothing)
+            (\previous -> void (installHandler sigTERM previous Nothing)) $ \_ ->
+      bracket create cleanup action
+  where
+    create = do
+      maxParallel <- compileMaxParallel gopts
+      CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
+                      <*> newProgressState
+    cleanup ctx = do
+      modifyMVar_ (csAsyncRef (cwScheduler ctx)) $ \running -> do
+        mapM_ Async.cancel running
+        return Nothing
+      progressReset (cwProgressUI ctx) (cwProgressState ctx)
 
 logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
 logProjectBuild gopts progressUI progressState projDir =
@@ -674,8 +694,11 @@ runTestsWatch gopts opts topts mode paths = do
         projDir = projPath paths
         srcRoot = srcDir paths
     withBackgroundCompilerLockOrExit projDir
-      "Another long-running Acton compiler is already running; cannot start test watch." $ do
-        (sched, progressUI, progressState) <- initCompileWatchContext gopts
+      "Another long-running Acton compiler is already running; cannot start test watch." $
+      withCompileWatchContext gopts $ \watchCtx -> do
+        let sched = cwScheduler watchCtx
+            progressUI = cwProgressUI watchCtx
+            progressState = cwProgressState watchCtx
         testParallel0 <- testMaxParallel gopts
         let testParallel = if mode == TestModeStress then 1 else testParallel0
         let runOnce gen mChanged = do
@@ -686,18 +709,19 @@ runTestsWatch gopts opts topts mode paths = do
                 -- Link the complete selected closure; cached modules still skip
                 -- unchanged compiler passes.
                 hadErrors <- if null selected then return False else
-                  compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (sched, gen)) (Just (progressUI, progressState))
-                unless hadErrors $ do
+                  compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (watchCtx, gen))
+                unless hadErrors $ whenCurrentGen sched gen $ do
                   selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
                   modulesToTest <- selectTestModules paths srcFiles mChanged testModules
                   logTiming gopts opts (progressLogLine progressUI) "affected test selection" selectStart
-                  unless (null modulesToTest) $
+                  unless (null modulesToTest) $ whenCurrentGen sched gen $
                     do
                       useColorOut <- useColor gopts
                       testStart <- getTime Monotonic
                       void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
                       logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
+                return (not hadErrors)
         runWatchProject gopts projDir srcRoot sched runOnce
 
 selectTestModules :: Paths -> [FilePath] -> Maybe [FilePath] -> [String] -> IO [String]
@@ -768,15 +792,19 @@ watchProjectAt gopts opts projDir = do
                 let sp = Source.diskSourceProvider
                 paths <- loadProjectPathsAt projDir opts
                 withBackgroundCompilerLockOrExit (projPath paths)
-                  "Another long-running Acton compiler is already running; cannot start watch." $ do
-                    (sched, progressUI, progressState) <- initCompileWatchContext gopts
+                  "Another long-running Acton compiler is already running; cannot start watch." $
+                  withCompileWatchContext gopts $ \watchCtx -> do
+                    let sched = cwScheduler watchCtx
+                        progressUI = cwProgressUI watchCtx
+                        progressState = cwProgressState watchCtx
                     let runOnce gen mChanged =
                           withProjectLockForGen gopts sched gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
-                            void $ compileFilesChanged sp gopts opts srcFiles True mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-                            when (isNothing mChanged) $
+                            hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (watchCtx, gen))
+                            when (not hadErrors && isNothing mChanged) $
                               generateProjectDocIndex sp gopts opts paths srcFiles
+                            return (not hadErrors)
                     runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
 -- | Build a single file, optionally running in watch mode.
@@ -825,14 +853,12 @@ watchFile gopts opts file = do
       Just proj -> watchProjectAt gopts opts proj
       Nothing -> do
         let sp = Source.diskSourceProvider
-        (sched, progressUI, progressState) <- initCompileWatchContext gopts
-        let runWatch opts' =
-              let runOnce gen mChanged =
-                    whenCurrentGen sched gen $
-                      void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (sched, gen)) (Just (progressUI, progressState))
-              in runWatchFile gopts absFile sched runOnce
         withTempDirOpts opts $ \opts' _ ->
-          runWatch opts'
+          withCompileWatchContext gopts $ \watchCtx -> do
+            let sched = cwScheduler watchCtx
+                runOnce gen mChanged = whenCurrentGen sched gen $
+                  void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (watchCtx, gen))
+            runWatchFile gopts absFile sched runOnce
 
 data WatchTrigger = WatchFull | WatchIncremental FilePath deriving (Eq, Show)
 
@@ -908,12 +934,22 @@ runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
                 -> CompileScheduler
-                -> (Int -> Maybe [FilePath] -> IO ())
+                -> (Int -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
 runWatchProject gopts projDir srcRoot sched runOnce = do
     stampsRef <- newIORef M.empty
-    let schedule mpath = void $ startCompile sched 0 $ \gen ->
-          runOnce gen (fmap (:[]) mpath)
+    pendingRef <- newIORef (0 :: Int, Just [])
+    let schedule mpath = do
+          atomicModifyIORef' pendingRef $ \(version, pending) ->
+            let changed = nub <$> ((++) <$> pending <*> fmap (:[]) mpath)
+            in ((version + 1, changed), ())
+          void $ startCompile sched 0 $ \gen -> do
+            (version, changed) <- readIORef pendingRef
+            completed <- runOnce gen changed
+            -- Canceled and failed generations leave their paths pending. A
+            -- later save must still run tests affected by those earlier edits.
+            when completed $ atomicModifyIORef' pendingRef $ \current@(latest, _) ->
+              (if latest == version then (latest, Just []) else current, ())
         scheduleMaybe mpath =
           case mpath of
             Nothing -> schedule Nothing
@@ -1372,7 +1408,7 @@ printDocs gopts opts = do
 compileReplHook :: C.GlobalOptions -> C.CompileOptions -> FilePath -> [FilePath] -> IO Bool
 compileReplHook gopts opts projDir srcFiles =
     withProjectLockNotice gopts projDir $
-      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles False Nothing Nothing Nothing
+      compileFilesChanged Source.diskSourceProvider gopts opts srcFiles False Nothing Nothing
 
 -- Compile Acton files ---------------------------------------------------------------------------------------------
 
@@ -1385,7 +1421,7 @@ compileMaxParallel gopts = do
 -- | Compile a set of files in a single-shot build.
 compileFiles :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> [String] -> Bool -> IO ()
 compileFiles sp gopts opts srcFiles allowPrune =
-    void $ compileFilesChanged sp gopts opts srcFiles allowPrune Nothing Nothing Nothing
+    void $ compileFilesChanged sp gopts opts srcFiles allowPrune Nothing Nothing
 
 -- | Compile with optional change set, wiring progress UI and back jobs.
 compileFilesChanged :: Source.SourceProvider
@@ -1394,20 +1430,19 @@ compileFilesChanged :: Source.SourceProvider
                     -> [String]
                     -> Bool
                     -> Maybe [FilePath]
-                    -> Maybe (CompileScheduler, Int)
-                    -> Maybe (ProgressUI, ProgressState)
+                    -> Maybe (CliWatchContext, Int)
                     -> IO Bool
-compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProgress = do
+compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
     maxParallel <- compileMaxParallel gopts
-    (progressUI, progressState) <- case mProgress of
-      Just ps -> return ps
+    (progressUI, progressState) <- case mWatch of
+      Just (ctx, _) -> return (cwProgressUI ctx, cwProgressState ctx)
       Nothing -> do
         ui <- initProgressUI gopts maxParallel
         st <- newProgressState
         return (ui, st)
     let logLine = progressLogLine progressUI
-    (sched, gen) <- case mSched of
-      Just sg -> return sg
+    (sched, gen) <- case mWatch of
+      Just (ctx, gen) -> return (cwScheduler ctx, gen)
       Nothing -> do
         sched' <- newCompileScheduler gopts maxParallel
         return (sched', 0)
@@ -1460,8 +1495,11 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mSched mProg
                           then reportCompileErrors
                           else do
                             clearProgress
-                            whenCurrentGen sched gen (runCliPostCompile cliHooks gopts plan env)
-                            return False
+                            result <- newIORef False
+                            whenCurrentGen sched gen $ do
+                              success <- runCliPostCompile cliHooks gopts plan env
+                              writeIORef result success
+                            not <$> readIORef result
           either reportPlanError runPlan planRes
     runCompile `finally` cleanupProgress
 
@@ -2040,7 +2078,7 @@ runCliPostCompile :: CliCompileHooks
                   -> C.GlobalOptions
                   -> CompilePlan
                   -> Acton.Env.Env0
-                  -> IO ()
+                  -> IO Bool
 runCliPostCompile cliHooks gopts plan env = do
     prepStart <- getTime Monotonic
     let logLine = cchLogLine cliHooks
@@ -2093,19 +2131,20 @@ runCliPostCompile cliHooks gopts plan env = do
     logTiming gopts opts' logLine "dependency build preparation" prepStart
     let runFinal action = do
           cchFinalStart cliHooks
-          action `onException` cchFinalDone cliHooks False
-          cchFinalDone cliHooks True
+          success <- action `onException` cchFinalDone cliHooks False
+          cchFinalDone cliHooks success
+          return success
     if C.skip_build opts'
       then
-        logLine "  Skipping final build step"
+        logLine "  Skipping final build step" >> return True
       else
         if C.test opts'
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-            unless (altOutput opts') $
+            if altOutput opts' then return True else
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
           else do
-            unless (altOutput opts') $
+            if altOutput opts' then return True else
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.
@@ -2377,7 +2416,7 @@ High-level Steps
 ================================================================================
 -}
 
-compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO ()
+compileBins:: C.GlobalOptions -> C.CompileOptions -> Paths -> Acton.Env.Env0 -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
 compileBins gopts opts paths env rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI =
     zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI
 
@@ -2435,28 +2474,31 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
 
 -- | Run a process and capture output, canceling on exceptions.
 readProcessWithExitCodeCancelable :: CreateProcess -> (ProcessHandle -> IO ()) -> IO (ExitCode, String, String)
-readProcessWithExitCodeCancelable cp onStart = do
-    let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
+readProcessWithExitCodeCancelable cp onStart = mask $ \restore -> do
+    let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe, create_group = True }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
-      onStart ph
-      outVar <- newEmptyMVar
-      errVar <- newEmptyMVar
-      let readHandle mH var =
-            case mH of
-              Nothing -> putMVar var ""
-              Just h -> do
-                txt <- hGetContents h
-                _ <- evaluate (length txt)
-                hClose h
-                putMVar var txt
-      _ <- forkIO $ readHandle mOut outVar
-      _ <- forkIO $ readHandle mErr errVar
-      code <- waitForProcess ph `onException` do
-                terminateProcess ph
-                void (waitForProcess ph)
-      out <- takeMVar outVar
-      err <- takeMVar errVar
-      return (code, out, err)
+      pid <- getPid ph
+      groupOwned <- newIORef True
+      let stop = mask $ \_ -> do
+            owned <- readIORef groupOwned
+            when owned $ do
+              stopProcessGroup ph pid
+              writeIORef groupOwned False
+          readHandle Nothing = return ""
+          readHandle (Just handle) = do
+            txt <- hGetContents handle
+            _ <- evaluate (length txt)
+            hClose handle
+            return txt
+      (restore $ do
+          onStart ph
+          Async.withAsync (readHandle mOut) $ \outReader ->
+            Async.withAsync (readHandle mErr) $ \errReader -> do
+              code <- waitForProcess ph
+              stop
+              out <- Async.wait outReader
+              err <- Async.wait errReader
+              return (code, out, err)) `finally` stop
 
 runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
     let display = showCommandForUser zigExe zigArgs
@@ -2521,12 +2563,13 @@ runZig gopts opts zigExe zigArgs paths wd mProgressUI = do
             -- Zig's summary includes cache hits and elapsed C/link build steps.
             -- Their durations overlap when Zig runs them in parallel.
             mapM_ logLine (dropWhile (not . isPrefixOf "Build Summary:") (lines zigStderr))
-          return ()
+          return True
         ExitFailure ret -> do
           printIce ("compilation of generated Zig code failed, returned error code" ++ show ret)
           putStrLn $ "zig stdout:\n" ++ zigStdout
           putStrLn $ "zig stderr:\n" ++ zigStderr
           unless (C.watch opts) System.Exit.exitFailure
+          return False
 
 generateFingerprint :: String -> IO String
 generateFingerprint name = do
@@ -2805,7 +2848,7 @@ defCpuFlag = ["-Dcpu=x86_64_v2+aes"]
 #endif
 
 -- | Run zig build for generated artifacts and prune stale outputs.
-zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO ()
+zigBuild :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> BuildSpec.BuildSpec -> [CompileTask] -> [BinTask] -> Bool -> [FilePath] -> [BuildLibrary] -> M.Map String String -> M.Map String FilePath -> Maybe ProgressUI -> IO Bool
 zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules buildLibraries depModuleOpts depPathOverrides mProgressUI = do
     prepStart <- getTime Monotonic
     allBinTasks <- mapM (writeRootC env gopts opts paths tasks) binTasks
@@ -2869,9 +2912,9 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs
 
     logTiming gopts opts (maybe putStrLn progressLogLine mProgressUI) "root and build file preparation" prepStart
-    runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
+    success <- runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI
     -- if we are in a temp acton project, copy the outputted binary next to the source file
-    if (isTmp paths && not (null realBinTasks))
+    if (success && isTmp paths && not (null realBinTasks))
       then do
         let baseName   = binName (head binTasks)
             exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
@@ -2879,7 +2922,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
-    return ()
+    return success
 
 -- Remove executables that no longer have corresponding root actors
 -- | Remove binaries that no longer have corresponding roots.

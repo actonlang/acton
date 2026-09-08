@@ -66,6 +66,7 @@ executables:
     source-dirs:         .
     other-modules:
       - FileUtil
+      - ProcessUtil
       - PkgCommands
       - Repl
       - Paths_acton

@@ -32,6 +32,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified Repl
+import qualified WatchTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -74,6 +75,7 @@ main = do
       , syntaxErrorAutoTests
       , typeErrorAutoTests
       , parseFlagTests
+      , WatchTests.watchProcessTests
       , crossCompileTests
       , pkgCliTests
       ]

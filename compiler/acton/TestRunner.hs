@@ -13,9 +13,7 @@ import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import TestFormat
 import TestUI
-import Control.Concurrent (forkIO)
 import Control.Concurrent.Async
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
 import Data.IORef
@@ -31,6 +29,7 @@ import System.Exit
 import System.FilePath ((</>), (<.>), joinPath)
 import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
 import System.Process
+import ProcessUtil (stopProcessGroup)
 import Text.Printf
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
@@ -40,7 +39,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
-import Control.Exception (SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO)
+import Control.Exception (SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
 import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
@@ -270,6 +269,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
         let totalTests = length specs
         progressDoneRef <- newIORef 0
+        workers <- newIORef []
         let (effectiveMinTime, effectiveMaxTime) = effectiveTestTiming mode topts
             expectedDurationMs =
               fromIntegral
@@ -343,27 +343,29 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                         then return Nothing
                         else do
                           callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs
-                          void $ async $ mask $ \restore -> do
-                            resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
-                                                   (tpuEnabled ui) callbacks))
-                                      :: IO (Either SomeException TestResult)
-                            case resE of
-                              Right res ->
-                                writeChan eventChan (TestEventDone res)
-                              Left ex -> do
-                                let res = initRes
-                                      { trComplete = True
-                                      , trException = Just ("Test runner exception: " ++ displayException ex)
-                                      , trNumErrors = 1
-                                      }
-                                finishE <- try (restore (tpcOnDone callbacks res >> tpcOnFinal callbacks res))
-                                             :: IO (Either SomeException ())
-                                writeChan eventChan (TestEventDone res)
-                                case finishE of
-                                  Left finishEx | isJust (fromException finishEx :: Maybe SomeAsyncException) -> throwIO finishEx
-                                  _ -> return ()
-                                when (isJust (fromException ex :: Maybe SomeAsyncException)) $
-                                  throwIO ex
+                          mask $ \unmask -> do
+                            worker <- async $ unmask $ mask $ \restore -> do
+                              resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
+                                                     (tpuEnabled ui) callbacks))
+                                        :: IO (Either SomeException TestResult)
+                              case resE of
+                                Right res ->
+                                  writeChan eventChan (TestEventDone res)
+                                Left ex -> do
+                                  let res = initRes
+                                        { trComplete = True
+                                        , trException = Just ("Test runner exception: " ++ displayException ex)
+                                        , trNumErrors = 1
+                                        }
+                                  finishE <- try (restore (tpcOnDone callbacks res >> tpcOnFinal callbacks res))
+                                               :: IO (Either SomeException ())
+                                  writeChan eventChan (TestEventDone res)
+                                  case finishE of
+                                    Left finishEx | isJust (fromException finishEx :: Maybe SomeAsyncException) -> throwIO finishEx
+                                    _ -> return ()
+                                  when (isJust (fromException ex :: Maybe SomeAsyncException)) $
+                                    throwIO ex
+                            atomicModifyIORef' workers (\ws -> (worker : ws, ()))
                           return (Just (running + 1, results))
             startAvailable pending running results = do
               case pending of
@@ -391,7 +393,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                               else pending'
                       loop pending'' (running' - 1) (res : results')
                     TestEventRoom -> loop pending' running' results'
-        results <- loop specs 0 []
+        results <- loop specs 0 [] `finally` (readIORef workers >>= mapConcurrently_ cancel)
         timeEnd <- getTime Monotonic
         writeSnapshotOutputs paths results
         let resultsRun =
@@ -668,7 +670,11 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
             Just val -> case parseTestInfo val of
                           Just res -> onUpdate res
                           Nothing -> addStdErr line
-    let procSpec = (proc binPath cmd){ cwd = Just (projPath paths), delegate_ctlc = True }
+    let procSpec = (proc binPath cmd)
+          { cwd = Just (projPath paths)
+          , create_group = C.watch opts
+          , delegate_ctlc = not (C.watch opts)
+          }
     procRes <- try (readProcessWithExitCodeStreaming procSpec onErrLine) :: IO (Either SomeException (ExitCode, String, String))
     (exitCode, out, _err, interruptedByUser) <-
       case procRes of
@@ -1371,14 +1377,16 @@ writePerfData paths results = do
 
 -- | Run a process and stream stderr lines to a callback while capturing output.
 readProcessWithExitCodeStreaming :: CreateProcess -> (String -> IO ()) -> IO (ExitCode, String, String)
-readProcessWithExitCodeStreaming cp onErrLine = do
+readProcessWithExitCodeStreaming cp onErrLine = mask $ \restore -> do
     let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
-      outVar <- newEmptyMVar
-      errVar <- newEmptyMVar
-      let readPipe var action = mask $ \restore -> do
-            res <- try (restore action) :: IO (Either SomeException String)
-            putMVar var res
+      pid <- getPid ph
+      groupOwned <- newIORef True
+      let stop = mask $ \_ -> do
+            owned <- readIORef groupOwned
+            when owned $ do
+              stopProcessGroup ph pid
+              writeIORef groupOwned False
           readStdout mH =
             case mH of
               Nothing -> return ""
@@ -1404,16 +1412,17 @@ readProcessWithExitCodeStreaming cp onErrLine = do
                     line <- hGetLine h
                     onErrLine line
                     go (line : acc)
-      _ <- forkIO $ readPipe outVar (readStdout mOut)
-      _ <- forkIO $ readPipe errVar (readStderr mErr)
-      code <- waitForProcess ph `onException` do
-                terminateProcess ph
-                void (waitForProcess ph)
-      outE <- takeMVar outVar
-      errE <- takeMVar errVar
-      out <- either throwIO return outE
-      err <- either throwIO return errE
-      return (code, out, err)
+      let capture = restore $
+            withAsync (readStdout mOut) $ \outReader ->
+              withAsync (readStderr mErr) $ \errReader -> do
+                code <- waitForProcess ph
+                when (create_group cp') stop
+                out <- wait outReader
+                err <- wait errReader
+                return (code, out, err)
+      if create_group cp'
+        then capture `finally` stop
+        else capture `onException` (terminateProcess ph >> void (waitForProcess ph))
 
 fmtTime :: TimeSpec -> String
 fmtTime t =
