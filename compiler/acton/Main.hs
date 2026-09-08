@@ -47,7 +47,7 @@ import  Pretty
 import qualified InterfaceFiles
 import qualified PkgCommands
 import qualified Repl
-import FileUtil (readFile, writeFile, writeFileAtomic)
+import FileUtil (readFile, writeFile, writeFileIfChanged)
 
 import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
@@ -2460,7 +2460,7 @@ writeRootC env gopts opts paths tasks binTask = do
             res <- (try :: IO a -> IO (Either SomeException a)) $ do
               c <- Acton.CodeGen.genRoot env qn
               createDirectoryIfMissing True (takeDirectory rootFile)
-              writeFile rootFile c
+              writeFileIfChanged rootFile c
             case res of
               Right _ -> return (Just binTask)
               Left _  -> return Nothing
@@ -2607,8 +2607,8 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
         mergedSpec = addImplicitStdDependency absSys mergedSpec1
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
-    writeFile buildZigPath (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
-    writeFileAtomic buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
+    writeFileIfChanged buildZigPath (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
+    writeFileIfChanged buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
 
 addImplicitStdDependency :: FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 addImplicitStdDependency sys spec
