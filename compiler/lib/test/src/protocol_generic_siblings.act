@@ -1,0 +1,11 @@
+protocol First:
+    pass
+
+protocol Second[T]:
+    pass
+
+protocol Joined(First, Second[int]):
+    pass
+
+protocol Inherited(Joined):
+    pass

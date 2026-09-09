@@ -73,7 +73,8 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ convProto p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ convProto p) |
+                                            w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n0) q1 us (sibClassBody ws n (head us) wes inh) Nothing | (ws,n,us,wes,inh) <- allsibs ]
@@ -140,7 +141,8 @@ convExtension env n1 c0 q ps0 eq wmap b opts
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
                         us1             = [ instProto t0 p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
-                        us0             = [ TC (baseGName w) (tcargs $ head us1) | w <- zipWith (:) (wheads ws0) (wtails ws0) ]
+                        us0             = [ TC (baseGName w) (tcargs $ instProto t0 p) |
+                                            w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p
 
         sibClasses                      = [ Class NoLoc (sibName ws n1) q1 us (sibClassBody ws n (head us) wes inh) Nothing | (ws,n,us,wes,inh) <- allsibs ]
