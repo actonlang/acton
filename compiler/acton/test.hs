@@ -1487,6 +1487,40 @@ parseFlagTests =
         -- Its inferred return type becomes eligible when the import changes.
         writeFile provider "def value():\n    return None\n"
         checkCount (1 :: Int)
+  , testCase "build preserves unchanged root and Zig files" $ do
+      withSystemTempDirectory "acton-build-file-reuse" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "build_file_reuse"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            rootFile = proj </> "out/types/main.root.c"
+            files = [rootFile, proj </> "build.zig", proj </> "build.zig.zon"]
+            oldTime = posixSecondsToUTCTime 1
+            build root = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton ["build", "--root", "main." ++ root]) { cwd = Just proj } ""
+              assertEqual ("build failed:\n" ++ out ++ err) ExitSuccess code
+        createDirectory (proj </> "src")
+        writeFile (proj </> "Build.act") ("name = " ++ show name ++ "\nfingerprint = " ++ fp ++ "\n")
+        writeFile (proj </> "src/main.act") $ unlines
+          [ "actor first(env: Env):"
+          , "    env.exit(11)"
+          , ""
+          , "actor second(env: Env):"
+          , "    env.exit(12)"
+          ]
+        build "first"
+        -- Use a known timestamp so this also detects rewrites on coarse filesystems.
+        forM_ files $ \file -> setModificationTime file oldTime
+        build "first"
+        forM_ files $ \file ->
+          assertEqual (file ++ " should retain its timestamp") oldTime =<< getModificationTime file
+        build "second"
+        assertBool "changing the root should update its stub" . (/= oldTime) =<< getModificationTime rootFile
+        (code, out, err) <- readCreateProcessWithExitCode
+          (proc (proj </> "out/bin/main") []) ""
+        assertEqual ("rebuilt executable should use the new root:\n" ++ out ++ err) (ExitFailure 12) code
   , testCase "build and test timings respect output modes" $ do
       withSystemTempDirectory "acton-build-timing" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
