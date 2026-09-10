@@ -176,33 +176,34 @@ formatTestPerfLines useColor baseline res =
     dim = paint "\ESC[2m"
     missing = dim "—"
     interval metric obj = baseline >>= (\old -> perfMeanInterval metric old obj)
-    change obj key value =
-      let metric = lookup key [(perfStatKey m "avg", m) | (m, _, _) <- perfMetrics]
-          direction = case metric >>= (\m -> if m == "ipc" then Nothing else interval m obj) of
-            Just (lo, _) | lo > 0 -> Just ("💩", "\ESC[91m")
-            Just (_, hi) | hi < 0 -> Just ("⚡", "\ESC[92m")
-            _ -> Nothing
-          comparison icon color s
-            | isJust metric = padLeft 11 (paint color s) ++ " "
-                ++ (if null icon then "  " else paint (if icon == "⚡" then testColorYellow else color) icon)
-            | otherwise = paint color s
-          neutral = comparison "" "\ESC[2m"
-          previous old = if maybe True (\m -> perfComparable m old obj) metric
-            then perfNumber old key else Nothing
-      in case baseline >>= previous of
-        Just 0 | value == 0 -> neutral "+0.0%"
-        Just 0 -> neutral "from 0"
-        Just old ->
-          let pct = (value - old) / abs old * 100
-              percent = fitNumber 11
-                [printf "%+.1f%%" pct, printf "%+.2e%%" pct, printf "%+.0e%%" pct]
-          in if isNaN pct || isInfinite pct
-               then neutral "n/a"
-               else case direction of
-                 Just (icon, color) -> comparison icon color percent
-                 Nothing | isJust metric -> neutral percent
-                 _ -> paint (if pct > 0 then "\ESC[91m" else if pct < 0 then "\ESC[92m" else "\ESC[2m") percent
-        Nothing -> neutral "—"
+    percentage previous value = case previous of
+      Nothing -> (Nothing, "—")
+      Just 0 -> (Nothing, if value == 0 then "+0.0%" else "from 0")
+      Just old ->
+        let pct = (value - old) / abs old * 100
+        in if isNaN pct || isInfinite pct then (Nothing, "n/a")
+           else (Just pct, fitNumber 11 [printf "%+.1f%%" pct, printf "%+.2e%%" pct, printf "%+.0e%%" pct])
+    meanChange obj metric value =
+      let previous = do
+            old <- baseline
+            if perfComparable metric old obj then perfNumber old (perfStatKey metric "avg") else Nothing
+          (pct, text) = percentage previous value
+          bounds = if metric == "ipc" then Nothing else interval metric obj
+          (icon, color) = case (pct, bounds) of
+            (Just _, Just (lo, _)) | lo > 0 -> ("💩", "\ESC[91m")
+            (Just _, Just (_, hi)) | hi < 0 -> ("⚡", "\ESC[92m")
+            _ -> ("", "\ESC[2m")
+      in padLeft 11 (paint color text) ++ " "
+          ++ (if null icon then "  " else paint (if icon == "⚡" then testColorYellow else color) icon)
+    footerChange key value = case baseline >>= (\old -> perfNumber old key) of
+      Nothing -> ""
+      Just old ->
+        let (pct, text) = percentage (Just old) value
+            color = case pct of
+              Just p | p > 0 -> "\ESC[91m"
+              Just p | p < 0 -> "\ESC[92m"
+              _ -> "\ESC[2m"
+        in " (" ++ paint color text ++ ")"
     fitNumber width choices = fromMaybe (last choices) (listToMaybe [s | s <- choices, length s <= width])
     padLeft width s = replicate (max 0 (width - termVisibleLength s)) ' ' ++ s
     padRight width s = s ++ replicate (max 0 (width - termVisibleLength s)) ' '
@@ -233,7 +234,7 @@ formatTestPerfLines useColor baseline res =
                     count = fitNumber 14 [printf "%.0f (%.0f%%)" n pct, printf "%.1e (%.0f%%)" n pct]
                 in paint (if pct >= 10 then testColorYellow else "\ESC[2m") count
               _ -> missing
-        in [label, mean, range, outliers, change obj (perfStatKey metric "avg") value]
+        in [label, mean, range, outliers, meanChange obj metric value]
     table obj =
       let headings numberWidth showSpread =
             let title color = padLeft (numberWidth + 2) . paint color
@@ -273,15 +274,9 @@ formatTestPerfLines useColor baseline res =
       in map render rows
     footers obj = map (\line cols -> termFitAnsiRight cols line) $ catMaybes
       [ do value <- perfNumber obj "median_duration"
-           let delta = case baseline >>= (\old -> perfNumber old "median_duration") of
-                 Just _ -> " (" ++ change obj "median_duration" value ++ ")"
-                 Nothing -> ""
-           return ("  median: " ++ single "" "ms" value ++ delta)
+           return ("  median: " ++ single "" "ms" value ++ footerChange "median_duration" value)
       , do value <- perfNumber obj "peak_rss"
-           let delta = case baseline >>= (\old -> perfNumber old "peak_rss") of
-                 Just _ -> " (" ++ change obj "peak_rss" value ++ ")"
-                 Nothing -> ""
-           return ("  process peak RSS: " ++ single "" "B" value ++ delta)
+           return ("  process peak RSS: " ++ single "" "B" value ++ footerChange "peak_rss" value)
       , do (lo, hi) <- interval "duration" obj
            return ("  mean delta (95% CI): " ++ pair "ms" " … " ("", "") lo hi)
       , do info <- perfCounterInfo obj
