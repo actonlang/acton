@@ -58,6 +58,7 @@ dependencies:
   - timeit
   - unix
   - unordered-containers
+  - wcwidth
   - regex-tdfa
   
 executables:
@@ -74,6 +75,7 @@ executables:
       - TerminalSize
       - ZigProgress
       - TestFormat
+      - TestPerf
       - TestRunner
       - TestUI
     ghc-options:

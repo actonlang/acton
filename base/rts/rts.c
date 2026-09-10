@@ -65,6 +65,7 @@
 #include "io.c"
 
 #include "log.c"
+#include "perf.c"
 #include "netstring.h"
 #include "../builtin/env.h"
 #include "../builtin/function.h"
@@ -2522,6 +2523,7 @@ void print_help(struct option *opt) {
 void DaveNull () {}
 
 int main(int argc, char **argv) {
+    rts_perf_init();
     // Init garbage collector and suppress warnings
     GC_INIT();
     GC_set_warn_proc(DaveNull);

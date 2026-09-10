@@ -6,6 +6,7 @@
 
 #include "rts/io.h"
 #include "rts/log.h"
+#include "rts/perf.h"
 
 void actonQ_rtsQ___ext_init__() {
     // NOP
@@ -75,6 +76,49 @@ int64_t actonQ_rtsQ_rss (B_SysCap cap) {
     size_t rsm;
     int r = uv_resident_set_memory(&rsm);
     return (int64_t)rsm;
+}
+
+B_u64 actonQ_rtsQ_get_peak_rss (B_SysCap cap) {
+    uv_rusage_t usage;
+    if (uv_getrusage(&usage) != 0)
+        return (B_u64)B_None;
+    // libuv normalizes ru_maxrss to KiB on all supported platforms.
+    return toB_u64(usage.ru_maxrss * 1024);
+}
+
+B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {
+    struct rts_perf_sample s;
+    rts_perf_read(&s);
+    return $NEWTUPLE(8,
+        s.cpu_available ? toB_u64(s.user_ns) : (B_u64)B_None,
+        s.cpu_available ? toB_u64(s.system_ns) : (B_u64)B_None,
+        s.hardware_available ? toB_u64(s.instructions) : (B_u64)B_None,
+        s.hardware_available ? toB_u64(s.cycles) : (B_u64)B_None,
+        toB_u64(s.instructions_enabled), toB_u64(s.instructions_running),
+        toB_u64(s.cycles_enabled), toB_u64(s.cycles_running));
+}
+
+B_dict actonQ_rtsQ_perf_info (B_SysCap cap) {
+    B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
+    B_dict info = $NEW(B_dict, wit, NULL, NULL);
+    B_dictD_setitem(info, wit, to$str("version"), to$str("1"));
+    B_dictD_setitem(info, wit, to$str("backend"), to$str((char *)rts_perf_backend()));
+    B_dictD_setitem(info, wit, to$str("scope"), to$str((char *)rts_perf_scope()));
+    B_dictD_setitem(info, wit, to$str("status"), to$str((char *)rts_perf_status()));
+    uv_utsname_t system;
+    if (uv_os_uname(&system) == 0) {
+        B_dictD_setitem(info, wit, to$str("os"), to$str(system.sysname));
+        B_dictD_setitem(info, wit, to$str("release"), to$str(system.release));
+        B_dictD_setitem(info, wit, to$str("arch"), to$str(system.machine));
+    }
+    uv_cpu_info_t *cpus;
+    int count;
+    if (uv_cpu_info(&cpus, &count) == 0) {
+        if (count > 0)
+            B_dictD_setitem(info, wit, to$str("cpu"), to$str(cpus[0].model));
+        uv_free_cpu_info(cpus, count);
+    }
+    return info;
 }
 
 B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {

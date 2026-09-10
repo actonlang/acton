@@ -65,6 +65,27 @@ def get_rss(cap: SysCap) -> u64:
     """
     NotImplemented
 
+def get_peak_rss(cap: SysCap) -> ?u64:
+    """Get the process lifetime peak resident set size in bytes.
+
+    Includes startup and all threads. Returns None if unavailable.
+    """
+    NotImplemented
+
+def perf_snapshot(cap: SysCap) -> (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycles: ?u64, instructions_enabled: u64, instructions_running: u64, cycles_enabled: u64, cycles_running: u64):
+    """Read cumulative process counters for the performance test harness.
+
+    Includes all runtime threads. Hardware counts require ACTON_TEST_PERF=1
+    at process start. Coverage fields detect intervals with uncounted work.
+    Unavailable measurements are None. Subtract integers before converting
+    to floating point, and reject intervals without full counter coverage.
+    """
+    NotImplemented
+
+def perf_info(cap: SysCap) -> dict[str, str]:
+    """Describe the counter backend, scope, availability and machine."""
+    NotImplemented
+
 # sleep is sort of dangerous - it will actually put the RTS thread executing the
 # actor calling this function to sleep. This could be seen as ultrabad, like we
 # would want to just pause execution of one actor and let the RTS thread process

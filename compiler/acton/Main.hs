@@ -655,6 +655,8 @@ runTests gopts cmd = do
             C.TestStress opts -> (TestModeStress, opts)
         gopts' = if C.testJson topts then gopts { C.quiet = True } else gopts
         opts0 = C.testCompile topts
+    when (C.testRecord topts && mode /= TestModePerf) $
+      printErrorAndExit "--record requires acton test perf"
     let opts = opts0
           { C.test = True
           , C.skip_build = mode == TestModeList
@@ -680,7 +682,7 @@ runTestsOnce gopts opts topts mode paths = do
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
         maxParallel0 <- testMaxParallel gopts
-        let maxParallel = if mode == TestModeStress then 1 else maxParallel0
+        let maxParallel = if mode `elem` [TestModePerf, TestModeStress] then 1 else maxParallel0
         useColorOut <- useColor gopts
         testStart <- getTime Monotonic
         exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel
@@ -700,7 +702,7 @@ runTestsWatch gopts opts topts mode paths = do
             progressUI = cwProgressUI watchCtx
             progressState = cwProgressState watchCtx
         testParallel0 <- testMaxParallel gopts
-        let testParallel = if mode == TestModeStress then 1 else testParallel0
+        let testParallel = if mode `elem` [TestModePerf, TestModeStress] then 1 else testParallel0
         let runOnce gen mChanged = do
               withProjectLockForGen gopts sched gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir

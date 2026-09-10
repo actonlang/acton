@@ -5,7 +5,7 @@ import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, catch, finally, mask)
 import Control.Monad
 import qualified Data.ByteString.Char8 as BS
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, tails)
 import Data.Maybe (isJust)
 import System.Directory
 import System.Exit
@@ -53,7 +53,7 @@ watchProcessTests = testGroup "watch subprocesses"
   , testCase "stopping test watch stops test descendants" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main") (childProcess True ++ waitingParent)
-        withActon acton proj ["test", "--watch", "--no-cache", "--syspath", system] $ \ph _ _ -> do
+        withActon acton proj ["test", "--watch", "--tty", "--no-cache", "--syspath", system] $ \ph _ output -> do
           child <- awaitPid proj "child.pid"
           leader <- awaitPid proj "leader.pid"
           terminateProcess ph
@@ -61,6 +61,7 @@ watchProcessTests = testGroup "watch subprocesses"
           assertEqual "watch should handle TERM" (ExitFailure 143) code
           assertStopped "test leader" leader
           assertStopped "test descendant" child
+          assertCursorRestored =<< output
   , testGroup "successful test exit stops descendants"
       [ testCase pipes $ withProcessProject $ \acton proj system -> do
           writeExecutable (proj </> "out/bin/.test_main")
@@ -135,13 +136,54 @@ watchProcessTests = testGroup "watch subprocesses"
           , "echo $$ > leader.pid"
           , "while :; do sleep 1; done"
           ]
-        withActon acton proj ["test", "stress", "--syspath", system] $ \ph group output -> do
+        withActon acton proj ["test", "stress", "--tty", "--syspath", system] $ \ph group output -> do
           _ <- awaitPid proj "leader.pid"
           signalProcessGroup sigINT group
           code <- await "interrupted stress exit" (getProcessExitCode ph)
           logText <- output
           assertEqual logText ExitSuccess code
           assertBool logText ("Stress run interrupted by user; showing partial results collected so far." `isInfixOf` logText)
+          assertCursorRestored logText
+  , testCase "live updates keep the cursor hidden and avoid repainting unchanged rows" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (proj </> "out/bin/.test_main")
+          [ testInfo False
+          , "sleep 0.3"
+          , testInfo False
+          , "sleep 0.3"
+          , testInfo True
+          ]
+        withActon acton proj ["test", "--tty", "--no-cache", "--color", "never", "--syspath", system] $ \ph _ output -> do
+          code <- await "test exit" (getProcessExitCode ph)
+          logText <- output
+          assertEqual logText ExitSuccess code
+          assertCursorRestored logText
+          assertBool "cursor restoration is the last terminal operation" ("\ESC[?25h" `isSuffixOf` logText)
+          let liveOutput = dropWhile (not . isPrefixOf "\ESC[?25l") (tails (testOutput logText))
+              updates = case liveOutput of
+                text:_ -> text
+                [] -> ""
+          assertBool updates (count "ready:" updates <= 3)
+          assertBool "spinner updates move directly to column two" ("\ESC[1A\r " `isInfixOf` updates)
+          assertBool "live updates do not erase the row before writing it" (not ("\ESC[2K" `isInfixOf` updates))
+  , testGroup "non-interactive test reports do not change cursor visibility"
+      [ testCase label $ withProcessProject $ \acton proj system -> do
+          writeExecutable (proj </> "out/bin/.test_main") [testInfo True]
+          withActon acton proj (["test", "--no-cache", "--syspath", system] ++ args) $ \ph _ output -> do
+            code <- await "test exit" (getProcessExitCode ph)
+            logText <- output
+            assertEqual logText ExitSuccess code
+            assertBool logText (not ("\ESC[?25" `isInfixOf` logText))
+      | (label, args) <- [("redirected", []), ("quiet", ["--tty", "--quiet"]), ("JSON", ["--tty", "--json"])]
+      ]
+  , testCase "a failed test process restores the cursor" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (proj </> "out/bin/.test_main") ["exit 1"]
+        withActon acton proj ["test", "--tty", "--no-cache", "--syspath", system] $ \ph _ output -> do
+          code <- await "failed test exit" (getProcessExitCode ph)
+          logText <- output
+          assertBool logText (code /= ExitSuccess)
+          assertCursorRestored logText
   ]
   where
     -- Inherited child pipes prevent EOF after the leader exits; redirected
@@ -154,6 +196,17 @@ watchProcessTests = testGroup "watch subprocesses"
       ]
     waitingParent = ["trap '' TERM", "while :; do sleep 1; done"]
     testInfo = moduleTestInfo "main"
+    count needle = length . filter (isPrefixOf needle) . tails
+    testOutput logText = case dropWhile (not . isPrefixOf "Skipping test result cache") (tails logText) of
+      text:_ -> text
+      _ -> logText
+    assertCursorRestored output = do
+      let logText = testOutput output
+      assertEqual "cursor is hidden once" 1 (count "\ESC[?25l" logText)
+      assertEqual "cursor is restored once" 1 (count "\ESC[?25h" logText)
+      assertBool "hide precedes restore"
+        (length (dropWhile (not . isPrefixOf "\ESC[?25l") (tails logText)) >
+         length (dropWhile (not . isPrefixOf "\ESC[?25h") (tails logText)))
     moduleTestInfo modName complete = "echo '{\"test_info\":{\"definition\":{\"module\":\"" ++ modName ++ "\",\"name\":\"_test_ready\"},\"complete\":" ++
       (if complete then "true" else "false") ++ ",\"success\":true,\"num_iterations\":1}}' >&2"
     awaitFile path = await path $ do

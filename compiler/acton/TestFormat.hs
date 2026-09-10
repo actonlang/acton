@@ -6,6 +6,7 @@ module TestFormat
   , formatTestFinalLineRenderer
   , formatTestLiveLineRenderer
   , formatTestDetailLines
+  , formatTestPerfLines
   , testColorApply
   , testColorBold
   , testColorRed
@@ -15,11 +16,13 @@ module TestFormat
   ) where
 
 import Acton.Testing (TestResult(..))
+import TestPerf
 import Data.Char (isSpace)
 import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
 import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
-import TerminalSize (termFitPlainRight, termVisibleLength)
+import qualified Data.Text as T
+import TerminalSize (termFitAnsiRight, termFitPlainRight, termVisibleLength)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -161,6 +164,172 @@ fitTestDisplay width display
   | width <= 3 = take width display
   | otherwise = termFitPlainRight (width - 3) display ++ "..."
 
+-- | Render a performance table. Keep the row count stable when the terminal
+-- resizes, dropping outliers, range and spread before the mean and comparison.
+formatTestPerfLines :: Bool -> Maybe Aeson.Object -> TestResult -> [Int -> String]
+formatTestPerfLines useColor baseline res =
+    case testPerfData res of
+      Just obj -> table obj ++ footers obj
+      Nothing -> []
+  where
+    paint color = testColorApply (useColor && not (null color)) [color]
+    dim = paint "\ESC[2m"
+    missing = dim "—"
+    interval metric obj = baseline >>= (\old -> perfMeanInterval metric old obj)
+    percentage previous value = case previous of
+      Nothing -> (Nothing, "—")
+      Just 0 -> (Nothing, if value == 0 then "+0.0%" else "from 0")
+      Just old ->
+        let pct = (value - old) / abs old * 100
+        in if isNaN pct || isInfinite pct then (Nothing, "n/a")
+           else (Just pct, fitNumber 11 [printf "%+.1f%%" pct, printf "%+.2e%%" pct, printf "%+.0e%%" pct])
+    meanChange obj metric value =
+      let previous = do
+            old <- baseline
+            if perfComparable metric old obj then perfNumber old (perfStatKey metric "avg") else Nothing
+          (pct, text) = percentage previous value
+          bounds = if metric == "ipc" then Nothing else interval metric obj
+          (icon, color) = case (pct, bounds) of
+            (Just _, Just (lo, _)) | lo > 0 -> ("💩", "\ESC[91m")
+            (Just _, Just (_, hi)) | hi < 0 -> ("⚡", "\ESC[92m")
+            _ -> ("", "\ESC[2m")
+      in padLeft 11 (paint color text) ++ " "
+          ++ (if null icon then "  " else paint (if icon == "⚡" then testColorYellow else color) icon)
+    footerChange key value = case baseline >>= (\old -> perfNumber old key) of
+      Nothing -> ""
+      Just old ->
+        let (pct, text) = percentage (Just old) value
+            color = case pct of
+              Just p | p > 0 -> "\ESC[91m"
+              Just p | p < 0 -> "\ESC[92m"
+              _ -> "\ESC[2m"
+        in " (" ++ paint color text ++ ")"
+    fitNumber width choices = fromMaybe (last choices) (listToMaybe [s | s <- choices, length s <= width])
+    padLeft width s = replicate (max 0 (width - termVisibleLength s)) ' ' ++ s
+    padRight width s = s ++ replicate (max 0 (width - termVisibleLength s)) ' '
+    single color unit value =
+      let (scale, suffix) = perfScale unit value
+      in paint color (perfDigits (value / scale)) ++ dim suffix
+    pair unit separator (colorA, colorB) a b =
+      single colorA unit a ++ separator ++ single colorB unit b
+    quantity width color unit value =
+      let (scale, suffix) = perfScale unit value
+          scaled = value / scale
+          digits = fitNumber width [perfDigits scaled, printf "%.1e" scaled, printf "%.0e" scaled]
+      in padLeft width (paint color digits) ++ padRight 2 (dim suffix)
+    row obj (metric, label, unit) = do
+      value <- perfNumber obj (perfStatKey metric "avg")
+      return $ \numberWidth showSpread ->
+        let q = quantity numberWidth
+            meanValue = q "\ESC[92m" unit value
+            mean = if not showSpread then meanValue else case perfNumber obj (perfStatKey metric "stdev") of
+              Just sd | sd >= 0 && trNumIterations res > 1 -> meanValue ++ " ± " ++ q testColorGreen unit sd
+              _ -> padRight (2 * (numberWidth + 2) + 3) meanValue
+            range = case (perfNumber obj (perfStatKey metric "min"), perfNumber obj (perfStatKey metric "max")) of
+              (Just lo, Just hi) -> q "\ESC[36m" unit lo ++ " … " ++ q "\ESC[35m" unit hi
+              _ -> padLeft (numberWidth + 2) missing
+            outliers = case perfNumber obj (perfStatKey metric "outlier_count") of
+              Just n ->
+                let pct = n / fromIntegral (trNumIterations res) * 100
+                    count = fitNumber 14 [printf "%.0f (%.0f%%)" n pct, printf "%.1e (%.0f%%)" n pct]
+                in paint (if pct >= 10 then testColorYellow else "\ESC[2m") count
+              _ -> missing
+        in [label, mean, range, outliers, meanChange obj metric value]
+    table obj =
+      let headings numberWidth showSpread =
+            let title color = padLeft (numberWidth + 2) . paint color
+                mean = title "\ESC[92m" "mean"
+            in [ paint testColorBold "measurement"
+               , mean ++ if showSpread then " ± " ++ title testColorGreen "σ" else ""
+               , title "\ESC[36m" "min" ++ " … " ++ title "\ESC[35m" "max"
+               , paint testColorYellow "outliers"
+               , paint testColorBold "delta" ++ "   "
+               ]
+          rows = headings : mapMaybe (row obj) perfMetrics
+          -- Choose widths only from the viewport, so benchmarks stay aligned.
+          -- Reserve comparison space even when this test has no baseline.
+          layouts = [ (16, 10, 4, [0,1,2,3,4], True)
+                    , (13, 7, 2, [0,1,2,3,4], True)
+                    , (13, 7, 2, [0,1,2,4], True)
+                    , (13, 7, 2, [0,1,4], True)
+                    , (13, 7, 1, [0,1,4], False)
+                    ]
+          widths (labelWidth, numberWidth, _, _, showSpread) =
+            let q = numberWidth + 2
+            in [labelWidth, if showSpread then 2 * q + 3 else q, 2 * q + 3, 14, 14]
+          width layout@(_, _, gap, indexes, _) = 2 + sum [widths layout !! i | i <- indexes] + gap * (length indexes - 1)
+          render cells cols =
+            let layout@(labelWidth, numberWidth, gap, indexes, showSpread) =
+                  fromMaybe (last layouts) (listToMaybe [l | l <- layouts, width l <= cols])
+                columnWidths = widths layout
+                values = cells numberWidth showSpread
+                cell i =
+                  let w = if i == 0 then max 1 (labelWidth - max 0 (width layout - cols)) else columnWidths !! i
+                      s = values !! i
+                  in if i == 0 then padRight w (termFitAnsiRight w s)
+                     else if i == 1 || i == 2 then padRight w s
+                     else padLeft w s
+                shown = [i | i <- indexes, i /= 4 || isJust baseline]
+            in termFitAnsiRight cols ("  " ++ intercalate (replicate gap ' ') (map cell shown))
+      in map render rows
+    footers obj = map (\line cols -> termFitAnsiRight cols line) $ catMaybes
+      [ do value <- perfNumber obj "median_duration"
+           return ("  median: " ++ single "" "ms" value ++ footerChange "median_duration" value)
+      , do value <- perfNumber obj "peak_rss"
+           return ("  process peak RSS: " ++ single "" "B" value ++ footerChange "peak_rss" value)
+      , do (lo, hi) <- interval "duration" obj
+           return ("  mean delta (95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+      , do info <- perfCounterInfo obj
+           let scope = case counterText info "scope" of
+                 Just "process:user" -> "user only"
+                 _ -> "user + kernel"
+               hardware = if counterText info "status" == Just "available" then "; hardware: " ++ scope else ""
+           return ("  CPU measurements: all process threads, including GC" ++ hardware)
+      , do info <- perfCounterInfo obj
+           status <- counterText info "status"
+           if status == "available" then Nothing
+             else Just ("  hardware counters unavailable: " ++ status)
+      , do old <- baseline
+           _ <- perfNumber old "avg_cpu_user"
+           _ <- perfNumber obj "avg_cpu_user"
+           if perfComparable "cpu_user" old obj then Nothing
+             else Just "  CPU deltas unavailable: baseline machine differs or is unknown"
+      , do old <- baseline
+           _ <- perfNumber old "avg_instructions"
+           _ <- perfNumber obj "avg_instructions"
+           if perfComparable "instructions" old obj then Nothing
+             else Just "  hardware deltas unavailable: baseline machine or counter scope differs or is unknown"
+      , Just ("  total: " ++ single "" "ms" (trTestDuration res) ++ printf " (%.1f runs/s)" (testsPerSecond (trNumIterations res) (trTestDuration res)))
+      ] ++ [""]
+    counterText info key = case AesonKM.lookup (AesonKey.fromString key) info of
+      Just (Aeson.String s) -> Just (T.unpack s)
+      _ -> Nothing
+
+-- Scale each quantity with decimal prefixes, including signed memory changes.
+-- A small spread keeps its own unit instead of rounding to zero beside a mean.
+perfScale :: String -> Double -> (Double, String)
+perfScale unit value =
+    fromMaybe fallback (listToMaybe [entry | entry@(scale, _) <- scales, magnitude >= scale])
+  where
+    magnitude = abs value
+    scales = case unit of
+      "ms" -> [(1e6, "ks"), (1e3, "s"), (1, "ms"), (1e-3, "µs"), (1e-6, "ns")]
+      "count" -> [(1e12, "T"), (1e9, "G"), (1e6, "M"), (1e3, "K"), (1, "")]
+      "ratio" -> [(1, "")]
+      _ -> [(1e12, "TB"), (1e9, "GB"), (1e6, "MB"), (1e3, "KB"), (1, "B")]
+    fallback
+      | unit == "ms" && magnitude > 0 = (1e-6, "ns")
+      | unit `elem` ["count", "ratio"] = (1, "")
+      | otherwise = (1, unit)
+
+perfDigits :: Double -> String
+perfDigits value
+  | abs value >= 10000 = printf "%.2e" value
+  | value /= 0 && abs value < 1 = printf "%.2e" value
+  | abs value >= 100 = printf "%.0f" value
+  | abs value >= 10 = printf "%.1f" value
+  | otherwise = printf "%.2f" value
+
 -- | Format a single test result line with alignment and timing.
 formatTestLineWith :: Bool -> (TestResult -> String) -> Double -> Int -> String -> TestResult -> String
 formatTestLineWith useColor statusFn expectedDurationMs nameWidth display res =
@@ -274,9 +443,13 @@ formatTestLineFitted useColor statusFn expectedDurationMs nameWidth width displa
       | width >= length statusPlain = statusRendered
       | otherwise = fitTestDisplay width display
 
-formatTestFinalLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> Int -> String
-formatTestFinalLineRenderer useColor expectedDurationMs nameWidth display res cols =
-    formatTestLineFitted useColor formatTestStatus expectedDurationMs nameWidth cols display res
+formatTestFinalLineRenderer :: Bool -> Bool -> Double -> Int -> String -> TestResult -> Int -> String
+formatTestFinalLineRenderer useColor perfMode expectedDurationMs nameWidth display res cols
+  | perfMode && isJust (testPerfData res) =
+      termFitAnsiRight cols (testColorApply useColor [testColorBold] "Benchmark"
+        ++ testColorApply useColor ["\ESC[2m"] (printf " (%d runs)" (trNumIterations res))
+        ++ ": " ++ display)
+  | otherwise = formatTestLineFitted useColor formatTestStatus expectedDurationMs nameWidth cols display res
 
 formatTestLiveLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> Int -> String
 formatTestLiveLineRenderer useColor expectedDurationMs nameWidth display res cols =

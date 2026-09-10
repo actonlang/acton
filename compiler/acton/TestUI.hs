@@ -1,7 +1,9 @@
 module TestUI
   ( TestKey(..)
+  , TestLine
   , TestProgressUI(..)
-  , initTestProgressUI
+  , staticLine
+  , withTestProgressUI
   , testUiStart
   , testUiAppendFinal
   , testUiUpdateLive
@@ -9,7 +11,6 @@ module TestUI
   , testUiUpdateFinal
   , testUiInsertDetails
   , testUiProgressPercent
-  , testUiProgressClear
   , queuePendingDetails
   , flushPendingDetails
   , moduleHeaderLine
@@ -18,6 +19,7 @@ module TestUI
 import qualified Acton.CommandLineParser as C
 import Control.Concurrent (ThreadId, forkIO, killThread, myThreadId, threadDelay)
 import Control.Concurrent.MVar
+import Control.Exception (bracket, finally, mask)
 import Control.Monad
 import Data.IORef
 import qualified Data.List
@@ -45,7 +47,7 @@ data TestProgressUI = TestProgressUI
   , tpuLiveSetRef :: IORef (Set.Set TestKey)
   , tpuLiveLineRef :: IORef (M.Map TestKey TestLine)
   , tpuPrintedModulesRef :: IORef (Set.Set String)
-  , tpuPendingDetailsRef :: IORef (M.Map TestKey [String])
+  , tpuPendingDetailsRef :: IORef (M.Map TestKey [TestLine])
   , tpuSpinnerRef :: IORef Int
   , tpuTickerThreadRef :: IORef (Maybe ThreadId)
   , tpuTermProgress :: TermProgress
@@ -53,11 +55,19 @@ data TestProgressUI = TestProgressUI
   , tpuLock :: MVar ()
   , tpuNameWidth :: Int
   , tpuUseColor :: Bool
-  , tpuShowLog :: Bool
   }
 
-initTestProgressUI :: C.GlobalOptions -> Int -> Bool -> Bool -> IO TestProgressUI
-initTestProgressUI gopts nameWidth showLog useColorOut = do
+withTestProgressUI :: C.GlobalOptions -> Int -> Bool -> (TestProgressUI -> IO a) -> IO a
+withTestProgressUI gopts nameWidth useColorOut action =
+    bracket (initTestProgressUI gopts nameWidth useColorOut) release $ \ui -> do
+      when (tpuEnabled ui) $ putStr "\ESC[?25l" >> hFlush stdout
+      action ui
+  where
+    release ui = (stopTestTicker ui >> testUiProgressClear ui) `finally`
+      when (tpuEnabled ui) (putStr "\ESC[?25h" >> hFlush stdout)
+
+initTestProgressUI :: C.GlobalOptions -> Int -> Bool -> IO TestProgressUI
+initTestProgressUI gopts nameWidth useColorOut = do
     tty <- hIsTerminalDevice stdout
     let enabled = (tty || C.tty gopts) && not (C.quiet gopts)
     totalLinesRef <- newIORef 0
@@ -92,7 +102,6 @@ initTestProgressUI gopts nameWidth showLog useColorOut = do
       , tpuLock = lock
       , tpuNameWidth = nameWidth
       , tpuUseColor = useColorOut
-      , tpuShowLog = showLog
       }
 
 withTestProgressLock :: TestProgressUI -> IO a -> IO a
@@ -152,8 +161,8 @@ startTestTicker ui =
       m <- readIORef (tpuTickerThreadRef ui)
       case m of
         Just _ -> return ()
-        Nothing -> do
-          tid <- forkIO (testTickerLoop ui)
+        Nothing -> mask $ \restore -> do
+          tid <- forkIO (restore (testTickerLoop ui))
           writeIORef (tpuTickerThreadRef ui) (Just tid)
 
 stopTestTicker :: TestProgressUI -> IO ()
@@ -172,9 +181,9 @@ testTickerLoop ui = do
               then return False
               else do
                 (_, cols) <- ensureViewportUnlocked ui
-                when (testSpinnerEnabled cols) $ do
+                when (testSpinnerEnabled cols) $
                   modifyIORef' (tpuSpinnerRef ui) (+ 1)
-                  refreshTestSpinnersUnlocked ui cols
+                refreshTestLinesUnlocked ui cols
                 termProgressHeartbeat (tpuTermProgress ui)
                 return True
           when keep loop
@@ -237,8 +246,8 @@ rerenderVisibleUnlocked ui rowsBefore rowsAfter cols = do
       hFlush stdout
     writeIORef (tpuLinesRef ui) renderedAll
 
-refreshTestSpinnersUnlocked :: TestProgressUI -> Int -> IO ()
-refreshTestSpinnersUnlocked ui cols = do
+refreshTestLinesUnlocked :: TestProgressUI -> Int -> IO ()
+refreshTestLinesUnlocked ui cols = do
     idxMap <- readIORef (tpuLineIndexRef ui)
     liveLines <- readIORef (tpuLiveLineRef ui)
     forM_ (M.toList liveLines) $ \(key, lineFn) ->
@@ -359,29 +368,30 @@ updateLineAtUnlocked ui idx lineFn = do
 updateLineAtUnlockedWithCols :: TestProgressUI -> Int -> Int -> TestLine -> IO ()
 updateLineAtUnlockedWithCols ui cols idx lineFn = do
     rendered <- renderIndexedLineWithColsUnlocked ui cols idx lineFn
+    previous <- readIORef (tpuLinesRef ui)
+    let old = case drop idx previous of
+          line:_ -> Just line
+          _ -> Nothing
+        update = case (old, rendered) of
+          (Just (' ':_:' ':rest), ' ':spinner:' ':rest') | rest == rest' -> "\r " ++ [spinner]
+          _ -> "\r" ++ rendered ++ case old of
+            Just line | termVisibleLength line > termVisibleLength rendered -> "\ESC[K"
+            _ -> ""
+    -- Keep the renderer even if it produces the same text at the current width.
     modifyIORef' (tpuLineRenderRef ui) (updateLineListAt idx lineFn)
     modifyIORef' (tpuLinesRef ui) (updateLineListAt idx rendered)
     total <- readIORef (tpuTotalLinesRef ui)
     (rows, _) <- currentViewportUnlocked ui
     let offset = total - idx
-    when (offset > 0 && (rows <= 0 || offset < rows)) $ do
-      putStr ("\ESC[" ++ show offset ++ "A")
-      putStr "\r\ESC[2K"
-      putStr rendered
-      putStr ("\ESC[" ++ show offset ++ "B")
-      putStr "\r"
+    when (old /= Just rendered && offset > 0 && (rows <= 0 || offset < rows)) $ do
+      putStr ("\ESC[" ++ show offset ++ "A" ++ update ++ "\ESC[" ++ show offset ++ "B\r")
       hFlush stdout
 
 testUiUpdateLive :: TestProgressUI -> TestKey -> TestLine -> IO ()
 testUiUpdateLive ui key lineFn = withTestProgressLock ui $ do
-    when (tpuEnabled ui) $ do
-      void (ensureViewportUnlocked ui)
-      idxMap <- readIORef (tpuLineIndexRef ui)
-      case M.lookup key idxMap of
-        Nothing -> return ()
-        Just idx -> do
-          modifyIORef' (tpuLiveLineRef ui) (M.insert key lineFn)
-          updateLineAtUnlocked ui idx lineFn
+    -- Coalesce result updates with spinner ticks; final results paint at once.
+    when (tpuEnabled ui) $
+      modifyIORef' (tpuLiveLineRef ui) (M.adjust (const lineFn) key)
 
 testUiFinalize :: TestProgressUI -> TestKey -> TestLine -> IO Bool
 testUiFinalize ui key lineFn = withTestProgressLock ui $ do
@@ -437,17 +447,16 @@ canInsertLinesUnlocked ui insertIdx n
                 total <- readIORef (tpuTotalLinesRef ui)
                 return ((total + n - minimum idxs) < rows)
 
-insertLinesAfterUnlocked :: TestProgressUI -> Int -> [String] -> IO Bool
-insertLinesAfterUnlocked ui idx lines = do
-    let n = length lines
+insertLinesAfterUnlocked :: TestProgressUI -> Int -> [TestLine] -> IO Bool
+insertLinesAfterUnlocked ui idx lineFns = do
+    let n = length lineFns
     if n <= 0
       then return True
       else do
         (rows, cols) <- currentViewportUnlocked ui
         total <- readIORef (tpuTotalLinesRef ui)
         liveSet <- readIORef (tpuLiveSetRef ui)
-        let lineFns = map staticLine lines
-            rendered = map ($ safeLiveWidth cols) lineFns
+        let rendered = map ($ safeLiveWidth cols) lineFns
             startIdx = idx + 1
             offsetNew = (total + n) - startIdx
             visibleOk =
@@ -490,7 +499,7 @@ rerenderFromUnlocked ui startIdx oldTotal = do
           putStr "\n"
         hFlush stdout
 
-testUiInsertDetails :: TestProgressUI -> TestKey -> [String] -> IO Bool
+testUiInsertDetails :: TestProgressUI -> TestKey -> [TestLine] -> IO Bool
 testUiInsertDetails ui key lines = withTestProgressLock ui $ do
     if null lines
       then return True
@@ -503,7 +512,7 @@ testUiInsertDetails ui key lines = withTestProgressLock ui $ do
             Nothing -> return False
             Just idx -> insertLinesAfterUnlocked ui idx lines
 
-queuePendingDetails :: TestProgressUI -> TestKey -> [String] -> IO ()
+queuePendingDetails :: TestProgressUI -> TestKey -> [TestLine] -> IO ()
 queuePendingDetails ui key lines = withTestProgressLock ui $ do
     unless (null lines) $
       modifyIORef' (tpuPendingDetailsRef ui) (M.insert key lines)
