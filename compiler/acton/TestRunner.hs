@@ -11,6 +11,7 @@ import Acton.Compile
 import qualified Acton.Syntax as A
 import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
+import qualified FileUtil
 import TestFormat
 import TestUI
 import Control.Concurrent.Async
@@ -39,7 +40,7 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
-import Control.Exception (SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
+import Control.Exception (IOException, SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
 import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
@@ -227,7 +228,13 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             nameWidth = max 20 (maxNameLen + 5)
             runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
-            useCache = not (C.testNoCache topts) && mode /= TestModeStress
+            useCache = not (C.testNoCache topts) && mode == TestModeRun
+        perfData <- if mode == TestModePerf then readPerfData paths else return M.empty
+        let detailLines res =
+              formatTestDetailLines useColorOut (C.testShowLog topts) res ++
+              if mode == TestModePerf
+                then formatTestPerfLines useColorOut (lookupPerfData perfData res) res
+                else []
         cache <-
           if useCache
             then readTestCache (testCachePath paths) runContext
@@ -261,12 +268,13 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             else return cachedResults1
         let showCached = C.testShowCached topts
         when (not emitJson && not useCache) $
-          if mode == TestModeStress
-            then putStrLn "Skipping test result cache in stress mode; running all selected tests"
-            else putStrLn "Skipping test result cache (--no-cache); running all selected tests"
+          case mode of
+            TestModePerf -> putStrLn "Skipping test result cache in perf mode; running all selected tests"
+            TestModeStress -> putStrLn "Skipping test result cache in stress mode; running all selected tests"
+            _ -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
-        ui <- initTestProgressUI gopts nameWidth (C.testShowLog topts) useColorOut
+        ui <- initTestProgressUI gopts nameWidth useColorOut
         let totalTests = length specs
         progressDoneRef <- newIORef 0
         workers <- newIORef []
@@ -294,11 +302,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   display = tsDisplay spec
                   modDisplay = displayModName paths (tsModule spec)
                   useColorLine = tpuUseColor ui
-                  showLog = tpuShowLog ui
               case M.lookup key cachedMap of
                 Just cachedRes -> do
                   let line = formatTestFinalLineRenderer useColorLine expectedDurationMs nameWidth display cachedRes
-                      details = formatTestDetailLines useColorLine showLog cachedRes
+                      details = detailLines cachedRes
                   if shouldShowCached cachedRes
                     then do
                       ok <- testUiAppendFinal ui key modDisplay line
@@ -342,7 +349,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                       if not started
                         then return Nothing
                         else do
-                          callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs
+                          callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs detailLines
                           mask $ \unmask -> do
                             worker <- async $ unmask $ mask $ \restore -> do
                               resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
@@ -401,7 +408,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                 then filter (\r -> not (trCached r) || trSnapshotUpdated r) results
                 else filter (not . trCached) results
         when (C.testRecord topts) $
-          writePerfData paths resultsRun
+          writePerfData paths perfData resultsRun
         let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
             newCache = TestCache
               { tcVersion = testCacheVersion
@@ -417,7 +424,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             return (testExitCode results)
           else do
             when (not (tpuEnabled ui)) $
-              printTestResultsOrdered paths (tpuUseColor ui) (tpuShowLog ui) showCached nameWidth specs results
+              printTestResultsOrdered paths (tpuUseColor ui) showCached nameWidth detailLines specs results
             _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
             testUiProgressClear ui
             return (testExitCode results)
@@ -775,15 +782,13 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
         _ ->
           Aeson.object [AesonKey.fromString "interrupted" Aeson..= True]
 
-testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> Double -> IO TestProgressCallbacks
-testProgressCallbacks ui eventChan key display expectedDurationMs = do
+testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> Double -> (TestResult -> [String]) -> IO TestProgressCallbacks
+testProgressCallbacks ui eventChan key display expectedDurationMs detailLines = do
     workerKeysRef <- newIORef M.empty
     let nameWidth = tpuNameWidth ui
         useColorOut = tpuUseColor ui
-        showLog = tpuShowLog ui
         liveLine res = formatTestLiveLineRenderer useColorOut expectedDurationMs nameWidth display res
         finalLine res = formatTestFinalLineRenderer useColorOut expectedDurationMs nameWidth display res
-        detailLines res = formatTestDetailLines useColorOut showLog res
         workerLine done durationMs laneSpec row cols =
           let role = if swrSync row then "sync" else "drift"
               phase =
@@ -1205,8 +1210,8 @@ printTestSummary useColor elapsed showCached results = do
             then return 1
             else return 0
 
-printTestResultsOrdered :: Paths -> Bool -> Bool -> Bool -> Int -> [TestSpec] -> [TestResult] -> IO ()
-printTestResultsOrdered paths useColor showLog showCached nameWidth specs results = do
+printTestResultsOrdered :: Paths -> Bool -> Bool -> Int -> (TestResult -> [String]) -> [TestSpec] -> [TestResult] -> IO ()
+printTestResultsOrdered paths useColor showCached nameWidth detailLines specs results = do
     let resMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- results ]
         isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
@@ -1229,7 +1234,7 @@ printTestResultsOrdered paths useColor showLog showCached nameWidth specs result
                         putStrLn (moduleHeaderLine (displayModName paths modName))
                         return (Set.insert modName printedMods)
                   putStrLn (formatLine spec res)
-                  mapM_ putStrLn (formatTestDetailLines useColor showLog res)
+                  mapM_ putStrLn (detailLines res)
                   mapM_ putStrLn (formatStressWorkerFinalLines useColor res)
                   go printedMods' True rest
     go Set.empty False specs
@@ -1358,22 +1363,43 @@ markSnapshotUpdated res = res
   , trNumErrors = 0
   }
 
--- | Write perf data JSON for the current test run.
-writePerfData :: Paths -> [TestResult] -> IO ()
-writePerfData paths results = do
-    let addTest acc res =
-          let modKey = AesonKey.fromString (trModule res)
-              testKey = AesonKey.fromString (trName res)
-              entry = case AesonKM.lookup modKey acc of
-                        Just (Aeson.Object obj) -> obj
-                        _ -> AesonKM.empty
-              entry' = AesonKM.insert testKey (trRaw res) entry
-              acc' = AesonKM.insert modKey (Aeson.Object entry') acc
-          in acc'
-        modulesObj = foldl' addTest AesonKM.empty results
-        outVal = Aeson.Object modulesObj
-        outPath = joinPath [projPath paths, "perf_data"]
-    BL.writeFile outPath (Aeson.encode outVal)
+type PerfData = M.Map String (M.Map String Aeson.Value)
+
+-- | Read the baseline before running tests, including when updating it.
+readPerfData :: Paths -> IO PerfData
+readPerfData paths = do
+    let path = projPath paths </> "perf_data"
+    exists <- doesPathExist path
+    if not exists
+      then return M.empty
+      else do
+        result <- try (Aeson.eitherDecodeFileStrict path) :: IO (Either IOException (Either String PerfData))
+        case result of
+          Right (Right baseline) -> return baseline
+          Right (Left err) -> printErrorAndExit ("Cannot read performance baseline " ++ path ++ ": " ++ err)
+          Left err -> printErrorAndExit ("Cannot read performance baseline " ++ path ++ ": " ++ displayException err)
+
+lookupPerfData :: PerfData -> TestResult -> Maybe Aeson.Object
+lookupPerfData baseline res = do
+    tests <- M.lookup (trModule res) baseline
+    raw <- M.lookup (trName res) tests
+    old <- AesonTypes.parseMaybe parseTestInfoValue raw
+    testPerfData old
+
+-- | Update successful measurements without discarding unselected or failed tests.
+writePerfData :: Paths -> PerfData -> [TestResult] -> IO ()
+writePerfData paths baseline results = do
+    let measurements =
+          [ (res, obj)
+          | res <- results
+          , Just obj <- [testPerfData res]
+          ]
+        addTest acc (res, obj) =
+          M.insertWith M.union (trModule res) (M.singleton (trName res) (Aeson.Object obj)) acc
+        updated = foldl' addTest baseline measurements
+    unless (null measurements) $
+      FileUtil.writeFile (projPath paths </> "perf_data")
+        (T.unpack (TE.decodeUtf8 (BL.toStrict (Aeson.encode updated))))
 
 -- | Run a process and stream stderr lines to a callback while capturing output.
 readProcessWithExitCodeStreaming :: CreateProcess -> (String -> IO ()) -> IO (ExitCode, String, String)

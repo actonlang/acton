@@ -1,38 +1,51 @@
 # Performance testing
 
-It is also possible to run tests in a *performance mode*, which uses the same basic test definitions (so you can run your tests both as logic test and for performance purposes) but alters the way in which the tests are run. In performance mode, only a single test will be run at a time unlike the normal mode in which many tests are typically run concurrently.
+Performance mode uses the same test definitions as ordinary testing, but runs one
+test at a time and always takes fresh measurements. Tests run serially even when
+`--jobs` allows parallel compilation.
 
-To get good numbers in performance mode, it's good if test functions run for at least a couple of milliseconds. With very short tests, very small differences lead to very large percentage differences.
-
-Source:
 ```python
 import testing
 
-def _test_simple():
+actor _test_simple(t: testing.AsyncT):
     a = 0
     for i in range(99999):
         a += i
+    assert a == 4999850001
+    t.success()
 ```
 
-Run:
 ```sh
-acton test perf
+acton test perf --release
 ```
 
-Output:
-```sh
-Building project in /home/user/foo
-  Compiling example.act for release
-   Finished compilation in   0.016 s
-  Final compilation step
-   Finished final compilation step in   0.451 s
+Use `--release` to measure optimized code. Without an explicit optimization
+option, the normal Debug build default applies. For more samples, increase the
+minimum duration, for example `--min-time 5000` for five seconds per test, or use
+`--iter` to select a fixed number of iterations.
 
-Tests - module example:
-  simple:                OK:  3.21ms            Avg:  4.20ms             5.11ms             106 runs in 1005.261ms
+Sampling limits are checked between iterations. A separate watchdog allows at
+least five minutes for a slow or hung performance test, so a long iteration can
+finish even when the sampling target is shorter. Longer configured run limits
+extend the watchdog; `--max-time 0` disables it.
 
-All 1 tests passed (1.571s)
+The result includes:
 
-```
-(note that the output is rather wide, scroll horizontally to see the full output)
+- **Min, Mean, Max:** minimum, average and maximum wall time per test iteration,
+  with measured garbage collection time subtracted. These include waiting within
+  asynchronous tests.
+- **Allocated / run:** average bytes reported by the GC allocation counter
+  during an iteration. This measures allocation volume, not peak memory usage.
+- **Non-GC change / run:** estimated average change in resident memory outside
+  the GC heap. This subtracts GC memory usage from RSS before and after the
+  iteration, with collections around the test. It is noisy and can be negative.
+- **Runs, total time, runs/second:** elapsed time and throughput for the whole
+  test loop, including harness and collection overhead. This differs from the
+  per-iteration times above.
 
-See [Stress testing](stress.md) for concurrency-focused stress runs.
+Very short tests are sensitive to measurement overhead and scheduling noise.
+Prefer workloads lasting at least a few milliseconds and repeat measurements
+before drawing conclusions from small percentage changes.
+
+See [Performance comparisons](perf_record.md) to record a baseline and compare
+later runs, or [Stress testing](stress.md) for concurrency-focused tests.

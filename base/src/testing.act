@@ -1663,6 +1663,8 @@ actor test_runner(env: Env,
         test_timeout = 0.0
         if config.max_time > 0:
             test_timeout = max([config.max_time, 2.0]) + _stress_timeout_slack_s()
+            if config.perf_mode:
+                test_timeout = max([test_timeout, 300.0])
 
         test_name = args.get_str("name")
         if test_name not in all_tests:

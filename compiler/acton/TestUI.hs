@@ -53,11 +53,10 @@ data TestProgressUI = TestProgressUI
   , tpuLock :: MVar ()
   , tpuNameWidth :: Int
   , tpuUseColor :: Bool
-  , tpuShowLog :: Bool
   }
 
-initTestProgressUI :: C.GlobalOptions -> Int -> Bool -> Bool -> IO TestProgressUI
-initTestProgressUI gopts nameWidth showLog useColorOut = do
+initTestProgressUI :: C.GlobalOptions -> Int -> Bool -> IO TestProgressUI
+initTestProgressUI gopts nameWidth useColorOut = do
     tty <- hIsTerminalDevice stdout
     let enabled = (tty || C.tty gopts) && not (C.quiet gopts)
     totalLinesRef <- newIORef 0
@@ -92,7 +91,6 @@ initTestProgressUI gopts nameWidth showLog useColorOut = do
       , tpuLock = lock
       , tpuNameWidth = nameWidth
       , tpuUseColor = useColorOut
-      , tpuShowLog = showLog
       }
 
 withTestProgressLock :: TestProgressUI -> IO a -> IO a

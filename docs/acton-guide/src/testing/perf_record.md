@@ -1,46 +1,48 @@
 # Performance comparisons
 
-When running in `performance mode` you can record a snapshot of performance using `acton test perf --record`. A `perf_data` file is written to disk with the stored performance data. Subsequent test runs will read this file and show a comparison. The difference is displayed as a percentage increase or decrease in time.
+Record a baseline with `acton test perf --record`. This writes measurements to
+`perf_data` in the project directory. Later performance runs compare with that
+file without changing it:
 
-Source:
-```python
-import testing
-
-def _test_simple():
-    a = 0
-    for i in range(99999):
-        a += i
-```
-
-Run:
 ```sh
-acton test perf --record
-acton test perf
+acton test perf --release --record
+# Make a change, then measure it against the baseline.
+acton test perf --release
 ```
 
-Output:
-```sh
-Building project in /home/user/foo
-  Compiling example.act for release
-   Finished compilation in   0.017 s
-  Final compilation step
-   Finished final compilation step in   0.452 s
+Each measured test shows its minimum, mean and maximum iteration time, average
+allocated bytes, and estimated non-GC memory change. If the baseline contains a
+successful measurement of that test, each available metric also shows its
+percentage change. Positive values mean more time or memory; negative values mean
+less. A change from zero to a nonzero value has no defined percentage and is
+shown as `from 0; % n/a`.
 
-Tests - module example:
-  simple:                OK:  3.25ms            Avg:  4.16ms             7.38ms             122 runs in 1006.002ms
+For example:
 
-All 1 tests passed (1.565s)
-
-Building project in /home/user/foo
-  Compiling example.act for release
-   Already up to date, in    0.000 s
-  Final compilation step
-   Finished final compilation step in   0.116 s
-
-Tests - module example:
-  simple:                OK:  3.23ms -0.50%     Avg:  4.17ms +0.19%      6.35ms -13.91%     119 runs in 1001.375ms
-
-All 1 tests passed (1.215s)
-
+```text
+Tests - module sample:
+   sample:          OK             :    3 runs in 9.542ms @  314.4/s
+      Min:                 0.107 ms (+94.55%)
+      Mean:                0.126 ms (+40.00%)
+      Max:                 0.158 ms (+6.76%)
+      Allocated / run:     30101 B (+3.83%)
+      Non-GC change / run: 61440 B (-11.76%)
 ```
-(note that the output is rather wide, scroll horizontally to see the full output)
+
+Performance tests always run afresh, even when their source code is unchanged.
+Compilation still reuses unchanged build artifacts.
+
+Use `--record` again to update the baseline. The run compares against the previous
+values before replacing them. Filters such as `--module` and `--name` update only
+the selected successful tests; other measurements remain in the file. Failed,
+skipped and incomplete tests do not replace saved measurements. If no test
+produces a successful measurement, the file is left untouched. Invalid JSON is
+reported as an error so that a damaged baseline is not silently overwritten.
+
+Use the same machine and build options for comparable measurements. In
+particular, keep `--release` consistent between runs. The baseline matches tests
+by their stored module and test names; renamed tests or recordings using older
+module names need a new recording. Remove `perf_data` to start a new baseline
+without retaining old entries. `--record` is only supported in performance mode.
+
+See [Performance testing](performance.md) for the meaning of each measurement.

@@ -517,7 +517,7 @@ testOptions = mkTestOptions
     <*> switch (long "show-cached"   <> help "Show cached test results")
     <*> switch (long "no-cache"      <> help "Always run tests instead of reusing cached results")
     <*> switch (long "json"          <> help "Output final test results as JSON")
-    <*> switch (long "record"        <> help "Record test performance results")
+    <*> switch (long "record"        <> help "Update the performance baseline in perf_data (perf mode)")
     <*> switch (long "snapshot-update" <> long "golden-update" <> long "accept" <> help "Accept current test output as expected snapshot values")
     <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
     <*> optional (option auto (long "max-iter" <> metavar "N" <> help "Maximum number of iterations to run a test (mode defaults when omitted)"))

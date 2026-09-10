@@ -6,6 +6,8 @@ module TestFormat
   , formatTestFinalLineRenderer
   , formatTestLiveLineRenderer
   , formatTestDetailLines
+  , formatTestPerfLines
+  , testPerfData
   , testColorApply
   , testColorBold
   , testColorRed
@@ -160,6 +162,48 @@ fitTestDisplay width display
   | length display <= width = display
   | width <= 3 = take width display
   | otherwise = termFitPlainRight (width - 3) display ++ "..."
+
+-- | Only complete, successful measurements can be recorded or compared.
+testPerfData :: TestResult -> Maybe Aeson.Object
+testPerfData res
+  | not (trComplete res) || trSuccess res /= Just True || isJust (trException res)
+    || trSkipped res || trCached res || trSnapshotUpdated res || trNumIterations res <= 0 = Nothing
+  | otherwise = case trRaw res of
+      Aeson.Object obj -> Just obj
+      _ -> Nothing
+
+-- | Format the per-iteration measurements, with changes from a recorded run.
+formatTestPerfLines :: Bool -> Maybe Aeson.Object -> TestResult -> [String]
+formatTestPerfLines useColor baseline res =
+    case testPerfData res of
+      Just obj -> catMaybes
+        [ metric obj "min_duration" "Min" "ms"
+        , metric obj "avg_duration" "Mean" "ms"
+        , metric obj "max_duration" "Max" "ms"
+        , metric obj "mem_usage_delta_avg" "Allocated / run" "B"
+        , metric obj "non_gc_mem_usage_delta_avg" "Non-GC change / run" "B"
+        ]
+      Nothing -> []
+  where
+    number :: Aeson.Object -> String -> Maybe Double
+    number obj key = do
+      value <- AesonKM.lookup (AesonKey.fromString key) obj >>= AesonTypes.parseMaybe Aeson.parseJSON
+      if isNaN value || isInfinite value then Nothing else Just value
+    metric :: Aeson.Object -> String -> String -> String -> Maybe String
+    metric obj key label unit = do
+      value <- number obj key
+      let previous = baseline >>= (\old -> number old key)
+          amount :: String
+          amount = if unit == "ms" then printf "%.3f ms" value else printf "%.0f B" value
+          change = case previous of
+            Just old | old /= 0 ->
+              let pct = (value - old) / abs old * 100 :: Double
+                  color = if pct > 0 then testColorRed else if pct < 0 then testColorGreen else testColorReset
+              in " (" ++ testColorApply useColor [color] (printf "%+.2f%%" pct) ++ ")"
+            Just 0 | value == 0 -> " (+0.00%)"
+            Just 0 -> " (from 0; % n/a)"
+            _ -> ""
+      return (printf "      %-20s %s%s" (label ++ ":") amount change)
 
 -- | Format a single test result line with alignment and timing.
 formatTestLineWith :: Bool -> (TestResult -> String) -> Double -> Int -> String -> TestResult -> String
