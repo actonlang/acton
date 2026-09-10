@@ -275,160 +275,158 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             _ -> putStrLn "Skipping test result cache (--no-cache); running all selected tests"
         when (not emitJson && showCached && not (null cachedResults)) $
           putStrLn ("Using cached results for " ++ show (length cachedResults) ++ " tests")
-        ui <- initTestProgressUI gopts nameWidth useColorOut
-        let totalTests = length specs
-        progressDoneRef <- newIORef 0
-        workers <- newIORef []
-        let (effectiveMinTime, effectiveMaxTime) = effectiveTestTiming mode topts
-            expectedDurationMs =
-              fromIntegral
-                (if effectiveMaxTime > 0
-                   then effectiveMaxTime
-                   else effectiveMinTime)
-        let progressStep = do
-              done <- atomicModifyIORef' progressDoneRef (\x -> let x' = x + 1 in (x', x'))
-              let pct =
-                    if totalTests <= 0
-                      then 100
-                      else min 100 ((done * 100) `div` totalTests)
-              testUiProgressPercent ui pct
-        testUiProgressPercent ui 0
-        eventChan <- newChan
-        let cachedMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- cachedResults ]
-            shouldShowCached res =
-              let ok = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
-              in showCached || not ok || trSnapshotUpdated res
-            startSpec spec running results = do
-              let key = TestKey (tsModule spec) (tsName spec)
-                  display = tsDisplay spec
-                  modDisplay = displayModName paths (tsModule spec)
-                  useColorLine = tpuUseColor ui
-              case M.lookup key cachedMap of
-                Just cachedRes -> do
-                  let line = formatTestFinalLineRenderer useColorLine (mode == TestModePerf) expectedDurationMs nameWidth display cachedRes
-                      details = detailLines cachedRes
-                  if shouldShowCached cachedRes
-                    then do
-                      ok <- testUiAppendFinal ui key modDisplay line
-                      if not ok
-                        then return Nothing
-                        else do
-                          inserted <- testUiInsertDetails ui key details
-                          unless inserted $ queuePendingDetails ui key details
-                          progressStep
-                          return (Just (running, cachedRes : results))
-                    else do
-                      progressStep
-                      return (Just (running, cachedRes : results))
-                Nothing -> do
-                  if running >= maxParallel
-                    then return Nothing
-                    else do
-                      let initRes = TestResult
-                            { trModule = tsModule spec
-                            , trName = tsName spec
-                            , trComplete = False
-                            , trSuccess = Nothing
-                            , trSkipped = False
-                            , trSkipReason = Nothing
-                            , trException = Nothing
-                            , trOutput = Nothing
-                            , trStdOut = Nothing
-                            , trStdErr = Nothing
-                            , trFlaky = False
-                            , trNumSkipped = 0
-                            , trNumFailures = 0
-                            , trNumErrors = 0
-                            , trNumIterations = 0
-                            , trTestDuration = 0
-                            , trRaw = Aeson.Null
-                            , trSnapshotUpdated = False
-                            , trCached = False
-                            }
-                          initLine = formatTestLiveLineRenderer useColorLine expectedDurationMs nameWidth display initRes
-                      started <- testUiStart ui key modDisplay initLine
-                      if not started
-                        then return Nothing
-                        else do
-                          callbacks <- testProgressCallbacks ui eventChan key display (mode == TestModePerf) expectedDurationMs detailLines
-                          mask $ \unmask -> do
-                            worker <- async $ unmask $ mask $ \restore -> do
-                              resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
-                                                     (tpuEnabled ui) callbacks))
-                                        :: IO (Either SomeException TestResult)
-                              case resE of
-                                Right res ->
-                                  writeChan eventChan (TestEventDone res)
-                                Left ex -> do
-                                  let res = initRes
-                                        { trComplete = True
-                                        , trException = Just ("Test runner exception: " ++ displayException ex)
-                                        , trNumErrors = 1
-                                        }
-                                  finishE <- try (restore (tpcOnDone callbacks res >> tpcOnFinal callbacks res))
-                                               :: IO (Either SomeException ())
-                                  writeChan eventChan (TestEventDone res)
-                                  case finishE of
-                                    Left finishEx | isJust (fromException finishEx :: Maybe SomeAsyncException) -> throwIO finishEx
-                                    _ -> return ()
-                                  when (isJust (fromException ex :: Maybe SomeAsyncException)) $
-                                    throwIO ex
-                            atomicModifyIORef' workers (\ws -> (worker : ws, ()))
-                          return (Just (running + 1, results))
-            startAvailable pending running results = do
-              case pending of
-                [] -> return ([], running, results)
-                (spec:rest) -> do
-                  mnext <- startSpec spec running results
-                  case mnext of
-                    Nothing -> return (pending, running, results)
-                    Just (running', results') -> startAvailable rest running' results'
-            loop pending running results = do
-              flushPendingDetails ui
-              (pending', running', results') <- startAvailable pending running results
-              if null pending' && running' == 0
-                then do
-                  flushPendingDetails ui
-                  return results'
-                else do
-                  evt <- readChan eventChan
-                  case evt of
-                    TestEventDone res -> do
-                      progressStep
-                      let pending'' =
-                            if testResultInterrupted res
-                              then []
-                              else pending'
-                      loop pending'' (running' - 1) (res : results')
-                    TestEventRoom -> loop pending' running' results'
-        results <- loop specs 0 [] `finally` (readIORef workers >>= mapConcurrently_ cancel)
-        timeEnd <- getTime Monotonic
-        writeSnapshotOutputs paths results
-        let resultsRun =
-              if C.testSnapshotUpdate topts
-                then filter (\r -> not (trCached r) || trSnapshotUpdated r) results
-                else filter (not . trCached) results
-        when (C.testRecord topts) $
-          writePerfData paths perfData resultsRun
-        let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
-            newCache = TestCache
-              { tcVersion = testCacheVersion
-              , tcContext = runContext
-              , tcTests = cacheEntries'
-              }
-        when useCache $
-          writeTestCache (testCachePath paths) newCache
-        if emitJson
-          then do
-            outputJsonReport paths mode perfData (timeEnd - timeStart) results
-            testUiProgressClear ui
-            return (testExitCode results)
-          else do
-            when (not (tpuEnabled ui)) $
-              printTestResultsOrdered paths (tpuUseColor ui) (mode == TestModePerf) showCached nameWidth detailLines specs results
-            _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
-            testUiProgressClear ui
-            return (testExitCode results)
+        withTestProgressUI gopts nameWidth useColorOut $ \ui -> do
+          let totalTests = length specs
+          progressDoneRef <- newIORef 0
+          workers <- newIORef []
+          let (effectiveMinTime, effectiveMaxTime) = effectiveTestTiming mode topts
+              expectedDurationMs =
+                fromIntegral
+                  (if effectiveMaxTime > 0
+                     then effectiveMaxTime
+                     else effectiveMinTime)
+          let progressStep = do
+                done <- atomicModifyIORef' progressDoneRef (\x -> let x' = x + 1 in (x', x'))
+                let pct =
+                      if totalTests <= 0
+                        then 100
+                        else min 100 ((done * 100) `div` totalTests)
+                testUiProgressPercent ui pct
+          testUiProgressPercent ui 0
+          eventChan <- newChan
+          let cachedMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- cachedResults ]
+              shouldShowCached res =
+                let ok = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
+                in showCached || not ok || trSnapshotUpdated res
+              startSpec spec running results = do
+                let key = TestKey (tsModule spec) (tsName spec)
+                    display = tsDisplay spec
+                    modDisplay = displayModName paths (tsModule spec)
+                    useColorLine = tpuUseColor ui
+                case M.lookup key cachedMap of
+                  Just cachedRes -> do
+                    let line = formatTestFinalLineRenderer useColorLine (mode == TestModePerf) expectedDurationMs nameWidth display cachedRes
+                        details = detailLines cachedRes
+                    if shouldShowCached cachedRes
+                      then do
+                        ok <- testUiAppendFinal ui key modDisplay line
+                        if not ok
+                          then return Nothing
+                          else do
+                            inserted <- testUiInsertDetails ui key details
+                            unless inserted $ queuePendingDetails ui key details
+                            progressStep
+                            return (Just (running, cachedRes : results))
+                      else do
+                        progressStep
+                        return (Just (running, cachedRes : results))
+                  Nothing -> do
+                    if running >= maxParallel
+                      then return Nothing
+                      else do
+                        let initRes = TestResult
+                              { trModule = tsModule spec
+                              , trName = tsName spec
+                              , trComplete = False
+                              , trSuccess = Nothing
+                              , trSkipped = False
+                              , trSkipReason = Nothing
+                              , trException = Nothing
+                              , trOutput = Nothing
+                              , trStdOut = Nothing
+                              , trStdErr = Nothing
+                              , trFlaky = False
+                              , trNumSkipped = 0
+                              , trNumFailures = 0
+                              , trNumErrors = 0
+                              , trNumIterations = 0
+                              , trTestDuration = 0
+                              , trRaw = Aeson.Null
+                              , trSnapshotUpdated = False
+                              , trCached = False
+                              }
+                            initLine = formatTestLiveLineRenderer useColorLine expectedDurationMs nameWidth display initRes
+                        started <- testUiStart ui key modDisplay initLine
+                        if not started
+                          then return Nothing
+                          else do
+                            callbacks <- testProgressCallbacks ui eventChan key display (mode == TestModePerf) expectedDurationMs detailLines
+                            mask $ \unmask -> do
+                              worker <- async $ unmask $ mask $ \restore -> do
+                                resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
+                                                       (tpuEnabled ui) callbacks))
+                                          :: IO (Either SomeException TestResult)
+                                case resE of
+                                  Right res ->
+                                    writeChan eventChan (TestEventDone res)
+                                  Left ex -> do
+                                    let res = initRes
+                                          { trComplete = True
+                                          , trException = Just ("Test runner exception: " ++ displayException ex)
+                                          , trNumErrors = 1
+                                          }
+                                    finishE <- try (restore (tpcOnDone callbacks res >> tpcOnFinal callbacks res))
+                                                 :: IO (Either SomeException ())
+                                    writeChan eventChan (TestEventDone res)
+                                    case finishE of
+                                      Left finishEx | isJust (fromException finishEx :: Maybe SomeAsyncException) -> throwIO finishEx
+                                      _ -> return ()
+                                    when (isJust (fromException ex :: Maybe SomeAsyncException)) $
+                                      throwIO ex
+                              atomicModifyIORef' workers (\ws -> (worker : ws, ()))
+                            return (Just (running + 1, results))
+              startAvailable pending running results = do
+                case pending of
+                  [] -> return ([], running, results)
+                  (spec:rest) -> do
+                    mnext <- startSpec spec running results
+                    case mnext of
+                      Nothing -> return (pending, running, results)
+                      Just (running', results') -> startAvailable rest running' results'
+              loop pending running results = do
+                flushPendingDetails ui
+                (pending', running', results') <- startAvailable pending running results
+                if null pending' && running' == 0
+                  then do
+                    flushPendingDetails ui
+                    return results'
+                  else do
+                    evt <- readChan eventChan
+                    case evt of
+                      TestEventDone res -> do
+                        progressStep
+                        let pending'' =
+                              if testResultInterrupted res
+                                then []
+                                else pending'
+                        loop pending'' (running' - 1) (res : results')
+                      TestEventRoom -> loop pending' running' results'
+          results <- loop specs 0 [] `finally` (readIORef workers >>= mapConcurrently_ cancel)
+          timeEnd <- getTime Monotonic
+          writeSnapshotOutputs paths results
+          let resultsRun =
+                if C.testSnapshotUpdate topts
+                  then filter (\r -> not (trCached r) || trSnapshotUpdated r) results
+                  else filter (not . trCached) results
+          when (C.testRecord topts) $
+            writePerfData paths perfData resultsRun
+          let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
+              newCache = TestCache
+                { tcVersion = testCacheVersion
+                , tcContext = runContext
+                , tcTests = cacheEntries'
+                }
+          when useCache $
+            writeTestCache (testCachePath paths) newCache
+          if emitJson
+            then do
+              outputJsonReport paths mode perfData (timeEnd - timeStart) results
+              return (testExitCode results)
+            else do
+              when (not (tpuEnabled ui)) $
+                printTestResultsOrdered paths (tpuUseColor ui) (mode == TestModePerf) showCached nameWidth detailLines specs results
+              _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
+              return (testExitCode results)
   where
     mkRunContext opts' topts' mode' = TestRunContext
       { trcCompilerVersion = getVer
