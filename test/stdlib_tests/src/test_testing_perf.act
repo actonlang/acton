@@ -1,0 +1,156 @@
+import math
+import testing
+
+
+def measurements(samples: list[float], gc: float=0.0) -> testing.TestInfo:
+    info = testing.TestInfo(testing.Test("sample", "", "perf"))
+    for sample in samples:
+        info.update(True, testing.TestResult(True, None, None, sample, 0, 0, gc_duration=gc))
+    return info
+
+
+def number(stats: dict[str, value], key: str) -> float:
+    v = stats[key]
+    if isinstance(v, float):
+        return v
+    if isinstance(v, int):
+        return float(v)
+    raise ValueError("Expected a numeric statistic")
+
+
+def _test_empty_and_single_sample(t: testing.SyncT):
+    assert len(measurements([]).performance()) == 0
+    info = measurements([4.0], gc=0.25)
+    stats = info.performance()
+    assert number(stats, "median_duration") == 4.0
+    assert number(stats, "q1_duration") == 4.0
+    assert number(stats, "q3_duration") == 4.0
+    assert number(stats, "outlier_count") == 0.0
+    assert "stdev_duration" not in stats
+    assert number(stats, "avg_gc_duration") == 0.25
+    assert number(stats, "avg_wall_duration") == 4.25
+    for stem, expected in [("duration", 4.0), ("wall_duration", 4.25), ("gc_duration", 0.25),
+                           ("mem_usage_delta", 0.0), ("non_gc_mem_usage_delta", 0.0)]:
+        for stat in ["min", "max", "median", "q1", "q3"]:
+            assert number(stats, stat + "_" + stem) == expected
+        assert "stdev_" + stem not in stats
+        outlier_key = "outlier_count" if stem == "duration" else "outlier_count_" + stem
+        assert number(stats, outlier_key) == 0.0
+
+
+def _test_odd_samples(t: testing.SyncT):
+    stats = measurements([5.0, 2.0, 4.0, 1.0, 3.0]).performance()
+    assert number(stats, "median_duration") == 3.0
+    assert number(stats, "q1_duration") == 2.0
+    assert number(stats, "q3_duration") == 4.0
+    assert abs(number(stats, "stdev_duration") - math.sqrt(2.5)) < 0.000000001
+
+
+def _test_even_samples(t: testing.SyncT):
+    stats = measurements([4.0, 2.0, 1.0, 3.0]).performance()
+    assert number(stats, "median_duration") == 2.5
+    assert number(stats, "q1_duration") == 1.75
+    assert number(stats, "q3_duration") == 3.25
+    assert abs(number(stats, "stdev_duration") - math.sqrt(5.0 / 3.0)) < 0.000000001
+
+
+def _test_outliers_are_retained(t: testing.SyncT):
+    info = measurements([1.0, 1.0, 1.0, 1.0, 100.0])
+    stats = info.performance()
+    assert number(stats, "outlier_count") == 1.0
+    assert number(stats, "median_duration") == 1.0
+    assert info.avg_duration == 20.8
+    assert abs(number(stats, "stdev_duration") - math.sqrt(1960.2)) < 0.000000001
+    assert len(info.results) == 5
+
+
+def _test_wall_time_uses_paired_samples(t: testing.SyncT):
+    info = testing.TestInfo(testing.Test("sample", "", "perf"))
+    info.update(True, testing.TestResult(True, None, None, 1.0, 0, 0, gc_duration=3.0))
+    info.update(True, testing.TestResult(True, None, None, 3.0, 0, 0, gc_duration=1.0))
+    stats = info.performance()
+    assert number(stats, "avg_wall_duration") == 4.0
+    assert number(stats, "min_wall_duration") == 4.0
+    assert number(stats, "max_wall_duration") == 4.0
+    assert number(stats, "stdev_wall_duration") == 0.0
+    assert number(stats, "avg_gc_duration") == 2.0
+    assert number(stats, "min_gc_duration") == 1.0
+    assert number(stats, "max_gc_duration") == 3.0
+    assert abs(number(stats, "stdev_gc_duration") - math.sqrt(2.0)) < 0.000000001
+
+
+def _test_memory_statistics_preserve_fractional_and_signed_values(t: testing.SyncT):
+    info = testing.TestInfo(testing.Test("sample", "", "perf"))
+    for allocated, non_gc in [(0, -1), (1, 0), (1, 0)]:
+        info.update(True, testing.TestResult(True, None, None, 1.0, allocated, non_gc))
+    stats = info.performance()
+    assert abs(info.mem_usage_delta_avg - 2.0 / 3.0) < 0.000000001
+    assert abs(info.non_gc_mem_usage_delta_avg + 1.0 / 3.0) < 0.000000001
+    assert abs(number(stats, "mem_usage_delta_avg") - 2.0 / 3.0) < 0.000000001
+    assert abs(number(stats, "non_gc_mem_usage_delta_avg") + 1.0 / 3.0) < 0.000000001
+    for stem in ["mem_usage_delta", "non_gc_mem_usage_delta"]:
+        assert abs(number(stats, "stdev_" + stem) - math.sqrt(1.0 / 3.0)) < 0.000000001
+        assert number(stats, "outlier_count_" + stem) == 0.0
+    assert number(stats, "min_mem_usage_delta") == 0.0
+    assert number(stats, "max_mem_usage_delta") == 1.0
+    assert number(stats, "median_mem_usage_delta") == 1.0
+    assert number(stats, "q1_mem_usage_delta") == 0.5
+    assert number(stats, "q3_mem_usage_delta") == 1.0
+    assert number(stats, "min_non_gc_mem_usage_delta") == -1.0
+    assert number(stats, "max_non_gc_mem_usage_delta") == 0.0
+    assert number(stats, "median_non_gc_mem_usage_delta") == 0.0
+    assert number(stats, "q1_non_gc_mem_usage_delta") == -0.5
+    assert number(stats, "q3_non_gc_mem_usage_delta") == 0.0
+    for data in [info.to_json(), info.to_json(include_perf=True)]:
+        restored = testing.TestInfo.from_json(data)
+        assert abs(restored.mem_usage_delta_avg - 2.0 / 3.0) < 0.000000001
+        assert abs(restored.non_gc_mem_usage_delta_avg + 1.0 / 3.0) < 0.000000001
+    legacy = info.to_json()
+    legacy["mem_usage_delta_avg"] = 100
+    legacy["non_gc_mem_usage_delta_avg"] = -10
+    restored = testing.TestInfo.from_json(legacy)
+    assert restored.mem_usage_delta_avg == 100.0
+    assert restored.non_gc_mem_usage_delta_avg == -10.0
+
+
+def _test_sparse_gc_and_memory_outliers_are_retained(t: testing.SyncT):
+    info = testing.TestInfo(testing.Test("sample", "", "perf"))
+    for gc in [0.0, 0.0, 0.0, 0.0, 100.0]:
+        info.update(True, testing.TestResult(True, None, None, 1.0, int(gc), -int(gc), gc_duration=gc))
+    stats = info.performance()
+    assert number(stats, "outlier_count") == 0.0
+    for stem in ["wall_duration", "gc_duration", "mem_usage_delta", "non_gc_mem_usage_delta"]:
+        assert number(stats, "outlier_count_" + stem) == 1.0
+        assert abs(number(stats, "stdev_" + stem) - math.sqrt(2000.0)) < 0.000000001
+    assert number(stats, "avg_wall_duration") == 21.0
+    assert number(stats, "avg_gc_duration") == 20.0
+    assert number(stats, "q1_gc_duration") == 0.0
+    assert number(stats, "q3_gc_duration") == 0.0
+    assert number(stats, "mem_usage_delta_avg") == 20.0
+    assert number(stats, "non_gc_mem_usage_delta_avg") == -20.0
+    assert len(info.results) == 5
+
+
+def _test_summary_serialization(t: testing.SyncT):
+    info = measurements([1.0, 3.0], gc=0.5)
+    live = info.to_json()
+    final = info.to_json(include_perf=True)
+    assert "median_duration" not in live
+    assert "median_duration" in final
+    assert "stdev_duration" in final
+    assert "avg_wall_duration" in final
+    for stem in ["wall_duration", "gc_duration", "mem_usage_delta", "non_gc_mem_usage_delta"]:
+        for stat in ["min", "max", "median", "q1", "q3", "stdev", "outlier_count"]:
+            assert stat + "_" + stem not in live
+            assert stat + "_" + stem in final
+    results = final["results"]
+    if isinstance(results, list):
+        assert len(results) == 0
+    else:
+        raise AssertionError("Expected a list of results")
+    sample = info.results[0]
+    restored = testing.TestResult.from_json(sample.to_json())
+    assert restored.gc_duration == 0.5
+    old = sample.to_json()
+    del old["gc_duration"]
+    assert testing.TestResult.from_json(old).gc_duration == 0.0

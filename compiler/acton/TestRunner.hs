@@ -13,6 +13,7 @@ import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import qualified FileUtil
 import TestFormat
+import TestPerf
 import TestUI
 import Control.Concurrent.Async
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
@@ -218,7 +219,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         if emitJson
           then do
             timeEnd <- getTime Monotonic
-            outputJsonReport paths (timeEnd - timeStart) []
+            outputJsonReport paths mode M.empty (timeEnd - timeStart) []
             return 0
           else do
             putStrLn "Nothing to test"
@@ -231,7 +232,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             useCache = not (C.testNoCache topts) && mode == TestModeRun
         perfData <- if mode == TestModePerf then readPerfData paths else return M.empty
         let detailLines res =
-              formatTestDetailLines useColorOut (C.testShowLog topts) res ++
+              map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
               if mode == TestModePerf
                 then formatTestPerfLines useColorOut (lookupPerfData perfData res) res
                 else []
@@ -304,7 +305,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   useColorLine = tpuUseColor ui
               case M.lookup key cachedMap of
                 Just cachedRes -> do
-                  let line = formatTestFinalLineRenderer useColorLine expectedDurationMs nameWidth display cachedRes
+                  let line = formatTestFinalLineRenderer useColorLine (mode == TestModePerf) expectedDurationMs nameWidth display cachedRes
                       details = detailLines cachedRes
                   if shouldShowCached cachedRes
                     then do
@@ -349,7 +350,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                       if not started
                         then return Nothing
                         else do
-                          callbacks <- testProgressCallbacks ui eventChan key display expectedDurationMs detailLines
+                          callbacks <- testProgressCallbacks ui eventChan key display (mode == TestModePerf) expectedDurationMs detailLines
                           mask $ \unmask -> do
                             worker <- async $ unmask $ mask $ \restore -> do
                               resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
@@ -419,12 +420,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           writeTestCache (testCachePath paths) newCache
         if emitJson
           then do
-            outputJsonReport paths (timeEnd - timeStart) results
+            outputJsonReport paths mode perfData (timeEnd - timeStart) results
             testUiProgressClear ui
             return (testExitCode results)
           else do
             when (not (tpuEnabled ui)) $
-              printTestResultsOrdered paths (tpuUseColor ui) showCached nameWidth detailLines specs results
+              printTestResultsOrdered paths (tpuUseColor ui) (mode == TestModePerf) showCached nameWidth detailLines specs results
             _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
             testUiProgressClear ui
             return (testExitCode results)
@@ -443,8 +444,8 @@ testExitCode results =
         errors = length [ r | r <- results, trSuccess r == Nothing ]
     in if errors > 0 then 2 else if failures > 0 then 1 else 0
 
-outputJsonReport :: Paths -> TimeSpec -> [TestResult] -> IO ()
-outputJsonReport paths elapsed results = do
+outputJsonReport :: Paths -> TestMode -> PerfData -> TimeSpec -> [TestResult] -> IO ()
+outputJsonReport paths mode baseline elapsed results = do
     let total = length results
         failures = length [ r | r <- results, trSuccess r == Just False ]
         errors = length [ r | r <- results, trSuccess r == Nothing ]
@@ -472,7 +473,7 @@ outputJsonReport paths elapsed results = do
               includeOutput = not (isOk res)
               name = displayTestName (trName res)
               combinedOutput = if includeOutput then formatCombinedOutput (trStdOut res) (trStdErr res) else Nothing
-          in Aeson.object
+          in Aeson.object $
                [ AesonKey.fromString "module" Aeson..= displayModName paths (trModule res)
                , AesonKey.fromString "name" Aeson..= name
                , AesonKey.fromString "raw_name" Aeson..= trName res
@@ -485,6 +486,9 @@ outputJsonReport paths elapsed results = do
                , AesonKey.fromString "skip_reason" Aeson..= trSkipReason res
                , AesonKey.fromString "exception" Aeson..= trException res
                , AesonKey.fromString "output" Aeson..= combinedOutput
+               ] ++
+               [ AesonKey.fromString "performance" Aeson..= perfJson (lookupPerfData baseline res) res
+               | mode == TestModePerf
                ]
         report = Aeson.object
           [ AesonKey.fromString "summary" Aeson..= Aeson.object
@@ -782,13 +786,13 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
         _ ->
           Aeson.object [AesonKey.fromString "interrupted" Aeson..= True]
 
-testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> Double -> (TestResult -> [String]) -> IO TestProgressCallbacks
-testProgressCallbacks ui eventChan key display expectedDurationMs detailLines = do
+testProgressCallbacks :: TestProgressUI -> Chan TestEvent -> TestKey -> String -> Bool -> Double -> (TestResult -> [TestLine]) -> IO TestProgressCallbacks
+testProgressCallbacks ui eventChan key display perfMode expectedDurationMs detailLines = do
     workerKeysRef <- newIORef M.empty
     let nameWidth = tpuNameWidth ui
         useColorOut = tpuUseColor ui
         liveLine res = formatTestLiveLineRenderer useColorOut expectedDurationMs nameWidth display res
-        finalLine res = formatTestFinalLineRenderer useColorOut expectedDurationMs nameWidth display res
+        finalLine res = formatTestFinalLineRenderer useColorOut perfMode expectedDurationMs nameWidth display res
         workerLine done durationMs laneSpec row cols =
           let role = if swrSync row then "sync" else "drift"
               phase =
@@ -1210,13 +1214,13 @@ printTestSummary useColor elapsed showCached results = do
             then return 1
             else return 0
 
-printTestResultsOrdered :: Paths -> Bool -> Bool -> Int -> (TestResult -> [String]) -> [TestSpec] -> [TestResult] -> IO ()
-printTestResultsOrdered paths useColor showCached nameWidth detailLines specs results = do
+printTestResultsOrdered :: Paths -> Bool -> Bool -> Bool -> Int -> (TestResult -> [TestLine]) -> [TestSpec] -> [TestResult] -> IO ()
+printTestResultsOrdered paths useColor perfMode showCached nameWidth detailLines specs results = do
     let resMap = M.fromList [ (TestKey (trModule res) (trName res), res) | res <- results ]
         isOk res = trSuccess res == Just True && trException res == Nothing && not (trSkipped res)
         shouldShow res = not (trCached res) || showCached || not (isOk res) || trSnapshotUpdated res
         formatLine spec res =
-          formatTestLineWith useColor formatTestStatus (trTestDuration res) nameWidth (tsDisplay spec) res
+          formatTestFinalLineRenderer useColor perfMode (trTestDuration res) nameWidth (tsDisplay spec) res maxBound
     let go _ _ [] = return ()
         go printedMods printedAny (spec:rest) =
           case M.lookup (TestKey (tsModule spec) (tsName spec)) resMap of
@@ -1234,7 +1238,7 @@ printTestResultsOrdered paths useColor showCached nameWidth detailLines specs re
                         putStrLn (moduleHeaderLine (displayModName paths modName))
                         return (Set.insert modName printedMods)
                   putStrLn (formatLine spec res)
-                  mapM_ putStrLn (detailLines res)
+                  mapM_ (putStrLn . ($ maxBound)) (detailLines res)
                   mapM_ putStrLn (formatStressWorkerFinalLines useColor res)
                   go printedMods' True rest
     go Set.empty False specs

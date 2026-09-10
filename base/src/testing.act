@@ -4,6 +4,7 @@ import diff
 import file
 import json
 import logging
+import math
 import term
 import time
 
@@ -590,6 +591,7 @@ class TestResult(object):
     exception: ?str
     output: ?str
     duration: float
+    gc_duration: float
     mem_usage_delta: int
     non_gc_mem_usage_delta: int
 
@@ -601,13 +603,15 @@ class TestResult(object):
                  mem_usage_delta: int,
                  non_gc_mem_usage_delta: int,
                  skipped: bool=False,
-                 skip_reason: ?str=None):
+                 skip_reason: ?str=None,
+                 gc_duration: float=0.0):
         self.success = success
         self.skipped = skipped
         self.skip_reason = skip_reason
         self.exception = exception
         self.output = output
         self.duration = duration
+        self.gc_duration = gc_duration
         self.mem_usage_delta = mem_usage_delta
         self.non_gc_mem_usage_delta = non_gc_mem_usage_delta
 
@@ -619,34 +623,41 @@ class TestResult(object):
             "exception": self.exception,
             "output": self.output,
             "duration": self.duration,
+            "gc_duration": self.gc_duration,
             "mem_usage_delta": self.mem_usage_delta,
             "non_gc_mem_usage_delta": self.non_gc_mem_usage_delta,
         }
 
     @staticmethod
-    def from_json(data: dict[str, str]) -> TestResult:
+    def from_json(data: dict[str, ?value]) -> TestResult:
+        def optional_string(v: ?value) -> ?str:
+            if v is None:
+                return None
+            if isinstance(v, str):
+                return v
+            raise ValueError("Invalid TestResult JSON")
+
         success = data["success"]
         skipped = False
         if "skipped" in data:
             skipped = data["skipped"]
         skip_reason = None
         if "skip_reason" in data:
-            skip_reason = data["skip_reason"]
-        exception = data["exception"]
-        output = data["output"]
+            skip_reason = optional_string(data["skip_reason"])
+        exception = optional_string(data["exception"])
+        output = optional_string(data["output"])
         duration = data["duration"]
+        gc_duration = data["gc_duration"] if "gc_duration" in data else 0.0
         mem_usage_delta = data["mem_usage_delta"]
         non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
         if (isinstance(success, bool)
             and isinstance(skipped, bool)
-            and (skip_reason is None or isinstance(skip_reason, str))
-            and (exception is None or isinstance(exception, str))
-            and (output is None or isinstance(output, str))
             and isinstance(duration, float)
+            and isinstance(gc_duration, float)
             and isinstance(mem_usage_delta, int)
             and isinstance(non_gc_mem_usage_delta, int)
             ):
-            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason)
+            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -672,8 +683,8 @@ class TestInfo(object):
     num_skipped: int
     num_failures: int
     num_errors: int
-    mem_usage_delta_avg: int
-    non_gc_mem_usage_delta_avg: int
+    mem_usage_delta_avg: float
+    non_gc_mem_usage_delta_avg: float
     non_gc_mem_inc_count: int
     results: list[TestResult]
 
@@ -697,8 +708,8 @@ class TestInfo(object):
                  num_skipped: int=0,
                  num_failures: int=0,
                  num_errors: int=0,
-                 mem_usage_delta_avg: int=0,
-                 non_gc_mem_usage_delta_avg: int=0,
+                 mem_usage_delta_avg: float=0.0,
+                 non_gc_mem_usage_delta_avg: float=0.0,
                  non_gc_mem_inc_count: int=0,
                  results: list[TestResult]=[]):
         self.definition = definition
@@ -764,8 +775,8 @@ class TestInfo(object):
             self.max_duration = result.duration
             self.total_duration = result.duration
             self.avg_duration = result.duration
-            self.mem_usage_delta_avg = result.mem_usage_delta
-            self.non_gc_mem_usage_delta_avg = result.non_gc_mem_usage_delta
+            self.mem_usage_delta_avg = float(result.mem_usage_delta)
+            self.non_gc_mem_usage_delta_avg = float(result.non_gc_mem_usage_delta)
             self.non_gc_mem_inc_count = 1 if result.non_gc_mem_usage_delta > 0 else 0
         else:
             if result.duration < self.min_duration or self.min_duration < 0.0:
@@ -774,8 +785,8 @@ class TestInfo(object):
                 self.max_duration = result.duration
             self.total_duration += result.duration
             self.avg_duration = self.total_duration / float(self.num_iterations)
-            self.mem_usage_delta_avg = ((self.mem_usage_delta_avg * prev_iterations) + result.mem_usage_delta) // self.num_iterations
-            self.non_gc_mem_usage_delta_avg = ((self.non_gc_mem_usage_delta_avg * prev_iterations) + result.non_gc_mem_usage_delta) // self.num_iterations
+            self.mem_usage_delta_avg = (self.mem_usage_delta_avg * float(prev_iterations) + float(result.mem_usage_delta)) / float(self.num_iterations)
+            self.non_gc_mem_usage_delta_avg = (self.non_gc_mem_usage_delta_avg * float(prev_iterations) + float(result.non_gc_mem_usage_delta)) / float(self.num_iterations)
             if result.non_gc_mem_usage_delta > 0:
                 self.non_gc_mem_inc_count += 1
 
@@ -822,13 +833,55 @@ class TestInfo(object):
             fmt_diff(self.non_gc_mem_inc_count, old.non_gc_mem_inc_count if old is not None else None)
         )
 
-    def to_json(self, include_results: bool=False):
+    def performance(self) -> dict[str, value]:
+        """Summarize all samples without discarding outliers.
+
+        Quartiles interpolate at (n - 1) * p. Standard deviation uses n - 1.
+        Call after measurement; sorting allocates and takes time.
+        """
+        n = len(self.results)
+        if n == 0:
+            return {}
+        def summarize(stem: str, mean_key: str, samples: list[float]) -> dict[str, value]:
+            ordered = sorted(samples)
+            def quantile(p: float) -> float:
+                pos = float(n - 1) * p
+                lo = int(pos)
+                hi = min([lo + 1, n - 1])
+                return ordered[lo] + (pos - float(lo)) * (ordered[hi] - ordered[lo])
+            mean = sum(samples) / float(n)
+            q1 = quantile(0.25)
+            q3 = quantile(0.75)
+            spread = q3 - q1
+            outliers = len([v for v in samples if v < q1 - 1.5 * spread or v > q3 + 1.5 * spread])
+            outlier_key = "outlier_count" if stem == "duration" else "outlier_count_" + stem
+            stats: dict[str, value] = {
+                mean_key: mean,
+                "min_" + stem: ordered[0],
+                "max_" + stem: ordered[-1],
+                "median_" + stem: quantile(0.5),
+                "q1_" + stem: q1,
+                "q3_" + stem: q3,
+                outlier_key: outliers,
+            }
+            if n > 1:
+                variance = sum([(v - mean) * (v - mean) for v in samples]) / float(n - 1)
+                stats["stdev_" + stem] = math.sqrt(variance)
+            return stats
+        stats: dict[str, value] = summarize("duration", "avg_duration", [r.duration for r in self.results])
+        stats.update(summarize("wall_duration", "avg_wall_duration", [r.duration + r.gc_duration for r in self.results]).items())
+        stats.update(summarize("gc_duration", "avg_gc_duration", [r.gc_duration for r in self.results]).items())
+        stats.update(summarize("mem_usage_delta", "mem_usage_delta_avg", [float(r.mem_usage_delta) for r in self.results]).items())
+        stats.update(summarize("non_gc_mem_usage_delta", "non_gc_mem_usage_delta_avg", [float(r.non_gc_mem_usage_delta) for r in self.results]).items())
+        return stats
+
+    def to_json(self, include_results: bool=False, include_perf: bool=False):
         test_results = []
         if include_results:
             for r in self.results:
                 test_results.append(r.to_json())
 
-        return {
+        data: dict[str, ?value] = {
             "definition": self.definition.to_json(),
             "complete": self.complete,
             "success": self.success,
@@ -853,9 +906,20 @@ class TestInfo(object):
             "non_gc_mem_inc_count": self.non_gc_mem_inc_count,
             "results": test_results
         }
+        if include_perf:
+            for key, val in self.performance().items():
+                data[key] = val
+        return data
 
     @staticmethod
     def from_json(json_data: dict[str, ?value]) -> TestInfo:
+        def take_mean(key: str) -> float:
+            v = json_data[key]
+            if isinstance(v, float):
+                return v
+            if isinstance(v, int):
+                return float(v)
+            raise ValueError("Invalid TestInfo mean: " + key)
         def take_definition(jd: dict[str, ?value]) -> Test:
             if "definition" in jd:
                 test_definition = jd["definition"]
@@ -908,8 +972,8 @@ class TestInfo(object):
             num_skipped = json_data["num_skipped"]
         num_failures = json_data["num_failures"]
         num_errors = json_data["num_errors"]
-        mem_usage_delta_avg = json_data["mem_usage_delta_avg"]
-        non_gc_mem_usage_delta_avg = json_data["non_gc_mem_usage_delta_avg"]
+        mem_usage_delta_avg = take_mean("mem_usage_delta_avg")
+        non_gc_mem_usage_delta_avg = take_mean("non_gc_mem_usage_delta_avg")
         non_gc_mem_inc_count = json_data["non_gc_mem_inc_count"]
         results: list[TestResult] = []
         # We don't support results in the JSON, since we don't want it for
@@ -926,8 +990,6 @@ class TestInfo(object):
             and isinstance(num_skipped, int)
             and isinstance(num_failures, int)
             and isinstance(num_errors, int)
-            and isinstance(mem_usage_delta_avg, int)
-            and isinstance(non_gc_mem_usage_delta_avg, int)
             and isinstance(non_gc_mem_inc_count, int)
             ):
             return TestInfo(definition,
@@ -1210,13 +1272,18 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
 
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur), test_dur*1000.0)
             if config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers:
                 _maybe_refine_stress_phase(test_info.num_iterations)
         iteration = completed_iterations
         if last_report.elapsed().to_float() > 0.05 or complete:
             if test_info is not None and config.output_enabled:
-                print("\n" + json.encode({"test_info": test_info.to_json()}), err=True)
+                # Capture the process peak before allocating the final summary.
+                peak_rss = acton.rts.get_peak_rss(syscap) if config.perf_mode and complete else None
+                payload = test_info.to_json(include_perf=config.perf_mode and complete)
+                if peak_rss is not None:
+                    payload["peak_rss"] = int(peak_rss)
+                print("\n" + json.encode({"test_info": payload}), err=True)
             last_report.reset()
         if config.stress_mode and (iteration == 1 or iteration % 32 == 0 or progress_report_sw.elapsed().to_float() > 0.08 or complete):
             report_progress(executor_id,
@@ -1488,8 +1555,8 @@ class ProjectTestResults(object):
                 if self.perf_mode and perf_mem:
                     indent = " " * 10
                     diffs = tinfo.diff(last_tinfo)
-                    print(f"{indent}Memory usage     : {tinfo.mem_usage_delta_avg // 1024:6d}KB {diffs.mem_usage_delta_avg}")
-                    print(f"{indent}non-GC usage     : {tinfo.non_gc_mem_usage_delta_avg // 1024:6d}KB {diffs.non_gc_mem_usage_delta_avg}")
+                    print(f"{indent}Memory usage     : {int(tinfo.mem_usage_delta_avg) // 1024:6d}KB {diffs.mem_usage_delta_avg}")
+                    print(f"{indent}non-GC usage     : {int(tinfo.non_gc_mem_usage_delta_avg) // 1024:6d}KB {diffs.non_gc_mem_usage_delta_avg}")
                     print(indent + "non-GC usage > 0 : %d%% (%d out of %d)" % ((tinfo.non_gc_mem_inc_count * 100 // tinfo.num_iterations) if tinfo.num_iterations > 0 else 0,
                                                                         tinfo.non_gc_mem_inc_count,
                                                                         tinfo.num_iterations))

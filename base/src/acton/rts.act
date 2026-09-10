@@ -65,6 +65,13 @@ def get_rss(cap: SysCap) -> u64:
     """
     NotImplemented
 
+def get_peak_rss(cap: SysCap) -> ?u64:
+    """Get the process lifetime peak resident set size in bytes.
+
+    Includes startup and all threads. Returns None if unavailable.
+    """
+    NotImplemented
+
 # sleep is sort of dangerous - it will actually put the RTS thread executing the
 # actor calling this function to sleep. This could be seen as ultrabad, like we
 # would want to just pause execution of one actor and let the RTS thread process

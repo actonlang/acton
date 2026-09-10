@@ -16,6 +16,7 @@ module TerminalSize
 
 import Control.Exception (SomeException, try)
 import Control.Monad (when)
+import Data.Char.WCWidth (wcwidth)
 import Data.IORef
 import Data.List (isInfixOf)
 import Foreign
@@ -127,7 +128,7 @@ termVisibleLength = go 0
   where
     go acc [] = acc
     go acc ('\ESC':'[':xs) = go acc (dropAnsi xs)
-    go acc (_:xs) = go (acc + 1) xs
+    go acc (x:xs) = go (acc + max 0 (wcwidth x)) xs
 
 termFitAnsiRight :: Int -> String -> String
 termFitAnsiRight width s
@@ -138,12 +139,13 @@ termFitAnsiRight width s
       in if "\ESC[" `isInfixOf` trimmed then trimmed ++ "\ESC[0m" else trimmed
   where
     go _ [] = []
-    go n _
-      | n <= 0 = []
     go n ('\ESC':'[':xs) =
       let (esc, rest) = spanAnsi xs
       in '\ESC' : '[' : esc ++ go n rest
-    go n (x:xs) = x : go (n - 1) xs
+    go n (x:xs)
+      | cells > n = []
+      | otherwise = x : go (n - cells) xs
+      where cells = max 0 (wcwidth x)
 
 termFitPlainRight :: Int -> String -> String
 termFitPlainRight width s

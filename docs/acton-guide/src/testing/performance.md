@@ -29,16 +29,42 @@ least five minutes for a slow or hung performance test, so a long iteration can
 finish even when the sampling target is shorter. Longer configured run limits
 extend the watchdog; `--max-time 0` disables it.
 
+Each benchmark has a table with `mean ± σ`, `min … max`, outliers and an optional
+baseline delta. Time and memory values use compact units such as µs, ms, KB and
+MB; memory prefixes are decimal (1 KB = 1000 bytes). Numeric and unit fields have
+fixed widths, so columns stay aligned across benchmarks. The default report is
+116 columns wide. Smaller terminals use compact layouts, omitting outliers,
+then the range, then the standard deviation to preserve the mean and delta.
+A dash means that statistic was not collected.
+
+Each row summarizes its own per-iteration samples. Wall time combines the time
+excluding GC and the GC time from the same iteration before calculating its
+distribution. Memory averages and quartiles can contain fractions of a byte.
+
 The result includes:
 
-- **Min, Mean, Max:** minimum, average and maximum wall time per test iteration,
-  with measured garbage collection time subtracted. These include waiting within
-  asynchronous tests.
-- **Allocated / run:** average bytes reported by the GC allocation counter
+- **Time excl. GC:** wall time per test iteration with measured full
+  garbage collection time subtracted. These include waiting within asynchronous
+  tests. The row shows the mean and range; the median appears below the table.
+- **σ:** sample standard deviation of the row's measurements. Requires at least
+  two iterations; a constant measurement has zero deviation.
+- **Wall time, GC time:** unadjusted wall time and measured full GC
+  time within an iteration. The GC counter has millisecond resolution. These
+  exclude the forced collections between iterations.
+- **Allocated:** average bytes reported by the GC allocation counter
   during an iteration. This measures allocation volume, not peak memory usage.
-- **Non-GC change / run:** estimated average change in resident memory outside
+- **Non-GC change:** estimated average change per iteration in resident memory outside
   the GC heap. This subtracts GC memory usage from RSS before and after the
   iteration, with collections around the test. It is noisy and can be negative.
+- **Process peak RSS:** peak resident memory for the test process, below the table.
+  This includes startup, the runtime, all threads, the test harness and all
+  iterations. It is recorded before computing the final statistics and is
+  omitted on platforms where it is unavailable.
+- **Outliers:** iterations outside the range from Q1 minus 1.5 times the
+  interquartile range to Q3 plus 1.5 times that range. Quartiles use linear
+  interpolation between sorted samples. Outliers remain in all statistics;
+  they are counted separately for each row. When most GC samples are zero,
+  nonzero collections can all count as outliers.
 - **Runs, total time, runs/second:** elapsed time and throughput for the whole
   test loop, including harness and collection overhead. This differs from the
   per-iteration times above.
@@ -46,6 +72,18 @@ The result includes:
 Very short tests are sensitive to measurement overhead and scheduling noise.
 Prefer workloads lasting at least a few milliseconds and repeat measurements
 before drawing conclusions from small percentage changes.
+
+`--json` includes a `performance` object for each successful test. Its
+`measurements` contain the displayed quantities, iteration count, median and
+quartiles for every row. For example, `stdev_wall_duration`,
+`q1_mem_usage_delta` and `outlier_count_gc_duration` describe wall time spread,
+the first allocation quartile and GC outliers. The time excluding GC retains
+its original `outlier_count` key. Durations are in milliseconds and memory
+quantities are in bytes. `baseline` contains the available reference quantities,
+or `null` when no baseline matches. `mean_difference_ci95_ms` contains the
+comparison interval's `lower` and `upper` bounds for time excluding GC, or `null`
+when the necessary statistics are unavailable. Failed or skipped tests have
+`performance: null`.
 
 See [Performance comparisons](perf_record.md) to record a baseline and compare
 later runs, or [Stress testing](stress.md) for concurrency-focused tests.

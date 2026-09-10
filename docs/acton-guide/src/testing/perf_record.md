@@ -10,24 +10,49 @@ acton test perf --release --record
 acton test perf --release
 ```
 
-Each measured test shows its minimum, mean and maximum iteration time, average
-allocated bytes, and estimated non-GC memory change. If the baseline contains a
-successful measurement of that test, each available metric also shows its
-percentage change. Positive values mean more time or memory; negative values mean
+Each measured test shows timing statistics, allocation volume, estimated non-GC
+memory change and process peak RSS. If the baseline contains a successful
+measurement of that test, the delta column shows each row's mean percentage
+change. The median and peak RSS comparisons appear below the table.
+Positive values mean more time or memory; negative values mean
 less. A change from zero to a nonzero value has no defined percentage and is
-shown as `from 0; % n/a`.
+shown as `from 0`.
 
 For example:
 
 ```text
 Tests - module sample:
-   sample:          OK             :    3 runs in 9.542ms @  314.4/s
-      Min:                 0.107 ms (+94.55%)
-      Mean:                0.126 ms (+40.00%)
-      Max:                 0.158 ms (+6.76%)
-      Allocated / run:     30101 B (+3.83%)
-      Non-GC change / run: 61440 B (-11.76%)
+Benchmark (3 runs): sample
+  measurement                 mean ±            σ             min …          max          outliers             delta
+  time excl. GC              126µs ±       27.9µs           107µs …        158µs            0 (0%)            +40.0%
+  wall time                  126µs ±       27.9µs           107µs …        158µs            0 (0%)                 —
+  GC time                   0.00ms ±       0.00ms          0.00ms …       0.00ms            0 (0%)                 —
+  allocated                 30.1KB ±       64.0B           30.0KB …       30.1KB            0 (0%)             +3.8%
+  non-GC change             61.4KB ±       4.10KB          57.3KB …       65.5KB            0 (0%)            -11.8%
+  median: 113µs
+  process peak RSS: 12.4MB
+  total: 9.54ms (314.4 runs/s)
 ```
+
+Old recordings still provide comparisons for the quantities they contain, as
+in this example. Record again to save the additional statistics.
+
+When both runs have at least two samples and include standard deviations, the
+report adds an approximate 95% Welch confidence interval for the difference in
+mean iteration time, with units shown beside each bound. Positive bounds indicate
+an increase; negative bounds indicate a decrease. Each table row's mean percentage
+change is colored only when its own interval excludes zero. The same check adds
+⚡ after the delta for an improvement or 💩 for a regression, including when
+color is disabled.
+Older recordings without a standard deviation still show a percentage, with
+neutral coloring.
+The median and process peak RSS colors show direction without an uncertainty
+estimate.
+
+The interval allows different sample counts and variances. It assumes independent
+iterations and cannot account for correlations within a process, machine load or
+changes between runs. Treat it as a guide to measured variability and repeat
+benchmarks before attributing small changes to code.
 
 Performance tests always run afresh, even when their source code is unchanged.
 Compilation still reuses unchanged build artifacts.

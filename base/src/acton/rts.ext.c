@@ -77,6 +77,14 @@ int64_t actonQ_rtsQ_rss (B_SysCap cap) {
     return (int64_t)rsm;
 }
 
+B_u64 actonQ_rtsQ_get_peak_rss (B_SysCap cap) {
+    uv_rusage_t usage;
+    if (uv_getrusage(&usage) != 0)
+        return (B_u64)B_None;
+    // libuv normalizes ru_maxrss to KiB on all supported platforms.
+    return toB_u64(usage.ru_maxrss * 1024);
+}
+
 B_NoneType actonQ_rtsQ_sleep (B_SysCap cap, double sleep_time) {
     double st = sleep_time;
     struct timespec ts;

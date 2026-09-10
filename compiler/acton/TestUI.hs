@@ -1,6 +1,8 @@
 module TestUI
   ( TestKey(..)
+  , TestLine
   , TestProgressUI(..)
+  , staticLine
   , initTestProgressUI
   , testUiStart
   , testUiAppendFinal
@@ -45,7 +47,7 @@ data TestProgressUI = TestProgressUI
   , tpuLiveSetRef :: IORef (Set.Set TestKey)
   , tpuLiveLineRef :: IORef (M.Map TestKey TestLine)
   , tpuPrintedModulesRef :: IORef (Set.Set String)
-  , tpuPendingDetailsRef :: IORef (M.Map TestKey [String])
+  , tpuPendingDetailsRef :: IORef (M.Map TestKey [TestLine])
   , tpuSpinnerRef :: IORef Int
   , tpuTickerThreadRef :: IORef (Maybe ThreadId)
   , tpuTermProgress :: TermProgress
@@ -435,17 +437,16 @@ canInsertLinesUnlocked ui insertIdx n
                 total <- readIORef (tpuTotalLinesRef ui)
                 return ((total + n - minimum idxs) < rows)
 
-insertLinesAfterUnlocked :: TestProgressUI -> Int -> [String] -> IO Bool
-insertLinesAfterUnlocked ui idx lines = do
-    let n = length lines
+insertLinesAfterUnlocked :: TestProgressUI -> Int -> [TestLine] -> IO Bool
+insertLinesAfterUnlocked ui idx lineFns = do
+    let n = length lineFns
     if n <= 0
       then return True
       else do
         (rows, cols) <- currentViewportUnlocked ui
         total <- readIORef (tpuTotalLinesRef ui)
         liveSet <- readIORef (tpuLiveSetRef ui)
-        let lineFns = map staticLine lines
-            rendered = map ($ safeLiveWidth cols) lineFns
+        let rendered = map ($ safeLiveWidth cols) lineFns
             startIdx = idx + 1
             offsetNew = (total + n) - startIdx
             visibleOk =
@@ -488,7 +489,7 @@ rerenderFromUnlocked ui startIdx oldTotal = do
           putStr "\n"
         hFlush stdout
 
-testUiInsertDetails :: TestProgressUI -> TestKey -> [String] -> IO Bool
+testUiInsertDetails :: TestProgressUI -> TestKey -> [TestLine] -> IO Bool
 testUiInsertDetails ui key lines = withTestProgressLock ui $ do
     if null lines
       then return True
@@ -501,7 +502,7 @@ testUiInsertDetails ui key lines = withTestProgressLock ui $ do
             Nothing -> return False
             Just idx -> insertLinesAfterUnlocked ui idx lines
 
-queuePendingDetails :: TestProgressUI -> TestKey -> [String] -> IO ()
+queuePendingDetails :: TestProgressUI -> TestKey -> [TestLine] -> IO ()
 queuePendingDetails ui key lines = withTestProgressLock ui $ do
     unless (null lines) $
       modifyIORef' (tpuPendingDetailsRef ui) (M.insert key lines)
