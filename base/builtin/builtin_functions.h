@@ -29,9 +29,8 @@ struct B_IteratorD_enumerate {
 extern struct B_IteratorD_enumerateG_class B_IteratorD_enumerateG_methods;
 B_IteratorD_enumerate B_IteratorD_enumerateG_new(B_Iterator,B_int);
 
-
 // filter ////////////////////////////////////////////////////////////
-
+/*
 B_Iterator B_filter (B_Iterable, $pure, $WORD);
 
 struct B_IteratorD_filter;
@@ -58,9 +57,9 @@ struct B_IteratorD_filter {
 
 extern struct B_IteratorD_filterG_class B_IteratorD_filterG_methods;
 B_IteratorD_filter B_IteratorD_filterG_new(B_Iterator, $pure);
-
+*/
 // map ////////////////////////////////////////////////////////////
-
+/*
 B_Iterator B_map (B_Iterable, $pure, $WORD);
 
 struct B_IteratorD_map;
@@ -87,9 +86,9 @@ struct B_IteratorD_map {
 
 extern struct B_IteratorD_mapG_class B_IteratorD_mapG_methods;
 B_IteratorD_map B_IteratorD_mapG_new(B_Iterator, $pure);
-
+*/
 // zip ////////////////////////////////////////////////////////////
-
+/*
 struct B_IteratorD_zip;
 typedef struct B_IteratorD_zip *B_IteratorD_zip;
 
@@ -116,7 +115,7 @@ extern struct B_IteratorD_zipG_class B_IteratorD_zipG_methods;
 B_IteratorD_zip B_IteratorD_zipG_new(B_Iterator, B_Iterator);
 
 B_Iterator B_zip(B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2);
-
+*/
 
 // EqOpt //////////////////////////////////////////////////////
 

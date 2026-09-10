@@ -138,7 +138,7 @@ B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_int start) {
 }
 
 // filter ////////////////////////////////////////////////////////////////////////////////
-
+/*
 void B_IteratorD_filter_init(B_IteratorD_filter self, B_Iterator it,  $pure f) {
     self->it = it;
     self->f = f;
@@ -183,7 +183,7 @@ B_Iterator B_filter(B_Iterable wit, $pure f, $WORD iter) {
     B_Iterator it = wit->$class->__iter__(wit,iter);
     return (B_Iterator)B_IteratorD_filterG_new(it,f);
 }
-
+*/
 // map ////////////////////////////////////////////////////////////////////////////////
 /*
 void B_IteratorD_map_init(B_IteratorD_map self, B_Iterator it, $pure f) {
@@ -230,7 +230,7 @@ B_Iterator B_map(B_Iterable wit, $pure f, $WORD iter) {
 */
 
 // max, min ///////////////////////////////////////////////////////////////////////////////////
-
+/*
 $WORD B_max(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     $WORD res = dflt;
     B_Iterator it = wit2->$class->__iter__(wit2,iter);  
@@ -330,7 +330,7 @@ $WORD B_min_def(B_Ord wit, B_Iterable wit2, $WORD iter, $WORD dflt) {
     }
     return res;
 }
-
+*/
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
     B_CollectionD_SequenceD_list w = B_CollectionD_SequenceD_listG_witness;
     B_list res = w->$class->__fromiter__(w, wit2, iter);
@@ -365,7 +365,7 @@ $WORD B_sum(B_Plus wit, B_Iterable wit2, $WORD iter, $WORD start) {
 }
 */
 // zip ////////////////////////////////////////////////////////////////////////////////
-
+/*
 void B_IteratorD_zip_init(B_IteratorD_zip self, B_Iterator it1, B_Iterator it2) {
     self->it1 = it1;
     self->it2 = it2;
@@ -412,7 +412,7 @@ B_Iterator B_zip (B_Iterable wit1, B_Iterable wit2, $WORD iter1, $WORD iter2) {
     B_Iterator it2 = wit1->$class->__iter__(wit1,iter2);
     return (B_Iterator)B_IteratorD_zipG_new(it1,it2);
 }
-
+*/
 // EqOpt //////////////////////////////////////////////////////
 
 extern struct $EqOptG_class $EqOptG_methods;
