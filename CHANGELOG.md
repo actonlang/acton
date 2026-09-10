@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+### Language
+- Treat `mut` and `pure` effects as temporarily interchangeable, allowing APIs
+  written with either effect to compose while immutable local mutation rules
+  are being redesigned. [#3084]
+
+### Compiler & Build
+- Compile protocols that inherit another protocol with fixed type arguments
+  without passing those type arguments to the wrong witness constructor, fixing
+  C generation for nested protocol inheritance. [#3098]
+- Preserve unchanged generated root stubs and Zig build files when their
+  contents match, avoiding timestamp-only rewrites that invalidate otherwise
+  reusable warm-build output. [#3099]
+
+### CLI & Project Workflow
+- Add dependency `follows` declarations in `Build.act` so a project can import
+  a package selected through another dependency, while requiring every directly
+  imported package to be declared by the importing project. [#3091]
+- Limit `acton test --module` and `--name` builds to selected modules and their
+  imports, including list and watch modes, so focused test runs avoid compiling
+  unrelated test modules and ignore production `libraries` groups. [#3086]
+- Refresh dependency build files even when selected test builds do not compile
+  sources from that dependency, so switching from a full build to `acton test
+  --module` or `--name` does not leave stale modules in Zig build plans.
+  [#3097]
+- Stop obsolete `acton test --watch` compiler and test process groups on
+  cancellation or rebuild completion, carry pending edits into the next
+  generation, and avoid running stale tests after a failed final compile.
+  [#3088]
+- Report phase timings with `--timing` for build planning, Acton compilation,
+  build preparation, Zig work, and test execution/cache handling, including
+  watch mode and Zig cache summaries. [#3085]
+
+### Runtime & Standard Library
+- Use a stable min-heap for runtime timers, making large batches of `after`
+  callbacks with increasing or equal deadlines scale logarithmically while
+  preserving FIFO order for equal deadlines. [#3092]
+
+### Packages & Distribution
+- Use Ubuntu 20.04 for Linux x86_64 CI and release artifacts to preserve glibc
+  2.31 compatibility after Debian 11 package downloads stopped working.
+  [#3089] [#3096]
+- Fix bundled native dependency inputs for ActonDB and TLSuv by removing the
+  backend dependency symlink, resolving backend packages through sibling
+  dependencies, and matching TLSuv's active mbed TLS and keychain source set.
+  [#3093] [#3094]
+
 ## [0.30.0] - 2026-09-03
 
 ### Language
@@ -4778,6 +4826,19 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3073]: https://github.com/actonlang/acton/pull/3073
 [#3075]: https://github.com/actonlang/acton/pull/3075
 [#3077]: https://github.com/actonlang/acton/pull/3077
+[#3084]: https://github.com/actonlang/acton/pull/3084
+[#3085]: https://github.com/actonlang/acton/pull/3085
+[#3086]: https://github.com/actonlang/acton/pull/3086
+[#3088]: https://github.com/actonlang/acton/pull/3088
+[#3089]: https://github.com/actonlang/acton/pull/3089
+[#3091]: https://github.com/actonlang/acton/pull/3091
+[#3092]: https://github.com/actonlang/acton/pull/3092
+[#3093]: https://github.com/actonlang/acton/pull/3093
+[#3094]: https://github.com/actonlang/acton/pull/3094
+[#3096]: https://github.com/actonlang/acton/pull/3096
+[#3097]: https://github.com/actonlang/acton/pull/3097
+[#3098]: https://github.com/actonlang/acton/pull/3098
+[#3099]: https://github.com/actonlang/acton/pull/3099
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
