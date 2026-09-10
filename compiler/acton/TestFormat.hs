@@ -21,6 +21,7 @@ import Data.Char (isSpace)
 import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
 import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
+import qualified Data.Text as T
 import TerminalSize (termFitAnsiRight, termFitPlainRight, termVisibleLength)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
@@ -177,7 +178,7 @@ formatTestPerfLines useColor baseline res =
     interval metric obj = baseline >>= (\old -> perfMeanInterval metric old obj)
     change obj key value =
       let metric = lookup key [(perfStatKey m "avg", m) | (m, _, _) <- perfMetrics]
-          direction = case metric >>= (\m -> interval m obj) of
+          direction = case metric >>= (\m -> if m == "ipc" then Nothing else interval m obj) of
             Just (lo, _) | lo > 0 -> Just ("💩", "\ESC[91m")
             Just (_, hi) | hi < 0 -> Just ("⚡", "\ESC[92m")
             _ -> Nothing
@@ -186,7 +187,9 @@ formatTestPerfLines useColor baseline res =
                 ++ (if null icon then "  " else paint (if icon == "⚡" then testColorYellow else color) icon)
             | otherwise = paint color s
           neutral = comparison "" "\ESC[2m"
-      in case baseline >>= (\old -> perfNumber old key) of
+          previous old = if maybe True (\m -> perfComparable m old obj) metric
+            then perfNumber old key else Nothing
+      in case baseline >>= previous of
         Just 0 | value == 0 -> neutral "+0.0%"
         Just 0 -> neutral "from 0"
         Just old ->
@@ -281,8 +284,31 @@ formatTestPerfLines useColor baseline res =
            return ("  process peak RSS: " ++ single "" "B" value ++ delta)
       , do (lo, hi) <- interval "duration" obj
            return ("  mean delta (95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+      , do info <- perfCounterInfo obj
+           let scope = case counterText info "scope" of
+                 Just "process:user" -> "user only"
+                 _ -> "user + kernel"
+               hardware = if counterText info "status" == Just "available" then "; hardware: " ++ scope else ""
+           return ("  CPU measurements: all process threads, including GC" ++ hardware)
+      , do info <- perfCounterInfo obj
+           status <- counterText info "status"
+           if status == "available" then Nothing
+             else Just ("  hardware counters unavailable: " ++ status)
+      , do old <- baseline
+           _ <- perfNumber old "avg_cpu_user"
+           _ <- perfNumber obj "avg_cpu_user"
+           if perfComparable "cpu_user" old obj then Nothing
+             else Just "  CPU deltas unavailable: baseline machine differs or is unknown"
+      , do old <- baseline
+           _ <- perfNumber old "avg_instructions"
+           _ <- perfNumber obj "avg_instructions"
+           if perfComparable "instructions" old obj then Nothing
+             else Just "  hardware deltas unavailable: baseline machine or counter scope differs or is unknown"
       , Just ("  total: " ++ single "" "ms" (trTestDuration res) ++ printf " (%.1f runs/s)" (testsPerSecond (trNumIterations res) (trTestDuration res)))
       ] ++ [""]
+    counterText info key = case AesonKM.lookup (AesonKey.fromString key) info of
+      Just (Aeson.String s) -> Just (T.unpack s)
+      _ -> Nothing
 
 -- Scale each quantity with decimal prefixes, including signed memory changes.
 -- A small spread keeps its own unit instead of rounding to zero beside a mean.
@@ -291,10 +317,15 @@ perfScale unit value =
     fromMaybe fallback (listToMaybe [entry | entry@(scale, _) <- scales, magnitude >= scale])
   where
     magnitude = abs value
-    scales = if unit == "ms"
-      then [(1e6, "ks"), (1e3, "s"), (1, "ms"), (1e-3, "µs"), (1e-6, "ns")]
-      else [(1e12, "TB"), (1e9, "GB"), (1e6, "MB"), (1e3, "KB"), (1, "B")]
-    fallback = if unit == "ms" && magnitude > 0 then (1e-6, "ns") else (1, unit)
+    scales = case unit of
+      "ms" -> [(1e6, "ks"), (1e3, "s"), (1, "ms"), (1e-3, "µs"), (1e-6, "ns")]
+      "count" -> [(1e12, "T"), (1e9, "G"), (1e6, "M"), (1e3, "K"), (1, "")]
+      "ratio" -> [(1, "")]
+      _ -> [(1e12, "TB"), (1e9, "GB"), (1e6, "MB"), (1e3, "KB"), (1, "B")]
+    fallback
+      | unit == "ms" && magnitude > 0 = (1e-6, "ns")
+      | unit `elem` ["count", "ratio"] = (1, "")
+      | otherwise = (1, unit)
 
 perfDigits :: Double -> String
 perfDigits value

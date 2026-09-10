@@ -154,3 +154,74 @@ def _test_summary_serialization(t: testing.SyncT):
     old = sample.to_json()
     del old["gc_duration"]
     assert testing.TestResult.from_json(old).gc_duration == 0.0
+
+
+def snapshot(count: ?u64, cycles: ?u64, enabled: u64, running: u64, user: ?u64=None, system: ?u64=None):
+    return (user_ns=user, system_ns=system, instructions=count, cycles=cycles,
+            instructions_enabled=enabled, instructions_running=running,
+            cycles_enabled=enabled, cycles_running=running)
+
+
+def _test_counter_deltas_preserve_integer_precision(t: testing.SyncT):
+    # Lifetime counts may exceed the exact integer range of a double.
+    start = 2**54
+    before = snapshot(u64(start), u64(start), u64(10), u64(10), u64(1000), u64(0))
+    end = snapshot(u64(start+3), u64(start+2), u64(20), u64(20), u64(2001000), u64(0))
+    counters = testing.perf_delta(before, end)
+    assert counters == {"instructions": 3.0, "cycles": 2.0, "ipc": 1.5, "cpu_user": 2.0, "cpu_system": 0.0}
+    huge: u64 = 0xffffffffffffffff
+    before = snapshot(u64(0), u64(0), u64(0), u64(0))
+    end = snapshot(huge, huge, u64(10), u64(10))
+    counters = testing.perf_delta(before, end)
+    assert counters["instructions"] == float(huge)
+    assert counters["cycles"] == float(huge)
+    assert counters["ipc"] == 1.0
+
+
+def _test_unavailable_and_incomplete_counters_are_omitted(t: testing.SyncT):
+    before = snapshot(u64(100), u64(100), u64(10), u64(10), u64(1000), u64(0))
+    for end in [snapshot(None, None, u64(20), u64(20)),
+                  snapshot(u64(99), u64(200), u64(20), u64(20)),
+                  snapshot(u64(200), u64(99), u64(20), u64(20)),
+                  snapshot(u64(200), u64(200), u64(20), u64(19)),
+                  snapshot(u64(200), u64(200), u64(20), u64(10)),
+                  snapshot(u64(200), u64(200), u64(9), u64(20))]:
+        assert testing.perf_delta(before, end) == {}
+    end = snapshot(u64(200), u64(100), u64(20), u64(20), u64(999), u64(0))
+    counters = testing.perf_delta(before, end)
+    assert "cpu_user" not in counters
+    assert "ipc" not in counters
+    assert counters["cycles"] == 0.0
+    assert counters["cpu_system"] == 0.0
+
+
+def _test_counter_distributions_and_serialization(t: testing.SyncT):
+    info = testing.TestInfo(testing.Test("sample", "", "perf"), counter_info={"status": "available", "scope": "process:user"})
+    # IPC averages paired ratios: mean(1/2, 3/3), not mean(1,3)/mean(2,3).
+    for instructions, cycles in [(1.0, 2.0), (3.0, 3.0)]:
+        counters = {"instructions": instructions, "cycles": cycles, "ipc": instructions/cycles, "cpu_user": 1.0, "cpu_system": 0.0}
+        sample = testing.TestResult(True, None, None, 1.0, 0, 0, counters=counters)
+        assert testing.TestResult.from_json(sample.to_json()).counters == counters
+        legacy = sample.to_json()
+        del legacy["counters"]
+        assert testing.TestResult.from_json(legacy).counters is None
+        info.update(True, sample)
+    stats = info.performance()
+    assert number(stats, "avg_ipc") == 0.75
+    assert number(stats, "min_ipc") == 0.5
+    assert number(stats, "max_ipc") == 1.0
+    assert number(stats, "avg_instructions") == 2.0
+    for metric in ["cpu_user", "cpu_system", "instructions", "cycles", "ipc"]:
+        for stat in ["avg", "min", "max", "median", "q1", "q3", "stdev", "outlier_count"]:
+            assert stat + "_" + metric in stats
+    data = info.to_json(include_perf=True)
+    assert testing.TestInfo.from_json(data).counter_info == info.counter_info
+    # A partial series cannot use the full iteration count in comparisons.
+    info.update(True, testing.TestResult(True, None, None, 1.0, 0, 0, counters={"cpu_user": 1.0, "cpu_system": 0.0}))
+    stats = info.performance()
+    assert "avg_instructions" not in stats
+    assert "avg_cycles" not in stats
+    assert "avg_ipc" not in stats
+    assert number(stats, "avg_cpu_system") == 0.0
+    restored = testing.TestInfo.from_json(info.to_json(include_perf=True))
+    assert restored.counter_info["status"] == "incomplete or multiplexed counter samples"

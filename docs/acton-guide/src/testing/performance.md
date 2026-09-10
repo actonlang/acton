@@ -51,6 +51,17 @@ The result includes:
 - **Wall time, GC time:** unadjusted wall time and measured full GC
   time within an iteration. The GC counter has millisecond resolution. These
   exclude the forced collections between iterations.
+- **CPU user, CPU system:** CPU time spent in user code and the kernel across
+  all threads in the test process. Unlike wall time, this excludes time waiting
+  to be scheduled and can exceed wall time when threads work in parallel.
+- **Instructions, cycles:** hardware counts across all threads in the test
+  process. Counts use decimal prefixes: K is one thousand and M is one million.
+  These include GC and runtime work during the measurement, as do CPU times.
+  They exclude child processes and the forced collections between iterations.
+- **IPC:** instructions divided by cycles for each iteration. The table
+  summarizes these per-iteration ratios. A higher IPC does not necessarily mean
+  a faster program, so its comparison has neutral coloring and no improvement
+  or regression icon.
 - **Allocated:** average bytes reported by the GC allocation counter
   during an iteration. This measures allocation volume, not peak memory usage.
 - **Non-GC change:** estimated average change per iteration in resident memory outside
@@ -73,6 +84,22 @@ Very short tests are sensitive to measurement overhead and scheduling noise.
 Prefer workloads lasting at least a few milliseconds and repeat measurements
 before drawing conclusions from small percentage changes.
 
+CPU counters bracket each iteration, including a small amount of harness and
+counter-reading work. They do not isolate instructions spent on GC from other
+work. Wall time, CPU time and instruction counts provide different views of the
+same run; counters help explain variation but do not remove it.
+
+Linux uses `perf_event_open`, with thread inheritance requiring Linux 5.13 or
+later and matching build headers. It first requests user and kernel events,
+then tries user-only events if permissions prevent kernel counting. The report
+states which scope was collected. macOS uses the kernel's process instruction
+and cycle accounting through `proc_pid_rusage`, where the OS and hardware support
+it. Hardware counters are optional: denied permissions, unsupported hardware,
+failed reads or incomplete counter coverage omit those rows with an explanation.
+CPU times remain available independently. Linux samples with multiplexed events
+are omitted rather than scaled; a row is reported only when every iteration has
+a valid sample.
+
 `--json` includes a `performance` object for each successful test. Its
 `measurements` contain the displayed quantities, iteration count, median and
 quartiles for every row. For example, `stdev_wall_duration`,
@@ -84,6 +111,12 @@ or `null` when no baseline matches. `mean_difference_ci95_ms` contains the
 comparison interval's `lower` and `upper` bounds for time excluding GC, or `null`
 when the necessary statistics are unavailable. Failed or skipped tests have
 `performance: null`.
+
+CPU durations are also in milliseconds. Instruction and cycle values are raw
+counts; IPC is a unitless ratio. For example, `avg_instructions`, `stdev_cycles`
+and `median_ipc` follow the same statistics naming scheme. `counter_info` records
+the backend, accounting scope, availability, CPU model, architecture and OS
+version. Missing counters are absent, while a measured zero remains zero.
 
 See [Performance comparisons](perf_record.md) to record a baseline and compare
 later runs, or [Stress testing](stress.md) for concurrency-focused tests.

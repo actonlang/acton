@@ -284,6 +284,7 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/q.h"), "rts/q.h");
     libActon.installHeader(b.path("rts/rts.h"), "rts/rts.h");
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
+    libActon.installHeader(b.path("rts/perf.h"), "rts/perf.h");
 
     libActon.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
     libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));

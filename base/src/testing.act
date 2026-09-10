@@ -594,6 +594,7 @@ class TestResult(object):
     gc_duration: float
     mem_usage_delta: int
     non_gc_mem_usage_delta: int
+    counters: ?dict[str, float]
 
     def __init__(self,
                  success: ?bool,
@@ -604,7 +605,8 @@ class TestResult(object):
                  non_gc_mem_usage_delta: int,
                  skipped: bool=False,
                  skip_reason: ?str=None,
-                 gc_duration: float=0.0):
+                 gc_duration: float=0.0,
+                 counters: ?dict[str, float]=None):
         self.success = success
         self.skipped = skipped
         self.skip_reason = skip_reason
@@ -614,9 +616,10 @@ class TestResult(object):
         self.gc_duration = gc_duration
         self.mem_usage_delta = mem_usage_delta
         self.non_gc_mem_usage_delta = non_gc_mem_usage_delta
+        self.counters = counters
 
     def to_json(self):
-        return {
+        data = {
             "success": self.success,
             "skipped": self.skipped,
             "skip_reason": self.skip_reason,
@@ -627,6 +630,9 @@ class TestResult(object):
             "mem_usage_delta": self.mem_usage_delta,
             "non_gc_mem_usage_delta": self.non_gc_mem_usage_delta,
         }
+        if self.counters is not None:
+            data["counters"] = self.counters
+        return data
 
     @staticmethod
     def from_json(data: dict[str, ?value]) -> TestResult:
@@ -650,6 +656,22 @@ class TestResult(object):
         gc_duration = data["gc_duration"] if "gc_duration" in data else 0.0
         mem_usage_delta = data["mem_usage_delta"]
         non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
+        counters: ?dict[str, float] = None
+        if "counters" in data:
+            raw_counters = data["counters"]
+            if isinstance(raw_counters, dict):
+                parsed: dict[str, float] = {}
+                entries: dict[str, ?value] = raw_counters
+                for key, val in entries.items():
+                    if isinstance(key, str) and isinstance(val, float):
+                        parsed[key] = val
+                    elif isinstance(key, str) and isinstance(val, int):
+                        parsed[key] = float(val)
+                    else:
+                        raise ValueError("Invalid TestResult counters")
+                counters = parsed
+            else:
+                raise ValueError("Invalid TestResult counters")
         if (isinstance(success, bool)
             and isinstance(skipped, bool)
             and isinstance(duration, float)
@@ -657,7 +679,7 @@ class TestResult(object):
             and isinstance(mem_usage_delta, int)
             and isinstance(non_gc_mem_usage_delta, int)
             ):
-            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration)
+            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration, counters)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -687,6 +709,7 @@ class TestInfo(object):
     non_gc_mem_usage_delta_avg: float
     non_gc_mem_inc_count: int
     results: list[TestResult]
+    counter_info: dict[str, str]
 
     def __init__(self,
                  definition: Test,
@@ -711,7 +734,8 @@ class TestInfo(object):
                  mem_usage_delta_avg: float=0.0,
                  non_gc_mem_usage_delta_avg: float=0.0,
                  non_gc_mem_inc_count: int=0,
-                 results: list[TestResult]=[]):
+                 results: list[TestResult]=[],
+                 counter_info: ?dict[str, str]=None):
         self.definition = definition
         self.complete = complete
         self.success = success
@@ -737,6 +761,7 @@ class TestInfo(object):
         self.non_gc_mem_usage_delta_avg = non_gc_mem_usage_delta_avg
         self.non_gc_mem_inc_count = non_gc_mem_inc_count
         self.results = results
+        self.counter_info = counter_info if counter_info is not None else {}
 
     def update(self, complete, result: TestResult, test_duration: float=-1.0):
         self.complete = complete
@@ -873,6 +898,16 @@ class TestInfo(object):
         stats.update(summarize("gc_duration", "avg_gc_duration", [r.gc_duration for r in self.results]).items())
         stats.update(summarize("mem_usage_delta", "mem_usage_delta_avg", [float(r.mem_usage_delta) for r in self.results]).items())
         stats.update(summarize("non_gc_mem_usage_delta", "non_gc_mem_usage_delta_avg", [float(r.non_gc_mem_usage_delta) for r in self.results]).items())
+        for metric in ["cpu_user", "cpu_system", "instructions", "cycles", "ipc"]:
+            samples: list[float] = []
+            for r in self.results:
+                counters = r.counters
+                if counters is not None and metric in counters:
+                    samples.append(counters[metric])
+            # Missing samples must not masquerade as zeros, or use the full
+            # iteration count when estimating uncertainty from a partial set.
+            if len(samples) == n:
+                stats.update(summarize(metric, "avg_" + metric, samples).items())
         return stats
 
     def to_json(self, include_results: bool=False, include_perf: bool=False):
@@ -909,6 +944,11 @@ class TestInfo(object):
         if include_perf:
             for key, val in self.performance().items():
                 data[key] = val
+            if len(self.counter_info) > 0:
+                info = {key: val for key, val in self.counter_info.items()}
+                if info.get("status") == "available" and "avg_instructions" not in data:
+                    info["status"] = "incomplete or multiplexed counter samples"
+                data["counter_info"] = info
         return data
 
     @staticmethod
@@ -975,6 +1015,18 @@ class TestInfo(object):
         mem_usage_delta_avg = take_mean("mem_usage_delta_avg")
         non_gc_mem_usage_delta_avg = take_mean("non_gc_mem_usage_delta_avg")
         non_gc_mem_inc_count = json_data["non_gc_mem_inc_count"]
+        counter_info: dict[str, str] = {}
+        if "counter_info" in json_data:
+            raw_info = json_data["counter_info"]
+            if isinstance(raw_info, dict):
+                entries: dict[str, ?value] = raw_info
+                for key, val in entries.items():
+                    if isinstance(key, str) and isinstance(val, str):
+                        counter_info[key] = val
+                    else:
+                        raise ValueError("Invalid performance counter metadata")
+            else:
+                raise ValueError("Invalid performance counter metadata")
         results: list[TestResult] = []
         # We don't support results in the JSON, since we don't want it for
         # performance reasons but for very generic JSON serialization support it
@@ -1014,7 +1066,8 @@ class TestInfo(object):
                             mem_usage_delta_avg,
                             non_gc_mem_usage_delta_avg,
                             non_gc_mem_inc_count,
-                            results)
+                            results,
+                            counter_info)
         else:
             raise ValueError("Invalid TestInfo JSON")
 
@@ -1058,6 +1111,35 @@ class TestRunnerConfig(object):
 
 class TimeoutError(Exception):
     pass
+
+def perf_delta(before: (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycles: ?u64, instructions_enabled: u64, instructions_running: u64, cycles_enabled: u64, cycles_running: u64),
+               end: (user_ns: ?u64, system_ns: ?u64, instructions: ?u64, cycles: ?u64, instructions_enabled: u64, instructions_running: u64, cycles_enabled: u64, cycles_running: u64)) -> dict[str, float]:
+    """Convert cumulative runtime counters to one complete iteration sample."""
+    def delta(old: ?u64, new: ?u64) -> ?u64:
+        if old is not None and new is not None and new >= old:
+            return new - old
+        return None
+
+    def covered(old_enabled: u64, old_running: u64, enabled: u64, running: u64) -> bool:
+        return (enabled >= old_enabled and running > old_running
+                and enabled - old_enabled == running - old_running)
+
+    counters: dict[str, float] = {}
+    for metric, old, new in [("cpu_user", before.user_ns, end.user_ns),
+                              ("cpu_system", before.system_ns, end.system_ns)]:
+        elapsed = delta(old, new)
+        if elapsed is not None:
+            counters[metric] = float(elapsed) / 1000000.0
+    instructions = delta(before.instructions, end.instructions)
+    cycles = delta(before.cycles, end.cycles)
+    if (instructions is not None and cycles is not None
+        and covered(before.instructions_enabled, before.instructions_running, end.instructions_enabled, end.instructions_running)
+        and covered(before.cycles_enabled, before.cycles_running, end.cycles_enabled, end.cycles_running)):
+        counters["instructions"] = float(instructions)
+        counters["cycles"] = float(cycles)
+        if cycles > 0:
+            counters["ipc"] = float(instructions) / float(cycles)
+    return counters
 
 actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, env, executor_id: int, stress_workers: int, stress_nodrift_workers: int):
     """The actual executor of tests
@@ -1223,13 +1305,14 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         legacy_path = file.join_path([fs.cwd(), "test", "golden", module, test])
         return _read_expected(legacy_path)
 
-    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, success: ?bool, exception: ?Exception, val: ?str):
+    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
         testiter_dur = full_dur - gc_dur
         gc_total_bytes_end = int(acton.rts.get_gc_total_bytes(syscap))
         mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
+        counters = perf_delta(counter_start, acton.rts.perf_snapshot(syscap)) if counter_start is not None else None
         test_dur = test_sw.elapsed().to_float()
         if config.stress_mode and not config.perf_mode:
             _update_stress_timing_estimate(testiter_dur)
@@ -1272,7 +1355,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
 
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur, counters=counters), test_dur*1000.0)
             if config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers:
                 _maybe_refine_stress_phase(test_info.num_iterations)
         iteration = completed_iterations
@@ -1311,6 +1394,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             acton.rts.gc(syscap)
             acton.rts.gc(syscap)
         non_gc_mem_usage_before = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        counter_start = acton.rts.perf_snapshot(syscap) if config.perf_mode else None
         gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
@@ -1321,23 +1405,23 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                 exp_val = get_expected(t.module, t.display_name())
                 if exp_val is None or exp_val is not None and val != exp_val:
                     exc = NotEqualError(val, exp_val, f"Test output does not match expected snapshot value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
-                    _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, exc, val)
+                    _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, False, exc, val)
                     return
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, s, e, val)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, s, e, val)
 
         try:
             t.run(repres, env, log_handler, config.tags)
         except SkipTest as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, True, e, None)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, True, e, None)
         except AssertionError as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, False, e, None)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, False, e, None)
         except Exception as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, None, e, None)
+            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, None, e, None)
 
     def _run_test():
         """Get the next available test and run it"""
         test_sw = time.Stopwatch()
-        test_info = TestInfo(t)
+        test_info = TestInfo(t, counter_info=acton.rts.perf_info(syscap) if config.perf_mode else None)
         _run_fn(t)
 
     after 0: _run_test()

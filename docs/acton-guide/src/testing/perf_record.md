@@ -10,11 +10,11 @@ acton test perf --release --record
 acton test perf --release
 ```
 
-Each measured test shows timing statistics, allocation volume, estimated non-GC
+Each measured test shows timing statistics, CPU measurements, allocation volume, estimated non-GC
 memory change and process peak RSS. If the baseline contains a successful
 measurement of that test, the delta column shows each row's mean percentage
 change. The median and peak RSS comparisons appear below the table.
-Positive values mean more time or memory; negative values mean
+Positive values mean a higher measured value; negative values mean
 less. A change from zero to a nonzero value has no defined percentage and is
 shown as `from 0`.
 
@@ -44,6 +44,7 @@ an increase; negative bounds indicate a decrease. Each table row's mean percenta
 change is colored only when its own interval excludes zero. The same check adds
 ⚡ after the delta for an improvement or 💩 for a regression, including when
 color is disabled.
+IPC comparisons stay neutral: higher IPC alone does not establish an improvement.
 Older recordings without a standard deviation still show a percentage, with
 neutral coloring.
 The median and process peak RSS colors show direction without an uncertainty
@@ -69,5 +70,12 @@ particular, keep `--release` consistent between runs. The baseline matches tests
 by their stored module and test names; renamed tests or recordings using older
 module names need a new recording. Remove `perf_data` to start a new baseline
 without retaining old entries. `--record` is only supported in performance mode.
+
+CPU measurements also check the recorded CPU model, architecture and OS version.
+Hardware counts additionally check the backend and accounting scope. Deltas are
+omitted when the relevant metadata differs or is missing. For example, user-only
+Linux counts cannot be compared against user-plus-kernel counts, while CPU-time
+comparisons remain available. Older recordings still provide their original
+timing and memory comparisons; record again to establish a CPU baseline.
 
 See [Performance testing](performance.md) for the meaning of each measurement.

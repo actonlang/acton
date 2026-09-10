@@ -28,6 +28,7 @@ import qualified Data.Set as Set
 import System.Clock
 import System.Directory
 import System.Exit
+import System.Environment (getEnvironment)
 import System.FilePath ((</>), (<.>), joinPath)
 import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
 import System.Process
@@ -653,6 +654,7 @@ runModuleTestStreaming :: C.CompileOptions
                        -> TestProgressCallbacks
                        -> IO TestResult
 runModuleTestStreaming opts paths topts mode modName testName allowLive callbacks = do
+    environment <- getEnvironment
     let binPath = testBinaryPath opts paths modName
         modeArgs =
           case mode of
@@ -681,6 +683,8 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
                           Nothing -> addStdErr line
     let procSpec = (proc binPath cmd)
           { cwd = Just (projPath paths)
+          , env = Just ((if mode == TestModePerf then [("ACTON_TEST_PERF", "1")] else [])
+              ++ filter ((/= "ACTON_TEST_PERF") . fst) environment)
           , create_group = C.watch opts
           , delegate_ctlc = not (C.watch opts)
           }

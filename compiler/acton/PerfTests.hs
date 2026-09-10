@@ -9,6 +9,7 @@ import Data.List (isInfixOf, isSuffixOf, find, elemIndices)
 import TerminalSize (termVisibleLength, termFitAnsiRight, termRenderedRows)
 import qualified Data.Map as M
 import System.Directory
+import System.Environment (getEnvironment)
 import System.Exit
 import System.FilePath
 import System.IO.Temp (withSystemTempDirectory)
@@ -19,7 +20,7 @@ import Test.Tasty.HUnit
 import qualified Acton.Fingerprint as Fingerprint
 import Acton.Testing (TestResult(..))
 import TestFormat (formatTestPerfLines)
-import TestPerf (perfMeanInterval, perfJson)
+import TestPerf (perfComparable, perfMeanInterval, perfJson)
 
 perfTests :: TestTree
 perfTests = testGroup "performance baselines"
@@ -94,6 +95,39 @@ perfTests = testGroup "performance baselines"
             assertEqual (show key) (Just (Aeson.Object obj)) (KM.lookup key report)
           _ -> assertFailure "expected a performance report"
         _ -> assertFailure "expected measurements"
+  , testCase "CPU rows scale counts and keep IPC comparisons neutral" $ do
+      let old = counterSample 1000000 1
+          new = counterSample 2000000 2
+          rows = renderPerf 119 True (Just old) ((result new) { trNumIterations = 10 })
+          instructions = maybe "" id (find ("instructions" `isInfixOf`) rows)
+          ipc = maybe "" id (find ("IPC" `isInfixOf`) rows)
+      assertBool instructions ("2.00" `isInfixOf` instructions && "M" `isInfixOf` instructions)
+      assertBool instructions (not ("MB" `isInfixOf` instructions))
+      assertBool instructions ("💩" `isInfixOf` instructions)
+      assertBool ipc ("+100.0%" `isInfixOf` ipc && not (any (`isInfixOf` ipc) ["⚡", "💩", "ratio", "\ESC[91m"]))
+      forM_ [39, 79, 119, 160] $ \cols ->
+        assertBool (show cols) (all ((<= cols) . termVisibleLength) (renderPerf cols True (Just old) (result new)))
+      case perfJson (Just old) (result new) of
+        Just (Aeson.Object report) -> do
+          assertEqual "measurements retain counters and metadata" (Just (Aeson.Object new)) (KM.lookup "measurements" report)
+          assertEqual "baseline retains counters and metadata" (Just (Aeson.Object old)) (KM.lookup "baseline" report)
+        _ -> assertFailure "expected a counter report"
+  , testCase "different counter scope or machine cannot produce a performance delta" $ do
+      let old = counterSample 1000000 1
+          new = counterSample 2000000 2
+          alter key value = KM.insert "counter_info" (case KM.lookup "counter_info" old of
+            Just (Aeson.Object info) -> Aeson.Object (KM.insert key (Aeson.String value) info)
+            _ -> Aeson.Null) old
+      assertBool "matching counters can compare" (perfComparable "instructions" old new)
+      assertBool "hardware permissions do not change CPU-time accounting"
+        (perfComparable "cpu_user" (alter "scope" "process:user") new)
+      forM_ [alter "scope" "process:user", alter "cpu" "another CPU", alter "version" "2", KM.delete "counter_info" old] $ \baseline -> do
+        assertEqual "no confidence interval for incomparable counters" Nothing (perfMeanInterval "instructions" baseline new)
+        let rows = renderPerf 119 False (Just baseline) (result new)
+            line = maybe "" id (find ("instructions" `isInfixOf`) rows)
+        assertBool line (not ("+100.0%" `isInfixOf` line))
+        assertBool line ("2.00M" `isInfixOf` line)
+        assertBool "legacy timing remains comparable" (perfComparable "duration" baseline new)
   , testCase "small spreads and range endpoints keep their precision" $ do
       let obj = sample 1 0.001 10 `KM.union` KM.fromList [("min_duration", Aeson.toJSON (0.001 :: Double)), ("max_duration", Aeson.Number 1)]
           rendered = unlines (renderPerf 79 False Nothing (result obj))
@@ -205,6 +239,7 @@ perfTests = testGroup "performance baselines"
         writeFile (proj </> "Build.act") $ unlines ["name = " ++ show name, "fingerprint = " ++ fp]
         writeFile (proj </> "src/sample.act") $ unlines
           [ "import testing"
+          , "import acton.rts"
           , ""
           , "actor _test_first(t: testing.AsyncT):"
           , "    t.success()"
@@ -220,7 +255,23 @@ perfTests = testGroup "performance baselines"
           , ""
           , "actor _test_slow(t: testing.AsyncT):"
           , "    after 3.5: t.success()"
+          , ""
+          , "actor _test_counter_activation(t: testing.EnvT):"
+          , "    assert t.env.getenv(\"ACTON_TEST_PERF\") is None"
+          , "    info = acton.rts.perf_info(t.env.syscap)"
+          , "    if \"perf\" in t.env.argv:"
+          , "        assert info[\"status\"] != \"not enabled at process start\""
+          , "    else:"
+          , "        assert info[\"status\"] == \"not enabled at process start\""
+          , "        assert acton.rts.perf_snapshot(t.env.syscap).instructions is None"
+          , "    t.success()"
           ]
+        _ <- runOK ["--name", "counter_activation"]
+        environment <- getEnvironment
+        (ordinaryCode, ordinaryOut, ordinaryErr) <- readCreateProcessWithExitCode
+          (proc acton ["test", "--iter", "1", "--name", "counter_activation", "--no-cache"])
+            { cwd = Just proj, env = Just (("ACTON_TEST_PERF", "1") : filter ((/= "ACTON_TEST_PERF") . fst) environment) } ""
+        assertEqual (ordinaryOut ++ ordinaryErr) ExitSuccess ordinaryCode
         _ <- runOK ["--record", "--name", "first|second"]
         saved0 <- readBaseline
         -- The old writer included null entries when a test process crashed.
@@ -231,6 +282,15 @@ perfTests = testGroup "performance baselines"
         forM_ tests $ \raw -> case raw of
           Aeson.Object obj -> do
             forM_ distributionKeys $ \key -> assertBool (show key ++ " missing from recording") (KM.member key obj)
+            case KM.lookup "counter_info" obj of
+              Just (Aeson.Object info) -> do
+                assertBool "performance counters activated before runtime startup"
+                  (KM.lookup "status" info /= Just (Aeson.String "not enabled at process start"))
+                when (KM.lookup "status" info == Just (Aeson.String "available")) $
+                  forM_ ["avg_instructions", "avg_cycles", "avg_ipc"] $ \key -> case KM.lookup key obj of
+                    Just (Aeson.Number n) -> assertBool (show key) (n > 0)
+                    _ -> assertFailure (show key ++ " missing from available hardware counters")
+              _ -> assertFailure "missing counter metadata"
             case KM.lookup "peak_rss" obj of
               Nothing -> return ()
               Just (Aeson.Number rss) -> assertBool "peak RSS is positive when available" (rss > 0)
@@ -246,7 +306,7 @@ perfTests = testGroup "performance baselines"
         assertEqual "terminal comparison leaves the baseline intact" bytes =<< BL.readFile baseline
         json <- runOK ["--json", "--name", "first"]
         assertBool json ("\"cached\":false" `isInfixOf` json)
-        forM_ ["performance", "median_duration", "stdev_duration", "outlier_count", "avg_wall_duration", "avg_gc_duration", "mean_difference_ci95_ms"] $ \key ->
+        forM_ ["performance", "median_duration", "stdev_duration", "outlier_count", "avg_wall_duration", "avg_gc_duration", "mean_difference_ci95_ms", "counter_info", "avg_cpu_user", "avg_cpu_system"] $ \key ->
           assertBool (key ++ " missing from " ++ json) (("\"" ++ key ++ "\"") `isInfixOf` json)
         forM_ distributionKeys $ \key -> assertBool (show key ++ " missing from " ++ json) (show key `isInfixOf` json)
         -- Set a deterministic reference and check that --record compares with
@@ -365,8 +425,23 @@ fullTableResult = tableResult { trRaw = case trRaw tableResult of
 distributionKeys :: [Aeson.Key]
 distributionKeys =
   [ stat <> "_" <> metric
-  | metric <- ["wall_duration", "gc_duration", "mem_usage_delta", "non_gc_mem_usage_delta"]
+  | metric <- ["wall_duration", "gc_duration", "mem_usage_delta", "non_gc_mem_usage_delta", "cpu_user", "cpu_system"]
   , stat <- ["min", "max", "median", "q1", "q3", "stdev", "outlier_count"]
+  ]
+
+counterSample :: Double -> Double -> Aeson.Object
+counterSample instructions ipc = KM.fromList
+  [ ("avg_instructions", Aeson.toJSON instructions)
+  , ("stdev_instructions", Aeson.Number 0)
+  , ("avg_ipc", Aeson.toJSON ipc)
+  , ("stdev_ipc", Aeson.Number 0)
+  , ("num_iterations", Aeson.Number 10)
+  , ("counter_info", Aeson.object
+      [ "version" Aeson..= ("1" :: String), "backend" Aeson..= ("perf_event_open" :: String)
+      , "scope" Aeson..= ("process:user+kernel" :: String), "os" Aeson..= ("Linux" :: String)
+      , "release" Aeson..= ("6.1" :: String), "arch" Aeson..= ("x86_64" :: String)
+      , "cpu" Aeson..= ("test CPU" :: String), "status" Aeson..= ("available" :: String)
+      ])
   ]
 
 renderPerf :: Int -> Bool -> Maybe Aeson.Object -> TestResult -> [String]
