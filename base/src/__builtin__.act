@@ -953,11 +953,32 @@ def chr(i: Integral) -> str:
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
     return Integral.__divmod__(a,b)
 
-def enumerate(iterable: Iterable[A], start: ?int) -> Iterator[(int,A)]:
-    NotImplemented
+# class enumerate[A](Iterator[(int,A)]):
+#     def __init__(self, it: Iterable[A], start: ?int):
+#         self.itr = iter(it)
+#         if start is not None:
+#             self.start = start
+#         else:
+#             self.start = 0
+# 
+#     def __next__(self):
+#         res = (self.start,next(self.itr))
+#         self.start += 1
+#         return res
 
-def filter (function: ?((A) -> B), iterable: Iterable[A]) -> Iterator[A]:
+def enumerate[A](it: Iterable[A], start: ?int) -> Iterator[(int,A)]:
     NotImplemented
+    
+class filter[A,B(value)](Iterator[A]):
+    def __init__(self, p: (A)->B, it: Iterable[A]):
+        self.p = p
+        self.itr = iter(it)
+
+    def __next__(self):
+        x = next(self.itr)
+        while not bool(self.p(x)):
+            x = next(self.itr)
+        return x
 
 def hash(x: Hashable) -> u64:
     h = hasher()
@@ -978,20 +999,49 @@ def iter(x : Iterable[A]) -> Iterator[A]:
 def len(x : Collection[A]) -> int:
     return x.__len__()
 
-def map(function: (A) -> B, iterable: Iterable[A]) -> Iterator[B]:
-    NotImplemented
+class map[A,B](Iterator[B]):
+    def __init__(self, f: (A) -> B, it: Iterable[A]):
+        self.f = f
+        self.itr = iter(it)
+    def __next__(self):
+        return self.f(next(self.itr))
 
-def max [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
-    NotImplemented
+def max [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
+    res: ?A = dflt
+    for x in it:
+        if res is not None:
+            res = x if x > res else res
+        else:
+            res = x
+    if res is not None:
+        return res
+    else:
+        raise ValueError("max() arg is an empty sequence")
 
-def min [A(Ord)] (iter: Iterable[A], dflt: ?A) -> A:
-    NotImplemented
+def min [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
+    res: ?A = dflt
+    for x in it:
+        if res is not None:
+            res = x if x < res else res
+        else:
+            res = x
+    if res is not None:
+        return res
+    else:
+        raise ValueError("min() arg is an empty sequence")
 
-def max_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
-    NotImplemented
 
-def min_def [A(Ord)] (iter: Iterable[A], dflt: A) -> A:
-    NotImplemented
+def max_def [A(Ord)] (it: Iterable[A], dflt: A) -> A:
+    res = dflt
+    for x in it:
+        res = x if x > res else res
+    return res
+
+def min_def [A(Ord)] (it: Iterable[A], dflt: A) -> A:
+    res = dflt
+    for x in it:
+        res = x if x < res else res
+    return res
 
 def next(x : Iterator[A]) -> A:
     return x.__next__()
@@ -1043,11 +1093,22 @@ def deserialize(data: bytes) -> value:
 def sorted [A(Ord)] (iter: Iterable[A]) -> list[A]:
     NotImplemented
 
-def sum [A(Plus)] (iter: Iterable[A], start: ?A) -> A:
-    NotImplemented
+def sum [A(Plus)] (it: Iterable[A], start: ?A) -> A:
+    if start is not None:
+        res = start
+    else:
+        res = Plus.__zero__()
+    for i in iter(it):
+        res += i
+    return res
 
-def zip (a: Iterable[A], b: Iterable[B]) -> Iterator[(A,B)]:
-    NotImplemented
+class zip[A,B](Iterator[(A,B)]):
+    def __init__(self, a: Iterable[A], b: Iterable[B]):
+        self.a = iter(a)
+        self.b = iter(b)
+        
+    def __next__(self):
+        return (next(self.a), next(self.b))
 
 def gcd(a : bigint, b :bigint) -> bigint:
     NotImplemented

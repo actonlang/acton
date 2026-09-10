@@ -2764,9 +2764,17 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
     int len = self->nbytes;
     B_bytearray other;
     NEW_UNFILLED_BYTEARRAY(other,0);
-    $WORD w;
-    while ((w=it->$class->__next__(it)))
-        B_SequenceD_bytearrayD_append(wit, other,w);
+    if ($PUSH()) {
+        while(1) {
+            $WORD w = it->$class->__next__(it);
+            B_SequenceD_bytearrayD_append(wit, other,w);
+        }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration))
+            $RAISE(ex);
+    }
     int olen = other->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);

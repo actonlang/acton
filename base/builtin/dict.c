@@ -232,18 +232,17 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     dict->table = NULL;
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
-        while(1) {
-            if ($PUSH()) {
+        if ($PUSH()) {
+            while(true) {
                 B_tuple nxt = (B_tuple)it->$class->__next__(it);
                 B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
-                $DROP();
-            } else {
-                B_BaseException ex = $POP();
-                if ($ISINSTANCE0(ex, B_StopIteration))
-                    break;
-                else
-                    $RAISE(ex);
             }
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if ($ISINSTANCE0(ex, B_StopIteration)) {
+            } else
+                $RAISE(ex);
         }
     }
     return B_None;
@@ -699,18 +698,16 @@ B_Iterator B_MappingD_dictD_items (B_MappingD_dict wit, B_dict dict) {
 B_NoneType B_MappingD_dictD_update (B_MappingD_dict wit, B_dict dict, B_Iterable wit2, $WORD other) {
     B_Hashable hashwit = wit->W_HashableD_AD_MappingD_dict;
     B_Iterator it = wit2->$class->__iter__(wit2,other);
-    while(1) {
-        if ($PUSH()) {
+    if ($PUSH()) {
+        while(true) {
             B_tuple item = it->$class->__next__(it);
             B_dictD_setitem(dict,hashwit,item->components[0],item->components[1]);
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration))
-                break;
-           else
-               $RAISE(ex);
         }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration))
+            $RAISE(ex);
     }
     return B_None;
 }

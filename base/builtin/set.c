@@ -210,18 +210,16 @@ B_NoneType B_setD___init__(B_set set, B_Hashable hashwit, B_Iterable wit, $WORD 
     memset(set->table,0,MIN_SIZE*sizeof(B_setentry));
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
-        while(1) {
-            if ($PUSH()) {
+        if ($PUSH()) {
+            while(true) {
                 $WORD nxt = it->$class->__next__(it);
                 B_set_add_entry(set,hashwit,nxt,B_hash(hashwit, nxt));
-                $DROP();
-            } else {
-                B_BaseException ex = $POP();
-                if ($ISINSTANCE0(ex, B_StopIteration))
-                    break;
-                else
-                    $RAISE(ex);
             }
+            $DROP();
+        } else {
+            B_BaseException ex = $POP();
+            if (! $ISINSTANCE0(ex, B_StopIteration))
+                $RAISE(ex);
         }
     }
     return B_None;
@@ -426,15 +424,15 @@ bool B_SetD_setD_isdisjoint (B_SetD_set wit, B_set set, B_set other) {
     if (other->numelements > set->numelements)
         return B_SetD_setD_isdisjoint(wit,other,set);
     B_Iterator iter = B_set_iter_entry(other);
-    $WORD w;
-    bool res = true;
-    while((w = $next(iter))){
+    uint64_t n = 0;
+    while(n < other->numelements) {
+        $WORD w = $next(iter);
         if(B_set_contains_entry(set, hashwit,((B_setentry*)w)->key, ((B_setentry*)w)->hash)) {
-            res = false;
-            break;
+            return false;
         }
+        n++;
     }
-    return res;
+    return true;
 }
 
 // TODO: ideally this could be defined in .act file instead of C since we just
@@ -444,18 +442,16 @@ B_NoneType B_SetD_setD_update (B_SetD_set wit, B_set set, B_Iterable otherwit, $
     if (set == other)
         return B_None;
     B_Iterator it = otherwit->$class->__iter__(otherwit, other);
-    while(1) {
-        if ($PUSH()) {
+    if ($PUSH()) {
+        while(true) {
             $WORD e = it->$class->__next__(it);
             B_set_add_entry(set, hashwit, e, B_hash(hashwit, e));
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration))
-                break;
-           else
-               $RAISE(ex);
         }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration)) 
+            $RAISE(ex);
     }
     return B_None;
 }

@@ -68,7 +68,7 @@ void $register_builtin() {
   $register_force(ENUMERATEITERATOR_ID,&B_IteratorD_enumerateG_methods);
   // $register_force(FILTERITERATOR_ID,&B_IteratorD_filterG_methods);
   // $register_force(MAPITERATOR_ID,&B_IteratorD_mapG_methods);
-  $register_force(ZIPITERATOR_ID,&B_IteratorD_zipG_methods);
+  // $register_force(ZIPITERATOR_ID,&B_IteratorD_zipG_methods);
   $register_force(BASEEXCEPTION_ID,&B_BaseExceptionG_methods);
   $register_force(SYSTEMEXIT_ID,&B_SystemExitG_methods);
   $register_force(KEYBOARDINTERRUPT_ID,&B_KeyboardInterruptG_methods);
