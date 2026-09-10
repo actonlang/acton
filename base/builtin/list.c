@@ -82,18 +82,16 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     $WORD w;
     B_Iterator it = wit->$class->__iter__(wit,iterable);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
-    while(1) {
-        if ($PUSH()) {
+    if ($PUSH()) {
+        while(true) {
             $WORD e = it->$class->__next__(it);
             wit2->$class->append(wit2, lst, e);
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration))
-                break;
-           else
-               $RAISE(ex);
         }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration))
+            $RAISE(ex);
     }
     return B_None;
 }
@@ -453,18 +451,16 @@ B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_It
     B_list other = B_listD_new(0);
     B_SequenceD_list wit3 = B_SequenceD_listG_new();
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
-    while(1) {
-        if ($PUSH()) {
+    if ($PUSH()) {
+        while(1) {
             $WORD w = it->$class->__next__(it);
             wit3->$class->append(wit3, other, w);
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration))
-                break;
-           else
-               $RAISE(ex);
         }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        if (! $ISINSTANCE0(ex, B_StopIteration))
+            $RAISE(ex);
     }
     int olen = other->length;
     int64_t start, stop, step, slen;
