@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module WatchTests (watchProcessTests) where
+module WatchTests (watchProcessTests, assertStopped) where
 
 import Control.Concurrent (threadDelay)
 import Control.Exception (IOException, catch, finally, mask)
