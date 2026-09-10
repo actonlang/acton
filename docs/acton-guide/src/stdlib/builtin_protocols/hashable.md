@@ -110,6 +110,11 @@ Many built-in value types implement `Hashable`, including:
 - `complex`
 - `str`
 - `bytes`
+- `set`, whose elements must also implement `Hashable`
 
-`dict` and `set` use `Hashable` for their key or element types, but are
-not themselves documented as `Hashable` here.
+A set's hash depends on its elements, regardless of insertion order.
+Sets can therefore be dictionary keys or elements of other sets. Keep a
+set unchanged while it is used as a dictionary key or stored in another
+set.
+
+`dict` requires `Hashable` keys but does not itself implement `Hashable`.

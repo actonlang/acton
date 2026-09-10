@@ -550,6 +550,21 @@ bool B_OrdD_SetD_setD___le__ (B_OrdD_SetD_set wit, B_set set, B_set other) {
     return  B_OrdD_SetD_setD___ge__(wit, other, set);
 }
 
+// B_Hashable
+
+B_NoneType B_HashableD_setD_hash(B_HashableD_set wit, B_set set, B_hasher h) {
+    // Element hashes are already mixed. Sum them to ignore table order and
+    // include the count so cardinality contributes even when hashes collide.
+    uint64_t data[2] = {set->numelements, 0};
+    for (uint64_t i = 0; i <= set->mask; i++) {
+        B_setentry *entry = &set->table[i];
+        if (entry->key != NULL && entry->key != dummy)
+            data[1] += entry->hash;
+    }
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)data,sizeof(data)));
+    return B_None;
+}
+
 // B_Minus
 
 
