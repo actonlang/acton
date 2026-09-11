@@ -48,6 +48,11 @@ When possible, strive to use unit tests rather than actor based tests and strive
 
 For snapshot-based assertions, see [Snapshot testing](testing/snapshot.md).
 
+Use `acton test perf` to measure tests with warmup and fresh performance
+measurements. Use `for scale in t.loop():` to measure a region while excluding
+setup and teardown; ordinary testing runs its body once at scale 1. See
+[Performance testing](testing/performance.md) for the lifecycle and examples.
+
 ## Cached test results
 
 The Acton test runner caches test results which means that repeated invokations of `acton test` might not actually (re)run tests. Cached failures and errors are still shown by default, so you never miss a failing test. Cached successes are hidden unless you pass `--show-cached`. Pass `--no-cache` to force all selected tests to run, even if cached results exist.

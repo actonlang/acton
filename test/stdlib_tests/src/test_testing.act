@@ -55,6 +55,13 @@ actor _test_async_snapshot(t: testing.AsyncT):
 actor _test_env_snapshot(t: testing.EnvT):
     t.success("env snapshot")
 
+actor _test_DuplicateCompletion(t: testing.AsyncT):
+    # Only the first completion belongs to this invocation. The delayed one
+    # must not complete or fail a subsequent invocation of the same test.
+    t.success()
+    t.failure(AssertionError("duplicate completion"))
+    after 0.001: t.failure(AssertionError("late completion"))
+
 actor _test_AsyncRequireShortCircuit(t: testing.AsyncT):
     t.require("network")
     t.failure(AssertionError("should not run after require"))

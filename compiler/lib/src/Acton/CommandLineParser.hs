@@ -18,7 +18,11 @@ defTarget = "x86_64-linux-gnu.2.27"
 #endif
 
 parseCmdLine        :: IO CmdLineOptions
-parseCmdLine        = execParser (info (cmdLineParser <**> helper) descr)
+parseCmdLine        = customExecParser cmdLinePrefs (info (cmdLineParser <**> helper) descr)
+
+-- Keep global options available between options of nested commands.
+cmdLinePrefs :: ParserPrefs
+cmdLinePrefs = prefs subparserInline
 
 data CmdLineOptions = CompileOpt [String] GlobalOptions CompileOptions
                     | CmdOpt GlobalOptions Command
@@ -163,6 +167,8 @@ data TestOptions = TestOptions
     , testMinIter      :: Int
     , testMaxTime      :: Int
     , testMinTime      :: Int
+    , testTime         :: Int
+    , testScale        :: Maybe Int
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -349,7 +355,10 @@ sigCompileOptions = mkSigCompileOptions
         , dep_overrides = depOverrides
         }
 
-compileOptions = CompileOptions
+compileOptions = compileOptionsWith optimizeOption
+
+compileOptionsWith :: Parser OptimizeMode -> Parser CompileOptions
+compileOptionsWith optimization = CompileOptions
         <$> switch (long "always-build" <> help "Show the result of parsing")
         <*> switch (long "ignore-compiler-version" <> help "Ignore acton version when checking .tydb freshness")
         <*> switch (long "db"           <> help "Enable DB backend")
@@ -370,7 +379,7 @@ compileOptions = CompileOptions
         <*> switch (long "cpedantic"    <> help "Pedantic C compilation with -Werror")
         <*> switch (long "dbg-no-lines" <> help "Disable emission of C #line directives (for debugging codegen)")
         <*> switch (long "no-dbp"      <> help "Disable deferred back passes")
-        <*> optimizeOption
+        <*> optimization
         <*> switch (long "only-build"   <> help "Only perform final build of .c files, do not compile .act files")
         <*> switch (long "skip-build"   <> help "Skip final bulid of .c files")
         <*> switch (long "watch"        <> help "Rebuild on file changes")
@@ -464,7 +473,10 @@ docOptions = DocOptions
         )
 
 optimizeOption :: Parser OptimizeMode
-optimizeOption = resolveOptimizeOption
+optimizeOption = fromMaybe Debug <$> requestedOptimizeOption
+
+requestedOptimizeOption :: Parser (Maybe OptimizeMode)
+requestedOptimizeOption = resolveOptimizeOption
     <$> optional releaseOption
     <*> optional
         (option optimizeReader
@@ -483,53 +495,42 @@ optimizeOption = resolveOptimizeOption
              <> internal
             )
 
-    resolveOptimizeOption _ (Just mode) = mode
-    resolveOptimizeOption (Just mode) _ = mode
-    resolveOptimizeOption Nothing Nothing = Debug
-
-data TestModeTag = ModeList | ModePerf | ModeStress deriving Show
+    resolveOptimizeOption _ (Just mode) = Just mode
+    resolveOptimizeOption release Nothing = release
 
 testCommand :: Parser TestCommand
 testCommand =
-    toCmd
-      <$> optional (argument testModeReader (metavar "MODE" <> help "list | perf | stress"))
-      <*> testOptions
-  where
-    toCmd mMode opts =
-      case mMode of
-        Just ModeList -> TestList opts
-        Just ModePerf -> TestPerf opts
-        Just ModeStress -> TestStress opts
-        Nothing -> TestRun opts
+    hsubparser
+      (  command "list" (info (TestList <$> testOptions False) (progDesc "List project tests"))
+      <> command "perf" (info (TestPerf <$> testOptions True) (progDesc "Measure test performance"))
+      <> command "stress" (info (TestStress <$> testOptions False) (progDesc "Run stress tests"))
+      )
+    <|> (TestRun <$> testOptions False)
 
-testModeReader :: ReadM TestModeTag
-testModeReader = eitherReader $ \s ->
-    case s of
-      "list" -> Right ModeList
-      "perf" -> Right ModePerf
-      "stress" -> Right ModeStress
-      _      -> Left "Expected 'list', 'perf' or 'stress'"
-
-testOptions :: Parser TestOptions
-testOptions = mkTestOptions
-    <$> compileOptions
+testOptions :: Bool -> Parser TestOptions
+testOptions perfMode = mkTestOptions
+    <$> compileOptionsWith (fromMaybe defaultOptimize <$> requestedOptimizeOption)
     <*> switch (long "show-log"      <> help "Show test log output")
     <*> switch (long "show-cached"   <> help "Show cached test results")
     <*> switch (long "no-cache"      <> help "Always run tests instead of reusing cached results")
     <*> switch (long "json"          <> help "Output final test results as JSON")
     <*> switch (long "record"        <> help "Update the performance baseline in perf_data (perf mode)")
     <*> switch (long "snapshot-update" <> long "golden-update" <> long "accept" <> help "Accept current test output as expected snapshot values")
-    <*> option auto (long "iter"     <> metavar "N" <> value (-1) <> help "Number of iterations to run a test")
-    <*> optional (option auto (long "max-iter" <> metavar "N" <> help "Maximum number of iterations to run a test (mode defaults when omitted)"))
-    <*> option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test")
-    <*> optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)"))
-    <*> optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds"))
-    <*> option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)")
+    <*> ordinary (-1) (option auto (long "iter" <> metavar "N" <> value (-1) <> help "Number of iterations to run a test"))
+    <*> ordinary Nothing (optional (option auto (long "max-iter" <> metavar "N" <> help "Maximum number of iterations to run a test (mode defaults when omitted)")))
+    <*> ordinary 3 (option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test"))
+    <*> ordinary Nothing (optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)")))
+    <*> ordinary Nothing (optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds")))
+    <*> (if perfMode then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
+    <*> (if perfMode then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
+    <*> ordinary 0 (option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)"))
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testStressWorkers testTags testModules testNames =
+    defaultOptimize = if perfMode then ReleaseFast else Debug
+    ordinary fallback parser = if perfMode then pure fallback else parser
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStressWorkers testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -543,6 +544,8 @@ testOptions = mkTestOptions
         , testMinIter = testMinIter
         , testMaxTime = fromMaybe 1000 testMaxTimeOpt
         , testMinTime = fromMaybe 50 testMinTimeOpt
+        , testTime = testTime
+        , testScale = testScale
         , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt
@@ -551,6 +554,28 @@ testOptions = mkTestOptions
         , testModules = testModules
         , testNames = testNames
         }
+
+scaleReader :: ReadM Int
+scaleReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of
+    [(n, "")] | n > 0 && n <= toInteger (maxBound :: Int) -> Right (fromInteger n)
+    _ -> Left "Expected a positive workload scale that fits in an integer"
+
+durationReader :: ReadM Int
+durationReader = eitherReader $ \s -> case reads s :: [(Double, String)] of
+    [(number, unit)] ->
+      let milliseconds = case map toLower unit of
+            "ms" -> number
+            "s" -> number * 1000
+            _ -> 0
+      in if isNaN milliseconds || isInfinite milliseconds || milliseconds < 1
+           then Left expected
+           else let rounded = round milliseconds :: Integer
+                in if rounded > toInteger (maxBound :: Int)
+                     then Left "Duration is too large"
+                     else Right (fromInteger rounded)
+    _ -> Left expected
+  where
+    expected = "Expected a positive duration such as 5s or 250ms (minimum 1ms)"
 
 depOverrideReader :: ReadM (String,String)
 depOverrideReader = eitherReader $ \s ->

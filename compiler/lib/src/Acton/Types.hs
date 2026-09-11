@@ -2790,6 +2790,8 @@ testType (NDef (TSchema _ [] (TFun _ fx ppar kpar res)) _ _)
                                              (r, fx', [t], []) | t == envT   && validReturn r                     -> Just EnvTest
                                              -- Functions with keyword test parameters
                                              (r, fx', [], [t]) | t == syncT  && validReturn r                     -> Just SyncTest
+                                             (r, fx', [], [t]) | t == asyncT && validReturn r                     -> Just AsyncTest
+                                             (r, fx', [], [t]) | t == envT   && validReturn r                     -> Just EnvTest
                                              _                                                                    -> Nothing
     where validReturn r                 = r == tNone || r == TNone NoLoc || r == tStr
           syncT                         = tCon (TC (gname [name "testing"] (name "SyncT")) [])

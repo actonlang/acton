@@ -34,6 +34,7 @@ import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
 import qualified PerfTests
+import qualified TestOutputTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -78,6 +79,7 @@ main = do
       , parseFlagTests
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
+      , TestOutputTests.testOutputTests
       , crossCompileTests
       , pkgCliTests
       ]
@@ -1648,7 +1650,7 @@ parseFlagTests =
     parserInfo = OA.info (C.cmdLineParser OA.<**> OA.helper) C.descr
 
     parseArgs args =
-      case OA.execParserPure OA.defaultPrefs parserInfo args of
+      case OA.execParserPure C.cmdLinePrefs parserInfo args of
         OA.Success result -> return result
         OA.Failure failure -> do
           let (msg, _) = OA.renderFailure failure "acton"
@@ -1667,7 +1669,7 @@ parseFlagTests =
           assertFailure ("expected build command for " ++ unwords args)
 
     renderParserHelp args =
-      case OA.execParserPure OA.defaultPrefs parserInfo args of
+      case OA.execParserPure C.cmdLinePrefs parserInfo args of
         OA.Failure failure -> pure (fst (OA.renderFailure failure "acton"))
         OA.Success _ -> assertFailure ("expected parser help for " ++ unwords args)
         OA.CompletionInvoked _ ->

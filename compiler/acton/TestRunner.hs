@@ -13,13 +13,15 @@ import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import qualified FileUtil
 import TestFormat
+import TestOutput
 import TestPerf
 import TestUI
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
 import Data.IORef
-import Data.Char (isSpace)
+import Data.Char (isSpace, isHexDigit, toLower)
 import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
 import Data.Maybe (catMaybes, listToMaybe, isJust)
@@ -29,8 +31,9 @@ import System.Clock
 import System.Directory
 import System.Exit
 import System.Environment (getEnvironment)
+import qualified System.Info as System
 import System.FilePath ((</>), (<.>), joinPath)
-import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
+import System.IO (hClose, hIsEOF)
 import System.Process
 import ProcessUtil (stopProcessGroup)
 import Text.Printf
@@ -39,7 +42,11 @@ import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
 import Control.Exception (IOException, SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
@@ -232,6 +239,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             ctxHash = contextHashBytes runContext
             useCache = not (C.testNoCache topts) && mode == TestModeRun
         perfData <- if mode == TestModePerf then readPerfData paths else return M.empty
+        perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts else return AesonKM.empty
         let detailLines res =
               map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
               if mode == TestModePerf
@@ -352,9 +360,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                           then return Nothing
                           else do
                             callbacks <- testProgressCallbacks ui eventChan key display (mode == TestModePerf) expectedDurationMs detailLines
+                            let baselineScale = lookupPerfData perfData initRes >>= (\old -> perfBaselineScale old perfHostInfo)
                             mask $ \unmask -> do
                               worker <- async $ unmask $ mask $ \restore -> do
-                                resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
+                                resE <- try (restore (runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale (tsModule spec) (tsName spec)
                                                        (tpuEnabled ui) callbacks))
                                           :: IO (Either SomeException TestResult)
                                 case resE of
@@ -514,29 +523,6 @@ renderChunk multi (chunk, count) =
 stripTrailingBlanks :: [String] -> [String]
 stripTrailingBlanks = reverse . dropWhile null . reverse
 
-testOutputMeaningful :: String -> Bool
-testOutputMeaningful msgs =
-    any (\line -> not (all isSpace line) && not ("== Running test," `isPrefixOf` line)) (lines msgs)
-
-splitTestOutput :: String -> [String]
-splitTestOutput buf =
-    let ls = lines buf
-        isMarker line = "== Running test, iteration:" `isInfixOf` stripAnsi (trim line)
-        step (chunks, current, seenMarker) line
-          | isMarker line =
-              if seenMarker
-                then (chunks ++ [trim current], "", True)
-                else (chunks, "", True)
-          | otherwise =
-              let current' = if null current then line else current ++ "\n" ++ line
-              in (chunks, current', seenMarker)
-        (chunks0, current0, seenMarker) = foldl' step ([], "", False) ls
-        chunks1 =
-          if seenMarker
-            then chunks0 ++ [trim current0]
-            else if null (trim buf) then [] else [trim buf]
-    in chunks1
-
 renderIterationOutput :: String -> String -> String
 renderIterationOutput out err =
     let out' = trim out
@@ -569,17 +555,6 @@ trim :: String -> String
 trim s =
     let dropEnd = reverse . dropWhile isSpace . reverse
     in dropWhile isSpace (dropEnd s)
-
-stripAnsi :: String -> String
-stripAnsi [] = []
-stripAnsi ('\ESC':'[':xs) = stripAnsi (dropAnsi xs)
-stripAnsi (x:xs) = x : stripAnsi xs
-
-dropAnsi :: String -> String
-dropAnsi [] = []
-dropAnsi (c:cs)
-  | c == 'm' = cs
-  | otherwise = dropAnsi cs
 
 -- | Filter module names based on CLI-provided allow lists.
 filterModules :: [String] -> [String] -> [String]
@@ -648,12 +623,14 @@ runModuleTestStreaming :: C.CompileOptions
                        -> Paths
                        -> C.TestOptions
                        -> TestMode
+                       -> Aeson.Object
+                       -> Maybe Int
                        -> String
                        -> String
                        -> Bool
                        -> TestProgressCallbacks
                        -> IO TestResult
-runModuleTestStreaming opts paths topts mode modName testName allowLive callbacks = do
+runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName testName allowLive callbacks = do
     environment <- getEnvironment
     let binPath = testBinaryPath opts paths modName
         modeArgs =
@@ -662,11 +639,17 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
             TestModeStress -> ["stress"]
             _ -> []
         cmd = ["test", testName] ++ modeArgs ++ testCmdArgs mode topts
-    updatesRef <- newIORef []
+          ++ maybe [] (\scale -> ["--scale", show scale]) (C.testScale topts <|> baselineScale)
+    resultRef <- newIORef Nothing
     lineDoneRef <- newIORef False
-    stdErrRef <- newIORef []
-    let onUpdate res = do
-          modifyIORef' updatesRef (\xs -> xs ++ [res])
+    stdOutRef <- newIORef emptyTestOutput
+    stdErrRef <- newIORef emptyTestOutput
+    let onUpdate raw = do
+          let res = validateScale (annotatePerfResult perfHostInfo raw)
+          modifyIORef' resultRef $ \previous ->
+            case previous of
+              Just old | trComplete old && not (trComplete res) -> previous
+              _ -> Just res
           done <- readIORef lineDoneRef
           when (not done && allowLive) $ do
             if trComplete res
@@ -674,7 +657,8 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
                 tpcOnDone callbacks res
                 writeIORef lineDoneRef True
               else tpcOnLive callbacks res
-        addStdErr line = modifyIORef' stdErrRef (line :)
+        onOutLine line = modifyIORef' stdOutRef (appendTestOutput line)
+        addStdErr line = modifyIORef' stdErrRef (appendTestOutput line)
         onErrLine line =
           case parseJsonLine line of
             Nothing -> addStdErr line
@@ -688,20 +672,20 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
           , create_group = C.watch opts
           , delegate_ctlc = not (C.watch opts)
           }
-    procRes <- try (readProcessWithExitCodeStreaming procSpec onErrLine) :: IO (Either SomeException (ExitCode, String, String))
-    (exitCode, out, _err, interruptedByUser) <-
+    procRes <- try (readProcessWithExitCodeStreaming procSpec onOutLine onErrLine) :: IO (Either SomeException ExitCode)
+    (exitCode, interruptedByUser) <-
       case procRes of
-        Right (code, outTxt, errTxt) ->
-          return (code, outTxt, errTxt, False)
+        Right code ->
+          return (code, False)
         Left ex ->
           case fromException ex of
             Just UserInterrupt ->
-              return (ExitFailure (-2), "", "", True)
+              return (ExitFailure (-2), True)
             _ -> throwIO ex
-    infos <- readIORef updatesRef
-    stdErrLines <- reverse <$> readIORef stdErrRef
-    let stdErrText = unlines stdErrLines
-    let final = pickFinalTestInfo infos
+    final <- readIORef resultRef
+    stdOut <- readIORef stdOutRef
+    stdErr <- readIORef stdErrRef
+    let (out, stdErrText) = finishTestOutput stdOut stdErr
         fallback = TestResult
           { trModule = modName
           , trName = testName
@@ -747,10 +731,11 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
                 ExitSuccess -> res1
                 ExitFailure code ->
                   res1 { trException = Just ("Test process exited with code " ++ show code) }
-    res' <-
+    updated <-
       if C.testSnapshotUpdate topts
         then applySnapshotUpdate paths res
         else return res
+    let res' = validateScale updated
     done <- readIORef lineDoneRef
     if done
       then tpcOnFinal callbacks res'
@@ -759,6 +744,18 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
         tpcOnFinal callbacks res'
     return res'
   where
+    validateScale res
+      | isJust (C.testScale topts), trComplete res, trSuccess res == Just True
+      , not (trSkipped res), not (isJust (trException res))
+      , Aeson.Object obj <- trRaw res, Just info <- perfInfo obj
+      , AesonKM.lookup (AesonKey.fromString "loop") info == Just (Aeson.Bool False) =
+          res { trSuccess = Just False
+              , trException = Just "Explicit --scale requires a test that uses t.loop()"
+              , trNumFailures = trNumFailures res + 1
+              , trSnapshotUpdated = False
+              }
+      | otherwise = res
+
     isInterruptExitCode ExitSuccess = False
     isInterruptExitCode (ExitFailure code) = code == (-2) || code == 130
 
@@ -1030,14 +1027,11 @@ testsPerSecond iterations durationMs
   | otherwise = (fromIntegral iterations * 1000.0) / durationMs
 
 effectiveTestTiming :: TestMode -> C.TestOptions -> (Int, Int)
+effectiveTestTiming TestModePerf topts = (C.testTime topts, C.testTime topts)
 effectiveTestTiming mode topts =
     let rawMinTime = C.testMinTime topts
         minTime =
           case mode of
-            TestModePerf ->
-              if not (C.testMinTimeSet topts)
-                then 1000
-                else rawMinTime
             TestModeStress ->
               if not (C.testMinTimeSet topts)
                 then 1000
@@ -1047,7 +1041,6 @@ effectiveTestTiming mode topts =
         modeDefaultMaxTime =
           case mode of
             TestModeRun -> minTime
-            TestModePerf -> 1000
             TestModeStress -> 5000
             _ -> 1000
         maxTime
@@ -1058,7 +1051,9 @@ effectiveTestTiming mode topts =
 
 -- | Build test runner arguments from TestOptions limits.
 testCmdArgs :: TestMode -> C.TestOptions -> [String]
-testCmdArgs mode topts =
+testCmdArgs mode topts
+  | mode == TestModePerf = ["--time", show (C.testTime topts)] ++ tagArgs
+  | otherwise =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts
         (minTime, maxTime) = effectiveTestTiming mode topts
@@ -1077,8 +1072,9 @@ testCmdArgs mode topts =
                  , "--max-time", show maxTime
                  , "--min-time", show minTime
                  ]
-        tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
     in baseArgs ++ stressWorkerArgs ++ tagArgs
+  where
+    tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
 
 -- | Normalize test names by stripping prefixes and wrappers.
 displayTestName :: String -> String
@@ -1092,12 +1088,12 @@ displayTestName name =
          else withoutPrefix
 
 -- | Parse a single JSON line emitted by test binaries.
-parseJsonLine :: String -> Maybe Aeson.Value
+parseJsonLine :: T.Text -> Maybe Aeson.Value
 parseJsonLine line =
-    let trimmed = dropWhile isSpace line
-    in if null trimmed
-         then Nothing
-         else Aeson.decodeStrict' (TE.encodeUtf8 (T.pack trimmed))
+    let trimmed = T.stripStart line
+    in case T.uncons trimmed of
+         Just ('{', _) -> Aeson.decodeStrict' (TE.encodeUtf8 trimmed)
+         _ -> Nothing
 
 -- | Extract test result payloads from JSON events.
 extractTestInfo :: [Aeson.Value] -> [TestResult]
@@ -1155,16 +1151,6 @@ parseTestInfoValue = Aeson.withObject "TestInfo" $ \o -> do
       , trSnapshotUpdated = False
       , trCached = False
       }
-
--- | Pick the final or last-seen TestResult from a stream.
-pickFinalTestInfo :: [TestResult] -> Maybe TestResult
-pickFinalTestInfo infos =
-    case reverse infos of
-      [] -> Nothing
-      xs ->
-        case listToMaybe [i | i <- xs, trComplete i] of
-          Just i -> Just i
-          Nothing -> Just (head xs)
 
 testResultInterrupted :: TestResult -> Bool
 testResultInterrupted res =
@@ -1371,6 +1357,52 @@ markSnapshotUpdated res = res
 
 type PerfData = M.Map String (M.Map String Aeson.Value)
 
+-- Keep raw machine identifiers out of recordings. An unknown identity disables
+-- comparisons; a CPU model or OS version is not a machine identifier.
+readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> IO Aeson.Object
+readPerfHostInfo opts topts = do
+    identity <- try readIdentity :: IO (Either IOException (Maybe String))
+    let machine = case identity of
+          Right (Just raw) -> Just (BS.unpack (Base16.encode (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw)))))
+          _ -> Nothing
+    return $ AesonKM.fromList
+      [ (AesonKey.fromString "machine", Aeson.toJSON machine)
+      , (AesonKey.fromString "build", Aeson.object
+          [ AesonKey.fromString "optimize" Aeson..= show (C.optimize opts)
+          , AesonKey.fromString "target" Aeson..= C.target opts
+          , AesonKey.fromString "cpu" Aeson..= C.cpu opts
+          , AesonKey.fromString "no_threads" Aeson..= C.no_threads opts
+          , AesonKey.fromString "db" Aeson..= C.db opts
+          , AesonKey.fromString "no_dbp" Aeson..= C.no_dbp opts
+          ])
+      , (AesonKey.fromString "tags", Aeson.toJSON (Set.toAscList (Set.fromList tags)))
+      , (AesonKey.fromString "version", Aeson.toJSON ("3" :: String))
+      , (AesonKey.fromString "gc", Aeson.toJSON ("natural" :: String))
+      ]
+  where
+    tags = filter (not . null)
+      [ dropWhile isSpace (reverse (dropWhile isSpace (reverse tag)))
+      | raw <- C.testTags topts, tag <- splitOnChar ',' raw ]
+    readIdentity = case System.os of
+      "darwin" -> do
+        (code, out, _) <- readProcessWithExitCode "/usr/sbin/ioreg" ["-rd1", "-c", "IOPlatformExpertDevice"] ""
+        return $ if code /= ExitSuccess then Nothing else listToMaybe
+          [ raw | line <- lines out, (key, '=' : value) <- [break (== '=') line]
+                , "\"IOPlatformUUID\"" `isInfixOf` key, Just raw <- [normalize value] ]
+      "linux" -> normalize . BS.unpack <$> BS.readFile "/etc/machine-id"
+      _ -> return Nothing
+    normalize value =
+      let raw = map toLower (filter (\c -> not (isSpace c) && c /= '"' && c /= '-') value)
+      in if length raw == 32 && all isHexDigit raw && any (/= '0') raw
+           then Just raw else Nothing
+
+annotatePerfResult :: Aeson.Object -> TestResult -> TestResult
+annotatePerfResult host res = case trRaw res of
+    Aeson.Object obj | Just info <- perfInfo obj ->
+      let extra = AesonKM.filterWithKey (\key _ -> AesonKey.toString key `elem` ["machine", "build", "tags"]) host
+      in res { trRaw = Aeson.Object (AesonKM.insert (AesonKey.fromString "perf_info") (Aeson.Object (extra `AesonKM.union` info)) obj) }
+    _ -> res
+
 -- | Read the baseline before running tests, including when updating it.
 readPerfData :: Paths -> IO PerfData
 readPerfData paths = do
@@ -1407,9 +1439,9 @@ writePerfData paths baseline results = do
       FileUtil.writeFile (projPath paths </> "perf_data")
         (T.unpack (TE.decodeUtf8 (BL.toStrict (Aeson.encode updated))))
 
--- | Run a process and stream stderr lines to a callback while capturing output.
-readProcessWithExitCodeStreaming :: CreateProcess -> (String -> IO ()) -> IO (ExitCode, String, String)
-readProcessWithExitCodeStreaming cp onErrLine = mask $ \restore -> do
+-- | Drain both process streams through callbacks without retaining another copy.
+readProcessWithExitCodeStreaming :: CreateProcess -> (T.Text -> IO ()) -> (T.Text -> IO ()) -> IO ExitCode
+readProcessWithExitCodeStreaming cp onOutLine onErrLine = mask $ \restore -> do
     let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
       pid <- getPid ph
@@ -1419,39 +1451,23 @@ readProcessWithExitCodeStreaming cp onErrLine = mask $ \restore -> do
             when owned $ do
               stopProcessGroup ph pid
               writeIORef groupOwned False
-          readStdout mH =
+          readLines onLine mH =
             case mH of
-              Nothing -> return ""
+              Nothing -> return ()
               Just h -> do
-                txt <- hGetContents h
-                _ <- evaluate (length txt)
+                let go = do
+                      eof <- hIsEOF h
+                      unless eof $ TIO.hGetLine h >>= onLine >> go
+                go
                 hClose h
-                return txt
-          readStderr mH =
-            case mH of
-              Nothing -> return ""
-              Just h -> do
-                txt <- readErrLines h
-                hClose h
-                return txt
-          readErrLines h = go []
-            where
-              go acc = do
-                eof <- hIsEOF h
-                if eof
-                  then return (unlines (reverse acc))
-                  else do
-                    line <- hGetLine h
-                    onErrLine line
-                    go (line : acc)
       let capture = restore $
-            withAsync (readStdout mOut) $ \outReader ->
-              withAsync (readStderr mErr) $ \errReader -> do
+            withAsync (readLines onOutLine mOut) $ \outReader ->
+              withAsync (readLines onErrLine mErr) $ \errReader -> do
                 code <- waitForProcess ph
                 when (create_group cp') stop
-                out <- wait outReader
-                err <- wait errReader
-                return (code, out, err)
+                wait outReader
+                wait errReader
+                return code
       if create_group cp'
         then capture `finally` stop
         else capture `onException` (terminateProcess ph >> void (waitForProcess ph))

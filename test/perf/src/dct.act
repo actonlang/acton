@@ -16,5 +16,13 @@ def dct_sum(l):
     return s
 
 
-def _test_dct():
-    r = dct_sum(500)
+def _test_dct(t: testing.SyncT):
+    # Scale the transform dimension: doubling it quadruples the work.
+    size = 0
+    result = 0.0
+    for scale in t.loop():
+        size = 32 * scale
+        result = dct_sum(float(size))
+    if size > 0:
+        # The zero-frequency row sums to size; the other rows sum to zero.
+        assert abs(result - float(size)) <= float(size) * 1e-8
