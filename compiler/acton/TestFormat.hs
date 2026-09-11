@@ -17,8 +17,9 @@ module TestFormat
 
 import Acton.Testing (TestResult(..))
 import TestPerf
+import TestOutput (testOutputMeaningful, splitTestOutput)
 import Data.Char (isSpace)
-import Data.List (foldl', isPrefixOf, isInfixOf, intercalate)
+import Data.List (foldl', isPrefixOf, intercalate)
 import Data.Maybe (catMaybes, fromMaybe, isJust, listToMaybe, mapMaybe)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -566,25 +567,6 @@ formatTestDetailLines useColor showLog res =
               else []
           body = map ("    " ++) (lines chunk)
       in header ++ body ++ [""]
-    testOutputMeaningful msgs =
-      any (\line -> not (all isSpace line) && not ("== Running test," `isPrefixOf` line)) (lines msgs)
-    splitTestOutput buf =
-      let ls = lines buf
-          isMarker line = "== Running test, iteration:" `isInfixOf` stripAnsi (trim line)
-          step (chunks, current, seenMarker) line
-            | isMarker line =
-                if seenMarker
-                  then (chunks ++ [trim current], "", True)
-                  else (chunks, "", True)
-            | otherwise =
-                let current' = if null current then line else current ++ "\n" ++ line
-                in (chunks, current', seenMarker)
-          (chunks0, current0, seenMarker) = foldl' step ([], "", False) ls
-          chunks1 =
-            if seenMarker
-              then chunks0 ++ [trim current0]
-              else if null (trim buf) then [] else [trim buf]
-      in chunks1
     renderIterationOutput out err =
       let out' = trim out
           err' = trim err
@@ -611,10 +593,3 @@ formatTestDetailLines useColor showLog res =
     trim s =
       let dropEnd = reverse . dropWhile isSpace . reverse
       in dropWhile isSpace (dropEnd s)
-    stripAnsi [] = []
-    stripAnsi ('\ESC':'[':xs) = stripAnsi (dropAnsi xs)
-    stripAnsi (x:xs) = x : stripAnsi xs
-    dropAnsi [] = []
-    dropAnsi (c:cs)
-      | c == 'm' = cs
-      | otherwise = dropAnsi cs

@@ -132,18 +132,52 @@ watchProcessTests = testGroup "watch subprocesses"
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main")
           [ "trap 'exit 130' INT"
+          , "echo '== Running test, iteration: 1'"
+          , "echo '== Running test, iteration: 1' >&2"
           , testInfo False
+          , "printf 'stdout before interrupt'"
+          , "printf 'stderr before interrupt' >&2"
           , "echo $$ > leader.pid"
           , "while :; do sleep 1; done"
           ]
-        withActon acton proj ["test", "stress", "--tty", "--syspath", system] $ \ph group output -> do
+        withActon acton proj ["test", "stress", "--tty", "--show-log", "--syspath", system] $ \ph group output -> do
           _ <- awaitPid proj "leader.pid"
           signalProcessGroup sigINT group
           code <- await "interrupted stress exit" (getProcessExitCode ph)
           logText <- output
           assertEqual logText ExitSuccess code
           assertBool logText ("Stress run interrupted by user; showing partial results collected so far." `isInfixOf` logText)
+          assertBool logText ("stdout before interrupt" `isInfixOf` logText && "stderr before interrupt" `isInfixOf` logText)
           assertCursorRestored logText
+  , testCase "a final result survives later partial updates and output" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (proj </> "out/bin/.test_main")
+          [ testInfo True
+          , "echo '{\"test_info\":{\"definition\":{\"module\":\"main\",\"name\":\"_test_ready\"},\"complete\":false,\"success\":false}}' >&2"
+          , "printf 'stdout after final result'"
+          , "printf 'stderr after final result' >&2"
+          ]
+        withActon acton proj ["test", "--no-cache", "--show-log", "--syspath", system] $ \ph _ output -> do
+          code <- await "test exit" (getProcessExitCode ph)
+          logText <- output
+          assertEqual logText ExitSuccess code
+          assertBool logText ("stdout after final result" `isInfixOf` logText && "stderr after final result" `isInfixOf` logText)
+  , testCase "a crashed test retains preamble and unterminated output" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (proj </> "out/bin/.test_main")
+          [ "echo 'startup diagnostic' >&2"
+          , "echo '== Running test, iteration: 1'"
+          , "echo '== Running test, iteration: 1' >&2"
+          , "printf 'stdout before crash'"
+          , "printf 'stderr before crash' >&2"
+          , "exit 1"
+          ]
+        withActon acton proj ["test", "--no-cache", "--json", "--syspath", system] $ \ph _ output -> do
+          code <- await "failed test exit" (getProcessExitCode ph)
+          logText <- output
+          assertBool logText (code /= ExitSuccess)
+          forM_ ["startup diagnostic", "stdout before crash", "stderr before crash"] $ \message ->
+            assertBool logText (message `isInfixOf` logText)
   , testCase "live updates keep the cursor hidden and avoid repainting unchanged rows" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (proj </> "out/bin/.test_main")

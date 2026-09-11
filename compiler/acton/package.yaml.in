@@ -75,6 +75,7 @@ executables:
       - TerminalSize
       - ZigProgress
       - TestFormat
+      - TestOutput
       - TestPerf
       - TestRunner
       - TestUI

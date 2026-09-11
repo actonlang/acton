@@ -34,6 +34,7 @@ import qualified Paths_acton
 import qualified Repl
 import qualified WatchTests
 import qualified PerfTests
+import qualified TestOutputTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -78,6 +79,7 @@ main = do
       , parseFlagTests
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
+      , TestOutputTests.testOutputTests
       , crossCompileTests
       , pkgCliTests
       ]
