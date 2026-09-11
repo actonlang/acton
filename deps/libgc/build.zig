@@ -174,6 +174,12 @@ pub fn build(b: *std.Build) void {
         "typd_mlc.c",
     }) catch unreachable;
 
+    // Use elapsed time for GC measurements. The fallback clock() counts CPU
+    // time across parallel marker threads, which can exceed wall time.
+    if (t.os.tag == .macos) {
+        flags.append("-D HAVE_CLOCK_GETTIME") catch unreachable;
+    }
+
     if (enable_threads) {
         flags.append("-D GC_THREADS") catch unreachable;
         if (enable_parallel_mark) {
