@@ -49,10 +49,10 @@ def _test_simple_sync_snapshot():
     m = MathTester()
     return "simple sync snapshot: " + str(m.add(2, 3))
 
-def _test_async_snapshot(t: testing.AsyncT):
+actor _test_async_snapshot(t: testing.AsyncT):
     t.success("async snapshot")
 
-def _test_env_snapshot(t: testing.EnvT):
+actor _test_env_snapshot(t: testing.EnvT):
     t.success("env snapshot")
 
 actor _test_AsyncRequireShortCircuit(t: testing.AsyncT):

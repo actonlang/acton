@@ -1,41 +1,29 @@
-import logging
+import acton.rts
 import testing
 
 actor Foo(cb):
-    print("Foo starting")
     action def __cleanup__():
-        print("Foo.__cleanup__")
         cb()
 
 
-actor CleanupTester(report_result, log_handler):
-    var started = 0
+actor _test_Cleanup(t: testing.EnvT):
+    """Unreachable actors get their __cleanup__ called when the GC collects them
+    """
     var cleaned_up = 0
+    var done = False
 
     def _count_cleanup():
         cleaned_up += 1
-        print("Cleaned up:", cleaned_up)
-        if cleaned_up > 80:
-            report_result(True, None)
+        if cleaned_up > 80 and not done:
+            done = True
+            t.success()
 
     for i in range(100):
         Foo(_count_cleanup)
 
-    def _dummy():
-        a = 0
-        for i in range(999):
-            a += i
-        after 0.1: _dummy()
-    after 0: _dummy()
-
-actor main(env):
-    def rr(success: bool, exc: ?str):
-        print("RR", success, exc)
-        env.exit(0)
-
-    print("Testing...")
-    log_handler = logging.Handler("ASDF")
-    c = CleanupTester(rr, log_handler)
-
-def _test_cleanup(report_result: action(?bool, ?Exception) -> None, log_handler: logging.Handler) -> None:
-    s = CleanupTester(report_result, log_handler)
+    def _collect():
+        if done:
+            return
+        acton.rts.gc(t.env.syscap)
+        after 0.1: _collect()
+    after 0: _collect()
