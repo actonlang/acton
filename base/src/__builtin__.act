@@ -899,8 +899,6 @@ extension dict[A(Hashable),B(Eq)] (Ord):
 
 extension set[A(Hashable)] (Set[A]):
     NotImplemented
-extension set[A(Hashable)] (Hashable):
-    NotImplemented
 
 extension iset[A(Hashable)] (ISet[A]):
     NotImplemented
