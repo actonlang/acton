@@ -183,6 +183,8 @@ $EqOpt $EqOptG_new(B_Eq W_Eq$A) {
 // the same offsets in the Eq, Ord and Hashable witness class structs.
 
 static bool $tupleWitD___eq__(B_tuple wits, $WORD a, $WORD b) {
+    if (a == b)
+        return true;
     B_tuple ta = (B_tuple)a;
     B_tuple tb = (B_tuple)b;
     for (int i = 0; i < wits->size; i++) {

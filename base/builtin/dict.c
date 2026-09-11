@@ -368,6 +368,8 @@ bool B_dictrel(bool directfalse,B_OrdD_dict w, B_dict a, B_dict b) {
 }
 
 bool B_OrdD_dictD___eq__ (B_OrdD_dict w, B_dict a, B_dict b) {
+    if (a == b)
+        return true;
     return B_dictrel(a->numelements != b->numelements,w,a,b);
 }
 

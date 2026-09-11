@@ -623,10 +623,14 @@ B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
 // B_OrdD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
 bool B_OrdD_bigintD___eq__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    if (a == b)
+        return true;
     return zz_equal(&a->val,&b->val);
 }
 
 bool B_OrdD_bigintD___ne__ (B_OrdD_bigint wit, B_bigint a, B_bigint b) {
+    if (a == b)
+        return false;
     return !zz_equal(&a->val,&b->val);
 }
 
