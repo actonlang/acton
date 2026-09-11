@@ -12,69 +12,61 @@ extension CollidingKey(Hashable):
         h.update(b"collision")
 
 def test_equal_hashes():
-    a = set(range(100))
-    b = set(range(99, -1, -1))
-    b.add(42)
+    a = iset(range(100))
+    b = iset(list(range(99, -1, -1)) + [42])
     return a == b and hash(a) == hash(b) and seed_hash(u64(17), a) == seed_hash(u64(17), b)
 
 def test_hash_after_resize_and_delete():
-    a = set(range(256))
-    for i in range(256):
-        if i not in {1, 2, 3}:
-            a.discard(i)
-    b = {3, 2, 1}
-    return a == b and hash(a) == hash(b) and hash(set(a)) == hash(b)
+    a = iset(range(256)) - iset(range(4, 256)) - iset([0])
+    b = iset([3, 2, 1])
+    return a == b and hash(a) == hash(b) and hash(iset(a)) == hash(b)
 
 def test_empty_hash():
-    a: set[int] = set()
-    b = set(range(100))
-    for i in range(100):
-        b.pop()
+    a: iset[int] = iset()
+    b = iset(range(100)) - iset(range(100))
     d = {a: "empty"}
-    return hash(a) == hash(b) and d[b] == "empty" and hash(a) != hash({1})
+    return hash(a) == hash(b) and d[b] == "empty" and hash(a) != hash(iset([1]))
 
 def test_hash_contents():
-    return hash({1, 2}) != hash({1, 3}) and hash({"ab", "c"}) != hash({"a", "bc"})
+    return hash(iset([1, 2])) != hash(iset([1, 3])) and hash(iset(["ab", "c"])) != hash(iset(["a", "bc"]))
 
 def test_dict_keys():
-    d = {{1, 2}: "first", {3}: "other"}
-    if d[{2, 1}] != "first" or {1, 3} in d:
+    d = {iset([1, 2]): "first", iset([3]): "other"}
+    if d[iset([2, 1])] != "first" or iset([1, 3]) in d:
         return False
-    d[{2, 1}] = "updated"
-    if len(d) != 2 or d[{1, 2}] != "updated":
+    d[iset([2, 1])] = "updated"
+    if len(d) != 2 or d[iset([1, 2])] != "updated":
         return False
-    del d[{2, 1}]
-    return len(d) == 1 and {1, 2} not in d and d[{3}] == "other"
+    del d[iset([2, 1])]
+    return len(d) == 1 and iset([1, 2]) not in d and d[iset([3])] == "other"
 
 def test_set_elements():
-    s = {{1, 2}, {2, 1}, {3}}
-    if len(s) != 2 or {2, 1} not in s or {1, 3} in s:
+    s = {iset([1, 2]), iset([2, 1]), iset([3])}
+    if len(s) != 2 or iset([2, 1]) not in s or iset([1, 3]) in s:
         return False
-    s.discard({2, 1})
-    s.add({4, 5})
-    return s == {{3}, {5, 4}}
+    s.discard(iset([2, 1]))
+    s.add(iset([4, 5]))
+    return s == {iset([3]), iset([5, 4])}
 
 def test_nested_keys():
-    d = {{{1, 2}, {3}}: "nested"}
-    t = {({1, 2}, "tag"): 42}
-    return d[{{3}, {2, 1}}] == "nested" and t[({2, 1}, "tag")] == 42
+    d = {iset([iset([1, 2]), iset([3])]): "nested"}
+    t = {(iset([1, 2]), "tag"): 42}
+    return d[iset([iset([3]), iset([2, 1])])] == "nested" and t[(iset([2, 1]), "tag")] == 42
 
-def test_mutation():
+def test_source_mutation():
     s = {1, 2}
-    before = hash(s)
+    a = iset(s)
+    before = hash(a)
     s.add(3)
-    if hash(s) != hash({3, 2, 1}) or hash(s) == before:
+    if a != iset([1, 2]) or hash(a) != before:
         return False
-    s.discard(3)
-    if hash(s) != before:
-        return False
-    s.update({3, 4})
-    popped = s.pop()
-    return hash(s) == hash({1, 2, 3, 4} - {popped})
+    b = iset(s)
+    s.discard(1)
+    return b == iset([1, 2, 3]) and hash(b) == hash(iset([3, 2, 1])) and hash(a) == before
 
 def test_seed_and_stream():
-    a = {1, 2, 3}
-    b = {3, 2, 1}
+    a = iset([1, 2, 3])
+    b = iset([3, 2, 1])
     if seed_hash(u64(0), a) != hash(a) or seed_hash(u64(17), a) == hash(a):
         return False
     h1 = hasher(u64(17))
@@ -88,9 +80,9 @@ def test_seed_and_stream():
     return h1.finalize() == h2.finalize() and h1.finalize() != seed_hash(u64(17), a)
 
 def test_colliding_elements():
-    a = {CollidingKey(1), CollidingKey(2)}
-    b = {CollidingKey(2), CollidingKey(1)}
-    c = {CollidingKey(3), CollidingKey(4)}
+    a = iset([CollidingKey(1), CollidingKey(2)])
+    b = iset([CollidingKey(2), CollidingKey(1)])
+    c = iset([CollidingKey(3), CollidingKey(4)])
     d = {a: "first", c: "other"}
     s = {a, b, c}
     return a == b and a != c and hash(a) == hash(b) and len(s) == 2 and d[b] == "first" and d[c] == "other"
@@ -103,7 +95,7 @@ tests = {
     "test_dict_keys": test_dict_keys,
     "test_set_elements": test_set_elements,
     "test_nested_keys": test_nested_keys,
-    "test_mutation": test_mutation,
+    "test_source_mutation": test_source_mutation,
     "test_seed_and_stream": test_seed_and_stream,
     "test_colliding_elements": test_colliding_elements,
 }
