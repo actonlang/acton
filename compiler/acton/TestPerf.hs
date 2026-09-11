@@ -79,6 +79,7 @@ perfComparisonReason :: String -> Aeson.Object -> Aeson.Object -> Maybe String
 perfComparisonReason metric old new = case (perfInfo old, perfInfo new) of
     (Nothing, _) -> Just "baseline has no performance identity; record a new baseline"
     (_, Nothing) -> Just "current performance identity is unavailable"
+    (Just a, Just b) | scaling a /= scaling b -> Just "measurement sampling mode differs"
     (Just a, Just b) -> case metadataReason (hostKeys ++ ["scale", "loop", "workers"]) a b of
       Just reason -> Just reason
       Nothing
@@ -86,12 +87,15 @@ perfComparisonReason metric old new = case (perfInfo old, perfInfo new) of
             (Just ca, Just cb) -> metadataReason ["version", "backend", "scope"] ca cb
             _ -> Just "hardware counter scope is unavailable"
         | otherwise -> Nothing
+  where
+    scaling info = AesonKM.lookup (AesonKey.fromString "scaling") info == Just (Aeson.Bool True)
 
 -- Select the recorded workload scale before launching the process. The completed
 -- run must still pass the actual worker-count and loop checks above.
 perfBaselineScale :: Aeson.Object -> Aeson.Object -> Maybe Int
 perfBaselineScale baseline currentInfo = do
     old <- perfInfo baseline
+    guard (AesonKM.lookup (AesonKey.fromString "scaling") old /= Just (Aeson.Bool True))
     guard (not (isJust (metadataReason hostKeys old currentInfo)))
     guard (AesonKM.lookup (AesonKey.fromString "loop") old == Just (Aeson.Bool True))
     value <- AesonKM.lookup (AesonKey.fromString "scale") old >>= AesonTypes.parseMaybe Aeson.parseJSON

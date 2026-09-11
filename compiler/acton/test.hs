@@ -35,6 +35,9 @@ import qualified Repl
 import qualified WatchTests
 import qualified PerfTests
 import qualified TestOutputTests
+import qualified ScaleOptionTests
+import qualified ScaleTests
+import qualified PerfMemoryTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -80,6 +83,9 @@ main = do
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
+      , ScaleOptionTests.scaleOptionTests
+      , ScaleTests.scaleTests
+      , PerfMemoryTests.perfMemoryTests
       , crossCompileTests
       , pkgCliTests
       ]

@@ -15,6 +15,7 @@ import qualified FileUtil
 import TestFormat
 import TestOutput
 import TestPerf
+import TestScale
 import TestUI
 import Control.Applicative ((<|>))
 import Control.Concurrent.Async
@@ -48,6 +49,7 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Encoding as TE
+import Data.Text.Encoding.Error (lenientDecode)
 import Data.Time.Clock (UTCTime)
 import Control.Exception (IOException, SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
 import TerminalSize (termFitAnsiRight)
@@ -55,7 +57,7 @@ import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
 import qualified Paths_acton
 
-data TestMode = TestModeRun | TestModeList | TestModePerf | TestModeStress deriving (Eq, Show)
+data TestMode = TestModeRun | TestModeList | TestModePerf | TestModeScale | TestModeStress deriving (Eq, Show)
 
 data TestSpec = TestSpec
   { tsModule :: String
@@ -232,6 +234,17 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           else do
             putStrLn "Nothing to test"
             return 0
+      else if mode == TestModeScale
+      then do
+        host <- readPerfHostInfo opts topts
+        let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
+            runSample limits scale modName testName = do
+              now <- getTime Monotonic
+              let remaining = max 1 (fromInteger (toNanoSecs (scaleDeadline limits - now) `div` 1000000))
+                  sampleOptions = topts { C.testScale = Just scale, C.testTime = remaining }
+              runModuleTestStreaming opts paths sampleOptions mode host Nothing (Just limits)
+                modName testName False callbacks
+        runScalingStudy useColorOut gopts topts (projOut paths </> "perf_scaling") host allTests runSample
       else do
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
@@ -363,7 +376,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                             let baselineScale = lookupPerfData perfData initRes >>= (\old -> perfBaselineScale old perfHostInfo)
                             mask $ \unmask -> do
                               worker <- async $ unmask $ mask $ \restore -> do
-                                resE <- try (restore (runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale (tsModule spec) (tsName spec)
+                                resE <- try (restore (runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale Nothing (tsModule spec) (tsName spec)
                                                        (tpuEnabled ui) callbacks))
                                           :: IO (Either SomeException TestResult)
                                 case resE of
@@ -625,17 +638,19 @@ runModuleTestStreaming :: C.CompileOptions
                        -> TestMode
                        -> Aeson.Object
                        -> Maybe Int
+                       -> Maybe ScaleLimits
                        -> String
                        -> String
                        -> Bool
                        -> TestProgressCallbacks
                        -> IO TestResult
-runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName testName allowLive callbacks = do
+runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits modName testName allowLive callbacks = do
     environment <- getEnvironment
     let binPath = testBinaryPath opts paths modName
         modeArgs =
           case mode of
             TestModePerf -> ["perf"]
+            TestModeScale -> ["perf"]
             TestModeStress -> ["stress"]
             _ -> []
         cmd = ["test", testName] ++ modeArgs ++ testCmdArgs mode topts
@@ -667,19 +682,19 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName 
                           Nothing -> addStdErr line
     let procSpec = (proc binPath cmd)
           { cwd = Just (projPath paths)
-          , env = Just ((if mode == TestModePerf then [("ACTON_TEST_PERF", "1")] else [])
+          , env = Just ((if mode `elem` [TestModePerf, TestModeScale] then [("ACTON_TEST_PERF", "1")] else [])
               ++ filter ((/= "ACTON_TEST_PERF") . fst) environment)
-          , create_group = C.watch opts
-          , delegate_ctlc = not (C.watch opts)
+          , create_group = C.watch opts || isJust limits
+          , delegate_ctlc = not (C.watch opts || isJust limits)
           }
-    procRes <- try (readProcessWithExitCodeStreaming procSpec onOutLine onErrLine) :: IO (Either SomeException ExitCode)
+    procRes <- try (readProcessWithExitCodeStreaming procSpec limits onOutLine onErrLine) :: IO (Either SomeException ExitCode)
     (exitCode, interruptedByUser) <-
       case procRes of
         Right code ->
           return (code, False)
         Left ex ->
           case fromException ex of
-            Just UserInterrupt ->
+            Just UserInterrupt | not (isJust limits) ->
               return (ExitFailure (-2), True)
             _ -> throwIO ex
     final <- readIORef resultRef
@@ -1052,7 +1067,8 @@ effectiveTestTiming mode topts =
 -- | Build test runner arguments from TestOptions limits.
 testCmdArgs :: TestMode -> C.TestOptions -> [String]
 testCmdArgs mode topts
-  | mode == TestModePerf = ["--time", show (C.testTime topts)] ++ tagArgs
+  | mode `elem` [TestModePerf, TestModeScale] = ["--time", show (C.testTime topts)]
+      ++ ["--scaling" | mode == TestModeScale] ++ tagArgs
   | otherwise =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts
@@ -1440,8 +1456,8 @@ writePerfData paths baseline results = do
         (T.unpack (TE.decodeUtf8 (BL.toStrict (Aeson.encode updated))))
 
 -- | Drain both process streams through callbacks without retaining another copy.
-readProcessWithExitCodeStreaming :: CreateProcess -> (T.Text -> IO ()) -> (T.Text -> IO ()) -> IO ExitCode
-readProcessWithExitCodeStreaming cp onOutLine onErrLine = mask $ \restore -> do
+readProcessWithExitCodeStreaming :: CreateProcess -> Maybe ScaleLimits -> (T.Text -> IO ()) -> (T.Text -> IO ()) -> IO ExitCode
+readProcessWithExitCodeStreaming cp limits onOutLine onErrLine = mask $ \restore -> do
     let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe }
     withCreateProcess cp' $ \_ mOut mErr ph -> do
       pid <- getPid ph
@@ -1454,23 +1470,47 @@ readProcessWithExitCodeStreaming cp onOutLine onErrLine = mask $ \restore -> do
           readLines onLine mH =
             case mH of
               Nothing -> return ()
+              Just h | isJust limits -> readLimited h onLine
               Just h -> do
                 let go = do
                       eof <- hIsEOF h
                       unless eof $ TIO.hGetLine h >>= onLine >> go
                 go
                 hClose h
-      let capture = restore $
-            withAsync (readLines onOutLine mOut) $ \outReader ->
-              withAsync (readLines onErrLine mErr) $ \errReader -> do
+          -- Studies can run for hours. Bound the raw stream and a single
+          -- unterminated line before decoding or passing it to the parser.
+          readLimited h emitLine = go 0 BS.empty
+            where
+              decode = TE.decodeUtf8With lenientDecode
+              go count pending = do
+                chunk <- BS.hGetSome h 32768
+                if BS.null chunk then do
+                  unless (BS.null pending) (emitLine (decode pending))
+                  hClose h
+                else do
+                  let size = count + BS.length chunk
+                  when (size > 1048576) $
+                    throwIO (ScalingStopped "sample output exceeded 1MiB per stream")
+                  rest <- linesOf (pending <> chunk)
+                  go size rest
+              linesOf buffer = case BS.break (== '\n') buffer of
+                (_, suffix) | BS.null suffix -> return buffer
+                (line, suffix) -> emitLine (decode line) >> linesOf (BS.drop 1 suffix)
+      let capture = restore $ do
+            (code, _) <- concurrently
+              (do
                 code <- waitForProcess ph
                 when (create_group cp') stop
-                wait outReader
-                wait errReader
-                return code
+                return code)
+              (concurrently (readLines onOutLine mOut) (readLines onErrLine mErr))
+            return code
+      let guarded = case limits of
+            Nothing -> capture
+            Just bounds -> race capture (restore (watchScaleProcess bounds (fromIntegral <$> pid) ph))
+              >>= either return (throwIO . ScalingStopped)
       if create_group cp'
-        then capture `finally` stop
-        else capture `onException` (terminateProcess ph >> void (waitForProcess ph))
+        then guarded `finally` stop
+        else guarded `onException` (terminateProcess ph >> void (waitForProcess ph))
 
 fmtTime :: TimeSpec -> String
 fmtTime t =

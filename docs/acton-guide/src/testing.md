@@ -50,8 +50,9 @@ For snapshot-based assertions, see [Snapshot testing](testing/snapshot.md).
 
 Use `acton test perf` to measure tests with warmup and fresh performance
 measurements. Use `for scale in t.loop():` to measure a region while excluding
-setup and teardown; ordinary testing runs its body once at scale 1. See
-[Performance testing](testing/performance.md) for the lifecycle and examples.
+setup and teardown; ordinary testing runs its body once at scale 1. Use
+`acton test scale` to explore growth automatically across increasing workloads.
+See [Performance testing](testing/performance.md) for the lifecycle and examples.
 
 ## Cached test results
 
