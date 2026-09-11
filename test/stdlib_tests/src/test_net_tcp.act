@@ -4,13 +4,13 @@ import random
 import re
 import testing
 
-actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handler):
-    log = logging.Logger(log_handler)
+actor _test_TCPClientSideClose(t: testing.EnvT):
+    log = logging.Logger(t.log_handler)
     test_payload = b"Stay a while and listen."
     address = "127.0.0.1"
     var retries = 10
     var port = random.randint(10000, 40000)
-    tcp_cap = net.TCPCap(net.NetCap(env.cap))
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
 
     var recv_buf: list[bytes] = []
 
@@ -21,17 +21,17 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
 
     def on_server_error(s, errmsg):
         log.error(errmsg)
-        report_result(False, AssertionError("server error: " + errmsg))
+        t.failure(AssertionError("server error: " + errmsg))
 
     def on_server_remote_close(s):
         try:
             testing.assertEqual(test_payload, bytes([]).join(recv_buf), "Did not receive expected data before remote close event")
         except AssertionError as ex:
-            report_result(False, ex)
+            t.failure(ex)
         except Exception as ex:
-            report_result(None, ex)
+            t.error(ex)
         else:
-            report_result(True, None)
+            t.success()
 
     def on_listen(l, error):
         if error is not None:
@@ -42,7 +42,7 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
                     _start()
                     return
             log.error(error)
-            report_result(False, AssertionError("listen error: " + error))
+            t.failure(AssertionError("listen error: " + error))
         else:
             _connect_client()
 
@@ -69,16 +69,12 @@ actor test_tcp_client_side_close(report_result, env, log_handler: logging.Handle
         server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
     _start()
 
-def _test_tcp_client_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
-    test_tcp_client_side_close(report_result, env, log_handler)
-
-actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handler):
-    log = logging.Logger(log_handler)
-    test_payload = b"Stay a while and listen."
+actor test_tcp_server_side_close(t: testing.EnvT, test_payload: bytes):
+    log = logging.Logger(t.log_handler)
     address = "127.0.0.1"
     var retries = 10
     var port = random.randint(10000, 40000)
-    tcp_cap = net.TCPCap(net.NetCap(env.cap))
+    tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
 
     recv_buf: list[bytes] = []
 
@@ -89,7 +85,7 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
 
     def on_server_error(s, errmsg):
         log.error(errmsg)
-        report_result(False, AssertionError("server error: " + errmsg))
+        t.failure(AssertionError("server error: " + errmsg))
 
     def on_listen(l, error):
         if error is not None:
@@ -100,7 +96,7 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
                     log.info("address already in use, retrying...")
                     return
             log.error(error)
-            report_result(False, AssertionError("listen error: " + error))
+            t.failure(AssertionError("listen error: " + error))
         else:
             _connect_client()
 
@@ -127,13 +123,14 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
         if client is not None and client is c:
             try:
                 recv = bytes([]).join(recv_buf)
-                testing.assertEqual(test_payload, recv, "Did not receive expected data '%s' before remote close event, got '%s', retry: %d" % (str(test_payload), str(recv), retries))
+                testing.assertEqual(len(test_payload), len(recv), "Did not receive expected %d bytes before remote close event, got %d bytes, retry: %d" % (len(test_payload), len(recv), retries))
+                testing.assertEqual(test_payload, recv, "Received data differs from the data the server wrote", print_vals=False, print_diff=False)
             except AssertionError as ex:
-                report_result(False, ex)
+                t.failure(ex)
             except Exception as ex:
-                report_result(None, ex)
+                t.error(ex)
             else:
-                report_result(True, None)
+                t.success()
 
     def _start():
         retries -= 1
@@ -141,5 +138,16 @@ actor test_tcp_server_side_close(report_result, env, log_handler: logging.Handle
         server = net.TCPListener(net.TCPListenCap(tcp_cap), address, port, on_listen, on_listen_accept)
     _start()
 
-def _test_tcp_server_side_close(report_result: action(?bool, ?Exception) -> None , env: Env, log_handler: logging.Handler):
-    test_tcp_server_side_close(report_result, env, log_handler)
+actor _test_TCPServerSideClose(t: testing.EnvT):
+    test_tcp_server_side_close(t, b"Stay a while and listen.")
+
+actor _test_TCPServerSideCloseLargePayload(t: testing.EnvT):
+    """Server-side close delivers a payload larger than the socket send buffer
+
+    The server writes 4 MB and closes the connection in the same step. The
+    write is asynchronous. The data that does not fit in the socket send
+    buffer stays in the stream write queue. close() must drain that queue
+    before it closes the handle, or the client receives a truncated payload.
+    http.Listener closes this way on Connection: close and for HTTP/1.0.
+    """
+    test_tcp_server_side_close(t, ("x" * 4000000).encode())
