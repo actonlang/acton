@@ -4,13 +4,13 @@ import random
 import testing
 
 
-actor udp_roundtrip(report_result, env, log_handler: logging.Handler, address: str, optional: bool=False):
-    log = logging.Logger(log_handler)
+actor udp_roundtrip(t: testing.EnvT, address: str, optional: bool=False):
+    log = logging.Logger(t.log_handler)
     request_payload = b"PING"
     response_payload = b"PONG"
     var retries = 10
     var port = random.randint(10000, 40000)
-    udp_cap = net.UDPCap(net.NetCap(env.cap))
+    udp_cap = net.UDPCap(net.NetCap(t.env.cap))
 
     var done = False
     var listener: ?net.UDPListener = None
@@ -28,21 +28,21 @@ actor udp_roundtrip(report_result, env, log_handler: logging.Handler, address: s
             return
         done = True
         _close_handles()
-        report_result(True, None)
+        t.success()
 
     def _finish_failure(msg: str):
         if done:
             return
         done = True
         _close_handles()
-        report_result(False, AssertionError(msg))
+        t.failure(AssertionError(msg))
 
     def _finish_error(msg: str):
         if done:
             return
         done = True
         _close_handles()
-        report_result(None, Exception(msg))
+        t.error(Exception(msg))
 
     def _is_addr_in_use(error: str) -> bool:
         return error.find("address already in use") != -1
@@ -135,27 +135,9 @@ actor udp_roundtrip(report_result, env, log_handler: logging.Handler, address: s
     _start()
 
 
-actor UDPTestResultAdapter(t: testing.EnvT, address: str, optional: bool=False):
-    def _report_result(success: ?bool, exception: ?Exception):
-        if success == True:
-            t.success()
-        elif success == False:
-            if exception is not None:
-                t.failure(exception)
-            else:
-                t.failure(AssertionError("UDP test failed"))
-        else:
-            if exception is not None:
-                t.error(exception)
-            else:
-                t.error(Exception("UDP test errored"))
-
-    udp_roundtrip(_report_result, t.env, t.log_handler, address, optional)
-
-
 actor _test_UDPIpv4Roundtrip(t: testing.EnvT):
-    UDPTestResultAdapter(t, "127.0.0.1")
+    udp_roundtrip(t, "127.0.0.1")
 
 
 actor _test_UDPIpv6Roundtrip(t: testing.EnvT):
-    UDPTestResultAdapter(t, "::1", True)
+    udp_roundtrip(t, "::1", True)
