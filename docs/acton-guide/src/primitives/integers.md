@@ -109,6 +109,55 @@ Use `int` for everyday counting and arithmetic. Use `bigint` when a
 value may exceed the normal machine-sized range. Use exact-width types
 when the bit pattern matters.
 
+## Integer division and remainder
+
+`a // b` computes an integer quotient and `a % b` computes the remainder.
+The rounding rule depends on the integer type:
+
+- `int`, `i32`, `i16`, and `i8` round the quotient toward zero. A nonzero
+  remainder has the same sign as the dividend (`a`).
+- `bigint` rounds the quotient toward negative infinity (floor division).
+  A nonzero remainder has the same sign as the divisor (`b`).
+- `u1`, `u8`, `u16`, `u32`, and `u64` round the quotient toward zero,
+  which is also rounding down for non-negative operands. For a nonzero
+  divisor, the remainder satisfies `0 <= a % b < b`. For example,
+  `u32(8) // u32(3)` and `u32(8) % u32(3)` both give `2`.
+
+For example:
+
+| `a` | `b` | `int`: `a // b` | `int`: `a % b` | `bigint`: `a // b` | `bigint`: `a % b` |
+| --- | --- | --- | --- | --- | --- |
+| `8` | `3` | `2` | `2` | `2` | `2` |
+| `-8` | `3` | `-2` | `-2` | `-3` | `1` |
+| `8` | `-3` | `-2` | `2` | `-3` | `-1` |
+| `-8` | `-3` | `2` | `-2` | `2` | `-2` |
+
+For a nonzero divisor and a quotient that fits the type, both conventions
+satisfy `a == (a // b) * b + (a % b)`. The magnitude of the remainder is
+less than the magnitude of the divisor. `divmod(a, b)` returns the same
+quotient and remainder as the tuple `(a // b, a % b)`.
+
+Converting operands to `bigint` can therefore change the quotient and
+remainder even when the operand values fit in `int`.
+
+### Why the rounding rules differ
+
+Bounded integers use truncation to match efficient hardware integer
+division. For signed types, when the quotient `q = a // b` fits,
+truncation also keeps the product `q * b` in range. With `i8` operands
+`-128` and `3`, truncation gives `q = -42` and `q * b = -126`.
+Rounding down would give `q = -43` and `q * b = -129`, which is outside
+the `i8` range.
+
+`bigint` has no fixed-width overflow limit. Its floor division gives
+useful properties for modular arithmetic: for a positive divisor `b`,
+the remainder is always in `0` through `b - 1`, even when the dividend
+is negative. Numbers that differ by a multiple of `b` have the same
+remainder. For example, with `bigint` operands, `-8`, `1`, and `4` all
+leave remainder `1` when divided by `3`. This agrees with Euclidean
+division for positive divisors; for negative divisors, `bigint` can
+have a negative remainder.
+
 ## Converting integers
 
 Convert by calling the target type as a constructor.

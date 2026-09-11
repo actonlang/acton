@@ -27,7 +27,7 @@ Use the narrowest constraint that matches the operations you need:
 <div class="beginner-content">
 <p>Choose <code>Number</code> when you need ordinary arithmetic.
 Choose <code>Integral</code> when you need integer-only operations such
-as floor division, modulo, or bit shifts.</p>
+as integer division, remainder, or bit shifts.</p>
 </div>
 
 ```python
@@ -38,10 +38,14 @@ def bucket[A(Integral)](x: A, size: A) -> A:
     return x // size
 ```
 
+`bucket` follows the [division and remainder rules](../../primitives/integers.md#integer-division-and-remainder)
+of its concrete integer type. An `Integral` constraint does not imply
+that `//` always rounds down.
+
 <div class="advanced-content">
 <p>Numeric constraints affect both operator availability and result
 types. For example, <code>Div[A]</code> separates the type of the result
-from the type of the operands, which is why integer division through
-<code>/</code> can return a different type than floor division through
+from the type of the operands, which is why division through
+<code>/</code> can return a different type than integer division through
 <code>//</code>.</p>
 </div>

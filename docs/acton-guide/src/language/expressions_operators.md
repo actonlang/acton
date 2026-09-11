@@ -19,7 +19,7 @@ actor main(env):
 
     print("sum:", a + b)
     print("product:", a * b)
-    print("floor division:", a // b)
+    print("integer division:", a // b)
     print("remainder:", a % b)
     print("power:", b ** 3)
 
@@ -27,11 +27,14 @@ actor main(env):
     print("boolean:", a > 0 and b > 0)
     print("membership:", "ct" in word)
 
-    print("indexing:", word[0], point[1])
+    print("indexing:", word[0], point.1)
     print("slicing:", word[1:4])
 
     env.exit(0)
 ```
+
+The rounding used by `//` and the sign of `%` depend on the integer type.
+See [Integer division and remainder](../primitives/integers.md#integer-division-and-remainder).
 
 Method calls, function calls, indexing, and slicing are expressions too.
 They all produce values.
