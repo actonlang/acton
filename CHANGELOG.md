@@ -35,6 +35,11 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Allow sets whose elements are hashable to be used as dictionary keys and
+  nested inside other sets. [#3103]
+- Implement builtin helpers such as `filter`, `map`, `max`, `min`, `sum`, and
+  `zip` in Acton and streamline collection iteration to avoid allocation-heavy
+  iterator handling in common builtin operations. [#3104]
 - Use a stable min-heap for runtime timers, making large batches of `after`
   callbacks with increasing or equal deadlines scale logarithmically while
   preserving FIFO order for equal deadlines. [#3092]
@@ -47,6 +52,11 @@
   backend dependency symlink, resolving backend packages through sibling
   dependencies, and matching TLSuv's active mbed TLS and keychain source set.
   [#3093] [#3094]
+
+### Testing & CI
+- Restore recorded baseline comparisons for `acton test perf` and expand
+  performance reports with timing distributions, GC and memory statistics, peak
+  RSS, and optional CPU, instruction, cycle, and IPC counters. [#3105]
 
 ## [0.30.0] - 2026-09-03
 
@@ -4839,6 +4849,9 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3097]: https://github.com/actonlang/acton/pull/3097
 [#3098]: https://github.com/actonlang/acton/pull/3098
 [#3099]: https://github.com/actonlang/acton/pull/3099
+[#3103]: https://github.com/actonlang/acton/pull/3103
+[#3104]: https://github.com/actonlang/acton/pull/3104
+[#3105]: https://github.com/actonlang/acton/pull/3105
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
