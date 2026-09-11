@@ -102,7 +102,7 @@ static bool testing_loop_end(testingQ_PerfLoop self) {
 }
 
 static void testing_loop_batch(testingQ_PerfLoop self, uint64_t completed) {
-    if (self->_phase < 2) {
+    if (self->_phase < 2 || self->_once) {
         self->_batch_size = 1;
         return;
     }

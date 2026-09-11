@@ -2,6 +2,7 @@
 
 module TerminalSize
   ( TermSize
+  , queryTermSize
   , initTermSize
   , termSizeCurrent
   , termSizeSync

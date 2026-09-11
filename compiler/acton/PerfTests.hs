@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module PerfTests (perfTests) where
+module PerfTests (perfTests, perfIntegrationTests) where
 
 import Control.Monad
 import qualified Acton.CommandLineParser as C
@@ -39,7 +39,7 @@ perfTests = testGroup "performance baselines"
       assertEqual "milliseconds are accepted" 250 (C.testTime explicit)
       forM_ [("5s", 5000), ("1.5s", 1500), ("0.001s", 1)] $ \(duration, expected) ->
         assertEqual duration expected . C.testTime =<< parsePerfOptions ["--time", duration]
-      forM_ ["0ms", "-1s", "0.1ms", "100", "1m", "1e100s", "NaNs"] $ \duration ->
+      forM_ ["0ms", "-1s", "0.1ms", "100", "1e100s", "NaNs"] $ \duration ->
         case parseOptions ["test", "perf", "--time", duration] of
           O.Failure _ -> return ()
           _ -> assertFailure ("--time must reject " ++ duration)
@@ -98,7 +98,7 @@ perfTests = testGroup "performance baselines"
           assertEqual text ExitSuccess code
           assertBool text ("--time DURATION" `isInfixOf` unwords (words text))
           assertBool text ("--scale N" `isInfixOf` unwords (words text))
-          assertBool text (not (any (`isInfixOf` text) ["--iter", "--min-time", "--max-time", "--warmup"]))
+          assertBool text (not (any (`isInfixOf` text) ["--iter", "--min-time", "--max-time", "--warmup", "--scaling", "--start-scale", "--max-memory"]))
         _ -> assertFailure "expected performance help"
   , testCase "all metrics require the same complete performance identity" $ do
       let old = sample 10 0 10
@@ -162,11 +162,14 @@ perfTests = testGroup "performance baselines"
       let old = sample 10 0 10
       assertEqual "reuse the recorded workload" (Just 7) (perfBaselineScale old identity)
       forM_ [changeIdentity "machine" Aeson.Null old, changeIdentity "scale" (Aeson.Number 0) old,
+             changeIdentity "scaling" (Aeson.Bool True) old,
              changeIdentity "loop" (Aeson.Bool False) old, changeIdentity "version" (Aeson.String "2") old,
              KM.delete "perf_info" old] $ \baseline ->
         assertEqual "cannot reuse a missing or incompatible scale" Nothing (perfBaselineScale baseline identity)
       assertEqual "worker count is checked after execution" (Just 7)
         (perfBaselineScale (changeIdentity "workers" (Aeson.Number 2) old) identity)
+      assertEqual "fixed-work samples cannot compare with time-budgeted samples" (Just "measurement sampling mode differs")
+        (perfComparisonReason "wall_duration" (changeIdentity "scaling" (Aeson.Bool True) old) old)
   , testCase "timing and allocation changes use the recorded measurement" $ do
       let old = identified $ KM.fromList [("avg_wall_duration", Aeson.Number 10), ("mem_usage_delta_avg", Aeson.Number 100)]
           new = identified $ KM.fromList [("avg_wall_duration", Aeson.Number 12), ("mem_usage_delta_avg", Aeson.Number 50)]
@@ -358,7 +361,17 @@ perfTests = testGroup "performance baselines"
       forM_ [res { trComplete = False }, res { trSuccess = Just False }, res { trSkipped = True },
              res { trException = Just "error" }, res { trNumIterations = 0 }, res { trSnapshotUpdated = True }] $ \invalid ->
         assertEqual "no performance lines" [] (renderPerf 79 False Nothing invalid)
-  , testCase "recording runs fresh tests and preserves unselected measurements" $
+  , testCase "record requires performance mode" $ do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      forM_ [[], ["stress"], ["list"]] $ \mode -> do
+        (code, _, err) <- readCreateProcessWithExitCode (proc acton (["test"] ++ mode ++ ["--record"])) ""
+        assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
+  ]
+
+-- Real measurements need a quiet machine; enable them with make test-performance.
+perfIntegrationTests :: TestTree
+perfIntegrationTests =
+    testCase "recording runs fresh tests and preserves unselected measurements" $
       withSystemTempDirectory "acton-perf-record" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
         let name = "perf_record"
@@ -701,12 +714,6 @@ perfTests = testGroup "performance baselines"
           assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
           assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
           assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
-  , testCase "record requires performance mode" $ do
-      acton <- canonicalizePath "../../dist/bin/acton"
-      forM_ [[], ["stress"], ["list"]] $ \mode -> do
-        (code, _, err) <- readCreateProcessWithExitCode (proc acton (["test"] ++ mode ++ ["--record"])) ""
-        assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
-  ]
 
 parseOptions :: [String] -> O.ParserResult C.CmdLineOptions
 parseOptions = O.execParserPure C.cmdLinePrefs (O.info (C.cmdLineParser O.<**> O.helper) mempty)

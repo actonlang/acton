@@ -151,8 +151,12 @@ data TestCommand
     = TestRun TestOptions
     | TestList TestOptions
     | TestPerf TestOptions
+    | TestScale TestOptions
+    | TestScaleReport FilePath (Maybe FilePath)
     | TestStress TestOptions
     deriving Show
+
+data MemoryLimit = MemoryPercent Double | MemoryBytes Integer deriving (Show, Eq)
 
 data TestOptions = TestOptions
     { testCompile      :: CompileOptions
@@ -169,6 +173,9 @@ data TestOptions = TestOptions
     , testMinTime      :: Int
     , testTime         :: Int
     , testScale        :: Maybe Int
+    , testStartScale   :: Maybe Int
+    , testMaxMemory    :: Maybe MemoryLimit
+    , testCompare      :: Maybe FilePath
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -501,14 +508,24 @@ requestedOptimizeOption = resolveOptimizeOption
 testCommand :: Parser TestCommand
 testCommand =
     hsubparser
-      (  command "list" (info (TestList <$> testOptions False) (progDesc "List project tests"))
-      <> command "perf" (info (TestPerf <$> testOptions True) (progDesc "Measure test performance"))
-      <> command "stress" (info (TestStress <$> testOptions False) (progDesc "Run stress tests"))
+      (  command "list" (info (TestList <$> testOptions OrdinaryOptions) (progDesc "List project tests"))
+      <> command "perf" (info (TestPerf <$> testOptions PerfOptions) (progDesc "Measure test performance"))
+      <> command "scale" (info scaleCommand (progDesc "Measure how performance changes with workload scale"))
+      <> command "stress" (info (TestStress <$> testOptions OrdinaryOptions) (progDesc "Run stress tests"))
       )
-    <|> (TestRun <$> testOptions False)
+    <|> (TestRun <$> testOptions OrdinaryOptions)
+  where
+    scaleCommand = scaling
+      <$> optional (strOption (long "compare" <> metavar "FILE" <> help "Compare against a saved scaling journal; live runs remeasure its completed sizes"))
+      <*> (Left <$> strOption (long "report" <> metavar "FILE" <> help "Render charts from a saved scaling journal without running tests")
+           <|> Right <$> testOptions ScaleOptions)
+    scaling baseline (Left path) = TestScaleReport path baseline
+    scaling baseline (Right opts) = TestScale opts { testCompare = baseline }
 
-testOptions :: Bool -> Parser TestOptions
-testOptions perfMode = mkTestOptions
+data TestOptionsMode = OrdinaryOptions | PerfOptions | ScaleOptions deriving Eq
+
+testOptions :: TestOptionsMode -> Parser TestOptions
+testOptions mode = mkTestOptions
     <$> compileOptionsWith (fromMaybe defaultOptimize <$> requestedOptimizeOption)
     <*> switch (long "show-log"      <> help "Show test log output")
     <*> switch (long "show-cached"   <> help "Show cached test results")
@@ -519,18 +536,23 @@ testOptions perfMode = mkTestOptions
     <*> ordinary (-1) (option auto (long "iter" <> metavar "N" <> value (-1) <> help "Number of iterations to run a test"))
     <*> ordinary Nothing (optional (option auto (long "max-iter" <> metavar "N" <> help "Maximum number of iterations to run a test (mode defaults when omitted)")))
     <*> ordinary 3 (option auto (long "min-iter" <> metavar "N" <> value 3 <> help "Minimum number of iterations to run a test"))
-    <*> ordinary Nothing (optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)")))
+    <*> (case mode of
+           ScaleOptions -> optional (option durationReader (long "max-time" <> metavar "DURATION" <> help "Maximum scaling study duration (e.g. 2h; default: 1h)"))
+           PerfOptions -> pure Nothing
+           OrdinaryOptions -> optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)")))
     <*> ordinary Nothing (optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds")))
-    <*> (if perfMode then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
-    <*> (if perfMode then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
+    <*> (if mode == PerfOptions then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
+    <*> (if mode == PerfOptions then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
+    <*> (if mode == ScaleOptions then optional (option scaleReader (long "start-scale" <> metavar "N" <> help "First positive workload scale in a scaling study (default: 1)")) else pure Nothing)
+    <*> (if mode == ScaleOptions then optional (option memoryLimitReader (long "max-memory" <> metavar "LIMIT" <> help "Scaling study memory limit, as bytes or a percentage (e.g. 2GiB or 50%; default: 50%)")) else pure Nothing)
     <*> ordinary 0 (option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)"))
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
     <*> many (strOption (long "name" <> metavar "NAME" <> help "Filter on test name (regex, anchored; use .* for substrings)"))
   where
-    defaultOptimize = if perfMode then ReleaseFast else Debug
-    ordinary fallback parser = if perfMode then pure fallback else parser
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStressWorkers testTags testModules testNames =
+    defaultOptimize = if mode == OrdinaryOptions then Debug else ReleaseFast
+    ordinary fallback parser = if mode == OrdinaryOptions then parser else pure fallback
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testMaxMemory testStressWorkers testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -546,6 +568,9 @@ testOptions perfMode = mkTestOptions
         , testMinTime = fromMaybe 50 testMinTimeOpt
         , testTime = testTime
         , testScale = testScale
+        , testStartScale = testStartScale
+        , testMaxMemory = testMaxMemory
+        , testCompare = Nothing
         , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt
@@ -560,12 +585,24 @@ scaleReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of
     [(n, "")] | n > 0 && n <= toInteger (maxBound :: Int) -> Right (fromInteger n)
     _ -> Left "Expected a positive workload scale that fits in an integer"
 
+memoryLimitReader :: ReadM MemoryLimit
+memoryLimitReader = eitherReader $ \s -> case reads s :: [(Double, String)] of
+    [(p, "%")] | not (isNaN p || isInfinite p) && p > 0 && p <= 100 -> Right (MemoryPercent p)
+    _ -> case reads s :: [(Integer, String)] of
+      [(n, unit)] | n > 0, Just factor <- lookup (map toLower unit) units -> Right (MemoryBytes (n * factor))
+      _ -> Left "Expected positive integer bytes (e.g. 2GiB) or a percentage greater than 0 and at most 100%"
+  where
+    units = [("", 1), ("b", 1), ("kb", 1000), ("mb", 1000^2), ("gb", 1000^3), ("tb", 1000^4),
+             ("kib", 1024), ("mib", 1024^2), ("gib", 1024^3), ("tib", 1024^4)]
+
 durationReader :: ReadM Int
 durationReader = eitherReader $ \s -> case reads s :: [(Double, String)] of
     [(number, unit)] ->
       let milliseconds = case map toLower unit of
             "ms" -> number
             "s" -> number * 1000
+            "m" -> number * 60000
+            "h" -> number * 3600000
             _ -> 0
       in if isNaN milliseconds || isInfinite milliseconds || milliseconds < 1
            then Left expected
@@ -575,7 +612,7 @@ durationReader = eitherReader $ \s -> case reads s :: [(Double, String)] of
                      else Right (fromInteger rounded)
     _ -> Left expected
   where
-    expected = "Expected a positive duration such as 5s or 250ms (minimum 1ms)"
+    expected = "Expected a positive duration such as 250ms, 5s, 2m or 1h (minimum 1ms)"
 
 depOverrideReader :: ReadM (String,String)
 depOverrideReader = eitherReader $ \s ->

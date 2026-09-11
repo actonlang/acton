@@ -358,13 +358,14 @@ class PerfLoop(Iterator[int]):
     _yield_scale: ?int
     _report_result: ?action(?bool, ?Exception, ?str) -> None
 
-    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, target_ms: float=0.0):
+    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, target_ms: float=0.0, once: bool=False):
         self._phase = phase
         self.scale = scale
         self.iterations = 0
         self._budget_ms = budget_ms
         self._remaining_ms = remaining_ms
         self._target_ms = target_ms
+        self._once = once
         self._previous_wall_ms = 0.0
         self._sw = time.Stopwatch()
         self.calibration = []
@@ -417,6 +418,8 @@ class PerfLoop(Iterator[int]):
         self.iterations += completed
         if self._phase == 0:
             return 1 if self.iterations == 0 else None
+        if self._once:
+            return self.scale if self.iterations == 0 else None
         elapsed = self._sw.elapsed().to_float() * 1000.0
         if completed == 0:
             # Setup uses the total budget, but a run may finish its first body
@@ -1215,6 +1218,7 @@ class TestInfo(object):
 
 class TestRunnerConfig(object):
     perf_mode: bool
+    scaling: bool
     stress_mode: bool
     max_iter: int
     min_iter: int
@@ -1256,18 +1260,22 @@ class TestRunnerConfig(object):
         self.tags = split_tags(args.get_strlist("tag"))
         self.time_ms = args.get_int("time")
         self.scale = args.get_int("scale")
+        self.scaling = args.get_bool("scaling")
         if perf_mode and (self.time_ms <= 0 or self.scale < 0):
             raise ValueError("Performance time must be positive and scale must be non-negative")
+        if self.scaling and (not perf_mode or self.scale <= 0):
+            raise ValueError("--scaling requires performance mode and a positive --scale")
 
 class PerfRun(object):
-    """Calibrate once, then collect fresh invocations within one elapsed budget."""
+    """Collect timed invocations, or one fixed-work sample after one warmup."""
     calibration: list[dict[str, value]]
 
-    def __init__(self, time_ms: int, scale: int=0):
+    def __init__(self, time_ms: int, scale: int=0, scaling: bool=False):
         self.time_ms = time_ms
+        self.scaling = scaling
         self.scale = max([1, scale])
         self.loop = False
-        self.phase = "calibrate" if scale == 0 else "warmup"
+        self.phase = "calibrate" if scale == 0 and not scaling else "warmup"
         self.warmup_duration_ms = 0.0
         self.measurement_ms = 0.0
         self.loop_iterations = 0
@@ -1278,6 +1286,10 @@ class PerfRun(object):
         return max([0.0, float(self.time_ms) - self._sw.elapsed().to_float() * 1000.0])
 
     def next_loop(self, samples: int) -> PerfLoop:
+        if self.scaling:
+            # The parent bounds the study. Each child warms up once, then takes
+            # one sample without filling a time budget or batching loop bodies.
+            return PerfLoop(2 if self.phase == "warmup" else 3, self.scale, once=True)
         remaining = self.remaining_ms()
         if self.phase == "calibrate":
             return PerfLoop(1, self.scale, min([remaining, float(self.time_ms) / 3.0]), remaining, float(self.time_ms) / 10.0)
@@ -1297,7 +1309,7 @@ class PerfRun(object):
                     self.phase = "measure"
         elif self.phase == "warmup":
             self.warmup_duration_ms = elapsed_ms
-            if self.warmup_duration_ms >= float(self.time_ms) / 10.0:
+            if self.scaling or self.warmup_duration_ms >= float(self.time_ms) / 10.0:
                 self.phase = "measure"
         else:
             self.measurement_ms += wall_ms
@@ -1352,7 +1364,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
     var iteration = 0
     var invocation = 0
     var accepting_result = False
-    perf_run = PerfRun(config.time_ms, config.scale) if config.perf_mode else None
+    perf_run = PerfRun(config.time_ms, config.scale, config.scaling) if config.perf_mode else None
     perf_phase_sw = time.Stopwatch()
     var stress_drift_rank = max([0, executor_id - stress_nodrift_workers])
     var stress_drift_workers = max([1, stress_workers - stress_nodrift_workers])
@@ -1521,6 +1533,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                     "version": "3",
                     "scale": perf_run.scale,
                     "loop": perf_run.loop,
+                    "scaling": perf_run.scaling,
                     "time_budget_ms": config.time_ms,
                     "warmup_duration_ms": perf_run.warmup_duration_ms,
                     "measurement_ms": perf_run.measurement_ms,
@@ -1586,6 +1599,9 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         if success == True and exception is None and not skipped and loop_status in [1, 3]:
             success = False
             exception = ValueError("Benchmark loop must run to exhaustion")
+        if config.scaling and success == True and exception is None and not skipped and loop_status == 0:
+            success = False
+            exception = ValueError("Scaling measurements require t.loop()")
         if perf_run is not None:
             if invocation == 1:
                 perf_run.loop = loop_status != 0
@@ -1606,7 +1622,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             if phase != perf_run.phase and (perf_run.loop or perf_run.phase == "measure"):
                 perf_phase_sw.reset()
             if not measured:
-                if perf_run.remaining_ms() > 0.0:
+                if perf_run.scaling or perf_run.remaining_ms() > 0.0:
                     if last_report.elapsed().to_float() > 0.05:
                         _emit_result(False)
                     after 0: _run_fn(test)
@@ -1644,7 +1660,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         if skipped:
             complete = True
         if perf_run is not None:
-            complete = perf_run.remaining_ms() <= 0.0 or (perf_run.loop and completed_iterations >= 4)
+            complete = perf_run.scaling or perf_run.remaining_ms() <= 0.0 or (perf_run.loop and completed_iterations >= 4)
         elif config.stress_mode:
             if config.max_time > 0.0 and test_dur > config.max_time:
                 complete = True
@@ -1684,7 +1700,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             report_complete(executor_id, t, test_info)
 
     def _run_fn(t: Test):
-        if perf_run is not None and perf_run.remaining_ms() <= 0.0:
+        if perf_run is not None and not perf_run.scaling and perf_run.remaining_ms() <= 0.0:
             _finish_budget()
             return
         _stress_drift_delay()
@@ -2406,6 +2422,7 @@ actor test_runner(env: Env,
         tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
         tp.add_option("time", "int", default=5000, help="Total performance budget in milliseconds")
         tp.add_option("scale", "int", default=0, help="Performance workload scale (0 = calibrate)")
+        tp.add_bool("scaling", "Measure one fixed workload after one warmup invocation")
         tp.add_option("stress-workers", "int", default=0, help="Concurrent stress workers to run (0 = auto)")
         tp.add_option("tag", "strlist", default=[], help="Enable test capability tag")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)

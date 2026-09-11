@@ -53,6 +53,8 @@ import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
+import TestScale (validateScalingOptions)
+import ScaleReport (printScaleRecording)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, throwTo)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
@@ -646,15 +648,21 @@ buildProjectOnce gopts opts = do
 
 -- | Entry point for acton test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
+runTests gopts (C.TestScaleReport path baseline) = do
+    color <- useColor gopts
+    printScaleRecording color path baseline
 runTests gopts cmd = do
     let (mode, topts) =
           case cmd of
             C.TestRun opts  -> (TestModeRun, opts)
             C.TestList opts -> (TestModeList, opts)
             C.TestPerf opts -> (TestModePerf, opts)
+            C.TestScale opts -> (TestModeScale, opts)
             C.TestStress opts -> (TestModeStress, opts)
         gopts' = if C.testJson topts then gopts { C.quiet = True } else gopts
         opts0 = C.testCompile topts
+    when (mode == TestModeScale) $
+      mapM_ printErrorAndExit (validateScalingOptions topts)
     when (C.testRecord topts && mode /= TestModePerf) $
       printErrorAndExit "--record requires acton test perf"
     let opts = opts0
@@ -671,7 +679,8 @@ runTests gopts cmd = do
 
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
-runTestsOnce gopts opts topts mode paths = do
+runTestsOnce gopts opts topts0 mode paths = do
+    (topts, baseline) <- if mode == TestModeScale then prepareScalingComparison paths topts0 else return (topts0, Nothing)
     modules <- withProjectLockNotice gopts (projPath paths) $ do
       srcFiles <- projectSourceFiles paths
       selected <- selectTestSources gopts opts paths topts srcFiles
@@ -682,10 +691,10 @@ runTestsOnce gopts opts topts mode paths = do
       TestModeList -> listProjectTests opts paths topts modules
       _ -> do
         maxParallel0 <- testMaxParallel gopts
-        let maxParallel = if mode `elem` [TestModePerf, TestModeStress] then 1 else maxParallel0
+        let maxParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else maxParallel0
         useColorOut <- useColor gopts
         testStart <- getTime Monotonic
-        exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel
+        exitCode <- runProjectTests useColorOut gopts opts paths topts mode modules maxParallel baseline
         logTiming gopts opts putStrLn "test execution and cache" testStart
         exitWithTestCode exitCode
 
@@ -702,7 +711,7 @@ runTestsWatch gopts opts topts mode paths = do
             progressUI = cwProgressUI watchCtx
             progressState = cwProgressState watchCtx
         testParallel0 <- testMaxParallel gopts
-        let testParallel = if mode `elem` [TestModePerf, TestModeStress] then 1 else testParallel0
+        let testParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else testParallel0
         let runOnce gen mChanged = do
               withProjectLockForGen gopts sched gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir
@@ -721,7 +730,7 @@ runTestsWatch gopts opts topts mode paths = do
                     do
                       useColorOut <- useColor gopts
                       testStart <- getTime Monotonic
-                      void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel
+                      void $ runProjectTests useColorOut gopts opts paths topts mode modulesToTest testParallel Nothing
                       logTiming gopts opts (progressLogLine progressUI) "test execution and cache" testStart
                 return (not hadErrors)
         runWatchProject gopts projDir srcRoot sched runOnce

@@ -15,6 +15,9 @@ copyright:           "Data Ductus, Deutsche Telekom"
 # common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/githubuser/simple#readme>
 
+c-sources:
+  - cbits/perf_memory.c
+
 dependencies:
   - MissingH
   - libacton
@@ -22,6 +25,7 @@ dependencies:
   - async
   - base >= 4.7 && < 5
   - base16-bytestring
+  - base64-bytestring
   - binary
   - bytestring
   - clock
@@ -60,6 +64,7 @@ dependencies:
   - unordered-containers
   - wcwidth
   - regex-tdfa
+  - zlib
   
 executables:
   acton:
@@ -77,7 +82,10 @@ executables:
       - TestFormat
       - TestOutput
       - TestPerf
+      - PerfMemory
       - TestRunner
+      - TestScale
+      - ScaleReport
       - TestUI
     ghc-options:
       - -threaded

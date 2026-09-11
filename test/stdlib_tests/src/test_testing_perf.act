@@ -60,6 +60,24 @@ def _test_loop_preserves_recorded_scale(t: testing.SyncT):
     assert len(run.calibration) == 0
 
 
+def _test_scaling_measures_one_body_after_one_warmup(t: testing.SyncT):
+    run = testing.PerfRun(1, scale=37, scaling=True)
+    run.loop = True
+    assert run.phase == "warmup"
+    warmup = run.next_loop(0)
+    assert list(warmup.claim()) == [37]
+    assert warmup.iterations == 1
+    assert warmup._wall_ns == 0
+    assert not run.observe(warmup, 0.0, 0.0)
+    assert run.phase == "measure"
+    sample = run.next_loop(0)
+    assert list(sample.claim()) == [37]
+    assert sample.iterations == 1
+    assert run.observe(sample, 0.0, float(sample._wall_ns) / 1000000.0)
+    assert run.loop_iterations == 1
+    assert len(run.calibration) == 0
+
+
 def _test_ordinary_loop_and_closed_context(t: testing.SyncT):
     loop = testing.PerfLoop()
     assert list(loop.claim()) == [1]
