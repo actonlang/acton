@@ -346,13 +346,17 @@ struct B_MinusD_SetD_set B_MinusD_SetD_setD_strG_instance;
 
 struct B_SetD_set B_SetD_setD_strG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_strG_instance, (B_Logical)&B_LogicalD_SetD_setD_strG_instance,
-                                               (B_Minus)& B_MinusD_SetD_setD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
+                                               (B_Minus)& B_MinusD_SetD_setD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
+                                               (B_Hashable)&B_HashableD_strG_instance};
 
 struct B_OrdD_SetD_set B_OrdD_SetD_setD_strG_instance = {&B_OrdD_SetD_setG_methods, (B_Eq)&B_HashableD_strG_instance,
+                                                         (B_ISet)&B_SetD_setD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                          (B_Set)&B_SetD_setD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
 struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_strG_instance = {&B_LogicalD_SetD_setG_methods, (B_Eq)&B_HashableD_strG_instance,
+                                                            (B_ISet)&B_SetD_setD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                             (B_Set)&B_SetD_setD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
 struct B_MinusD_SetD_set B_MinusD_SetD_setD_strG_instance = {&B_MinusD_SetD_setG_methods, (B_Eq)&B_HashableD_strG_instance,
+                                                         (B_ISet)&B_SetD_setD_strG_instance, (B_Eq)&B_HashableD_strG_instance,
                                                          (B_Set)&B_SetD_setD_strG_instance, (B_Hashable)&B_HashableD_strG_instance};
 
 B_SetD_set B_SetD_SetD_strG_witness = &B_SetD_setD_strG_instance;
@@ -365,14 +369,18 @@ struct B_MinusD_SetD_set B_MinusD_SetD_setD_intG_instance;
 
 struct B_SetD_set B_SetD_setD_intG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_intG_instance, (B_Logical)&B_LogicalD_SetD_setD_intG_instance,
-                                               (B_Minus)& B_MinusD_SetD_setD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
+                                               (B_Minus)& B_MinusD_SetD_setD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
+                                               (B_Hashable)&B_HashableD_intG_instance};
 
 
 struct B_OrdD_SetD_set B_OrdD_SetD_setD_intG_instance = {&B_OrdD_SetD_setG_methods, (B_Eq)&B_HashableD_intG_instance,
+                                                         (B_ISet)&B_SetD_setD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
                                                          (B_Set)&B_SetD_setD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
 struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_intG_instance = {&B_LogicalD_SetD_setG_methods, (B_Eq)&B_HashableD_intG_instance,
+                                                            (B_ISet)&B_SetD_setD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
                                                             (B_Set)&B_SetD_setD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
 struct B_MinusD_SetD_set B_MinusD_SetD_setD_intG_instance = {&B_MinusD_SetD_setG_methods, (B_Eq)&B_HashableD_intG_instance,
+                                                         (B_ISet)&B_SetD_setD_intG_instance, (B_Eq)&B_HashableD_intG_instance,
                                                          (B_Set)&B_SetD_setD_intG_instance, (B_Hashable)&B_HashableD_intG_instance};
 
 B_SetD_set B_SetD_SetD_intG_witness = &B_SetD_setD_intG_instance;
@@ -385,14 +393,18 @@ struct B_MinusD_SetD_set B_MinusD_SetD_setD_u64G_instance;
 
 struct B_SetD_set B_SetD_setD_u64G_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_u64G_instance, (B_Logical)&B_LogicalD_SetD_setD_u64G_instance,
-                                               (B_Minus)& B_MinusD_SetD_setD_u64G_instance, (B_Hashable)&B_HashableD_u64G_instance};
+                                               (B_Minus)& B_MinusD_SetD_setD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
+                                               (B_Hashable)&B_HashableD_u64G_instance};
 
 
 struct B_OrdD_SetD_set B_OrdD_SetD_setD_u64G_instance = {&B_OrdD_SetD_setG_methods, (B_Eq)&B_HashableD_u64G_instance,
+                                                         (B_ISet)&B_SetD_setD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
                                                          (B_Set)&B_SetD_setD_u64G_instance, (B_Hashable)&B_HashableD_u64G_instance};
 struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_u64G_instance = {&B_LogicalD_SetD_setG_methods, (B_Eq)&B_HashableD_u64G_instance,
+                                                            (B_ISet)&B_SetD_setD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
                                                             (B_Set)&B_SetD_setD_u64G_instance, (B_Hashable)&B_HashableD_u64G_instance};
 struct B_MinusD_SetD_set B_MinusD_SetD_setD_u64G_instance = {&B_MinusD_SetD_setG_methods, (B_Eq)&B_HashableD_u64G_instance,
+                                                         (B_ISet)&B_SetD_setD_u64G_instance, (B_Eq)&B_HashableD_u64G_instance,
                                                          (B_Set)&B_SetD_setD_u64G_instance, (B_Hashable)&B_HashableD_u64G_instance};
 
 B_SetD_set B_SetD_SetD_u64G_witness = &B_SetD_setD_u64G_instance;
@@ -405,15 +417,18 @@ struct B_MinusD_SetD_set B_MinusD_SetD_setD_bytesG_instance;
 
 struct B_SetD_set B_SetD_setD_bytesG_instance = {&B_SetD_setG_methods, (B_Eq)&B_HashableD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
                                                (B_Ord)&B_OrdD_SetD_setD_bytesG_instance, (B_Logical)&B_LogicalD_SetD_setD_bytesG_instance,
-                                               (B_Minus)& B_MinusD_SetD_setD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
+                                               (B_Minus)& B_MinusD_SetD_setD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
+                                               (B_Hashable)&B_HashableD_bytesG_instance};
 
 
 struct B_OrdD_SetD_set B_OrdD_SetD_setD_bytesG_instance = {&B_OrdD_SetD_setG_methods, (B_Eq)&B_HashableD_bytesG_instance,
+                                                         (B_ISet)&B_SetD_setD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
                                                          (B_Set)&B_SetD_setD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
 struct B_LogicalD_SetD_set B_LogicalD_SetD_setD_bytesG_instance = {&B_LogicalD_SetD_setG_methods, (B_Eq)&B_HashableD_bytesG_instance,
+                                                            (B_ISet)&B_SetD_setD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
                                                             (B_Set)&B_SetD_setD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
 struct B_MinusD_SetD_set B_MinusD_SetD_setD_bytesG_instance = {&B_MinusD_SetD_setG_methods, (B_Eq)&B_HashableD_bytesG_instance,
+                                                         (B_ISet)&B_SetD_setD_bytesG_instance, (B_Eq)&B_HashableD_bytesG_instance,
                                                          (B_Set)&B_SetD_setD_bytesG_instance, (B_Hashable)&B_HashableD_bytesG_instance};
 
 B_SetD_set B_SetD_SetD_bytesG_witness = &B_SetD_setD_bytesG_instance;
-

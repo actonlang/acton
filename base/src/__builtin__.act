@@ -577,6 +577,10 @@ class set[A(Hashable)] (object):
     def __init__(self, iterable: ?Iterable[A]) -> None:
         NotImplemented
 
+class iset[A(Hashable)] (object):
+    def __init__(self, iterable: ?Iterable[A]) -> None:
+        NotImplemented
+
 ## Number protocols ################################################################################
 
 #   Plus
@@ -861,11 +865,18 @@ protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
 #   Container       Ord             Logical         Minus
 #    |               |               |               |
 #    |               |               |               |
-#   Set <------------- <-------------- <--------------
+#  ISet <------------- <-------------- <--------------
+#    |
+#    |
+#   Set
 
-protocol Set[A (Eq)] (Container[A], Ord, Logical, Minus):
+    
+protocol ISet[A (Eq)] (Container[A], Ord, Logical, Minus):
     @staticmethod
     isdisjoint  : (Self,Self) -> bool
+
+
+protocol Set[A (Eq)] (ISet[A]):
     add         : mut(A) -> None
     discard     : mut(A) -> None
     pop         : mut() -> A
@@ -889,6 +900,12 @@ extension dict[A(Hashable),B(Eq)] (Ord):
 extension set[A(Hashable)] (Set[A]):
     NotImplemented
 extension set[A(Hashable)] (Hashable):
+    NotImplemented
+
+extension iset[A(Hashable)] (ISet[A]):
+    NotImplemented
+
+extension iset[A(Hashable)] (Hashable):
     NotImplemented
 
 extension Iterator[A](Iterable[A]):

@@ -54,6 +54,7 @@ void $register_builtin() {
   $register_force(LIST_ID,&B_listG_methods);
   $register_force(DICT_ID,&B_dictG_methods);
   $register_force(SET_ID,&B_setG_methods);
+  $register_force(ISET_ID,&B_isetG_methods);
   $register_force(RANGE_ID,&B_rangeG_methods);
   $register_force(TUPLE_ID,&B_tupleG_methods);
   $register_force(BYTEARRAY_ID,&B_bytearrayG_methods);

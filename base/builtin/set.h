@@ -4,13 +4,22 @@ typedef struct {
     uint64_t hash;
 } B_setentry;
 
-struct B_set {
-    struct B_setG_class *$class;
-    uint64_t numelements;    // nr of elements in B_set
+typedef struct {
+    uint64_t numelements;    // nr of elements
     uint64_t fill;           // numelements + #dummy entries
     uint64_t mask;
     uint64_t finger;         // Search finger for pop()
     B_setentry *table;       // the hashtable
+} B_set_table;
+
+struct B_set {
+    struct B_setG_class *$class;
+    B_set_table data;
+};
+
+struct B_iset {
+    struct B_isetG_class *$class;
+    B_set_table data;
 };
 
 
@@ -33,7 +42,8 @@ struct B_IteratorD_setG_class {
 
 struct B_IteratorD_set {
     struct B_IteratorD_setG_class *$class;
-    B_set src;
+    $WORD src;
+    B_set_table *data;
     uint64_t nxt;
 };
 
