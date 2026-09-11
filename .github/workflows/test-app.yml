@@ -28,8 +28,8 @@ jobs:
           repository: ${{ inputs.repo_url }}
           path: app
       - name: "Compile acton program"
-        run: |
-          cd app
-          acton build
-          acton test
-          acton test perf
+        working-directory: app
+        run: acton build
+      - name: "Run tests"
+        working-directory: app
+        run: acton test

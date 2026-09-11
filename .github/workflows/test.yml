@@ -973,10 +973,14 @@ jobs:
       - name: "Run perf tests and record"
         run: |
           acton version
-          cd test/stdlib_tests
-          acton test perf --record
-          cd ../perf
-          acton test perf --record
+          rm -f test/perf/perf_data
+          perf_help="$(acton test perf --help)"
+          if ! grep -q -- '--scale' <<< "$perf_help"; then
+            echo "The APT compiler predates performance loops. Running the new compiler's benchmarks without a baseline." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          cd test/perf
+          acton test perf --time 1s --record
       - name: "Download .deb files"
         uses: actions/download-artifact@v8
         with:
@@ -985,14 +989,14 @@ jobs:
         run: |
           sudo dpkg -i ./deb/acton_*.deb
           acton version
+      - name: "Run stdlib tests in ReleaseFast"
+        working-directory: test/stdlib_tests
+        run: acton test --optimize ReleaseFast --iter 1 --no-cache
       - name: "Run perf tests to compare"
         run: |
-          cd test/stdlib_tests
+          cd test/perf
           rm -rf out
-          acton test perf
-          cd ../perf
-          rm -rf out
-          acton test perf
+          acton test perf --time 1s
 
   test-app-sorespo:
     strategy:
