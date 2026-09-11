@@ -5,6 +5,7 @@ module TestPerf
   , perfStatKey
   , perfInfo
   , perfCounterInfo
+  , perfHostReason, perfSamplingReason
   , perfComparisonReason
   , perfBaselineScale
   , perfComparable
@@ -79,16 +80,27 @@ perfComparisonReason :: String -> Aeson.Object -> Aeson.Object -> Maybe String
 perfComparisonReason metric old new = case (perfInfo old, perfInfo new) of
     (Nothing, _) -> Just "baseline has no performance identity; record a new baseline"
     (_, Nothing) -> Just "current performance identity is unavailable"
-    (Just a, Just b) | scaling a /= scaling b -> Just "measurement sampling mode differs"
-    (Just a, Just b) -> case metadataReason (hostKeys ++ ["scale", "loop", "workers"]) a b of
+    (Just a, Just b) -> case perfSamplingReason a b of
       Just reason -> Just reason
-      Nothing
-        | metric `elem` ["instructions", "cycles", "ipc"] -> case (perfCounterInfo old, perfCounterInfo new) of
-            (Just ca, Just cb) -> metadataReason ["version", "backend", "scope"] ca cb
-            _ -> Just "hardware counter scope is unavailable"
-        | otherwise -> Nothing
+      Nothing -> case metadataReason ["scale"] a b of
+        Just reason -> Just reason
+        Nothing
+          | metric `elem` ["instructions", "cycles", "ipc"] -> case (perfCounterInfo old, perfCounterInfo new) of
+              (Just ca, Just cb) -> metadataReason ["version", "backend", "scope"] ca cb
+              _ -> Just "hardware counter scope is unavailable"
+          | otherwise -> Nothing
+
+-- Scaling curves compare many sizes, while retaining the same environment and
+-- sampling contract. Workload scale is checked separately for fixed-size deltas.
+perfSamplingReason :: Aeson.Object -> Aeson.Object -> Maybe String
+perfSamplingReason old new
+  | scaling old /= scaling new = Just "measurement sampling mode differs"
+  | otherwise = metadataReason (hostKeys ++ ["loop", "workers"]) old new
   where
     scaling info = AesonKM.lookup (AesonKey.fromString "scaling") info == Just (Aeson.Bool True)
+
+perfHostReason :: Aeson.Object -> Aeson.Object -> Maybe String
+perfHostReason = metadataReason hostKeys
 
 -- Select the recorded workload scale before launching the process. The completed
 -- run must still pass the actual worker-count and loop checks above.

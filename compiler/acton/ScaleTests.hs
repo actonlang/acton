@@ -10,13 +10,18 @@ import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString as BS
 import qualified Data.IntMap.Strict as IM
+import qualified Data.Map.Strict as M
 import Data.IORef
+import Data.Char (isHexDigit)
 import Data.List (find, isInfixOf)
 import Data.Maybe (isJust)
 import qualified Options.Applicative as O
 import PerfMemory (MemoryStatus(..))
 import ScaleReportTests (scaleReportTests)
+import ScaleReport (ScaleRecording(..), ScaleSeries(..), readScaleRecording)
+import TestPerf (perfInfo)
 import System.Clock (Clock(Monotonic), fromNanoSecs, getTime)
 import System.Directory
 import System.Exit
@@ -217,7 +222,7 @@ scaleTests = testGroup "performance scaling studies"
       withSystemTempDirectory "acton-scaling-monitor" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "1B", "--max-time", "2s"]
         let reason = "memory monitoring unavailable: injected failure"
-        code <- runScalingStudy False gopts opts directory KM.empty [("sample", "test")]
+        code <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Nothing)] Nothing
           (\_ _ _ _ -> throwIO (ScalingStopped reason))
         assertEqual "an unavailable guard cannot report success" 2 code
         files <- filter ((== ".jsonl") . takeExtension) <$> listDirectory directory
@@ -225,6 +230,45 @@ scaleTests = testGroup "performance scaling studies"
         events <- BL.readFile (directory </> head files) >>= decodeEvents . BL.unpack
         assertEnd reason events
         assertBool "an unguarded sample cannot contribute a point" (null (eventsOf "point" events))
+  , testCase "comparison replays completed recorded sizes without adaptive early stopping" $
+      withSystemTempDirectory "acton-scale-replay" $ \directory -> do
+        (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s", "--json"]
+        let sizes = [1,3..49]
+            points = IM.fromList [(n, (True, [(0.001, 1048576)])) | n <- sizes]
+            Aeson.Object raw = trRaw (modelResult 1 0.001)
+            series = ScaleSeries (IM.insert 50 (False, [(0.001, 1048576)]) points) (perfInfo raw) Nothing Nothing
+            baseline = ScaleRecording "old.jsonl" KM.empty (M.singleton ("sample", "test") series) Nothing
+            implementation = replicate 64 'a'
+        calls <- newIORef []
+        code <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Just implementation)] (Just baseline) $ \_ n _ _ -> do
+          modifyIORef' calls (++ [n])
+          return (modelResult n 0.001)
+        assertEqual "all scheduled sizes completed" 0 code
+        assertEqual "partial baseline point is excluded and 20 tiny sizes do not stop replay"
+          (concatMap (replicate 3) sizes) =<< readIORef calls
+        [name] <- listDirectory directory
+        assertBool name ("sample.test__" `isInfixOf` name && "__aaaaaaaaaaaa.jsonl" `isInfixOf` name)
+        recording <- readScaleRecording (directory </> name)
+        assertEqual "full implementation identity is retained" (Just (Aeson.toJSON implementation))
+          (KM.lookup "implementation_hash" (recordingHeader recording))
+        assertEqual "completion describes replay" (Just "Completed baseline sizes remeasured")
+          (seriesReason (recordingTests recording M.! ("sample", "test")))
+  , testCase "each benchmark owns its journal while sharing the command budget" $
+      withSystemTempDirectory "acton-scale-files" $ \directory -> do
+        (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s", "--json"]
+        code <- runScalingStudy False gopts opts directory KM.empty
+          [("sample", "one", Nothing), ("sample", "two", Nothing)] Nothing $ \_ n _ name ->
+            if name == "two" then throwIO (ScalingStopped "time limit reached") else return (modelResult n 1)
+        assertEqual "the time ceiling is a normal stop" 0 code
+        files <- listDirectory directory
+        assertEqual "one journal per benchmark" 2 (length files)
+        recordings <- mapM (readScaleRecording . (directory </>)) files
+        let one = head [r | r <- recordings, M.member ("sample", "one") (recordingTests r)]
+            two = head [r | r <- recordings, M.member ("sample", "two") (recordingTests r)]
+        assertEqual "the first file only claims its own completion" (Just "benchmark finished") (recordingStopped one)
+        assertEqual "the unfinished benchmark has its own reason" (Just "time limit reached") (recordingStopped two)
+        assertEqual "both files identify the common command"
+          (KM.lookup "run_id" (recordingHeader one)) (KM.lookup "run_id" (recordingHeader two))
   , scaleReportTests
   , testCase "scaling journals completed work when later work stops" $
       withSystemTempDirectory "acton-perf-scaling" $ \project -> do
@@ -261,6 +305,9 @@ scaleTests = testGroup "performance scaling studies"
           , "        sw = time.Stopwatch()"
           , "        while sw.elapsed().to_float() < target:"
           , "            pass"
+          , ""
+          , "def _test__test_partial(t: testing.SyncT):"
+          , "    raise ValueError(\"wrong benchmark selected\")"
           , ""
           , "def _test_failure(t: testing.SyncT):"
           , "    for scale in t.loop():"
@@ -302,6 +349,32 @@ scaleTests = testGroup "performance scaling studies"
           assertEqual "fixed-scale study samples do not calibrate" (Just (Aeson.toJSON ([] :: [Int]))) (KM.lookup "calibration" info)
           warmup <- field "warmup_duration_ms" info :: IO Double
           assertBool "the child completed warmup" (warmup > 0)
+        originalHeader <- requireEvent "study" partial
+        originalPath <- field "path" originalHeader
+        implementation <- field "implementation_hash" originalHeader :: IO String
+        assertBool "a real benchmark has a full implementation digest"
+          (length implementation == 64 && all isHexDigit implementation)
+        assertBool "the filename includes the benchmark and short implementation digest"
+          (("scale_tests.sample._test_partial__" `isInfixOf` takeFileName originalPath)
+            && ("__" ++ take 12 implementation ++ ".jsonl") `isInfixOf` takeFileName originalPath)
+        original <- BS.readFile originalPath
+        (compareCode, compareOut, compareErr) <- readCreateProcessWithExitCode
+          (proc acton ["test", "scale", "--compare", originalPath, "--max-time", "2s", "--json"])
+            { cwd = Just project } ""
+        assertEqual (compareOut ++ compareErr) ExitSuccess compareCode
+        compared <- decodeEvents compareOut
+        compareHeader <- requireEvent "study" compared
+        comparePath <- field "path" compareHeader
+        assertBool "comparison writes a distinct journal" (originalPath /= comparePath)
+        assertEqual "sampling options do not change implementation identity"
+          (KM.lookup "implementation_hash" originalHeader) (KM.lookup "implementation_hash" compareHeader)
+        forM_ (eventsOf "sample_start" compared) $ \event -> do
+          assertEqual "recorded scale is replayed without calibration" (Just (Aeson.Number 1000)) (KM.lookup "scale" event)
+          assertEqual "the recorded raw identity excludes a colliding display name"
+            (Just (Aeson.String "_test_partial")) (KM.lookup "test" event)
+        summary <- requireEvent "test_end" compared
+        assertEqual "the recorded schedule completed" (Just (Aeson.String "compared")) (KM.lookup "outcome" summary)
+        assertEqual "the old recording is unchanged" original =<< BS.readFile originalPath
         forM_ [("failure", "scaling failure"), ("without_loop", "require")] $ \(test, message) -> do
           (code, events, output) <- run test "128MiB" "2s"
           assertBool output (code /= ExitSuccess)
@@ -346,7 +419,7 @@ simulate :: String -> (Int -> Int -> TestResult) -> IO (Int, [Aeson.Object])
 simulate name result = withSystemTempDirectory ("acton-scale-" ++ name) $ \directory -> do
     (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s"]
     calls <- newIORef IM.empty
-    code <- runScalingStudy False gopts opts directory KM.empty [("sample", name)] $ \_ scale modName testName -> do
+    code <- runScalingStudy False gopts opts directory KM.empty [("sample", name, Nothing)] Nothing $ \_ scale modName testName -> do
       counts <- readIORef calls
       when (sum (IM.elems counts) >= 500) (assertFailure "the simulated study did not stop")
       let invocation = IM.findWithDefault 0 scale counts + 1
@@ -367,7 +440,11 @@ modelResult scale wall = TestResult
     , trRaw = Aeson.object ["complete" Aeson..= True, "success" Aeson..= True,
         "skipped" Aeson..= False, "num_iterations" Aeson..= (1 :: Int), "loop_iterations" Aeson..= (1 :: Int),
         "avg_wall_duration" Aeson..= wall, "peak_rss" Aeson..= (1048576 :: Int),
-        "perf_info" Aeson..= Aeson.object ["scale" Aeson..= scale, "loop" Aeson..= True, "scaling" Aeson..= True]]
+        "perf_info" Aeson..= Aeson.object ["scale" Aeson..= scale, "loop" Aeson..= True, "scaling" Aeson..= True,
+          "machine" Aeson..= ("test-machine" :: String), "version" Aeson..= ("3" :: String),
+          "workers" Aeson..= (2 :: Int), "gc" Aeson..= ("natural" :: String), "tags" Aeson..= ([] :: [String]),
+          "build" Aeson..= Aeson.object ["target" Aeson..= ("native" :: String), "optimize" Aeson..= ("ReleaseFast" :: String),
+            "cpu" Aeson..= ("" :: String), "no_threads" Aeson..= False, "db" Aeson..= False, "no_dbp" Aeson..= False]]]
     }
 
 assertSummary :: String -> (Int, Int) -> (Int, Int) -> [Aeson.Object] -> IO Aeson.Object
@@ -379,7 +456,7 @@ assertSummary outcome (first, final) (points, samples) events = do
     assertEqual "all curve points are counted" (Just (Aeson.toJSON points)) (KM.lookup "points" summary)
     assertEqual "curve samples exclude reference checks" (Just (Aeson.toJSON samples)) (KM.lookup "samples" summary)
     assertEqual "each reported point is journaled" points (length (eventsOf "point" events))
-    assertEnd "all selected studies finished" events
+    assertEnd "benchmark finished" events
     return summary
 
 assertSampleProvenance :: [Aeson.Object] -> Assertion

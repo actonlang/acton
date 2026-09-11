@@ -152,7 +152,7 @@ data TestCommand
     | TestList TestOptions
     | TestPerf TestOptions
     | TestScale TestOptions
-    | TestScaleReport FilePath
+    | TestScaleReport FilePath (Maybe FilePath)
     | TestStress TestOptions
     deriving Show
 
@@ -175,6 +175,7 @@ data TestOptions = TestOptions
     , testScale        :: Maybe Int
     , testStartScale   :: Maybe Int
     , testMaxMemory    :: Maybe MemoryLimit
+    , testCompare      :: Maybe FilePath
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -514,8 +515,12 @@ testCommand =
       )
     <|> (TestRun <$> testOptions OrdinaryOptions)
   where
-    scaleCommand = TestScaleReport <$> strOption (long "report" <> metavar "FILE" <> help "Render charts from a saved scaling journal without running tests")
-               <|> TestScale <$> testOptions ScaleOptions
+    scaleCommand = scaling
+      <$> optional (strOption (long "compare" <> metavar "FILE" <> help "Compare against a saved scaling journal; live runs remeasure its completed sizes"))
+      <*> (Left <$> strOption (long "report" <> metavar "FILE" <> help "Render charts from a saved scaling journal without running tests")
+           <|> Right <$> testOptions ScaleOptions)
+    scaling baseline (Left path) = TestScaleReport path baseline
+    scaling baseline (Right opts) = TestScale opts { testCompare = baseline }
 
 data TestOptionsMode = OrdinaryOptions | PerfOptions | ScaleOptions deriving Eq
 
@@ -565,6 +570,7 @@ testOptions mode = mkTestOptions
         , testScale = testScale
         , testStartScale = testStartScale
         , testMaxMemory = testMaxMemory
+        , testCompare = Nothing
         , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt

@@ -10,6 +10,7 @@ import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.IntMap.Strict as IM
+import qualified Data.Map.Strict as M
 import Data.List (foldl', isInfixOf)
 import Data.Word (Word8)
 import ScaleReport
@@ -32,10 +33,10 @@ scaleReportTests = testGroup "terminal charts"
                      sample 8 0 1 True False]
           points = foldl' (flip addScaleEvent) IM.empty samples
       assertEqual "linear work has constant time per scale and preserves sample ranges"
-        [ Chart WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False]
-        , Chart TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False]
-        , Chart PeakMemory [ChartPoint 2 1 1 1 True, ChartPoint 4 2 2 2 False]
-        ] (scaleCharts points)
+        [ Chart WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False] []
+        , Chart TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False] []
+        , Chart PeakMemory [ChartPoint 2 1 1 1 True, ChartPoint 4 2 2 2 False] []
+        ] (scaleCharts points IM.empty)
       assertEqual "summary distinguishes finished sizes and accepted partial samples"
         "1 size + 1 partial · 6 curve samples · scale 2 … 4" (scaleSummary points)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
@@ -88,17 +89,50 @@ scaleReportTests = testGroup "terminal charts"
           assertBool (out ++ err) (code /= ExitSuccess)
           assertBool "bad input has a diagnostic" (not (null err))
           assertBool "bad input is not presented as a valid report" (not ("Scaling charts:" `isInfixOf` out))
+  , testCase "comparisons retain sample identity and reject a later incompatible sample" $ do
+      let named = KM.insert "module" (Aeson.String "alpha") . KM.insert "test" (Aeson.String "same")
+          measured machine workers n = named $ KM.mapWithKey
+            (\key value -> case (key, value) of
+              ("result", Aeson.Object result) -> Aeson.Object (KM.insert "perf_info" (identity machine workers n) result)
+              _ -> value) (sample n 10 1048576 True False)
+          identity machine workers n = Aeson.object
+            ["machine" Aeson..= (machine :: String), "workers" Aeson..= (workers :: Int),
+             "scale" Aeson..= n, "scaling" Aeson..= True, "loop" Aeson..= True,
+             "version" Aeson..= ("3" :: String), "gc" Aeson..= ("natural" :: String),
+             "tags" Aeson..= ([] :: [String]), "build" Aeson..= Aeson.object
+               ["target" Aeson..= ("native" :: String), "optimize" Aeson..= ("ReleaseFast" :: String),
+                "cpu" Aeson..= ("" :: String), "no_threads" Aeson..= False, "db" Aeson..= False, "no_dbp" Aeson..= False]]
+          events = [header 3, measured "machine-a" 2 1, measured "machine-a" 2 3, ending]
+      withRecording events $ \path _ -> do
+        recording <- readScaleRecording path
+        let series = recordingTests recording M.! ("alpha", "same")
+        assertEqual "different workload sizes share one sampling identity" Nothing (scaleSeriesReason series series)
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let baseline = takeDirectory path </> "baseline.jsonl"
+            compare = readCreateProcessWithExitCode
+              (proc acton ["test", "scale", "--compare", baseline, "--report", path, "--color", "never"])
+                { cwd = Just (takeDirectory path) } ""
+        copyFile path baseline
+        (code, out, err) <- compare
+        assertEqual (out ++ err) ExitSuccess code
+        assertBool out ("baseline" `isInfixOf` out && "current" `isInfixOf` out)
+        forM_ [("machine-b", 2, "machine identity"), ("machine-a", 3, "worker count")] $ \(machine, workers, reason) -> do
+          BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
+            [header 3, measured "machine-a" 2 1, measured machine workers 3, ending]])
+          (code, out, err) <- compare
+          assertBool (out ++ err) (code /= ExitSuccess && reason `isInfixOf` err)
+          assertBool "no invalid overlay is displayed" (not ("Scaling charts:" `isInfixOf` out))
   , testCase "the proportional guide uses the largest completed size, without fitting or extrapolating" $ do
       let points = [ChartPoint 1 10 10 10 True, ChartPoint 100 20 20 20 True,
                     ChartPoint 200 100 100 100 False]
       assertEqual "proportional time, anchored at size 100" [(1, 0.2), (100, 20)]
-        (chartGuide (Chart WallTime points))
-      forM_ [Chart WallTime [], Chart WallTime [head points],
-             Chart WallTime [p {chartComplete = False} | p <- points],
-             Chart TimePerScale points, Chart PeakMemory points] $ \chart ->
+        (chartGuide (Chart WallTime points []))
+      forM_ [Chart WallTime [] [], Chart WallTime [head points] [],
+             Chart WallTime [p {chartComplete = False} | p <- points] [],
+             Chart TimePerScale points [], Chart PeakMemory points []] $ \chart ->
         assertEqual "only wall time with a completed span has a guide" [] (chartGuide chart)
   , testCase "a guide below the visible range is clipped rather than clamped to the axis" $ do
-      let chart = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1 1 1 True]
+      let chart = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1 1 1 True] []
           pixels = BS.unpack (chartPixels True 67 12 chart)
           rgbas [] = []
           rgbas (r:g:b:a:rest) = (r,g,b,a) : rgbas rest
@@ -107,7 +141,7 @@ scaleReportTests = testGroup "terminal charts"
       assertBool "part of the guide is visible" (not (null gold))
       assertBool "it enters the plot only in the final decade"
         (all (\i -> i `mod` 536 > 450) gold)
-      let diagonal = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1000 4 4 4 True]
+      let diagonal = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1000 4 4 4 True] []
       assertBool "a near-diagonal guide still contains visible dashes"
         (any (\(r,g,b,a) -> r > g && g > b && a > 0)
           (rgbas (BS.unpack (chartPixels True 67 12 diagonal))))
@@ -118,19 +152,37 @@ scaleReportTests = testGroup "terminal charts"
                     [ChartPoint n 1 1 1 True | n <- [1,10,100]],
                     [ChartPoint 1 0.00001 0.00001 0.00001 True, ChartPoint 1e12 1e6 1e6 1e6 True]]
       forM_ curves $ \points -> forM_ [(27,4), (67,12), (96,12)] $ \(width, height) -> do
-        let chart = Chart WallTime points
+        let chart = Chart WallTime points []
             output = chartText False width height chart
         assertEqual "title, plot, baseline and scale labels" (height + 3) (length output)
         assertBool (show output) (all ((<= width + 11) . length) output)
         assertBool "text fallback has no escape codes" (all (notElem '\ESC') output)
         assertEqual "RGBA has four bytes per pixel" (width * 8 * height * 16 * 4)
           (BS.length (chartPixels True width height chart))
-      let partial = unlines (chartText False 67 12 (Chart WallTime [ChartPoint 1 1 1 1 False]))
+      let partial = unlines (chartText False 67 12 (Chart WallTime [ChartPoint 1 1 1 1 False] []))
       assertBool "a completed sample in an unfinished point stays hollow" ('○' `elem` partial)
       let narrow = chartText False 27 8 (Chart WallTime
-            [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1e6 1e6 1e6 True])
+            [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1e6 1e6 1e6 True] [])
       assertEqual "narrow axes show whole, separated decade labels"
         ["scale", "1", "100", "1e4", "1e6"] (words (last narrow))
+  , testCase "recorded and new curves share axes without losing the unmatched range" $ do
+      let current = [ChartPoint 1 1 2 3 True, ChartPoint 10 4 5 6 False]
+          old = [ChartPoint 1 10 12 14 True, ChartPoint 1e6 800 900 1000 False]
+          chart = Chart WallTime current old
+          text = unlines (chartText False 67 12 chart)
+          rgbas [] = []
+          rgbas (r:g:b:a:rest) = (r,g,b,a) : rgbas rest
+          rgbas _ = error "incomplete RGBA"
+          colors = rgbas (BS.unpack (chartPixels True 27 4 chart))
+      forM_ ['●', '○', '◆', '◇'] $ \mark -> assertBool "both series and partial samples remain distinguishable" (mark `elem` text)
+      assertBool "old sizes beyond an interrupted new curve remain visible" ("1e6" `isInfixOf` text)
+      assertBool "new curve has its own color" ((56,189,248,255) `elem` colors)
+      assertBool "recorded curve has its own color" ((251,146,60,255) `elem` colors)
+      assertBool "monochrome preserves both styles without colored pixels"
+        (all (\(r,g,b,_) -> r == g && g == b) (rgbas (BS.unpack (chartPixels False 27 4 chart))))
+      assertEqual "recorded points do not change the proportional guide" [] (chartGuide chart)
+      let coincident = unlines (chartText False 67 12 (Chart WallTime (take 1 current) (take 1 current)))
+      assertBool "coincident means retain both series' presence" ('◈' `elem` coincident)
   , testCase "graphics selection is conservative and never applies to redirected output" $ do
       forM_ [[("TERM", "xterm-kitty")], [("TERM", "xterm-ghostty")],
              [("TERM", "xterm-256color"), ("TERM_PROGRAM", "ghostty")]] $ \env -> do

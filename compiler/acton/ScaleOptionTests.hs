@@ -76,18 +76,35 @@ scaleOptionTests = testGroup "performance scaling options"
       forM_ [["test", "scale", "--report", "run.jsonl", "--color", "never"],
              ["test", "--color", "never", "scale", "--report", "run.jsonl"]] $ \args ->
         case parseOptions args of
-          O.Success (C.CmdOpt globals (C.Test (C.TestScaleReport path))) -> do
+          O.Success (C.CmdOpt globals (C.Test (C.TestScaleReport path Nothing))) -> do
             assertEqual "recording path" "run.jsonl" path
             assertEqual "display options apply" C.Never (C.color globals)
           _ -> assertFailure ("expected saved report: " ++ unwords args)
       forM_ [["--max-time", "1s"], ["--name", "dct"], ["--start-scale", "2"], ["--json"], ["--record"]] $ \args ->
         rejects (["test", "scale", "--report", "run.jsonl"] ++ args)
+  , testCase "comparison always takes one baseline file in live and report modes" $ do
+      forM_ [["--compare", "before.jsonl"], ["--name", "dct", "--compare", "before.jsonl"],
+             ["--compare", "before.jsonl", "--max-time", "2m"]] $ \args -> do
+        opts <- parseScale args
+        assertEqual "live baseline" (Just "before.jsonl") (C.testCompare opts)
+      forM_ [["--report", "after.jsonl", "--compare", "before.jsonl"],
+             ["--compare", "before.jsonl", "--report", "after.jsonl"]] $ \args ->
+        case parseOptions (["test", "scale"] ++ args) of
+          O.Success (C.CmdOpt _ (C.Test (C.TestScaleReport path baseline))) ->
+            assertEqual "current and baseline have fixed roles" ("after.jsonl", Just "before.jsonl") (path, baseline)
+          O.Failure failure -> assertFailure (fst (O.renderFailure failure "acton"))
+          _ -> assertFailure "expected comparison report"
+      forM_ [["--report", "one", "two"], ["--compare", "one", "two"],
+             ["--compare", "one", "--compare", "two"], ["--report", "one", "--report", "two"]] $ \args ->
+        rejects (["test", "scale"] ++ args)
+      forM_ [[], ["perf"], ["list"], ["stress"]] $ \mode ->
+        rejects (["test"] ++ mode ++ ["--compare", "before.jsonl"])
   , testCase "scale help exposes study and report controls" $
       case parseOptions ["test", "scale", "--help"] of
         O.Failure failure -> do
           let (text, code) = O.renderFailure failure "acton"
           assertEqual text ExitSuccess code
-          forM_ ["--start-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE"] $ \option ->
+          forM_ ["--start-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE", "--compare FILE"] $ \option ->
             assertBool text (option `isInfixOf` unwords (words text))
           assertBool text (not (any (`isInfixOf` text) ["--scaling", "--scale N", "--time DURATION", "--iter", "--min-time"]))
         _ -> assertFailure "expected scale help"

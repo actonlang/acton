@@ -3,6 +3,7 @@ module TestRunner
   , listProjectTests
   , runProjectTests
   , selectTestSources
+  , prepareScalingComparison
   ) where
 
 import qualified Acton.CommandLineParser as C
@@ -16,6 +17,7 @@ import TestFormat
 import TestOutput
 import TestPerf
 import TestScale
+import ScaleReport (ScaleRecording(..), ScaleSeries(..), readScaleRecording, scaleSeriesReason)
 import TestUI
 import Control.Applicative ((<|>))
 import Control.Concurrent.Async
@@ -27,6 +29,7 @@ import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
 import Data.Maybe (catMaybes, listToMaybe, isJust)
 import qualified Data.Map as M
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as Set
 import System.Clock
 import System.Directory
@@ -119,6 +122,34 @@ isWindowsTarget targetTriple =
 modulesOpt paths topts = [ proj ++ "." ++ m | m <- C.testModules topts ]
   where proj = projName paths
 
+-- Resolve a recorded benchmark before selecting compilation roots. File names
+-- are labels; the literal module and test identities come from the journal.
+prepareScalingComparison :: Paths -> C.TestOptions -> IO (C.TestOptions, Maybe ScaleRecording)
+prepareScalingComparison paths opts = case C.testCompare opts of
+    Nothing -> return (opts, Nothing)
+    Just path -> do
+      recording <- readScaleRecording path
+      regexes <- compileTestNameRegexes (C.testNames opts)
+      let selected = M.filterWithKey (\(modName, name) _ ->
+            not (null (filterModules (modulesOpt paths opts) [modName]))
+            && not (null (filterTests regexes [name]))) (recordingTests recording)
+      case M.toList selected of
+        [((modName, name), series)] -> do
+          forM_ (scaleSeriesReason series series) $ \reason ->
+            ioError (userError ("Cannot compare: " ++ reason))
+          when (null [n | (n, (True, _)) <- IM.toAscList (seriesData series),
+                         maybe True (n >=) (C.testStartScale opts)]) $
+            ioError (userError "The baseline has no completed sizes in the selected range")
+          case Data.List.stripPrefix (projName paths ++ ".") modName of
+            Nothing -> ioError (userError "The recorded benchmark belongs to a different project")
+            Just localModule -> return
+              (opts { C.testModules = [localModule], C.testNames = [concatMap escape name] },
+               Just recording { recordingTests = selected })
+        [] -> ioError (userError "No benchmark in the baseline matches the selection")
+        _ -> ioError (userError "The baseline contains multiple benchmarks; select one with --module and/or --name")
+  where
+    escape c = if c `elem` ("\\.^$|?*+()[]{}" :: String) then ['\\', c] else [c]
+
 -- | Select compilation roots without changing the contents of module caches.
 -- A cached test list can confirm a match, but cannot rule one out: a changed
 -- import may change an inferred function type and make it eligible as a test.
@@ -208,15 +239,16 @@ listProjectTests opts paths topts modules = do
           exitSuccess
 
 -- | Run selected tests concurrently, stream results, and return an exit code.
-runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
-runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
+runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> Maybe ScaleRecording -> IO Int
+runProjectTests useColorOut gopts opts paths topts mode modules maxParallel baseline = do
     timeStart <- getTime Monotonic
     let emitJson = C.testJson topts
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
     let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
     testsByModule <- forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
-      let wantedNames = Data.List.sort (filterTests nameRegexes names)
+      let wantedNames = Data.List.sort [name | name <- filterTests nameRegexes names,
+            maybe True (M.member (modName, name) . recordingTests) baseline]
       return (modName, wantedNames)
     let specs =
           [ TestSpec modName testName (displayTestName testName)
@@ -224,6 +256,8 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
           , testName <- names
           ]
         allTests = [ (tsModule spec, tsName spec) | spec <- specs ]
+    forM_ baseline $ \old -> when (allTests /= M.keys (recordingTests old)) $
+      ioError (userError "The recorded benchmark was not found in this project")
     if null specs
       then do
         if emitJson
@@ -237,6 +271,16 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
       else if mode == TestModeScale
       then do
         host <- readPerfHostInfo opts topts
+        forM_ baseline $ \old -> forM_ (M.elems (recordingTests old)) $ \series ->
+          forM_ (seriesInfo series >>= (`perfHostReason` host)) $ \reason ->
+            ioError (userError ("Cannot compare: " ++ reason))
+        revision <- gitOutput ["rev-parse", "HEAD"]
+        dirty <- fmap (fmap (not . null)) (gitOutput ["status", "--porcelain", "--untracked-files=normal"])
+        let provenance = AesonKM.union host (AesonKM.fromList
+              [(AesonKey.fromString "compiler_version", Aeson.toJSON getVer), (AesonKey.fromString "git_revision", Aeson.toJSON revision), (AesonKey.fromString "git_dirty", Aeson.toJSON dirty)])
+        tests <- forM testsByModule $ \(modName, names) -> do
+          hashes <- readModuleNameHashes paths modName
+          return [(modName, name, fmap (BS.unpack . Base16.encode . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
         let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
             runSample limits scale modName testName = do
               now <- getTime Monotonic
@@ -244,7 +288,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   sampleOptions = topts { C.testScale = Just scale, C.testTime = remaining }
               runModuleTestStreaming opts paths sampleOptions mode host Nothing (Just limits)
                 modName testName False callbacks
-        runScalingStudy useColorOut gopts topts (projOut paths </> "perf_scaling") host allTests runSample
+        runScalingStudy useColorOut gopts topts (projOut paths </> "perf_scaling") provenance (concat tests) baseline runSample
       else do
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
@@ -451,6 +495,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
               return (testExitCode results)
   where
+    gitOutput args = do
+      result <- try (readCreateProcessWithExitCode (proc "git" args) { cwd = Just (projPath paths) } "")
+        :: IO (Either IOException (ExitCode, String, String))
+      return $ case result of
+        Right (ExitSuccess, output, _) -> Just (trim output)
+        _ -> Nothing
     mkRunContext opts' topts' mode' = TestRunContext
       { trcCompilerVersion = getVer
       , trcTarget = C.target opts'

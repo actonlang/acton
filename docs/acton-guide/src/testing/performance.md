@@ -134,19 +134,58 @@ needed. Completed measurements remain in the table. Redirected output prints
 one status line per size or reference check; `--no-progress` suppresses sampling
 status.
 
-Each study writes its own JSON Lines journal under `out/perf_scaling/`.
-Filenames include the module, test name and UTC timestamp. When several tests
-are selected, the first test's name is followed by `+N-more`; the journal contains
-the whole study.
+Each benchmark writes its own JSON Lines journal under `out/perf_scaling/`.
+Filenames include the module, test name, UTC timestamp and a short implementation
+hash, for example
+`perf.dct._test_dct__2026-09-11T19-05-20.643370Z__a1b2c3d4e5f6.jsonl`.
+The header retains the full hash, timestamp, machine and build settings,
+compiler version and available Git revision and dirty status. A common run ID
+connects benchmarks selected by the same command. Renaming a file is harmless;
+the journal contents identify its benchmark.
+
+The implementation hash covers the test's typed Acton code and its tracked
+implementation dependencies. Changing the sampling settings does not change
+this hash. It does not cover external input files, handwritten C or the
+compiler/runtime binaries. Those can affect performance even when the benchmark
+hash stays the same. An unavailable hash is shown as `unknown` in the filename.
+
 To display an earlier recording with the same terminal charts:
 
 ```sh
-acton test scale --report out/perf_scaling/perf.dct._test_dct-20260911T185315.562647000000Z.jsonl
+acton test scale --report after.jsonl
 ```
 
 Use the path printed by that run. Rendering only reads the journal, so it works
 outside the project without compiling or running tests. Completed samples from
 interrupted studies remain visible, with unfinished sizes marked as partial.
+
+Compare two recordings, or run the benchmark again against a recording:
+
+```sh
+acton test scale --report after.jsonl --compare before.jsonl
+acton test scale --compare before.jsonl
+```
+
+Each option takes one filename. `--compare` always supplies the baseline.
+The charts overlay at most two studies, with solid current curves and dashed
+baseline curves. Both retain their full recorded ranges and distinguish partial
+points. Comparison requires the same machine, build settings, input tags,
+measurement version, loop usage, GC policy and runtime worker count. Different
+implementation hashes are expected. Files without enough measurement identity
+can still be displayed individually.
+
+A live comparison selects the recorded benchmark before compilation, then
+remeasures its completed sizes in ascending order using fresh processes and the
+usual warmup and repeat policy. It finishes after those sizes rather than
+stopping early when a growth trend appears stable. `--start-scale` restricts the
+schedule to recorded sizes at or above that value. Current time and memory
+ceilings still apply; an early stop retains the partial curve and reports which
+baseline sizes were not reached. Every run writes a new recording and leaves
+the baseline untouched.
+
+Older journals containing multiple benchmarks require `--module` and/or `--name`
+to select one for a live comparison. Two-file reports compare matching benchmark
+identities. Old timestamp-only filenames and journal formats remain readable.
 
 Every sample start and completed result is flushed immediately, so
 interruption leaves the completed work available and identifies the unfinished
