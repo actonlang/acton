@@ -13,6 +13,8 @@ import qualified Data.ByteString.Lazy.Char8 as BL8
 import Data.List (isInfixOf, isSuffixOf, find, elemIndices)
 import TerminalSize (termVisibleLength, termFitAnsiRight, termRenderedRows)
 import qualified Data.Map as M
+import Foreign.Marshal.Alloc (allocaBytes)
+import Foreign.Marshal.Utils (fillBytes)
 import System.Directory
 import System.Environment (getEnvironment)
 import System.Exit
@@ -419,6 +421,11 @@ perfIntegrationTests =
           , "actor _test_slow(t: testing.AsyncT):"
           , "    after 3.5: t.success()"
           , ""
+          , "actor _test_peak_rss(t: testing.EnvT):"
+          , "    peak = acton.rts.get_peak_rss(t.env.syscap)"
+          , "    assert peak is not None and peak < 64 * 1048576"
+          , "    t.success()"
+          , ""
           , "actor _test_looped(t: testing.EnvT):"
           , "    expected_scale = t.env.getenv(\"ACTON_PERF_EXPECT_SCALE\")"
           , "    for scale in t.loop():"
@@ -499,6 +506,22 @@ perfIntegrationTests =
           , "    t.success()"
           ]
         _ <- runOK ["--name", "counter_activation"]
+        -- The child must report its own peak, even after exec from a large parent.
+        allocaBytes (128 * 1048576) $ \memory -> do
+          fillBytes memory 1 (128 * 1048576)
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc (proj </> "out/bin/.test_sample")
+              ["--rts-wthreads", "1", "test", "_test_peak_rss_wrapper",
+               "--max-iter", "1", "--min-iter", "1", "--max-time", "1000000", "--min-time", "1"])
+              { cwd = Just proj } ""
+          assertEqual (out ++ err) ExitSuccess code
+          let results = [info | line <- lines err,
+                               Right event <- [Aeson.eitherDecode (BL8.pack line)],
+                               Just (Aeson.Object info) <- [KM.lookup "test_info" event],
+                               KM.lookup "complete" info == Just (Aeson.Bool True)]
+          case results of
+            [info] -> assertEqual (out ++ err) (Just (Aeson.Bool True)) (KM.lookup "success" info)
+            _ -> assertFailure ("Expected a completed peak RSS probe\n" ++ out ++ err)
         environment <- getEnvironment
         let runLoop budget expected args = do
               (code, out, err) <- readCreateProcessWithExitCode

@@ -14,6 +14,7 @@ struct rts_perf_sample {
 
 void rts_perf_init(void);
 void rts_perf_read(struct rts_perf_sample *sample);
+bool rts_perf_peak_rss(uint64_t *bytes);
 const char *rts_perf_backend(void);
 const char *rts_perf_scope(void);
 const char *rts_perf_status(void);

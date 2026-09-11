@@ -310,12 +310,15 @@ The result includes:
 - **Allocated:** average bytes reported by the GC allocation counter
   in the measured region, averaged per loop body or whole invocation. This
   measures allocation volume, not peak memory usage.
-- **Process peak RSS:** peak resident memory for the test process, below the table.
+- **Process peak RSS:** peak resident memory since the test executable started, below the table.
   This includes startup, the runtime, all threads, the test harness, calibration,
   warmup and measurement. It is recorded before computing the final statistics
   and is omitted on platforms where it is unavailable. RSS minus GC heap size
   is not used as a performance or leak verdict. No baseline delta is shown,
   because calibration and warmup can differ between runs.
+  Linux reads the executable's `VmHWM` rather than an inherited launcher peak.
+  Older Linux recordings may include the launcher's footprint; replay cannot
+  correct those recorded values.
 - **Outliers:** run averages outside the range from Q1 minus 1.5 times the
   interquartile range to Q3 plus 1.5 times that range. Quartiles use linear
   interpolation between sorted samples. Outliers remain in all statistics;
