@@ -2,6 +2,95 @@ import math
 import testing
 
 
+def _test_calibration_doubles_the_workload(t: testing.SyncT):
+    loop = testing.PerfLoop(1, 1, 10000.0, 10000.0, 50.0)
+    assert loop._advance(0) == 1
+    for scale in [1, 2, 4]:
+        loop._last_wall_ns = u64(scale * 1000000)
+        assert loop._advance(1) == scale * 2
+    loop._last_wall_ns = u64(50000000)
+    assert loop._advance(1) is None
+    assert loop.scale == 8
+    assert loop.iterations == 4
+    assert len(loop.calibration) == 4
+    for i in range(4):
+        assert number(loop.calibration[i], "scale") == float(2**i)
+        assert number(loop.calibration[i], "wall_ms") == [1.0, 2.0, 4.0, 50.0][i]
+
+
+def _test_calibration_selects_nearer_scale(t: testing.SyncT):
+    for previous, current, expected in [(400, 1600, 1), (200, 600, 2), (300, 700, 1)]:
+        loop = testing.PerfLoop(1, 1, 10000.0, 10000.0, 500.0)
+        assert loop._advance(0) == 1
+        loop._last_wall_ns = u64(previous * 1000000)
+        assert loop._advance(1) == 2
+        loop._last_wall_ns = u64(current * 1000000)
+        assert loop._advance(1) is None
+        assert loop.scale == expected
+        assert number(loop.calibration[0], "wall_ms") == float(previous)
+        assert number(loop.calibration[1], "wall_ms") == float(current)
+        assert number(loop.calibration[1], "scale") == 2.0
+        run = testing.PerfRun(5000)
+        run.loop = True
+        assert not run.observe(loop, float(previous + current), 0.0)
+        assert run.next_loop(0).scale == expected
+
+    slow = testing.PerfLoop(1, 1, 10000.0, 10000.0, 500.0)
+    assert slow._advance(0) == 1
+    slow._last_wall_ns = u64(1600000000)
+    assert slow._advance(1) is None
+    assert slow.scale == 1
+
+
+def _test_loop_preserves_recorded_scale(t: testing.SyncT):
+    run = testing.PerfRun(5000, scale=37)
+    run.loop = True
+    assert run.phase == "warmup"
+    warmup = run.next_loop(0)
+    assert warmup.scale == 37
+    assert not run.observe(warmup, 500.0, 0.0)
+    assert run.phase == "measure"
+    sample = run.next_loop(0)
+    sample.iterations = 3
+    assert sample.scale == 37
+    assert run.observe(sample, 1000.0, 900.0)
+    assert run.scale == 37
+    assert run.measurement_ms == 900.0
+    assert run.loop_iterations == 3
+    assert len(run.calibration) == 0
+
+
+def _test_ordinary_loop_and_closed_context(t: testing.SyncT):
+    loop = testing.PerfLoop()
+    assert list(loop.claim()) == [1]
+    loop.close()
+    assert loop.status() == 2
+    try:
+        loop.claim()
+        assert False
+    except ValueError:
+        pass
+    assert loop.status() == 2
+    unused = testing.PerfLoop()
+    unused.close()
+    assert unused.status() == 0
+    unfinished = testing.PerfLoop()
+    assert next(unfinished.claim()) == 1
+    unfinished.close()
+    assert unfinished.status() == 1
+
+
+def _test_loop_memory_preserves_fractional_averages(t: testing.SyncT):
+    info = testing.TestInfo(testing.Test("sample", "", "perf"))
+    sample = testing.TestResult(True, None, None, 1.0, 3, 0, loop_iterations=2)
+    info.update(True, sample)
+    assert info.mem_usage_delta_avg == 1.5
+    assert number(info.performance(), "mem_usage_delta_avg") == 1.5
+    restored = testing.TestResult.from_json(sample.to_json())
+    assert restored.loop_iterations == 2
+    assert restored.mem_usage_delta == 3
+
+
 def measurements(samples: list[float], gc: float=0.0) -> testing.TestInfo:
     info = testing.TestInfo(testing.Test("sample", "", "perf"))
     for sample in samples:

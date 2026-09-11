@@ -327,10 +327,137 @@ class SkipTest(AssertionError):
 class AbortTest(Exception):
     pass
 
+class PerfLoop(Iterator[int]):
+    """One invocation's loop. Native __next__ brackets batches; policy lives here.
+
+    Phases: 0 ordinary, 1 calibration, 2 warmup, 3 measurement.
+    """
+    calibration: list[dict[str, value]]
+    _state: u64
+    _last_wall_ns: u64
+    _start_wall_ns: u64
+    _start_gc_ms: u64
+    _start_alloc: u64
+    _start_user_ns: u64
+    _start_system_ns: u64
+    _start_instructions: u64
+    _start_cycles: u64
+    _start_instructions_enabled: u64
+    _start_instructions_running: u64
+    _start_cycles_enabled: u64
+    _start_cycles_running: u64
+    _wall_ns: u64
+    _gc_ns: u64
+    _allocated_bytes: u64
+    _user_ns: u64
+    _system_ns: u64
+    _instructions: u64
+    _cycles: u64
+    _batch_left: u64
+    _batch_size: u64
+    _yield_scale: ?int
+    _report_result: ?action(?bool, ?Exception, ?str) -> None
+
+    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, target_ms: float=0.0):
+        self._phase = phase
+        self.scale = scale
+        self.iterations = 0
+        self._budget_ms = budget_ms
+        self._remaining_ms = remaining_ms
+        self._target_ms = target_ms
+        self._previous_wall_ms = 0.0
+        self._sw = time.Stopwatch()
+        self.calibration = []
+        self._state = 0
+        self._last_wall_ns = 0
+        self._start_wall_ns = 0
+        self._start_gc_ms = 0
+        self._start_alloc = 0
+        self._start_user_ns = 0
+        self._start_system_ns = 0
+        self._start_instructions = 0
+        self._start_cycles = 0
+        self._start_instructions_enabled = 0
+        self._start_instructions_running = 0
+        self._start_cycles_enabled = 0
+        self._start_cycles_running = 0
+        self._wall_ns = 0
+        self._gc_ns = 0
+        self._allocated_bytes = 0
+        self._user_ns = 0
+        self._system_ns = 0
+        self._instructions = 0
+        self._cycles = 0
+        self._batch_left = 0
+        self._batch_size = 1
+        self._yield_scale = None
+        self._report_result = None
+        self._start_cpu_valid = False
+        self._start_hardware_valid = False
+        self._cpu_valid = True
+        self._hardware_valid = True
+
+    def claim(self) -> PerfLoop:
+        NotImplemented
+
+    def __next__(self) -> int:
+        NotImplemented
+
+    def close(self) -> None:
+        NotImplemented
+
+    action def _report(self, success: ?bool, exception: ?Exception, output: ?str) -> None:
+        NotImplemented
+
+    def status(self) -> int:
+        """0 unused, 1 unfinished, 2 exhausted, 3 invalid."""
+        NotImplemented
+
+    mut def _advance(self, completed: int) -> ?int:
+        self.iterations += completed
+        if self._phase == 0:
+            return 1 if self.iterations == 0 else None
+        elapsed = self._sw.elapsed().to_float() * 1000.0
+        if completed == 0:
+            # Setup uses the total budget, but a run may finish its first body
+            # after its individual slice expires.
+            return self.scale if elapsed < self._remaining_ms else None
+        if self._phase == 1:
+            wall_ms = float(self._last_wall_ns) / 1000000.0
+            self.calibration.append({"scale": self.scale, "wall_ms": wall_ms})
+            if wall_ms >= self._target_ms or elapsed >= self._budget_ms or self.scale >= 2**30:
+                # Doubling the input can overshoot badly for nonlinear workloads.
+                if self.iterations > 1 and abs(self._previous_wall_ms - self._target_ms) <= abs(wall_ms - self._target_ms):
+                    self.scale //= 2
+                return None
+            self._previous_wall_ms = wall_ms
+            self.scale *= 2
+        elif elapsed >= self._budget_ms:
+            return None
+        return self.scale
+
+    def counters(self) -> dict[str, float]:
+        counts: dict[str, float] = {}
+        n = float(self.iterations)
+        if self._cpu_valid:
+            counts["cpu_user"] = float(self._user_ns) / 1000000.0 / n
+            counts["cpu_system"] = float(self._system_ns) / 1000000.0 / n
+        if self._hardware_valid:
+            counts["instructions"] = float(self._instructions) / n
+            counts["cycles"] = float(self._cycles) / n
+            if self._cycles > 0:
+                counts["ipc"] = float(self._instructions) / float(self._cycles)
+        return counts
+
 class SyncT(value):
-    def __init__(self, log_handler: logging.Handler, tags: set[str]):
+    def __init__(self, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         self.log_handler = log_handler
         self.tags = tags
+        self._loop = loop if loop is not None else PerfLoop()
+
+    def loop(self) -> Iterator[int]:
+        """Measure this loop's bodies, yielding the workload scale each time."""
+        return self._loop.claim()
 
     def skip(self, reason: ?str="Skipped"):
         raise SkipTest(reason)
@@ -340,10 +467,15 @@ class SyncT(value):
             self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 class AsyncT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler, tags: set[str]):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         self.report_result = report_result
         self.log_handler = log_handler
         self.tags = tags
+        self._loop = loop if loop is not None else PerfLoop()
+
+    def loop(self) -> Iterator[int]:
+        """Measure this loop's bodies, yielding the workload scale each time."""
+        return self._loop.claim()
 
     def success(self, output: ?str=None):
         self.report_result(True, None, output)
@@ -363,11 +495,16 @@ class AsyncT(value):
             self.skip(f"Missing required capability '{tag}' (enable with --tag {tag})")
 
 class EnvT(value):
-    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+    def __init__(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         self.report_result = report_result
         self.env = env
         self.log_handler = log_handler
         self.tags = tags
+        self._loop = loop if loop is not None else PerfLoop()
+
+    def loop(self) -> Iterator[int]:
+        """Measure this loop's bodies, yielding the workload scale each time."""
+        return self._loop.claim()
 
     def success(self, output: ?str=None):
         self.report_result(True, None, output)
@@ -408,17 +545,17 @@ class Test(object):
             n = n[:-8]
         return n
 
-    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+    def run(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         if isinstance(self, UnitTest):
             self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SimpleSyncTest):
             self.run_test(report_result, env, log_handler, tags)
         elif isinstance(self, SyncTest):
-            self.run_test(report_result, env, log_handler, tags)
+            self.run_test(report_result, env, log_handler, tags, loop)
         elif isinstance(self, AsyncTest):
-            self.run_test(report_result, env, log_handler, tags)
+            self.run_test(report_result, env, log_handler, tags, loop)
         elif isinstance(self, EnvTest):
-            self.run_test(report_result, env, log_handler, tags)
+            self.run_test(report_result, env, log_handler, tags, loop)
         else:
             raise ValueError("Test: Invalid test type")
 
@@ -526,12 +663,12 @@ class SyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         output = None
         success = None
         exception = None
         try:
-            output = self.fn(SyncT(log_handler, tags))
+            output = self.fn(SyncT(log_handler, tags, loop))
             success = True
             exception = None
         except SkipTest as e:
@@ -552,9 +689,9 @@ class AsyncTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         try:
-            self.fn(AsyncT(report_result, log_handler, tags))
+            self.fn(AsyncT(report_result, log_handler, tags, loop))
         except AbortTest:
             pass
 
@@ -565,9 +702,9 @@ class EnvTest(Test):
         self.desc = desc
         self.module = module
 
-    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str]):
+    def run_test(self, report_result: action(?bool, ?Exception, ?str) -> None, env: Env, log_handler: logging.Handler, tags: set[str], loop: ?PerfLoop=None):
         try:
-            self.fn(EnvT(report_result, env, log_handler, tags))
+            self.fn(EnvT(report_result, env, log_handler, tags, loop))
         except AbortTest:
             pass
 
@@ -606,7 +743,8 @@ class TestResult(object):
                  skipped: bool=False,
                  skip_reason: ?str=None,
                  gc_duration: float=0.0,
-                 counters: ?dict[str, float]=None):
+                 counters: ?dict[str, float]=None,
+                 loop_iterations: int=1):
         self.success = success
         self.skipped = skipped
         self.skip_reason = skip_reason
@@ -617,6 +755,7 @@ class TestResult(object):
         self.mem_usage_delta = mem_usage_delta
         self.non_gc_mem_usage_delta = non_gc_mem_usage_delta
         self.counters = counters
+        self.loop_iterations = loop_iterations
 
     def to_json(self):
         data = {
@@ -627,6 +766,7 @@ class TestResult(object):
             "output": self.output,
             "duration": self.duration,
             "gc_duration": self.gc_duration,
+            "loop_iterations": self.loop_iterations,
             "mem_usage_delta": self.mem_usage_delta,
             "non_gc_mem_usage_delta": self.non_gc_mem_usage_delta,
         }
@@ -656,6 +796,7 @@ class TestResult(object):
         gc_duration = data["gc_duration"] if "gc_duration" in data else 0.0
         mem_usage_delta = data["mem_usage_delta"]
         non_gc_mem_usage_delta = data["non_gc_mem_usage_delta"]
+        loop_iterations = data["loop_iterations"] if "loop_iterations" in data else 1
         counters: ?dict[str, float] = None
         if "counters" in data:
             raw_counters = data["counters"]
@@ -678,8 +819,9 @@ class TestResult(object):
             and isinstance(gc_duration, float)
             and isinstance(mem_usage_delta, int)
             and isinstance(non_gc_mem_usage_delta, int)
+            and isinstance(loop_iterations, int) and loop_iterations > 0
             ):
-            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration, counters)
+            return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration, counters, loop_iterations)
         raise ValueError("Invalid TestResult JSON")
 
 
@@ -800,7 +942,7 @@ class TestInfo(object):
             self.max_duration = result.duration
             self.total_duration = result.duration
             self.avg_duration = result.duration
-            self.mem_usage_delta_avg = float(result.mem_usage_delta)
+            self.mem_usage_delta_avg = (float(result.mem_usage_delta) / float(result.loop_iterations))
             self.non_gc_mem_usage_delta_avg = float(result.non_gc_mem_usage_delta)
             self.non_gc_mem_inc_count = 1 if result.non_gc_mem_usage_delta > 0 else 0
         else:
@@ -810,7 +952,7 @@ class TestInfo(object):
                 self.max_duration = result.duration
             self.total_duration += result.duration
             self.avg_duration = self.total_duration / float(self.num_iterations)
-            self.mem_usage_delta_avg = (self.mem_usage_delta_avg * float(prev_iterations) + float(result.mem_usage_delta)) / float(self.num_iterations)
+            self.mem_usage_delta_avg = (self.mem_usage_delta_avg * float(prev_iterations) + (float(result.mem_usage_delta) / float(result.loop_iterations))) / float(self.num_iterations)
             self.non_gc_mem_usage_delta_avg = (self.non_gc_mem_usage_delta_avg * float(prev_iterations) + float(result.non_gc_mem_usage_delta)) / float(self.num_iterations)
             if result.non_gc_mem_usage_delta > 0:
                 self.non_gc_mem_inc_count += 1
@@ -896,7 +1038,7 @@ class TestInfo(object):
         stats: dict[str, value] = summarize("duration", "avg_duration", [r.duration for r in self.results])
         stats.update(summarize("wall_duration", "avg_wall_duration", [r.duration + r.gc_duration for r in self.results]).items())
         stats.update(summarize("gc_duration", "avg_gc_duration", [r.gc_duration for r in self.results]).items())
-        stats.update(summarize("mem_usage_delta", "mem_usage_delta_avg", [float(r.mem_usage_delta) for r in self.results]).items())
+        stats.update(summarize("mem_usage_delta", "mem_usage_delta_avg", [(float(r.mem_usage_delta) / float(r.loop_iterations)) for r in self.results]).items())
         stats.update(summarize("non_gc_mem_usage_delta", "non_gc_mem_usage_delta_avg", [float(r.non_gc_mem_usage_delta) for r in self.results]).items())
         for metric in ["cpu_user", "cpu_system", "instructions", "cycles", "ipc"]:
             samples: list[float] = []
@@ -1081,6 +1223,8 @@ class TestRunnerConfig(object):
     stress_workers: int
     output_enabled: bool
     tags: set[str]
+    time_ms: int
+    scale: int
 
     def __init__(self, perf_mode: bool, stress_mode: bool, args):
         def split_tags(tag_args: list[str]) -> set[str]:
@@ -1104,10 +1248,62 @@ class TestRunnerConfig(object):
         raw_max_time = args.get_int("max-time")
         if raw_max_time <= 0:
             self.max_time = 0.0
+        elif perf_mode:
+            self.max_time = float(raw_max_time) / 1000.0
         else:
             self.max_time = max([float(raw_max_time) / 1000.0, self.min_time])
         self.stress_workers = max([0, args.get_int("stress-workers")])
         self.tags = split_tags(args.get_strlist("tag"))
+        self.time_ms = args.get_int("time")
+        self.scale = args.get_int("scale")
+        if perf_mode and (self.time_ms <= 0 or self.scale < 0):
+            raise ValueError("Performance time must be positive and scale must be non-negative")
+
+class PerfRun(object):
+    """Calibrate once, then collect fresh invocations within one elapsed budget."""
+    calibration: list[dict[str, value]]
+
+    def __init__(self, time_ms: int, scale: int=0):
+        self.time_ms = time_ms
+        self.scale = max([1, scale])
+        self.loop = False
+        self.phase = "calibrate" if scale == 0 else "warmup"
+        self.warmup_duration_ms = 0.0
+        self.measurement_ms = 0.0
+        self.loop_iterations = 0
+        self.calibration = []
+        self._sw = time.Stopwatch()
+
+    def remaining_ms(self) -> float:
+        return max([0.0, float(self.time_ms) - self._sw.elapsed().to_float() * 1000.0])
+
+    def next_loop(self, samples: int) -> PerfLoop:
+        remaining = self.remaining_ms()
+        if self.phase == "calibrate":
+            return PerfLoop(1, self.scale, min([remaining, float(self.time_ms) / 3.0]), remaining, float(self.time_ms) / 10.0)
+        if self.phase == "warmup":
+            return PerfLoop(2, self.scale, min([remaining, float(self.time_ms) / 10.0]), remaining)
+        return PerfLoop(3, self.scale, remaining / float(max([1, 4 - samples])), remaining)
+
+    def observe(self, loop: PerfLoop, elapsed_ms: float, wall_ms: float) -> bool:
+        """Preparation never contributes a statistical sample."""
+        if self.phase == "calibrate":
+            self.scale = loop.scale if self.loop else 1
+            self.calibration = loop.calibration
+            self.phase = "warmup"
+            if not self.loop:
+                self.warmup_duration_ms = elapsed_ms
+                if elapsed_ms >= float(self.time_ms) / 10.0:
+                    self.phase = "measure"
+        elif self.phase == "warmup":
+            self.warmup_duration_ms = elapsed_ms
+            if self.warmup_duration_ms >= float(self.time_ms) / 10.0:
+                self.phase = "measure"
+        else:
+            self.measurement_ms += wall_ms
+            self.loop_iterations += loop.iterations if self.loop else 0
+            return True
+        return False
 
 class TimeoutError(Exception):
     pass
@@ -1154,6 +1350,10 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
     var progress_report_sw = time.Stopwatch()
     var test_info = None
     var iteration = 0
+    var invocation = 0
+    var accepting_result = False
+    perf_run = PerfRun(config.time_ms, config.scale) if config.perf_mode else None
+    perf_phase_sw = time.Stopwatch()
     var stress_drift_rank = max([0, executor_id - stress_nodrift_workers])
     var stress_drift_workers = max([1, stress_workers - stress_nodrift_workers])
     var stress_last_drift_us = 0
@@ -1305,7 +1505,50 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         legacy_path = file.join_path([fs.cwd(), "test", "golden", module, test])
         return _read_expected(legacy_path)
 
-    action def _report_result(test: Test, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
+    def _emit_result(complete: bool):
+        measurement_duration_ms = perf_phase_sw.elapsed().to_float() * 1000.0
+        elapsed_ms = test_sw.elapsed().to_float() * 1000.0
+        if test_info is not None and config.output_enabled:
+            peak_rss = acton.rts.get_peak_rss(syscap) if config.perf_mode and complete else None
+            payload = test_info.to_json(include_perf=config.perf_mode and complete)
+            if peak_rss is not None:
+                payload["peak_rss"] = int(peak_rss)
+            if perf_run is not None:
+                payload["test_duration"] = elapsed_ms
+                payload["perf_phase"] = perf_run.phase
+                payload["loop_iterations"] = perf_run.loop_iterations
+                payload["perf_info"] = {
+                    "version": "3",
+                    "scale": perf_run.scale,
+                    "loop": perf_run.loop,
+                    "time_budget_ms": config.time_ms,
+                    "warmup_duration_ms": perf_run.warmup_duration_ms,
+                    "measurement_ms": perf_run.measurement_ms,
+                    "measurement_duration_ms": measurement_duration_ms if perf_run.phase == "measure" else 0.0,
+                    "calibration": perf_run.calibration,
+                    "workers": env.nr_wthreads,
+                    "gc": "natural",
+                }
+            print("\n" + json.encode({"test_info": payload}), err=True)
+        last_report.reset()
+
+    def _finish_budget():
+        if test_info is not None:
+            test_info.complete = True
+            test_info.test_duration = test_sw.elapsed().to_float() * 1000.0
+            if iteration == 0:
+                test_info.success = False
+                test_info.exception = "Performance time budget exhausted during preparation; increase --time"
+                test_info.num_failures = 1
+        _emit_result(True)
+        report_complete(executor_id, t, test_info)
+
+    action def _report_result(test: Test, invocation_id: int, loop: PerfLoop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, success: ?bool, exception: ?Exception, val: ?str):
+        # The executor accepts exactly one completion for the active invocation.
+        # Late callbacks cannot update a subsequent invocation's measurements.
+        if invocation_id != invocation or not accepting_result:
+            return
+        accepting_result = False
         full_dur = sw.elapsed().to_float() * 1000.0
         gc_time_end = acton.rts.get_gc_time(syscap).total
         gc_dur = float(gc_time_end - gc_time_start)
@@ -1314,16 +1557,19 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         mem_usage_delta = gc_total_bytes_end - gc_total_bytes_start
         counters = perf_delta(counter_start, acton.rts.perf_snapshot(syscap)) if counter_start is not None else None
         test_dur = test_sw.elapsed().to_float()
+        # Snapshot comparison is correctness work, outside the measured interval.
+        if val is not None:
+            exp_val = get_expected(test.module, test.display_name())
+            if exp_val is None or exp_val is not None and val != exp_val:
+                success = False
+                exception = NotEqualError(val, exp_val, "Test output does not match expected snapshot value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
         if config.stress_mode and not config.perf_mode:
             _update_stress_timing_estimate(testiter_dur)
             if stress_calibrating:
                 stress_calib_samples += 1
                 if stress_calib_samples >= stress_calib_target_samples:
                     _finalize_stress_calibration()
-        if config.perf_mode:
-            acton.rts.gc(syscap)
-            acton.rts.gc(syscap)
-        non_gc_mem_usage_after = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        non_gc_mem_usage_after = 0 if config.perf_mode else int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
         non_gc_mem_usage_delta = non_gc_mem_usage_after - non_gc_mem_usage_before
         #print(f"non-GC memory before: {non_gc_mem_usage_before}  after: {non_gc_mem_usage_after}  delta: {non_gc_mem_usage_delta}")
 
@@ -1336,11 +1582,70 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             success = True
             exception = None
 
+        loop_status = loop.status()
+        if success == True and exception is None and not skipped and loop_status in [1, 3]:
+            success = False
+            exception = ValueError("Benchmark loop must run to exhaustion")
+        if perf_run is not None:
+            if invocation == 1:
+                perf_run.loop = loop_status != 0
+                if not perf_run.loop:
+                    perf_run.scale = 1
+            elif success == True and exception is None and not skipped and (loop_status != 0) != perf_run.loop:
+                success = False
+                exception = ValueError("Call t.loop() consistently in every invocation")
+            if success == True and exception is None and not skipped and loop_status == 2 and loop.iterations == 0:
+                _finish_budget()
+                return
+
+        complete = config.perf_mode and (success != True or exception is not None)
+        if perf_run is not None and not complete and not skipped:
+            phase = perf_run.phase
+            wall_ms = float(loop._wall_ns) / 1000000.0 if perf_run.loop else full_dur
+            measured = perf_run.observe(loop, perf_phase_sw.elapsed().to_float() * 1000.0, wall_ms)
+            if phase != perf_run.phase and (perf_run.loop or perf_run.phase == "measure"):
+                perf_phase_sw.reset()
+            if not measured:
+                if perf_run.remaining_ms() > 0.0:
+                    if last_report.elapsed().to_float() > 0.05:
+                        _emit_result(False)
+                    after 0: _run_fn(test)
+                    return
+                success = False
+                exception = ValueError("Performance time budget exhausted during preparation; increase --time")
+                complete = True
+
+        if perf_run is not None and (complete or skipped):
+            # Failed or skipped invocations are outcomes, never timing samples.
+            if test_info is not None:
+                test_info.complete = True
+                test_info.success = success
+                test_info.skipped = skipped
+                test_info.skip_reason = skip_reason
+                test_info.exception = str(exception) if exception is not None else None
+                test_info.output = val
+                test_info.test_duration = test_dur * 1000.0
+                test_info.num_skipped += 1 if skipped else 0
+                test_info.num_failures += 1 if success == False else 0
+                test_info.num_errors += 1 if success is None else 0
+            _emit_result(True)
+            report_complete(executor_id, t, test_info)
+            return
+
+        loop_iterations = 1
+        if perf_run is not None and perf_run.loop:
+            loop_iterations = loop.iterations
+            gc_dur = float(loop._gc_ns) / 1000000.0 / float(loop_iterations)
+            testiter_dur = float(loop._wall_ns) / 1000000.0 / float(loop_iterations) - gc_dur
+            mem_usage_delta = int(loop._allocated_bytes)
+            counters = loop.counters()
+
         completed_iterations = iteration + 1
-        complete = False
         if skipped:
             complete = True
-        if config.stress_mode:
+        if perf_run is not None:
+            complete = perf_run.remaining_ms() <= 0.0 or (perf_run.loop and completed_iterations >= 4)
+        elif config.stress_mode:
             if config.max_time > 0.0 and test_dur > config.max_time:
                 complete = True
             if config.max_iter > 0 and completed_iterations >= config.max_iter:
@@ -1355,19 +1660,12 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
 
         if test_info is not None:
             exc = str(exception) if exception is not None else None
-            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur, counters=counters), test_dur*1000.0)
+            test_info.update(complete, TestResult(success, exc, val, testiter_dur, mem_usage_delta, non_gc_mem_usage_delta, skipped=skipped, skip_reason=skip_reason, gc_duration=gc_dur, counters=counters, loop_iterations=loop_iterations), test_dur*1000.0)
             if config.stress_mode and not config.perf_mode and executor_id >= stress_nodrift_workers:
                 _maybe_refine_stress_phase(test_info.num_iterations)
         iteration = completed_iterations
         if last_report.elapsed().to_float() > 0.05 or complete:
-            if test_info is not None and config.output_enabled:
-                # Capture the process peak before allocating the final summary.
-                peak_rss = acton.rts.get_peak_rss(syscap) if config.perf_mode and complete else None
-                payload = test_info.to_json(include_perf=config.perf_mode and complete)
-                if peak_rss is not None:
-                    payload["peak_rss"] = int(peak_rss)
-                print("\n" + json.encode({"test_info": payload}), err=True)
-            last_report.reset()
+            _emit_result(complete)
         if config.stress_mode and (iteration == 1 or iteration % 32 == 0 or progress_report_sw.elapsed().to_float() > 0.08 or complete):
             report_progress(executor_id,
                             iteration,
@@ -1386,42 +1684,43 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             report_complete(executor_id, t, test_info)
 
     def _run_fn(t: Test):
+        if perf_run is not None and perf_run.remaining_ms() <= 0.0:
+            _finish_budget()
+            return
         _stress_drift_delay()
-        print("\n== Running test, iteration:", iteration)
-        print("\n== Running test, iteration:", iteration, err=True)
-        # Run GC to get accurate memory usage
-        if config.perf_mode:
-            acton.rts.gc(syscap)
-            acton.rts.gc(syscap)
-        non_gc_mem_usage_before = int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        invocation += 1
+        invocation_id = invocation
+        accepting_result = True
+        print("\n== Running test, iteration:", invocation_id)
+        print("\n== Running test, iteration:", invocation_id, err=True)
+        non_gc_mem_usage_before = 0 if config.perf_mode else int(acton.rts.get_rss(syscap) - acton.rts.get_mem_usage(syscap))
+        loop = perf_run.next_loop(iteration) if perf_run is not None else PerfLoop()
         counter_start = acton.rts.perf_snapshot(syscap) if config.perf_mode else None
         gc_total_bytes_start = int(acton.rts.get_gc_total_bytes(syscap))
         gc_time_start = acton.rts.get_gc_time(syscap).total
         sw = time.Stopwatch()
 
         def repres(s: ?bool, e: ?Exception, val: ?str) -> None:
-            # Compare expected snapshot value
-            if val is not None:
-                exp_val = get_expected(t.module, t.display_name())
-                if exp_val is None or exp_val is not None and val != exp_val:
-                    exc = NotEqualError(val, exp_val, f"Test output does not match expected snapshot value.", diff_str=f"{term.normal}{diff.diff(str(exp_val), val, color=True)}", print_vals=False)
-                    _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, False, exc, val)
-                    return
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, s, e, val)
+            _report_result(t, invocation_id, loop, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, s, e, val)
 
+        loop._report_result = repres
+        report = loop._report
         try:
-            t.run(repres, env, log_handler, config.tags)
+            t.run(report, env, log_handler, config.tags, loop)
         except SkipTest as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, True, e, None)
+            report(True, e, None)
         except AssertionError as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, False, e, None)
+            report(False, e, None)
         except Exception as e:
-            _report_result(t, sw, non_gc_mem_usage_before, gc_total_bytes_start, gc_time_start, counter_start, None, e, None)
+            report(None, e, None)
 
     def _run_test():
         """Get the next available test and run it"""
         test_sw = time.Stopwatch()
         test_info = TestInfo(t, counter_info=acton.rts.perf_info(syscap) if config.perf_mode else None)
+        perf_phase_sw.reset()
+        if perf_run is not None:
+            perf_run._sw.reset()
         _run_fn(t)
 
     after 0: _run_test()
@@ -1814,8 +2113,8 @@ actor test_runner(env: Env,
         test_timeout = 0.0
         if config.max_time > 0:
             test_timeout = max([config.max_time, 2.0]) + _stress_timeout_slack_s()
-            if config.perf_mode:
-                test_timeout = max([test_timeout, 300.0])
+        if config.perf_mode:
+            test_timeout = max([300.0, float(config.time_ms) / 1000.0 + 2.0])
 
         test_name = args.get_str("name")
         if test_name not in all_tests:
@@ -2105,6 +2404,8 @@ actor test_runner(env: Env,
         tp.add_option("min-iter", "int", default=3, help="Minumum number of iterations to run")
         tp.add_option("max-time", "int", default=1000, help="Maximum time to run a test in milliseconds (0 = no time limit)")
         tp.add_option("min-time", "int", default=50, help="Minimum time to run a test in milliseconds")
+        tp.add_option("time", "int", default=5000, help="Total performance budget in milliseconds")
+        tp.add_option("scale", "int", default=0, help="Performance workload scale (0 = calibrate)")
         tp.add_option("stress-workers", "int", default=0, help="Concurrent stress workers to run (0 = auto)")
         tp.add_option("tag", "strlist", default=[], help="Enable test capability tag")
         pp = tp.add_cmd("perf", "Performance benchmark tests", _run_perf_tests)

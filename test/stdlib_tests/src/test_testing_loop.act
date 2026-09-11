@@ -1,0 +1,63 @@
+import testing
+
+
+def loop_work(scale: int):
+    assert scale > 0
+    for i in range(scale):
+        assert i >= 0
+
+
+def _test_sync_function(t: testing.SyncT):
+    for scale in t.loop():
+        loop_work(scale)
+
+
+actor _test_sync_actor(t: testing.SyncT):
+    for scale in t.loop():
+        loop_work(scale)
+
+
+def _test_async_function(t: testing.AsyncT):
+    for scale in t.loop():
+        loop_work(scale)
+    t.success()
+
+
+actor LoopWorker():
+    def work(scale: int) -> int:
+        loop_work(scale)
+        return scale
+
+
+actor _test_async_actor(t: testing.AsyncT):
+    worker = LoopWorker()
+    for scale in t.loop():
+        result = await async worker.work(scale)
+        assert result == scale
+    t.success()
+
+
+def _test_env_function(t: testing.EnvT):
+    for scale in t.loop():
+        loop_work(scale)
+    t.success()
+
+
+actor _test_env_actor(t: testing.EnvT):
+    for scale in t.loop():
+        loop_work(scale)
+    t.success()
+
+
+def _test_context_defaults(t: testing.EnvT):
+    sync = testing.SyncT(t.log_handler, set())
+    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set())
+    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set())
+    assert list(sync.loop()) == [1]
+    assert list(asynchronous.loop()) == [1]
+    assert list(environment.loop()) == [1]
+    t.success()
+
+
+def _test_without_context():
+    loop_work(1)

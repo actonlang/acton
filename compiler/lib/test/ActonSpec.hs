@@ -1853,6 +1853,24 @@ main = do
       testTypes env0 ["test_discovery"]
       testTypes env0 ["witness_forward"]
 
+      it "discovers functions with each testing context" $ do
+        let src = unlines
+              [ "import testing"
+              , "def _test_sync(t: testing.SyncT):"
+              , "    pass"
+              , "def _test_async(t: testing.AsyncT):"
+              , "    t.success()"
+              , "def _test_env(t: testing.EnvT):"
+              , "    t.success()"
+              ]
+            moduleName = S.modName ["context_test_discovery"]
+            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+        parsed <- liftIO $ P.parseModule moduleName "<context_test_discovery>" src Nothing
+        env <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 parsed
+        kchecked <- liftIO $ Acton.Kinds.check env parsed
+        (_, _, _, discovered) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+        sort discovered `shouldBe` ["_test_async", "_test_env", "_test_sync"]
+
       testAttributesInitialization env0
 
       it "keeps generated names stable within unchanged defs" $ do

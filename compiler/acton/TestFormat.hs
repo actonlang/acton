@@ -195,7 +195,7 @@ formatTestPerfLines useColor baseline res =
             _ -> ("", "\ESC[2m")
       in padLeft 11 (paint color text) ++ " "
           ++ (if null icon then "  " else paint (if icon == "⚡" then testColorYellow else color) icon)
-    footerChange key value = case baseline >>= (\old -> perfNumber old key) of
+    footerChange obj key value = case baseline >>= (\old -> if perfComparable key old obj then perfNumber old key else Nothing) of
       Nothing -> ""
       Just old ->
         let (pct, text) = percentage (Just old) value
@@ -273,12 +273,47 @@ formatTestPerfLines useColor baseline res =
             in termFitAnsiRight cols ("  " ++ intercalate (replicate gap ' ') (map cell shown))
       in map render rows
     footers obj = map (\line cols -> termFitAnsiRight cols line) $ catMaybes
-      [ do value <- perfNumber obj "median_duration"
-           return ("  median: " ++ single "" "ms" value ++ footerChange "median_duration" value)
+      [ do info <- perfInfo obj
+           workers <- perfNumber info "workers"
+           scope <- if AesonKM.lookup (AesonKey.fromString "loop") info == Just (Aeson.Bool True)
+             then do scale <- perfNumber info "scale"
+                     iterations <- perfNumber obj "loop_iterations"
+                     return (printf "per loop iteration at scale %.0f; %d runs; %.0f loop iterations" scale (trNumIterations res) iterations)
+             else return (printf "whole invocation; %d runs" (trNumIterations res))
+           return ("  " ++ scope ++ printf "; %.0f runtime workers" workers)
+      , do info <- perfInfo obj
+           raw <- AesonKM.lookup (AesonKey.fromString "calibration") info
+           points <- AesonTypes.parseMaybe Aeson.parseJSON raw :: Maybe [Aeson.Object]
+           let point obj = do
+                 scale <- perfNumber obj "scale"
+                 duration <- perfNumber obj "wall_ms"
+                 return (printf "%.0f:" scale ++ single "" "ms" duration)
+               observed = mapMaybe point points
+               shown = if length observed > 4
+                 then take 2 observed ++ ["…"] ++ drop (length observed - 2) observed
+                 else observed
+           if null observed then Nothing
+             else Just ("  calibration: " ++ intercalate "; " shown)
+      , if trNumIterations res < 4
+             then Just "  limited samples: use a larger --time budget for more complete runs"
+             else Nothing
+      , do info <- perfInfo obj
+           duration <- perfNumber info "warmup_duration_ms"
+           return ("  warmup: " ++ single "" "ms" duration ++ " (excluded)")
+      , do info <- perfInfo obj
+           duration <- perfNumber info "measurement_duration_ms"
+           measured <- perfNumber info "measurement_ms"
+           return ("  measurement: " ++ single "" "ms" measured ++ " timed, " ++ single "" "ms" duration ++ " elapsed including setup and teardown")
+      , do value <- perfNumber obj "median_wall_duration"
+           return ("  wall median: " ++ single "" "ms" value ++ footerChange obj "median_wall_duration" value)
       , do value <- perfNumber obj "peak_rss"
-           return ("  process peak RSS: " ++ single "" "B" value ++ footerChange "peak_rss" value)
-      , do (lo, hi) <- interval "duration" obj
-           return ("  mean delta (95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+           return ("  process peak RSS: " ++ single "" "B" value)
+      , do (lo, hi) <- interval "wall_duration" obj
+           return ("  wall mean delta (approx. 95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+      , do reason <- case baseline of
+             Nothing -> Just "no recorded baseline"
+             Just old -> perfComparisonReason "wall_duration" old obj
+           return ("  comparison unavailable: " ++ reason)
       , do info <- perfCounterInfo obj
            let scope = case counterText info "scope" of
                  Just "process:user" -> "user only"
@@ -290,16 +325,15 @@ formatTestPerfLines useColor baseline res =
            if status == "available" then Nothing
              else Just ("  hardware counters unavailable: " ++ status)
       , do old <- baseline
-           _ <- perfNumber old "avg_cpu_user"
-           _ <- perfNumber obj "avg_cpu_user"
-           if perfComparable "cpu_user" old obj then Nothing
-             else Just "  CPU deltas unavailable: baseline machine differs or is unknown"
-      , do old <- baseline
            _ <- perfNumber old "avg_instructions"
            _ <- perfNumber obj "avg_instructions"
-           if perfComparable "instructions" old obj then Nothing
-             else Just "  hardware deltas unavailable: baseline machine or counter scope differs or is unknown"
-      , Just ("  total: " ++ single "" "ms" (trTestDuration res) ++ printf " (%.1f runs/s)" (testsPerSecond (trNumIterations res) (trTestDuration res)))
+           reason <- perfComparisonReason "instructions" old obj
+           if perfComparable "wall_duration" old obj
+             then Just ("  hardware deltas unavailable: " ++ reason)
+             else Nothing
+      , Just ("  total: " ++ single "" "ms" (trTestDuration res) ++ case perfInfo obj >>= (\info -> perfNumber info "time_budget_ms") of
+           Just budget -> " / " ++ single "" "ms" budget ++ " budget"
+           Nothing -> "")
       ] ++ [""]
     counterText info key = case AesonKM.lookup (AesonKey.fromString key) info of
       Just (Aeson.String s) -> Just (T.unpack s)
@@ -336,7 +370,9 @@ formatTestLineWith useColor statusFn expectedDurationMs nameWidth display res =
     let prefix0 = "   " ++ display ++ ": "
         padding = replicate (max 0 (nameWidth - length prefix0)) ' '
         statusRaw = statusFn res
-        runs = printf "%4d runs in %s @ %6.1f/s" (trNumIterations res) (formatMillisPadded expectedDurationMs (trTestDuration res)) (testsPerSecond (trNumIterations res) (trTestDuration res))
+        runs = case perfPhase res of
+          Just phase -> phase ++ printf ": %d measured samples, %s elapsed" (trNumIterations res) (formatSecondsCompact (trTestDuration res))
+          Nothing -> printf "%4d runs in %s @ %6.1f/s" (trNumIterations res) (formatMillisPadded expectedDurationMs (trTestDuration res)) (testsPerSecond (trNumIterations res) (trTestDuration res))
         statusPart = colorizeStatusPart useColor (trCached res) statusRaw runs
         stressPart =
           case stressWorkerOverview res of
@@ -410,8 +446,8 @@ formatTestLineFitted useColor statusFn expectedDurationMs nameWidth width displa
     (statusPlain, statusRendered) = renderStatusToken useColor (trCached res) statusRaw
     (statusFieldPlain, statusFieldRendered) = renderStatusField useColor (trCached res) statusRaw
     duration = formatSecondsCompactPadded expectedDurationMs (trTestDuration res)
-    summaryFull = show (trNumIterations res) ++ " runs " ++ duration
-    summaryCompact = show (trNumIterations res) ++ "r " ++ duration
+    summaryFull = maybe "" (++ " ") (perfPhase res) ++ show (trNumIterations res) ++ " runs " ++ duration
+    summaryCompact = maybe "" (++ " ") (perfPhase res) ++ show (trNumIterations res) ++ "r " ++ duration
     summaries = [Just summaryFull, Just summaryCompact, Nothing]
     legacyRendered = formatTestLineWith useColor statusFn expectedDurationMs nameWidth display res
     legacyLine
@@ -454,6 +490,15 @@ formatTestFinalLineRenderer useColor perfMode expectedDurationMs nameWidth displ
 formatTestLiveLineRenderer :: Bool -> Double -> Int -> String -> TestResult -> Int -> String
 formatTestLiveLineRenderer useColor expectedDurationMs nameWidth display res cols =
     formatTestLineFitted useColor formatTestStatusLive expectedDurationMs nameWidth cols display res
+
+perfPhase :: TestResult -> Maybe String
+perfPhase res
+  | trComplete res = Nothing
+  | otherwise = case trRaw res of
+      Aeson.Object obj -> case AesonKM.lookup (AesonKey.fromString "perf_phase") obj of
+        Just (Aeson.String phase) -> Just (T.unpack phase)
+        _ -> Nothing
+      _ -> Nothing
 
 formatTestDetailLines :: Bool -> Bool -> TestResult -> [String]
 formatTestDetailLines useColor showLog res =

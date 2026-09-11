@@ -19,7 +19,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
 import Data.IORef
-import Data.Char (isSpace)
+import Data.Char (isSpace, isHexDigit, toLower)
 import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
 import Data.Maybe (catMaybes, listToMaybe, isJust)
@@ -29,6 +29,7 @@ import System.Clock
 import System.Directory
 import System.Exit
 import System.Environment (getEnvironment)
+import qualified System.Info as System
 import System.FilePath ((</>), (<.>), joinPath)
 import System.IO (hClose, hGetContents, hGetLine, hIsEOF)
 import System.Process
@@ -39,6 +40,9 @@ import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Base16 as Base16
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import Data.Time.Clock (UTCTime)
@@ -232,6 +236,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             ctxHash = contextHashBytes runContext
             useCache = not (C.testNoCache topts) && mode == TestModeRun
         perfData <- if mode == TestModePerf then readPerfData paths else return M.empty
+        perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts else return AesonKM.empty
         let detailLines res =
               map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
               if mode == TestModePerf
@@ -352,9 +357,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                           then return Nothing
                           else do
                             callbacks <- testProgressCallbacks ui eventChan key display (mode == TestModePerf) expectedDurationMs detailLines
+                            let baselineScale = lookupPerfData perfData initRes >>= (\old -> perfBaselineScale old perfHostInfo)
                             mask $ \unmask -> do
                               worker <- async $ unmask $ mask $ \restore -> do
-                                resE <- try (restore (runModuleTestStreaming opts paths topts mode (tsModule spec) (tsName spec)
+                                resE <- try (restore (runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale (tsModule spec) (tsName spec)
                                                        (tpuEnabled ui) callbacks))
                                           :: IO (Either SomeException TestResult)
                                 case resE of
@@ -648,12 +654,14 @@ runModuleTestStreaming :: C.CompileOptions
                        -> Paths
                        -> C.TestOptions
                        -> TestMode
+                       -> Aeson.Object
+                       -> Maybe Int
                        -> String
                        -> String
                        -> Bool
                        -> TestProgressCallbacks
                        -> IO TestResult
-runModuleTestStreaming opts paths topts mode modName testName allowLive callbacks = do
+runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName testName allowLive callbacks = do
     environment <- getEnvironment
     let binPath = testBinaryPath opts paths modName
         modeArgs =
@@ -662,10 +670,12 @@ runModuleTestStreaming opts paths topts mode modName testName allowLive callback
             TestModeStress -> ["stress"]
             _ -> []
         cmd = ["test", testName] ++ modeArgs ++ testCmdArgs mode topts
+          ++ maybe [] (\scale -> ["--scale", show scale]) baselineScale
     updatesRef <- newIORef []
     lineDoneRef <- newIORef False
     stdErrRef <- newIORef []
-    let onUpdate res = do
+    let onUpdate raw = do
+          let res = annotatePerfResult perfHostInfo raw
           modifyIORef' updatesRef (\xs -> xs ++ [res])
           done <- readIORef lineDoneRef
           when (not done && allowLive) $ do
@@ -1030,14 +1040,11 @@ testsPerSecond iterations durationMs
   | otherwise = (fromIntegral iterations * 1000.0) / durationMs
 
 effectiveTestTiming :: TestMode -> C.TestOptions -> (Int, Int)
+effectiveTestTiming TestModePerf topts = (C.testTime topts, C.testTime topts)
 effectiveTestTiming mode topts =
     let rawMinTime = C.testMinTime topts
         minTime =
           case mode of
-            TestModePerf ->
-              if not (C.testMinTimeSet topts)
-                then 1000
-                else rawMinTime
             TestModeStress ->
               if not (C.testMinTimeSet topts)
                 then 1000
@@ -1047,7 +1054,6 @@ effectiveTestTiming mode topts =
         modeDefaultMaxTime =
           case mode of
             TestModeRun -> minTime
-            TestModePerf -> 1000
             TestModeStress -> 5000
             _ -> 1000
         maxTime
@@ -1058,7 +1064,9 @@ effectiveTestTiming mode topts =
 
 -- | Build test runner arguments from TestOptions limits.
 testCmdArgs :: TestMode -> C.TestOptions -> [String]
-testCmdArgs mode topts =
+testCmdArgs mode topts
+  | mode == TestModePerf = ["--time", show (C.testTime topts)] ++ tagArgs
+  | otherwise =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts
         (minTime, maxTime) = effectiveTestTiming mode topts
@@ -1077,8 +1085,9 @@ testCmdArgs mode topts =
                  , "--max-time", show maxTime
                  , "--min-time", show minTime
                  ]
-        tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
     in baseArgs ++ stressWorkerArgs ++ tagArgs
+  where
+    tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
 
 -- | Normalize test names by stripping prefixes and wrappers.
 displayTestName :: String -> String
@@ -1370,6 +1379,52 @@ markSnapshotUpdated res = res
   }
 
 type PerfData = M.Map String (M.Map String Aeson.Value)
+
+-- Keep raw machine identifiers out of recordings. An unknown identity disables
+-- comparisons; a CPU model or OS version is not a machine identifier.
+readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> IO Aeson.Object
+readPerfHostInfo opts topts = do
+    identity <- try readIdentity :: IO (Either IOException (Maybe String))
+    let machine = case identity of
+          Right (Just raw) -> Just (BS.unpack (Base16.encode (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw)))))
+          _ -> Nothing
+    return $ AesonKM.fromList
+      [ (AesonKey.fromString "machine", Aeson.toJSON machine)
+      , (AesonKey.fromString "build", Aeson.object
+          [ AesonKey.fromString "optimize" Aeson..= show (C.optimize opts)
+          , AesonKey.fromString "target" Aeson..= C.target opts
+          , AesonKey.fromString "cpu" Aeson..= C.cpu opts
+          , AesonKey.fromString "no_threads" Aeson..= C.no_threads opts
+          , AesonKey.fromString "db" Aeson..= C.db opts
+          , AesonKey.fromString "no_dbp" Aeson..= C.no_dbp opts
+          ])
+      , (AesonKey.fromString "tags", Aeson.toJSON (Set.toAscList (Set.fromList tags)))
+      , (AesonKey.fromString "version", Aeson.toJSON ("3" :: String))
+      , (AesonKey.fromString "gc", Aeson.toJSON ("natural" :: String))
+      ]
+  where
+    tags = filter (not . null)
+      [ dropWhile isSpace (reverse (dropWhile isSpace (reverse tag)))
+      | raw <- C.testTags topts, tag <- splitOnChar ',' raw ]
+    readIdentity = case System.os of
+      "darwin" -> do
+        (code, out, _) <- readProcessWithExitCode "/usr/sbin/ioreg" ["-rd1", "-c", "IOPlatformExpertDevice"] ""
+        return $ if code /= ExitSuccess then Nothing else listToMaybe
+          [ raw | line <- lines out, (key, '=' : value) <- [break (== '=') line]
+                , "\"IOPlatformUUID\"" `isInfixOf` key, Just raw <- [normalize value] ]
+      "linux" -> normalize . BS.unpack <$> BS.readFile "/etc/machine-id"
+      _ -> return Nothing
+    normalize value =
+      let raw = map toLower (filter (\c -> not (isSpace c) && c /= '"' && c /= '-') value)
+      in if length raw == 32 && all isHexDigit raw && any (/= '0') raw
+           then Just raw else Nothing
+
+annotatePerfResult :: Aeson.Object -> TestResult -> TestResult
+annotatePerfResult host res = case trRaw res of
+    Aeson.Object obj | Just info <- perfInfo obj ->
+      let extra = AesonKM.filterWithKey (\key _ -> AesonKey.toString key `elem` ["machine", "build", "tags"]) host
+      in res { trRaw = Aeson.Object (AesonKM.insert (AesonKey.fromString "perf_info") (Aeson.Object (extra `AesonKM.union` info)) obj) }
+    _ -> res
 
 -- | Read the baseline before running tests, including when updating it.
 readPerfData :: Paths -> IO PerfData
