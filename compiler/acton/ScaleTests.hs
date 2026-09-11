@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ScaleTests (scaleTests) where
+module ScaleTests (scaleTests, scaleIntegrationTests) where
 
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
@@ -270,7 +270,12 @@ scaleTests = testGroup "performance scaling studies"
         assertEqual "both files identify the common command"
           (KM.lookup "run_id" (recordingHeader one)) (KM.lookup "run_id" (recordingHeader two))
   , scaleReportTests
-  , testCase "scaling journals completed work when later work stops" $
+  ]
+
+-- Real measurements need a quiet machine; enable them with make test-performance.
+scaleIntegrationTests :: TestTree
+scaleIntegrationTests =
+    testCase "scaling journals completed work when later work stops" $
       withSystemTempDirectory "acton-perf-scaling" $ \project -> do
         acton <- canonicalizePath "../../dist/bin/acton"
         let name = "scale_tests"
@@ -393,7 +398,6 @@ scaleTests = testGroup "performance scaling studies"
           assertBool output (code /= ExitSuccess)
           assertEnd "sample output exceeded 1MiB per stream" events
           assertBool "oversized unterminated output cannot contribute a point" (null (eventsOf "point" events))
-  ]
 
 point :: Int -> [Double] -> Double -> ScalePoint
 point scale times rss = ScalePoint scale

@@ -25,6 +25,20 @@ make test-rts
 make test-backend
 ```
 
+## Performance integration tests
+
+Live `acton test perf` and `acton test scale` integration tests are opt-in:
+
+```sh
+make test-performance
+```
+
+Run these on a quiet machine with suitable hardware. The target enables
+`ACTON_TEST_PERFORMANCE=1` and runs the `live performance` group sequentially.
+Normal `make test` and `stack test` runs keep the option, statistics, recording
+report, memory-monitor and simulated-controller checks, without collecting live
+benchmark measurements.
+
 ## Snapshot / acceptance tests
 
 Some compiler suites have explicit accept targets that update expected output:

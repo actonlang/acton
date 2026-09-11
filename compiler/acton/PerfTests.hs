@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module PerfTests (perfTests) where
+module PerfTests (perfTests, perfIntegrationTests) where
 
 import Control.Monad
 import qualified Acton.CommandLineParser as C
@@ -361,7 +361,17 @@ perfTests = testGroup "performance baselines"
       forM_ [res { trComplete = False }, res { trSuccess = Just False }, res { trSkipped = True },
              res { trException = Just "error" }, res { trNumIterations = 0 }, res { trSnapshotUpdated = True }] $ \invalid ->
         assertEqual "no performance lines" [] (renderPerf 79 False Nothing invalid)
-  , testCase "recording runs fresh tests and preserves unselected measurements" $
+  , testCase "record requires performance mode" $ do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      forM_ [[], ["stress"], ["list"]] $ \mode -> do
+        (code, _, err) <- readCreateProcessWithExitCode (proc acton (["test"] ++ mode ++ ["--record"])) ""
+        assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
+  ]
+
+-- Real measurements need a quiet machine; enable them with make test-performance.
+perfIntegrationTests :: TestTree
+perfIntegrationTests =
+    testCase "recording runs fresh tests and preserves unselected measurements" $
       withSystemTempDirectory "acton-perf-record" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"
         let name = "perf_record"
@@ -704,12 +714,6 @@ perfTests = testGroup "performance baselines"
           assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
           assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
           assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
-  , testCase "record requires performance mode" $ do
-      acton <- canonicalizePath "../../dist/bin/acton"
-      forM_ [[], ["stress"], ["list"]] $ \mode -> do
-        (code, _, err) <- readCreateProcessWithExitCode (proc acton (["test"] ++ mode ++ ["--record"])) ""
-        assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
-  ]
 
 parseOptions :: [String] -> O.ParserResult C.CmdLineOptions
 parseOptions = O.execParserPure C.cmdLinePrefs (O.info (C.cmdLineParser O.<**> O.helper) mempty)

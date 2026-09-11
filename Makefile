@@ -106,6 +106,7 @@ help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
+	@echo "  test-performance - run live perf and scale integration tests on a quiet machine"
 	@echo "  make PROFILE=1 dist/bin/acton - build profiled acton binary"
 	@echo "  rpms    - build RPM package from existing dist/"
 	@echo ""
@@ -522,6 +523,7 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 # top level targets
 .PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
+.PHONY: test-performance
 # These run stack against libacton/acton, which link liblmdb, so the bdeps
 # archives must exist first. (test, test-stdlib, test-incremental, online-tests
 # already pull it in transitively via dist/bin/acton[c].)
@@ -536,6 +538,9 @@ test: dist/bin/acton
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
+
+test-performance: dist/bin/acton
+	cd compiler && ACTON_TEST_PERFORMANCE=1 stack test acton:test_acton --ta '-p "/live performance/" --num-threads=1'
 
 test-builtins:
 	cd compiler && stack test acton --ta '-p "Builtins"'
