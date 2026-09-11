@@ -1,0 +1,29 @@
+actor main(env):
+    a: iset[int] = iset([1, 2, 3])
+    b: iset[int] = iset([3, 4])
+    c = a & b
+    d = a | b
+    e = a - b
+    x: dict[iset[int], str] = {}
+    x[a] = "ok"
+
+    if not 3 in a:
+        print("error 1")
+        env.exit(1)
+    if not ISet.isdisjoint(a, iset([8, 9])):
+        print("error 2")
+        env.exit(1)
+    if c != iset([3]):
+        print("error 3")
+        env.exit(1)
+    if d != iset([4,3,2,1]):
+        print("error 4")
+        env.exit(1)
+    if e != iset([2,1]):
+        print("error 5")
+        env.exit(1)
+    if x[iset([3, 2, 1])] != "ok":
+        print("error 6")
+        env.exit(1)
+    print(iset([1, 2, 3, 4, 5]))
+    env.exit(0)
