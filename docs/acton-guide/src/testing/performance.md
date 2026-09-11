@@ -57,6 +57,17 @@ complexity. The terminal abbreviates long curves to the first and last two
 points; JSON retains every point. Time divided by scale is not generally
 comparable across scales.
 
+Use `--scale` to choose an exact positive integer for tests that use `t.loop()`:
+
+```sh
+acton test perf --scale 8 --time 10s
+```
+
+An explicit scale overrides the baseline's scale and skips calibration. Warmup
+still runs, and `--time` independently controls the total budget. Without
+`--scale`, the runner uses a compatible baseline's scale or calibrates one.
+Tests that do not call `t.loop()` reject an explicit `--scale`.
+
 After preparation and warmup, a loop test aims for four complete measured
 invocations within the remaining budget. Each starts the test from the beginning,
 with fresh setup and teardown. Its loop repeats at the fixed scale while time

@@ -33,6 +33,7 @@ perfTests = testGroup "performance baselines"
       opts <- parsePerfOptions []
       assertEqual "release by default" C.ReleaseFast (C.optimize (C.testCompile opts))
       assertEqual "five seconds per benchmark" 5000 (C.testTime opts)
+      assertEqual "scale is calibrated by default" Nothing (C.testScale opts)
       explicit <- parsePerfOptions ["--optimize", "Debug", "--time", "250ms"]
       assertEqual "explicit debug remains available" C.Debug (C.optimize (C.testCompile explicit))
       assertEqual "milliseconds are accepted" 250 (C.testTime explicit)
@@ -42,10 +43,20 @@ perfTests = testGroup "performance baselines"
         case parseOptions ["test", "perf", "--time", duration] of
           O.Failure _ -> return ()
           _ -> assertFailure ("--time must reject " ++ duration)
-      forM_ ["--iter", "--min-iter", "--max-iter", "--min-time", "--max-time", "--warmup", "--scale"] $ \option ->
+      forM_ ["--iter", "--min-iter", "--max-iter", "--min-time", "--max-time", "--warmup"] $ \option ->
         case parseOptions ["test", "perf", option, "1"] of
           O.Failure _ -> return ()
           _ -> assertFailure ("perf must reject " ++ option)
+      forM_ [1, 50000, maxBound :: Int] $ \scale ->
+        assertEqual "positive workload scales are accepted" (Just scale) . C.testScale =<< parsePerfOptions ["--scale", show scale]
+      forM_ ["0", "-1", "1.5", show (toInteger (maxBound :: Int) + 1)] $ \scale ->
+        case parseOptions ["test", "perf", "--scale", scale] of
+          O.Failure _ -> return ()
+          _ -> assertFailure ("--scale must reject " ++ scale)
+      forM_ [[], ["stress"]] $ \mode ->
+        case parseOptions (["test"] ++ mode ++ ["--scale", "1"]) of
+          O.Failure _ -> return ()
+          _ -> assertFailure ("--scale must reject mode " ++ show mode)
       case parseOptions ["test"] of
         O.Success (C.CmdOpt _ (C.Test (C.TestRun normal))) -> assertEqual "ordinary tests keep debug" C.Debug (C.optimize (C.testCompile normal))
         _ -> assertFailure "ordinary test options failed to parse"
@@ -59,14 +70,14 @@ perfTests = testGroup "performance baselines"
         _ -> assertFailure "stress test limits failed to parse"
   , testCase "global options can appear throughout performance commands" $ do
       forM_
-        [ ["test", "--color", "never", "perf", "--time", "100ms", "--name", "sample"]
-        , ["test", "perf", "--color", "never", "--time", "100ms", "--name", "sample"]
-        , ["test", "perf", "--time", "100ms", "--color", "never", "--name", "sample"]
-        , ["test", "perf", "--time", "100ms", "--name", "sample", "--color", "never"]
+        [ ["test", "--color", "never", "perf", "--time", "100ms", "--scale", "7", "--name", "sample"]
+        , ["test", "perf", "--color", "never", "--time", "100ms", "--scale", "7", "--name", "sample"]
+        , ["test", "perf", "--time", "100ms", "--scale", "7", "--color", "never", "--name", "sample"]
+        , ["test", "perf", "--time", "100ms", "--scale", "7", "--name", "sample", "--color", "never"]
         ] $ \args -> case parseOptions args of
           O.Success (C.CmdOpt globals (C.Test (C.TestPerf opts))) -> do
             assertEqual (unwords args) C.Never (C.color globals)
-            assertEqual "performance options survive global options" (100, ["sample"]) (C.testTime opts, C.testNames opts)
+            assertEqual "performance options survive global options" (100, Just 7, ["sample"]) (C.testTime opts, C.testScale opts, C.testNames opts)
           O.Failure failure -> assertFailure (fst (O.renderFailure failure "acton"))
           _ -> assertFailure ("unexpected command: " ++ unwords args)
       case parseOptions ["test", "--quiet", "perf", "--time", "100ms", "--jobs", "2", "--name", "sample", "--no-progress", "--tag", "input"] of
@@ -80,13 +91,14 @@ perfTests = testGroup "performance baselines"
           assertEqual "stress options also mix with global options" (C.Never, 2, ["sample"]) (C.color globals, C.testIter opts, C.testNames opts)
         O.Failure failure -> assertFailure (fst (O.renderFailure failure "acton"))
         _ -> assertFailure "expected stress options"
-  , testCase "performance help exposes only the supported budget control" $
+  , testCase "performance help exposes time and workload scale controls" $
       case parseOptions ["test", "perf", "--help"] of
         O.Failure failure -> do
           let (text, code) = O.renderFailure failure "acton"
           assertEqual text ExitSuccess code
           assertBool text ("--time DURATION" `isInfixOf` unwords (words text))
-          assertBool text (not (any (`isInfixOf` text) ["--iter", "--min-time", "--max-time", "--warmup", "--scale"]))
+          assertBool text ("--scale N" `isInfixOf` unwords (words text))
+          assertBool text (not (any (`isInfixOf` text) ["--iter", "--min-time", "--max-time", "--warmup"]))
         _ -> assertFailure "expected performance help"
   , testCase "all metrics require the same complete performance identity" $ do
       let old = sample 10 0 10
@@ -382,6 +394,9 @@ perfTests = testGroup "performance baselines"
           , "actor _test_second(t: testing.AsyncT):"
           , "    t.success()"
           , ""
+          , "def _test_snapshot() -> str:"
+          , "    return \"snapshot value\""
+          , ""
           , "actor _test_failed(t: testing.AsyncT):"
           , "    t.failure(ValueError(\"expected failure\"))"
           , ""
@@ -472,6 +487,12 @@ perfTests = testGroup "performance baselines"
           ]
         _ <- runOK ["--name", "counter_activation"]
         environment <- getEnvironment
+        let runLoop budget expected args = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton (["test", "perf", "--time", budget, "--name", "looped", "--json"] ++ args))
+                  { cwd = Just proj, env = Just (("ACTON_PERF_EXPECT_SCALE", expected) : filter ((/= "ACTON_PERF_EXPECT_SCALE") . fst) environment) } ""
+              assertEqual (out ++ err) ExitSuccess code
+              singleJsonTest out >>= requireObject "performance"
         (ordinaryCode, ordinaryOut, ordinaryErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "--iter", "1", "--name", "counter_activation", "--no-cache"])
             { cwd = Just proj, env = Just (("ACTON_TEST_PERF", "1") : filter ((/= "ACTON_TEST_PERF") . fst) environment) } ""
@@ -563,14 +584,25 @@ perfTests = testGroup "performance baselines"
         assertEqual "unavailable old measurements survive recording"
           (M.lookup "missing" saved) (M.lookup "missing" updated)
         updatedBytes <- BL.readFile baseline
-        (failedCode, failedOut, _) <- run ["--record", "--name", "failed", "--json"]
+        (failedCode, failedOut, _) <- run ["--record", "--name", "failed", "--json", "--scale", "50000"]
         assertBool "failing test exits unsuccessfully" (failedCode /= ExitSuccess)
         failed <- singleJsonTest failedOut
         assertEqual "an initial failure aborts before any measured sample" (Just (Aeson.Number 0)) (KM.lookup "iterations" failed)
         assertEqual "failed preparation produces no performance measurement" (Just Aeson.Null) (KM.lookup "performance" failed)
-        _ <- runOK ["--record", "--name", "skipped"]
+        assertBool "explicit scale preserves the original failure" ("expected failure" `isInfixOf` failedOut && not ("Explicit --scale" `isInfixOf` failedOut))
+        skippedOut <- runOK ["--record", "--name", "skipped", "--json", "--scale", "50000"]
+        skipped <- singleJsonTest skippedOut
+        assertEqual "explicit scale preserves skips" (Just (Aeson.Bool True)) (KM.lookup "skipped" skipped)
+        assertBool skippedOut ("expected skip" `isInfixOf` skippedOut && not ("Explicit --scale" `isInfixOf` skippedOut))
+        forM_ [("first", []), ("snapshot", ["--accept"])] $ \(test, args) -> do
+          (noLoopCode, noLoopOut, noLoopErr) <- run (["--record", "--name", test, "--json", "--scale", "50000"] ++ args)
+          assertBool (noLoopOut ++ noLoopErr) (noLoopCode /= ExitSuccess)
+          noLoop <- singleJsonTest noLoopOut
+          assertEqual "scale rejection stays failed after snapshot acceptance" (Just (Aeson.String "FAIL")) (KM.lookup "status" noLoop)
+          assertEqual "explicit scale on a whole invocation has no performance report" (Just Aeson.Null) (KM.lookup "performance" noLoop)
+          assertBool noLoopOut ("Explicit --scale requires a test that uses t.loop()" `isInfixOf` noLoopOut)
         _ <- runOK ["--record", "--name", "absent"]
-        assertEqual "failed, skipped and empty selections preserve the baseline" updatedBytes =<< BL.readFile baseline
+        assertEqual "failed, skipped, incompatible and empty selections preserve the baseline" updatedBytes =<< BL.readFile baseline
         let invalidate (Aeson.Object obj) = Aeson.Object (KM.insert "success" (Aeson.Bool False) obj)
             invalidate raw = raw
             failedReference = M.adjust (M.adjust invalidate "_test_first_wrapper") "perf_record.sample" updated
@@ -593,23 +625,25 @@ perfTests = testGroup "performance baselines"
         duration <- requireNumber "duration_ms" slow
         assertBool "the slow invocation completed past the former watchdog" (duration >= 3000)
         assertBool slowOut (not ("TimeoutError" `isInfixOf` slowOut))
-        loopedOut <- runOK ["--record", "--name", "looped", "--json", "--tag", "beta, alpha", "--tag", "alpha"]
-        looped <- singleJsonTest loopedOut >>= requireObject "performance" >>= requireObject "measurements"
+        looped <- runLoop "100ms" "50000" ["--record", "--scale", "50000", "--tag", "beta, alpha", "--tag", "alpha"] >>= requireObject "measurements"
         loopedInfo <- requireObject "perf_info" looped
         assertEqual "author opted into loop measurement" (Just (Aeson.Bool True)) (KM.lookup "loop" loopedInfo)
-        scale <- requireNumber "scale" loopedInfo
-        assertBool "calibration chooses a positive scale" (scale >= 1)
+        assertEqual "explicit scale reaches every yield without a baseline" (Just (Aeson.Number 50000)) (KM.lookup "scale" loopedInfo)
+        assertEqual "explicit scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" loopedInfo)
+        assertEqual "explicit scale retains the requested time budget" (Just (Aeson.Number 100)) (KM.lookup "time_budget_ms" loopedInfo)
+        warmup <- requireNumber "warmup_duration_ms" loopedInfo
+        assertBool "explicit scale retains warmup" (warmup > 0)
         samples <- requireNumber "num_iterations" looped
         bodies <- requireNumber "loop_iterations" looped
         assertBool "loop samples are complete invocation averages" (samples >= 1 && samples <= 4)
         assertBool "loop bodies are counted separately from statistical samples" (bodies >= samples)
-        case KM.lookup "calibration" loopedInfo of
-          Just (Aeson.Array _) -> return ()
-          _ -> assertFailure "missing calibration observations"
         assertEqual "tags match actual capability parsing" (Just (Aeson.toJSON (["alpha", "beta"] :: [String]))) (KM.lookup "tags" loopedInfo)
         helperOut <- runOK ["--name", "helper_workload", "--json"]
         helperInfo <- singleJsonTest helperOut >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
         assertEqual "a helper actor can exhaust the loop before reporting completion" (Just (Aeson.Bool True)) (KM.lookup "loop" helperInfo)
+        case KM.lookup "calibration" helperInfo of
+          Just (Aeson.Array observations) -> assertBool "automatic scale records calibration observations" (not (null observations))
+          _ -> assertFailure "missing calibration observations"
         lateOut <- runOK ["--name", "late_loop", "--json"]
         lateInfo <- singleJsonTest lateOut >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
         assertEqual "late loop requests and duplicate completions cannot change measurement identity"
@@ -633,7 +667,7 @@ perfTests = testGroup "performance baselines"
               assertBool "loop validation preserves the original failure"
                 (not ("Benchmark loop must run to exhaustion" `isInfixOf` out))
         (timedCode, timedOut, timedErr) <- readCreateProcessWithExitCode
-          (proc acton ["test", "perf", "--time", "200ms", "--name", "timed_body", "--json"])
+          (proc acton ["test", "perf", "--time", "1s", "--scale", "1", "--name", "timed_body", "--json"])
             { cwd = Just proj } ""
         assertEqual (timedOut ++ timedErr) ExitSuccess timedCode
         timed <- singleJsonTest timedOut >>= requireObject "performance" >>= requireObject "measurements"
@@ -647,22 +681,26 @@ perfTests = testGroup "performance baselines"
         -- Machines without a usable identity intentionally cannot reuse a
         -- recording. The pure tests above cover that contract independently.
         when (hasMachine loopedInfo) $ do
-          recorded <- readBaseline
-          let setScale (Aeson.Object obj) = Aeson.Object (changeIdentity "scale" (Aeson.Number 7) obj)
-              setScale raw = raw
-              fixed = M.adjust (M.adjust setScale "_test_looped_wrapper") "perf_record.sample" recorded
-          BL.writeFile baseline (Aeson.encode fixed)
-          (reuseCode, reuseOut, reuseErr) <- readCreateProcessWithExitCode
-            (proc acton ["test", "perf", "--time", "200ms", "--name", "looped", "--json", "--tag", "alpha,beta"])
-              { cwd = Just proj, env = Just (("ACTON_PERF_EXPECT_SCALE", "7") : filter ((/= "ACTON_PERF_EXPECT_SCALE") . fst) environment) } ""
-          assertEqual (reuseOut ++ reuseErr) ExitSuccess reuseCode
-          reused <- singleJsonTest reuseOut >>= requireObject "performance"
-          assertEqual "different time budgets remain comparable" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" reused)
+          fixed <- BL.readFile baseline
+          same <- runLoop "200ms" "50000" ["--scale", "50000", "--tag", "alpha,beta"]
+          assertEqual "the same explicit scale remains comparable across budgets" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" same)
+          sameInfo <- requireObject "measurements" same >>= requireObject "perf_info"
+          assertEqual "the new budget is retained as provenance" (Just (Aeson.Number 200)) (KM.lookup "time_budget_ms" sameInfo)
+          different <- runLoop "200ms" "25000" ["--scale", "25000", "--tag", "alpha,beta"]
+          assertEqual "explicit scale overrides the recorded scale" (Just (Aeson.String "workload scale differs")) (KM.lookup "comparison_unavailable_reason" different)
+          assertEqual "different workloads have no confidence interval" (Just Aeson.Null) (KM.lookup "mean_difference_ci95_ms" different)
+          differentInfo <- requireObject "measurements" different >>= requireObject "perf_info"
+          assertEqual "the requested workload is measured" (Just (Aeson.Number 25000)) (KM.lookup "scale" differentInfo)
+          assertEqual "comparison leaves the baseline intact" fixed =<< BL.readFile baseline
+          _ <- runLoop "200ms" "25000" ["--record", "--scale", "25000", "--tag", "alpha,beta"]
+          replaced <- BL.readFile baseline
+          assertBool "recording replaces the workload scale" (replaced /= fixed)
+          reused <- runLoop "100ms" "25000" ["--tag", "alpha,beta"]
+          assertEqual "the replacement baseline is comparable by default" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" reused)
           reusedInfo <- requireObject "measurements" reused >>= requireObject "perf_info"
-          assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 7)) (KM.lookup "scale" reusedInfo)
+          assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
           assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
-          assertEqual "the new budget is retained as provenance" (Just (Aeson.Number 200)) (KM.lookup "time_budget_ms" reusedInfo)
-          assertEqual "comparison leaves the seeded baseline intact" (Aeson.encode fixed) =<< BL.readFile baseline
+          assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
   , testCase "record requires performance mode" $ do
       acton <- canonicalizePath "../../dist/bin/acton"
       forM_ [[], ["stress"], ["list"]] $ \mode -> do

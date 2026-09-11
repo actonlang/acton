@@ -15,6 +15,7 @@ import qualified FileUtil
 import TestFormat
 import TestPerf
 import TestUI
+import Control.Applicative ((<|>))
 import Control.Concurrent.Async
 import Control.Concurrent.Chan (Chan, newChan, readChan, writeChan)
 import Control.Monad
@@ -670,12 +671,12 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName 
             TestModeStress -> ["stress"]
             _ -> []
         cmd = ["test", testName] ++ modeArgs ++ testCmdArgs mode topts
-          ++ maybe [] (\scale -> ["--scale", show scale]) baselineScale
+          ++ maybe [] (\scale -> ["--scale", show scale]) (C.testScale topts <|> baselineScale)
     updatesRef <- newIORef []
     lineDoneRef <- newIORef False
     stdErrRef <- newIORef []
     let onUpdate raw = do
-          let res = annotatePerfResult perfHostInfo raw
+          let res = validateScale (annotatePerfResult perfHostInfo raw)
           modifyIORef' updatesRef (\xs -> xs ++ [res])
           done <- readIORef lineDoneRef
           when (not done && allowLive) $ do
@@ -757,10 +758,11 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName 
                 ExitSuccess -> res1
                 ExitFailure code ->
                   res1 { trException = Just ("Test process exited with code " ++ show code) }
-    res' <-
+    updated <-
       if C.testSnapshotUpdate topts
         then applySnapshotUpdate paths res
         else return res
+    let res' = validateScale updated
     done <- readIORef lineDoneRef
     if done
       then tpcOnFinal callbacks res'
@@ -769,6 +771,18 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale modName 
         tpcOnFinal callbacks res'
     return res'
   where
+    validateScale res
+      | isJust (C.testScale topts), trComplete res, trSuccess res == Just True
+      , not (trSkipped res), not (isJust (trException res))
+      , Aeson.Object obj <- trRaw res, Just info <- perfInfo obj
+      , AesonKM.lookup (AesonKey.fromString "loop") info == Just (Aeson.Bool False) =
+          res { trSuccess = Just False
+              , trException = Just "Explicit --scale requires a test that uses t.loop()"
+              , trNumFailures = trNumFailures res + 1
+              , trSnapshotUpdated = False
+              }
+      | otherwise = res
+
     isInterruptExitCode ExitSuccess = False
     isInterruptExitCode (ExitFailure code) = code == (-2) || code == 130
 

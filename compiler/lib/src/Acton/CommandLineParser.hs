@@ -168,6 +168,7 @@ data TestOptions = TestOptions
     , testMaxTime      :: Int
     , testMinTime      :: Int
     , testTime         :: Int
+    , testScale        :: Maybe Int
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -521,6 +522,7 @@ testOptions perfMode = mkTestOptions
     <*> ordinary Nothing (optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)")))
     <*> ordinary Nothing (optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds")))
     <*> (if perfMode then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
+    <*> (if perfMode then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
     <*> ordinary 0 (option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)"))
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
     <*> many (strOption (long "module" <> metavar "MODULE" <> help "Filter on test module name"))
@@ -528,7 +530,7 @@ testOptions perfMode = mkTestOptions
   where
     defaultOptimize = if perfMode then ReleaseFast else Debug
     ordinary fallback parser = if perfMode then pure fallback else parser
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testStressWorkers testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStressWorkers testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -543,6 +545,7 @@ testOptions perfMode = mkTestOptions
         , testMaxTime = fromMaybe 1000 testMaxTimeOpt
         , testMinTime = fromMaybe 50 testMinTimeOpt
         , testTime = testTime
+        , testScale = testScale
         , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt
@@ -551,6 +554,11 @@ testOptions perfMode = mkTestOptions
         , testModules = testModules
         , testNames = testNames
         }
+
+scaleReader :: ReadM Int
+scaleReader = eitherReader $ \s -> case reads s :: [(Integer, String)] of
+    [(n, "")] | n > 0 && n <= toInteger (maxBound :: Int) -> Right (fromInteger n)
+    _ -> Left "Expected a positive workload scale that fits in an integer"
 
 durationReader :: ReadM Int
 durationReader = eitherReader $ \s -> case reads s :: [(Double, String)] of

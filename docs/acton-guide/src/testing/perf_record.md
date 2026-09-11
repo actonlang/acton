@@ -52,10 +52,13 @@ scale 8, a slower version still processes the scale-8 input. It may complete few
 measured invocations or overrun the sampling target. It does not silently reduce
 the input to fit the target.
 
-A different scale is a distinct benchmark condition and prevents a delta against
-the old scale. Remove the recording to calibrate a fresh baseline. Dividing time
-by scale does not make different input sizes comparable, because workload costs
-can be nonlinear.
+Use `--scale N` to override the baseline with an exact positive integer. This
+skips calibration while preserving warmup and the independent `--time` budget.
+The same scale can still be compared with a compatible baseline; a different
+scale prevents a delta against the old scale. Use `--scale N --record` to record
+the chosen scale, or remove the recording to calibrate a fresh baseline.
+Dividing time by scale does not make different input sizes comparable, because
+workload costs can be nonlinear.
 
 ## Reading uncertainty
 
