@@ -135,6 +135,27 @@ int main(int argc, char **argv) {
     expect("v1 ancestor limits", 268435456, 33554432);
     write_text("cgroup", "1:name=systemd:/\n");
     expect("no memory controller", 1073741824, 805306368);
+    remove_file("cgroup");
+    expect_error("unreadable cgroup membership");
+    write_text("cgroup", "1:name=systemd:/\n");
+
+    /* Check the join directly: stat() would hide a truncated path later. */
+    mount_table("/", 2);
+    char group[PATH_MAX], mount[PATH_MAX], directory[PATH_MAX], error[512];
+    size_t group_length = PATH_MAX - 1 - (strlen(fixture) + 3);
+    memset(group, 'x', sizeof(group));
+    group[0] = '/';
+    group[group_length] = '\0';
+    if (cgroup_mount(2, group, mount, directory, error, sizeof(error))
+        || strlen(directory) != PATH_MAX - 1
+        || strcmp(directory + strlen(mount), group) != 0) abort();
+    group[group_length] = 'x';
+    group[group_length + 1] = '\0';
+    strcpy(mount, "unchanged");
+    strcpy(directory, "unchanged");
+    if (!cgroup_mount(2, group, mount, directory, error, sizeof(error))
+        || strcmp(mount, "unchanged") || strcmp(directory, "unchanged")) abort();
+
     write_text("meminfo", "MemTotal: 1048576 kB\n");
     expect_error("missing MemAvailable");
     printf("native Linux memory fixtures passed (%s)\n", fixture);

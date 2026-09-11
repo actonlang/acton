@@ -117,10 +117,13 @@ static int cgroup_mount(int version, const char *group, char *mount, char *direc
         else if (strncmp(group, root, n) == 0 && (group[n] == '/' || group[n] == '\0')) relative = group + n;
         /* Prefer the mount exposing the most ancestors. A namespace can still
          * hide limits above its root; they cannot be observed from here. */
-        if (!relative || n >= best || strlen(point) + strlen(relative) >= PATH_MAX) continue;
+        if (!relative || n >= best) continue;
+        size_t point_length = strlen(point), relative_length = strlen(relative);
+        if (point_length >= PATH_MAX || relative_length >= PATH_MAX - point_length) continue;
         strcpy(mount, point);
-        snprintf(directory, PATH_MAX, "%s%s", point, relative);
-        size_t length = strlen(directory);
+        memcpy(directory, point, point_length);
+        memcpy(directory + point_length, relative, relative_length + 1);
+        size_t length = point_length + relative_length;
         if (length > 1 && directory[length - 1] == '/') directory[length - 1] = '\0';
         best = n;
     }
@@ -159,7 +162,7 @@ static int cgroup_number(const char *directory, const char *name, uint64_t *valu
 }
 
 static int cgroup_memory(int pid, uint64_t *total, uint64_t *available, char *error, size_t size) {
-    int version;
+    int version = 0;
     char group[PATH_MAX], mount[PATH_MAX], directory[PATH_MAX];
     if (cgroup_path(pid, &version, group, error, size)) return -1;
     if (!version) return 0;
