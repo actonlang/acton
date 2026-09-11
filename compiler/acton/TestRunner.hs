@@ -138,8 +138,12 @@ prepareScalingComparison paths opts = case C.testCompare opts of
           forM_ (scaleSeriesReason series series) $ \reason ->
             ioError (userError ("Cannot compare: " ++ reason))
           when (null [n | (n, (True, _)) <- IM.toAscList (seriesData series),
-                         maybe True (n >=) (C.testStartScale opts)]) $
+                         maybe True (n >=) (C.testStartScale opts),
+                         maybe True (n <=) (C.testEndScale opts)]) $
             ioError (userError "The baseline has no completed sizes in the selected range")
+          forM_ (C.testEndScale opts) $ \target ->
+            unless (maybe False fst (IM.lookup target (seriesData series))) $
+              ioError (userError "The baseline has no completed point at --end-scale; choose a recorded size or run a new study without --compare")
           case Data.List.stripPrefix (projName paths ++ ".") modName of
             Nothing -> ioError (userError "The recorded benchmark belongs to a different project")
             Just localModule -> return

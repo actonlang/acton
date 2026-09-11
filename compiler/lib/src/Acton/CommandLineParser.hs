@@ -174,6 +174,7 @@ data TestOptions = TestOptions
     , testTime         :: Int
     , testScale        :: Maybe Int
     , testStartScale   :: Maybe Int
+    , testEndScale     :: Maybe Int
     , testMaxMemory    :: Maybe MemoryLimit
     , testCompare      :: Maybe FilePath
     , testStressWorkers :: Int
@@ -544,6 +545,7 @@ testOptions mode = mkTestOptions
     <*> (if mode == PerfOptions then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
     <*> (if mode == PerfOptions then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
     <*> (if mode == ScaleOptions then optional (option scaleReader (long "start-scale" <> metavar "N" <> help "First positive workload scale in a scaling study (default: 1)")) else pure Nothing)
+    <*> (if mode == ScaleOptions then optional (option scaleReader (long "end-scale" <> metavar "N" <> help "Measure through this workload scale and finish, subject to resource limits")) else pure Nothing)
     <*> (if mode == ScaleOptions then optional (option memoryLimitReader (long "max-memory" <> metavar "LIMIT" <> help "Scaling study memory limit, as bytes or a percentage (e.g. 2GiB or 50%; default: 50%)")) else pure Nothing)
     <*> ordinary 0 (option auto (long "stress-workers" <> metavar "N" <> value 0 <> help "Concurrent stress workers to run in stress mode (0 = auto)"))
     <*> many (strOption (long "tag" <> metavar "TAG" <> help "Enable test capability TAG for testing.require()"))
@@ -552,7 +554,7 @@ testOptions mode = mkTestOptions
   where
     defaultOptimize = if mode == OrdinaryOptions then Debug else ReleaseFast
     ordinary fallback parser = if mode == OrdinaryOptions then parser else pure fallback
-    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testMaxMemory testStressWorkers testTags testModules testNames =
+    mkTestOptions testCompile testShowLog testShowCached testNoCache testJson testRecord testSnapshotUpdate testIter testMaxIterOpt testMinIter testMaxTimeOpt testMinTimeOpt testTime testScale testStartScale testEndScale testMaxMemory testStressWorkers testTags testModules testNames =
       TestOptions
         { testCompile = testCompile
         , testShowLog = testShowLog
@@ -569,6 +571,7 @@ testOptions mode = mkTestOptions
         , testTime = testTime
         , testScale = testScale
         , testStartScale = testStartScale
+        , testEndScale = testEndScale
         , testMaxMemory = testMaxMemory
         , testCompare = Nothing
         , testStressWorkers = testStressWorkers

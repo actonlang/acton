@@ -30,15 +30,64 @@ scaleReportTests = testGroup "terminal charts"
                  ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 2)]]
                  ++ [sample 4 t 2097152 True False | t <- [16, 20, 24]]
                  ++ [sample 8 32 1 False False, sample 2 9999 1 True True,
-                     sample 8 0 1 True False]
+                     sample 8 (-1) 1 True False]
           points = foldl' (flip addScaleEvent) IM.empty samples
       assertEqual "linear work has constant time per scale and preserves sample ranges"
         [ Chart WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False] []
         , Chart TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False] []
+        , Chart Allocated [] []
         , Chart PeakMemory [ChartPoint 2 1 1 1 True, ChartPoint 4 2 2 2 False] []
         ] (scaleCharts points IM.empty)
       assertEqual "summary distinguishes finished sizes and accepted partial samples"
         "1 size + 1 partial · 6 curve samples · scale 2 … 4" (scaleSummary points)
+  , testCase "zero clock readings retain coverage and memory without biasing time charts" $ do
+      let events = [sample 1 t 1048576 True False | t <- [0, 0.001, 0.002]]
+                ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 1)],
+                    sample 2 0.002 2097152 True False]
+          points = foldl' (flip addScaleEvent) IM.empty events
+      assertEqual "all samples remain in the recorded coverage"
+        "1 size + 1 partial · 4 curve samples · scale 1 … 2" (scaleSummary points)
+      assertEqual "a time point is omitted in full, while its memory remains visible"
+        [ Chart WallTime [ChartPoint 2 0.002 0.002 0.002 False] []
+        , Chart TimePerScale [ChartPoint 2 1 1 1 False] []
+        , Chart Allocated [] []
+        , Chart PeakMemory [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
+        ] (scaleCharts points IM.empty)
+      withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
+        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
+          (code, out, err) <- run
+          assertEqual (out ++ err) ExitSuccess code
+          assertBool out ("Time charts omit sizes with zero clock readings" `isInfixOf` out)
+  , testCase "allocation charts retain zero, ranges and missing measurements" $ do
+      let allocated bytes = KM.mapWithKey (\key value -> case (key, value) of
+            ("result", Aeson.Object result) -> Aeson.Object
+              (KM.insert "mem_usage_delta_avg" (Aeson.toJSON (bytes :: Double)) result)
+            _ -> value)
+          events = [allocated n (sample 1 1 1048576 True False) | n <- [0,1024,2048]]
+                ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 1)],
+                    allocated 0 (sample 2 2 1048576 True False),
+                    allocated 1024 (sample 4 4 1048576 True False),
+                    sample 4 4 1048576 True False]
+          points = foldl' (flip addScaleEvent) IM.empty events
+          chart = scaleCharts points IM.empty !! 2
+      assertEqual "missing samples do not become zeros or partial averages"
+        (Chart Allocated [ChartPoint 1 0 1 2 True, ChartPoint 2 0 0 0 False] []) chart
+      let output = unlines (chartText False 67 12 chart)
+      assertBool output ("0.000│" `isInfixOf` output && '○' `elem` output)
+      assertEqual "zero allocation still renders graphics" (67 * 8 * 12 * 16 * 4)
+        (BS.length (chartPixels True 67 12 chart))
+      let small = Chart Allocated [ChartPoint 1 0 0 0 True,
+                                   ChartPoint 2 (16/1024) (16/1024) (16/1024) True] []
+      assertBool "small allocation volumes use the full vertical range"
+        ('●' `elem` concat (take 3 (chartText False 67 12 small)))
+      withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
+        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
+          (code, out, err) <- run
+          assertEqual (out ++ err) ExitSuccess code
+          assertBool out ("Linear allocation axis" `isInfixOf` out)
+          assertBool "older journals already contain allocation samples" ("Allocated (KiB)" `isInfixOf` out)
+          assertBool "known allocation data is not labelled unavailable"
+            (not ("Allocation measurements are unavailable" `isInfixOf` out))
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
       forM_ [1, 2] $ \version -> do
         let named modName = KM.insert "module" (Aeson.String modName) . KM.insert "test" (Aeson.String "same")
@@ -63,6 +112,18 @@ scaleReportTests = testGroup "terminal charts"
           assertBool "plain reports have no terminal escapes" (notElem '\ESC' (out ++ err))
           assertEqual "replay never changes the recording" before =<< BS.readFile path
           assertEqual "replay creates no build or measurement files" [takeFileName path] =<< listDirectory (takeDirectory path)
+  , testCase "replay requires a completed point at the requested endpoint" $ do
+      let named = KM.insert "module" (Aeson.String "alpha") . KM.insert "test" (Aeson.String "same")
+          study = KM.insert "end_scale" (Aeson.Number 100000) (header 3)
+          partial = named (sample 100000 10 1048576 True False)
+          point = named (KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 100000)])
+      forM_ [Nothing, Just 100000, Just 200000] $ \completed ->
+        withRecording ([study, partial] ++ concat
+          [[named (sample n 10 1048576 True False), KM.insert "scale" (Aeson.toJSON n) point] | Just n <- [completed]] ++ [ending]) $ \_ run -> do
+          (code, out, err) <- run
+          assertEqual (out ++ err) ExitSuccess code
+          assertEqual "only the exact completed endpoint satisfies the target" (completed /= Just 100000)
+            ("Requested end scale 100000 was not reached" `isInfixOf` out)
   , testCase "incomplete journals retain samples and diagnose an unfinished final record" $
       withRecording [header 2, KM.insert "module" (Aeson.String "alpha")
         (KM.insert "test" (Aeson.String "same") (sample 1 10 1048576 True False))] $ \path run -> do

@@ -3,43 +3,87 @@ import testing
 
 
 def _test_calibration_doubles_the_workload(t: testing.SyncT):
-    loop = testing.PerfLoop(1, 1, 10000.0, 10000.0, 50.0)
-    assert loop._advance(0) == 1
-    for scale in [1, 2, 4]:
-        loop._last_wall_ns = u64(scale * 1000000)
-        assert loop._advance(1) == scale * 2
-    loop._last_wall_ns = u64(50000000)
-    assert loop._advance(1) is None
-    assert loop.scale == 8
-    assert loop.iterations == 4
-    assert len(loop.calibration) == 4
+    run = testing.PerfRun(500)
+    run.loop = True
+    elapsed = 0.0
+    loops: list[testing.PerfLoop] = []
+    for scale, wall_ms in [(1, 1.0), (2, 2.0), (4, 4.0), (8, 50.0)]:
+        loop = run.next_loop(0)
+        loops.append(loop)
+        assert loop._advance(0) == scale
+        loop._last_wall_ns = u64(wall_ms * 1000000.0)
+        assert loop._advance(1) is None
+        assert loop.iterations == 1
+        elapsed += wall_ms
+        assert not run.observe(loop, elapsed, wall_ms)
+    assert run.phase == "warmup"
+    assert run.scale == 8
+    assert len(run.calibration) == 4
     for i in range(4):
-        assert number(loop.calibration[i], "scale") == float(2**i)
-        assert number(loop.calibration[i], "wall_ms") == [1.0, 2.0, 4.0, 50.0][i]
+        assert loops[i]._scale == 2**i
+        assert number(run.calibration[i], "scale") == float(2**i)
+        assert number(run.calibration[i], "wall_ms") == [1.0, 2.0, 4.0, 50.0][i]
 
 
 def _test_calibration_selects_nearer_scale(t: testing.SyncT):
     for previous, current, expected in [(400, 1600, 1), (200, 600, 2), (300, 700, 1)]:
-        loop = testing.PerfLoop(1, 1, 10000.0, 10000.0, 500.0)
-        assert loop._advance(0) == 1
-        loop._last_wall_ns = u64(previous * 1000000)
-        assert loop._advance(1) == 2
-        loop._last_wall_ns = u64(current * 1000000)
-        assert loop._advance(1) is None
-        assert loop.scale == expected
-        assert number(loop.calibration[0], "wall_ms") == float(previous)
-        assert number(loop.calibration[1], "wall_ms") == float(current)
-        assert number(loop.calibration[1], "scale") == 2.0
         run = testing.PerfRun(5000)
         run.loop = True
-        assert not run.observe(loop, float(previous + current), 0.0)
-        assert run.next_loop(0).scale == expected
+        first = run.next_loop(0)
+        first._last_wall_ns = u64(previous * 1000000)
+        assert not run.observe(first, float(previous), float(previous))
+        assert run.phase == "calibrate"
+        second = run.next_loop(0)
+        assert second._scale == 2
+        second._last_wall_ns = u64(current * 1000000)
+        assert not run.observe(second, float(previous + current), float(current))
+        assert run.phase == "warmup"
+        assert run.next_loop(0)._scale == expected
+        assert first._scale == 1
+        assert second._scale == 2
+        assert number(run.calibration[0], "wall_ms") == float(previous)
+        assert number(run.calibration[1], "wall_ms") == float(current)
+        assert number(run.calibration[1], "scale") == 2.0
 
-    slow = testing.PerfLoop(1, 1, 10000.0, 10000.0, 500.0)
-    assert slow._advance(0) == 1
+    run = testing.PerfRun(5000)
+    run.loop = True
+    slow = run.next_loop(0)
     slow._last_wall_ns = u64(1600000000)
-    assert slow._advance(1) is None
-    assert slow.scale == 1
+    assert not run.observe(slow, 1600.0, 1600.0)
+    assert run.phase == "warmup"
+    assert run.scale == 1
+
+
+def _test_calibration_accounts_for_setup_and_teardown(t: testing.SyncT):
+    run = testing.PerfRun(5000)
+    run.loop = True
+    first = run.next_loop(0)
+    first._last_wall_ns = 1000000
+    assert not run.observe(first, 400.0, 400.0)
+    assert run.scale == 2
+    second = run.next_loop(0)
+    second._last_wall_ns = 2000000
+    assert not run.observe(second, 1600.0, 1200.0)
+    assert run.phase == "warmup"
+    assert run.scale == 1
+    assert number(run.calibration[1], "wall_ms") == 2.0
+    assert number(run.calibration[1], "invocation_ms") == 1200.0
+    assert not run.observe(run.next_loop(0), 500.0, 500.0)
+    sample = run.next_loop(0)
+    sample.iterations = 2
+    sample._wall_ns = 20000000
+    assert run.observe(sample, 600.0, 600.0)
+    assert run.measurement_ms == 20.0
+    assert run.loop_iterations == 2
+
+
+def _test_whole_invocation_measurements_include_setup(t: testing.SyncT):
+    run = testing.PerfRun(5000)
+    assert not run.observe(run.next_loop(0), 500.0, 500.0)
+    assert run.phase == "measure"
+    assert run.observe(run.next_loop(0), 250.0, 250.0)
+    assert run.measurement_ms == 250.0
+    assert run.scale == 1
 
 
 def _test_loop_preserves_recorded_scale(t: testing.SyncT):
@@ -47,12 +91,13 @@ def _test_loop_preserves_recorded_scale(t: testing.SyncT):
     run.loop = True
     assert run.phase == "warmup"
     warmup = run.next_loop(0)
-    assert warmup.scale == 37
+    assert warmup._scale == 37
     assert not run.observe(warmup, 500.0, 0.0)
     assert run.phase == "measure"
     sample = run.next_loop(0)
     sample.iterations = 3
-    assert sample.scale == 37
+    sample._wall_ns = 900000000
+    assert sample._scale == 37
     assert run.observe(sample, 1000.0, 900.0)
     assert run.scale == 37
     assert run.measurement_ms == 900.0
@@ -79,6 +124,7 @@ def _test_scaling_measures_one_body_after_one_warmup(t: testing.SyncT):
 
 
 def _test_ordinary_loop_and_closed_context(t: testing.SyncT):
+    assert t.scale() == 1
     loop = testing.PerfLoop()
     assert list(loop.claim()) == [1]
     loop.close()

@@ -332,7 +332,6 @@ class PerfLoop(Iterator[int]):
 
     Phases: 0 ordinary, 1 calibration, 2 warmup, 3 measurement.
     """
-    calibration: list[dict[str, value]]
     _state: u64
     _last_wall_ns: u64
     _start_wall_ns: u64
@@ -358,17 +357,14 @@ class PerfLoop(Iterator[int]):
     _yield_scale: ?int
     _report_result: ?action(?bool, ?Exception, ?str) -> None
 
-    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, target_ms: float=0.0, once: bool=False):
+    def __init__(self, phase: int=0, scale: int=1, budget_ms: float=0.0, remaining_ms: float=0.0, once: bool=False):
         self._phase = phase
-        self.scale = scale
+        self._scale = scale
         self.iterations = 0
         self._budget_ms = budget_ms
         self._remaining_ms = remaining_ms
-        self._target_ms = target_ms
         self._once = once
-        self._previous_wall_ms = 0.0
         self._sw = time.Stopwatch()
-        self.calibration = []
         self._state = 0
         self._last_wall_ns = 0
         self._start_wall_ns = 0
@@ -419,25 +415,17 @@ class PerfLoop(Iterator[int]):
         if self._phase == 0:
             return 1 if self.iterations == 0 else None
         if self._once:
-            return self.scale if self.iterations == 0 else None
+            return self._scale if self.iterations == 0 else None
         elapsed = self._sw.elapsed().to_float() * 1000.0
         if completed == 0:
             # Setup uses the total budget, but a run may finish its first body
             # after its individual slice expires.
-            return self.scale if elapsed < self._remaining_ms else None
-        if self._phase == 1:
-            wall_ms = float(self._last_wall_ns) / 1000000.0
-            self.calibration.append({"scale": self.scale, "wall_ms": wall_ms})
-            if wall_ms >= self._target_ms or elapsed >= self._budget_ms or self.scale >= 2**30:
-                # Doubling the input can overshoot badly for nonlinear workloads.
-                if self.iterations > 1 and abs(self._previous_wall_ms - self._target_ms) <= abs(wall_ms - self._target_ms):
-                    self.scale //= 2
-                return None
-            self._previous_wall_ms = wall_ms
-            self.scale *= 2
-        elif elapsed >= self._budget_ms:
+            return self._scale if elapsed < self._remaining_ms else None
+        # Calibration changes scale between invocations, so setup sees the
+        # same scale as the single calibration body.
+        if self._phase == 1 or elapsed >= self._budget_ms:
             return None
-        return self.scale
+        return self._scale
 
     def counters(self) -> dict[str, float]:
         counts: dict[str, float] = {}
@@ -458,6 +446,10 @@ class SyncT(value):
         self.tags = tags
         self._loop = loop if loop is not None else PerfLoop()
 
+    def scale(self) -> int:
+        """Workload scale, fixed for this invocation; available before t.loop()."""
+        return self._loop._scale
+
     def loop(self) -> Iterator[int]:
         """Measure this loop's bodies, yielding the workload scale each time."""
         return self._loop.claim()
@@ -475,6 +467,10 @@ class AsyncT(value):
         self.log_handler = log_handler
         self.tags = tags
         self._loop = loop if loop is not None else PerfLoop()
+
+    def scale(self) -> int:
+        """Workload scale, fixed for this invocation; available before t.loop()."""
+        return self._loop._scale
 
     def loop(self) -> Iterator[int]:
         """Measure this loop's bodies, yielding the workload scale each time."""
@@ -504,6 +500,10 @@ class EnvT(value):
         self.log_handler = log_handler
         self.tags = tags
         self._loop = loop if loop is not None else PerfLoop()
+
+    def scale(self) -> int:
+        """Workload scale, fixed for this invocation; available before t.loop()."""
+        return self._loop._scale
 
     def loop(self) -> Iterator[int]:
         """Measure this loop's bodies, yielding the workload scale each time."""
@@ -1280,6 +1280,7 @@ class PerfRun(object):
         self.measurement_ms = 0.0
         self.loop_iterations = 0
         self.calibration = []
+        self._previous_invocation_ms = 0.0
         self._sw = time.Stopwatch()
 
     def remaining_ms(self) -> float:
@@ -1292,16 +1293,30 @@ class PerfRun(object):
             return PerfLoop(2 if self.phase == "warmup" else 3, self.scale, once=True)
         remaining = self.remaining_ms()
         if self.phase == "calibrate":
-            return PerfLoop(1, self.scale, min([remaining, float(self.time_ms) / 3.0]), remaining, float(self.time_ms) / 10.0)
+            return PerfLoop(1, self.scale, remaining_ms=remaining)
         if self.phase == "warmup":
             return PerfLoop(2, self.scale, min([remaining, float(self.time_ms) / 10.0]), remaining)
         return PerfLoop(3, self.scale, remaining / float(max([1, 4 - samples])), remaining)
 
-    def observe(self, loop: PerfLoop, elapsed_ms: float, wall_ms: float) -> bool:
+    def observe(self, loop: PerfLoop, elapsed_ms: float, invocation_ms: float) -> bool:
         """Preparation never contributes a statistical sample."""
         if self.phase == "calibrate":
-            self.scale = loop.scale if self.loop else 1
-            self.calibration = loop.calibration
+            if self.loop:
+                wall_ms = float(loop._last_wall_ns) / 1000000.0
+                target_ms = float(self.time_ms) / 10.0
+                self.calibration.append({"scale": self.scale, "wall_ms": wall_ms, "invocation_ms": invocation_ms})
+                # Setup and teardown must also fit repeated invocations into
+                # the budget, even when the operation itself is very cheap.
+                if invocation_ms < target_ms and elapsed_ms < float(self.time_ms) / 3.0 and self.scale < 2**30:
+                    self._previous_invocation_ms = invocation_ms
+                    self.scale *= 2
+                    return False
+                # Doubling can overshoot badly for nonlinear workloads. Choose
+                # the closer of the last two scales, then warm it up afresh.
+                if len(self.calibration) > 1 and abs(self._previous_invocation_ms - target_ms) <= abs(invocation_ms - target_ms):
+                    self.scale //= 2
+            else:
+                self.scale = 1
             self.phase = "warmup"
             if not self.loop:
                 self.warmup_duration_ms = elapsed_ms
@@ -1312,7 +1327,7 @@ class PerfRun(object):
             if self.scaling or self.warmup_duration_ms >= float(self.time_ms) / 10.0:
                 self.phase = "measure"
         else:
-            self.measurement_ms += wall_ms
+            self.measurement_ms += float(loop._wall_ns) / 1000000.0 if self.loop else invocation_ms
             self.loop_iterations += loop.iterations if self.loop else 0
             return True
         return False
@@ -1617,8 +1632,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         complete = config.perf_mode and (success != True or exception is not None)
         if perf_run is not None and not complete and not skipped:
             phase = perf_run.phase
-            wall_ms = float(loop._wall_ns) / 1000000.0 if perf_run.loop else full_dur
-            measured = perf_run.observe(loop, perf_phase_sw.elapsed().to_float() * 1000.0, wall_ms)
+            measured = perf_run.observe(loop, perf_phase_sw.elapsed().to_float() * 1000.0, full_dur)
             if phase != perf_run.phase and (perf_run.loop or perf_run.phase == "measure"):
                 perf_phase_sw.reset()
             if not measured:

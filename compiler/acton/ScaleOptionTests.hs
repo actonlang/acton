@@ -11,8 +11,9 @@ import Test.Tasty.HUnit
 scaleOptionTests :: TestTree
 scaleOptionTests = testGroup "performance scaling options"
   [ testCase "scale captures explicit resource limits" $ do
-      opts <- parseScale ["--start-scale", "1000", "--max-memory", "50%", "--max-time", "2h"]
+      opts <- parseScale ["--start-scale", "1000", "--end-scale", "100000", "--max-memory", "50%", "--max-time", "2h"]
       assertEqual "starting scale" (Just 1000) (C.testStartScale opts)
+      assertEqual "inclusive endpoint" (Just 100000) (C.testEndScale opts)
       assertEqual "memory percentage" (Just (C.MemoryPercent 50)) (C.testMaxMemory opts)
       assertEqual "duration is stored in milliseconds" 7200000 (C.testMaxTime opts)
       assertBool "the total limit is explicit" (C.testMaxTimeSet opts)
@@ -20,6 +21,7 @@ scaleOptionTests = testGroup "performance scaling options"
       opts <- parseScale []
       assertEqual "release by default" C.ReleaseFast (C.optimize (C.testCompile opts))
       assertEqual "default starting scale is chosen by the runner" Nothing (C.testStartScale opts)
+      assertEqual "no endpoint means automatic exploration" Nothing (C.testEndScale opts)
       assertEqual "default memory limit is chosen by the runner" Nothing (C.testMaxMemory opts)
       assertBool "default total limit is chosen by the runner" (not (C.testMaxTimeSet opts))
       explicit <- parseScale ["--optimize", "Debug"]
@@ -39,19 +41,20 @@ scaleOptionTests = testGroup "performance scaling options"
         rejects ["test", "scale", "--max-time", value]
       forM_ [1, maxBound :: Int] $ \value ->
         assertEqual "positive starting scale" (Just value) . C.testStartScale =<< parseScale ["--start-scale", show value]
-      forM_ ["0", "-1", "1.5", show (toInteger (maxBound :: Int) + 1)] $ \value ->
-        rejects ["test", "scale", "--start-scale", value]
+      forM_ ["--start-scale", "--end-scale"] $ \option ->
+        forM_ ["0", "-1", "1.5", show (toInteger (maxBound :: Int) + 1)] $ \value ->
+          rejects ["test", "scale", option, value]
   , testCase "scale and perf reject each other's workload controls" $ do
       forM_ [["--scale", "7"], ["--time", "1s"], ["--iter", "1"],
              ["--min-iter", "1"], ["--max-iter", "1"], ["--min-time", "1"],
-             ["--stress-workers", "1"], ["--scaling"]] $ \args ->
+             ["--stress-workers", "1"], ["--scaling"], ["--min-scale", "1000"]] $ \args ->
         rejects (["test", "scale"] ++ args)
-      forM_ [["--start-scale", "1"], ["--max-memory", "50%"],
+      forM_ [["--start-scale", "1"], ["--end-scale", "1000"], ["--max-memory", "50%"],
              ["--max-time", "1h"], ["--scaling"]] $ \args ->
         rejects (["test", "perf"] ++ args)
   , testCase "ordinary limits keep milliseconds and reject scaling controls" $ do
       forM_ [[], ["list"], ["stress"]] $ \mode ->
-        forM_ [["--scaling"], ["--start-scale", "1"], ["--max-memory", "50%"]] $ \args ->
+        forM_ [["--scaling"], ["--start-scale", "1"], ["--end-scale", "1000"], ["--max-memory", "50%"]] $ \args ->
           rejects (["test"] ++ mode ++ args)
       case parseOptions ["test", "stress", "--max-time", "0"] of
         O.Success (C.CmdOpt _ (C.Test (C.TestStress opts))) ->
@@ -80,7 +83,7 @@ scaleOptionTests = testGroup "performance scaling options"
             assertEqual "recording path" "run.jsonl" path
             assertEqual "display options apply" C.Never (C.color globals)
           _ -> assertFailure ("expected saved report: " ++ unwords args)
-      forM_ [["--max-time", "1s"], ["--name", "dct"], ["--start-scale", "2"], ["--json"], ["--record"]] $ \args ->
+      forM_ [["--max-time", "1s"], ["--name", "dct"], ["--start-scale", "2"], ["--end-scale", "2"], ["--json"], ["--record"]] $ \args ->
         rejects (["test", "scale", "--report", "run.jsonl"] ++ args)
   , testCase "comparison always takes one baseline file in live and report modes" $ do
       forM_ [["--compare", "before.jsonl"], ["--name", "dct", "--compare", "before.jsonl"],
@@ -104,7 +107,7 @@ scaleOptionTests = testGroup "performance scaling options"
         O.Failure failure -> do
           let (text, code) = O.renderFailure failure "acton"
           assertEqual text ExitSuccess code
-          forM_ ["--start-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE", "--compare FILE"] $ \option ->
+          forM_ ["--start-scale N", "--end-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE", "--compare FILE"] $ \option ->
             assertBool text (option `isInfixOf` unwords (words text))
           assertBool text (not (any (`isInfixOf` text) ["--scaling", "--scale N", "--time DURATION", "--iter", "--min-time"]))
         _ -> assertFailure "expected scale help"

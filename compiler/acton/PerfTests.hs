@@ -381,7 +381,8 @@ perfIntegrationTests =
               (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
             baseline = proj </> "perf_data"
             run args = readCreateProcessWithExitCode
-              (proc acton (["test", "perf", "--time", "100ms", "--color", "never"] ++ args)) { cwd = Just proj } ""
+              (proc acton (["test", "perf", "--color", "never"] ++
+                [arg | "--time" `notElem` args, arg <- ["--time", "100ms"]] ++ args)) { cwd = Just proj } ""
             runOK args = do
               (code, out, err) <- run args
               assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
@@ -426,18 +427,39 @@ perfIntegrationTests =
           , "    assert peak is not None and peak < 64 * 1048576"
           , "    t.success()"
           , ""
+          , "actor _test_slow_setup(t: testing.EnvT):"
+          , "    acton.rts.sleep(t.env.syscap, 0.2)"
+          , "    for scale in t.loop():"
+          , "        assert False, \"No body should run after setup exhausts the budget\""
+          , "    t.success()"
+          , ""
           , "actor _test_looped(t: testing.EnvT):"
+          , "    setup_scale = t.scale()"
           , "    expected_scale = t.env.getenv(\"ACTON_PERF_EXPECT_SCALE\")"
           , "    for scale in t.loop():"
-          , "        assert scale > 0"
+          , "        assert scale == setup_scale"
           , "        if expected_scale is not None:"
           , "            assert scale == int(expected_scale)"
           , "    t.success()"
           , ""
           , "actor LoopWorker(t: testing.AsyncT):"
+          , "    setup_scale = t.scale()"
           , "    for scale in t.loop():"
-          , "        assert scale > 0"
+          , "        assert scale == setup_scale"
           , "    t.success()"
+          , ""
+          , "def _test_calibration_setup(t: testing.SyncT):"
+          , "    data = list(range(t.scale()))"
+          , "    start = time.monotonic().unix_ns()"
+          , "    while time.monotonic().unix_ns() - start < t.scale() * 1000000:"
+          , "        pass"
+          , "    for scale in t.loop():"
+          , "        assert scale == len(data)"
+          , ""
+          , "def _test_allocation_setup(t: testing.SyncT):"
+          , "    data = \"x\" * (t.scale() * 1048576)"
+          , "    for scale in t.loop():"
+          , "        assert len(data) == scale * 1048576"
           , ""
           , "actor _test_helper_workload(t: testing.AsyncT):"
           , "    LoopWorker(t)"
@@ -496,6 +518,7 @@ perfIntegrationTests =
           , "    t.success()"
           , ""
           , "actor _test_counter_activation(t: testing.EnvT):"
+          , "    assert t.scale() == 1"
           , "    assert t.env.getenv(\"ACTON_TEST_PERF\") is None"
           , "    info = acton.rts.perf_info(t.env.syscap)"
           , "    if \"perf\" in t.env.argv:"
@@ -661,6 +684,11 @@ perfIntegrationTests =
         duration <- requireNumber "duration_ms" slow
         assertBool "the slow invocation completed past the former watchdog" (duration >= 3000)
         assertBool slowOut (not ("TimeoutError" `isInfixOf` slowOut))
+        (setupCode, setupOut, setupErr) <- run ["--name", "slow_setup", "--json"]
+        assertBool (setupOut ++ setupErr) (setupCode /= ExitSuccess)
+        exhausted <- singleJsonTest setupOut
+        assertEqual "setup can exhaust calibration before its first body" (Just Aeson.Null) (KM.lookup "performance" exhausted)
+        assertBool setupOut (not ("No body should run" `isInfixOf` setupOut))
         looped <- runLoop "100ms" "50000" ["--record", "--scale", "50000", "--tag", "beta, alpha", "--tag", "alpha"] >>= requireObject "measurements"
         loopedInfo <- requireObject "perf_info" looped
         assertEqual "author opted into loop measurement" (Just (Aeson.Bool True)) (KM.lookup "loop" loopedInfo)
@@ -680,6 +708,13 @@ perfIntegrationTests =
         case KM.lookup "calibration" helperInfo of
           Just (Aeson.Array observations) -> assertBool "automatic scale records calibration observations" (not (null observations))
           _ -> assertFailure "missing calibration observations"
+        setupOut <- runOK ["--name", "calibration_setup", "--time", "500ms", "--json"]
+        setupInfo <- singleJsonTest setupOut >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
+        assertBool "calibration rebuilds scale-sized setup at increasing sizes" . (> 1) =<< requireNumber "scale" setupInfo
+        assertBool "calibrated setup retains warmup" . (> 0) =<< requireNumber "warmup_duration_ms" setupInfo
+        allocationOut <- runOK ["--name", "allocation_setup", "--scale", "8", "--time", "500ms", "--json"]
+        allocation <- singleJsonTest allocationOut >>= requireObject "performance" >>= requireObject "measurements"
+        assertBool "8MiB of setup allocation is excluded from the measured body" . (< 4096) =<< requireNumber "mem_usage_delta_avg" allocation
         lateOut <- runOK ["--name", "late_loop", "--json"]
         lateInfo <- singleJsonTest lateOut >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
         assertEqual "late loop requests and duplicate completions cannot change measurement identity"

@@ -51,6 +51,8 @@ validateScalingOptions opts
   | C.testRecord opts = Just "Scaling studies save every sample automatically; --record updates fixed-scale perf_data"
   | C.testSnapshotUpdate opts = Just "Scaling studies cannot update test snapshots"
   | C.watch (C.testCompile opts) = Just "Scaling studies cannot run with --watch"
+  | maybe False (< fromMaybe 1 (C.testStartScale opts)) (C.testEndScale opts) =
+      Just "--end-scale must be at least --start-scale (default: 1)"
   | otherwise = Nothing
 
 -- Reserve memory for the machine as well as bounding the child itself.
@@ -199,9 +201,12 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
               path = directory </> (name ++ "__" ++ timestamp ++ "__" ++ maybe "unknown" (take 12) implementation) <.> "jsonl"
               old = baseline >>= M.lookup (modName, testName) . recordingTests
               oldData = maybe IM.empty seriesData old
-              schedule = [n | (n, (True, _)) <- IM.toAscList oldData, maybe True (n >=) (C.testStartScale opts)]
+              schedule = [n | (n, (True, _)) <- IM.toAscList oldData,
+                              maybe True (n >=) (C.testStartScale opts),
+                              maybe True (n <=) (C.testEndScale opts)]
               firstScale = case schedule of n:_ -> n; [] -> fromMaybe 1 (C.testStartScale opts)
           chartData <- newIORef IM.empty
+          reached <- newIORef False
           (code, finished) <- bracket
             (PIO.openFd path PIO.WriteOnly PIO.defaultFileFlags { PIO.creat = Just 0o600, PIO.exclusive = True } >>= PIO.fdToHandle)
             hClose $ \journal -> do
@@ -215,7 +220,11 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                   event kind fields = emit (("event" Aeson..= (kind :: String)) : fields)
                   finish reason code = do
                     now <- getTime Monotonic
-                    event "end" ["reason" Aeson..= reason, "elapsed_ms" Aeson..= milliseconds (now - benchmarkStart)]
+                    targetReached <- readIORef reached
+                    event "end" ["reason" Aeson..= reason, "elapsed_ms" Aeson..= milliseconds (now - benchmarkStart),
+                                 "end_scale_reached" Aeson..= fmap (const targetReached) (C.testEndScale opts)]
+                    forM_ (C.testEndScale opts) $ \target -> unless targetReached $
+                      say ("Requested end scale " ++ show target ++ " was not reached")
                     say ("Stopped: " ++ reason)
                     say ("Results: " ++ path)
                     return code
@@ -231,7 +240,9 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                                  KM.lookup "loop_iterations" obj == Just (Aeson.Number 1),
                                  KM.lookup "scaling" info == Just (Aeson.Bool True),
                                  KM.lookup "scale" info == Just (Aeson.toJSON scale) -> do
-                        when (maybe True (<= 0) (perfNumber obj "avg_wall_duration")) $
+                        -- A body shorter than one clock tick can measure zero.
+                        -- Keep it as an unreliable probe and try larger sizes.
+                        when (maybe True (< 0) (perfNumber obj "avg_wall_duration")) $
                           throwIO (ScalingStopped "wall time measurement unavailable")
                         forM_ old $ \previous -> do
                           let issue = seriesInfo previous >>= (`perfSamplingReason` info)
@@ -249,7 +260,7 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                                     "accepted" Aeson..= either (const False) (const True) checked]
                     obj <- either throwIO return checked
                     -- Raw results, including diagnostics, are already on disk.
-                    return (KM.filterWithKey (\key _ -> key `elem` ["avg_wall_duration", "peak_rss"]) obj)
+                    return (KM.filterWithKey (\key _ -> key `elem` ["avg_wall_duration", "peak_rss", "mem_usage_delta_avg"]) obj)
                   collect modName testName scale reference = do
                     when (progress && not live) (say ("  sampling " ++ label))
                     gather [] `finally` clearProgress
@@ -299,13 +310,20 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                     point <- collect modName testName scale False
                     let points' = point : points
                         growth = case points of old:_ -> scaleGrowth old point; [] -> Nothing
-                        trend = stableGrowth points'
+                        targetReached = C.testEndScale opts == Just scale
+                        automatic = not (isJust (C.testEndScale opts))
+                        trend = if automatic || targetReached then stableGrowth points' else Nothing
+                        allocated = mapM (`perfNumber` "mem_usage_delta_avg") (pointSamples point)
                         reference' = case reference of
                           Nothing | scaleReliable point -> Just point
                           _ -> reference
+                    writeIORef reached targetReached
                     event "point" ["module" Aeson..= modName, "test" Aeson..= testName,
                                    "scale" Aeson..= scale, "samples" Aeson..= length (pointSamples point),
                                    "wall_mean_ms" Aeson..= scaleMean (pointValues "avg_wall_duration" point),
+                                   "allocated_mean_bytes" Aeson..= (allocated >>= scaleMean),
+                                   "allocated_min_bytes" Aeson..= fmap minimum allocated,
+                                   "allocated_max_bytes" Aeson..= fmap maximum allocated,
                                    "relative_standard_error" Aeson..= scaleError point,
                                    "reliable" Aeson..= scaleReliable point,
                                    "observed_exponent" Aeson..= growth]
@@ -324,15 +342,23 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                     if isJust old then case pending of
                       [] -> finish "compared" "Completed baseline sizes remeasured" points' Nothing
                       next:rest -> study modName testName next points' reference' failures rest
+                    else if targetReached then
+                      finish "range" ("Requested scale range measured" ++
+                        if isJust trend && checked == Just True then "" else "; growth remains inconclusive")
+                        points' (if checked == Just True then trend else Nothing)
                     else if isJust trend && checked == Just True then
                       finish "stable" "Growth stable over the measured range" points' trend
-                    else if failures >= 3 then
+                    else if automatic && failures >= 3 then
                       finish "inconclusive" "Reference measurements did not settle" points' Nothing
-                    else if length (takeWhile (not . scaleReliable) points') >= 20 then
+                    else if automatic && length (takeWhile (not . scaleReliable) points') >= 20 then
                       finish "inconclusive" "Timing stayed too short or noisy across 20 successive sizes" points' Nothing
                     else case nextScale cap points' of
                       Nothing -> finish "limited" "Next scale approaches the memory or integer limit" points' Nothing
-                      Just next -> study modName testName next points' reference' failures []
+                      Just next ->
+                        let chosen = case C.testEndScale opts of
+                              Just target | scale < target -> min next target
+                              _ -> next
+                        in study modName testName chosen points' reference' failures []
               event "study" ["version" Aeson..= (3 :: Int), "host" Aeson..= host,
                              "module" Aeson..= modName, "test" Aeson..= testName,
                              "recorded_at" Aeson..= recordedAt, "run_id" Aeson..= runId,
@@ -340,18 +366,22 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                              "baseline" Aeson..= fmap recordingPath baseline,
                              "max_memory_bytes" Aeson..= cap, "reserve_bytes" Aeson..= reserve,
                              "max_time_ms" Aeson..= duration, "start_scale" Aeson..= firstScale,
+                             "end_scale" Aeson..= C.testEndScale opts,
                              "memory_protection" Aeson..= ("monitored; abrupt allocations can exceed the limit" :: String),
                              "path" Aeson..= path]
-              say ((if isJust old then "Scaling comparison: recorded sizes" else "Scaling study: adaptive range")
+              say ((if isJust old then "Scaling comparison: recorded sizes"
+                    else if isJust (C.testEndScale opts) then "Scaling study: requested range"
+                    else "Scaling study: adaptive range")
                    ++ ", 3–7 samples per size, one warmup per sample")
               say ("Safety limits: " ++ show duration ++ "ms, memory ceiling " ++ bytes cap)
+              forM_ (C.testEndScale opts) $ \target -> say ("Scale range: " ++ show firstScale ++ " … " ++ show target)
               say "Memory protection is monitored; abrupt allocations can exceed the limit."
               say ("Results: " ++ path)
               outcome <- try $ flip finally (terminal "\ESC[?25h") $ do
                 terminal "\ESC[?25l"
                 say ("\nScaling " ++ modName ++ "." ++ testName)
                 forM_ baseline $ \previous -> say ("Baseline: " ++ clean (recordingPath previous))
-                say "       scale          mean          min … max             time/scale       peak RSS       growth"
+                say "       scale          mean          min … max             time/scale      allocated       peak RSS       growth"
                 study modName testName firstScale [] Nothing (0 :: Int) (drop 1 schedule)
                   `finally` unless (C.testJson opts) (do
                     points <- readIORef chartData
@@ -386,8 +416,11 @@ formatPoint point growth =
     let values = pointValues "avg_wall_duration" point
         mean = fromMaybe 0 (scaleMean values)
         peak = maximum (0 : pointValues "peak_rss" point)
+        allocated :: String
+        allocated = maybe "unavailable" (\n -> printf "%.3g KiB" (n / 1024))
+          (scaleMean =<< mapM (`perfNumber` "mem_usage_delta_avg") (pointSamples point))
         trend :: String
         trend = maybe "inconclusive" (printf "n^%.2f") growth
-    in printf "%12d  %10.3f ms  %9.3f … %9.3f ms  %10.3f µs  %10.1f MiB  %s"
+    in printf "%12d  %10.3f ms  %9.3f … %9.3f ms  %10.3f µs  %13s  %10.1f MiB  %s"
          (pointScale point) mean (if null values then 0 else minimum values) (maximum (0:values))
-         (mean * 1000 / fromIntegral (pointScale point)) (peak / 1048576) trend
+         (mean * 1000 / fromIntegral (pointScale point)) allocated (peak / 1048576) trend
