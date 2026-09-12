@@ -1,14 +1,13 @@
 import testing
 
 
-# Scale repeats one operation on the same input. Input construction and result
-# checks are outside t.loop(); output allocation remains part of the operation.
-size = 1024
-
-def inputs() -> list[int]:
+# Scale is the number of input elements. Prepare inputs and mutable targets
+# before t.loop(); each body measures one operation, including output allocation.
+# Empty controls keep their input empty regardless of scale.
+def inputs(size: int) -> list[int]:
     return [i for i in range(size)]
 
-def items() -> list[(int, int)]:
+def items(size: int) -> list[(int, int)]:
     return [(i, i + 1) for i in range(size)]
 
 
@@ -16,11 +15,10 @@ def construct_list(t: testing.SyncT, xs: list[int]):
     count = 0
     repeats = 0
     last: list[int] = []
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            last = list(xs)
-            count += len(last)
+    for _ in t.loop():
+        repeats += 1
+        last = list(xs)
+        count += len(last)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         testing.assertEqual(last, xs)
@@ -28,12 +26,11 @@ def construct_list(t: testing.SyncT, xs: list[int]):
 def assign_list_slice(t: testing.SyncT, xs: list[int]):
     count = 0
     repeats = 0
-    target = [-1]
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            target[:] = xs
-            count += len(target)
+    target = list(xs)
+    for _ in t.loop():
+        repeats += 1
+        target[:] = xs
+        count += len(target)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         testing.assertEqual(target, xs)
@@ -42,26 +39,24 @@ def construct_dict(t: testing.SyncT, xs: list[(int, int)]):
     count = 0
     repeats = 0
     last: dict[int, int] = {}
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            last = dict(xs)
-            count += len(last)
+    for _ in t.loop():
+        repeats += 1
+        last = dict(xs)
+        count += len(last)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         for k, v in xs:
             testing.assertEqual(last[k], v)
 
 def update_dict(t: testing.SyncT, xs: list[(int, int)]):
-    # After the first update, measure replacement without table growth.
-    target: dict[int, int] = {}
+    # Measure replacement without table growth from the first body.
+    target: dict[int, int] = dict(xs)
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            target.update(xs)
-            count += len(target)
+    for _ in t.loop():
+        repeats += 1
+        target.update(xs)
+        count += len(target)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         for k, v in xs:
@@ -71,26 +66,24 @@ def construct_set(t: testing.SyncT, xs: list[int]):
     count = 0
     repeats = 0
     last: set[int] = set()
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            last = set(xs)
-            count += len(last)
+    for _ in t.loop():
+        repeats += 1
+        last = set(xs)
+        count += len(last)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         for x in xs:
             testing.assertIn(x, last)
 
 def update_set(t: testing.SyncT, xs: list[int]):
-    # After the first update, measure duplicate insertion without table growth.
-    target: set[int] = set()
+    # Measure duplicate insertion without table growth from the first body.
+    target: set[int] = set(xs)
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            target.update(xs)
-            count += len(target)
+    for _ in t.loop():
+        repeats += 1
+        target.update(xs)
+        count += len(target)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         for x in xs:
@@ -98,29 +91,21 @@ def update_set(t: testing.SyncT, xs: list[int]):
 
 def disjoint(t: testing.SyncT, xs: set[int], ys: set[int], expected: bool):
     matches = 0
-    completed = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            if Set.isdisjoint(xs, ys):
-                matches += 1
-            completed += 1
-    testing.assertEqual(completed, repeats)
+    for _ in t.loop():
+        repeats += 1
+        if Set.isdisjoint(xs, ys):
+            matches += 1
     testing.assertEqual(matches, repeats if expected else 0)
 
 def assign_bytearray_slice(t: testing.SyncT, xs: list[int]):
-    target = bytearray(b"_")
+    target = bytearray(b"_" * len(xs))
     count = 0
-    completed = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            target[:] = xs
-            count += len(target)
-            completed += 1
-    testing.assertEqual(completed, repeats)
+    for _ in t.loop():
+        repeats += 1
+        target[:] = xs
+        count += len(target)
     testing.assertEqual(count, repeats * len(xs))
     if repeats > 0:
         testing.assertEqual(len(target), len(xs))
@@ -129,55 +114,58 @@ def assign_bytearray_slice(t: testing.SyncT, xs: list[int]):
 
 
 def _test_list(t: testing.SyncT):
-    construct_list(t, inputs())
+    construct_list(t, inputs(t.scale()))
 
 def _test_list_empty(t: testing.SyncT):
     construct_list(t, [])
 
 def _test_list_slice(t: testing.SyncT):
-    assign_list_slice(t, inputs())
+    assign_list_slice(t, inputs(t.scale()))
 
 def _test_list_slice_empty(t: testing.SyncT):
     assign_list_slice(t, [])
 
 def _test_dict(t: testing.SyncT):
-    construct_dict(t, items())
+    construct_dict(t, items(t.scale()))
 
 def _test_dict_empty(t: testing.SyncT):
     construct_dict(t, [])
 
 def _test_dict_update(t: testing.SyncT):
-    update_dict(t, items())
+    update_dict(t, items(t.scale()))
 
 def _test_dict_update_empty(t: testing.SyncT):
     update_dict(t, [])
 
 def _test_set(t: testing.SyncT):
-    construct_set(t, inputs())
+    construct_set(t, inputs(t.scale()))
 
 def _test_set_empty(t: testing.SyncT):
     construct_set(t, [])
 
 def _test_set_update(t: testing.SyncT):
-    update_set(t, inputs())
+    update_set(t, inputs(t.scale()))
 
 def _test_set_update_empty(t: testing.SyncT):
     update_set(t, [])
 
 def _test_set_isdisjoint(t: testing.SyncT):
-    disjoint(t, set(inputs()), set([size + i for i in range(size)]), True)
+    size = t.scale()
+    disjoint(t, set(inputs(size)), set([size + i for i in range(size)]), True)
 
 def _test_set_isdisjoint_overlap(t: testing.SyncT):
-    disjoint(t, set(inputs()), set(inputs()), False)
+    disjoint(t, set(inputs(t.scale())), set(inputs(t.scale())), False)
 
 def _test_set_isdisjoint_empty(t: testing.SyncT):
-    disjoint(t, set(inputs()), set(), True)
+    disjoint(t, set(inputs(t.scale())), set(), True)
 
 def _test_set_isdisjoint_unbalanced(t: testing.SyncT):
+    size = t.scale()
     # Exercise the branch that swaps arguments to scan the smaller set.
-    disjoint(t, {size}, set(inputs()), True)
+    disjoint(t, {size}, set(inputs(size)), True)
 
 def _test_bytearray_slice(t: testing.SyncT):
+    size = t.scale()
     assign_bytearray_slice(t, [i % 256 for i in range(size)])
 
 def _test_bytearray_slice_empty(t: testing.SyncT):

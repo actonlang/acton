@@ -1,71 +1,65 @@
 import testing
 
 
-# Scale repeats an operation on the same 1024-element input. Construct inputs
-# before t.loop(), and check accumulated results after it. Consume lazy
-# iterators directly so list() or sum() cannot mask their cost.
-size = 1024
-
-def inputs() -> list[int]:
-    # A permutation avoids measuring only monotonically increasing extrema.
-    # Keep the minimum last so returning the first element cannot pass.
-    return [((i + 1) * 73) % size for i in range(size)]
+# Scale is the number of input elements. Prepare inputs before t.loop(), then
+# measure one operation per body. Consume lazy iterators directly so list() or
+# sum() cannot mask their cost. Empty controls keep their input empty.
+def inputs(size: int) -> list[int]:
+    # Visit every value once for any positive size, with the minimum last.
+    return ([2 * i + 1 for i in range(size // 2)]
+            + [2 * i for i in range(1, (size + 1) // 2)] + [0])
 
 
 def traverse(t: testing.SyncT, xs: list[int]):
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for x in xs:
-                total += x
+    for _ in t.loop():
+        repeats += 1
+        for x in xs:
+            total += x
     testing.assertEqual(total, repeats * len(xs) * (len(xs) - 1) // 2)
 
 def add_ints(t: testing.SyncT, xs: list[int]):
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += sum(xs)
+    for _ in t.loop():
+        repeats += 1
+        total += sum(xs)
     testing.assertEqual(total, repeats * len(xs) * (len(xs) - 1) // 2)
 
 def maximum(t: testing.SyncT, xs: list[int]):
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += max(xs, -1)
+    for _ in t.loop():
+        repeats += 1
+        total += max(xs, -1)
     testing.assertEqual(total, repeats * (len(xs) - 1))
 
 def minimum(t: testing.SyncT, xs: list[int]):
+    fallback = len(xs) + 1
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += min(xs, size)
-    testing.assertEqual(total, repeats * (size if len(xs) == 0 else 0))
+    for _ in t.loop():
+        repeats += 1
+        total += min(xs, fallback)
+    testing.assertEqual(total, repeats * (fallback if len(xs) == 0 else 0))
 
 def maximum_def(t: testing.SyncT, xs: list[int]):
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += max_def(xs, -1)
+    for _ in t.loop():
+        repeats += 1
+        total += max_def(xs, -1)
     testing.assertEqual(total, repeats * (len(xs) - 1))
 
 def minimum_def(t: testing.SyncT, xs: list[int]):
+    fallback = len(xs) + 1
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += min_def(xs, size)
-    testing.assertEqual(total, repeats * (size if len(xs) == 0 else 0))
+    for _ in t.loop():
+        repeats += 1
+        total += min_def(xs, fallback)
+    testing.assertEqual(total, repeats * (fallback if len(xs) == 0 else 0))
 
 def increment(x: int) -> int:
     return x + 1
@@ -74,12 +68,11 @@ def mapped(t: testing.SyncT, xs: list[int]):
     total = 0
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for x in map(increment, xs):
-                total += x
-                count += 1
+    for _ in t.loop():
+        repeats += 1
+        for x in map(increment, xs):
+            total += x
+            count += 1
     testing.assertEqual(count, repeats * len(xs))
     testing.assertEqual(total, repeats * len(xs) * (len(xs) + 1) // 2)
 
@@ -100,12 +93,11 @@ def filtered(t: testing.SyncT, xs: list[int], predicate: (int)->bool,
     total = 0
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for x in filter(predicate, xs):
-                total += x
-                count += 1
+    for _ in t.loop():
+        repeats += 1
+        for x in filter(predicate, xs):
+            total += x
+            count += 1
     testing.assertEqual(count, repeats * expected_count)
     testing.assertEqual(total, repeats * expected_sum)
 
@@ -113,12 +105,11 @@ def zipped(t: testing.SyncT, xs: list[int]):
     total = 0
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for a, b in zip(xs, xs):
-                total += a + b
-                count += 1
+    for _ in t.loop():
+        repeats += 1
+        for a, b in zip(xs, xs):
+            total += a + b
+            count += 1
     testing.assertEqual(count, repeats * len(xs))
     testing.assertEqual(total, repeats * len(xs) * (len(xs) - 1))
 
@@ -126,93 +117,91 @@ def enumerated(t: testing.SyncT, xs: list[int]):
     total = 0
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for i, x in enumerate(xs, 7):
-                total += i + x
-                count += 1
+    for _ in t.loop():
+        repeats += 1
+        for i, x in enumerate(xs, 7):
+            total += i + x
+            count += 1
     testing.assertEqual(count, repeats * len(xs))
     testing.assertEqual(total, repeats * len(xs) * (len(xs) - 1 + 7))
 
 
 def _test_control(t: testing.SyncT):
-    traverse(t, inputs())
+    traverse(t, inputs(t.scale()))
 
 def _test_enumerate(t: testing.SyncT):
-    enumerated(t, inputs())
+    enumerated(t, inputs(t.scale()))
 
 def _test_enumerate_empty(t: testing.SyncT):
     enumerated(t, [])
 
 def _test_sum(t: testing.SyncT):
-    add_ints(t, inputs())
+    add_ints(t, inputs(t.scale()))
 
 def _test_sum_empty(t: testing.SyncT):
     add_ints(t, [])
 
 def _test_sum_float(t: testing.SyncT):
+    size = t.scale()
     xs = [float(i) for i in range(size)]
     total = 0.0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += sum(xs)
+    for _ in t.loop():
+        repeats += 1
+        total += sum(xs)
     testing.assertEqual(total, float(repeats * size * (size - 1) // 2))
 
 def _test_sum_bigint(t: testing.SyncT):
+    size = t.scale()
     xs = [bigint(i) for i in range(size)]
     total = bigint(0)
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += sum(xs)
+    for _ in t.loop():
+        repeats += 1
+        total += sum(xs)
     testing.assertEqual(total, bigint(repeats * size * (size - 1) // 2))
 
 def _test_sum_start(t: testing.SyncT):
-    xs = inputs()
+    size = t.scale()
+    xs = inputs(size)
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += sum(xs, 7)
+    for _ in t.loop():
+        repeats += 1
+        total += sum(xs, 7)
     testing.assertEqual(total, repeats * (size * (size - 1) // 2 + 7))
 
 def _test_sum_range(t: testing.SyncT):
+    size = t.scale()
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += sum(range(size))
+    for _ in t.loop():
+        repeats += 1
+        total += sum(range(size))
     testing.assertEqual(total, repeats * size * (size - 1) // 2)
 
 def _test_max(t: testing.SyncT):
-    xs = inputs()
+    size = t.scale()
+    xs = inputs(size)
     total = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            total += max(xs)
+    for _ in t.loop():
+        repeats += 1
+        total += max(xs)
     testing.assertEqual(total, repeats * (size - 1))
 
 def _test_min(t: testing.SyncT):
-    xs = inputs()
+    xs = inputs(t.scale())
     total = 0
-    for scale in t.loop():
-        for _ in range(scale):
-            total += min(xs)
+    for _ in t.loop():
+        total += min(xs)
     testing.assertEqual(total, 0)
 
 def _test_max_default(t: testing.SyncT):
-    maximum(t, inputs())
+    maximum(t, inputs(t.scale()))
 
 def _test_min_default(t: testing.SyncT):
-    minimum(t, inputs())
+    minimum(t, inputs(t.scale()))
 
 def _test_max_empty(t: testing.SyncT):
     maximum(t, [])
@@ -221,10 +210,10 @@ def _test_min_empty(t: testing.SyncT):
     minimum(t, [])
 
 def _test_max_def(t: testing.SyncT):
-    maximum_def(t, inputs())
+    maximum_def(t, inputs(t.scale()))
 
 def _test_min_def(t: testing.SyncT):
-    minimum_def(t, inputs())
+    minimum_def(t, inputs(t.scale()))
 
 def _test_max_def_empty(t: testing.SyncT):
     maximum_def(t, [])
@@ -233,44 +222,47 @@ def _test_min_def_empty(t: testing.SyncT):
     minimum_def(t, [])
 
 def _test_map(t: testing.SyncT):
-    mapped(t, inputs())
+    mapped(t, inputs(t.scale()))
 
 def _test_map_empty(t: testing.SyncT):
     mapped(t, [])
 
 def _test_filter_all(t: testing.SyncT):
-    filtered(t, inputs(), keep_all, size, size * (size - 1) // 2)
+    size = t.scale()
+    filtered(t, inputs(size), keep_all, size, size * (size - 1) // 2)
 
 def _test_filter_half(t: testing.SyncT):
-    n = size // 2
-    filtered(t, inputs(), keep_even, n, n * (n - 1))
+    size = t.scale()
+    n = (size + 1) // 2
+    filtered(t, inputs(size), keep_even, n, n * (n - 1))
 
 def _test_filter_rare(t: testing.SyncT):
-    n = size // 128
-    filtered(t, inputs(), keep_rare, n, 128 * n * (n - 1) // 2)
+    size = t.scale()
+    n = (size + 127) // 128
+    filtered(t, inputs(size), keep_rare, n, 128 * n * (n - 1) // 2)
 
 def _test_filter_none(t: testing.SyncT):
-    filtered(t, inputs(), keep_none, 0, 0)
+    filtered(t, inputs(t.scale()), keep_none, 0, 0)
 
 def _test_filter_empty(t: testing.SyncT):
     filtered(t, [], keep_all, 0, 0)
 
 def _test_zip(t: testing.SyncT):
-    zipped(t, inputs())
+    zipped(t, inputs(t.scale()))
 
 def _test_zip_empty(t: testing.SyncT):
     zipped(t, [])
 
 def _test_zip_mixed(t: testing.SyncT):
-    xs = inputs()
+    size = t.scale()
+    xs = inputs(size)
     total = 0
     count = 0
     repeats = 0
-    for scale in t.loop():
-        repeats += scale
-        for _ in range(scale):
-            for a, b in zip(xs, range(size)):
-                total += a + b
-                count += 1
+    for _ in t.loop():
+        repeats += 1
+        for a, b in zip(xs, range(size)):
+            total += a + b
+            count += 1
     testing.assertEqual(count, repeats * size)
     testing.assertEqual(total, repeats * size * (size - 1))
