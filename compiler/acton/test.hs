@@ -35,9 +35,7 @@ import qualified Repl
 import qualified WatchTests
 import qualified PerfTests
 import qualified TestOutputTests
-import qualified ScaleOptionTests
-import qualified ScaleTests
-import qualified PerfMemoryTests
+import qualified PerfScalingTests
 import qualified TestGolden
 
 -- The default is to build and run each test program with the expectation that
@@ -84,12 +82,12 @@ main = do
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
-      , ScaleOptionTests.scaleOptionTests
-      , ScaleTests.scaleTests
-      , PerfMemoryTests.perfMemoryTests
+      , PerfScalingTests.scaleOptionTests
+      , PerfScalingTests.scaleTests
+      , PerfScalingTests.perfMemoryTests
       , crossCompileTests
       , pkgCliTests
-      ] ++ [ testGroup "live performance" [PerfTests.perfIntegrationTests, ScaleTests.scaleIntegrationTests]
+      ] ++ [ testGroup "live performance" [PerfTests.perfIntegrationTests, PerfScalingTests.scaleIntegrationTests]
            | lookup "ACTON_TEST_PERFORMANCE" environment == Just "1" ]
   where timeout :: Timeout
         timeout = mkTimeout (30*60*1000000)
