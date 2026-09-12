@@ -61,12 +61,28 @@ visible container limits and available memory headroom. `--max-memory` also
 accepts byte quantities such as `512MiB` or `4GiB`. The runner prints the actual
 ceiling before starting.
 
+Use `--start-scale` and `--end-scale` to choose the range of workload sizes:
+
+```sh
+acton test scale --name list_touch --start-scale 1000 --end-scale 100000
+```
+
+The runner starts at 1 unless given a different start, chooses intermediate
+sizes adaptively, and measures the exact endpoint before finishing. An explicit
+endpoint prevents statistical stopping rules from ending the study early.
+The end must be at least the start; equal values measure a single size.
+Without an endpoint, automatic exploration continues until growth settles or
+a resource limit intervenes. Time and memory ceilings apply to explicit ranges
+too, and a study that stops short reports that the endpoint was not reached.
+Completing the requested range does not establish stable growth: the report
+separately describes the available growth evidence, which can be inconclusive.
+
 `--max-time` caps the entire study across all selected tests, including process
 startup, warmup, setup and teardown. It defaults to one hour; durations support
 `ms`, `s`, `m` and `h`. Compilation is outside this budget. The parent stops a
 running sample when the deadline expires. This is a safety ceiling, not the usual
 completion condition. `--time` and `--scale` belong to `acton test perf`; use
-`--max-time` and `--start-scale` with `acton test scale`.
+`--max-time`, `--start-scale` and `--end-scale` with `acton test scale`.
 
 Scale must represent the workload dimension you want to investigate. For example,
 sorting `scale` elements tests growth with input size. Sorting the same small
@@ -92,8 +108,9 @@ warmup and teardown; it is process capacity, not a count of live application
 data. Allocation volume is recorded separately.
 
 The table and plots show mean wall time, sample ranges, time per unit of scale,
-peak RSS and observed growth between successive sizes. An exponent near 1 means
-time grew roughly linearly over those sizes; near 2 means roughly quadratically.
+allocated bytes, peak RSS and observed growth between successive sizes. An
+exponent near 1 means time grew roughly linearly over those sizes; near 2 means
+roughly quadratically.
 A growth estimate needs at least three samples at both sizes, mean times of at
 least 0.1ms and relative standard errors no greater than 5%.
 
@@ -106,7 +123,9 @@ uses three to seven samples under the same precision rule. It must remain
 reliable and its mean must stay within 20% of the original mean. Reference checks
 are separate observations, not additional curve samples. The study ends as
 inconclusive after three consecutive failed reference checks, or 20 consecutive
-sizes that remain too short or too variable.
+sizes that remain too short or too variable. With `--end-scale`, the requested
+range determines completion. Periodic reference checks still run, and unstable
+measurements prevent a stable-growth claim without shortening the range.
 
 These are practical stopping heuristics. Stable growth describes the measured
 range; it does not prove an algorithm's asymptotic complexity or rule out a bend
@@ -114,19 +133,29 @@ at a larger size. The result includes the covered scales, point and sample count
 and the recent scale range that supports its growth summary. A resource limit
 leaves a partial curve with the stopping reason.
 
-Each benchmark ends with terminal charts for time, time divided by scale and
-process peak memory. Both axes are logarithmic. Points show means, bars show
-sample ranges, and hollow points mark incomplete sampling at a size. Flat
+Each benchmark ends with terminal charts for time, time divided by scale,
+allocated bytes and process peak memory. Axes are logarithmic, except that an
+allocation chart containing zero uses a labelled linear vertical axis. Missing
+allocation data is omitted rather than shown as zero. Points show means, bars show
+sample ranges, and hollow points mark incomplete sampling at a size.
+If any timing at a size is zero because the operation is shorter than the clock
+resolution, that size is omitted from time charts but retained in the recording
+and memory charts. Zero readings do not by themselves stop the study. Flat
 time/scale suggests roughly linear time over the measured range. The wall-time
 chart includes a dashed guide for time proportional to scale, anchored at the
 largest completed size. It is an illustration, not a fitted model or a complexity
 claim. Each chart highlights its latest point and shows its latest mean.
-Cyan, violet and teal distinguish time, time/scale and memory; `--color never`
-and `NO_COLOR` select monochrome output. The summary counts curve samples
+Cyan, violet, pink and teal distinguish time, time/scale, allocations and peak
+memory; `--color never` and `NO_COLOR` select monochrome output. The summary counts curve samples
 separately from reference checks and identifies partial sizes. Kitty and
 Ghostty use inline graphics; other terminals, multiplexers and redirected output
 use Unicode plots. Very small terminals keep the table without charts. No
 external image viewer is needed, and drawing happens after measurement.
+
+Allocations measure the volume allocated inside the measured body, not retained
+structure size. Building a fixture before `t.loop()` excludes its allocation
+volume; peak RSS still includes it. The allocation chart can be rendered from
+older journals that contain allocation samples, without rerunning the study.
 
 While sampling, one terminal line shows the current scale and sample number.
 The target increases from three to five or seven when more measurements are
@@ -178,10 +207,12 @@ A live comparison selects the recorded benchmark before compilation, then
 remeasures its completed sizes in ascending order using fresh processes and the
 usual warmup and repeat policy. It finishes after those sizes rather than
 stopping early when a growth trend appears stable. `--start-scale` restricts the
-schedule to recorded sizes at or above that value. Current time and memory
-ceilings still apply; an early stop retains the partial curve and reports which
-baseline sizes were not reached. Every run writes a new recording and leaves
-the baseline untouched.
+schedule to recorded sizes at or above that value. `--end-scale` includes recorded
+sizes up to the endpoint and requires a completed baseline point at that exact
+size. Choose a recorded size or run a new study to explore a different endpoint.
+Current time and memory ceilings still apply. An early
+stop retains the partial curve and reports which baseline sizes were not reached.
+Every run writes a new recording and leaves the baseline untouched.
 
 Older journals containing multiple benchmarks require `--module` and/or `--name`
 to select one for a live comparison. Two-file reports compare matching benchmark
@@ -198,7 +229,12 @@ snapshot updates are not supported during a scaling study.
 Each sample may emit at most 1MiB on each output stream. Exceeding this limit
 stops the study with an error so diagnostic output cannot exhaust the runner's
 memory during a long study. Raw diagnostics stay in the journal; terminal charts
-retain only timing and peak memory samples for the current benchmark.
+retain only timing, allocation and peak memory samples for the current benchmark.
+Point events include `allocated_mean_bytes`, `allocated_min_bytes` and
+`allocated_max_bytes`, or `null` when allocation measurements are unavailable.
+The header records `start_scale` and the optional `end_scale`. The final event's
+`end_scale_reached` is true only when that exact endpoint completed sampling,
+false if the study stopped short, and null when no endpoint was requested.
 
 The memory guard monitors the benchmark process during execution and leaves a
 reserve for other work. Linux observes RSS and visible cgroup memory limits;
@@ -226,12 +262,33 @@ sorted copy are measured. Ordinary testing runs the body once with scale 1.
 Tests without `t.loop()`, including tests without a context, measure their whole
 invocation.
 
-Scale is a positive integer whose meaning the author defines. The example sorts
-the same input `scale` times per body. It could instead control input size or the
+Read `t.scale()` before the loop to prepare an input of the requested size:
+
+```python
+def _test_lookup(t: testing.SyncT):
+    data = {i: i for i in range(t.scale())}
+    key = t.scale() - 1
+    for scale in t.loop():
+        assert data[key] == key
+```
+
+Scale stays fixed for the entire invocation and agrees with every value yielded
+by its loop. Calibration starts a fresh invocation for each candidate scale, so
+setup is rebuilt at the correct size. Warmup and measured invocations also run
+their own setup and teardown. Repeated bodies within one invocation share its
+setup; reset mutated state as needed. The getter is available on all three
+testing contexts and returns 1 in ordinary tests. Calling `t.scale()` alone does
+not opt into bracketed measurement; use `t.loop()` as well.
+
+Scale is a positive integer whose meaning the author defines. The sorting example
+runs on the same input `scale` times per body. It could instead control input size or the
 number of concurrent actors. Document that meaning. The runner tries increasing
 scales 1, 2, 4 and so on to find enough work for useful measurement. At the end of
 calibration, it chooses whichever of the last two scales ran closer to the target
-duration, then freezes that scale. A compatible baseline supplies its recorded
+duration, then freezes that scale. This target is one tenth of the budget for
+the complete invocation, including setup and teardown, so preparation leaves
+room for repeated measurements. Reported operation timings still exclude setup
+and teardown. A compatible baseline supplies its recorded
 scale instead.
 The calibration points show observed growth; they do not establish an algorithm's
 complexity. The terminal abbreviates long curves to the first and last two
@@ -310,12 +367,15 @@ The result includes:
 - **Allocated:** average bytes reported by the GC allocation counter
   in the measured region, averaged per loop body or whole invocation. This
   measures allocation volume, not peak memory usage.
-- **Process peak RSS:** peak resident memory for the test process, below the table.
+- **Process peak RSS:** peak resident memory since the test executable started, below the table.
   This includes startup, the runtime, all threads, the test harness, calibration,
   warmup and measurement. It is recorded before computing the final statistics
   and is omitted on platforms where it is unavailable. RSS minus GC heap size
   is not used as a performance or leak verdict. No baseline delta is shown,
   because calibration and warmup can differ between runs.
+  Linux reads the executable's `VmHWM` rather than an inherited launcher peak.
+  Older Linux recordings may include the launcher's footprint; replay cannot
+  correct those recorded values.
 - **Outliers:** run averages outside the range from Q1 minus 1.5 times the
   interquartile range to Q3 plus 1.5 times that range. Quartiles use linear
   interpolation between sorted samples. Outliers remain in all statistics;
@@ -377,8 +437,9 @@ scale, whether `loop` was used, worker count and `time_budget_ms`.
 setup and teardown across the measured invocations. Both are in milliseconds and
 exclude warmup. At the top level of `measurements`, `loop_iterations` counts
 completed measured bodies and `num_iterations` counts complete invocation samples.
-`calibration` retains each observed `{scale, wall_ms}` point; these are sizing
-observations, separate from the measured samples.
+`calibration` retains each observed `{scale, wall_ms, invocation_ms}` point;
+`wall_ms` times the body and `invocation_ms` includes setup and teardown. These
+are sizing observations, separate from the measured samples.
 
 See [Performance comparisons](perf_record.md) to record a baseline and compare
 later runs, or [Stress testing](stress.md) for concurrency-focused tests.

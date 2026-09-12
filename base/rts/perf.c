@@ -1,6 +1,8 @@
 #include "perf.h"
 
 #include <errno.h>
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -18,6 +20,36 @@
 static const char *perf_status = "not enabled at process start";
 static const char *perf_scope = "process:user+kernel";
 static bool perf_enabled;
+
+bool rts_perf_peak_rss(uint64_t *bytes) {
+#if defined(__linux__)
+    // getrusage retains the launcher's high-water mark across exec on Linux.
+    // VmHWM belongs to this executable's address space instead.
+    FILE *status = fopen("/proc/self/status", "r");
+    if (!status)
+        return false;
+    char line[256], unit[3];
+    uint64_t kib;
+    bool found = false;
+    while (fgets(line, sizeof(line), status)) {
+        if (sscanf(line, "VmHWM: %" SCNu64 " %2s", &kib, unit) == 2
+                && strcmp(unit, "kB") == 0 && kib <= UINT64_MAX / 1024) {
+            *bytes = kib * 1024;
+            found = true;
+            break;
+        }
+    }
+    fclose(status);
+    return found;
+#else
+    uv_rusage_t usage;
+    if (uv_getrusage(&usage) != 0)
+        return false;
+    // libuv normalizes ru_maxrss to KiB on supported platforms.
+    *bytes = usage.ru_maxrss * 1024;
+    return true;
+#endif
+}
 
 #if defined(__linux__) && defined(PERF_ATTR_SIZE_VER7)
 static int perf_cycles_fd = -1;

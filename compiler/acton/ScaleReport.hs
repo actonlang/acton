@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module ScaleReport
-  ( ScaleData, ScaleSeries(..), ScaleRecording(..), readScaleRecording, printScaleRecording
+  ( ScaleData, ScaleSample(..), ScaleSeries(..), ScaleRecording(..), readScaleRecording, printScaleRecording
   , scaleSeriesReason, addScaleEvent, scaleCharts, scaleSummary, printScaleReport
   , Chart(..), ChartKind(..), ChartPoint(..), chartGuide, chartText, chartPixels, kittyImage, kittyTerminal
   ) where
@@ -8,7 +8,7 @@ module ScaleReport
 import Codec.Compression.Zlib (compress)
 import Control.Exception (bracket_)
 import Control.Applicative ((<|>))
-import Control.Monad (forM_, when)
+import Control.Monad (forM_, unless, when)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Types as Aeson
@@ -31,9 +31,16 @@ import TestPerf (perfNumber, perfInfo, perfSamplingReason)
 import TestFormat (testColorApply, testColorBold)
 import Text.Printf (printf)
 
--- Only accepted curve samples are retained: (point complete, [(wall ms, RSS)]).
+-- Only accepted curve samples are retained, with optional allocation data for
+-- older recordings. Missing allocation measurements must not become zeros.
 -- Diagnostics remain in the journal, not in the chart's in-memory history.
-type ScaleData = IM.IntMap (Bool, [(Double, Double)])
+type ScaleData = IM.IntMap (Bool, [ScaleSample])
+
+data ScaleSample = ScaleSample
+    { sampleWall :: !Double
+    , sampleRSS :: !Double
+    , sampleAllocated :: !(Maybe Double)
+    } deriving (Eq, Show)
 
 data ScaleSeries = ScaleSeries
     { seriesData :: ScaleData
@@ -138,18 +145,24 @@ printScaleRecording useColor path baselinePath = do
     forM_ baseline $ \old -> putStrLn ("Baseline: " ++ show (recordingPath old))
     when (all (IM.null . seriesData) (M.elems reports)) $
       putStrLn "No accepted measurements in this recording."
-    forM_ (M.toAscList pairs) $ \((modName, testName), (current, old)) -> do
+    forM_ (M.toAscList pairs) $ \((modName, testName), (new, old)) -> do
       forM_ baseline $ \previous -> do
         putStrLn ("Current: " ++ clean (takeFileName path))
         putStrLn ("Baseline: " ++ clean (takeFileName (recordingPath previous)))
-      printScaleReport useColor (modName ++ "." ++ testName) (seriesData current) (maybe IM.empty seriesData old)
-      forM_ (seriesReason current) (putStrLn . ("  " ++) . clean)
+      printScaleReport useColor (modName ++ "." ++ testName) (seriesData new) (maybe IM.empty seriesData old)
+      endpointStatus "  " current new
+      forM_ baseline $ \recording -> forM_ old (endpointStatus "  Baseline: " recording)
+      forM_ (seriesReason new) (putStrLn . ("  " ++) . clean)
       forM_ (old >>= seriesReason) (putStrLn . ("  Baseline: " ++) . clean)
     putStrLn (maybe "Recording is incomplete: no completion event was recorded." (("Stopped: " ++) . clean) (recordingStopped current))
     forM_ baseline $ \old -> putStrLn
       (maybe "Baseline is incomplete: no completion event was recorded." (("Baseline stopped: " ++) . clean) (recordingStopped old))
   where
     clean = map (\c -> if isPrint c then c else ' ')
+    endpointStatus prefix recording series =
+      forM_ (Aeson.parseMaybe (Aeson..: "end_scale") (recordingHeader recording)) $ \target ->
+        unless (maybe False fst (IM.lookup target (seriesData series))) $
+          putStrLn (prefix ++ "Requested end scale " ++ show target ++ " was not reached")
 
 data ChartPoint = ChartPoint
     { chartScale :: Double
@@ -159,12 +172,13 @@ data ChartPoint = ChartPoint
     , chartComplete :: Bool
     } deriving (Eq, Show)
 
-data ChartKind = WallTime | TimePerScale | PeakMemory deriving (Eq, Show)
+data ChartKind = WallTime | TimePerScale | Allocated | PeakMemory deriving (Eq, Show)
 data Chart = Chart ChartKind [ChartPoint] [ChartPoint] deriving (Eq, Show)
 
 chartStyle :: ChartKind -> (String, [Int])
 chartStyle WallTime = ("Wall time (ms)", [56, 189, 248])
 chartStyle TimePerScale = ("Time / scale (µs)", [192, 132, 252])
+chartStyle Allocated = ("Allocated (KiB)", [244, 114, 182])
 chartStyle PeakMemory = ("Process peak memory (MiB)", [45, 212, 191])
 
 scaleSummary :: ScaleData -> String
@@ -200,23 +214,32 @@ addScaleEvent event points = fromMaybe points $ do
         , Just (Aeson.Object result) <- KM.lookup "result" event -> do
             wall <- perfNumber result "avg_wall_duration"
             rss <- perfNumber result "peak_rss"
-            if wall <= 0 || rss <= 0 then Nothing else
-              wall `seq` rss `seq` Just (IM.insertWith
-                (\(_, new) (done, old) -> (done, new ++ old)) n (False, [(wall, rss)]) points)
+            let allocated = case perfNumber result "mem_usage_delta_avg" of
+                  Just bytes | bytes >= 0 -> Just bytes
+                  _ -> Nothing
+            if wall < 0 || rss <= 0 then Nothing else
+              let sample = ScaleSample wall rss allocated
+              in sample `seq` Just (IM.insertWith
+                (\(_, new) (done, old) -> (done, new ++ old)) n (False, [sample]) points)
       _ -> Nothing
 
 scaleCharts :: ScaleData -> ScaleData -> [Chart]
 scaleCharts points baseline =
-    [ chart WallTime (\_ (wall, _) -> wall)
-    , chart TimePerScale (\n (wall, _) -> wall * 1000 / n)
-    , chart PeakMemory (\_ (_, rss) -> rss / 1048576)
+    [ chart WallTime (\_ sample -> wall sample)
+    , chart TimePerScale (\n sample -> (* (1000 / n)) <$> wall sample)
+    , chart Allocated (\_ sample -> (/ 1024) <$> sampleAllocated sample)
+    , chart PeakMemory (\_ sample -> Just (sampleRSS sample / 1048576))
     ]
   where
+    -- A logarithmic time chart cannot represent a zero clock reading. Omit
+    -- the whole point, not individual samples that would bias its statistics.
+    wall sample = if sampleWall sample > 0 then Just (sampleWall sample) else Nothing
     chart title value = Chart title (series value points) (series value baseline)
     series value dataPoints =
       [ ChartPoint scale (minimum ys) (sum ys / fromIntegral (length ys)) (maximum ys) done
       | (n, (done, xs)) <- IM.toAscList dataPoints, not (null xs)
-      , let scale = fromIntegral n; ys = map (value scale) xs ]
+      , let scale = fromIntegral n
+      , Just ys <- [mapM (value scale) xs] ]
 
 -- Be conservative without querying stdin or consuming the user's keystrokes.
 -- Multiplexers get text until their graphics passthrough is supported here.
@@ -242,8 +265,11 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
       putStrLn ("\n" ++ paint [testColorBold] ("Scaling charts: " ++ map (\c -> if isPrint c then c else ' ') name))
       putStrLn (scaleSummary points)
       when (not (IM.null baseline)) (putStrLn ("Baseline: " ++ scaleSummary baseline))
-      putStrLn "Logarithmic axes; means and min–max ranges; hollow markers = partial points."
-      forM_ (scaleCharts points baseline) $ \chart@(Chart kind _ old) -> do
+      putStrLn "Logarithmic axes unless labelled; means and min–max ranges; hollow markers = partial points."
+      when (any (any ((== 0) . sampleWall) . snd) (IM.elems points ++ IM.elems baseline)) $
+        putStrLn "Time charts omit sizes with zero clock readings (below resolution); memory charts retain them."
+      let charts = scaleCharts points baseline
+      forM_ [chart | chart@(Chart _ current old) <- charts, not (null current && null old)] $ \chart@(Chart kind _ old) -> do
         let rgb = snd (chartStyle kind)
             accent = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
             style row line
@@ -252,6 +278,7 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
               | otherwise = line
         when (not (null old)) $
           putStrLn (paint [accent] "  ● ━ current" ++ "    " ++ paint [if graphics then "\ESC[38;2;251;146;60m" else accent] "◆ ┄ baseline" ++ "    ◈ overlapping points")
+        when (linearAxis chart) (putStrLn "  Linear allocation axis, including zero.")
         putStr (unlines (zipWith style [0..] (chartText graphics width height chart)))
         when graphics $ do
           -- The text reserves space first, including when output scrolls.
@@ -265,6 +292,9 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
           _ -> return ()
         putStrLn ""
       putStrLn "Flat time/scale means roughly linear time over these sizes."
+      putStrLn "Allocated bytes cover the measured region, not retained structure size."
+      when (any (\(Chart kind current old) -> kind == Allocated && null current && null old) charts) $
+        putStrLn "Allocation measurements are unavailable in this recording."
       putStrLn "Peak memory includes process startup, setup, warmup and teardown."
       hFlush stdout
 
@@ -272,10 +302,15 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
 -- differences from looking like large changes. Constant series still have range.
 layout :: Chart -> ([(Double, String)], [(Double, String)], [ChartPoint], [ChartPoint], [(Double, Double)])
 layout (Chart _ [] []) = ([], [], [], [], [])
-layout chart@(Chart _ points baseline) = (ticks xbounds, ticks ybounds, map project points, map project baseline, guide)
+layout chart@(Chart _ points baseline) = (ticks xbounds, yticks, map project points, map project baseline, guide)
   where
     xbounds = bounds (map chartScale (points ++ baseline))
-    ybounds = bounds (concatMap (\p -> [chartMinimum p, chartMaximum p]) (points ++ baseline))
+    values = concatMap (\p -> [chartMinimum p, chartMaximum p]) (points ++ baseline)
+    ybounds = if linearAxis chart then (0, if maximum values > 0 then maximum values else 1) else bounds values
+    ypos value = if linearAxis chart then value / snd ybounds else position ybounds value
+    yticks = if linearAxis chart
+      then [(n, printf "%.3g" (n * snd ybounds)) | n <- [0, 0.25, 0.5, 0.75, 1]]
+      else ticks ybounds
     bounds values =
       let lo = logBase 10 (minimum values); hi = logBase 10 (maximum values)
           lower = fromIntegral (floor (lo + 1e-10) :: Int)
@@ -287,7 +322,7 @@ layout chart@(Chart _ points baseline) = (ticks xbounds, ticks ybounds, map proj
       | n <- [ceiling lo, ceiling lo + max 1 (ceiling ((hi - lo) / 4)) .. floor hi :: Int] ]
     -- Clip before rasterization: clamping every pixel would draw a false line
     -- along the bottom edge wherever the guide lies below the measured range.
-    guide = case [(position xbounds n, position ybounds t) | (n, t) <- chartGuide chart] of
+    guide = case [(position xbounds n, ypos t) | (n, t) <- chartGuide chart] of
       [(ax, ay), (bx, by)] | bx > ax && by > ay ->
         let slope = (by - ay) / (bx - ax)
             left = max ax (ax - ay / slope)
@@ -295,9 +330,13 @@ layout chart@(Chart _ points baseline) = (ticks xbounds, ticks ybounds, map proj
         in [(u, ay + (u - ax) * slope) | left < right, u <- [left, right]]
       _ -> []
     project p = p { chartScale = position xbounds (chartScale p)
-                  , chartMinimum = position ybounds (chartMinimum p)
-                  , chartMean = position ybounds (chartMean p)
-                  , chartMaximum = position ybounds (chartMaximum p) }
+                  , chartMinimum = ypos (chartMinimum p)
+                  , chartMean = ypos (chartMean p)
+                  , chartMaximum = ypos (chartMaximum p) }
+
+linearAxis :: Chart -> Bool
+linearAxis (Chart Allocated points baseline) = any ((== 0) . chartMinimum) (points ++ baseline)
+linearAxis _ = False
 
 chartText :: Bool -> Int -> Int -> Chart -> [String]
 chartText graphics width height chart@(Chart kind raw _) =

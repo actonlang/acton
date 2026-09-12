@@ -79,11 +79,10 @@ int64_t actonQ_rtsQ_rss (B_SysCap cap) {
 }
 
 B_u64 actonQ_rtsQ_get_peak_rss (B_SysCap cap) {
-    uv_rusage_t usage;
-    if (uv_getrusage(&usage) != 0)
+    uint64_t bytes;
+    if (!rts_perf_peak_rss(&bytes))
         return (B_u64)B_None;
-    // libuv normalizes ru_maxrss to KiB on all supported platforms.
-    return toB_u64(usage.ru_maxrss * 1024);
+    return toB_u64(bytes);
 }
 
 B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {

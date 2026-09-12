@@ -66,7 +66,7 @@ def get_rss(cap: SysCap) -> u64:
     NotImplemented
 
 def get_peak_rss(cap: SysCap) -> ?u64:
-    """Get the process lifetime peak resident set size in bytes.
+    """Get this executable's peak resident set size in bytes.
 
     Includes startup and all threads. Returns None if unavailable.
     """
