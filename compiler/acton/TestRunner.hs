@@ -16,8 +16,7 @@ import qualified FileUtil
 import TestFormat
 import TestOutput
 import TestPerf
-import TestScale
-import ScaleReport (ScaleRecording(..), ScaleSeries(..), readScaleRecording, scaleSeriesReason)
+import PerfScaling
 import TestUI
 import Control.Applicative ((<|>))
 import Control.Concurrent.Async

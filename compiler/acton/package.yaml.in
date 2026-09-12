@@ -82,10 +82,8 @@ executables:
       - TestFormat
       - TestOutput
       - TestPerf
-      - PerfMemory
       - TestRunner
-      - TestScale
-      - ScaleReport
+      - PerfScaling
       - TestUI
     ghc-options:
       - -threaded
