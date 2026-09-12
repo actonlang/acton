@@ -35,11 +35,20 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
-- Allow sets whose elements are hashable to be used as dictionary keys and
-  nested inside other sets. [#3103]
+- Add immutable `iset` values whose hashable elements make the set hashable as
+  a whole, allowing them to be used as dictionary keys and nested inside other
+  sets while mutable `set` values remain unhashable. [#3103] [#3109]
+- Speed up `==` and `!=` for `str`, `bytes`, `bytearray`, `bigint`, `list`,
+  `dict`, and tuple values by returning immediately when both operands refer to
+  the same object instead of comparing their contents. This avoids unnecessary
+  work for large values and containers, and means lists, dictionaries, and
+  tuples compare equal to themselves even when they contain `NaN`. [#3106]
 - Implement builtin helpers such as `filter`, `map`, `max`, `min`, `sum`, and
   `zip` in Acton and streamline collection iteration to avoid allocation-heavy
   iterator handling in common builtin operations. [#3104]
+- Drain queued writes before closing server-side TCP connections, preventing
+  large response payloads from being truncated when
+  `TCPListenConnection.close()` follows `write()`. [#3110]
 - Use a stable min-heap for runtime timers, making large batches of `after`
   callbacks with increasing or equal deadlines scale logarithmically while
   preserving FIFO order for equal deadlines. [#3092]
@@ -53,10 +62,28 @@
   dependencies, and matching TLSuv's active mbed TLS and keychain source set.
   [#3093] [#3094]
 
+### Documentation
+- Document division and remainder semantics for bounded signed and unsigned
+  integers and `bigint`, including quotient rounding and remainder signs for
+  negative operands. [#3114]
+
 ### Testing & CI
-- Restore recorded baseline comparisons for `acton test perf` and expand
-  performance reports with timing distributions, GC and memory statistics, peak
-  RSS, and optional CPU, instruction, cycle, and IPC counters. [#3105]
+- Expand performance testing into a repeatable workflow for measuring
+  individual benchmarks and how they scale with workload size. [#3105] [#3107]
+  [#3112] [#3113] [#3115] [#3117]
+  - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
+    configurable time budget, warms up and measures fresh invocations, accepts
+    explicit or recorded workload scales, and includes dedicated builtin and
+    collection benchmarks.
+  - Reports compare recorded baselines and show timing distributions, GC,
+    allocation and memory statistics, peak RSS, and optional CPU, instruction,
+    cycle, and IPC counters, with consistent elapsed-time measurement on macOS.
+  - `acton test scale` varies `t.scale()` workloads across configurable start
+    and end bounds, samples until growth stabilizes or resource limits stop the
+    study, and supports terminal charts, journals, replay, and comparison with
+    recorded studies.
+- Update standard-library tests to the supported testing signatures, restoring
+  discovery and execution of tests that used the legacy callback form. [#3111]
 
 ## [0.30.0] - 2026-09-03
 
@@ -4852,6 +4879,16 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3103]: https://github.com/actonlang/acton/pull/3103
 [#3104]: https://github.com/actonlang/acton/pull/3104
 [#3105]: https://github.com/actonlang/acton/pull/3105
+[#3106]: https://github.com/actonlang/acton/pull/3106
+[#3107]: https://github.com/actonlang/acton/pull/3107
+[#3109]: https://github.com/actonlang/acton/pull/3109
+[#3110]: https://github.com/actonlang/acton/pull/3110
+[#3111]: https://github.com/actonlang/acton/pull/3111
+[#3112]: https://github.com/actonlang/acton/pull/3112
+[#3113]: https://github.com/actonlang/acton/pull/3113
+[#3114]: https://github.com/actonlang/acton/pull/3114
+[#3115]: https://github.com/actonlang/acton/pull/3115
+[#3117]: https://github.com/actonlang/acton/pull/3117
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
