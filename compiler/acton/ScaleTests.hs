@@ -297,9 +297,9 @@ scaleTests = testGroup "performance scaling studies"
       withSystemTempDirectory "acton-scale-replay" $ \directory -> do
         (gopts, opts) <- parseScale (["--max-memory", "128MiB", "--max-time", "30s", "--json"] ++ args)
         let sizes = [1,3..49]
-            points = IM.fromList [(n, (True, [ScaleSample 0.001 1048576 Nothing])) | n <- sizes]
+            points = IM.fromList [(n, (True, [ScaleSample 0.001 Nothing])) | n <- sizes]
             Aeson.Object raw = trRaw (modelResult 1 0.001)
-            series = ScaleSeries (IM.insert 50 (False, [ScaleSample 0.001 1048576 Nothing]) points) (perfInfo raw) Nothing Nothing
+            series = ScaleSeries (IM.insert 50 (False, [ScaleSample 0.001 Nothing]) points) (perfInfo raw) Nothing Nothing
             baseline = ScaleRecording "old.jsonl" KM.empty (M.singleton ("sample", "test") series) Nothing
             implementation = replicate 64 'a'
         calls <- newIORef []
