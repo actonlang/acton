@@ -889,6 +889,8 @@ extension list[A] (Sequence[A]):
     NotImplemented
 extension list[A(Eq)] (Container[A]):
     NotImplemented
+extension list[A(Eq)] (Eq):
+    NotImplemented
 extension list[A(Ord)] (Ord):
     NotImplemented
 

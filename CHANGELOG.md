@@ -35,6 +35,8 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Allow list equality and inequality when elements implement only `Eq`,
+  while ordering comparisons continue to require `Ord`.
 - Allow sets whose elements are hashable to be used as dictionary keys and
   nested inside other sets. [#3103]
 - Implement builtin helpers such as `filter`, `map`, `max`, `min`, `sum`, and
