@@ -53,8 +53,7 @@ import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
-import TestScale (validateScalingOptions)
-import ScaleReport (printScaleRecording)
+import PerfScaling (validateScalingOptions, printScaleRecording)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, throwTo)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
