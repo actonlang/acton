@@ -11,7 +11,7 @@ import qualified Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map.Strict as M
-import Data.List (foldl', isInfixOf)
+import Data.List (foldl', isInfixOf, isPrefixOf)
 import Data.Word (Word8)
 import ScaleReport
 import System.Directory
@@ -36,22 +36,20 @@ scaleReportTests = testGroup "terminal charts"
         [ Chart WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False] []
         , Chart TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False] []
         , Chart Allocated [] []
-        , Chart PeakMemory [ChartPoint 2 1 1 1 True, ChartPoint 4 2 2 2 False] []
         ] (scaleCharts points IM.empty)
       assertEqual "summary distinguishes finished sizes and accepted partial samples"
         "1 size + 1 partial · 6 curve samples · scale 2 … 4" (scaleSummary points)
-  , testCase "zero clock readings retain coverage and memory without biasing time charts" $ do
-      let events = [sample 1 t 1048576 True False | t <- [0, 0.001, 0.002]]
+  , testCase "zero clock readings retain coverage and allocations without biasing time charts" $ do
+      let events = [allocated 1024 (sample 1 t 1048576 True False) | t <- [0, 0.001, 0.002]]
                 ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 1)],
-                    sample 2 0.002 2097152 True False]
+                    allocated 2048 (sample 2 0.002 2097152 True False)]
           points = foldl' (flip addScaleEvent) IM.empty events
       assertEqual "all samples remain in the recorded coverage"
         "1 size + 1 partial · 4 curve samples · scale 1 … 2" (scaleSummary points)
-      assertEqual "a time point is omitted in full, while its memory remains visible"
+      assertEqual "a time point is omitted in full, while its allocations remain visible"
         [ Chart WallTime [ChartPoint 2 0.002 0.002 0.002 False] []
         , Chart TimePerScale [ChartPoint 2 1 1 1 False] []
-        , Chart Allocated [] []
-        , Chart PeakMemory [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
+        , Chart Allocated [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
         ] (scaleCharts points IM.empty)
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
         KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
@@ -59,11 +57,7 @@ scaleReportTests = testGroup "terminal charts"
           assertEqual (out ++ err) ExitSuccess code
           assertBool out ("Time charts omit sizes with zero clock readings" `isInfixOf` out)
   , testCase "allocation charts retain zero, ranges and missing measurements" $ do
-      let allocated bytes = KM.mapWithKey (\key value -> case (key, value) of
-            ("result", Aeson.Object result) -> Aeson.Object
-              (KM.insert "mem_usage_delta_avg" (Aeson.toJSON (bytes :: Double)) result)
-            _ -> value)
-          events = [allocated n (sample 1 1 1048576 True False) | n <- [0,1024,2048]]
+      let events = [allocated n (sample 1 1 1048576 True False) | n <- [0,1024,2048]]
                 ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 1)],
                     allocated 0 (sample 2 2 1048576 True False),
                     allocated 1024 (sample 4 4 1048576 True False),
@@ -84,6 +78,7 @@ scaleReportTests = testGroup "terminal charts"
         KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
           (code, out, err) <- run
           assertEqual (out ++ err) ExitSuccess code
+          assertEqual "reports show three charts" 3 (length (filter ("  ◆ " `isPrefixOf`) (lines out)))
           assertBool out ("Linear allocation axis" `isInfixOf` out)
           assertBool "older journals already contain allocation samples" ("Allocated (KiB)" `isInfixOf` out)
           assertBool "known allocation data is not labelled unavailable"
@@ -110,6 +105,8 @@ scaleReportTests = testGroup "terminal charts"
                  "Reference measurements did not settle", "Stopped: all selected studies finished"] $ \text ->
             assertBool out (text `isInfixOf` out)
           assertBool "plain reports have no terminal escapes" (notElem '\ESC' (out ++ err))
+          assertEqual "each test has two charts when allocations are unavailable" 4
+            (length (filter ("  ◆ " `isPrefixOf`) (lines out)))
           assertEqual "replay never changes the recording" before =<< BS.readFile path
           assertEqual "replay creates no build or measurement files" [takeFileName path] =<< listDirectory (takeDirectory path)
   , testCase "replay requires a completed point at the requested endpoint" $ do
@@ -152,7 +149,7 @@ scaleReportTests = testGroup "terminal charts"
           assertBool "bad input is not presented as a valid report" (not ("Scaling charts:" `isInfixOf` out))
   , testCase "comparisons retain sample identity and reject a later incompatible sample" $ do
       let named = KM.insert "module" (Aeson.String "alpha") . KM.insert "test" (Aeson.String "same")
-          measured machine workers n = named $ KM.mapWithKey
+          measured machine workers n = named $ allocated (fromIntegral n * 1024) $ KM.mapWithKey
             (\key value -> case (key, value) of
               ("result", Aeson.Object result) -> Aeson.Object (KM.insert "perf_info" (identity machine workers n) result)
               _ -> value) (sample n 10 1048576 True False)
@@ -177,6 +174,8 @@ scaleReportTests = testGroup "terminal charts"
         (code, out, err) <- compare
         assertEqual (out ++ err) ExitSuccess code
         assertBool out ("baseline" `isInfixOf` out && "current" `isInfixOf` out)
+        assertEqual "comparisons still show three charts" 3
+          (length (filter ("  ◆ " `isPrefixOf`) (lines out)))
         forM_ [("machine-b", 2, "machine identity"), ("machine-a", 3, "worker count")] $ \(machine, workers, reason) -> do
           BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
             [header 3, measured "machine-a" 2 1, measured machine workers 3, ending]])
@@ -190,7 +189,7 @@ scaleReportTests = testGroup "terminal charts"
         (chartGuide (Chart WallTime points []))
       forM_ [Chart WallTime [] [], Chart WallTime [head points] [],
              Chart WallTime [p {chartComplete = False} | p <- points] [],
-             Chart TimePerScale points [], Chart PeakMemory points []] $ \chart ->
+             Chart TimePerScale points [], Chart Allocated points []] $ \chart ->
         assertEqual "only wall time with a completed span has a guide" [] (chartGuide chart)
   , testCase "a guide below the visible range is clipped rather than clamped to the axis" $ do
       let chart = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1 1 1 True] []
@@ -275,6 +274,10 @@ scaleReportTests = testGroup "terminal charts"
         (BL.toStrict (decompress (BL.fromStrict compressed)))
   ]
   where
+    allocated bytes = KM.mapWithKey (\key value -> case (key, value) of
+      ("result", Aeson.Object result) -> Aeson.Object
+        (KM.insert "mem_usage_delta_avg" (Aeson.toJSON (bytes :: Double)) result)
+      _ -> value)
     header :: Int -> Aeson.Object
     header version = KM.fromList [("event", Aeson.String "study"), ("version", Aeson.toJSON version)]
     ending = KM.fromList [("event", Aeson.String "end"), ("reason", Aeson.String "all selected studies finished")]

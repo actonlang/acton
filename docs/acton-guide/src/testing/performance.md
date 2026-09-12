@@ -107,7 +107,7 @@ a time budget. Natural GC remains enabled. Peak RSS includes startup, setup,
 warmup and teardown; it is process capacity, not a count of live application
 data. Allocation volume is recorded separately.
 
-The table and plots show mean wall time, sample ranges, time per unit of scale,
+The table shows mean wall time, sample ranges, time per unit of scale,
 allocated bytes, peak RSS and observed growth between successive sizes. An
 exponent near 1 means time grew roughly linearly over those sizes; near 2 means
 roughly quadratically.
@@ -133,20 +133,20 @@ at a larger size. The result includes the covered scales, point and sample count
 and the recent scale range that supports its growth summary. A resource limit
 leaves a partial curve with the stopping reason.
 
-Each benchmark ends with terminal charts for time, time divided by scale,
-allocated bytes and process peak memory. Axes are logarithmic, except that an
-allocation chart containing zero uses a labelled linear vertical axis. Missing
+Each benchmark ends with three terminal charts: time, time divided by scale,
+and allocated bytes. Axes are logarithmic, except that an allocation chart
+containing zero uses a labelled linear vertical axis. Missing
 allocation data is omitted rather than shown as zero. Points show means, bars show
 sample ranges, and hollow points mark incomplete sampling at a size.
 If any timing at a size is zero because the operation is shorter than the clock
 resolution, that size is omitted from time charts but retained in the recording
-and memory charts. Zero readings do not by themselves stop the study. Flat
+and allocation chart. Zero readings do not by themselves stop the study. Flat
 time/scale suggests roughly linear time over the measured range. The wall-time
 chart includes a dashed guide for time proportional to scale, anchored at the
 largest completed size. It is an illustration, not a fitted model or a complexity
 claim. Each chart highlights its latest point and shows its latest mean.
-Cyan, violet, pink and teal distinguish time, time/scale, allocations and peak
-memory; `--color never` and `NO_COLOR` select monochrome output. The summary counts curve samples
+Cyan, violet and pink distinguish time, time/scale and allocations;
+`--color never` and `NO_COLOR` select monochrome output. The summary counts curve samples
 separately from reference checks and identifies partial sizes. Kitty and
 Ghostty use inline graphics; other terminals, multiplexers and redirected output
 use Unicode plots. Very small terminals keep the table without charts. No
@@ -229,7 +229,7 @@ snapshot updates are not supported during a scaling study.
 Each sample may emit at most 1MiB on each output stream. Exceeding this limit
 stops the study with an error so diagnostic output cannot exhaust the runner's
 memory during a long study. Raw diagnostics stay in the journal; terminal charts
-retain only timing, allocation and peak memory samples for the current benchmark.
+retain only timing and allocation samples for the current benchmark.
 Point events include `allocated_mean_bytes`, `allocated_min_bytes` and
 `allocated_max_bytes`, or `null` when allocation measurements are unavailable.
 The header records `start_scale` and the optional `end_scale`. The final event's

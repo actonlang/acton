@@ -38,7 +38,6 @@ type ScaleData = IM.IntMap (Bool, [ScaleSample])
 
 data ScaleSample = ScaleSample
     { sampleWall :: !Double
-    , sampleRSS :: !Double
     , sampleAllocated :: !(Maybe Double)
     } deriving (Eq, Show)
 
@@ -172,14 +171,13 @@ data ChartPoint = ChartPoint
     , chartComplete :: Bool
     } deriving (Eq, Show)
 
-data ChartKind = WallTime | TimePerScale | Allocated | PeakMemory deriving (Eq, Show)
+data ChartKind = WallTime | TimePerScale | Allocated deriving (Eq, Show)
 data Chart = Chart ChartKind [ChartPoint] [ChartPoint] deriving (Eq, Show)
 
 chartStyle :: ChartKind -> (String, [Int])
 chartStyle WallTime = ("Wall time (ms)", [56, 189, 248])
 chartStyle TimePerScale = ("Time / scale (µs)", [192, 132, 252])
 chartStyle Allocated = ("Allocated (KiB)", [244, 114, 182])
-chartStyle PeakMemory = ("Process peak memory (MiB)", [45, 212, 191])
 
 scaleSummary :: ScaleData -> String
 scaleSummary points = case (IM.lookupMin points, IM.lookupMax points) of
@@ -213,12 +211,11 @@ addScaleEvent event points = fromMaybe points $ do
         , KM.lookup "reference" event /= Just (Aeson.Bool True)
         , Just (Aeson.Object result) <- KM.lookup "result" event -> do
             wall <- perfNumber result "avg_wall_duration"
-            rss <- perfNumber result "peak_rss"
             let allocated = case perfNumber result "mem_usage_delta_avg" of
                   Just bytes | bytes >= 0 -> Just bytes
                   _ -> Nothing
-            if wall < 0 || rss <= 0 then Nothing else
-              let sample = ScaleSample wall rss allocated
+            if wall < 0 then Nothing else
+              let sample = ScaleSample wall allocated
               in sample `seq` Just (IM.insertWith
                 (\(_, new) (done, old) -> (done, new ++ old)) n (False, [sample]) points)
       _ -> Nothing
@@ -228,7 +225,6 @@ scaleCharts points baseline =
     [ chart WallTime (\_ sample -> wall sample)
     , chart TimePerScale (\n sample -> (* (1000 / n)) <$> wall sample)
     , chart Allocated (\_ sample -> (/ 1024) <$> sampleAllocated sample)
-    , chart PeakMemory (\_ sample -> Just (sampleRSS sample / 1048576))
     ]
   where
     -- A logarithmic time chart cannot represent a zero clock reading. Omit
@@ -267,7 +263,7 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
       when (not (IM.null baseline)) (putStrLn ("Baseline: " ++ scaleSummary baseline))
       putStrLn "Logarithmic axes unless labelled; means and min–max ranges; hollow markers = partial points."
       when (any (any ((== 0) . sampleWall) . snd) (IM.elems points ++ IM.elems baseline)) $
-        putStrLn "Time charts omit sizes with zero clock readings (below resolution); memory charts retain them."
+        putStrLn "Time charts omit sizes with zero clock readings (below resolution); allocation data is retained."
       let charts = scaleCharts points baseline
       forM_ [chart | chart@(Chart _ current old) <- charts, not (null current && null old)] $ \chart@(Chart kind _ old) -> do
         let rgb = snd (chartStyle kind)
@@ -295,7 +291,6 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
       putStrLn "Allocated bytes cover the measured region, not retained structure size."
       when (any (\(Chart kind current old) -> kind == Allocated && null current && null old) charts) $
         putStrLn "Allocation measurements are unavailable in this recording."
-      putStrLn "Peak memory includes process startup, setup, warmup and teardown."
       hFlush stdout
 
 -- Positions are fractions of the plot area. A decade grid keeps small timing
