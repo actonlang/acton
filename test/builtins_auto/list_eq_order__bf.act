@@ -1,0 +1,10 @@
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item (Eq):
+    def __eq__(self, other: Item) -> bool:
+        return self.n == other.n
+
+def before(a: list[Item], b: list[Item]) -> bool:
+    return a < b

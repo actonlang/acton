@@ -1,0 +1,90 @@
+# Existing list comparisons use ordered elements, so they do not exercise
+# equality witnesses for elements that implement only Eq.
+class Item:
+    def __init__(self, n: int):
+        self.n = n
+
+extension Item (Eq):
+    def __eq__(self, other: Item) -> bool:
+        return self.n == other.n
+
+def same_items[A(Eq)](a: list[A], b: list[A]) -> bool:
+    return a == b and not (a != b)
+
+def same_ordered[A(Ord)](a: A, b: A) -> bool:
+    return a == b and not (a != b)
+
+def test_eq_only():
+    a = [Item(1), Item(2)]
+    b = [Item(1), Item(2)]
+    unequal = [Item(1), Item(3)]
+    reordered = [Item(2), Item(1)]
+    empty: list[Item] = []
+    another_empty: list[Item] = []
+    assert a == b and not (a != b)
+    assert a != unequal and not (a == unequal)
+    assert a != reordered and not (a == reordered)
+    assert a != [Item(1)] and not (a == [Item(1)])
+    assert empty == another_empty and not (empty != another_empty)
+    assert empty != a and not (empty == a)
+    assert same_items(a, b) and not same_items(a, unequal)
+    assert [a, empty] == [b, another_empty]
+    assert [a] != [unequal]
+    assert same_items([a], [b]) and not same_items([a], [reordered])
+
+def test_ordered():
+    a = [1, 2]
+    b = [1, 2]
+    later = [1, 3]
+    assert a == b and not (a != b)
+    assert a != later and not (a == later)
+    assert same_ordered(a, b) and not same_ordered(a, later)
+    assert not (a < b) and a <= b and not (a > b) and a >= b
+    assert a < later and a <= later and not (a > later) and not (a >= later)
+    assert later > a and later >= a and not (later < a) and not (later <= a)
+    assert [1] < a and [1] <= a and a > [1] and a >= [1]
+
+# List equality must dispatch element __ne__, with shortcuts before dispatch.
+class NeItem:
+    def __init__(self, n: int):
+        self.n = n
+
+extension NeItem (Eq):
+    def __eq__(self, other: NeItem) -> bool:
+        raise ValueError("list equality called element __eq__")
+
+    def __ne__(self, other: NeItem) -> bool:
+        if self.n < 0 or other.n < 0:
+            raise ValueError("element comparison")
+        return self.n != other.n
+
+def test_dispatch():
+    assert [NeItem(1)] == [NeItem(1)]
+    assert not ([NeItem(1)] != [NeItem(1)])
+    bad = [NeItem(-1)]
+    assert bad == bad and not (bad != bad)
+    assert bad != [] and not (bad == [])
+    assert [NeItem(0), NeItem(-1)] != [NeItem(1), NeItem(-1)]
+    assert not ([NeItem(0), NeItem(-1)] == [NeItem(1), NeItem(-1)])
+    try:
+        assert bad == [NeItem(-1)]
+    except ValueError as e:
+        assert e.error_message == "element comparison"
+    else:
+        raise ValueError("list == swallowed an element exception")
+    try:
+        assert bad != [NeItem(-1)]
+    except ValueError as e:
+        assert e.error_message == "element comparison"
+    else:
+        raise ValueError("list != swallowed an element exception")
+
+actor main(env):
+    try:
+        test_eq_only()
+        test_ordered()
+        test_dispatch()
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)
