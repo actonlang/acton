@@ -486,7 +486,7 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                     else if isJust (C.testEndScale opts) then "Scaling study: requested range"
                     else "Scaling study: adaptive range")
                    ++ ", 3–7 samples per size, one warmup per sample")
-              say ("Safety limits: " ++ show duration ++ "ms, memory ceiling " ++ bytes cap)
+              say ("Safety limits: " ++ show duration ++ "ms, memory ceiling " ++ bytes (fromIntegral cap))
               forM_ (C.testEndScale opts) $ \target -> say ("Scale range: " ++ show firstScale ++ " … " ++ show target)
               say "Memory protection is monitored; abrupt allocations can exceed the limit."
               say ("Results: " ++ path)
@@ -524,8 +524,12 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
 milliseconds :: TimeSpec -> Double
 milliseconds t = fromIntegral (toNanoSecs t) / 1000000
 
-bytes :: Integer -> String
-bytes n = printf "%.1f MiB" (fromIntegral n / 1048576 :: Double)
+byteUnit :: Double -> (Double, String)
+byteUnit n = last ((1, "B") : [(1024 ** power, unit)
+    | (power, unit) <- zip [1..] ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"], n >= 1024 ** power])
+
+bytes :: Double -> String
+bytes n = let (divisor, unit) = byteUnit n in printf "%.2f %s" (n / divisor) unit
 
 formatPoint :: ScalePoint -> Maybe Double -> String
 formatPoint point growth =
@@ -533,13 +537,13 @@ formatPoint point growth =
         mean = fromMaybe 0 (scaleMean values)
         peak = maximum (0 : pointValues "peak_rss" point)
         allocated :: String
-        allocated = maybe "unavailable" (\n -> printf "%.3g KiB" (n / 1024))
+        allocated = maybe "unavailable" bytes
           (scaleMean =<< mapM (`perfNumber` "mem_usage_delta_avg") (pointSamples point))
         trend :: String
         trend = maybe "inconclusive" (printf "n^%.2f") growth
-    in printf "%12d  %10.3f ms  %9.3f … %9.3f ms  %10.3f µs  %13s  %10.1f MiB  %s"
+    in printf "%12d  %10.3f ms  %9.3f … %9.3f ms  %10.3f µs  %13s  %14s  %s"
          (pointScale point) mean (if null values then 0 else minimum values) (maximum (0:values))
-         (mean * 1000 / fromIntegral (pointScale point)) allocated (peak / 1048576) trend
+         (mean * 1000 / fromIntegral (pointScale point)) allocated (bytes peak) trend
 
 -- Recordings ------------------------------------------------------------------
 
@@ -709,10 +713,22 @@ data ChartPoint = ChartPoint
 data ChartKind = WallTime | TimePerScale | Allocated deriving (Eq, Show)
 data Chart = Chart ChartKind [ChartPoint] [ChartPoint] deriving (Eq, Show)
 
-chartStyle :: ChartKind -> (String, [Int])
-chartStyle WallTime = ("Wall time (ms)", [56, 189, 248])
-chartStyle TimePerScale = ("Time / scale (µs)", [192, 132, 252])
-chartStyle Allocated = ("Allocated (KiB)", [244, 114, 182])
+chartStyle :: Chart -> (String, [Int])
+chartStyle (Chart WallTime _ _) = ("Wall time (ms)", [56, 189, 248])
+chartStyle (Chart TimePerScale _ _) = ("Time / scale (µs)", [192, 132, 252])
+chartStyle chart = ("Allocated (" ++ snd (chartUnit chart) ++ ")", [244, 114, 182])
+
+-- Allocation chart values are KiB. Choose one display unit for both curves,
+-- including their ranges, without changing the plotted coordinates.
+chartUnit :: Chart -> (Double, String)
+chartUnit (Chart Allocated points baseline) =
+    let (divisor, unit) = byteUnit (1024 * maximum (0 : map chartMaximum (points ++ baseline)))
+    in (divisor / 1024, unit)
+chartUnit _ = (1, "")
+
+chartNumber :: Double -> String
+chartNumber n | n >= 1e5 || n < 0.001 = printf "%.2e" n
+              | otherwise = printf "%.*f" (max 0 (2 - floor (logBase 10 n)) :: Int) n
 
 scaleSummary :: ScaleData -> String
 scaleSummary points = case (IM.lookupMin points, IM.lookupMax points) of
@@ -781,8 +797,8 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
       when (any (any ((== 0) . sampleWall) . snd) (IM.elems points ++ IM.elems baseline)) $
         putStrLn "Time charts omit sizes with zero clock readings (below resolution); allocation data is retained."
       let charts = scaleCharts points baseline
-      forM_ [chart | chart@(Chart _ current old) <- charts, not (null current && null old)] $ \chart@(Chart kind _ old) -> do
-        let rgb = snd (chartStyle kind)
+      forM_ [chart | chart@(Chart _ current old) <- charts, not (null current && null old)] $ \chart@(Chart _ _ old) -> do
+        let rgb = snd (chartStyle chart)
             accent = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
             style row line
               | row == 0 = paint [testColorBold, accent] line
@@ -813,23 +829,26 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
 -- differences from looking like large changes. Constant series still have range.
 layout :: Chart -> ([(Double, String)], [(Double, String)], [ChartPoint], [ChartPoint], [(Double, Double)])
 layout (Chart _ [] []) = ([], [], [], [], [])
-layout chart@(Chart _ points baseline) = (ticks xbounds, yticks, map project points, map project baseline, guide)
+layout chart@(Chart _ points baseline) = (ticks 1 xbounds, yticks, map project points, map project baseline, guide)
   where
     xbounds = bounds (map chartScale (points ++ baseline))
     values = concatMap (\p -> [chartMinimum p, chartMaximum p]) (points ++ baseline)
     ybounds = if linearAxis chart then (0, if maximum values > 0 then maximum values else 1) else bounds values
     ypos value = if linearAxis chart then value / snd ybounds else position ybounds value
+    divisor = fst (chartUnit chart)
     yticks = if linearAxis chart
-      then [(n, printf "%.3g" (n * snd ybounds)) | n <- [0, 0.25, 0.5, 0.75, 1]]
-      else ticks ybounds
+      then [(n, printf "%.3g" (n * snd ybounds / divisor)) | n <- [0, 0.25, 0.5, 0.75, 1]]
+      else ticks divisor ybounds
     bounds values =
       let lo = logBase 10 (minimum values); hi = logBase 10 (maximum values)
           lower = fromIntegral (floor (lo + 1e-10) :: Int)
           upper = fromIntegral (ceiling (hi - 1e-10) :: Int)
       in if lower >= upper then (lo - 0.5, hi + 0.5) else (lower, upper)
     position (lo, hi) value = (logBase 10 value - lo) / (hi - lo)
-    ticks limits@(lo, hi) =
-      [ (position limits (10 ** fromIntegral n), if n >= 0 && n <= 3 then show (10^n :: Int) else "1e" ++ show n)
+    ticks divisor limits@(lo, hi) =
+      [ (position limits (10 ** fromIntegral n),
+         if divisor /= 1 then chartNumber (10 ** fromIntegral n / divisor)
+         else if n >= 0 && n <= 3 then show (10^n :: Int) else "1e" ++ show n)
       | n <- [ceiling lo, ceiling lo + max 1 (ceiling ((hi - lo) / 4)) .. floor hi :: Int] ]
     -- Clip before rasterization: clamping every pixel would draw a false line
     -- along the bottom edge wherever the guide lies below the measured range.
@@ -850,20 +869,18 @@ linearAxis (Chart Allocated points baseline) = any ((== 0) . chartMinimum) (poin
 linearAxis _ = False
 
 chartText :: Bool -> Int -> Int -> Chart -> [String]
-chartText graphics width height chart@(Chart kind raw _) =
+chartText graphics width height chart@(Chart _ raw _) =
     [heading] ++
     [ pad 10 (fromMaybe "" (lookup row labels)) ++ "│" ++ plotRow row | row <- [0..height-1] ] ++
     [replicate 10 ' ' ++ "└" ++ replicate width '─', "     scale " ++ xlabels]
   where
     (xticks, yticks, points, baseline, guide) = layout chart
-    title = "  ◆ " ++ fst (chartStyle kind)
+    title = "  ◆ " ++ fst (chartStyle chart)
     lastValue = case reverse raw of
-      p:_ -> "last " ++ number (chartMean p) ++ if chartComplete p then "" else " (partial)"
+      p:_ -> "last " ++ chartNumber (chartMean p / fst (chartUnit chart)) ++ if chartComplete p then "" else " (partial)"
       _ -> ""
     heading = title ++ if length title + length lastValue + 3 <= width + 11
                         then replicate (width + 11 - length title - length lastValue) ' ' ++ lastValue else ""
-    number n | n >= 1e5 || n < 0.001 = printf "%.2e" n
-             | otherwise = printf "%.*f" (max 0 (2 - floor (logBase 10 n)) :: Int) n
     labels = [(y height value, label) | (value, label) <- yticks]
     -- Give the end ticks priority and leave a gap between labels on narrow
     -- terminals. Overwriting a neighbouring label could change its number.
@@ -920,7 +937,7 @@ drawing width height cellWidth cellHeight edges = IM.fromList
            ay + round (fromIntegral (by - ay) * fromIntegral i / fromIntegral steps :: Double)) | i <- [0..steps]]
 
 chartPixels :: Bool -> Int -> Int -> Chart -> BS.ByteString
-chartPixels useColor cols rows chart@(Chart kind _ _) = BS.pack (concatMap pixel [0..width*height-1])
+chartPixels useColor cols rows chart = BS.pack (concatMap pixel [0..width*height-1])
   where
     width = cols * 8
     height = rows * 16
@@ -957,7 +974,7 @@ chartPixels useColor cols rows chart@(Chart kind _ _) = BS.pack (concatMap pixel
               | IM.member i guideLine && (i `mod` width - i `div` width) `mod` 12 < 6 -> gold
               | i `mod` width `elem` gridX || i `div` width `elem` gridY -> [128, 128, 128, 50]
               | otherwise -> [0, 0, 0, 0]
-    accent alpha = map fromIntegral (if useColor then snd (chartStyle kind) else [190, 190, 190]) ++ [alpha]
+    accent alpha = map fromIntegral (if useColor then snd (chartStyle chart) else [190, 190, 190]) ++ [alpha]
     recorded = (if useColor then [251, 146, 60] else [235, 235, 235]) ++ [255]
     gold = (if useColor then [251, 191, 36] else [150, 150, 150]) ++ [210]
 

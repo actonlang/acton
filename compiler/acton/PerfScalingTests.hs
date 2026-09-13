@@ -1023,6 +1023,8 @@ scaleReportTests = testGroup "terminal charts"
                                    ChartPoint 2 (16/1024) (16/1024) (16/1024) True] []
       assertBool "small allocation volumes use the full vertical range"
         ('●' `elem` concat (take 3 (chartText False 67 12 small)))
+      assertBool "small allocation volumes use bytes"
+        ("Allocated (B)" `isInfixOf` head (chartText False 67 12 small))
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
         KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
           (code, out, err) <- run
@@ -1032,6 +1034,20 @@ scaleReportTests = testGroup "terminal charts"
           assertBool "older journals already contain allocation samples" ("Allocated (KiB)" `isInfixOf` out)
           assertBool "known allocation data is not labelled unavailable"
             (not ("Allocation measurements are unavailable" `isInfixOf` out))
+  , testCase "allocation comparisons share binary units across both curves and ranges" $ do
+      let current = [ChartPoint 1 1024 1024 1024 True]
+          baseline low = [ChartPoint 1 low 512 2097152 True]
+          render old = chartText False 67 12 (Chart Allocated current old)
+      assertBool "the current curve alone uses MiB"
+        ("Allocated (MiB)" `isInfixOf` head (render []))
+      forM_ [0, 1] $ \low -> do
+        let output = render (baseline low)
+        assertBool "the baseline range selects GiB on linear and logarithmic axes"
+          ("Allocated (GiB)" `isInfixOf` head output)
+        assertBool "the current value uses the shared unit"
+          ("last 9.77e-4" `isInfixOf` head output)
+        assertBool "axis labels use GiB"
+          (any (isInfixOf (if low == 0 then "2.000│" else "0.954│")) output)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
       forM_ [1, 2] $ \version -> do
         let named modName = KM.insert "module" (Aeson.String modName) . KM.insert "test" (Aeson.String "same")
