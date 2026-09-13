@@ -78,3 +78,27 @@ remainder_classes = {n % 3 for n in range(10)}
 
 Set comprehensions are a compact way to build a set while automatically
 removing duplicates.
+
+## Freezing a set
+
+Use `freeze(tags)` to convert a set to an immutable `iset` in place:
+
+```python
+tags = {"docs", "guide"}
+tags.add("api")
+frozen_tags = freeze(tags)
+```
+
+The conversion takes constant time. It changes the object's class and keeps
+the same hash table and elements. The resulting `iset` supports membership,
+iteration, set operations, and hashing, so it can be a dictionary key or an
+element of another set. Sets implement `Freeze[iset[A]]`, which lets the
+global `freeze()` function return the corresponding immutable set type.
+
+After calling `freeze()`, use only the returned `iset`. The original set and
+any aliases must no longer be used. The compiler does not yet enforce this
+ownership requirement; escape and reachability analysis will check it in a
+future version.
+
+Use `iset(tags)` to make an immutable copy while keeping a mutable set, or
+`set(frozen_tags)` to make a new mutable copy.

@@ -452,6 +452,9 @@ class ZeroDivisionError (ArithmeticError):
 
 ## General protocols ###############################################################################
 
+protocol Freeze[A]:
+    freeze        : mut() -> A
+
 protocol Identity:
     @staticmethod
     __is__        : (Self,Self) -> bool
@@ -902,6 +905,9 @@ extension dict[A(Hashable),B(Eq)] (Ord):
 extension set[A(Hashable)] (Set[A]):
     NotImplemented
 
+extension set[A(Hashable)] (Freeze[iset[A]]):
+    NotImplemented
+
 extension iset[A(Hashable)] (ISet[A]):
     NotImplemented
 
@@ -998,6 +1004,14 @@ class filter[A,B(value)](Iterator[A]):
         while not bool(self.p(x)):
             x = next(self.itr)
         return x
+
+mut def freeze[A](x: Freeze[A]) -> A:
+    """Consume an exclusively owned value and return its immutable form.
+
+    The caller must stop using x and any aliases after freezing it.
+    The compiler does not yet enforce this ownership requirement.
+    """
+    return x.freeze()
 
 def hash(x: Hashable) -> u64:
     h = hasher()

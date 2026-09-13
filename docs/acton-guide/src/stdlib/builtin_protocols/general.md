@@ -1,6 +1,6 @@
 # General protocols
 
-These protocols cover iteration, comparison, operators, and hashing.
+These protocols cover iteration, comparison, operators, hashing, and freezing.
 
 ## Iteration
 
@@ -39,3 +39,13 @@ type <code>A</code> can be used where hashing is required.</p>
 
 See [Hashable](hashable.md) for the full protocol reference and an
 implementation example.
+
+## Freezing
+
+`Freeze[A]` provides a mutating `freeze() -> A` method. The global
+`freeze(value)` function calls this method and returns the immutable result
+of type `A`. For example, `set[T]` implements `Freeze[iset[T]]`.
+
+Freezing consumes the source value. The caller must own it exclusively and
+use only the result afterward. The compiler does not yet enforce this
+ownership requirement. See [Freezing a set](../../collections/sets.md#freezing-a-set).

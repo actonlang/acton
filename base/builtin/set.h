@@ -22,6 +22,11 @@ struct B_iset {
     B_set_table data;
 };
 
+_Static_assert(sizeof(struct B_set) == sizeof(struct B_iset),
+               "set and iset must have the same size for freeze()");
+_Static_assert(offsetof(struct B_set, data) == offsetof(struct B_iset, data),
+               "set and iset must have the same table offset for freeze()");
+
 
 // Iterators over sets ///////////////////////////////////////////////////////
 
