@@ -1,0 +1,201 @@
+import testing
+
+
+# Scale is the UTF-8 input byte count. Prepare text before t.loop(), then
+# measure one operation or comparison group per body. Short decode controls
+# keep their fixed inputs. Ordinary text makes both implementations do the same work.
+
+def ascii_text(size: int) -> str:
+    return "x" * size
+
+def mixed_text(size: int) -> str:
+    # Half ASCII prefix, then 64-byte blocks of ASCII-heavy UTF-8.
+    prefix = size // 2
+    rest = size - prefix
+    return "x" * prefix + ("a" * 58 + "å🌍") * (rest // 64) + "a" * (rest % 64)
+
+def unicode_text(size: int) -> str:
+    # Complete eight-byte blocks, then whole characters to reach the byte count.
+    return "åå🌍" * (size // 8) + "å" * ((size % 8) // 2) + "x" * (size % 2)
+
+def mismatched_text(size: int) -> (str, str):
+    if size == 0:
+        return "", ""
+    prefix = "x" * (size - 1)
+    return prefix + "a", prefix + "b"
+
+def decode_bytes(t: testing.SyncT, expected: str):
+    wire = expected.encode()
+    total = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = wire.decode()
+        total += len(last)
+    testing.assertEqual(total, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last.encode(), wire)
+
+def decode_bytearray(t: testing.SyncT, expected: str):
+    wire = expected.encode()
+    data = bytearray(wire)
+    total = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = data.decode()
+        total += len(last)
+    testing.assertEqual(total, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last.encode(), wire)
+
+def equality(t: testing.SyncT, left: str, right: str, expected: bool):
+    equal = 0
+    unequal = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        if left == right:
+            equal += 1
+        if left != right:
+            unequal += 1
+    testing.assertEqual(equal, repeats if expected else 0)
+    testing.assertEqual(unequal, 0 if expected else repeats)
+
+def ordering(t: testing.SyncT, lower: str, upper: str, same: bool=False):
+    matches = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        if lower < upper:
+            matches += 1
+        if lower <= upper:
+            matches += 1
+        if upper > lower:
+            matches += 1
+        if upper >= lower:
+            matches += 1
+    testing.assertEqual(matches, repeats * (2 if same else 4))
+    testing.assertFalse(upper < lower)
+    testing.assertEqual(upper <= lower, same)
+    testing.assertFalse(lower > upper)
+    testing.assertEqual(lower >= upper, same)
+    testing.assertFalse(lower < lower)
+    testing.assertFalse(lower > lower)
+    testing.assertTrue(lower <= lower)
+    testing.assertTrue(lower >= lower)
+
+
+def _test_bytes_decode_ascii(t: testing.SyncT):
+    decode_bytes(t, ascii_text(t.scale()))
+
+def _test_bytes_decode_mixed(t: testing.SyncT):
+    decode_bytes(t, mixed_text(t.scale()))
+
+def _test_bytes_decode_unicode(t: testing.SyncT):
+    decode_bytes(t, unicode_text(t.scale()))
+
+def _test_bytearray_decode_ascii(t: testing.SyncT):
+    decode_bytearray(t, ascii_text(t.scale()))
+
+def _test_bytearray_decode_mixed(t: testing.SyncT):
+    decode_bytearray(t, mixed_text(t.scale()))
+
+def _test_bytearray_decode_unicode(t: testing.SyncT):
+    decode_bytearray(t, unicode_text(t.scale()))
+
+def _test_bytes_decode_short_ascii(t: testing.SyncT):
+    decode_bytes(t, "abcdefgh" * 4)
+
+def _test_bytes_decode_short_mixed(t: testing.SyncT):
+    decode_bytes(t, "actor=Ångström;state=ready")
+
+def _test_equal_strings(t: testing.SyncT):
+    wire = b"x" * t.scale()
+    # Separate allocations above size one; empty and single ASCII strings are cached.
+    equality(t, wire.decode(), bytearray(wire).decode(), True)
+
+def _test_equal_length_mismatch(t: testing.SyncT):
+    size = t.scale()
+    left, right = mismatched_text(size)
+    equality(t, left, right, size == 0)
+
+def _test_unequal_length(t: testing.SyncT):
+    prefix = ascii_text(t.scale())
+    equality(t, prefix, prefix + "x", False)
+
+def _test_order_late_difference(t: testing.SyncT):
+    size = t.scale()
+    lower, upper = mismatched_text(size)
+    ordering(t, lower, upper, size == 0)
+
+def _test_order_prefix(t: testing.SyncT):
+    prefix = ascii_text(t.scale())
+    ordering(t, prefix, prefix + "x")
+
+def _test_startswith(t: testing.SyncT):
+    size = t.scale()
+    matching, different = mismatched_text(size)
+    text = matching + "tail"
+    matches = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        if text.startswith(matching):
+            matches += 1
+        if not text.startswith(different):
+            matches += 1
+    testing.assertEqual(matches, repeats * (1 if size == 0 else 2))
+
+def _test_endswith(t: testing.SyncT):
+    size = t.scale()
+    matching, different = mismatched_text(size)
+    text = "head" + matching
+    matches = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        if text.endswith(matching):
+            matches += 1
+        if not text.endswith(different):
+            matches += 1
+    testing.assertEqual(matches, repeats * (1 if size == 0 else 2))
+
+def _test_hash_string(t: testing.SyncT):
+    text = mixed_text(t.scale())
+    expected = hash(text.encode())
+    matches = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        if hash(text) == expected:
+            matches += 1
+    testing.assertEqual(matches, repeats)
+
+def iterate(t: testing.SyncT, text: str, expected_count: int, expected_sum: int):
+    count = 0
+    total = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        for char in text:
+            count += 1
+            total += ord(char)
+    testing.assertEqual(count, repeats * expected_count)
+    testing.assertEqual(total, repeats * expected_sum)
+
+def _test_iterate_ascii(t: testing.SyncT):
+    size = t.scale()
+    text = "ax" * (size // 2) + "a" * (size % 2)
+    iterate(t, text, size, (97 + 120) * (size // 2) + 97 * (size % 2))
+
+def _test_iterate_unicode(t: testing.SyncT):
+    size = t.scale()
+    blocks = size // 8
+    twobyte = (size % 8) // 2
+    ascii_tail = size % 2
+    count = blocks * 3 + twobyte + ascii_tail
+    total = (229 + 229 + 127757) * blocks + 229 * twobyte + 120 * ascii_tail
+    iterate(t, unicode_text(size), count, total)

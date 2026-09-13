@@ -7,8 +7,8 @@ acton test list --module builtin_functions --module collection_iterators
 acton test perf --module builtin_functions --module collection_iterators
 ```
 
-Scale means **input element count**. Each loop body performs one operation on
-that input. For example, `sum` at scale 100000 sums a list of 100,000 elements;
+For the collection modules, scale means **input element count**. Each loop body
+performs one operation on that input. For example, `sum` at scale 100000 sums a list of 100,000 elements;
 `filter_all` creates and fully consumes one filter iterator over that list.
 The report gives time and allocation per operation. Empty inputs stay empty at
 every scale, and their controls measure one empty operation per body.
@@ -70,6 +70,25 @@ The disjoint and empty-set cases and both bytearray slice cases expose iterator
 exhaustion bugs fixed in #3104. Before that fix, `StopIteration` escapes the
 operation and the completion checks fail. Report a failed baseline rather than
 treating the failure time as an operation latency or speedup.
+
+## String operations
+
+`string_operations` covers decoding, comparison, prefix and suffix checks,
+hashing, and iteration. Scale is the UTF-8 byte count of the prepared input;
+each loop body performs one operation or comparison group. Mixed and Unicode
+inputs contain complete codepoints at every size. Prefix comparisons use
+strings of N and N+1 bytes; affix checks use an N-byte affix and N+4-byte text.
+The two short decode cases keep their fixed inputs as controls.
+
+```sh
+acton test perf --module string_operations --scale 65536 --time 3s --record
+acton test scale --module string_operations --name equal_strings --start-scale 2 --end-scale 65536
+```
+
+Equal strings use separate decoded buffers. Empty and one-byte ASCII strings
+can share cached objects, so start at scale 2 to measure byte comparisons.
+All timed strings contain ordinary text; embedded NUL and malformed UTF-8
+are covered by `test/builtins_auto/bytes_decode.act`.
 
 ## Comparing implementations
 

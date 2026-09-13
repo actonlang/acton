@@ -164,6 +164,7 @@ static unsigned char ascii_char_data[ASCII_CHAR_TABLE_SIZE][2] = {
     [127] = {127, 0}
 };
 static struct B_str ascii_char_strs[ASCII_CHAR_TABLE_SIZE] = {
+    [0] = {&B_strG_methods, 1, 1, ascii_char_data[0]},
     [1] = {&B_strG_methods, 1, 1, ascii_char_data[1]},
     [2] = {&B_strG_methods, 1, 1, ascii_char_data[2]},
     [3] = {&B_strG_methods, 1, 1, ascii_char_data[3]},
@@ -425,6 +426,37 @@ B_str to_str_noc(char *str) {
     return res;
 }
 
+// Decode byte buffers by length. NUL is a Unicode character, not a terminator.
+B_str to_str_len(const char *str, int nbytes) {
+    const unsigned char *data = (const unsigned char *)str;
+    if (nbytes == 0)
+        return null_str;
+    if (nbytes == 1 && data[0] < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[data[0]];
+
+    const unsigned char *p = data;
+    const unsigned char *end = data + nbytes;
+    int nchars = nbytes;
+    while (p < end) {
+        if (*p < 0x80) {
+            p++;
+        } else {
+            int cp;
+            int size = utf8proc_iterate(p, end - p, &cp);
+            if (size < 0) {
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("Unicode decode error")));
+                return NULL;
+            }
+            p += size;
+            nchars -= size - 1;
+        }
+    }
+    B_str res;
+    NEW_UNFILLED_STR(res,nchars,nbytes);
+    memcpy(res->str,data,nbytes);
+    return res;
+}
+
 unsigned char *fromB_str(B_str str) {
     return str->str;
 }
@@ -572,7 +604,7 @@ static int fix_start_end(int nchars, B_int *start, B_int *end) {
 // Builds a new one-char string starting at p.
 static B_str mk_char(unsigned char *p) {
     unsigned char c = *p;
-    if (c > 0 && c < ASCII_CHAR_TABLE_SIZE)
+    if (c < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[c];
 
     B_str res;
@@ -953,16 +985,11 @@ bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return false;
-    if (en->val-st->val < sub->nbytes) return false;
+    if (en->val-st->val < sub->nchars) return false;
     int isascii = s->nchars==s->nbytes;
-    unsigned char *p = skip_chars(s->str + s->nbytes,fromB_int(en) - s->nchars,isascii) - sub->nbytes;
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    unsigned char *q = skip_chars(s->str+s->nbytes,fromB_int(en)-s->nchars,isascii);
+    if (q-s->str < sub->nbytes) return false;
+    return memcmp(q-sub->nbytes, sub->str, sub->nbytes) == 0;
 }
 
 B_str B_strD_expandtabs(B_str s, B_int tabsize){
@@ -1516,15 +1543,11 @@ bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return false;
+    if (en->val-st->val < sub->nchars) return false;
     int isascii = s->nchars==s->nbytes;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    if (s->str+s->nbytes-p < sub->nbytes) return false;
+    return memcmp(p, sub->str, sub->nbytes) == 0;
 }
 
 
@@ -1573,38 +1596,42 @@ B_str B_strD_zfill(B_str s, int64_t width) {
 // The comparisons below do lexicographic byte-wise comparisons.
 // Thus they do not in general reflect locale-dependent order conventions.
 
+static int str_compare(B_str a, B_str b) {
+    int size = a->nbytes < b->nbytes ? a->nbytes : b->nbytes;
+    int order = memcmp(a->str, b->str, size);
+    return order != 0 ? order : a->nbytes - b->nbytes;
+}
+
 bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
     if (a == b)
         return true;
-    return strcmp((char *)a->str,(char *)b->str) == 0;
+    return a->nbytes == b->nbytes && memcmp(a->str, b->str, a->nbytes) == 0;
 }
 
 bool B_OrdD_strD___ne__ (B_OrdD_str wit, B_str a, B_str b) {
-    if (a == b)
-        return false;
-    return strcmp((char *)a->str,(char *)b->str) != 0;
+    return !B_OrdD_strD___eq__(wit, a, b);
 }
 
 bool B_OrdD_strD___lt__ (B_OrdD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) < 0;
+    return str_compare(a, b) < 0;
 }
 
 bool B_OrdD_strD___le__ (B_OrdD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) <= 0;
+    return str_compare(a, b) <= 0;
 }
 
 bool B_OrdD_strD___gt__ (B_OrdD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) > 0;
+    return str_compare(a, b) > 0;
 }
 
 bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
-    return strcmp((char *)a->str,(char *)b->str) >= 0;
+    return str_compare(a, b) >= 0;
 }
 
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher,to$bytes((char *)a->str));
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)a->str, a->nbytes));
     return B_None;
 }
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
@@ -1694,8 +1721,12 @@ B_str B_IteratorD_strD_str(B_IteratorD_str self) {
 
 // this is next function for forward iteration
 static B_str B_IteratorD_strD_next(B_IteratorD_str self) {
-    unsigned char *p = &self->src->str[self->nxt];
-    if (*p != 0) {
+    if (self->nxt < self->src->nbytes) {
+        unsigned char *p = &self->src->str[self->nxt];
+        if (*p < ASCII_CHAR_TABLE_SIZE) {
+            self->nxt++;
+            return &ascii_char_strs[*p];
+        }
         self->nxt +=byte_length2(*p);
         return mk_char(p);
     }
@@ -1985,7 +2016,7 @@ int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int en
 }
 
 B_str B_bytearrayD_decode(B_bytearray s) {
-    return to$str((char*)s->str);
+    return to_str_len((const char *)s->str, s->nbytes);
 }
 
 bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
@@ -3079,7 +3110,7 @@ int64_t B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_str B_bytesD_decode(B_bytes s) {
-    return to$str((char*)s->str);
+    return to_str_len((const char *)s->str, s->nbytes);
 }
 
 bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
@@ -3969,7 +4000,7 @@ B_str B_chr(B_Integral wit, $WORD n) {
     int64_t v = wit->$class->__int__(wit,n);
     if (v >=  0x110000)
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
-    if (v > 0 && v < ASCII_CHAR_TABLE_SIZE)
+    if (v >= 0 && v < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[v];
     unsigned char code[4];
     int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
