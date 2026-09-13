@@ -38,6 +38,25 @@ def _test_std_namespace_data_modules():
     testing.assertEqual(wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
 
 
+def _test_std_namespace_json_strings():
+    source = r'{"key\u0000tail":"value\u0000tail"}'
+    data = json.decode(source)
+    item = data[b"key\x00tail".decode()]
+    if isinstance(item, str):
+        testing.assertEqual(item.encode(), b"value\x00tail")
+    else:
+        raise AssertionError("std.json decoded a string with the wrong type")
+    testing.assertEqual(json.encode(data), source)
+    array_source = r'["value\u0000tail"]'
+    items = json.decode_list(array_source)
+    item = items[0]
+    if isinstance(item, str):
+        testing.assertEqual(item.encode(), b"value\x00tail")
+    else:
+        raise AssertionError("std.json decoded an array string with the wrong type")
+    testing.assertEqual(json.encode_list(items), array_source)
+
+
 def _test_std_namespace_pure_helpers():
     testing.assertEqual(diff.diff("same", "same"), "")
     testing.assertEqual(math.sqrt(9.0), 3.0)

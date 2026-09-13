@@ -38,71 +38,72 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data, b
 
     for (int i=0; i < data->numelements; i++) {
         item = (B_tuple)iter->$class->__next__(iter);
-        char *key = (char *)fromB_str((B_str)item->components[0]);
+        B_str name = (B_str)item->components[0];
+        yyjson_mut_val *key = yyjson_mut_strn(doc, (char *)name->str, name->nbytes);
         B_value v = item->components[1];
         if (v) {
             switch (v->$class->$class_id) {
                 case INT_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, fromB_int((B_int)v));
+                    yyjson_mut_obj_add(node, key, yyjson_mut_sint(doc, fromB_int((B_int)v)));
                     break;
                 case FLOAT_ID:;
-                    yyjson_mut_obj_add_real(doc, node, key, fromB_float((B_float)v));
+                    yyjson_mut_obj_add(node, key, yyjson_mut_real(doc, fromB_float((B_float)v)));
                     break;
                 case BOOL_ID:;
-                    yyjson_mut_obj_add_bool(doc, node, key, fromB_bool((B_bool)v));
+                    yyjson_mut_obj_add(node, key, yyjson_mut_bool(doc, fromB_bool((B_bool)v)));
                     break;
                 case STR_ID:;
-                    yyjson_mut_obj_add_str(doc, node, key,  (char *)fromB_str((B_str)v));
+                    yyjson_mut_obj_add(node, key, yyjson_mut_strn(doc, (char *)fromB_str((B_str)v), ((B_str)v)->nbytes));
                     break;
                 case BIGINT_ID:;
-                    yyjson_mut_obj_add_val(doc, node, key, jsonQ_encode_bigint(doc, (B_bigint)v, bigint_as_string));
+                    yyjson_mut_obj_add(node, key, jsonQ_encode_bigint(doc, (B_bigint)v, bigint_as_string));
                     break;
                 case LIST_ID:;
                     yyjson_mut_val *l = yyjson_mut_arr(doc);
-                    yyjson_mut_obj_add_val(doc, node, key, l);
+                    yyjson_mut_obj_add(node, key, l);
                     jsonQ_encode_list_into(doc, l, (B_list)v, bigint_as_string);
                     break;
                 case DICT_ID:;
                     yyjson_mut_val *d = yyjson_mut_obj(doc);
-                    yyjson_mut_obj_add_val(doc, node, key, d);
+                    yyjson_mut_obj_add(node, key, d);
                     jsonQ_encode_dict(doc, d, (B_dict)v, bigint_as_string);
                     break;
                 case I8_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, ((B_i8)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_sint(doc, ((B_i8)v)->val));
                     break;
                 case I16_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, ((B_i16)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_sint(doc, ((B_i16)v)->val));
                     break;
                 case I32_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, ((B_i32)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_sint(doc, ((B_i32)v)->val));
                     break;
                 case I64_ID:;
-                    yyjson_mut_obj_add_int(doc, node, key, ((B_int)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_sint(doc, ((B_int)v)->val));
                     break;
                 case U1_ID:;
-                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u1)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_uint(doc, ((B_u1)v)->val));
                     break;
                 case U8_ID:;
-                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u8)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_uint(doc, ((B_u8)v)->val));
                     break;
                 case U16_ID:;
-                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u16)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_uint(doc, ((B_u16)v)->val));
                     break;
                 case U32_ID:;
-                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u32)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_uint(doc, ((B_u32)v)->val));
                     break;
                 case U64_ID:;
-                    yyjson_mut_obj_add_uint(doc, node, key, ((B_u64)v)->val);
+                    yyjson_mut_obj_add(node, key, yyjson_mut_uint(doc, ((B_u64)v)->val));
                     break;
                 default:;
                     // TODO: hmm, at least handle all builtin types? and that's it,
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_dict: for key %s unknown type: %s", key, v->$class->$GCINFO))));
+                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_dict: for key %s unknown type: %s", name->str, v->$class->$GCINFO))));
             }
         } else {
-            yyjson_mut_obj_add_null(doc, node, key);
+            yyjson_mut_obj_add(node, key, yyjson_mut_null(doc));
         }
     }
 }
@@ -122,7 +123,7 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
                     yyjson_mut_arr_add_bool(doc, node, fromB_bool((B_bool)v));
                     break;
                 case STR_ID:;
-                    yyjson_mut_arr_add_str(doc, node,  (char *)fromB_str((B_str)v));
+                    yyjson_mut_arr_add_strn(doc, node, (char *)fromB_str((B_str)v), ((B_str)v)->nbytes);
                     break;
                 case BIGINT_ID:;
                     yyjson_mut_arr_add_val(node, jsonQ_encode_bigint(doc, (B_bigint)v, bigint_as_string));
@@ -216,40 +217,41 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
     yyjson_val *key, *val;
     while ((key = yyjson_obj_iter_next(&iter))) {
         val = yyjson_obj_iter_get_val(key);
+        B_str name = to_str_len(yyjson_get_str(key), yyjson_get_len(key));
 
         switch (yyjson_get_type(val)) {
             case YYJSON_TYPE_NONE:;
                 break;
             case YYJSON_TYPE_RAW:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), jsonQ_decode_integer(val));
+                B_dictD_setitem(res, wit, name, jsonQ_decode_integer(val));
                 break;
             case YYJSON_TYPE_NULL:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), B_None);
+                B_dictD_setitem(res, wit, name, B_None);
                 break;
             case YYJSON_TYPE_BOOL:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), toB_bool(yyjson_get_bool(val)));
+                B_dictD_setitem(res, wit, name, toB_bool(yyjson_get_bool(val)));
                 break;
             case YYJSON_TYPE_NUM:;
                 switch (yyjson_get_subtype(val)) {
                     case YYJSON_SUBTYPE_UINT:;
                     case YYJSON_SUBTYPE_SINT:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), jsonQ_decode_integer(val));
+                        B_dictD_setitem(res, wit, name, jsonQ_decode_integer(val));
                         break;
                     case YYJSON_SUBTYPE_REAL:;
-                        B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$float(yyjson_get_real(val)));
+                        B_dictD_setitem(res, wit, name, to$float(yyjson_get_real(val)));
                         break;
                 }
                 break;
             case YYJSON_TYPE_STR:;
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), to$str(yyjson_get_str(val)));
+                B_dictD_setitem(res, wit, name, to_str_len(yyjson_get_str(val), yyjson_get_len(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = jsonQ_decode_arr(val);
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), l);
+                B_dictD_setitem(res, wit, name, l);
                 break;
             case YYJSON_TYPE_OBJ:;
                 B_dict d = jsonQ_decode_obj(val);
-                B_dictD_setitem(res, wit, to$str(yyjson_get_str(key)), d);
+                B_dictD_setitem(res, wit, name, d);
                 break;
             default:;
                 // unreachable
@@ -290,7 +292,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 }
                 break;
             case YYJSON_TYPE_STR:;
-                wit->$class->append(wit, res, to$str(yyjson_get_str(val)));
+                wit->$class->append(wit, res, to_str_len(yyjson_get_str(val), yyjson_get_len(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = jsonQ_decode_arr(val);
@@ -311,13 +313,17 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
 B_dict jsonQ__decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), YYJSON_READ_BIGNUM_AS_RAW, &acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &acton_alc, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
     B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
     // Iterate over the root object
     if (doc) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
+        if (yyjson_get_type(obj) != YYJSON_TYPE_OBJ) {
+            yyjson_doc_free(doc);
+            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("JSON root is not an object")));
+        }
         res = jsonQ_decode_obj(obj);
     } else {
         char errmsg[1024];
@@ -332,7 +338,7 @@ B_dict jsonQ__decode (B_str data) {
 B_list jsonQ__decode_list (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), strlen(fromB_str(data)), YYJSON_READ_BIGNUM_AS_RAW, &acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &acton_alc, &err);
     if (!doc) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);

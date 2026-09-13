@@ -90,6 +90,24 @@ can share cached objects, so start at scale 2 to measure byte comparisons.
 All timed strings contain ordinary text; embedded NUL and malformed UTF-8
 are covered by `test/builtins_auto/bytes_decode.act`.
 
+## JSON conversion
+
+`json_strings` covers object and array encoding and decoding with long ASCII
+and Unicode keys and values. Scale is the object field count, or the number
+of record/string pairs in an array. Each loop body converts one complete
+prepared document. Fixture construction and full content checks run outside
+`t.loop()`; conversion, output allocation and result-length accumulation are timed.
+
+```sh
+acton test perf --module json_strings --scale 64 --time 3s --record
+acton test scale --module json_strings --start-scale 1 --end-scale 256
+```
+
+The inputs contain ordinary text without escapes. Expected JSON text is
+assembled independently of the encoder. Embedded NUL and malformed input are
+covered by the functional JSON tests. When comparing JSON implementations,
+keep the string implementation and benchmark sources the same in both runs.
+
 ## Comparing implementations
 
 Record the first implementation, then run the second against the same reference:

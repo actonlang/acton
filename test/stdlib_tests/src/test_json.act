@@ -137,3 +137,46 @@ actor _test_json_actor(t: testing.AsyncT):
     testing.assertEqual(r"""{"value":"18446744073709551616"}""", encoded_bigint_string, "Json actor bigint string encoding mismatch")
 
     t.success()
+
+
+def _test_json_rejects_truncated_input():
+    for source in [b'{}\x00junk', b'{}\x00', b'[]', b'null', b'"text"']:
+        rejected = False
+        try:
+            json.decode(source.decode())
+        except ValueError:
+            rejected = True
+        assert rejected
+    for source in [b'[]\x00junk', b'[]\x00']:
+        rejected = False
+        try:
+            json.decode_list(source.decode())
+        except ValueError:
+            rejected = True
+        assert rejected
+
+
+def _test_json_escaped_nul_roundtrip():
+    source = r"""{"a\u0000b":"x\u0000y","a":"tail","array":["\u0000","x\u0000y"]}"""
+    decoded = json.decode(source)
+    assert len(decoded) == 3
+    key = b"a\x00b".decode()
+    value = decoded[key]
+    if isinstance(value, str):
+        assert value.encode() == b"x\x00y"
+    else:
+        raise AssertionError("JSON string was decoded with the wrong type")
+    assert json.encode(decoded).encode() == source.encode()
+
+    array_source = r"""["x\u0000y",{"a\u0000b":1,"a":2},"\u0000"]"""
+    array = json.decode_list(array_source)
+    first = array[0]
+    if isinstance(first, str):
+        assert first.encode() == b"x\x00y"
+    else:
+        raise AssertionError("JSON array string was decoded with the wrong type")
+    assert json.encode_list(array).encode() == array_source.encode()
+
+    # Every value kind must retain the complete object key when encoding.
+    object_source = r"""{"n\u0000":null,"i\u0000":1,"f\u0000":1.5,"b\u0000":true,"s\u0000":"text","a\u0000":[],"o\u0000":{},"big\u0000":18446744073709551616}"""
+    assert json.encode(json.decode(object_source)).encode() == object_source.encode()
