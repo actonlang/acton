@@ -1,0 +1,16 @@
+--- a/lib/compiler_rt.zig
++++ b/lib/compiler_rt.zig
+@@ -305,7 +305,12 @@
+             symbol(&__memset, "__memset");
+         }
+         _ = @import("compiler_rt/memmove.zig");
+-        symbol(&memcmp, "memcmp");
++        // Prefer libc's optimized comparison when it provides one.
++        // Zig's bundled musl and WASI libcs get memcmp from compiler-rt.
++        if (!builtin.link_libc or
++            builtin.target.isMuslLibC() or
++            builtin.target.isWasiLibC())
++            symbol(&memcmp, "memcmp");
+         symbol(&bcmp, "bcmp");
+         _ = @import("compiler_rt/ssp.zig");
+         symbol(&strlen, "strlen");
