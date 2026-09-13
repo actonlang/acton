@@ -195,7 +195,8 @@ acton test scale --report after.jsonl --compare before.jsonl
 acton test scale --compare before.jsonl
 ```
 
-Each option takes one filename. `--compare` always supplies the baseline.
+Each option takes one target. `--compare` supplies the baseline: a recording
+filename, or an explicit `git:REF` when running a new study.
 The charts overlay at most two studies, with solid current curves and dashed
 baseline curves. Both retain their full recorded ranges and distinguish partial
 points. Comparison requires the same machine, build settings, input tags,
@@ -217,6 +218,52 @@ Every run writes a new recording and leaves the baseline untouched.
 Older journals containing multiple benchmarks require `--module` and/or `--name`
 to select one for a live comparison. Two-file reports compare matching benchmark
 identities. Old timestamp-only filenames and journal formats remain readable.
+
+To compare your current code, including uncommitted changes, with a Git revision:
+
+```sh
+acton test scale --name dct --compare git:main
+acton test scale --name dct --compare git:HEAD~1 --end-scale 100000
+```
+
+The revision is resolved locally to a commit. Branches, tags and commit hashes
+are accepted; no fetch is performed. A filename is always a filename unless it
+starts with `git:`. Use `./git:example.jsonl` for a recording whose name has that
+prefix. `--report` accepts recordings only.
+
+The baseline runs in one detached worktree under
+`~/.cache/acton/worktrees/<repository-id>/<commit>/`. Current code builds and runs
+directly in your checkout, including local changes and untracked files. Its
+branch, source files and index stay in place. Both versions are built before
+measurement, using the running compiler and the same build settings. The project
+build lock prevents another Acton build from replacing the current binary during
+the comparison. The baseline is measured first;
+the current version then remeasures its completed sizes, even if a resource limit
+stopped the baseline before the requested endpoint. Time and memory limits
+apply separately to each study. Select one benchmark that exists under the same
+module and test name in both revisions.
+
+The baseline worktree contains the committed repository, preserving relative
+paths to sibling projects. Its required input fixtures must be committed too.
+For dependencies outside the repository, use absolute paths or
+explicit dependency overrides; relative paths outside the repository cannot be
+preserved by its worktrees. This also applies to Zig dependency paths. External
+inputs are shared and must remain unchanged during the comparison. Paths inside
+the repository passed through search and dependency override options are mapped to the baseline;
+absolute paths embedded in project configuration retain their original meaning.
+This compares application revisions with the current compiler and runtime; it does
+not build an older compiler from the selected revision.
+
+Both recordings are written to the original project's `out/perf_scaling/`.
+They retain their Git revision and dirty status. Each baseline uses a fresh
+checkout at the same path for that repository and commit. Both Zig caches live
+outside the worktree and remain reusable after its removal. A lock prevents
+simultaneous comparisons from using the same worktree. The command removes and
+deregisters the baseline on completion, errors or normal interruption; recordings
+remain available. A hard kill or crash can leave a worktree behind; the next
+comparison at that path removes it under the same lock before checking out again.
+The final charts overlay the two studies; use
+`--report after.jsonl --compare before.jsonl` to display them again.
 
 Every sample start and completed result is flushed immediately, so
 interruption leaves the completed work available and identifies the unfinished

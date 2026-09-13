@@ -1,7 +1,7 @@
 module TestRunner
   ( TestMode(..)
   , listProjectTests
-  , runProjectTests
+  , runProjectTests, runScalingTests, selectedTestNames, readScaleSourceInfo
   , selectTestSources
   , prepareScalingComparison
   ) where
@@ -241,26 +241,77 @@ listProjectTests opts paths topts modules = do
             putStrLn ""
           exitSuccess
 
--- | Run selected tests concurrently, stream results, and return an exit code.
-runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> Maybe ScaleRecording -> IO Int
-runProjectTests useColorOut gopts opts paths topts mode modules maxParallel baseline = do
-    timeStart <- getTime Monotonic
-    let emitJson = C.testJson topts
+-- Resolve literal benchmark names from the compiled selection.
+selectedTestNames :: C.CompileOptions -> Paths -> C.TestOptions -> [String] -> IO [(String, [String])]
+selectedTestNames opts paths topts modules = do
     nameRegexes <- compileTestNameRegexes (C.testNames topts)
     let wantedModules = Data.List.sort (filterModules (modulesOpt paths topts) modules)
-    testsByModule <- forM wantedModules $ \modName -> do
+    forM wantedModules $ \modName -> do
       names <- listModuleTests opts paths modName
-      let wantedNames = Data.List.sort [name | name <- filterTests nameRegexes names,
-            maybe True (M.member (modName, name) . recordingTests) baseline]
+      let wantedNames = Data.List.sort (filterTests nameRegexes names)
       return (modName, wantedNames)
+
+-- Scaling owns its journal destination separately from the compiled project.
+runScalingTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> [String]
+                -> FilePath -> Aeson.Object -> Maybe ScaleRecording -> IO (Int, [FilePath])
+runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo baseline = do
+    selected <- selectedTestNames opts paths topts modules
+    let testsByModule = [(modName, filter (\name -> maybe True
+          (M.member (modName, name) . recordingTests) baseline) names) | (modName, names) <- selected]
+        allTests = [(modName, name) | (modName, names) <- testsByModule, name <- names]
+    forM_ baseline $ \old -> when (allTests /= M.keys (recordingTests old)) $
+      ioError (userError "The recorded benchmark was not found in this project")
+    if null allTests then do
+      if C.testJson topts then outputJsonReport paths TestModeScale M.empty (fromNanoSecs 0) []
+                         else putStrLn "Nothing to test"
+      return (0, [])
+    else do
+      host <- readPerfHostInfo opts topts
+      forM_ baseline $ \old -> forM_ (M.elems (recordingTests old)) $ \series ->
+        forM_ (seriesInfo series >>= (`perfHostReason` host)) $ \reason ->
+          ioError (userError ("Cannot compare: " ++ reason))
+      let provenance = AesonKM.union host sourceInfo
+      tests <- forM testsByModule $ \(modName, names) -> do
+        hashes <- readModuleNameHashes paths modName
+        return [(modName, name, fmap (BS.unpack . Base16.encode . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
+      let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
+          runSample limits scale modName testName = do
+            now <- getTime Monotonic
+            let remaining = max 1 (fromInteger (toNanoSecs (scaleDeadline limits - now) `div` 1000000))
+                sampleOptions = topts { C.testScale = Just scale, C.testTime = remaining }
+            runModuleTestStreaming opts paths sampleOptions TestModeScale host Nothing (Just limits)
+              modName testName False callbacks
+      runScalingStudy useColorOut gopts topts directory provenance (concat tests) baseline runSample
+
+-- Capture source identity before compilation creates files in the checkout.
+readScaleSourceInfo :: FilePath -> IO Aeson.Object
+readScaleSourceInfo project = do
+    revision <- gitOutput ["rev-parse", "HEAD"]
+    dirty <- fmap (fmap (not . null)) (gitOutput ["status", "--porcelain", "--untracked-files=normal", "--",
+      ":(top,exclude,glob)**/.acton.lock"])
+    return (AesonKM.fromList
+      [(AesonKey.fromString "compiler_version", Aeson.toJSON getVer), (AesonKey.fromString "git_revision", Aeson.toJSON revision), (AesonKey.fromString "git_dirty", Aeson.toJSON dirty)])
+  where
+    gitOutput args = do
+      result <- try (readCreateProcessWithExitCode (proc "git" args) { cwd = Just project } "")
+        :: IO (Either IOException (ExitCode, String, String))
+      return $ case result of
+        Right (ExitSuccess, output, _) -> Just (trim output)
+        _ -> Nothing
+
+
+-- | Run selected tests concurrently, stream results, and return an exit code.
+runProjectTests :: Bool -> C.GlobalOptions -> C.CompileOptions -> Paths -> C.TestOptions -> TestMode -> [String] -> Int -> IO Int
+runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
+    timeStart <- getTime Monotonic
+    let emitJson = C.testJson topts
+    testsByModule <- selectedTestNames opts paths topts modules
     let specs =
           [ TestSpec modName testName (displayTestName testName)
           | (modName, names) <- testsByModule
           , testName <- names
           ]
         allTests = [ (tsModule spec, tsName spec) | spec <- specs ]
-    forM_ baseline $ \old -> when (allTests /= M.keys (recordingTests old)) $
-      ioError (userError "The recorded benchmark was not found in this project")
     if null specs
       then do
         if emitJson
@@ -271,27 +322,6 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel base
           else do
             putStrLn "Nothing to test"
             return 0
-      else if mode == TestModeScale
-      then do
-        host <- readPerfHostInfo opts topts
-        forM_ baseline $ \old -> forM_ (M.elems (recordingTests old)) $ \series ->
-          forM_ (seriesInfo series >>= (`perfHostReason` host)) $ \reason ->
-            ioError (userError ("Cannot compare: " ++ reason))
-        revision <- gitOutput ["rev-parse", "HEAD"]
-        dirty <- fmap (fmap (not . null)) (gitOutput ["status", "--porcelain", "--untracked-files=normal"])
-        let provenance = AesonKM.union host (AesonKM.fromList
-              [(AesonKey.fromString "compiler_version", Aeson.toJSON getVer), (AesonKey.fromString "git_revision", Aeson.toJSON revision), (AesonKey.fromString "git_dirty", Aeson.toJSON dirty)])
-        tests <- forM testsByModule $ \(modName, names) -> do
-          hashes <- readModuleNameHashes paths modName
-          return [(modName, name, fmap (BS.unpack . Base16.encode . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
-        let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
-            runSample limits scale modName testName = do
-              now <- getTime Monotonic
-              let remaining = max 1 (fromInteger (toNanoSecs (scaleDeadline limits - now) `div` 1000000))
-                  sampleOptions = topts { C.testScale = Just scale, C.testTime = remaining }
-              runModuleTestStreaming opts paths sampleOptions mode host Nothing (Just limits)
-                modName testName False callbacks
-        runScalingStudy useColorOut gopts topts (projOut paths </> "perf_scaling") provenance (concat tests) baseline runSample
       else do
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
@@ -498,12 +528,6 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel base
               _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
               return (testExitCode results)
   where
-    gitOutput args = do
-      result <- try (readCreateProcessWithExitCode (proc "git" args) { cwd = Just (projPath paths) } "")
-        :: IO (Either IOException (ExitCode, String, String))
-      return $ case result of
-        Right (ExitSuccess, output, _) -> Just (trim output)
-        _ -> Nothing
     mkRunContext opts' topts' mode' = TestRunContext
       { trcCompilerVersion = getVer
       , trcTarget = C.target opts'

@@ -176,7 +176,7 @@ data TestOptions = TestOptions
     , testStartScale   :: Maybe Int
     , testEndScale     :: Maybe Int
     , testMaxMemory    :: Maybe MemoryLimit
-    , testCompare      :: Maybe FilePath
+    , testCompare      :: Maybe String
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -517,7 +517,7 @@ testCommand =
     <|> (TestRun <$> testOptions OrdinaryOptions)
   where
     scaleCommand = scaling
-      <$> optional (strOption (long "compare" <> metavar "FILE" <> help "Compare against a saved scaling journal; live runs remeasure its completed sizes"))
+      <$> optional (strOption (long "compare" <> metavar "FILE|git:REF" <> help "Compare against a saved scaling journal or Git revision; live runs remeasure baseline sizes"))
       <*> (Left <$> strOption (long "report" <> metavar "FILE" <> help "Render charts from a saved scaling journal without running tests")
            <|> Right <$> testOptions ScaleOptions)
     scaling baseline (Left path) = TestScaleReport path baseline

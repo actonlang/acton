@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, ForeignFunctionInterface #-}
 module PerfScaling
   ( validateScalingOptions, runScalingStudy, printScaleRecording
+  , withScaleWorktree, scaleWorktreePath
   , ScaleLimits(..), ScalingStopped(..), watchScaleProcess
   , ScaleRecording(..), ScaleSeries(..), readScaleRecording, scaleSeriesReason
   , ScalePoint(..), scaleMean, scaleError, scaleReliable, scaleNeedsSamples, scaleGrowth, stableGrowth
@@ -14,7 +15,10 @@ import Acton.Testing (TestResult(..))
 import TestPerf
 import TestFormat (testColorApply, testColorBold)
 import Codec.Compression.Zlib (compress)
+import qualified Crypto.Hash.SHA256 as SHA256
 import Control.Applicative ((<|>))
+import Control.Concurrent.Async (concurrently)
+import ProcessUtil (stopProcessGroup)
 import TerminalSize (queryTermSize, termFitAnsiRight)
 import Control.Concurrent (threadDelay)
 import Control.Exception
@@ -22,6 +26,7 @@ import Control.Monad
 import Data.Char (chr, isAscii, isAlphaNum, isPrint)
 import Data.Bits (bit, (.|.))
 import Data.List (foldl', isPrefixOf, intercalate)
+import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.IORef
 import qualified Data.IntMap.Strict as IM
@@ -31,6 +36,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
@@ -43,6 +49,8 @@ import System.Environment (getEnvironment)
 import System.Directory
 import System.FilePath
 import System.IO
+import System.FileLock (SharedExclusive(Exclusive), withFileLock)
+import System.Exit (ExitCode(..))
 import System.Process
 import qualified System.Posix.IO as PIO
 import Text.Printf
@@ -63,12 +71,67 @@ data ScalePoint = ScalePoint
 
 validateScalingOptions :: C.TestOptions -> Maybe String
 validateScalingOptions opts
+  | C.testCompare opts == Just "git:" = Just "--compare git:REF requires a Git revision"
   | C.testRecord opts = Just "Scaling studies save every sample automatically; --record updates fixed-scale perf_data"
   | C.testSnapshotUpdate opts = Just "Scaling studies cannot update test snapshots"
   | C.watch (C.testCompile opts) = Just "Scaling studies cannot run with --watch"
   | maybe False (< fromMaybe 1 (C.testStartScale opts)) (C.testEndScale opts) =
       Just "--end-scale must be at least --start-scale (default: 1)"
   | otherwise = Nothing
+
+-- Git sources -----------------------------------------------------------------
+
+-- Preserve repository-relative paths, including sibling projects. Explicit
+-- paths outside the repository keep their usual meaning on both sides.
+scaleWorktreePath :: FilePath -> FilePath -> FilePath -> FilePath
+scaleWorktreePath source checkout path =
+    let relative = makeRelative source path
+    in if isRelative relative && ".." `notElem` splitDirectories relative
+       then checkout </> relative else path
+
+-- Own one baseline at a stable path. Zig caches live outside the checkout and
+-- survive its removal. The sibling lock also protects recovery after a crash.
+withScaleWorktree :: FilePath -> FilePath -> String -> (FilePath -> FilePath -> IO a) -> IO a
+withScaleWorktree cache project ref action = do
+    when (null ref) (ioError (userError "--compare git:REF requires a Git revision"))
+    root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
+    common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
+    previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", "--end-of-options", ref ++ "^{commit}"]
+    let key = BC.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
+        directory = cache </> "worktrees" </> key
+    createDirectoryIfMissing True directory
+    baseline <- (</> previous) <$> canonicalizePath directory
+    withFileLock (baseline <.> "lock") Exclusive $ \_ -> do
+      let remove = void (git root ["worktree", "remove", "--force", "--force", "--", baseline])
+          cleanup = remove `catch` \err ->
+            hPutStrLn stderr ("Could not remove comparison worktree " ++ baseline ++ ": " ++ displayException (err :: IOException))
+      -- A previous process may have died during checkout. Double --force also
+      -- handles Git's initialization lock, only at this command-owned path.
+      exists <- doesPathExist baseline
+      when exists $ do
+        registered <- splitOn "\0" <$> git root ["worktree", "list", "--porcelain", "-z"]
+        if ("worktree " ++ baseline) `elem` registered
+          then remove
+          else removePathForcibly baseline
+      bracket_ (void (git root ["worktree", "add", "--force", "--force", "--detach", "--", baseline, previous])
+                  `onException` cleanup)
+               cleanup (action root baseline)
+  where
+    unlinesTrimmed :: String -> String
+    unlinesTrimmed = reverse . dropWhile (`elem` ['\r', '\n']) . reverse
+    git directory args =
+      withCreateProcess (proc "git" ("-C" : directory : args))
+        { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe, create_group = True } $
+        \_ (Just out) (Just err) process -> do
+          pid <- getPid process
+          let readAll handle = do
+                text <- hGetContents handle
+                evaluate (length text)
+                return text
+          (code, (output, errors)) <- concurrently (waitForProcess process)
+            (concurrently (readAll out) (readAll err)) `finally` stopProcessGroup process pid
+          if code == ExitSuccess then return output
+          else ioError (userError ("Git comparison: " ++ unlinesTrimmed errors))
 
 -- Memory limits ---------------------------------------------------------------
 
@@ -220,7 +283,7 @@ nextScale cap (point:older) =
 -- Each sample has its own process and the same amount of warmup and measured
 -- work. The callback reuses the ordinary test runner's result handling.
 runScalingStudy :: Bool -> C.GlobalOptions -> C.TestOptions -> FilePath -> Aeson.Object -> [(String, String, Maybe String)] -> Maybe ScaleRecording
-                -> (ScaleLimits -> Int -> String -> String -> IO TestResult) -> IO Int
+                -> (ScaleLimits -> Int -> String -> String -> IO TestResult) -> IO (Int, [FilePath])
 runScalingStudy useColor gopts opts directory host tests baseline runSample = do
     memory <- readMemoryStatus Nothing >>= either (ioError . userError) return
     (cap, reserve) <- either (ioError . userError) return
@@ -240,7 +303,7 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
         updateProgress text = when live $ do
           (_, cols) <- fromMaybe (24, 80) <$> queryTermSize
           terminal ("\r" ++ termFitAnsiRight (max 0 (cols - 1)) text ++ "\ESC[K")
-    let runTests [] = return 0
+    let runTests [] = return (0, [])
         runTests ((modName, testName, implementation):rest) = do
           benchmarkStart <- getTime Monotonic
           recordedAt <- getCurrentTime
@@ -452,7 +515,10 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                         | Just async <- (fromException ex :: Maybe SomeAsyncException) -> throwIO async
                         | otherwise -> finish (displayException (ex :: SomeException)) 1
               return (code, case outcome of Right () -> True; _ -> False)
-          if finished then runTests rest else return code
+          if finished then do
+            (nextCode, recordings) <- runTests rest
+            return (nextCode, path : recordings)
+          else return (code, [path])
     runTests tests
 
 milliseconds :: TimeSpec -> Double
@@ -573,6 +639,8 @@ scaleSeriesReason old new = seriesIssue old <|> seriesIssue new <|>
 
 printScaleRecording :: Bool -> FilePath -> Maybe FilePath -> IO ()
 printScaleRecording useColor path baselinePath = do
+    when (maybe False ("git:" `isPrefixOf`) baselinePath) $
+      ioError (userError "--report only compares saved recordings; run acton test scale --compare git:REF to measure a Git revision")
     current <- readScaleRecording path
     baseline <- mapM readScaleRecording baselinePath
     let reports = recordingTests current

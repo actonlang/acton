@@ -134,6 +134,7 @@ module Acton.Compile
   , backPassFailureMessage
   , BackJobResult(..)
   , defaultCompileOptions
+  , clearModuleCaches
   , ProjectError(..)
   , throwProjectError
   , fetchDependencies
@@ -958,6 +959,17 @@ nameHashCache = unsafePerformIO (newMVar M.empty)
 {-# NOINLINE nameHashOneCache #-}
 nameHashOneCache :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))
 nameHashOneCache = unsafePerformIO (newMVar M.empty)
+
+-- | Start an independent build of another source tree. These caches are keyed
+-- by module name, so they cannot cross revision boundaries. The caller must
+-- finish all compiler jobs before clearing them.
+clearModuleCaches :: IO ()
+clearModuleCaches = do
+  modifyMVar_ tyPathCache (const (return M.empty))
+  modifyMVar_ pubHashCache (const (return M.empty))
+  modifyMVar_ implHashCache (const (return M.empty))
+  modifyMVar_ nameHashCache (const (return M.empty))
+  modifyMVar_ nameHashOneCache (const (return M.empty))
 
 -- | Resolve the on-disk .tydb path for a module, using a process-wide cache.
 -- Avoids repeated filesystem walks when many modules share dependencies.
