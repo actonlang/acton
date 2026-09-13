@@ -235,22 +235,20 @@ int64_t B_listD_count(B_list self, B_Eq W_EqD_B, $WORD val) {
 
 
 
-// B_OrdD_list ////////////////////////////////////////////////////////
+// B_EqD_list /////////////////////////////////////////////////////////
 
-bool B_OrdD_listD___eq__ (B_OrdD_list w, B_list a, B_list b) {
+bool B_EqD_listD___eq__ (B_EqD_list w, B_list a, B_list b) {
     if (a == b)
         return true;
     if (a->length != b->length) return false;
-    B_Ord w2 = w->W_OrdD_AD_OrdD_list;
+    B_Eq w2 = w->W_EqD_AD_EqD_list;
     for (int i = 0; i<a->length; i++) {
         if ((w2->$class->__ne__(w2,a->data[i],b->data[i]))) return false;
     }
     return true;
 }
 
-bool B_OrdD_listD___ne__ (B_OrdD_list w, B_list a, B_list b) {
-    return !(w->$class->__eq__(w,a,b));
-}
+// B_OrdD_list ////////////////////////////////////////////////////////
 
 bool B_OrdD_listD___lt__ (B_OrdD_list w, B_list a, B_list b) {
     int minl = a->length<b->length ? a->length : b->length;
