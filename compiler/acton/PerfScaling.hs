@@ -26,7 +26,6 @@ import Control.Monad
 import Data.Char (chr, isAscii, isAlphaNum, isPrint)
 import Data.Bits (bit, (.|.))
 import Data.List (foldl', isPrefixOf, intercalate)
-import Data.List.Split (splitOn)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.IORef
 import qualified Data.IntMap.Strict as IM
@@ -93,10 +92,10 @@ scaleWorktreePath source checkout path =
 -- survive its removal. The sibling lock also protects recovery after a crash.
 withScaleWorktree :: FilePath -> FilePath -> String -> (FilePath -> FilePath -> IO a) -> IO a
 withScaleWorktree cache project ref action = do
-    when (null ref) (ioError (userError "--compare git:REF requires a Git revision"))
+    when (null ref || "-" `isPrefixOf` ref) (ioError (userError "--compare git:REF requires a Git revision"))
     root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
     common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
-    previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", "--end-of-options", ref ++ "^{commit}"]
+    previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", ref ++ "^{commit}"]
     let key = BC.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
         directory = cache </> "worktrees" </> key
     createDirectoryIfMissing True directory
@@ -105,14 +104,10 @@ withScaleWorktree cache project ref action = do
       let remove = void (git root ["worktree", "remove", "--force", "--force", "--", baseline])
           cleanup = remove `catch` \err ->
             hPutStrLn stderr ("Could not remove comparison worktree " ++ baseline ++ ": " ++ displayException (err :: IOException))
-      -- A previous process may have died during checkout. Double --force also
-      -- handles Git's initialization lock, only at this command-owned path.
+      -- Clear a checkout left by a previous process. Double --force replaces
+      -- its stale registration, including Git's initialization lock.
       exists <- doesPathExist baseline
-      when exists $ do
-        registered <- splitOn "\0" <$> git root ["worktree", "list", "--porcelain", "-z"]
-        if ("worktree " ++ baseline) `elem` registered
-          then remove
-          else removePathForcibly baseline
+      when exists (removePathForcibly baseline)
       bracket_ (void (git root ["worktree", "add", "--force", "--force", "--detach", "--", baseline, previous])
                   `onException` cleanup)
                cleanup (action root baseline)

@@ -329,7 +329,7 @@ jobs:
           # fail the whole job.
           retry() { n=1; until "$@"; do [ $n -ge 3 ] && { echo "failed after 3 attempts: $*" >&2; return 1; }; echo "attempt $n failed, retrying in 15s: $*" >&2; sleep 15; n=$((n+1)); done; }
           retry apt-get update
-          retry apt-get install -qy bzip2 curl g++ haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
+          retry apt-get install -qy bzip2 curl g++ git haskell-stack libgmp-dev libncurses-dev make procps zlib1g-dev
           retry apt-get install -qy gdb
           # Reclaim the apt download cache; these containers have limited disk.
           apt-get clean || true

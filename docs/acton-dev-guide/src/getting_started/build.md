@@ -6,6 +6,7 @@ This repo builds the compiler (Haskell), runtime, and bundled deps into `dist/`.
 
 - `stack` for Haskell builds (compiler + LSP)
 - `make`, `curl`, `tar`, `xz` (used by the Makefile)
+- `git` for compiler tests and Git revision comparisons
 - Zig is downloaded automatically into `dist/zig` (version pinned in `Makefile`)
 
 ## Common targets

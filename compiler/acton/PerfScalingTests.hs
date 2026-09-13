@@ -609,7 +609,8 @@ withGitFixture action = withSystemTempDirectory "acton-scale-git-test" $ \tempor
     let project = repo </> "bench/perf"
         fingerprint = Fingerprint.formatFingerprint
           (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "sample") 1)
-    _ <- fixtureGit repo ["init", "-q", "--initial-branch=main"]
+    _ <- fixtureGit repo ["init", "-q"]
+    _ <- fixtureGit repo ["symbolic-ref", "HEAD", "refs/heads/main"]
     createDirectoryIfMissing True (project </> "src")
     createDirectoryIfMissing True (repo </> "shared/src")
     createDirectoryIfMissing True (repo </> "directory")
