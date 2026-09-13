@@ -5,7 +5,9 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import Acton.Testing (TestResult(..))
 import Codec.Compression.Zlib (decompress)
-import Control.Exception (throwIO)
+import Control.Exception (IOException, displayException, throwIO, try)
+import Control.Concurrent.Async (async, cancel, waitCatch)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Monad (forM_, when)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.KeyMap as KM
@@ -23,10 +25,12 @@ import Data.Word (Word8)
 import Data.Maybe (isJust)
 import qualified Options.Applicative as O
 import TestPerf (perfInfo)
+import TestRunner (readScaleSourceInfo)
 import System.Clock (Clock(Monotonic), fromNanoSecs, getTime)
 import System.Directory
 import System.Exit
 import System.FilePath
+import System.FileLock (SharedExclusive(Exclusive), tryLockFile, unlockFile)
 import System.IO.Temp (withSystemTempDirectory)
 import System.Process
 import System.Random (mkStdGen, randoms)
@@ -400,7 +404,7 @@ scaleTests = testGroup "performance scaling studies"
       withSystemTempDirectory "acton-scaling-monitor" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "1B", "--max-time", "2s"]
         let reason = "memory monitoring unavailable: injected failure"
-        code <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Nothing)] Nothing
+        (code, _) <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Nothing)] Nothing
           (\_ _ _ _ -> throwIO (ScalingStopped reason))
         assertEqual "an unavailable guard cannot report success" 2 code
         files <- filter ((== ".jsonl") . takeExtension) <$> listDirectory directory
@@ -419,7 +423,7 @@ scaleTests = testGroup "performance scaling studies"
             baseline = ScaleRecording "old.jsonl" KM.empty (M.singleton ("sample", "test") series) Nothing
             implementation = replicate 64 'a'
         calls <- newIORef []
-        code <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Just implementation)] (Just baseline) $ \_ n _ _ -> do
+        (code, _) <- runScalingStudy False gopts opts directory KM.empty [("sample", "test", Just implementation)] (Just baseline) $ \_ n _ _ -> do
           modifyIORef' calls (++ [n])
           return (modelResult n 0.001)
         assertEqual "all scheduled sizes completed" 0 code
@@ -435,7 +439,7 @@ scaleTests = testGroup "performance scaling studies"
   , testCase "each benchmark owns its journal while sharing the command budget" $
       withSystemTempDirectory "acton-scale-files" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s", "--json"]
-        code <- runScalingStudy False gopts opts directory KM.empty
+        (code, _) <- runScalingStudy False gopts opts directory KM.empty
           [("sample", "one", Nothing), ("sample", "two", Nothing)] Nothing $ \_ n _ name ->
             if name == "two" then throwIO (ScalingStopped "time limit reached") else return (modelResult n 1)
         assertEqual "the time ceiling is a normal stop" 0 code
@@ -449,13 +453,189 @@ scaleTests = testGroup "performance scaling studies"
         assertEqual "both files identify the common command"
           (KM.lookup "run_id" (recordingHeader one)) (KM.lookup "run_id" (recordingHeader two))
   , scaleReportTests
+  , scaleGitTests
   ]
+
+-- Git worktrees ---------------------------------------------------------------
+
+scaleGitTests :: TestTree
+scaleGitTests = testGroup "Git comparisons"
+  [ testCase "Git syntax is explicit and reports remain offline" $ do
+      forM_ ["git:main", "git:HEAD~1", "main", "./git:main"] $ \target -> do
+        (_, opts) <- parseScale ["--compare", target]
+        assertEqual "the target is preserved" (Just target) (C.testCompare opts)
+      (_, empty) <- parseScale ["--compare", "git:"]
+      assertBool "empty Git revisions fail validation" (isJust (validateScalingOptions empty))
+      result <- try (printScaleRecording False "missing.jsonl" (Just "git:HEAD")) :: IO (Either IOException ())
+      assertBool "offline reports reject Git before reading either path"
+        (either (isInfixOf "--report only compares saved recordings" . displayException) (const False) result)
+  , testCase "one detached baseline in the cache leaves the current checkout in place" $
+      withGitFixture $ \repo project -> do
+        let cache = takeDirectory repo </> "cache"
+        writeFile (repo </> "version.txt") "staged\n"
+        _ <- fixtureGit repo ["add", "version.txt"]
+        writeFile (repo </> "version.txt") "working\n"
+        writeFile (repo </> "untracked.txt") "new\n"
+        before <- fixtureGit repo ["status", "--porcelain"]
+        index <- BS.readFile (repo </> ".git/index")
+        trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
+        revision <- head . lines <$> fixtureGit repo ["rev-parse", "HEAD~1"]
+        path <- withScaleWorktree cache project "HEAD~1" $ \root old -> do
+          assertEqual "root is the original checkout" repo root
+          assertEqual "baseline is under the requested cache" (cache </> "worktrees") (takeDirectory (takeDirectory old))
+          assertEqual "the full commit identifies the checkout" revision (takeFileName old)
+          lock <- tryLockFile (old <.> "lock") Exclusive
+          forM_ lock unlockFile
+          assertBool "the sibling lock is held throughout the action" (not (isJust lock))
+          during <- fixtureGit repo ["worktree", "list", "--porcelain"]
+          assertEqual "exactly one Git worktree is registered" 1
+            (length (filter (isPrefixOf "worktree ") (lines during)) - length (filter (isPrefixOf "worktree ") (lines trees)))
+          assertEqual "old revision" "old\n" =<< readFile (old </> "version.txt")
+          assertEqual "current source stays local" "working\n" =<< readFile (root </> "version.txt")
+          assertEqual "untracked source stays local" "new\n" =<< readFile (root </> "untracked.txt")
+          assertBool "untracked files are absent from baseline" . not =<< doesFileExist (old </> "untracked.txt")
+          assertBool "nested project retains its config" =<< doesFileExist (scaleWorktreePath root old project </> "Build.act")
+          assertEqual "tracked sibling dependency is included" "sibling\n" =<< readFile (old </> "shared/src/input.txt")
+          assertEqual "current branch stays checked out" "main\n" =<< fixtureGit root ["rev-parse", "--abbrev-ref", "HEAD"]
+          assertEqual "baseline HEAD is detached" "HEAD\n" =<< fixtureGit old ["rev-parse", "--abbrev-ref", "HEAD"]
+          writeFile (cache </> "unrelated") "keep\n"
+          return old
+        assertEqual "caller changes stay intact" before =<< fixtureGit repo ["status", "--porcelain"]
+        assertEqual "the caller index is untouched" index =<< BS.readFile (repo </> ".git/index")
+        assertEqual "baseline is deregistered" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+        assertBool "owned checkout is removed" . not =<< doesDirectoryExist path
+        assertEqual "other cache contents stay intact" "keep\n" =<< readFile (cache </> "unrelated")
+        withScaleWorktree cache project revision $ \_ again ->
+          assertEqual "the same commit always gets the same path" path again
+  , testCase "overlapping comparisons own separate cache directories" $
+      withGitFixture $ \repo project -> do
+        let cache = takeDirectory repo </> "cache"
+        paths <- withScaleWorktree cache project "HEAD~1" $ \_ first -> do
+          second <- withScaleWorktree cache project "HEAD" $ \_ second -> do
+            assertBool "each comparison has its own worktree" (first /= second)
+            assertBool "first remains present" =<< doesDirectoryExist first
+            return second
+          assertBool "cleaning the second retains the first" =<< doesDirectoryExist first
+          return [first, second]
+        forM_ paths $ \path -> assertBool "owned checkout is removed" . not =<< doesDirectoryExist path
+  , testCase "a leftover checkout or registration is recovered at its stable path" $
+      withGitFixture $ \repo project -> do
+        let cache = takeDirectory repo </> "cache"
+        trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
+        path <- withScaleWorktree cache project "HEAD~1" $ \_ old -> return old
+        _ <- fixtureGit repo ["worktree", "add", "--detach", path, "HEAD"]
+        _ <- fixtureGit repo ["worktree", "lock", "--reason", "initializing", path]
+        writeFile (path </> "untracked.txt") "leftover\n"
+        withScaleWorktree cache project "HEAD~1" $ \_ old -> do
+          assertEqual "recovery keeps the path" path old
+          assertEqual "the requested revision is restored" "old\n" =<< readFile (old </> "version.txt")
+          assertBool "leftover test files are discarded" . not =<< doesFileExist (old </> "untracked.txt")
+        _ <- fixtureGit repo ["worktree", "add", "--detach", path, "HEAD"]
+        _ <- fixtureGit repo ["worktree", "lock", "--reason", "initializing", path]
+        removeDirectoryRecursive path
+        withScaleWorktree cache project "HEAD~1" $ \_ old ->
+          assertEqual "a stale registration can be replaced" "old\n" =<< readFile (old </> "version.txt")
+        createDirectory path
+        writeFile (path </> "unfinished") "interrupted checkout\n"
+        withScaleWorktree cache project "HEAD~1" $ \_ old -> do
+          assertEqual "an unregistered partial checkout can be replaced" "old\n" =<< readFile (old </> "version.txt")
+          assertBool "unfinished files are removed" . not =<< doesFileExist (old </> "unfinished")
+        let external = takeDirectory repo </> "external"
+        createDirectory external
+        writeFile (external </> "sentinel") "keep\n"
+        createDirectoryLink external path
+        withScaleWorktree cache project "HEAD~1" $ \_ old ->
+          assertEqual "recovery uses the owned path" path old
+        assertEqual "recovery never follows a cache-entry symlink" "keep\n" =<< readFile (external </> "sentinel")
+        assertEqual "only the owned worktree is removed" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+  , testCase "source provenance ignores only the compiler work lock" $
+      withGitFixture $ \repo project -> do
+        removeFile (repo </> ".gitignore")
+        _ <- fixtureGit repo ["commit", "-qam", "Remove ignore rules"]
+        writeFile (repo </> ".acton.lock") ""
+        writeFile (project </> ".acton.lock") ""
+        clean <- readScaleSourceInfo project
+        assertEqual "locks do not mark source dirty" (Just (Aeson.Bool False)) (KM.lookup "git_dirty" clean)
+        writeFile (repo </> "version.txt") "changed\n"
+        dirty <- readScaleSourceInfo project
+        assertEqual "source edits elsewhere in the repository remain visible" (Just (Aeson.Bool True)) (KM.lookup "git_dirty" dirty)
+  , testCase "failed and interrupted studies clean worktrees and retain recordings" $
+      withGitFixture $ \repo project -> do
+        trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
+        let recording = project </> "out/perf_scaling/partial.jsonl"
+        result <- try (withScaleWorktree (takeDirectory repo </> "cache") project "HEAD~1" $ \_ _ -> do
+          createDirectoryIfMissing True (takeDirectory recording)
+          writeFile recording "completed sample\n"
+          throwIO (userError "injected study failure")) :: IO (Either IOException ())
+        assertBool "original failure survives cleanup" (either (isInfixOf "injected study failure" . displayException) (const False) result)
+        assertEqual "the recording survives" "completed sample\n" =<< readFile recording
+        assertEqual "failed study cleans worktrees" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+        ready <- newEmptyMVar
+        never <- newEmptyMVar
+        worker <- async (withScaleWorktree (takeDirectory repo </> "cache") project "HEAD" $ \_ _ -> putMVar ready () >> takeMVar never)
+        takeMVar ready
+        cancel worker
+        stopped <- waitCatch worker
+        assertBool "cancellation propagates" (either (const True) (const False) stopped)
+        assertEqual "interrupted study cleans worktrees" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+  , testCase "invalid and non-commit refs fail before invoking the study" $
+      withGitFixture $ \repo project -> do
+        trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
+        forM_ ["", "missing-ref", "HEAD:version.txt", "HEAD^{tree}", "--output=escaped"] $ \ref -> do
+          called <- newIORef False
+          result <- try (withScaleWorktree (takeDirectory repo </> "cache") project ref $ \_ _ -> writeIORef called True) :: IO (Either IOException ())
+          assertBool ("must reject " ++ show ref) (either (const True) (const False) result)
+          assertEqual "the study never starts" False =<< readIORef called
+        assertEqual "invalid refs leave no worktrees" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+  , testCase "explicit paths retain repository and external boundaries" $ do
+      assertEqual "repo sibling maps to its snapshot" "/tmp/current/shared"
+        (scaleWorktreePath "/repo" "/tmp/current" "/repo/shared")
+      assertEqual "similar prefix remains external" "/repository/shared"
+        (scaleWorktreePath "/repo" "/tmp/current" "/repository/shared")
+  ]
+
+fixtureGit :: FilePath -> [String] -> IO String
+fixtureGit repo args = do
+    (code, out, err) <- readProcessWithExitCode "git"
+      (["-C", repo, "-c", "user.name=Acton tests", "-c", "user.email=tests@example.invalid",
+        "-c", "commit.gpgsign=false"] ++ args) ""
+    assertEqual (out ++ err) ExitSuccess code
+    return out
+
+withGitFixture :: (FilePath -> FilePath -> IO a) -> IO a
+withGitFixture action = withSystemTempDirectory "acton-scale-git-test" $ \temporary -> do
+    createDirectory (temporary </> "repo")
+    repo <- canonicalizePath (temporary </> "repo")
+    let project = repo </> "bench/perf"
+        fingerprint = Fingerprint.formatFingerprint
+          (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "sample") 1)
+    _ <- fixtureGit repo ["init", "-q"]
+    _ <- fixtureGit repo ["symbolic-ref", "HEAD", "refs/heads/main"]
+    createDirectoryIfMissing True (project </> "src")
+    createDirectoryIfMissing True (repo </> "shared/src")
+    createDirectoryIfMissing True (repo </> "directory")
+    writeFile (repo </> ".gitignore") "out/\n.acton*\n"
+    writeFile (project </> "Build.act") ("name = \"sample\"\nfingerprint = " ++ fingerprint ++ "\n")
+    writeFile (project </> "src/main.act") "import testing\ndef _test_sample(t: testing.SyncT):\n    for scale in t.loop():\n        assert scale > 0\n"
+    writeFile (repo </> "shared/src/input.txt") "sibling\n"
+    writeFile (repo </> "directory/file.txt") "old child\n"
+    writeFile (repo </> "version.txt") "old\n"
+    writeFile (repo </> "gone.txt") "gone\n"
+    _ <- fixtureGit repo ["add", "."]
+    _ <- fixtureGit repo ["commit", "-qm", "Old version"]
+    writeFile (repo </> "version.txt") "committed\n"
+    _ <- fixtureGit repo ["commit", "-qam", "Current version"]
+    action repo project
 
 -- Live integration ------------------------------------------------------------
 
 -- Real measurements need a quiet machine; enable them with make test-performance.
 scaleIntegrationTests :: TestTree
-scaleIntegrationTests =
+scaleIntegrationTests = testGroup "scaling"
+  [ scaleJournalIntegrationTest, scaleGitIntegrationTest ]
+
+scaleJournalIntegrationTest :: TestTree
+scaleJournalIntegrationTest =
     testCase "scaling journals completed work when later work stops" $
       withSystemTempDirectory "acton-perf-scaling" $ \project -> do
         acton <- canonicalizePath "../../dist/bin/acton"
@@ -584,6 +764,82 @@ scaleIntegrationTests =
           assertEnd "sample output exceeded 1MiB per stream" events
           assertBool "oversized unterminated output cannot contribute a point" (null (eventsOf "point" events))
 
+scaleGitIntegrationTest :: TestTree
+scaleGitIntegrationTest = testCase "Git revisions produce durable comparable recordings without changing the checkout" $
+    withGitFixture $ \repo project -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      let source = project </> "src/main.act"
+          dependency = project </> "src/workload.act"
+          workload n = unlines ["def items(scale: int) -> list[int]:", "    return list(range(scale * " ++ show n ++ "))"]
+          run args = readCreateProcessWithExitCode (proc acton (["test", "scale"] ++ args)) { cwd = Just project } ""
+      writeFile source $ unlines
+        [ "import testing", "import workload", "import time", ""
+        , "def _test_sample(t: testing.SyncT):"
+        , "    for scale in t.loop():"
+        , "        values = workload.items(scale)"
+        , "        assert len(values) >= scale"
+        , "        if scale > 200:"
+        , "            sw = time.Stopwatch()"
+        , "            while sw.elapsed().to_float() < 30.0:"
+        , "                pass"
+        ]
+      -- Build products must not turn a clean source snapshot into a dirty one.
+      removeFile (repo </> ".gitignore")
+      writeFile dependency (workload (100 :: Int))
+      _ <- fixtureGit repo ["add", "."]
+      _ <- fixtureGit repo ["commit", "-qm", "Baseline workload"]
+      oldRevision <- lines <$> fixtureGit repo ["rev-parse", "HEAD"]
+      writeFile dependency (workload (300 :: Int))
+      _ <- fixtureGit repo ["commit", "-qam", "Current workload"]
+      newRevision <- lines <$> fixtureGit repo ["rev-parse", "HEAD"]
+      writeFile dependency (workload (200 :: Int))
+      before <- fixtureGit repo ["status", "--porcelain", "--untracked-files=no"]
+      index <- BS.readFile (repo </> ".git/index")
+      trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
+      (code, out, err) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", "100",
+                               "--end-scale", "200", "--max-time", "10s", "--max-memory", "128MiB", "--json"]
+      assertEqual (out ++ err) ExitSuccess code
+      events <- decodeEvents out
+      let headers = eventsOf "study" events
+      assertEqual "both studies are streamed" 2 (length headers)
+      paths <- mapM (field "path") headers :: IO [FilePath]
+      assertBool "each side has a distinct durable journal" (head paths /= last paths)
+      saved <- mapM (\path -> BL.readFile path >>= decodeEvents . BL.unpack) paths
+      forM_ (zip3 paths headers saved) $ \(path, header, journal) -> do
+        assertEqual "journals stay in the original project" (project </> "out/perf_scaling") (takeDirectory path)
+        assertEqual "the saved header matches stdout" header =<< requireEvent "study" journal
+        assertEqual "both sides measure the requested sizes" [Aeson.Number 100, Aeson.Number 200]
+          [value | point <- eventsOf "point" journal, Just value <- [KM.lookup "scale" point]]
+      oldHost <- field "host" (head headers)
+      newHost <- field "host" (last headers)
+      assertEqual "baseline commit provenance" (Aeson.toJSON (head oldRevision)) =<< field "git_revision" oldHost
+      assertEqual "current commit provenance" (Aeson.toJSON (head newRevision)) =<< field "git_revision" newHost
+      assertEqual "baseline is clean" (Just (Aeson.Bool False)) (KM.lookup "git_dirty" oldHost)
+      assertEqual "current includes dirty source" (Just (Aeson.Bool True)) (KM.lookup "git_dirty" newHost)
+      assertBool "changed dependency has a distinct implementation hash"
+        (KM.lookup "implementation_hash" (head headers) /= KM.lookup "implementation_hash" (last headers))
+      assertEqual "current recording names the durable baseline" (Aeson.toJSON (head paths)) =<< field "baseline" (last headers)
+      assertEqual "source changes stay intact" before =<< fixtureGit repo ["status", "--porcelain", "--untracked-files=no"]
+      assertEqual "index stays intact" index =<< BS.readFile (repo </> ".git/index")
+      assertEqual "worktrees are removed before return" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+      (reportCode, reportOut, reportErr) <- run ["--report", last paths, "--compare", head paths, "--color", "never"]
+      assertEqual (reportOut ++ reportErr) ExitSuccess reportCode
+      assertBool "saved comparison renders after worktree cleanup" ("baseline" `isInfixOf` reportOut && "current" `isInfixOf` reportOut)
+      (partialCode, partialOut, partialErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", "100",
+                                                   "--end-scale", "400", "--max-time", "3s", "--max-memory", "128MiB", "--json"]
+      assertEqual (partialOut ++ partialErr) ExitSuccess partialCode
+      partial <- decodeEvents partialOut
+      assertEqual "a partial baseline still produces a comparison" 2 (length (eventsOf "study" partial))
+      assertEqual "neither study claims the unreached endpoint" [Just (Aeson.Bool False), Just (Aeson.Bool False)]
+        (map (KM.lookup "end_scale_reached") (eventsOf "end" partial))
+      let partialSummary = last (eventsOf "test_end" partial)
+      assertEqual "completed smaller baseline sizes are remeasured" (Just (Aeson.String "compared")) (KM.lookup "outcome" partialSummary)
+      writeFile source "import testing\n"
+      (missingCode, missingOut, missingErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--json"]
+      assertBool (missingOut ++ missingErr) (missingCode /= ExitSuccess && "same single benchmark" `isInfixOf` missingErr)
+      assertEqual "missing current test fails before measuring either side" "" missingOut
+      assertEqual "preflight failure cleans the baseline worktree" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
+
 -- Test helpers ----------------------------------------------------------------
 
 point :: Int -> [Double] -> Double -> ScalePoint
@@ -610,7 +866,7 @@ simulate :: String -> [String] -> (Int -> Int -> TestResult) -> IO (Int, [Aeson.
 simulate name options result = withSystemTempDirectory ("acton-scale-" ++ name) $ \directory -> do
     (gopts, opts) <- parseScale (["--max-memory", "128MiB", "--max-time", "30s"] ++ options)
     calls <- newIORef IM.empty
-    code <- runScalingStudy False gopts opts directory KM.empty [("sample", name, Nothing)] Nothing $ \_ scale modName testName -> do
+    (code, _) <- runScalingStudy False gopts opts directory KM.empty [("sample", name, Nothing)] Nothing $ \_ scale modName testName -> do
       counts <- readIORef calls
       when (sum (IM.elems counts) >= 500) (assertFailure "the simulated study did not stop")
       let invocation = IM.findWithDefault 0 scale counts + 1
@@ -768,6 +1024,8 @@ scaleReportTests = testGroup "terminal charts"
                                    ChartPoint 2 (16/1024) (16/1024) (16/1024) True] []
       assertBool "small allocation volumes use the full vertical range"
         ('●' `elem` concat (take 3 (chartText False 67 12 small)))
+      assertBool "small allocation volumes use bytes"
+        ("Allocated (B)" `isInfixOf` head (chartText False 67 12 small))
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
         KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
           (code, out, err) <- run
@@ -777,6 +1035,20 @@ scaleReportTests = testGroup "terminal charts"
           assertBool "older journals already contain allocation samples" ("Allocated (KiB)" `isInfixOf` out)
           assertBool "known allocation data is not labelled unavailable"
             (not ("Allocation measurements are unavailable" `isInfixOf` out))
+  , testCase "allocation comparisons share binary units across both curves and ranges" $ do
+      let current = [ChartPoint 1 1024 1024 1024 True]
+          baseline low = [ChartPoint 1 low 512 2097152 True]
+          render old = chartText False 67 12 (Chart Allocated current old)
+      assertBool "the current curve alone uses MiB"
+        ("Allocated (MiB)" `isInfixOf` head (render []))
+      forM_ [0, 1] $ \low -> do
+        let output = render (baseline low)
+        assertBool "the baseline range selects GiB on linear and logarithmic axes"
+          ("Allocated (GiB)" `isInfixOf` head output)
+        assertBool "the current value uses the shared unit"
+          ("last 9.77e-4" `isInfixOf` head output)
+        assertBool "axis labels use GiB"
+          (any (isInfixOf (if low == 0 then "2.000│" else "0.954│")) output)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
       forM_ [1, 2] $ \version -> do
         let named modName = KM.insert "module" (Aeson.String modName) . KM.insert "test" (Aeson.String "same")
