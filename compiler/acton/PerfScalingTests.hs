@@ -412,8 +412,9 @@ scaleTests = testGroup "performance scaling studies"
         events <- BL.readFile (directory </> head files) >>= decodeEvents . BL.unpack
         assertEnd reason events
         assertBool "an unguarded sample cannot contribute a point" (null (eventsOf "point" events))
-  , testCase "comparison replays completed recorded sizes without adaptive early stopping" $
-      forM_ [([], [1,3..49]), (["--start-scale", "8", "--end-scale", "17"], [9,11..17])] $ \(args, expected) ->
+  , testCase "comparison replays completed sizes and continues to an explicit endpoint" $
+      forM_ [([], [1,3..49]), (["--start-scale", "8", "--end-scale", "17"], [9,11..17]),
+             (["--end-scale", "100"], [1,3..49] ++ [98,100])] $ \(args, expected) ->
       withSystemTempDirectory "acton-scale-replay" $ \directory -> do
         (gopts, opts) <- parseScale (["--max-memory", "128MiB", "--max-time", "30s", "--json"] ++ args)
         let sizes = [1,3..49]
@@ -427,15 +428,21 @@ scaleTests = testGroup "performance scaling studies"
           modifyIORef' calls (++ [n])
           return (modelResult n 0.001)
         assertEqual "all scheduled sizes completed" 0 code
-        assertEqual "only completed sizes inside the requested range are replayed, regardless of timing"
+        assertEqual "completed sizes are replayed, then the requested endpoint is reached"
           (concatMap (replicate 3) expected) =<< readIORef calls
         [name] <- listDirectory directory
         assertBool name ("sample.test__" `isInfixOf` name && "__aaaaaaaaaaaa.jsonl" `isInfixOf` name)
         recording <- readScaleRecording (directory </> name)
         assertEqual "full implementation identity is retained" (Just (Aeson.toJSON implementation))
           (KM.lookup "implementation_hash" (recordingHeader recording))
-        assertEqual "completion describes replay" (Just "Completed baseline sizes remeasured")
+        assertEqual "completion describes the requested range or replay"
+          (Just (if null args then "Completed baseline sizes remeasured"
+                 else "Requested scale range measured; growth remains inconclusive"))
           (seriesReason (recordingTests recording M.! ("sample", "test")))
+        events <- BL.readFile (directory </> name) >>= decodeEvents . BL.unpack
+        end <- requireEvent "end" events
+        assertEqual "an explicit endpoint is reached" (Just (if null args then Aeson.Null else Aeson.Bool True))
+          (KM.lookup "end_scale_reached" end)
   , testCase "each benchmark owns its journal while sharing the command budget" $
       withSystemTempDirectory "acton-scale-files" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s", "--json"]
@@ -739,7 +746,7 @@ scaleJournalIntegrationTest =
           assertEqual "the recorded raw identity excludes a colliding display name"
             (Just (Aeson.String "_test_partial")) (KM.lookup "test" event)
         summary <- requireEvent "test_end" compared
-        assertEqual "the recorded schedule completed" (Just (Aeson.String "compared")) (KM.lookup "outcome" summary)
+        assertEqual "the requested recorded range completed" (Just (Aeson.String "range")) (KM.lookup "outcome" summary)
         assertEqual "the old recording is unchanged" original =<< BS.readFile originalPath
         (unreachedCode, _, unreachedErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "scale", "--compare", originalPath, "--end-scale", "1001", "--json"])
@@ -778,7 +785,7 @@ scaleGitIntegrationTest = testCase "Git revisions produce durable comparable rec
         , "    for scale in t.loop():"
         , "        values = workload.items(scale)"
         , "        assert len(values) >= scale"
-        , "        if scale > 200:"
+        , "        if scale > 200 and len(values) == scale * 100:"
         , "            sw = time.Stopwatch()"
         , "            while sw.elapsed().to_float() < 30.0:"
         , "                pass"
@@ -825,15 +832,21 @@ scaleGitIntegrationTest = testCase "Git revisions produce durable comparable rec
       (reportCode, reportOut, reportErr) <- run ["--report", last paths, "--compare", head paths, "--color", "never"]
       assertEqual (reportOut ++ reportErr) ExitSuccess reportCode
       assertBool "saved comparison renders after worktree cleanup" ("baseline" `isInfixOf` reportOut && "current" `isInfixOf` reportOut)
-      (partialCode, partialOut, partialErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", "100",
-                                                   "--end-scale", "400", "--max-time", "3s", "--max-memory", "128MiB", "--json"]
-      assertEqual (partialOut ++ partialErr) ExitSuccess partialCode
-      partial <- decodeEvents partialOut
-      assertEqual "a partial baseline still produces a comparison" 2 (length (eventsOf "study" partial))
-      assertEqual "neither study claims the unreached endpoint" [Just (Aeson.Bool False), Just (Aeson.Bool False)]
-        (map (KM.lookup "end_scale_reached") (eventsOf "end" partial))
-      let partialSummary = last (eventsOf "test_end" partial)
-      assertEqual "completed smaller baseline sizes are remeasured" (Just (Aeson.String "compared")) (KM.lookup "outcome" partialSummary)
+      forM_ ["100", "400"] $ \start -> do
+        (partialCode, partialOut, partialErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", start,
+                                                     "--end-scale", "400", "--max-time", "3s", "--max-memory", "128MiB", "--json"]
+        assertEqual (partialOut ++ partialErr) ExitSuccess partialCode
+        partial <- decodeEvents partialOut
+        assertEqual "an incomplete baseline still produces a comparison" 2 (length (eventsOf "study" partial))
+        assertEqual "each revision attempts the endpoint independently" [Just (Aeson.Bool False), Just (Aeson.Bool True)]
+          (map (KM.lookup "end_scale_reached") (eventsOf "end" partial))
+        let partialSummary = last (eventsOf "test_end" partial)
+        assertEqual "the current version reaches its requested endpoint" (Just (Aeson.String "range")) (KM.lookup "outcome" partialSummary)
+        partialPaths <- mapM (field "path") (eventsOf "study" partial) :: IO [FilePath]
+        (savedCode, savedOut, savedErr) <- run ["--report", last partialPaths, "--compare", head partialPaths, "--color", "never"]
+        assertEqual (savedOut ++ savedErr) ExitSuccess savedCode
+        assertBool "the saved comparison explains the shorter baseline"
+          ("Baseline stopped: time limit reached" `isInfixOf` savedOut)
       writeFile source "import testing\n"
       (missingCode, missingOut, missingErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--json"]
       assertBool (missingOut ++ missingErr) (missingCode /= ExitSuccess && "same single benchmark" `isInfixOf` missingErr)

@@ -447,26 +447,27 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                           Just False -> driftFailures + 1
                           Nothing -> driftFailures
                         finish = endTest modName testName
-                    if isJust old then case pending of
-                      [] -> finish "compared" "Completed baseline sizes remeasured" points' Nothing
+                    case pending of
                       next:rest -> study modName testName next points' reference' failures rest
-                    else if targetReached then
-                      finish "range" ("Requested scale range measured" ++
-                        if isJust trend && checked == Just True then "" else "; growth remains inconclusive")
-                        points' (if checked == Just True then trend else Nothing)
-                    else if isJust trend && checked == Just True then
-                      finish "stable" "Growth stable over the measured range" points' trend
-                    else if automatic && failures >= 3 then
-                      finish "inconclusive" "Reference measurements did not settle" points' Nothing
-                    else if automatic && length (takeWhile (not . scaleReliable) points') >= 20 then
-                      finish "inconclusive" "Timing stayed too short or noisy across 20 successive sizes" points' Nothing
-                    else case nextScale cap points' of
-                      Nothing -> finish "limited" "Next scale approaches the memory or integer limit" points' Nothing
-                      Just next ->
-                        let chosen = case C.testEndScale opts of
-                              Just target | scale < target -> min next target
-                              _ -> next
-                        in study modName testName chosen points' reference' failures []
+                      [] | isJust old && automatic ->
+                        finish "compared" "Completed baseline sizes remeasured" points' Nothing
+                      _ | targetReached ->
+                        finish "range" ("Requested scale range measured" ++
+                          if isJust trend && checked == Just True then "" else "; growth remains inconclusive")
+                          points' (if checked == Just True then trend else Nothing)
+                        | isJust trend && checked == Just True ->
+                        finish "stable" "Growth stable over the measured range" points' trend
+                        | automatic && failures >= 3 ->
+                        finish "inconclusive" "Reference measurements did not settle" points' Nothing
+                        | automatic && length (takeWhile (not . scaleReliable) points') >= 20 ->
+                        finish "inconclusive" "Timing stayed too short or noisy across 20 successive sizes" points' Nothing
+                        | otherwise -> case nextScale cap points' of
+                          Nothing -> finish "limited" "Next scale approaches the memory or integer limit" points' Nothing
+                          Just next ->
+                            let chosen = case C.testEndScale opts of
+                                  Just target | scale < target -> min next target
+                                  _ -> next
+                            in study modName testName chosen points' reference' failures []
               event "study" ["version" Aeson..= (3 :: Int), "host" Aeson..= host,
                              "module" Aeson..= modName, "test" Aeson..= testName,
                              "recorded_at" Aeson..= recordedAt, "run_id" Aeson..= runId,
@@ -651,13 +652,14 @@ printScaleRecording useColor path baselinePath = do
     forM_ baseline $ \old -> do
       when (M.null pairs) (ioError (userError "The recordings contain no matching benchmarks"))
       forM_ (M.toAscList pairs) $ \((modName, testName), (new, previous)) ->
-        forM_ (previous >>= (`scaleSeriesReason` new)) $ \reason ->
-          ioError (userError ("Cannot compare " ++ modName ++ "." ++ testName ++ ": " ++ reason))
+        forM_ previous $ \old -> when (hasSamples old && hasSamples new) $
+          forM_ (scaleSeriesReason old new) $ \reason ->
+            ioError (userError ("Cannot compare " ++ modName ++ "." ++ testName ++ ": " ++ reason))
       when (M.keys reports /= M.keys (recordingTests old)) $
         putStrLn "Only benchmarks present in both recordings are compared."
     putStrLn ("Recording: " ++ show path)
     forM_ baseline $ \old -> putStrLn ("Baseline: " ++ show (recordingPath old))
-    when (all (IM.null . seriesData) (M.elems reports)) $
+    unless (any hasSamples (M.elems reports)) $
       putStrLn "No accepted measurements in this recording."
     forM_ (M.toAscList pairs) $ \((modName, testName), (new, old)) -> do
       forM_ baseline $ \previous -> do
@@ -672,6 +674,7 @@ printScaleRecording useColor path baselinePath = do
     forM_ baseline $ \old -> putStrLn
       (maybe "Baseline is incomplete: no completion event was recorded." (("Baseline stopped: " ++) . clean) (recordingStopped old))
   where
+    hasSamples = any (not . null . snd) . IM.elems . seriesData
     clean = map (\c -> if isPrint c then c else ' ')
     endpointStatus prefix recording series =
       forM_ (AesonTypes.parseMaybe (Aeson..: "end_scale") (recordingHeader recording)) $ \target ->

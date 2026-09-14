@@ -238,8 +238,10 @@ branch, source files and index stay in place. Both versions are built before
 measurement, using the running compiler and the same build settings. The project
 build lock prevents another Acton build from replacing the current binary during
 the comparison. The baseline is measured first;
-the current version then remeasures its completed sizes, even if a resource limit
-stopped the baseline before the requested endpoint. Time and memory limits
+the current version then remeasures its completed sizes. With `--end-scale`, both
+versions attempt to reach that endpoint, even if the baseline stopped earlier
+or could not complete its first size. Without it, the current version only
+remeasures completed baseline sizes. Time and memory limits
 apply separately to each study. Select one benchmark that exists under the same
 module and test name in both revisions.
 

@@ -53,7 +53,7 @@ import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
-import PerfScaling (validateScalingOptions, printScaleRecording, withScaleWorktree, scaleWorktreePath)
+import PerfScaling (validateScalingOptions, printScaleRecording, readScaleRecording, withScaleWorktree, scaleWorktreePath)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, throwTo)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
@@ -755,11 +755,15 @@ runGitScalingComparison gopts opts topts paths ref = do
           [recording] -> withCurrentDirectory (projPath newPaths) $ do
             let newStudy = topts { C.testCompile = newOpts, C.testCompare = Just recording }
             -- A resource limit may stop the baseline short of the requested end.
-            -- Replay its completed sizes, retaining that endpoint in the report.
-            (compared, baseline) <- prepareScalingComparison newPaths newStudy { C.testEndScale = Nothing }
-            announce "Measuring current working tree at the recorded baseline sizes"
+            -- Replay its completed sizes, then continue to the requested end.
+            (compared, baseline) <- case C.testEndScale topts of
+              Just _ -> do
+                baseline <- readScaleRecording recording
+                return (newStudy, Just baseline)
+              Nothing -> prepareScalingComparison newPaths newStudy
+            announce "Measuring current working tree (replaying baseline sizes first)"
             fst <$> runScalingTests color gopts newOpts newPaths
-              compared { C.testEndScale = C.testEndScale topts } newModules directory newSource baseline
+              compared newModules directory newSource baseline
           _ -> printErrorAndExit "The Git baseline did not produce a scaling recording"
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
