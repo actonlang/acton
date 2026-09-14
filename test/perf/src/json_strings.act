@@ -1,0 +1,117 @@
+import json
+import testing
+
+
+# Scale is the number of object fields or record/string pairs. Fixture
+# construction and content checks are outside t.loop(); each body measures one
+# conversion and its output allocation. The fixtures contain no NUL, quotes,
+# backslashes or escaped characters, so their independently assembled JSON text
+# is also the exact encoded result.
+
+def object_fixture(size: int, unicode: bool) -> (dict[str, ?value], str):
+    # Distinct keys with a shared 128-character prefix, and 4096-character
+    # values. Unicode uses 2-, 3- and 4-byte UTF-8 characters in keys and values.
+    prefix = "åβ中🙂" * 32 if unicode else "abcdefghijklmnop" * 8
+    payload = "åβ中🙂" * 1024 if unicode else "0123456789abcdef" * 256
+    data: dict[str, ?value] = {}
+    fields: list[str] = []
+    for i in range(size):
+        key = prefix + ":" + str(i)
+        item = payload + ":" + str(i)
+        data[key] = item
+        fields.append('"' + key + '":"' + item + '"')
+    return data, r"{" + ",".join(fields) + r"}"
+
+def array_fixture(size: int) -> (list[?value], str):
+    # Each record repeats the same long ASCII and Unicode keys, while direct
+    # string elements alternate long ASCII and Unicode text. Exercise nested
+    # object conversion and the array's direct string path in a single batch.
+    ascii_key = "abcdefghijklmnop" * 8
+    unicode_key = "åβ中🙂" * 32
+    ascii_payload = "0123456789abcdef" * 128
+    unicode_payload = "åβ中🙂" * 512
+    data: list[?value] = []
+    elements: list[str] = []
+    for i in range(size):
+        ascii_item = ascii_payload + ":" + str(i)
+        unicode_item = unicode_payload + ":" + str(i)
+        record: dict[str, ?value] = {ascii_key: ascii_item, unicode_key: unicode_item}
+        data.append(record)
+        elements.append(r'{"' + ascii_key + '":"' + ascii_item + '","' + unicode_key + '":"' + unicode_item + r'"}')
+        item = ascii_item if i % 2 == 0 else unicode_item
+        data.append(item)
+        elements.append('"' + item + '"')
+    return data, "[" + ",".join(elements) + "]"
+
+def encode_object(t: testing.SyncT, data: dict[str, ?value], expected: str):
+    count = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = json.encode(data)
+        count += len(last)
+    testing.assertEqual(count, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last, expected)
+
+def decode_object(t: testing.SyncT, source: str, expected_items: int):
+    count = 0
+    repeats = 0
+    last: dict[str, ?value] = {}
+    for _ in t.loop():
+        repeats += 1
+        last = json.decode(source)
+        count += len(last)
+    testing.assertEqual(count, repeats * expected_items)
+    if repeats > 0:
+        testing.assertEqual(json.encode(last), source)
+
+def encode_array(t: testing.SyncT, data: list[?value], expected: str):
+    count = 0
+    repeats = 0
+    last = ""
+    for _ in t.loop():
+        repeats += 1
+        last = json.encode_list(data)
+        count += len(last)
+    testing.assertEqual(count, repeats * len(expected))
+    if repeats > 0:
+        testing.assertEqual(last, expected)
+
+def decode_array(t: testing.SyncT, source: str, expected_items: int):
+    count = 0
+    repeats = 0
+    last: list[?value] = []
+    for _ in t.loop():
+        repeats += 1
+        last = json.decode_list(source)
+        count += len(last)
+    testing.assertEqual(count, repeats * expected_items)
+    if repeats > 0:
+        testing.assertEqual(json.encode_list(last), source)
+
+
+def _test_encode_object_ascii(t: testing.SyncT):
+    data, source = object_fixture(t.scale(), False)
+    encode_object(t, data, source)
+
+def _test_decode_object_ascii(t: testing.SyncT):
+    data, source = object_fixture(t.scale(), False)
+    decode_object(t, source, len(data))
+
+def _test_encode_object_unicode(t: testing.SyncT):
+    data, source = object_fixture(t.scale(), True)
+    encode_object(t, data, source)
+
+def _test_decode_object_unicode(t: testing.SyncT):
+    data, source = object_fixture(t.scale(), True)
+    decode_object(t, source, len(data))
+
+def _test_encode_array_records(t: testing.SyncT):
+    data, source = array_fixture(t.scale())
+    encode_array(t, data, source)
+
+def _test_decode_array_records(t: testing.SyncT):
+    data, source = array_fixture(t.scale())
+    decode_array(t, source, len(data))
