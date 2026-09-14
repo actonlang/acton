@@ -25,7 +25,7 @@ import Data.Word (Word8)
 import Data.Maybe (isJust)
 import qualified Options.Applicative as O
 import TestPerf (perfInfo)
-import TestRunner (readScaleSourceInfo)
+import TestRunner (readScaleSourceInfo, withPerfWorktree, perfWorktreePath)
 import System.Clock (Clock(Monotonic), fromNanoSecs, getTime)
 import System.Directory
 import System.Exit
@@ -148,7 +148,7 @@ scaleOptionTests = testGroup "performance scaling options"
       forM_ [["--report", "one", "two"], ["--compare", "one", "two"],
              ["--compare", "one", "--compare", "two"], ["--report", "one", "--report", "two"]] $ \args ->
         rejects (["test", "scale"] ++ args)
-      forM_ [[], ["perf"], ["list"], ["stress"]] $ \mode ->
+      forM_ [[], ["list"], ["stress"]] $ \mode ->
         rejects (["test"] ++ mode ++ ["--compare", "before.jsonl"])
   , testCase "scale help exposes study and report controls" $
       case parseOptions ["test", "scale", "--help"] of
@@ -503,7 +503,7 @@ scaleGitTests = testGroup "Git comparisons"
         index <- BS.readFile (repo </> ".git/index")
         trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
         revision <- head . lines <$> fixtureGit repo ["rev-parse", "HEAD~1"]
-        path <- withScaleWorktree cache project "HEAD~1" $ \root old -> do
+        path <- withPerfWorktree cache project "HEAD~1" $ \root old -> do
           assertEqual "root is the original checkout" repo root
           assertEqual "baseline is under the requested cache" (cache </> "worktrees") (takeDirectory (takeDirectory old))
           assertEqual "the full commit identifies the checkout" revision (takeFileName old)
@@ -517,7 +517,7 @@ scaleGitTests = testGroup "Git comparisons"
           assertEqual "current source stays local" "working\n" =<< readFile (root </> "version.txt")
           assertEqual "untracked source stays local" "new\n" =<< readFile (root </> "untracked.txt")
           assertBool "untracked files are absent from baseline" . not =<< doesFileExist (old </> "untracked.txt")
-          assertBool "nested project retains its config" =<< doesFileExist (scaleWorktreePath root old project </> "Build.act")
+          assertBool "nested project retains its config" =<< doesFileExist (perfWorktreePath root old project </> "Build.act")
           assertEqual "tracked sibling dependency is included" "sibling\n" =<< readFile (old </> "shared/src/input.txt")
           assertEqual "current branch stays checked out" "main\n" =<< fixtureGit root ["rev-parse", "--abbrev-ref", "HEAD"]
           assertEqual "baseline HEAD is detached" "HEAD\n" =<< fixtureGit old ["rev-parse", "--abbrev-ref", "HEAD"]
@@ -528,13 +528,13 @@ scaleGitTests = testGroup "Git comparisons"
         assertEqual "baseline is deregistered" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
         assertBool "owned checkout is removed" . not =<< doesDirectoryExist path
         assertEqual "other cache contents stay intact" "keep\n" =<< readFile (cache </> "unrelated")
-        withScaleWorktree cache project revision $ \_ again ->
+        withPerfWorktree cache project revision $ \_ again ->
           assertEqual "the same commit always gets the same path" path again
   , testCase "overlapping comparisons own separate cache directories" $
       withGitFixture $ \repo project -> do
         let cache = takeDirectory repo </> "cache"
-        paths <- withScaleWorktree cache project "HEAD~1" $ \_ first -> do
-          second <- withScaleWorktree cache project "HEAD" $ \_ second -> do
+        paths <- withPerfWorktree cache project "HEAD~1" $ \_ first -> do
+          second <- withPerfWorktree cache project "HEAD" $ \_ second -> do
             assertBool "each comparison has its own worktree" (first /= second)
             assertBool "first remains present" =<< doesDirectoryExist first
             return second
@@ -545,29 +545,29 @@ scaleGitTests = testGroup "Git comparisons"
       withGitFixture $ \repo project -> do
         let cache = takeDirectory repo </> "cache"
         trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
-        path <- withScaleWorktree cache project "HEAD~1" $ \_ old -> return old
+        path <- withPerfWorktree cache project "HEAD~1" $ \_ old -> return old
         _ <- fixtureGit repo ["worktree", "add", "--detach", path, "HEAD"]
         _ <- fixtureGit repo ["worktree", "lock", "--reason", "initializing", path]
         writeFile (path </> "untracked.txt") "leftover\n"
-        withScaleWorktree cache project "HEAD~1" $ \_ old -> do
+        withPerfWorktree cache project "HEAD~1" $ \_ old -> do
           assertEqual "recovery keeps the path" path old
           assertEqual "the requested revision is restored" "old\n" =<< readFile (old </> "version.txt")
           assertBool "leftover test files are discarded" . not =<< doesFileExist (old </> "untracked.txt")
         _ <- fixtureGit repo ["worktree", "add", "--detach", path, "HEAD"]
         _ <- fixtureGit repo ["worktree", "lock", "--reason", "initializing", path]
         removeDirectoryRecursive path
-        withScaleWorktree cache project "HEAD~1" $ \_ old ->
+        withPerfWorktree cache project "HEAD~1" $ \_ old ->
           assertEqual "a stale registration can be replaced" "old\n" =<< readFile (old </> "version.txt")
         createDirectory path
         writeFile (path </> "unfinished") "interrupted checkout\n"
-        withScaleWorktree cache project "HEAD~1" $ \_ old -> do
+        withPerfWorktree cache project "HEAD~1" $ \_ old -> do
           assertEqual "an unregistered partial checkout can be replaced" "old\n" =<< readFile (old </> "version.txt")
           assertBool "unfinished files are removed" . not =<< doesFileExist (old </> "unfinished")
         let external = takeDirectory repo </> "external"
         createDirectory external
         writeFile (external </> "sentinel") "keep\n"
         createDirectoryLink external path
-        withScaleWorktree cache project "HEAD~1" $ \_ old ->
+        withPerfWorktree cache project "HEAD~1" $ \_ old ->
           assertEqual "recovery uses the owned path" path old
         assertEqual "recovery never follows a cache-entry symlink" "keep\n" =<< readFile (external </> "sentinel")
         assertEqual "only the owned worktree is removed" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
@@ -586,7 +586,7 @@ scaleGitTests = testGroup "Git comparisons"
       withGitFixture $ \repo project -> do
         trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
         let recording = project </> "out/perf_scaling/partial.jsonl"
-        result <- try (withScaleWorktree (takeDirectory repo </> "cache") project "HEAD~1" $ \_ _ -> do
+        result <- try (withPerfWorktree (takeDirectory repo </> "cache") project "HEAD~1" $ \_ _ -> do
           createDirectoryIfMissing True (takeDirectory recording)
           writeFile recording "completed sample\n"
           throwIO (userError "injected study failure")) :: IO (Either IOException ())
@@ -595,7 +595,7 @@ scaleGitTests = testGroup "Git comparisons"
         assertEqual "failed study cleans worktrees" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
         ready <- newEmptyMVar
         never <- newEmptyMVar
-        worker <- async (withScaleWorktree (takeDirectory repo </> "cache") project "HEAD" $ \_ _ -> putMVar ready () >> takeMVar never)
+        worker <- async (withPerfWorktree (takeDirectory repo </> "cache") project "HEAD" $ \_ _ -> putMVar ready () >> takeMVar never)
         takeMVar ready
         cancel worker
         stopped <- waitCatch worker
@@ -606,15 +606,15 @@ scaleGitTests = testGroup "Git comparisons"
         trees <- fixtureGit repo ["worktree", "list", "--porcelain"]
         forM_ ["", "missing-ref", "HEAD:version.txt", "HEAD^{tree}", "--output=escaped"] $ \ref -> do
           called <- newIORef False
-          result <- try (withScaleWorktree (takeDirectory repo </> "cache") project ref $ \_ _ -> writeIORef called True) :: IO (Either IOException ())
+          result <- try (withPerfWorktree (takeDirectory repo </> "cache") project ref $ \_ _ -> writeIORef called True) :: IO (Either IOException ())
           assertBool ("must reject " ++ show ref) (either (const True) (const False) result)
           assertEqual "the study never starts" False =<< readIORef called
         assertEqual "invalid refs leave no worktrees" trees =<< fixtureGit repo ["worktree", "list", "--porcelain"]
   , testCase "explicit paths retain repository and external boundaries" $ do
       assertEqual "repo sibling maps to its snapshot" "/tmp/current/shared"
-        (scaleWorktreePath "/repo" "/tmp/current" "/repo/shared")
+        (perfWorktreePath "/repo" "/tmp/current" "/repo/shared")
       assertEqual "similar prefix remains external" "/repository/shared"
-        (scaleWorktreePath "/repo" "/tmp/current" "/repository/shared")
+        (perfWorktreePath "/repo" "/tmp/current" "/repository/shared")
   ]
 
 fixtureGit :: FilePath -> [String] -> IO String

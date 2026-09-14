@@ -1280,6 +1280,7 @@ class PerfRun(object):
         self.measurement_ms = 0.0
         self.loop_iterations = 0
         self.calibration = []
+        self.preparation_exhausted = False
         self._previous_invocation_ms = 0.0
         self._sw = time.Stopwatch()
 
@@ -1554,6 +1555,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                     "measurement_ms": perf_run.measurement_ms,
                     "measurement_duration_ms": measurement_duration_ms if perf_run.phase == "measure" else 0.0,
                     "calibration": perf_run.calibration,
+                    "preparation_exhausted": perf_run.preparation_exhausted,
                     "workers": env.nr_wthreads,
                     "gc": "natural",
                 }
@@ -1565,6 +1567,8 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
             test_info.complete = True
             test_info.test_duration = test_sw.elapsed().to_float() * 1000.0
             if iteration == 0:
+                if perf_run is not None:
+                    perf_run.preparation_exhausted = True
                 test_info.success = False
                 test_info.exception = "Performance time budget exhausted during preparation; increase --time"
                 test_info.num_failures = 1
@@ -1641,6 +1645,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                         _emit_result(False)
                     after 0: _run_fn(test)
                     return
+                perf_run.preparation_exhausted = True
                 success = False
                 exception = ValueError("Performance time budget exhausted during preparation; increase --time")
                 complete = True

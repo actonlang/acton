@@ -53,7 +53,7 @@ import Control.Concurrent.MVar
 import Control.Exception (throw,catch,finally,IOException,try,SomeException,onException,evaluate,bracket,mask)
 import qualified Control.Concurrent.Async as Async
 import ProcessUtil (stopProcessGroup)
-import PerfScaling (validateScalingOptions, printScaleRecording, readScaleRecording, withScaleWorktree, scaleWorktreePath)
+import PerfScaling (validateScalingOptions, printScaleRecording, readScaleRecording)
 import Control.Concurrent (ThreadId, forkIO, killThread, threadDelay, throwTo)
 import Control.Concurrent.Chan (Chan, newChan, writeChan, readChan)
 import Control.Monad
@@ -662,6 +662,13 @@ runTests gopts cmd = do
         opts0 = C.testCompile topts
     when (mode == TestModeScale) $
       mapM_ printErrorAndExit (validateScalingOptions topts)
+    when (mode == TestModePerf && isJust (C.testCompare topts)) $ do
+      when (C.testCompare topts == Just "git:") $
+        printErrorAndExit "--compare git:REF requires a Git revision"
+      when (C.testSnapshotUpdate topts) $
+        printErrorAndExit "Performance comparisons cannot update test snapshots"
+      when (C.watch opts0) $
+        printErrorAndExit "Performance comparisons cannot run with --watch"
     when (C.testRecord topts && mode /= TestModePerf) $
       printErrorAndExit "--record requires acton test perf"
     let opts = opts0
@@ -679,8 +686,8 @@ runTests gopts cmd = do
 -- | Build once and then list/run tests based on the selected mode.
 runTestsOnce :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()
 runTestsOnce gopts opts topts mode paths
-  | mode == TestModeScale, Just ref <- C.testCompare topts >>= Data.List.stripPrefix "git:" =
-      runGitScalingComparison gopts opts topts paths ref >>= exitWithTestCode
+  | mode `elem` [TestModePerf, TestModeScale], Just ref <- C.testCompare topts >>= Data.List.stripPrefix "git:" =
+      runGitTestComparison gopts opts topts mode paths ref >>= exitWithTestCode
 runTestsOnce gopts opts topts0 mode paths = do
     (topts, baseline) <- if mode == TestModeScale then prepareScalingComparison paths topts0 else return (topts0, Nothing)
     (sourceInfo, modules) <- withProjectLockNotice gopts (projPath paths) $ do
@@ -708,21 +715,19 @@ buildTestModules gopts opts paths topts = do
       compileFiles Source.diskSourceProvider gopts opts selected (selected == srcFiles)
     mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
 
--- Build the baseline and current checkout before timing either. The baseline
--- produces an ordinary recording, then current code replays its completed sizes.
-runGitScalingComparison :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> Paths -> String -> IO Int
-runGitScalingComparison gopts opts topts paths ref = do
-    directory <- makeAbsolute (projOut paths </> "perf_scaling")
+-- Build both revisions before timing. Each mode then owns its sampling policy.
+runGitTestComparison :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> String -> IO Int
+runGitTestComparison gopts opts topts mode paths ref = do
     search <- mapM canonicalizePath (C.searchpath opts)
     overrides <- normalizeDepOverrides (projPath paths) (C.dep_overrides opts)
     color <- useColor gopts
     cache <- actonCacheDir
     let announce = unless (C.quiet gopts || C.testJson topts) . putStrLn
-    withScaleWorktree cache (projPath paths) ref $ \root baseline -> do
+    withPerfWorktree cache (projPath paths) ref $ \root baseline -> do
       oldSource <- readScaleSourceInfo baseline
-      let oldProject = scaleWorktreePath root baseline (projPath paths)
+      let oldProject = perfWorktreePath root baseline (projPath paths)
           buildAt checkout = do
-            let rebase = scaleWorktreePath root checkout
+            let rebase = perfWorktreePath root checkout
                 project = rebase (projPath paths)
                 compileOpts = opts { C.syspath = sysPath paths, C.searchpath = map rebase search
                                    , C.dep_overrides = [(name, rebase path) | (name, path) <- overrides] }
@@ -747,24 +752,30 @@ runGitScalingComparison gopts opts topts paths ref = do
         case (oldTests, newTests) of
           ([old], [new]) | old == new -> return ()
           _ -> printErrorAndExit "Git comparison requires the same single benchmark in both revisions; select it with --module and/or --name"
-        let oldStudy = topts { C.testCompile = oldOpts, C.testCompare = Nothing }
-        announce "Measuring Git baseline (time and memory limits apply to each study)"
-        (oldCode, recordings) <- withCurrentDirectory (projPath oldPaths) $
-          runScalingTests color gopts oldOpts oldPaths oldStudy oldModules directory oldSource Nothing
-        if oldCode /= 0 then return oldCode else case recordings of
-          [recording] -> withCurrentDirectory (projPath newPaths) $ do
-            let newStudy = topts { C.testCompile = newOpts, C.testCompare = Just recording }
-            -- A resource limit may stop the baseline short of the requested end.
-            -- Replay its completed sizes, then continue to the requested end.
-            (compared, baseline) <- case C.testEndScale topts of
-              Just _ -> do
-                baseline <- readScaleRecording recording
-                return (newStudy, Just baseline)
-              Nothing -> prepareScalingComparison newPaths newStudy
-            announce "Measuring current working tree (replaying baseline sizes first)"
-            fst <$> runScalingTests color gopts newOpts newPaths
-              compared newModules directory newSource baseline
-          _ -> printErrorAndExit "The Git baseline did not produce a scaling recording"
+        if mode == TestModePerf then do
+          let (modName, testName) = head newTests
+          runPerfComparison color gopts topts (oldOpts, oldPaths, oldSource)
+            (newOpts, newPaths, newSource) modName testName
+        else do
+          directory <- makeAbsolute (projOut paths </> "perf_scaling")
+          let oldStudy = topts { C.testCompile = oldOpts, C.testCompare = Nothing }
+          announce "Measuring Git baseline (time and memory limits apply to each study)"
+          (oldCode, recordings) <- withCurrentDirectory (projPath oldPaths) $
+            runScalingTests color gopts oldOpts oldPaths oldStudy oldModules directory oldSource Nothing
+          if oldCode /= 0 then return oldCode else case recordings of
+            [recording] -> withCurrentDirectory (projPath newPaths) $ do
+              let newStudy = topts { C.testCompile = newOpts, C.testCompare = Just recording }
+              -- A resource limit may stop the baseline short of the requested end.
+              -- Replay its completed sizes, then continue to the requested end.
+              (compared, baseline) <- case C.testEndScale topts of
+                Just _ -> do
+                  baseline <- readScaleRecording recording
+                  return (newStudy, Just baseline)
+                Nothing -> prepareScalingComparison newPaths newStudy
+              announce "Measuring current working tree (replaying baseline sizes first)"
+              fst <$> runScalingTests color gopts newOpts newPaths
+                compared newModules directory newSource baseline
+            _ -> printErrorAndExit "The Git baseline did not produce a scaling recording"
 
 -- | Watch mode for tests that rebuilds incrementally and reruns changed modules.
 runTestsWatch :: C.GlobalOptions -> C.CompileOptions -> C.TestOptions -> TestMode -> Paths -> IO ()

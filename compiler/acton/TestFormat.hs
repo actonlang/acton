@@ -177,6 +177,8 @@ formatTestPerfLines useColor baseline res =
     dim = paint "\ESC[2m"
     missing = dim "—"
     interval metric obj = baseline >>= (\old -> perfMeanInterval metric old obj)
+    paired obj = baseline >>= (\old -> perfPairedCount old obj)
+    processes obj = AesonKM.member (AesonKey.fromString "process_samples") obj
     percentage previous value = case previous of
       Nothing -> (Nothing, "—")
       Just 0 -> (Nothing, if value == 0 then "+0.0%" else "from 0")
@@ -235,21 +237,34 @@ formatTestPerfLines useColor baseline res =
                     count = fitNumber 14 [printf "%.0f (%.0f%%)" n pct, printf "%.1e (%.0f%%)" n pct]
                 in paint (if pct >= 10 then testColorYellow else "\ESC[2m") count
               _ -> missing
-        in [label, mean, range, outliers, meanChange obj metric value]
+            previous = case baseline >>= (\old -> if perfComparable metric old obj
+                then perfNumber old (perfStatKey metric "avg") else Nothing) of
+              Just old -> q "\ESC[36m" unit old
+              Nothing -> padLeft (numberWidth + 2) missing
+        in [label, mean, range, outliers, meanChange obj metric value, previous]
     table obj =
       let headings numberWidth showSpread =
             let title color = padLeft (numberWidth + 2) . paint color
-                mean = title "\ESC[92m" "mean"
+                mean = title "\ESC[92m" (if isJust (paired obj)
+                  then if numberWidth >= 5 then "current" else "now" else "mean")
             in [ paint testColorBold "measurement"
                , mean ++ if showSpread then " ± " ++ title testColorGreen "σ" else ""
                , title "\ESC[36m" "min" ++ " … " ++ title "\ESC[35m" "max"
                , paint testColorYellow "outliers"
                , paint testColorBold "delta" ++ "   "
+               , title "\ESC[36m" (if numberWidth >= 6 then "baseline" else "before")
                ]
           rows = headings : mapMaybe (row obj) perfMetrics
           -- Choose widths only from the viewport, so benchmarks stay aligned.
           -- Reserve comparison space even when this test has no baseline.
-          layouts = [ (16, 10, 4, [0,1,2,3,4], True)
+          layouts = if isJust (paired obj)
+            then [ (16, 10, 3, [0,5,1,2,3,4], True)
+                 , (16, 10, 3, [0,5,1,2,4], True)
+                 , (13, 7, 2, [0,5,1,4], True)
+                 , (13, 7, 1, [0,5,1,4], False)
+                 , (9, 4, 1, [0,5,1,4], False)
+                 ]
+            else [ (16, 10, 4, [0,1,2,3,4], True)
                     , (13, 7, 2, [0,1,2,3,4], True)
                     , (13, 7, 2, [0,1,2,4], True)
                     , (13, 7, 2, [0,1,4], True)
@@ -257,7 +272,7 @@ formatTestPerfLines useColor baseline res =
                     ]
           widths (labelWidth, numberWidth, _, _, showSpread) =
             let q = numberWidth + 2
-            in [labelWidth, if showSpread then 2 * q + 3 else q, 2 * q + 3, 14, 14]
+            in [labelWidth, if showSpread then 2 * q + 3 else q, 2 * q + 3, 14, 14, q]
           width layout@(_, _, gap, indexes, _) = 2 + sum [widths layout !! i | i <- indexes] + gap * (length indexes - 1)
           render cells cols =
             let layout@(labelWidth, numberWidth, gap, indexes, showSpread) =
@@ -268,7 +283,7 @@ formatTestPerfLines useColor baseline res =
                   let w = if i == 0 then max 1 (labelWidth - max 0 (width layout - cols)) else columnWidths !! i
                       s = values !! i
                   in if i == 0 then padRight w (termFitAnsiRight w s)
-                     else if i == 1 || i == 2 then padRight w s
+                     else if i == 1 || i == 2 || i == 5 then padRight w s
                      else padLeft w s
                 shown = [i | i <- indexes, i /= 4 || isJust baseline]
             in termFitAnsiRight cols ("  " ++ intercalate (replicate gap ' ') (map cell shown))
@@ -279,9 +294,13 @@ formatTestPerfLines useColor baseline res =
            scope <- if AesonKM.lookup (AesonKey.fromString "loop") info == Just (Aeson.Bool True)
              then do scale <- perfNumber info "scale"
                      iterations <- perfNumber obj "loop_iterations"
-                     return (printf "per loop iteration at scale %.0f; %d runs; %.0f loop iterations" scale (trNumIterations res) iterations)
-             else return (printf "whole invocation; %d runs" (trNumIterations res))
+                     return (printf "per loop iteration at scale %.0f; %d %s; %.0f loop iterations" scale (trNumIterations res) (runLabel obj) iterations)
+             else return (printf "whole invocation; %d %s" (trNumIterations res) (runLabel obj))
            return ("  " ++ scope ++ printf "; %.0f runtime workers" workers)
+      , case paired obj of
+          Just n -> Just (printf "  %d process %s; table summarizes equally weighted process means" n (if n == 1 then "pair" else "pairs"))
+          Nothing | processes obj -> Just "  table summarizes equally weighted process means"
+                  | otherwise -> Nothing
       , do info <- perfInfo obj
            raw <- AesonKM.lookup (AesonKey.fromString "calibration") info
            points <- AesonTypes.parseMaybe Aeson.parseJSON raw :: Maybe [Aeson.Object]
@@ -310,7 +329,12 @@ formatTestPerfLines useColor baseline res =
       , do value <- perfNumber obj "peak_rss"
            return ("  process peak RSS: " ++ single "" "B" value)
       , do (lo, hi) <- interval "wall_duration" obj
-           return ("  wall mean delta (approx. 95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+           return ("  " ++ (if isJust (paired obj) then "paired " else "") ++ "wall mean delta (approx. 95% CI): " ++ pair "ms" " … " ("", "") lo hi)
+      , do _ <- paired obj
+           case interval "wall_duration" obj of
+             Nothing -> Just "  comparison: inconclusive; too few process pairs"
+             Just (lo, hi) | lo <= 0 && hi >= 0 -> Just "  comparison: inconclusive; interval includes no change"
+                          | otherwise -> Nothing
       , do reason <- case baseline of
              Nothing -> Just "no recorded baseline"
              Just old -> perfComparisonReason "wall_duration" old obj
@@ -336,6 +360,7 @@ formatTestPerfLines useColor baseline res =
            Just budget -> " / " ++ single "" "ms" budget ++ " budget"
            Nothing -> "")
       ] ++ [""]
+    runLabel obj = if processes obj then "processes" else "runs"
     counterText info key = case AesonKM.lookup (AesonKey.fromString key) info of
       Just (Aeson.String s) -> Just (T.unpack s)
       _ -> Nothing

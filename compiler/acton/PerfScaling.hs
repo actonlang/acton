@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings, ForeignFunctionInterface #-}
 module PerfScaling
   ( validateScalingOptions, runScalingStudy, printScaleRecording
-  , withScaleWorktree, scaleWorktreePath
   , ScaleLimits(..), ScalingStopped(..), watchScaleProcess
   , ScaleRecording(..), ScaleSeries(..), readScaleRecording, scaleSeriesReason
   , ScalePoint(..), scaleMean, scaleError, scaleReliable, scaleNeedsSamples, scaleGrowth, stableGrowth
@@ -15,10 +14,7 @@ import Acton.Testing (TestResult(..))
 import TestPerf
 import TestFormat (testColorApply, testColorBold)
 import Codec.Compression.Zlib (compress)
-import qualified Crypto.Hash.SHA256 as SHA256
 import Control.Applicative ((<|>))
-import Control.Concurrent.Async (concurrently)
-import ProcessUtil (stopProcessGroup)
 import TerminalSize (queryTermSize, termFitAnsiRight)
 import Control.Concurrent (threadDelay)
 import Control.Exception
@@ -35,7 +31,6 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BC
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Base64 as Base64
 import qualified Data.ByteString.Lazy.Char8 as BL
 import Data.Time (getCurrentTime, formatTime, defaultTimeLocale)
@@ -48,7 +43,6 @@ import System.Environment (getEnvironment)
 import System.Directory
 import System.FilePath
 import System.IO
-import System.FileLock (SharedExclusive(Exclusive), withFileLock)
 import System.Exit (ExitCode(..))
 import System.Process
 import qualified System.Posix.IO as PIO
@@ -77,56 +71,6 @@ validateScalingOptions opts
   | maybe False (< fromMaybe 1 (C.testStartScale opts)) (C.testEndScale opts) =
       Just "--end-scale must be at least --start-scale (default: 1)"
   | otherwise = Nothing
-
--- Git sources -----------------------------------------------------------------
-
--- Preserve repository-relative paths, including sibling projects. Explicit
--- paths outside the repository keep their usual meaning on both sides.
-scaleWorktreePath :: FilePath -> FilePath -> FilePath -> FilePath
-scaleWorktreePath source checkout path =
-    let relative = makeRelative source path
-    in if isRelative relative && ".." `notElem` splitDirectories relative
-       then checkout </> relative else path
-
--- Own one baseline at a stable path. Zig caches live outside the checkout and
--- survive its removal. The sibling lock also protects recovery after a crash.
-withScaleWorktree :: FilePath -> FilePath -> String -> (FilePath -> FilePath -> IO a) -> IO a
-withScaleWorktree cache project ref action = do
-    when (null ref || "-" `isPrefixOf` ref) (ioError (userError "--compare git:REF requires a Git revision"))
-    root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
-    common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
-    previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", ref ++ "^{commit}"]
-    let key = BC.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
-        directory = cache </> "worktrees" </> key
-    createDirectoryIfMissing True directory
-    baseline <- (</> previous) <$> canonicalizePath directory
-    withFileLock (baseline <.> "lock") Exclusive $ \_ -> do
-      let remove = void (git root ["worktree", "remove", "--force", "--force", "--", baseline])
-          cleanup = remove `catch` \err ->
-            hPutStrLn stderr ("Could not remove comparison worktree " ++ baseline ++ ": " ++ displayException (err :: IOException))
-      -- Clear a checkout left by a previous process. Double --force replaces
-      -- its stale registration, including Git's initialization lock.
-      exists <- doesPathExist baseline
-      when exists (removePathForcibly baseline)
-      bracket_ (void (git root ["worktree", "add", "--force", "--force", "--detach", "--", baseline, previous])
-                  `onException` cleanup)
-               cleanup (action root baseline)
-  where
-    unlinesTrimmed :: String -> String
-    unlinesTrimmed = reverse . dropWhile (`elem` ['\r', '\n']) . reverse
-    git directory args =
-      withCreateProcess (proc "git" ("-C" : directory : args))
-        { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe, create_group = True } $
-        \_ (Just out) (Just err) process -> do
-          pid <- getPid process
-          let readAll handle = do
-                text <- hGetContents handle
-                evaluate (length text)
-                return text
-          (code, (output, errors)) <- concurrently (waitForProcess process)
-            (concurrently (readAll out) (readAll err)) `finally` stopProcessGroup process pid
-          if code == ExitSuccess then return output
-          else ioError (userError ("Git comparison: " ++ unlinesTrimmed errors))
 
 -- Memory limits ---------------------------------------------------------------
 

@@ -35,6 +35,62 @@ finishes a whole invocation, so slow work can overrun it. A separate watchdog
 allows at least five minutes for a slow test; longer budgets extend it.
 Compilation is outside the benchmark budget.
 
+## Comparing revisions
+
+Use `--compare git:REF` to measure the current code against a Git revision:
+
+```sh
+acton test perf --name my_test --compare git:main
+acton test perf --name my_test --compare git:HEAD~1 --time 10s
+```
+
+Git comparisons require the same single benchmark in both revisions; select it
+with `--module` and/or `--name` when needed.
+
+Both versions build before measurement with the current compiler, runtime and
+build options. Current code, including uncommitted changes, runs from the working
+directory. The baseline uses one detached worktree under
+`~/.cache/acton/worktrees/<repository-id>/<commit>/`, following the same cache and
+cleanup rules as scaling comparisons. The current checkout stays in place.
+
+The runner chooses one workload scale for both versions, calibrating once when
+needed. `--scale N` selects that shared scale explicitly. Each measurement process
+warms up before collecting samples; warmup and calibration are excluded from
+reported measurements.
+
+Measurements run in pairs, with a fresh process each time. The runner randomly
+chooses one of the six schedules containing two old/new pairs and two new/old
+pairs. This balances which version goes first over four complete pairs while
+avoiding a fixed execution pattern. The actual execution order is recorded.
+Slow workloads can leave room for fewer pairs; an incomplete schedule need not
+be balanced. Every process still repeats complete test invocations and loop
+bodies at the fixed scale.
+
+`--time` is the total budget per version, shared across its rounds and including
+calibration, warmup, setup and teardown. The default comparison therefore targets
+ten seconds per benchmark, plus builds and process startup. More time allows
+longer measurements and more complete pairs; slow invocations can overrun the
+target. The comparison reports the pair count and estimates uncertainty from
+paired process results. Inner loop bodies do not count as independent evidence
+of a performance change.
+
+To compare against a saved `perf_data` file instead:
+
+```sh
+acton test perf --name my_test --compare before.perf_data
+```
+
+A file comparison measures only the current version and uses the same
+compatibility checks as the ordinary `perf_data` baseline. Comparisons are valid
+only on the same machine and at the same workload scale. The `git:` prefix is
+required for revisions; other targets are file paths. Historical measurements
+cannot be interleaved with a new run.
+
+Without `--compare`, performance mode continues to use the project's `perf_data`
+baseline. `--record` writes current measurements there, including when an
+explicit comparison target is supplied; it never updates the external baseline.
+See [Performance comparisons](perf_record.md) for recording and interpretation.
+
 ## Studying growth with input size
 
 Use `acton test scale` to explore how performance changes with input size:
@@ -409,6 +465,11 @@ loop bodies. The table summarizes those run averages, at the selected scale.
 For a test without a loop, each sample covers one whole invocation. Memory
 averages and quartiles can contain fractions of a byte.
 
+For an interleaved Git comparison, the table instead summarizes each version's
+process means, giving every process equal weight. It shows both means and their
+delta. The uncertainty calculation pairs processes in measurement order;
+additional invocations within a process do not increase the number of pairs.
+
 The result includes:
 
 - **Wall time:** the primary measurement, including natural GC and waiting within
@@ -501,11 +562,19 @@ The `perf_info` object records measurement version, machine and build identity,
 scale, whether `loop` was used, worker count and `time_budget_ms`.
 `measurement_ms` sums timed body wall time; `measurement_duration_ms` includes
 setup and teardown across the measured invocations. Both are in milliseconds and
-exclude warmup. At the top level of `measurements`, `loop_iterations` counts
-completed measured bodies and `num_iterations` counts complete invocation samples.
+exclude warmup. In ordinary performance runs, at the top level of `measurements`,
+`loop_iterations` counts completed measured bodies and `num_iterations` counts
+complete invocation samples.
 `calibration` retains each observed `{scale, wall_ms, invocation_ms}` point;
 `wall_ms` times the body and `invocation_ms` includes setup and teardown. These
 are sizing observations, separate from the measured samples.
+
+Interleaved comparisons retain each process's measurements in `process_samples`
+and identify the paired run with `comparison_id`. Their `num_iterations` counts
+processes; each retained process has its own invocation count. `loop_iterations`
+still sums all measured bodies. Later comparisons against these saved measurements
+use process means as their samples. Pairing applies only to the two versions from
+the same interleaved comparison.
 
 See [Performance comparisons](perf_record.md) to record a baseline and compare
 later runs, or [Stress testing](stress.md) for concurrency-focused tests.

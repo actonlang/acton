@@ -4,6 +4,7 @@ module TestRunner
   , runProjectTests, runScalingTests, selectedTestNames, readScaleSourceInfo
   , selectTestSources
   , prepareScalingComparison
+  , withPerfWorktree, perfWorktreePath, runPerfComparison, runPerfPairs, perfPairOrders
   ) where
 
 import qualified Acton.CommandLineParser as C
@@ -26,7 +27,7 @@ import Data.IORef
 import Data.Char (isSpace, isHexDigit, toLower)
 import Data.List (isPrefixOf, isSuffixOf, foldl', isInfixOf, intercalate)
 import qualified Data.List
-import Data.Maybe (catMaybes, listToMaybe, isJust)
+import Data.Maybe (catMaybes, listToMaybe, isJust, fromMaybe)
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Set as Set
@@ -35,9 +36,11 @@ import System.Directory
 import System.Exit
 import System.Environment (getEnvironment)
 import qualified System.Info as System
-import System.FilePath ((</>), (<.>), joinPath)
-import System.IO (hClose, hIsEOF)
+import System.FilePath ((</>), (<.>), joinPath, makeRelative, isRelative, splitDirectories)
+import System.IO (hClose, hIsEOF, hPutStrLn, stderr, hGetContents)
+import System.FileLock (SharedExclusive(Exclusive), withFileLock)
 import System.Process
+import System.Random (randomRIO)
 import ProcessUtil (stopProcessGroup)
 import Text.Printf
 import qualified Data.Aeson as Aeson
@@ -52,8 +55,8 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Encoding as TE
 import Data.Text.Encoding.Error (lenientDecode)
-import Data.Time.Clock (UTCTime)
-import Control.Exception (IOException, SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, mask, onException, try, fromException, throwIO, finally)
+import Data.Time.Clock (UTCTime, getCurrentTime)
+import Control.Exception (IOException, SomeException, SomeAsyncException, AsyncException(..), displayException, evaluate, bracket_, catch, mask, onException, try, fromException, throwIO, finally)
 import TerminalSize (termFitAnsiRight)
 import qualified Text.Regex.TDFA as TDFA
 import Data.Version (showVersion)
@@ -92,6 +95,56 @@ data StressPhaseLane = StressPhaseLane
   { splPhaseResolutionUs :: Int
   , splTargetSweepIters :: Int
   }
+
+-- Git sources -----------------------------------------------------------------
+
+-- Preserve repository-relative paths, including sibling projects. Explicit
+-- paths outside the repository keep their usual meaning on both sides.
+perfWorktreePath :: FilePath -> FilePath -> FilePath -> FilePath
+perfWorktreePath source checkout path =
+    let relative = makeRelative source path
+    in if isRelative relative && ".." `notElem` splitDirectories relative
+       then checkout </> relative else path
+
+-- Own one baseline at a stable path. Zig caches live outside the checkout and
+-- survive its removal. The sibling lock also protects recovery after a crash.
+withPerfWorktree :: FilePath -> FilePath -> String -> (FilePath -> FilePath -> IO a) -> IO a
+withPerfWorktree cache project ref action = do
+    when (null ref || "-" `isPrefixOf` ref) (ioError (userError "--compare git:REF requires a Git revision"))
+    root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
+    common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
+    previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", ref ++ "^{commit}"]
+    let key = BS.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
+        directory = cache </> "worktrees" </> key
+    createDirectoryIfMissing True directory
+    baseline <- (</> previous) <$> canonicalizePath directory
+    withFileLock (baseline <.> "lock") Exclusive $ \_ -> do
+      let remove = void (git root ["worktree", "remove", "--force", "--force", "--", baseline])
+          cleanup = remove `catch` \err ->
+            hPutStrLn stderr ("Could not remove comparison worktree " ++ baseline ++ ": " ++ displayException (err :: IOException))
+      -- Clear a checkout left by a previous process. Double --force replaces
+      -- its stale registration, including Git's initialization lock.
+      exists <- doesPathExist baseline
+      when exists (removePathForcibly baseline)
+      bracket_ (void (git root ["worktree", "add", "--force", "--force", "--detach", "--", baseline, previous])
+                  `onException` cleanup)
+               cleanup (action root baseline)
+  where
+    unlinesTrimmed :: String -> String
+    unlinesTrimmed = reverse . dropWhile (`elem` ['\r', '\n']) . reverse
+    git directory args =
+      withCreateProcess (proc "git" ("-C" : directory : args))
+        { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe, create_group = True } $
+        \_ (Just out) (Just err) process -> do
+          pid <- getPid process
+          let readAll handle = do
+                text <- hGetContents handle
+                evaluate (length text)
+                return text
+          (code, (output, errors)) <- concurrently (waitForProcess process)
+            (concurrently (readAll out) (readAll err)) `finally` stopProcessGroup process pid
+          if code == ExitSuccess then return output
+          else ioError (userError ("Git comparison: " ++ unlinesTrimmed errors))
 
 getVer :: String
 getVer = showVersion Paths_acton.version
@@ -283,6 +336,157 @@ runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo 
               modName testName False callbacks
       runScalingStudy useColorOut gopts topts directory provenance (concat tests) baseline runSample
 
+-- The six balanced schedules are equally likely. True means baseline first.
+perfPairOrders :: [[Bool]]
+perfPairOrders = [[i == a || i == b | i <- [0..3]] | a <- [0..2], b <- [a+1..3]]
+
+-- Each child contributes one observation. Budgets include its preparation,
+-- and only complete pairs enter the comparison, in pair order on both sides.
+runPerfPairs :: [Bool] -> Int -> Maybe Int -> (Bool -> Maybe Int -> Int -> IO TestResult)
+             -> IO (Either TestResult [(TestResult, TestResult)])
+runPerfPairs order budget requested run = do
+    pilot <- case requested of
+      Just scale -> return (Right (Just scale, total, 0))
+      Nothing -> do
+        res <- run True Nothing (max 1 (budget `div` 8))
+        let scale = case trRaw res of
+              Aeson.Object obj -> perfInfo obj >>= (`perfNumber` "scale")
+              _ -> Nothing
+        return $ case scale of
+          Just n | n >= 1 && n <= fromIntegral (maxBound :: Int) && (valid res || exhausted res) ->
+            Right (if loopUsed res then Just (round n) else Nothing, total - trTestDuration res, if exhausted res then 2 * trTestDuration res else 0)
+          _ -> Left res
+    case pilot of
+      Left res -> return (Left res)
+      Right (scale, oldLeft, minimumBlock) -> collect order scale oldLeft total minimumBlock []
+  where
+    total = fromIntegral budget
+    valid res = isJust (testPerfData res)
+    loopUsed res = case trRaw res of
+      Aeson.Object obj -> (perfInfo obj >>= AesonKM.lookup (AesonKey.fromString "loop")) == Just (Aeson.Bool True)
+      _ -> False
+    exhausted res = case trRaw res of
+      Aeson.Object obj -> case perfInfo obj of
+        Just info -> AesonKM.lookup (AesonKey.fromString "preparation_exhausted") info == Just (Aeson.Bool True)
+        _ -> False
+      _ -> False
+    sample old scale left slice = do
+      res <- run old scale slice
+      let remaining = left - trTestDuration res
+      -- A larger block reuses the selected scale; it never recalibrates.
+      if exhausted res && remaining > fromIntegral slice && remaining > trTestDuration res
+        then do
+          retry <- run old scale (max 1 (floor remaining))
+          return (retry, remaining - trTestDuration retry)
+        else return (res, remaining)
+    minimumDuration res = fromMaybe (trTestDuration res) $ do
+      obj <- testPerfData res
+      info <- perfInfo obj
+      warmup <- perfNumber info "warmup_duration_ms"
+      measured <- perfNumber info "measurement_duration_ms"
+      return (warmup + measured / fromIntegral (trNumIterations res))
+    finish res pairs = return (if exhausted res then Right (reverse pairs) else Left res)
+    collect [] _ _ _ _ pairs = return (Right (reverse pairs))
+    collect remaining@(oldFirst:rest) scale oldLeft newLeft minimumBlock pairs
+      | min oldLeft newLeft <= 0
+        || (not (null pairs) && min oldLeft newLeft < minimumBlock) = return (Right (reverse pairs))
+      | otherwise = do
+          let left = min oldLeft newLeft
+              slice = max 1 (floor (min left (max minimumBlock (left / fromIntegral (length remaining)))))
+              firstLeft = if oldFirst then oldLeft else newLeft
+              secondLeft = if oldFirst then newLeft else oldLeft
+          (first, firstRemaining) <- sample oldFirst scale firstLeft slice
+          if not (valid first) then finish first pairs else do
+            (second, secondRemaining) <- sample (not oldFirst) scale secondLeft slice
+            if not (valid second) then finish second pairs else do
+              let (old, new, oldRemaining, newRemaining) = if oldFirst
+                    then (first, second, firstRemaining, secondRemaining)
+                    else (second, first, secondRemaining, firstRemaining)
+                  issue = do a <- testPerfData old
+                             b <- testPerfData new
+                             perfComparisonReason "wall_duration" a b
+              case issue of
+                Just reason -> return (Left new { trSuccess = Nothing, trException = Just ("Cannot compare: " ++ reason) })
+                Nothing -> collect rest scale oldRemaining newRemaining
+                  (max minimumBlock (max (minimumDuration old) (minimumDuration new))) ((old, new) : pairs)
+
+-- Git builds supply two runnable projects. Preparation and measurements happen
+-- here so both perf modes share the process runner, result format and baseline.
+runPerfComparison :: Bool -> C.GlobalOptions -> C.TestOptions
+                  -> (C.CompileOptions, Paths, Aeson.Object) -> (C.CompileOptions, Paths, Aeson.Object)
+                  -> String -> String -> IO Int
+runPerfComparison color gopts topts (oldOpts, oldPaths, oldSource) (newOpts, newPaths, newSource) modName testName = do
+    ident <- show <$> getCurrentTime
+    schedule <- randomRIO (0, length perfPairOrders - 1)
+    start <- getTime Monotonic
+    oldHost <- readPerfHostInfo oldOpts topts
+    newHost <- readPerfHostInfo newOpts topts
+    forM_ (perfHostReason oldHost newHost) $ \reason -> printErrorAndExit ("Cannot compare: " ++ reason)
+    recorded <- if C.testRecord topts then readPerfData (projPath newPaths </> "perf_data") else return M.empty
+    let name = displayTestName testName
+        key = TestKey modName testName
+        modDisplay = displayModName newPaths modName
+        quiet = C.quiet gopts || C.testJson topts
+        width = max 20 (length name + 5)
+    withTestProgressUI gopts width color $ \ui -> do
+      count <- newIORef (0 :: Int)
+      spent <- newIORef (0, 0)
+      _ <- testUiStart ui key modDisplay (staticLine ("Comparing " ++ name))
+      let run old scale budget = do
+            n <- atomicModifyIORef' count (\n -> (n + 1, n + 1))
+            let (opts, paths, host, source) = if old then (oldOpts, oldPaths, oldHost, oldSource)
+                                                       else (newOpts, newPaths, newHost, newSource)
+                phase = if n == 1 && not (isJust (C.testScale topts)) then "calibrating" else "measuring"
+                label = phase ++ " " ++ (if old then "baseline" else "current") ++ " (process " ++ show n ++ ")"
+                line = "Comparing " ++ name ++ ": " ++ label
+                sampleOpts = topts { C.testTime = budget, C.testScale = scale, C.testCompare = Nothing, C.testRecord = False }
+                callbacks = TestProgressCallbacks
+                  (\res -> testUiUpdateLive ui key (\cols -> termFitAnsiRight cols (line ++ printf " (%.2fs)" (trTestDuration res / 1000))))
+                  (const (return ())) (const (return ()))
+            testUiUpdateLive ui key (staticLine line)
+            unless (quiet || tpuEnabled ui) $ putStrLn line
+            res <- runModuleTestStreaming opts paths sampleOpts TestModePerf host Nothing Nothing
+              modName testName (tpuEnabled ui) callbacks
+            modifyIORef' spent (\(a, b) -> if old then (a + trTestDuration res, b) else (a, b + trTestDuration res))
+            let addSource obj = AesonKM.insert (AesonKey.fromString "source") (Aeson.Object source) $
+                  AesonKM.insert (AesonKey.fromString "sequence") (Aeson.toJSON n) obj
+            return res { trException = fmap ((if old then "Baseline: " else "Current: ") ++) (trException res)
+                       , trRaw = case trRaw res of Aeson.Object obj -> Aeson.Object (addSource obj); raw -> raw }
+      measured <- runPerfPairs (perfPairOrders !! schedule) (C.testTime topts) (C.testScale topts) run
+      finish <- getTime Monotonic
+      (oldSpent, newSpent) <- readIORef spent
+      let prepared elapsed res = res { trTestDuration = elapsed, trRaw = case trRaw res of
+            Aeson.Object obj | Just info <- perfInfo obj -> Aeson.Object (AesonKM.insert (AesonKey.fromString "test_duration") (Aeson.toJSON elapsed) $ AesonKM.insert
+              (AesonKey.fromString "perf_info") (Aeson.Object (AesonKM.insert
+                (AesonKey.fromString "time_budget_ms") (Aeson.toJSON (C.testTime topts)) info)) obj)
+            raw -> raw }
+          result = case measured of
+            Left failed -> Just (Left failed)
+            Right pairs -> case (aggregatePerfRuns ident (map fst pairs), aggregatePerfRuns ident (map snd pairs)) of
+              (Just old, Just new) -> Just (Right (prepared oldSpent old, prepared newSpent new))
+              _ -> Nothing
+      case result of
+        Nothing -> printErrorAndExit "Performance time budget exhausted before a complete pair; increase --time"
+        Just outcome -> do
+          let (baseline, res) = case outcome of
+                Left failed -> (M.empty, failed)
+                Right (old, new) -> (M.singleton modName (M.singleton testName (trRaw old)), new)
+              old = lookupPerfData baseline res
+              details = map staticLine (formatTestDetailLines color (C.testShowLog topts) res) ++ formatTestPerfLines color old res
+              line = formatTestFinalLineRenderer color True (fromIntegral (2 * C.testTime topts)) width name res
+          _ <- testUiFinalize ui key line
+          _ <- testUiInsertDetails ui key details
+          when (C.testRecord topts && isJust old) $ writePerfData newPaths recorded [res]
+          if C.testJson topts then outputJsonReport newPaths TestModePerf baseline (finish - start) [res]
+          else do
+            unless (tpuEnabled ui) $ do
+              putStrLn (moduleHeaderLine modDisplay)
+              putStrLn (line maxBound)
+              mapM_ (putStrLn . ($ maxBound)) details
+            _ <- printTestSummary color (finish - start) False [res]
+            return ()
+          return (if isJust (trException res) then 2 else testExitCode [res])
+
 -- Capture source identity before compilation creates files in the checkout.
 readScaleSourceInfo :: FilePath -> IO Aeson.Object
 readScaleSourceInfo project = do
@@ -328,7 +532,12 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             runContext = mkRunContext opts topts mode
             ctxHash = contextHashBytes runContext
             useCache = not (C.testNoCache topts) && mode == TestModeRun
-        perfData <- if mode == TestModePerf then readPerfData paths else return M.empty
+        when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
+          exists <- doesFileExist path
+          unless exists $ printErrorAndExit ("Performance baseline does not exist: " ++ path)
+        perfData <- if mode == TestModePerf then readPerfData (maybe (projPath paths </> "perf_data") id (C.testCompare topts)) else return M.empty
+        recorded <- if C.testRecord topts && isJust (C.testCompare topts)
+          then readPerfData (projPath paths </> "perf_data") else return perfData
         perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts else return AesonKM.empty
         let detailLines res =
               map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
@@ -509,7 +718,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
                   then filter (\r -> not (trCached r) || trSnapshotUpdated r) results
                   else filter (not . trCached) results
           when (C.testRecord topts) $
-            writePerfData paths perfData resultsRun
+            writePerfData paths recorded resultsRun
           let cacheEntries' = foldl' (updateTestCacheEntry testHashInfos) cacheEntries resultsRun
               newCache = TestCache
                 { tcVersion = testCacheVersion
@@ -822,7 +1031,12 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
               case exitCode of
                 ExitSuccess -> res1
                 ExitFailure code ->
-                  res1 { trException = Just ("Test process exited with code " ++ show code) }
+                  res1 { trException = Just ("Test process exited with code " ++ show code)
+                       , trRaw = case trRaw res1 of
+                           Aeson.Object obj | Just info <- perfInfo obj -> Aeson.Object (AesonKM.insert
+                             (AesonKey.fromString "perf_info") (Aeson.Object (AesonKM.delete
+                               (AesonKey.fromString "preparation_exhausted") info)) obj)
+                           raw -> raw }
     updated <-
       if C.testSnapshotUpdate topts
         then applySnapshotUpdate paths res
@@ -1497,9 +1711,8 @@ annotatePerfResult host res = case trRaw res of
     _ -> res
 
 -- | Read the baseline before running tests, including when updating it.
-readPerfData :: Paths -> IO PerfData
-readPerfData paths = do
-    let path = projPath paths </> "perf_data"
+readPerfData :: FilePath -> IO PerfData
+readPerfData path = do
     exists <- doesPathExist path
     if not exists
       then return M.empty
