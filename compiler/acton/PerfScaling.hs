@@ -472,6 +472,8 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                              "recorded_at" Aeson..= recordedAt, "run_id" Aeson..= runId,
                              "implementation_hash" Aeson..= implementation,
                              "baseline" Aeson..= fmap recordingPath baseline,
+                             "total_memory_bytes" Aeson..= memoryTotal memory,
+                             "available_memory_bytes" Aeson..= memoryAvailable memory,
                              "max_memory_bytes" Aeson..= cap, "reserve_bytes" Aeson..= reserve,
                              "max_time_ms" Aeson..= duration, "start_scale" Aeson..= firstScale,
                              "end_scale" Aeson..= C.testEndScale opts,

@@ -234,6 +234,16 @@ int acton_perf_memory(int pid, uint64_t *total, uint64_t *available, uint64_t *p
 #include <libproc.h>
 #include <sys/resource.h>
 
+static uint64_t available_memory(const vm_statistics64_data_t *vm, uint64_t total, uint64_t page_size) {
+    /* Estimate fully reclaimable memory using free, file-backed and purgeable
+     * pages. Mach includes speculative file pages in both free and external
+     * counts, so remove that overlap. Non-purgeable anonymous and compressed
+     * pages need compression or swap; inactive pages mix both kinds.
+     * See XNU doc/vm/memorystatus_notify.md, "Differences from Jetsam". */
+    uint64_t free = vm->free_count - smaller(vm->free_count, vm->speculative_count);
+    return smaller(total, (free + vm->external_page_count + vm->purgeable_count) * page_size);
+}
+
 int acton_perf_memory(int pid, uint64_t *total, uint64_t *available, uint64_t *process,
                       char *error, size_t size) {
     *total = *available = *process = 0;
@@ -251,12 +261,7 @@ int acton_perf_memory(int pid, uint64_t *total, uint64_t *available, uint64_t *p
         return memory_error(error, size, "Cannot read host memory: Mach error %d", result);
     if (!basic.max_mem || !page_size) return memory_error(error, size, "Invalid host memory size");
     *total = basic.max_mem;
-    /* free_count already includes speculative pages. Subtracting all anonymous
-     * pages gives a lower bound on inactive file-backed pages. Do not count
-     * anonymous, wired or compressed memory as available, or add purgeable pages
-     * which can overlap these queues. This estimate can stop a run early. */
-    uint64_t inactive_file = vm.inactive_count > vm.internal_page_count ? vm.inactive_count - vm.internal_page_count : 0;
-    *available = smaller(*total, ((uint64_t)vm.free_count + inactive_file) * (uint64_t)page_size);
+    *available = available_memory(&vm, *total, page_size);
     if (pid) {
         struct rusage_info_v0 usage;
         if (proc_pid_rusage(pid, RUSAGE_INFO_V0, (rusage_info_t *)&usage) != 0)

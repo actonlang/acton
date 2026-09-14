@@ -285,10 +285,14 @@ false if the study stopped short, and null when no endpoint was requested.
 
 The memory guard monitors the benchmark process during execution and leaves a
 reserve for other work. Linux observes RSS and visible cgroup memory limits;
-macOS observes physical footprint and uses a conservative estimate of available
-pages. This is a best-effort guard, not a memory reservation or an OS-enforced
-allocation limit. A sudden allocation can exceed it before the next observation,
-and macOS can stop earlier than its apparent reclaimable memory would suggest.
+macOS observes physical footprint and estimates available memory from free,
+file-backed and purgeable pages, without counting speculative pages twice.
+This includes reusable file cache but excludes memory that would need compression
+or swap. The journal records total and available memory at the start of each study;
+other applications can change the headroom between baseline and current runs.
+This is a best-effort guard, not a memory reservation or an OS-enforced allocation
+limit. Reclaiming cache may need I/O, and a sudden allocation can exceed the limit
+before the next observation.
 Memory in separate child processes is not included in the benchmark process's
 ceiling, although the machine's available headroom is still checked. Unavailable
 memory observations stop the study with an error. Supported platforms are Linux

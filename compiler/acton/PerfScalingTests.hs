@@ -956,16 +956,16 @@ assertEnd reason events = do
 
 perfMemoryTests :: TestTree
 perfMemoryTests = testGroup "live memory observation"
-  [ nativeTest "host and process readings" "perf_memory_probe" ["perf_memory.c"]
-  , nativeTest "Linux cgroup boundaries" "perf_memory_test" []
+  [ nativeTest "host and process readings" "perf_memory_probe"
+  , nativeTest "Linux cgroup boundaries" "perf_memory_test"
   ]
   where
-    nativeTest label name extra = testCase label $
+    nativeTest label name = testCase label $
       withSystemTempDirectory "acton-perf-memory" $ \tmp -> do
         sources <- canonicalizePath "cbits"
         let binary = tmp </> name
             args = ["-Wall", "-Wextra", "-Werror", "-O2"]
-              ++ map (sources </>) ((name ++ ".c") : extra) ++ ["-o", binary]
+              ++ [sources </> name <.> "c", "-o", binary]
         (compiled, out, err) <- readProcessWithExitCode "cc" args ""
         assertEqual (out ++ err) ExitSuccess compiled
         (status, stdout, stderr) <- readProcessWithExitCode binary [tmp] ""
