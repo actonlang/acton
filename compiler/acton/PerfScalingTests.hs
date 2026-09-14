@@ -1087,8 +1087,8 @@ scaleReportTests = testGroup "terminal charts"
         let output = render (baseline low)
         assertBool "the baseline range selects GiB on linear and logarithmic axes"
           ("Allocated (GiB)" `isInfixOf` head output)
-        assertBool "the current value uses the shared unit"
-          ("last 9.77e-4" `isInfixOf` head output)
+        assertBool "both last values use the shared unit"
+          ("last current 9.77e-4 · baseline 4.88e-4" `isInfixOf` head output)
         assertBool "axis labels use GiB"
           (any (isInfixOf (if low == 0 then "2.00│" else "0.954│")) output)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
@@ -1227,6 +1227,22 @@ scaleReportTests = testGroup "terminal charts"
           (rgbas (BS.unpack (chartPixels True 67 12 diagonal))))
       assertBool "monochrome keeps every visible pixel neutral"
         (all (\(r,g,b,_) -> r == g && g == b) (rgbas (BS.unpack (chartPixels False 67 12 chart))))
+  , testCase "headings retain both last means, unequal scales and partial status at every width" $ do
+      let p n value done = ChartPoint n value value value done
+          cases =
+            [ ([p 2048 314 True], [], "last 314")
+            , ([p 2048 314 True], [p 2048 549 True], "last current 314 · baseline 549")
+            , ([p 2048 314 False], [p 4096 549 False], "last current 314 @ 2048 (partial) · baseline 549 @ 4096 (partial)")
+            , ([], [p 4096 549 False], "last baseline 549 (partial)")
+            ]
+      forM_ cases $ \(current, old, expected) -> forM_ [27,67,96] $ \width -> forM_ [False,True] $ \graphics -> do
+        let output = chartText graphics width 12 (Chart C.LinearAxes WallTime current old)
+            headingRows = length output - 14
+            summary = unwords (words (unwords (take headingRows output)))
+        assertBool summary (expected `isInfixOf` summary)
+        assertBool "wrapped headers stay inside the terminal" (all ((<= width + 11) . length) output)
+        assertEqual "the plot stays immediately above its two axis rows" 12
+          (length (filter (\line -> take 1 (drop 10 line) == "│") output))
   , testCase "empty, singleton, constant and wide-ranging plots fit the terminal" $ do
       let curves = [[], [ChartPoint 1 1 1 1 False],
                     [ChartPoint n 1 1 1 True | n <- [1,10,100]],
@@ -1235,7 +1251,7 @@ scaleReportTests = testGroup "terminal charts"
        forM_ curves $ \points -> forM_ [(27,4), (67,12), (96,12)] $ \(width, height) -> do
         let chart = Chart axes WallTime points []
             output = chartText False width height chart
-        assertEqual "title, plot, baseline and scale labels" (height + 3) (length output)
+        assertBool "title, plot and axis labels are retained" (length output >= height + 3)
         assertBool (show output) (all ((<= width + 11) . length) output)
         assertBool "text fallback has no escape codes" (all (notElem '\ESC') output)
         assertEqual "RGBA has four bytes per pixel" (width * 8 * height * 16 * 4)

@@ -802,14 +802,16 @@ printScaleReport useColor axes name points baseline = when (not (IM.null points 
       forM_ [chart | chart@(Chart _ _ current old) <- charts, not (null current && null old)] $ \chart@(Chart _ _ _ old) -> do
         let rgb = snd (chartStyle chart)
             accent = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
+            output = chartText graphics width height chart
+            headingRows = length output - height - 2
             style row line
-              | row == 0 = paint [testColorBold, accent] line
-              | row <= height = take 11 line ++ paint [accent] (drop 11 line)
+              | row < headingRows = paint [testColorBold, accent] line
+              | row < headingRows + height = take 11 line ++ paint [accent] (drop 11 line)
               | otherwise = line
         when (not (null old)) $
           putStrLn (paint [accent] "  ● ━ current" ++ "    " ++ paint [if graphics then "\ESC[38;2;251;146;60m" else accent] "◆ ┄ baseline" ++ "    ◈ overlapping points")
         when (axes == C.LogAxes && linearY chart) (putStrLn "  Linear allocation axis, including zero.")
-        putStr (unlines (zipWith style [0..] (chartText graphics width height chart)))
+        putStr (unlines (zipWith style [0..] output))
         when graphics $ do
           -- The text reserves space first, including when output scrolls.
           -- C=1 keeps the image from moving the cursor; return below the axes.
@@ -877,18 +879,31 @@ linearY (Chart _ Allocated points baseline) = any ((== 0) . chartMinimum) (point
 linearY _ = False
 
 chartText :: Bool -> Int -> Int -> Chart -> [String]
-chartText graphics width height chart@(Chart _ _ raw _) =
-    [heading] ++
+chartText graphics width height chart@(Chart _ _ raw old) =
+    headings ++
     [ pad 10 (fromMaybe "" (lookup row labels)) ++ "│" ++ plotRow row | row <- [0..height-1] ] ++
     [replicate 10 ' ' ++ "└" ++ replicate width '─', "     scale " ++ xlabels]
   where
     (xticks, yticks, points, baseline, guide) = layout chart
     title = "  ◆ " ++ fst (chartStyle chart)
-    lastValue = case reverse raw of
-      p:_ -> "last " ++ chartNumber (chartMean p / fst (chartUnit chart)) ++ if chartComplete p then "" else " (partial)"
-      _ -> ""
-    heading = title ++ if length title + length lastValue + 3 <= width + 11
-                        then replicate (width + 11 - length title - length lastValue) ' ' ++ lastValue else ""
+    latest = [(label, p) | (label, p:_) <- [("current", reverse raw), ("baseline", reverse old)]]
+    differentScales = case latest of
+      [(_, a), (_, b)] -> chartScale a /= chartScale b
+      _ -> False
+    lastValue = if null latest then "" else "last " ++ intercalate " · "
+      [ (if null old then "" else label ++ " ") ++ chartNumber (chartMean p / fst (chartUnit chart))
+        ++ (if differentScales then " @ " ++ printf "%.0f" (chartScale p) else "")
+        ++ (if chartComplete p then "" else " (partial)") | (label, p) <- latest ]
+    headings
+      | null lastValue = [title]
+      | length title + length lastValue + 3 <= width + 11 =
+          [title ++ replicate (width + 11 - length title - length lastValue) ' ' ++ lastValue]
+      | otherwise = title : wrap (words lastValue)
+    wrap [] = []
+    wrap (word:rest) = fit word rest
+      where
+        fit line (word:rest) | length line + length word + 1 <= width + 9 = fit (line ++ " " ++ word) rest
+        fit line rest = ("  " ++ line) : wrap rest
     labels = [(y height value, label) | (value, label) <- yticks]
     -- Give the end ticks priority and leave a gap between labels on narrow
     -- terminals. Overwriting a neighbouring label could change its number.

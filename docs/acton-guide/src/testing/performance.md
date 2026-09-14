@@ -155,7 +155,9 @@ themselves stop the study. Flat
 time/scale suggests roughly linear time over the measured range. The wall-time
 chart includes a dashed guide for time proportional to scale, anchored at the
 largest completed size. It is an illustration, not a fitted model or a complexity
-claim. Each chart highlights its latest point and shows its latest mean.
+claim. Each chart highlights its latest point and shows the latest mean for
+both current and baseline curves. Different endpoint scales are shown beside
+their values, and incomplete points are labelled partial.
 Cyan, violet and pink distinguish time, time/scale and allocations;
 `--color never` and `NO_COLOR` select monochrome output. The summary counts curve samples
 separately from reference checks and identifies partial sizes. Kitty and
