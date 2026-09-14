@@ -504,7 +504,7 @@ runScalingStudy useColor gopts opts directory host tests baseline runSample = do
                       forM_ (old >>= seriesReason) (say . ("Baseline: " ++) . clean)
                       forM_ baseline $ \previous -> say (maybe "Baseline recording is incomplete"
                         (("Baseline stopped: " ++) . clean) (recordingStopped previous))
-                    printScaleReport useColor (modName ++ "." ++ testName) points oldData)
+                    printScaleReport useColor (C.testScaleAxes opts) (modName ++ "." ++ testName) points oldData)
               code <- case outcome of
                 Right () -> finish "benchmark finished" 0
                 Left ex | Just (ScalingStopped reason) <- fromException ex ->
@@ -639,8 +639,8 @@ scaleSeriesReason old new = seriesIssue old <|> seriesIssue new <|>
       (Just a, Just b) -> perfSamplingReason a b
       _ -> Just "performance identity is unavailable"
 
-printScaleRecording :: Bool -> FilePath -> Maybe FilePath -> IO ()
-printScaleRecording useColor path baselinePath = do
+printScaleRecording :: Bool -> C.ScaleAxes -> FilePath -> Maybe FilePath -> IO ()
+printScaleRecording useColor axes path baselinePath = do
     when (maybe False ("git:" `isPrefixOf`) baselinePath) $
       ioError (userError "--report only compares saved recordings; run acton test scale --compare git:REF to measure a Git revision")
     current <- readScaleRecording path
@@ -665,7 +665,7 @@ printScaleRecording useColor path baselinePath = do
       forM_ baseline $ \previous -> do
         putStrLn ("Current: " ++ clean (takeFileName path))
         putStrLn ("Baseline: " ++ clean (takeFileName (recordingPath previous)))
-      printScaleReport useColor (modName ++ "." ++ testName) (seriesData new) (maybe IM.empty seriesData old)
+      printScaleReport useColor axes (modName ++ "." ++ testName) (seriesData new) (maybe IM.empty seriesData old)
       endpointStatus "  " current new
       forM_ baseline $ \recording -> forM_ old (endpointStatus "  Baseline: " recording)
       forM_ (seriesReason new) (putStrLn . ("  " ++) . clean)
@@ -711,23 +711,24 @@ data ChartPoint = ChartPoint
     } deriving (Eq, Show)
 
 data ChartKind = WallTime | TimePerScale | Allocated deriving (Eq, Show)
-data Chart = Chart ChartKind [ChartPoint] [ChartPoint] deriving (Eq, Show)
+data Chart = Chart C.ScaleAxes ChartKind [ChartPoint] [ChartPoint] deriving (Eq, Show)
 
 chartStyle :: Chart -> (String, [Int])
-chartStyle (Chart WallTime _ _) = ("Wall time (ms)", [56, 189, 248])
-chartStyle (Chart TimePerScale _ _) = ("Time / scale (µs)", [192, 132, 252])
+chartStyle (Chart _ WallTime _ _) = ("Wall time (ms)", [56, 189, 248])
+chartStyle (Chart _ TimePerScale _ _) = ("Time / scale (µs)", [192, 132, 252])
 chartStyle chart = ("Allocated (" ++ snd (chartUnit chart) ++ ")", [244, 114, 182])
 
 -- Allocation chart values are KiB. Choose one display unit for both curves,
 -- including their ranges, without changing the plotted coordinates.
 chartUnit :: Chart -> (Double, String)
-chartUnit (Chart Allocated points baseline) =
+chartUnit (Chart _ Allocated points baseline) =
     let (divisor, unit) = byteUnit (1024 * maximum (0 : map chartMaximum (points ++ baseline)))
     in (divisor / 1024, unit)
 chartUnit _ = (1, "")
 
 chartNumber :: Double -> String
-chartNumber n | n >= 1e5 || n < 0.001 = printf "%.2e" n
+chartNumber n | n == 0 = "0"
+              | n >= 1e5 || n < 0.001 = printf "%.2e" n
               | otherwise = printf "%.*f" (max 0 (2 - floor (logBase 10 n)) :: Int) n
 
 scaleSummary :: ScaleData -> String
@@ -745,15 +746,15 @@ scaleSummary points = case (IM.lookupMin points, IM.lookupMax points) of
 -- An illustrative proportionality line, not a fit or a complexity verdict.
 -- Anchor at the largest completed size; partial samples cannot set the guide.
 chartGuide :: Chart -> [(Double, Double)]
-chartGuide (Chart WallTime points _) = case (points, reverse (filter chartComplete points)) of
-    (first:_, anchor:_) | chartScale first < chartScale anchor ->
+chartGuide (Chart _ WallTime points _) = case (points, reverse (filter chartComplete points)) of
+    (first:_, anchor:_) | chartScale first < chartScale anchor, chartMean anchor > 0 ->
       [(chartScale first, chartMean anchor * (chartScale first / chartScale anchor)),
        (chartScale anchor, chartMean anchor)]
     _ -> []
 chartGuide _ = []
 
-scaleCharts :: ScaleData -> ScaleData -> [Chart]
-scaleCharts points baseline =
+scaleCharts :: C.ScaleAxes -> ScaleData -> ScaleData -> [Chart]
+scaleCharts axes points baseline =
     [ chart WallTime (\_ sample -> wall sample)
     , chart TimePerScale (\n sample -> (* (1000 / n)) <$> wall sample)
     , chart Allocated (\_ sample -> (/ 1024) <$> sampleAllocated sample)
@@ -761,8 +762,8 @@ scaleCharts points baseline =
   where
     -- A logarithmic time chart cannot represent a zero clock reading. Omit
     -- the whole point, not individual samples that would bias its statistics.
-    wall sample = if sampleWall sample > 0 then Just (sampleWall sample) else Nothing
-    chart title value = Chart title (series value points) (series value baseline)
+    wall sample = if axes == C.LogAxes && sampleWall sample <= 0 then Nothing else Just (sampleWall sample)
+    chart title value = Chart axes title (series value points) (series value baseline)
     series value dataPoints =
       [ ChartPoint scale (minimum ys) (sum ys / fromIntegral (length ys)) (maximum ys) done
       | (n, (done, xs)) <- IM.toAscList dataPoints, not (null xs)
@@ -780,8 +781,8 @@ kittyTerminal tty env = tty && not multiplexer && term /= "dumb"
     multiplexer = any (\key -> maybe False (not . null) (lookup key env)) ["TMUX", "STY"]
                || any (`isPrefixOf` term) ["screen", "tmux"]
 
-printScaleReport :: Bool -> String -> ScaleData -> ScaleData -> IO ()
-printScaleReport useColor name points baseline = when (not (IM.null points && IM.null baseline)) $ do
+printScaleReport :: Bool -> C.ScaleAxes -> String -> ScaleData -> ScaleData -> IO ()
+printScaleReport useColor axes name points baseline = when (not (IM.null points && IM.null baseline)) $ do
     tty <- hIsTerminalDevice stdout
     (rows, cols) <- if tty then fromMaybe (24, 80) <$> queryTermSize else return (24, 80)
     graphics <- kittyTerminal tty <$> getEnvironment
@@ -793,11 +794,12 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
       putStrLn ("\n" ++ paint [testColorBold] ("Scaling charts: " ++ map (\c -> if isPrint c then c else ' ') name))
       putStrLn (scaleSummary points)
       when (not (IM.null baseline)) (putStrLn ("Baseline: " ++ scaleSummary baseline))
-      putStrLn "Logarithmic axes unless labelled; means and min–max ranges; hollow markers = partial points."
-      when (any (any ((== 0) . sampleWall) . snd) (IM.elems points ++ IM.elems baseline)) $
+      putStrLn ((if axes == C.LogAxes then "Logarithmic axes unless labelled" else "Linear axes")
+                ++ "; means and min–max ranges; hollow markers = partial points.")
+      when (axes == C.LogAxes && any (any ((== 0) . sampleWall) . snd) (IM.elems points ++ IM.elems baseline)) $
         putStrLn "Time charts omit sizes with zero clock readings (below resolution); allocation data is retained."
-      let charts = scaleCharts points baseline
-      forM_ [chart | chart@(Chart _ current old) <- charts, not (null current && null old)] $ \chart@(Chart _ _ old) -> do
+      let charts = scaleCharts axes points baseline
+      forM_ [chart | chart@(Chart _ _ current old) <- charts, not (null current && null old)] $ \chart@(Chart _ _ _ old) -> do
         let rgb = snd (chartStyle chart)
             accent = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
             style row line
@@ -806,7 +808,7 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
               | otherwise = line
         when (not (null old)) $
           putStrLn (paint [accent] "  ● ━ current" ++ "    " ++ paint [if graphics then "\ESC[38;2;251;146;60m" else accent] "◆ ┄ baseline" ++ "    ◈ overlapping points")
-        when (linearAxis chart) (putStrLn "  Linear allocation axis, including zero.")
+        when (axes == C.LogAxes && linearY chart) (putStrLn "  Linear allocation axis, including zero.")
         putStr (unlines (zipWith style [0..] (chartText graphics width height chart)))
         when graphics $ do
           -- The text reserves space first, including when output scrolls.
@@ -821,24 +823,29 @@ printScaleReport useColor name points baseline = when (not (IM.null points && IM
         putStrLn ""
       putStrLn "Flat time/scale means roughly linear time over these sizes."
       putStrLn "Allocated bytes cover the measured region, not retained structure size."
-      when (any (\(Chart kind current old) -> kind == Allocated && null current && null old) charts) $
+      when (any (\(Chart _ kind current old) -> kind == Allocated && null current && null old) charts) $
         putStrLn "Allocation measurements are unavailable in this recording."
       hFlush stdout
 
--- Positions are fractions of the plot area. A decade grid keeps small timing
--- differences from looking like large changes. Constant series still have range.
+-- Positions are fractions of the plot area. Both series share zero-based linear
+-- bounds or a decade grid. Constant series still have range.
 layout :: Chart -> ([(Double, String)], [(Double, String)], [ChartPoint], [ChartPoint], [(Double, Double)])
-layout (Chart _ [] []) = ([], [], [], [], [])
-layout chart@(Chart _ points baseline) = (ticks 1 xbounds, yticks, map project points, map project baseline, guide)
+layout (Chart _ _ [] []) = ([], [], [], [], [])
+layout chart@(Chart axes _ points baseline) = (xticks, yticks, map project points, map project baseline, guide)
   where
-    xbounds = bounds (map chartScale (points ++ baseline))
+    (xpos, xticks) = axis (axes == C.LinearAxes) 1 (map chartScale (points ++ baseline))
     values = concatMap (\p -> [chartMinimum p, chartMaximum p]) (points ++ baseline)
-    ybounds = if linearAxis chart then (0, if maximum values > 0 then maximum values else 1) else bounds values
-    ypos value = if linearAxis chart then value / snd ybounds else position ybounds value
-    divisor = fst (chartUnit chart)
-    yticks = if linearAxis chart
-      then [(n, printf "%.3g" (n * snd ybounds / divisor)) | n <- [0, 0.25, 0.5, 0.75, 1]]
-      else ticks divisor ybounds
+    (ypos, yticks) = axis (linearY chart) (fst (chartUnit chart)) values
+    axis linear divisor values
+      | linear =
+          let high = if maximum values > 0 then maximum values / divisor else 1
+              unit = 10 ** fromIntegral (floor (logBase 10 (high / 5)) :: Int)
+              step = head [n * unit | n <- [1, 2, 5, 10], n * unit >= high / 5]
+              count = ceiling (high / step) :: Int
+              top = fromIntegral count * step
+          in (\value -> value / divisor / top,
+              [(fromIntegral n / fromIntegral count, chartNumber (fromIntegral n * step)) | n <- [0..count]])
+      | otherwise = let limits = bounds values in (position limits, ticks divisor limits)
     bounds values =
       let lo = logBase 10 (minimum values); hi = logBase 10 (maximum values)
           lower = fromIntegral (floor (lo + 1e-10) :: Int)
@@ -852,24 +859,25 @@ layout chart@(Chart _ points baseline) = (ticks 1 xbounds, yticks, map project p
       | n <- [ceiling lo, ceiling lo + max 1 (ceiling ((hi - lo) / 4)) .. floor hi :: Int] ]
     -- Clip before rasterization: clamping every pixel would draw a false line
     -- along the bottom edge wherever the guide lies below the measured range.
-    guide = case [(position xbounds n, ypos t) | (n, t) <- chartGuide chart] of
+    guide = case [(xpos n, ypos t) | (n, t) <- chartGuide chart] of
       [(ax, ay), (bx, by)] | bx > ax && by > ay ->
         let slope = (by - ay) / (bx - ax)
             left = max ax (ax - ay / slope)
             right = min bx (ax + (1 - ay) / slope)
         in [(u, ay + (u - ax) * slope) | left < right, u <- [left, right]]
       _ -> []
-    project p = p { chartScale = position xbounds (chartScale p)
+    project p = p { chartScale = xpos (chartScale p)
                   , chartMinimum = ypos (chartMinimum p)
                   , chartMean = ypos (chartMean p)
                   , chartMaximum = ypos (chartMaximum p) }
 
-linearAxis :: Chart -> Bool
-linearAxis (Chart Allocated points baseline) = any ((== 0) . chartMinimum) (points ++ baseline)
-linearAxis _ = False
+linearY :: Chart -> Bool
+linearY (Chart C.LinearAxes _ _ _) = True
+linearY (Chart _ Allocated points baseline) = any ((== 0) . chartMinimum) (points ++ baseline)
+linearY _ = False
 
 chartText :: Bool -> Int -> Int -> Chart -> [String]
-chartText graphics width height chart@(Chart _ raw _) =
+chartText graphics width height chart@(Chart _ _ raw _) =
     [heading] ++
     [ pad 10 (fromMaybe "" (lookup row labels)) ++ "│" ++ plotRow row | row <- [0..height-1] ] ++
     [replicate 10 ' ' ++ "└" ++ replicate width '─', "     scale " ++ xlabels]

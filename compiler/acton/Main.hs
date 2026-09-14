@@ -647,9 +647,9 @@ buildProjectOnce gopts opts = do
 
 -- | Entry point for acton test; configures options and selects mode/watch.
 runTests :: C.GlobalOptions -> C.TestCommand -> IO ()
-runTests gopts (C.TestScaleReport path baseline) = do
+runTests gopts (C.TestScaleReport axes path baseline) = do
     color <- useColor gopts
-    printScaleRecording color path baseline
+    printScaleRecording color axes path baseline
 runTests gopts cmd = do
     let (mode, topts) =
           case cmd of

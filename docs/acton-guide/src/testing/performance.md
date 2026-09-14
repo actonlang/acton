@@ -134,13 +134,24 @@ and the recent scale range that supports its growth summary. A resource limit
 leaves a partial curve with the stopping reason.
 
 Each benchmark ends with three terminal charts: time, time divided by scale,
-and allocated bytes. Axes are logarithmic, except that an allocation chart
-containing zero uses a labelled linear vertical axis. Missing
+and allocated bytes. Axes are linear and start at zero. Use `--log` for
+logarithmic axes when exploring growth across many orders of magnitude:
+
+```sh
+acton test scale --name my_test --log
+acton test scale --report current.jsonl --compare baseline.jsonl --log
+```
+
+The axis choice only changes the display, so saved studies can be viewed either
+way without rerunning them. Axes do not switch automatically based on the
+performance difference. With `--log`, an allocation chart containing zero uses
+a labelled linear vertical axis. Missing
 allocation data is omitted rather than shown as zero. Points show means, bars show
 sample ranges, and hollow points mark incomplete sampling at a size.
 If any timing at a size is zero because the operation is shorter than the clock
-resolution, that size is omitted from time charts but retained in the recording
-and allocation chart. Zero readings do not by themselves stop the study. Flat
+resolution, linear charts retain it. Logarithmic time charts omit the entire
+size, retaining it in the recording and allocation chart. Zero readings do not by
+themselves stop the study. Flat
 time/scale suggests roughly linear time over the measured range. The wall-time
 chart includes a dashed guide for time proportional to scale, anchored at the
 largest completed size. It is an illustration, not a fitted model or a complexity
