@@ -152,11 +152,12 @@ data TestCommand
     | TestList TestOptions
     | TestPerf TestOptions
     | TestScale TestOptions
-    | TestScaleReport FilePath (Maybe FilePath)
+    | TestScaleReport ScaleAxes FilePath (Maybe FilePath)
     | TestStress TestOptions
     deriving Show
 
 data MemoryLimit = MemoryPercent Double | MemoryBytes Integer deriving (Show, Eq)
+data ScaleAxes = LinearAxes | LogAxes deriving (Show, Eq)
 
 data TestOptions = TestOptions
     { testCompile      :: CompileOptions
@@ -177,6 +178,7 @@ data TestOptions = TestOptions
     , testEndScale     :: Maybe Int
     , testMaxMemory    :: Maybe MemoryLimit
     , testCompare      :: Maybe String
+    , testScaleAxes    :: ScaleAxes
     , testStressWorkers :: Int
     , testTags         :: [String]
     , testMaxIterSet   :: Bool
@@ -517,11 +519,12 @@ testCommand =
     <|> (TestRun <$> testOptions OrdinaryOptions)
   where
     scaleCommand = scaling
-      <$> optional (strOption (long "compare" <> metavar "FILE|git:REF" <> help "Compare against a saved scaling journal or Git revision; live runs remeasure baseline sizes"))
+      <$> flag LinearAxes LogAxes (long "log" <> help "Use logarithmic chart axes (default: linear)")
+      <*> optional (strOption (long "compare" <> metavar "FILE|git:REF" <> help "Compare against a saved scaling journal or Git revision; live runs remeasure baseline sizes"))
       <*> (Left <$> strOption (long "report" <> metavar "FILE" <> help "Render charts from a saved scaling journal without running tests")
            <|> Right <$> testOptions ScaleOptions)
-    scaling baseline (Left path) = TestScaleReport path baseline
-    scaling baseline (Right opts) = TestScale opts { testCompare = baseline }
+    scaling axes baseline (Left path) = TestScaleReport axes path baseline
+    scaling axes baseline (Right opts) = TestScale opts { testCompare = baseline, testScaleAxes = axes }
 
 data TestOptionsMode = OrdinaryOptions | PerfOptions | ScaleOptions deriving Eq
 
@@ -574,6 +577,7 @@ testOptions mode = mkTestOptions
         , testEndScale = testEndScale
         , testMaxMemory = testMaxMemory
         , testCompare = Nothing
+        , testScaleAxes = LinearAxes
         , testStressWorkers = testStressWorkers
         , testTags = testTags
         , testMaxIterSet = isJust testMaxIterOpt

@@ -55,6 +55,7 @@ scaleOptionTests = testGroup "performance scaling options"
       assertEqual "default starting scale is chosen by the runner" Nothing (C.testStartScale opts)
       assertEqual "no endpoint means automatic exploration" Nothing (C.testEndScale opts)
       assertEqual "default memory limit is chosen by the runner" Nothing (C.testMaxMemory opts)
+      assertEqual "chart axes are linear by default" C.LinearAxes (C.testScaleAxes opts)
       assertBool "default total limit is chosen by the runner" (not (C.testMaxTimeSet opts))
       (_, explicit) <- parseScale ["--optimize", "Debug"]
       assertEqual "explicit debug remains available" C.Debug (C.optimize (C.testCompile explicit))
@@ -111,12 +112,27 @@ scaleOptionTests = testGroup "performance scaling options"
       forM_ [["test", "scale", "--report", "run.jsonl", "--color", "never"],
              ["test", "--color", "never", "scale", "--report", "run.jsonl"]] $ \args ->
         case parseOptions args of
-          O.Success (C.CmdOpt globals (C.Test (C.TestScaleReport path Nothing))) -> do
+          O.Success (C.CmdOpt globals (C.Test (C.TestScaleReport axes path Nothing))) -> do
             assertEqual "recording path" "run.jsonl" path
+            assertEqual "saved reports use linear axes by default" C.LinearAxes axes
             assertEqual "display options apply" C.Never (C.color globals)
           _ -> assertFailure ("expected saved report: " ++ unwords args)
       forM_ [["--max-time", "1s"], ["--name", "dct"], ["--start-scale", "2"], ["--end-scale", "2"], ["--json"], ["--record"]] $ \args ->
         rejects (["test", "scale", "--report", "run.jsonl"] ++ args)
+  , testCase "logarithmic axes are a display option for studies and saved comparisons" $ do
+      forM_ [["--log"], ["--log", "--compare", "git:main"], ["--compare", "git:main", "--log"]] $ \args -> do
+        (_, opts) <- parseScale args
+        assertEqual (unwords args) C.LogAxes (C.testScaleAxes opts)
+      forM_ [["--log", "--report", "after.jsonl", "--compare", "before.jsonl"],
+             ["--report", "after.jsonl", "--log", "--compare", "before.jsonl"],
+             ["--report", "after.jsonl", "--compare", "before.jsonl", "--log"]] $ \args ->
+        case parseOptions (["test", "scale"] ++ args) of
+          O.Success (C.CmdOpt _ (C.Test (C.TestScaleReport axes path baseline))) ->
+            assertEqual "axes and recording roles survive option ordering"
+              (C.LogAxes, "after.jsonl", Just "before.jsonl") (axes, path, baseline)
+          O.Failure failure -> assertFailure (fst (O.renderFailure failure "acton"))
+          _ -> assertFailure "expected logarithmic comparison report"
+      forM_ [[], ["perf"], ["list"], ["stress"]] $ \mode -> rejects (["test"] ++ mode ++ ["--log"])
   , testCase "comparison always takes one baseline file in live and report modes" $ do
       forM_ [["--compare", "before.jsonl"], ["--name", "dct", "--compare", "before.jsonl"],
              ["--compare", "before.jsonl", "--max-time", "2m"]] $ \args -> do
@@ -125,7 +141,7 @@ scaleOptionTests = testGroup "performance scaling options"
       forM_ [["--report", "after.jsonl", "--compare", "before.jsonl"],
              ["--compare", "before.jsonl", "--report", "after.jsonl"]] $ \args ->
         case parseOptions (["test", "scale"] ++ args) of
-          O.Success (C.CmdOpt _ (C.Test (C.TestScaleReport path baseline))) ->
+          O.Success (C.CmdOpt _ (C.Test (C.TestScaleReport _ path baseline))) ->
             assertEqual "current and baseline have fixed roles" ("after.jsonl", Just "before.jsonl") (path, baseline)
           O.Failure failure -> assertFailure (fst (O.renderFailure failure "acton"))
           _ -> assertFailure "expected comparison report"
@@ -139,7 +155,7 @@ scaleOptionTests = testGroup "performance scaling options"
         O.Failure failure -> do
           let (text, code) = O.renderFailure failure "acton"
           assertEqual text ExitSuccess code
-          forM_ ["--start-scale N", "--end-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE", "--compare FILE"] $ \option ->
+          forM_ ["--start-scale N", "--end-scale N", "--max-memory LIMIT", "--max-time DURATION", "--report FILE", "--compare FILE", "--log"] $ \option ->
             assertBool text (option `isInfixOf` unwords (words text))
           assertBool text (not (any (`isInfixOf` text) ["--scaling", "--scale N", "--time DURATION", "--iter", "--min-time"]))
         _ -> assertFailure "expected scale help"
@@ -412,8 +428,9 @@ scaleTests = testGroup "performance scaling studies"
         events <- BL.readFile (directory </> head files) >>= decodeEvents . BL.unpack
         assertEnd reason events
         assertBool "an unguarded sample cannot contribute a point" (null (eventsOf "point" events))
-  , testCase "comparison replays completed recorded sizes without adaptive early stopping" $
-      forM_ [([], [1,3..49]), (["--start-scale", "8", "--end-scale", "17"], [9,11..17])] $ \(args, expected) ->
+  , testCase "comparison replays completed sizes and continues to an explicit endpoint" $
+      forM_ [([], [1,3..49]), (["--start-scale", "8", "--end-scale", "17"], [9,11..17]),
+             (["--end-scale", "100"], [1,3..49] ++ [98,100])] $ \(args, expected) ->
       withSystemTempDirectory "acton-scale-replay" $ \directory -> do
         (gopts, opts) <- parseScale (["--max-memory", "128MiB", "--max-time", "30s", "--json"] ++ args)
         let sizes = [1,3..49]
@@ -427,15 +444,21 @@ scaleTests = testGroup "performance scaling studies"
           modifyIORef' calls (++ [n])
           return (modelResult n 0.001)
         assertEqual "all scheduled sizes completed" 0 code
-        assertEqual "only completed sizes inside the requested range are replayed, regardless of timing"
+        assertEqual "completed sizes are replayed, then the requested endpoint is reached"
           (concatMap (replicate 3) expected) =<< readIORef calls
         [name] <- listDirectory directory
         assertBool name ("sample.test__" `isInfixOf` name && "__aaaaaaaaaaaa.jsonl" `isInfixOf` name)
         recording <- readScaleRecording (directory </> name)
         assertEqual "full implementation identity is retained" (Just (Aeson.toJSON implementation))
           (KM.lookup "implementation_hash" (recordingHeader recording))
-        assertEqual "completion describes replay" (Just "Completed baseline sizes remeasured")
+        assertEqual "completion describes the requested range or replay"
+          (Just (if null args then "Completed baseline sizes remeasured"
+                 else "Requested scale range measured; growth remains inconclusive"))
           (seriesReason (recordingTests recording M.! ("sample", "test")))
+        events <- BL.readFile (directory </> name) >>= decodeEvents . BL.unpack
+        end <- requireEvent "end" events
+        assertEqual "an explicit endpoint is reached" (Just (if null args then Aeson.Null else Aeson.Bool True))
+          (KM.lookup "end_scale_reached" end)
   , testCase "each benchmark owns its journal while sharing the command budget" $
       withSystemTempDirectory "acton-scale-files" $ \directory -> do
         (gopts, opts) <- parseScale ["--max-memory", "128MiB", "--max-time", "30s", "--json"]
@@ -466,7 +489,7 @@ scaleGitTests = testGroup "Git comparisons"
         assertEqual "the target is preserved" (Just target) (C.testCompare opts)
       (_, empty) <- parseScale ["--compare", "git:"]
       assertBool "empty Git revisions fail validation" (isJust (validateScalingOptions empty))
-      result <- try (printScaleRecording False "missing.jsonl" (Just "git:HEAD")) :: IO (Either IOException ())
+      result <- try (printScaleRecording False C.LinearAxes "missing.jsonl" (Just "git:HEAD")) :: IO (Either IOException ())
       assertBool "offline reports reject Git before reading either path"
         (either (isInfixOf "--report only compares saved recordings" . displayException) (const False) result)
   , testCase "one detached baseline in the cache leaves the current checkout in place" $
@@ -739,7 +762,7 @@ scaleJournalIntegrationTest =
           assertEqual "the recorded raw identity excludes a colliding display name"
             (Just (Aeson.String "_test_partial")) (KM.lookup "test" event)
         summary <- requireEvent "test_end" compared
-        assertEqual "the recorded schedule completed" (Just (Aeson.String "compared")) (KM.lookup "outcome" summary)
+        assertEqual "the requested recorded range completed" (Just (Aeson.String "range")) (KM.lookup "outcome" summary)
         assertEqual "the old recording is unchanged" original =<< BS.readFile originalPath
         (unreachedCode, _, unreachedErr) <- readCreateProcessWithExitCode
           (proc acton ["test", "scale", "--compare", originalPath, "--end-scale", "1001", "--json"])
@@ -778,7 +801,7 @@ scaleGitIntegrationTest = testCase "Git revisions produce durable comparable rec
         , "    for scale in t.loop():"
         , "        values = workload.items(scale)"
         , "        assert len(values) >= scale"
-        , "        if scale > 200:"
+        , "        if scale > 200 and len(values) == scale * 100:"
         , "            sw = time.Stopwatch()"
         , "            while sw.elapsed().to_float() < 30.0:"
         , "                pass"
@@ -825,15 +848,21 @@ scaleGitIntegrationTest = testCase "Git revisions produce durable comparable rec
       (reportCode, reportOut, reportErr) <- run ["--report", last paths, "--compare", head paths, "--color", "never"]
       assertEqual (reportOut ++ reportErr) ExitSuccess reportCode
       assertBool "saved comparison renders after worktree cleanup" ("baseline" `isInfixOf` reportOut && "current" `isInfixOf` reportOut)
-      (partialCode, partialOut, partialErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", "100",
-                                                   "--end-scale", "400", "--max-time", "3s", "--max-memory", "128MiB", "--json"]
-      assertEqual (partialOut ++ partialErr) ExitSuccess partialCode
-      partial <- decodeEvents partialOut
-      assertEqual "a partial baseline still produces a comparison" 2 (length (eventsOf "study" partial))
-      assertEqual "neither study claims the unreached endpoint" [Just (Aeson.Bool False), Just (Aeson.Bool False)]
-        (map (KM.lookup "end_scale_reached") (eventsOf "end" partial))
-      let partialSummary = last (eventsOf "test_end" partial)
-      assertEqual "completed smaller baseline sizes are remeasured" (Just (Aeson.String "compared")) (KM.lookup "outcome" partialSummary)
+      forM_ ["100", "400"] $ \start -> do
+        (partialCode, partialOut, partialErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--start-scale", start,
+                                                     "--end-scale", "400", "--max-time", "3s", "--max-memory", "128MiB", "--json"]
+        assertEqual (partialOut ++ partialErr) ExitSuccess partialCode
+        partial <- decodeEvents partialOut
+        assertEqual "an incomplete baseline still produces a comparison" 2 (length (eventsOf "study" partial))
+        assertEqual "each revision attempts the endpoint independently" [Just (Aeson.Bool False), Just (Aeson.Bool True)]
+          (map (KM.lookup "end_scale_reached") (eventsOf "end" partial))
+        let partialSummary = last (eventsOf "test_end" partial)
+        assertEqual "the current version reaches its requested endpoint" (Just (Aeson.String "range")) (KM.lookup "outcome" partialSummary)
+        partialPaths <- mapM (field "path") (eventsOf "study" partial) :: IO [FilePath]
+        (savedCode, savedOut, savedErr) <- run ["--report", last partialPaths, "--compare", head partialPaths, "--color", "never"]
+        assertEqual (savedOut ++ savedErr) ExitSuccess savedCode
+        assertBool "the saved comparison explains the shorter baseline"
+          ("Baseline stopped: time limit reached" `isInfixOf` savedOut)
       writeFile source "import testing\n"
       (missingCode, missingOut, missingErr) <- run ["--compare", "git:HEAD~1", "--name", "sample", "--json"]
       assertBool (missingOut ++ missingErr) (missingCode /= ExitSuccess && "same single benchmark" `isInfixOf` missingErr)
@@ -956,16 +985,16 @@ assertEnd reason events = do
 
 perfMemoryTests :: TestTree
 perfMemoryTests = testGroup "live memory observation"
-  [ nativeTest "host and process readings" "perf_memory_probe" ["perf_memory.c"]
-  , nativeTest "Linux cgroup boundaries" "perf_memory_test" []
+  [ nativeTest "host and process readings" "perf_memory_probe"
+  , nativeTest "Linux cgroup boundaries" "perf_memory_test"
   ]
   where
-    nativeTest label name extra = testCase label $
+    nativeTest label name = testCase label $
       withSystemTempDirectory "acton-perf-memory" $ \tmp -> do
         sources <- canonicalizePath "cbits"
         let binary = tmp </> name
             args = ["-Wall", "-Wextra", "-Werror", "-O2"]
-              ++ map (sources </>) ((name ++ ".c") : extra) ++ ["-o", binary]
+              ++ [sources </> name <.> "c", "-o", binary]
         (compiled, out, err) <- readProcessWithExitCode "cc" args ""
         assertEqual (out ++ err) ExitSuccess compiled
         (status, stdout, stderr) <- readProcessWithExitCode binary [tmp] ""
@@ -983,10 +1012,10 @@ scaleReportTests = testGroup "terminal charts"
                      sample 8 (-1) 1 True False]
           points = foldl' (flip addScaleEvent) IM.empty samples
       assertEqual "linear work has constant time per scale and preserves sample ranges"
-        [ Chart WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False] []
-        , Chart TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False] []
-        , Chart Allocated [] []
-        ] (scaleCharts points IM.empty)
+        [ Chart C.LogAxes WallTime [ChartPoint 2 8 10 12 True, ChartPoint 4 16 20 24 False] []
+        , Chart C.LogAxes TimePerScale [ChartPoint 2 4000 5000 6000 True, ChartPoint 4 4000 5000 6000 False] []
+        , Chart C.LogAxes Allocated [] []
+        ] (scaleCharts C.LogAxes points IM.empty)
       assertEqual "summary distinguishes finished sizes and accepted partial samples"
         "1 size + 1 partial · 6 curve samples · scale 2 … 4" (scaleSummary points)
   , testCase "zero clock readings retain coverage and allocations without biasing time charts" $ do
@@ -996,16 +1025,25 @@ scaleReportTests = testGroup "terminal charts"
           points = foldl' (flip addScaleEvent) IM.empty events
       assertEqual "all samples remain in the recorded coverage"
         "1 size + 1 partial · 4 curve samples · scale 1 … 2" (scaleSummary points)
-      assertEqual "a time point is omitted in full, while its allocations remain visible"
-        [ Chart WallTime [ChartPoint 2 0.002 0.002 0.002 False] []
-        , Chart TimePerScale [ChartPoint 2 1 1 1 False] []
-        , Chart Allocated [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
-        ] (scaleCharts points IM.empty)
+      assertEqual "logarithmic charts omit a time point in full, retaining its allocations"
+        [ Chart C.LogAxes WallTime [ChartPoint 2 0.002 0.002 0.002 False] []
+        , Chart C.LogAxes TimePerScale [ChartPoint 2 1 1 1 False] []
+        , Chart C.LogAxes Allocated [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
+        ] (scaleCharts C.LogAxes points IM.empty)
+      assertEqual "linear charts retain zero timings without biasing their means"
+        [ Chart C.LinearAxes WallTime [ChartPoint 1 0 0.001 0.002 True, ChartPoint 2 0.002 0.002 0.002 False] []
+        , Chart C.LinearAxes TimePerScale [ChartPoint 1 0 1 2 True, ChartPoint 2 1 1 1 False] []
+        , Chart C.LinearAxes Allocated [ChartPoint 1 1 1 1 True, ChartPoint 2 2 2 2 False] []
+        ] (scaleCharts C.LinearAxes points IM.empty)
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
-        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
+        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \path run -> do
           (code, out, err) <- run
           assertEqual (out ++ err) ExitSuccess code
-          assertBool out ("Time charts omit sizes with zero clock readings" `isInfixOf` out)
+          assertBool out ("Linear axes;" `isInfixOf` out && not ("Time charts omit" `isInfixOf` out))
+          acton <- canonicalizePath "../../dist/bin/acton"
+          (logCode, logOut, logErr) <- readProcessWithExitCode acton ["test", "scale", "--report", path, "--log"] ""
+          assertEqual (logOut ++ logErr) ExitSuccess logCode
+          assertBool logOut ("Time charts omit sizes with zero clock readings" `isInfixOf` logOut)
   , testCase "allocation charts retain zero, ranges and missing measurements" $ do
       let events = [allocated n (sample 1 1 1048576 True False) | n <- [0,1024,2048]]
                 ++ [KM.fromList [("event", Aeson.String "point"), ("scale", Aeson.Number 1)],
@@ -1013,42 +1051,46 @@ scaleReportTests = testGroup "terminal charts"
                     allocated 1024 (sample 4 4 1048576 True False),
                     sample 4 4 1048576 True False]
           points = foldl' (flip addScaleEvent) IM.empty events
-          chart = scaleCharts points IM.empty !! 2
+          chart = scaleCharts C.LogAxes points IM.empty !! 2
       assertEqual "missing samples do not become zeros or partial averages"
-        (Chart Allocated [ChartPoint 1 0 1 2 True, ChartPoint 2 0 0 0 False] []) chart
+        (Chart C.LogAxes Allocated [ChartPoint 1 0 1 2 True, ChartPoint 2 0 0 0 False] []) chart
       let output = unlines (chartText False 67 12 chart)
-      assertBool output ("0.000│" `isInfixOf` output && '○' `elem` output)
+      assertBool output ("         0│" `isInfixOf` output && '○' `elem` output)
       assertEqual "zero allocation still renders graphics" (67 * 8 * 12 * 16 * 4)
         (BS.length (chartPixels True 67 12 chart))
-      let small = Chart Allocated [ChartPoint 1 0 0 0 True,
+      let small = Chart C.LogAxes Allocated [ChartPoint 1 0 0 0 True,
                                    ChartPoint 2 (16/1024) (16/1024) (16/1024) True] []
       assertBool "small allocation volumes use the full vertical range"
-        ('●' `elem` concat (take 3 (chartText False 67 12 small)))
+        ('●' `elem` concat (take 5 (chartText False 67 12 small)))
       assertBool "small allocation volumes use bytes"
         ("Allocated (B)" `isInfixOf` head (chartText False 67 12 small))
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
-        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \_ run -> do
+        KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \path run -> do
           (code, out, err) <- run
           assertEqual (out ++ err) ExitSuccess code
           assertEqual "reports show three charts" 3 (length (filter ("  ◆ " `isPrefixOf`) (lines out)))
-          assertBool out ("Linear allocation axis" `isInfixOf` out)
+          assertBool out ("Linear axes;" `isInfixOf` out)
           assertBool "older journals already contain allocation samples" ("Allocated (KiB)" `isInfixOf` out)
           assertBool "known allocation data is not labelled unavailable"
             (not ("Allocation measurements are unavailable" `isInfixOf` out))
+          acton <- canonicalizePath "../../dist/bin/acton"
+          (logCode, logOut, logErr) <- readProcessWithExitCode acton ["test", "scale", "--log", "--report", path] ""
+          assertEqual (logOut ++ logErr) ExitSuccess logCode
+          assertBool logOut ("Linear allocation axis, including zero" `isInfixOf` logOut)
   , testCase "allocation comparisons share binary units across both curves and ranges" $ do
       let current = [ChartPoint 1 1024 1024 1024 True]
           baseline low = [ChartPoint 1 low 512 2097152 True]
-          render old = chartText False 67 12 (Chart Allocated current old)
+          render old = chartText False 67 12 (Chart C.LogAxes Allocated current old)
       assertBool "the current curve alone uses MiB"
         ("Allocated (MiB)" `isInfixOf` head (render []))
       forM_ [0, 1] $ \low -> do
         let output = render (baseline low)
         assertBool "the baseline range selects GiB on linear and logarithmic axes"
           ("Allocated (GiB)" `isInfixOf` head output)
-        assertBool "the current value uses the shared unit"
-          ("last 9.77e-4" `isInfixOf` head output)
+        assertBool "both last values use the shared unit"
+          ("last current 9.77e-4 · baseline 4.88e-4" `isInfixOf` head output)
         assertBool "axis labels use GiB"
-          (any (isInfixOf (if low == 0 then "2.000│" else "0.954│")) output)
+          (any (isInfixOf (if low == 0 then "2.00│" else "0.954│")) output)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
       forM_ [1, 2] $ \version -> do
         let named modName = KM.insert "module" (Aeson.String modName) . KM.insert "test" (Aeson.String "same")
@@ -1148,50 +1190,82 @@ scaleReportTests = testGroup "terminal charts"
           (code, out, err) <- compare
           assertBool (out ++ err) (code /= ExitSuccess && reason `isInfixOf` err)
           assertBool "no invalid overlay is displayed" (not ("Scaling charts:" `isInfixOf` out))
+  , testCase "linear comparisons share zero-based axes with evenly spaced workload sizes" $ do
+      let current = [ChartPoint n 1 1 1 True | n <- [50,100]]
+          old = [ChartPoint 200 1 1 1 True]
+          output = chartText False 67 12 (Chart C.LinearAxes TimePerScale current old)
+          marks = [(col, mark) | (col, mark) <- zip [0..] (drop 11 (output !! 1)), mark `elem` ['●', '◆']]
+      assertEqual "baseline size 200 sets the shared range; current size 100 is halfway across"
+        [(16, '●'), (33, '●'), (66, '◆')] marks
+      assertEqual "linear scale ticks include zero and equal increments"
+        ["scale", "0", "50.0", "100", "150", "200"] (words (last output))
+      let zero = Chart C.LinearAxes WallTime [ChartPoint 1 0 0 0 True] []
+      assertBool "zero time appears on the origin rather than disappearing"
+        ('●' `elem` (chartText False 67 12 zero !! 12))
+      assertEqual "all-zero timing still renders graphics" (67 * 8 * 12 * 16 * 4)
+        (BS.length (chartPixels True 67 12 zero))
   , testCase "the proportional guide uses the largest completed size, without fitting or extrapolating" $ do
       let points = [ChartPoint 1 10 10 10 True, ChartPoint 100 20 20 20 True,
                     ChartPoint 200 100 100 100 False]
       assertEqual "proportional time, anchored at size 100" [(1, 0.2), (100, 20)]
-        (chartGuide (Chart WallTime points []))
-      forM_ [Chart WallTime [] [], Chart WallTime [head points] [],
-             Chart WallTime [p {chartComplete = False} | p <- points] [],
-             Chart TimePerScale points [], Chart Allocated points []] $ \chart ->
+        (chartGuide (Chart C.LogAxes WallTime points []))
+      forM_ [Chart C.LogAxes WallTime [] [], Chart C.LogAxes WallTime [head points] [],
+             Chart C.LinearAxes WallTime [ChartPoint n 0 0 0 True | n <- [1,100]] [],
+             Chart C.LogAxes WallTime [p {chartComplete = False} | p <- points] [],
+             Chart C.LogAxes TimePerScale points [], Chart C.LogAxes Allocated points []] $ \chart ->
         assertEqual "only wall time with a completed span has a guide" [] (chartGuide chart)
   , testCase "a guide below the visible range is clipped rather than clamped to the axis" $ do
-      let chart = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1 1 1 True] []
+      let chart = Chart C.LogAxes WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1 1 1 True] []
           pixels = BS.unpack (chartPixels True 67 12 chart)
           gold = [i | (i,(r,g,b,a)) <- zip [0..] (rgbas pixels), r > g, g > b, a > 0]
       assertBool "part of the guide is visible" (not (null gold))
       assertBool "it enters the plot only in the final decade"
         (all (\i -> i `mod` 536 > 450) gold)
-      let diagonal = Chart WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1000 4 4 4 True] []
+      let diagonal = Chart C.LogAxes WallTime [ChartPoint 1 1 1 1 True, ChartPoint 1000 4 4 4 True] []
       assertBool "a near-diagonal guide still contains visible dashes"
         (any (\(r,g,b,a) -> r > g && g > b && a > 0)
           (rgbas (BS.unpack (chartPixels True 67 12 diagonal))))
       assertBool "monochrome keeps every visible pixel neutral"
         (all (\(r,g,b,_) -> r == g && g == b) (rgbas (BS.unpack (chartPixels False 67 12 chart))))
+  , testCase "headings retain both last means, unequal scales and partial status at every width" $ do
+      let p n value done = ChartPoint n value value value done
+          cases =
+            [ ([p 2048 314 True], [], "last 314")
+            , ([p 2048 314 True], [p 2048 549 True], "last current 314 · baseline 549")
+            , ([p 2048 314 False], [p 4096 549 False], "last current 314 @ 2048 (partial) · baseline 549 @ 4096 (partial)")
+            , ([], [p 4096 549 False], "last baseline 549 (partial)")
+            ]
+      forM_ cases $ \(current, old, expected) -> forM_ [27,67,96] $ \width -> forM_ [False,True] $ \graphics -> do
+        let output = chartText graphics width 12 (Chart C.LinearAxes WallTime current old)
+            headingRows = length output - 14
+            summary = unwords (words (unwords (take headingRows output)))
+        assertBool summary (expected `isInfixOf` summary)
+        assertBool "wrapped headers stay inside the terminal" (all ((<= width + 11) . length) output)
+        assertEqual "the plot stays immediately above its two axis rows" 12
+          (length (filter (\line -> take 1 (drop 10 line) == "│") output))
   , testCase "empty, singleton, constant and wide-ranging plots fit the terminal" $ do
       let curves = [[], [ChartPoint 1 1 1 1 False],
                     [ChartPoint n 1 1 1 True | n <- [1,10,100]],
                     [ChartPoint 1 0.00001 0.00001 0.00001 True, ChartPoint 1e12 1e6 1e6 1e6 True]]
-      forM_ curves $ \points -> forM_ [(27,4), (67,12), (96,12)] $ \(width, height) -> do
-        let chart = Chart WallTime points []
+      forM_ [C.LinearAxes, C.LogAxes] $ \axes ->
+       forM_ curves $ \points -> forM_ [(27,4), (67,12), (96,12)] $ \(width, height) -> do
+        let chart = Chart axes WallTime points []
             output = chartText False width height chart
-        assertEqual "title, plot, baseline and scale labels" (height + 3) (length output)
+        assertBool "title, plot and axis labels are retained" (length output >= height + 3)
         assertBool (show output) (all ((<= width + 11) . length) output)
         assertBool "text fallback has no escape codes" (all (notElem '\ESC') output)
         assertEqual "RGBA has four bytes per pixel" (width * 8 * height * 16 * 4)
           (BS.length (chartPixels True width height chart))
-      let partial = unlines (chartText False 67 12 (Chart WallTime [ChartPoint 1 1 1 1 False] []))
+      let partial = unlines (chartText False 67 12 (Chart C.LogAxes WallTime [ChartPoint 1 1 1 1 False] []))
       assertBool "a completed sample in an unfinished point stays hollow" ('○' `elem` partial)
-      let narrow = chartText False 27 8 (Chart WallTime
+      let narrow = chartText False 27 8 (Chart C.LogAxes WallTime
             [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1e6 1e6 1e6 True] [])
       assertEqual "narrow axes show whole, separated decade labels"
         ["scale", "1", "100", "1e4", "1e6"] (words (last narrow))
   , testCase "recorded and new curves share axes without losing the unmatched range" $ do
       let current = [ChartPoint 1 1 2 3 True, ChartPoint 10 4 5 6 False]
           old = [ChartPoint 1 10 12 14 True, ChartPoint 1e6 800 900 1000 False]
-          chart = Chart WallTime current old
+          chart = Chart C.LogAxes WallTime current old
           text = unlines (chartText False 67 12 chart)
           colors = rgbas (BS.unpack (chartPixels True 27 4 chart))
       forM_ ['●', '○', '◆', '◇'] $ \mark -> assertBool "both series and partial samples remain distinguishable" (mark `elem` text)
@@ -1201,7 +1275,7 @@ scaleReportTests = testGroup "terminal charts"
       assertBool "monochrome preserves both styles without colored pixels"
         (all (\(r,g,b,_) -> r == g && g == b) (rgbas (BS.unpack (chartPixels False 27 4 chart))))
       assertEqual "recorded points do not change the proportional guide" [] (chartGuide chart)
-      let coincident = unlines (chartText False 67 12 (Chart WallTime (take 1 current) (take 1 current)))
+      let coincident = unlines (chartText False 67 12 (Chart C.LogAxes WallTime (take 1 current) (take 1 current)))
       assertBool "coincident means retain both series' presence" ('◈' `elem` coincident)
   , testCase "graphics selection is conservative and never applies to redirected output" $ do
       forM_ [[("TERM", "xterm-kitty")], [("TERM", "xterm-ghostty")],

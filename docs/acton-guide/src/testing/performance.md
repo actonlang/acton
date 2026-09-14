@@ -134,17 +134,30 @@ and the recent scale range that supports its growth summary. A resource limit
 leaves a partial curve with the stopping reason.
 
 Each benchmark ends with three terminal charts: time, time divided by scale,
-and allocated bytes. Axes are logarithmic, except that an allocation chart
-containing zero uses a labelled linear vertical axis. Missing
+and allocated bytes. Axes are linear and start at zero. Use `--log` for
+logarithmic axes when exploring growth across many orders of magnitude:
+
+```sh
+acton test scale --name my_test --log
+acton test scale --report current.jsonl --compare baseline.jsonl --log
+```
+
+The axis choice only changes the display, so saved studies can be viewed either
+way without rerunning them. Axes do not switch automatically based on the
+performance difference. With `--log`, an allocation chart containing zero uses
+a labelled linear vertical axis. Missing
 allocation data is omitted rather than shown as zero. Points show means, bars show
 sample ranges, and hollow points mark incomplete sampling at a size.
 If any timing at a size is zero because the operation is shorter than the clock
-resolution, that size is omitted from time charts but retained in the recording
-and allocation chart. Zero readings do not by themselves stop the study. Flat
+resolution, linear charts retain it. Logarithmic time charts omit the entire
+size, retaining it in the recording and allocation chart. Zero readings do not by
+themselves stop the study. Flat
 time/scale suggests roughly linear time over the measured range. The wall-time
 chart includes a dashed guide for time proportional to scale, anchored at the
 largest completed size. It is an illustration, not a fitted model or a complexity
-claim. Each chart highlights its latest point and shows its latest mean.
+claim. Each chart highlights its latest point and shows the latest mean for
+both current and baseline curves. Different endpoint scales are shown beside
+their values, and incomplete points are labelled partial.
 Cyan, violet and pink distinguish time, time/scale and allocations;
 `--color never` and `NO_COLOR` select monochrome output. The summary counts curve samples
 separately from reference checks and identifies partial sizes. Kitty and
@@ -238,8 +251,10 @@ branch, source files and index stay in place. Both versions are built before
 measurement, using the running compiler and the same build settings. The project
 build lock prevents another Acton build from replacing the current binary during
 the comparison. The baseline is measured first;
-the current version then remeasures its completed sizes, even if a resource limit
-stopped the baseline before the requested endpoint. Time and memory limits
+the current version then remeasures its completed sizes. With `--end-scale`, both
+versions attempt to reach that endpoint, even if the baseline stopped earlier
+or could not complete its first size. Without it, the current version only
+remeasures completed baseline sizes. Time and memory limits
 apply separately to each study. Select one benchmark that exists under the same
 module and test name in both revisions.
 
@@ -285,10 +300,14 @@ false if the study stopped short, and null when no endpoint was requested.
 
 The memory guard monitors the benchmark process during execution and leaves a
 reserve for other work. Linux observes RSS and visible cgroup memory limits;
-macOS observes physical footprint and uses a conservative estimate of available
-pages. This is a best-effort guard, not a memory reservation or an OS-enforced
-allocation limit. A sudden allocation can exceed it before the next observation,
-and macOS can stop earlier than its apparent reclaimable memory would suggest.
+macOS observes physical footprint and estimates available memory from free,
+file-backed and purgeable pages, without counting speculative pages twice.
+This includes reusable file cache but excludes memory that would need compression
+or swap. The journal records total and available memory at the start of each study;
+other applications can change the headroom between baseline and current runs.
+This is a best-effort guard, not a memory reservation or an OS-enforced allocation
+limit. Reclaiming cache may need I/O, and a sudden allocation can exceed the limit
+before the next observation.
 Memory in separate child processes is not included in the benchmark process's
 ceiling, although the machine's available headroom is still checked. Unavailable
 memory observations stop the study with an error. Supported platforms are Linux

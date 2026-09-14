@@ -4,8 +4,9 @@
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+#include <assert.h>
 
-extern int acton_perf_memory(int, uint64_t *, uint64_t *, uint64_t *, char *, size_t);
+#include "perf_memory.c"
 
 static uint64_t observe(int pid) {
     uint64_t total, available, process;
@@ -21,6 +22,28 @@ static uint64_t observe(int pid) {
 }
 
 int main(void) {
+#if defined(__APPLE__) && defined(__MACH__)
+    /* A busy 48 GiB host can have little free RAM but a large reusable cache.
+     * Anonymous pages outnumber inactive pages, which defeated the old estimate. */
+    const uint64_t gib = UINT64_C(1024) * 1024 * 1024, page_size = 16384;
+    vm_statistics64_data_t vm = {
+        .free_count = 2 * gib / page_size,
+        .speculative_count = gib / page_size,
+        .external_page_count = 15 * gib / page_size,
+        .purgeable_count = 3 * gib / page_size,
+        .inactive_count = 17 * gib / page_size,
+        .internal_page_count = 21 * gib / page_size,
+        .compressor_page_count = 5 * gib / page_size
+    };
+    assert(available_memory(&vm, 48 * gib, page_size) == 19 * gib);
+    vm.external_page_count = vm.purgeable_count = vm.speculative_count = 0;
+    assert(available_memory(&vm, 48 * gib, page_size) == 2 * gib);
+    /* Counter snapshots need not describe the exact same instant. */
+    vm.speculative_count = 3 * gib / page_size;
+    assert(available_memory(&vm, 48 * gib, page_size) == 0);
+    vm.external_page_count = 50 * gib / page_size;
+    assert(available_memory(&vm, 48 * gib, page_size) == 48 * gib);
+#endif
     observe(0);
     uint64_t before = observe((int)getpid());
     const size_t size = 32 * 1024 * 1024;
