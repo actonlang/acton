@@ -11,6 +11,9 @@ struct B_str {
 // The constructor checks this and returns a B_str value.
 B_str to$str(char *str);  //Dare not remove this
 
+// Decode a UTF-8 byte buffer of known length, preserving embedded NUL.
+B_str to_str_len(const char *str, int nbytes);
+
 B_str toB_str(char *str);
 
 B_str to_str_noc(char *str);

@@ -1,0 +1,97 @@
+def check():
+    # Preserve embedded NUL, count Unicode characters, and copy mutable input.
+    for wire, chars in [(b"", 0), (b"x", 1), (b"\x00", 1),
+                        (b"before\x00after", 12),
+                        (b"\xc3\xa5\x00\xf0\x9f\x8c\x8d", 3)]:
+        text = wire.decode()
+        assert len(text) == chars
+        assert text.encode() == wire
+        assert "".join(text).encode() == wire
+        assert len(list(text)) == chars
+        mutable_text = bytearray(wire).decode()
+        assert len(mutable_text) == chars
+        assert mutable_text.encode() == wire
+
+    data = bytearray(b"a\x00b")
+    original = data.decode()
+    data[0] = 120
+    assert original.encode() == b"a\x00b"
+
+    prefix = b"a".decode()
+    first = b"a\x00b".decode()
+    second = b"a\x00c".decode()
+    same = bytearray(b"a\x00b").decode()
+    assert first == same and not first != same
+    assert first != prefix and not first == prefix
+    assert prefix < first and first < second
+    assert prefix <= first and first <= same
+    assert second > first and first > prefix
+    assert second >= first and first >= same
+    assert hash(first) == hash(first.encode())
+    assert hash(second) == hash(second.encode())
+    values = {prefix: 1, first: 2, second: 3}
+    assert len(values) == 3
+    assert values[prefix] == 1 and values[same] == 2 and values[second] == 3
+
+    assert first[1].encode() == b"\x00"
+    assert first.startswith(b"a\x00".decode())
+    assert first.endswith(b"\x00b".decode())
+    assert first.startswith(chr(0), 1, 2)
+    assert first.endswith(chr(0), 0, 2)
+    assert not first.startswith(b"a\x00".decode(), 0, 1)
+    assert not first.endswith(b"\x00b".decode(), 2, 3)
+    assert not first.startswith(b"a\x00bc".decode())
+    assert not first.endswith(b"xa\x00b".decode())
+    unicode_text = b"\xc3\x85\x00B".decode()
+    assert unicode_text.lower().encode() == b"\xc3\xa5\x00b"
+    assert unicode_text.upper().encode() == b"\xc3\x85\x00B"
+    assert unicode_text.startswith(b"\xc3\x85\x00".decode(), 0, 2)
+    assert unicode_text.endswith(b"\xc3\x85\x00".decode(), 0, 2)
+    assert not "ab".startswith(b"\xf0\x9f\x8c\x8d".decode())
+    assert not "ab".endswith(b"\xf0\x9f\x8c\x8d".decode())
+
+    # Invalid UTF-8 after a NUL must still fail, as must partial codepoints.
+    for wire in [b"\xff", b"\x00\xff", b"\xc3", b"\xf0\x9f",
+                 b"\xc0\x80", b"\xed\xa0\x80", b"\xf4\x90\x80\x80"]:
+        bytes_rejected = False
+        try:
+            wire.decode()
+        except ValueError:
+            bytes_rejected = True
+        assert bytes_rejected
+        bytearray_rejected = False
+        try:
+            bytearray(wire).decode()
+        except ValueError:
+            bytearray_rejected = True
+        assert bytearray_rejected
+
+def check_ascii():
+    # Every ASCII value, including NUL, is a nonempty one-character string.
+    for code in range(128):
+        wire = bytes([code])
+        char = chr(code)
+        assert char != ""
+        assert len(char) == 1
+        assert ord(char) == code
+        assert char.encode() == wire
+        assert wire.decode() == char
+        assert char[0] == char
+        assert char[-1] == char
+        assert list(char) == [char]
+        assert list(char[::-1]) == [char]
+
+        mutable = bytearray(wire)
+        original = mutable.decode()
+        mutable[0] = (code + 1) % 128
+        assert original == char
+        assert original.encode() == wire
+
+    text = bytes(range(128)).decode()
+    assert [ord(char) for char in text] == list(range(128))
+    assert [ord(char) for char in text[::-1]] == list(range(127, -1, -1))
+
+actor main(env):
+    check()
+    check_ascii()
+    await async env.exit(0)
