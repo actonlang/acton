@@ -44,3 +44,5 @@ def acosh(x: float)->float:
    NotImplemented
 def atanh(x: float)->float:
    NotImplemented
+def ldexp(x: float, exp: int)->float:
+   NotImplemented
