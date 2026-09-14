@@ -696,6 +696,14 @@ B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set oth
     return res;
 }
 
+// Freeze[set] /////////////////////////////////////////////////////////////////////////////////////
+
+B_iset B_FreezeD_setD_freeze(B_FreezeD_set wit, B_set self) {
+    B_iset frozen = (B_iset)self;
+    frozen->$class = &B_isetG_methods;
+    return frozen;
+}
+
 // ISet[iset] wrappers //////////////////////////////////////////////////////////////////////////////
 
 B_Iterator B_ISetD_isetD___iter__(B_ISetD_iset wit, B_iset set) {

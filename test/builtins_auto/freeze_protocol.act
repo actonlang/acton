@@ -1,0 +1,18 @@
+class Builder:
+    text: str
+
+    def __init__(self, text: str):
+        self.text = text
+
+extension Builder (Freeze[str]):
+    mut def freeze(self):
+        return self.text
+
+mut def finish[A](value: Freeze[A]) -> A:
+    return freeze(value)
+
+actor main(env):
+    result = finish(Builder("frozen"))
+    if result.upper() != "FROZEN":
+        raise ValueError("freeze did not dispatch through the protocol")
+    env.exit(0)

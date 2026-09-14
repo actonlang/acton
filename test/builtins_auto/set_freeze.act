@@ -1,0 +1,35 @@
+def object_address(value: object) -> u64:
+    NotImplemented
+
+def table_address(value: object) -> u64:
+    NotImplemented
+
+def check_freeze[A(Hashable)](source: set[A], expected: iset[A]):
+    obj = object_address(source)
+    table = table_address(source)
+    frozen = freeze(source)
+    if object_address(frozen) != obj or table_address(frozen) != table:
+        raise ValueError("freeze copied the set or its table")
+    if type(frozen) != type(expected):
+        raise ValueError("freeze did not change the set class")
+    if frozen != expected or iset(iter(frozen)) != expected:
+        raise ValueError("freeze lost set elements")
+    if hash(frozen) != hash(expected) or {frozen: 42}[expected] != 42:
+        raise ValueError("frozen set cannot be used as a dictionary key")
+    payload = serialize(frozen)
+    restored = deserialize(payload)
+    if not isinstance(restored, iset):
+        raise ValueError("frozen set did not deserialize as an iset")
+    if isinstance(restored, iset):
+        if serialize(restored) != payload:
+            raise ValueError("frozen set lost elements during serialization")
+
+actor main(env):
+    empty: set[int] = set()
+    check_freeze(empty, iset())
+    check_freeze({"one"}, iset(["one"]))
+    source = set(range(100))
+    for i in range(3, 100):
+        source.discard(i)
+    check_freeze(source, iset([0, 1, 2]))
+    env.exit(0)
