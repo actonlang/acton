@@ -10,6 +10,21 @@ acton test perf --record
 acton test perf
 ```
 
+Use `--compare` to choose a different baseline:
+
+```sh
+acton test perf --compare before.perf_data
+acton test perf --name my_test --compare git:main
+```
+
+File targets contain saved `perf_data` measurements. A `git:` target builds both
+versions and measures them in interleaved pairs of fresh processes. Pair order
+is randomized, with each version going first twice across four complete pairs. Both versions use one fixed workload scale. The current
+checkout includes uncommitted changes; the baseline uses a temporary worktree
+under `~/.cache/acton/worktrees/`. Both use the current compiler and runtime.
+See [Comparing revisions](performance.md#comparing-revisions) for the measurement
+schedule, budgets and worktree lifecycle.
+
 Each measured test shows wall time, CPU measurements, allocation volume and
 process peak RSS. If the baseline contains a successful, compatible measurement
 of that test, the delta column shows each row's mean percentage change. The wall
@@ -60,12 +75,19 @@ the chosen scale, or remove the recording to calibrate a fresh baseline.
 Dividing time by scale does not make different input sizes comparable, because
 workload costs can be nonlinear.
 
+Git comparisons choose one shared scale for the two live versions, calibrating
+once when needed. `--scale N` sets it for both. Unlike a saved recording, the
+baseline version can be measured at the requested scale.
+
 ## Reading uncertainty
 
-When both runs have at least two samples and include standard deviations, the
-report adds an approximate 95% Welch confidence interval for the difference in
+For a saved baseline, when both runs have at least two samples and include standard
+deviations, the report adds an approximate 95% Welch confidence interval for the difference in
 mean time per loop body, or per invocation for tests without a loop, with units
-shown beside each bound. Positive bounds indicate an increase; negative bounds
+shown beside each bound. For a Git comparison, the interval instead uses the
+differences between paired process means. The report shows the number of pairs;
+too few pairs or an interval spanning zero leave the result inconclusive.
+Positive bounds indicate an increase; negative bounds
 indicate a decrease. Each table row's mean percentage
 change is colored only when its own interval excludes zero. The same check adds
 ⚡ after the delta for an improvement or 💩 for a regression, including when
@@ -75,13 +97,19 @@ Compatible recordings without a standard deviation show a percentage with neutra
 coloring.
 The median's color shows direction without an uncertainty estimate.
 
-The interval allows different sample counts and variances. Each sample is one
-complete invocation's average, even if that invocation ran many loop bodies.
-It assumes independent samples and cannot account for correlations within a
-process, machine load or changes between runs. Treat it as a guide to measured
-variability and repeat benchmarks before attributing small changes to code.
-These samples come from one
-process per benchmark; they do not estimate variation between fresh processes.
+The saved-baseline interval allows different sample counts and variances. Each
+sample in an ordinary performance run is one complete invocation's average, even
+if that invocation ran many loop bodies. Those samples share one process and do
+not estimate variation between fresh processes. Git comparisons collect fresh
+processes and use the process pairs as the independent observations; extra inner
+loop bodies do not increase the pair count.
+Recordings from Git comparisons retain process means for later comparisons too;
+an unrelated new run cannot reuse the original pairing.
+
+Both intervals assume independent observations. Interleaving reduces drift but
+does not remove machine load, thermal effects or correlated workload behavior.
+Treat the interval as a guide to measured variability and repeat benchmarks before
+attributing small changes to code.
 
 ## Updating recordings
 
@@ -89,7 +117,10 @@ Performance tests always run afresh, even when their source code is unchanged.
 Compilation still reuses unchanged build artifacts.
 
 Use `--record` again to update the baseline. The run compares against the previous
-values before replacing them. Filters such as `--module` and `--name` update only
+values before replacing them, unless `--compare` selects another baseline.
+`--record` always saves current measurements in the project's `perf_data`; an
+external baseline supplied to `--compare` is left unchanged.
+Filters such as `--module` and `--name` update only
 the selected successful tests; other measurements remain in the file. Failed,
 skipped and incomplete tests do not replace saved measurements. If no test
 produces a successful measurement, the file is left untouched. Invalid JSON is

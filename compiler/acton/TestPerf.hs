@@ -9,14 +9,16 @@ module TestPerf
   , perfComparisonReason
   , perfBaselineScale
   , perfComparable
+  , aggregatePerfRuns
+  , perfPairedCount
   , perfMeanInterval
   , perfJson
   ) where
 
 import Acton.Testing (TestResult(..))
 import Control.Monad (guard)
-import Data.Maybe (isJust)
-import Data.List (find)
+import Data.Maybe (isJust, mapMaybe)
+import Data.List (find, sort)
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -154,11 +156,127 @@ metadataReason keys old new = do
       "workers" -> "runtime worker count"
       _ -> "hardware counter " ++ key
 
--- | Approximate 95% Welch interval for a mean difference, in the metric's units.
--- The sample model assumes independent iterations; process drift is not covered.
+-- | Give each fresh process equal weight, regardless of its inner loop count.
+-- Retain the ordered process measurements so paired comparisons survive recording.
+aggregatePerfRuns :: String -> [TestResult] -> Maybe TestResult
+aggregatePerfRuns comparison runs = do
+    first <- case runs of
+      r:_ -> Just r
+      [] -> Nothing
+    guard (not (null comparison))
+    objects <- mapM testPerfData runs
+    obj <- testPerfData first
+    guard (all (\r -> trModule r == trModule first && trName r == trName first
+                  && trNumFailures r == 0 && trNumErrors r == 0 && trNumSkipped r == 0) runs)
+    guard (all (\other -> perfComparable "wall_duration" obj other
+                  && not (AesonKM.member (key "process_samples") other)) objects)
+    wall <- values "wall_duration" obj objects
+    wallStats <- summarize "wall_duration" wall
+    let otherStats = mapMaybe (\metric -> values metric obj objects >>= summarize metric)
+          (filter (/= "wall_duration") metrics)
+        sums keys objs = AesonKM.fromList $ mapMaybe (\name -> do
+          samples <- mapM (\o -> perfNumber o name) objs
+          let value = sum samples
+          guard (finite value)
+          return (key name, Aeson.toJSON value)) keys
+        infoKeys = ["time_budget_ms", "warmup_duration_ms", "measurement_ms", "measurement_duration_ms"]
+        info = case mapM perfInfo objects of
+          Just infos@(i:_) -> sums infoKeys infos `AesonKM.union` remove infoKeys i
+          _ -> AesonKM.empty
+        peak = case mapM (\o -> perfNumber o "peak_rss") objects of
+          Just samples -> AesonKM.singleton (key "peak_rss") (Aeson.toJSON (maximum samples))
+          Nothing -> AesonKM.empty
+        counters = case perfCounterInfo obj of
+          Just info | AesonKM.lookup (key "status") info == Just (Aeson.toJSON ("available" :: String))
+                    , not (all (\metric -> isJust (values metric obj objects)) ["instructions", "cycles", "ipc"]) ->
+            AesonKM.singleton (key "counter_info") (Aeson.Object (AesonKM.insert (key "status")
+              (Aeson.toJSON ("incomplete process counters" :: String)) info))
+          _ -> AesonKM.empty
+        fields = AesonKM.fromList
+          [ (key "comparison_id", Aeson.toJSON comparison)
+          , (key "process_samples", Aeson.toJSON objects)
+          , (key "num_iterations", Aeson.toJSON (length runs))
+          , (key "test_duration", Aeson.toJSON (sum (map trTestDuration runs)))
+          , (key "perf_info", Aeson.Object info)
+          ]
+        raw = foldr AesonKM.union AesonKM.empty (fields : wallStats : otherStats ++
+          [sums ["loop_iterations"] objects, peak, counters, remove ("sequence" : "peak_rss" : "loop_iterations" : statKeys) obj])
+    return first { trRaw = Aeson.Object raw, trNumIterations = length runs
+                 , trTestDuration = sum (map trTestDuration runs) }
+  where
+    key = AesonKey.fromString
+    metrics = [metric | (metric, _, _) <- perfMetrics] ++ ["duration", "non_gc_mem_usage_delta"]
+    statKeys = [perfStatKey metric stat | metric <- metrics,
+      stat <- ["avg", "min", "max", "median", "q1", "q3", "stdev", "outlier_count"]]
+    remove keys obj = foldr (AesonKM.delete . key) obj keys
+    values metric first objects = do
+      guard (all (perfComparable metric first) objects)
+      mapM (\obj -> perfNumber obj (perfStatKey metric "avg")) objects
+
+summarize :: String -> [Double] -> Maybe Aeson.Object
+summarize metric samples = do
+    guard (not (null samples))
+    let n = length samples
+        ordered = sort samples
+        mean = sum (map (/ fromIntegral n) samples)
+        quantile p = let pos = fromIntegral (n - 1) * p
+                         lo = floor pos
+                         a = ordered !! lo
+                         b = ordered !! min (lo + 1) (n - 1)
+                     in a + (pos - fromIntegral lo) * (b - a)
+        q1 = quantile 0.25
+        q3 = quantile 0.75
+        outliers = length [v | v <- samples, v < q1 - 1.5 * (q3 - q1) || v > q3 + 1.5 * (q3 - q1)]
+        stats = [("avg", mean), ("min", head ordered), ("max", last ordered)
+                , ("median", quantile 0.5), ("q1", q1), ("q3", q3), ("outlier_count", fromIntegral outliers)] ++
+          [("stdev", sqrt (sum [(v - mean) ^ (2 :: Int) | v <- samples] / fromIntegral (n - 1))) | n > 1]
+    guard (all (finite . snd) stats)
+    return (AesonKM.fromList [(AesonKey.fromString (perfStatKey metric stat), Aeson.toJSON value) | (stat, value) <- stats])
+
+processSamples :: Aeson.Object -> Maybe [Aeson.Object]
+processSamples obj = do
+    raw <- AesonKM.lookup (AesonKey.fromString "process_samples") obj
+    samples <- AesonTypes.parseMaybe Aeson.parseJSON raw
+    n <- perfNumber obj "num_iterations"
+    guard (not (null samples) && n == fromIntegral (length samples))
+    return samples
+
+-- | Pair only measurements produced together, in the runner's pair order.
+perfPairedCount :: Aeson.Object -> Aeson.Object -> Maybe Int
+perfPairedCount old new = do
+    a <- AesonKM.lookup (AesonKey.fromString "comparison_id") old
+    b <- AesonKM.lookup (AesonKey.fromString "comparison_id") new
+    guard (a == b && case a of Aeson.String s -> s /= mempty; _ -> False)
+    as <- processSamples old
+    bs <- processSamples new
+    guard (length as == length bs && perfComparable "wall_duration" old new)
+    guard (all (perfComparable "wall_duration" old) as && all (perfComparable "wall_duration" new) bs)
+    return (length as)
+
+-- | Approximate 95% interval in the metric's units. Paired runs use differences
+-- between process means; historical recordings use an unpaired Welch interval.
 perfMeanInterval :: String -> Aeson.Object -> Aeson.Object -> Maybe (Double, Double)
 perfMeanInterval metric old new = do
     guard (perfComparable metric old new)
+    case perfPairedCount old new of
+      Just n -> do
+        guard (n >= 2)
+        as <- processSamples old >>= mapM processMean
+        bs <- processSamples new >>= mapM processMean
+        let differences = zipWith (-) bs as
+            mean = sum differences / fromIntegral n
+            variance = sum [(d - mean) ^ (2 :: Int) | d <- differences] / fromIntegral (n - 1)
+            half = critical95 (fromIntegral (n - 1)) * sqrt (variance / fromIntegral n)
+        guard (all finite [mean, half])
+        return (mean - half, mean + half)
+      Nothing -> welchInterval metric old new
+  where
+    processMean obj = do
+      guard (perfComparable metric old obj && perfComparable metric new obj)
+      perfNumber obj (perfStatKey metric "avg")
+
+welchInterval :: String -> Aeson.Object -> Aeson.Object -> Maybe (Double, Double)
+welchInterval metric old new = do
     (mean0, s0, n0) <- sample old
     (mean1, s1, n1) <- sample new
     let v0 = s0 * s0 / n0
@@ -210,7 +328,7 @@ perfJson baseline res = do
       , AesonKey.fromString "comparison_unavailable_reason" Aeson..= reason
       ]
   where
-    keys = ["peak_rss", "num_iterations", "loop_iterations", "perf_info", "counter_info"] ++
+    keys = ["peak_rss", "num_iterations", "loop_iterations", "perf_info", "counter_info", "source", "comparison_id", "process_samples"] ++
       [ perfStatKey metric stat
       | metric <- [m | (m, _, _) <- perfMetrics] ++ ["duration"]
       , stat <- ["avg", "min", "max", "median", "q1", "q3", "stdev", "outlier_count"]

@@ -10,7 +10,8 @@ import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BL8
-import Data.List (isInfixOf, isSuffixOf, find, elemIndices)
+import Data.List (isInfixOf, isSuffixOf, find, elemIndices, nub)
+import Data.IORef
 import TerminalSize (termVisibleLength, termFitAnsiRight, termRenderedRows)
 import qualified Data.Map as M
 import Foreign.Marshal.Alloc (allocaBytes)
@@ -27,7 +28,8 @@ import Test.Tasty.HUnit
 import qualified Acton.Fingerprint as Fingerprint
 import Acton.Testing (TestResult(..))
 import TestFormat (formatTestPerfLines)
-import TestPerf (perfComparable, perfComparisonReason, perfBaselineScale, perfMeanInterval, perfJson)
+import TestRunner (runPerfPairs, perfPairOrders)
+import TestPerf (testPerfData, perfComparable, perfComparisonReason, perfBaselineScale, aggregatePerfRuns, perfPairedCount, perfMeanInterval, perfJson)
 
 perfTests :: TestTree
 perfTests = testGroup "performance baselines"
@@ -70,6 +72,22 @@ perfTests = testGroup "performance baselines"
         O.Success (C.CmdOpt _ (C.Test (C.TestStress stress))) ->
           assertEqual "stress test limits remain available" (9, 20, 3) (C.testMaxIter stress, C.testMaxTime stress, C.testStressWorkers stress)
         _ -> assertFailure "stress test limits failed to parse"
+  , testCase "performance comparison targets and options compose" $ do
+      forM_ ["git:main", "before.perf_data", "./git:main", "main"] $ \target ->
+        forM_ [["--compare", target, "--name", "sample", "--scale", "50", "--time", "10s", "--record"],
+               ["--name", "sample", "--record", "--time", "10s", "--scale", "50", "--compare", target]] $ \args -> do
+          opts <- parsePerfOptions args
+          assertEqual "preserve the comparison target" (Just target) (C.testCompare opts)
+          assertEqual "preserve measurement options" (["sample"], Just 50, 10000, True)
+            (C.testNames opts, C.testScale opts, C.testTime opts, C.testRecord opts)
+      forM_ [["--compare", "one", "two"], ["--compare", "one", "--compare", "two"]] $ \args ->
+        case parseOptions (["test", "perf"] ++ args) of
+          O.Failure _ -> return ()
+          _ -> assertFailure ("comparison must reject " ++ unwords args)
+      case parseOptions ["test", "perf", "--help"] of
+        O.Failure failure -> assertBool "help shows file and Git comparisons"
+          ("--compare FILE|git:REF" `isInfixOf` fst (O.renderFailure failure "acton"))
+        _ -> assertFailure "expected help text"
   , testCase "global options can appear throughout performance commands" $ do
       forM_
         [ ["test", "--color", "never", "perf", "--time", "100ms", "--scale", "7", "--name", "sample"]
@@ -172,6 +190,212 @@ perfTests = testGroup "performance baselines"
         (perfBaselineScale (changeIdentity "workers" (Aeson.Number 2) old) identity)
       assertEqual "fixed-work samples cannot compare with time-budgeted samples" (Just "measurement sampling mode differs")
         (perfComparisonReason "wall_duration" (changeIdentity "scaling" (Aeson.Bool True) old) old)
+  , testCase "all randomized pair schedules balance order and share an explicit scale" $ do
+      assertEqual "all balanced schedules are distinct" 6 (length (nub perfPairOrders))
+      assertEqual "six possible schedules" 6 (length perfPairOrders)
+      forM_ perfPairOrders $ \order -> do
+        launches <- newIORef []
+        measured <- runPerfPairs order 5000 (Just 50000) $ \old scale budget -> do
+          modifyIORef' launches (++ [(old, scale, budget)])
+          return (result (changeIdentity "scale" (Aeson.Number 50000) (sample (if old then 10 else 12) 0 10)))
+            { trTestDuration = fromIntegral budget }
+        calls <- readIORef launches
+        assertEqual "the chosen schedule controls execution" (concatMap (\old -> [old, not old]) order) [old | (old, _, _) <- calls]
+        assertEqual "four pairs per schedule" 4 (length order)
+        assertEqual "each version goes first twice" 2 (length (filter id order))
+        assertEqual "both versions always receive the same explicit scale" (replicate 8 (Just 50000)) [scale | (_, scale, _) <- calls]
+        forM_ [False, True] $ \side ->
+          assertEqual "each revision receives the full requested budget" 5000 (sum [budget | (old, _, budget) <- calls, old == side])
+        case measured of
+          Right pairs -> do
+            assertEqual "four complete pairs" 4 (length pairs)
+            forM_ pairs $ \(old, new) -> do
+              assertEqual "baseline stays first in stored pairs" 10 =<< (requirePerfData old >>= requireNumber "avg_wall_duration")
+              assertEqual "current stays second in stored pairs" 12 =<< (requirePerfData new >>= requireNumber "avg_wall_duration")
+          Left res -> assertFailure (show res)
+  , testCase "automatic pair calibration runs once and stays within the budget" $ do
+      launches <- newIORef []
+      measured <- runPerfPairs [True, False, True, False] 5000 Nothing $ \old scale budget -> do
+        modifyIORef' launches (++ [(old, scale, budget)])
+        return (result (sample 10 0 10)) { trTestDuration = fromIntegral budget }
+      calls <- readIORef launches
+      assertEqual "one excluded baseline pilot" [(True, Nothing, 625)] (take 1 calls)
+      assertEqual "all measurements reuse the pilot's scale" (replicate 8 (Just 7)) [scale | (_, scale, _) <- drop 1 calls]
+      forM_ [False, True] $ \side ->
+        assertBool "pilot time counts against its revision budget" (sum [budget | (old, _, budget) <- calls, old == side] <= 5000)
+      case measured of
+        Right pairs -> assertEqual "the pilot is not a measured pair" 4 (length pairs)
+        Left res -> assertFailure (show res)
+  , testCase "failed performance processes stop before an incomplete pair is counted" $ do
+      launches <- newIORef (0 :: Int)
+      measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \_ _ budget -> do
+        n <- atomicModifyIORef' launches (\n -> (n + 1, n + 1))
+        return (result (sample 10 0 10)) { trTestDuration = fromIntegral budget, trSuccess = Just (n < 4) }
+      assertEqual "stop on the first failed process" 4 =<< readIORef launches
+      case measured of
+        Left failed -> assertEqual "return the failed process without aggregate results" (Just False) (trSuccess failed)
+        Right _ -> assertFailure "a failed comparison cannot produce accepted pairs"
+  , testCase "whole-invocation comparisons do not force a loop scale" $ do
+      launches <- newIORef []
+      measured <- runPerfPairs [True, False, True, False] 5000 Nothing $ \_ scale budget -> do
+        modifyIORef' launches (++ [scale])
+        return (result (changeIdentity "loop" (Aeson.Bool False) (sample 10 0 10)))
+          { trTestDuration = fromIntegral budget }
+      assertEqual "the pilot and both revisions can measure whole invocations" (replicate 9 Nothing) =<< readIORef launches
+      case measured of
+        Right pairs -> assertEqual "whole invocations still form independent pairs" 4 (length pairs)
+        Left res -> assertFailure (show res)
+  , testCase "performance preparation retries at the selected scale" $ do
+      forM_ [False, True] $ \retryFails -> do
+        launches <- newIORef []
+        measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \old scale budget -> do
+          previous <- readIORef launches
+          modifyIORef' launches (++ [(old, scale, budget)])
+          let obj = if null previous then changeIdentity "preparation_exhausted" (Aeson.Bool True) (sample 10 0 10)
+                                    else sample 10 0 10
+          return (result obj) { trTestDuration = fromIntegral budget
+                              , trSuccess = Just (not (null previous) && not retryFails) }
+        calls <- readIORef launches
+        assertEqual "retry uses the remaining budget without recalibrating"
+          [(True, Just 7, 1250), (True, Just 7, 3750)] (take 2 calls)
+        case measured of
+          Right pairs | not retryFails -> do
+            assertEqual "only completed retries contribute to the pair" 1 (length pairs)
+            assertEqual "current still runs after successful preparation" 3 (length calls)
+          Left _ | retryFails -> assertEqual "a real failure ends retries" 2 (length calls)
+          _ -> assertFailure "unexpected preparation retry result"
+  , testCase "randomized pairs retain orientation when the second process retries" $ do
+      launches <- newIORef []
+      measured <- runPerfPairs [False, True, False, True] 5000 (Just 7) $ \old _ budget -> do
+        previous <- readIORef launches
+        modifyIORef' launches (++ [old])
+        let n = length previous + 1
+            obj = changeIdentity "preparation_exhausted" (Aeson.Bool (n == 2)) $
+              KM.insert "sequence" (Aeson.toJSON n) (sample 10 0 10)
+        return (result obj) { trTestDuration = fromIntegral budget, trSuccess = Just (n /= 2) }
+      assertEqual "retry only the second side" [False, True, True] =<< readIORef launches
+      case measured of
+        Right [(old, new)] -> do
+          assertEqual "accepted baseline follows its discarded preparation" 3 =<< (requirePerfData old >>= requireNumber "sequence")
+          assertEqual "current keeps its earlier measurement" 1 =<< (requirePerfData new >>= requireNumber "sequence")
+        _ -> assertFailure "expected one complete pair after retry"
+  , testCase "later preparation exhaustion retains complete pairs" $ do
+      launches <- newIORef (0 :: Int)
+      measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \_ _ budget -> do
+        n <- atomicModifyIORef' launches (\n -> (n + 1, n + 1))
+        let obj = if n == 3 then changeIdentity "preparation_exhausted" (Aeson.Bool True) (sample 10 0 10)
+                           else sample 10 0 10
+        return (result obj) { trTestDuration = if n == 3 then 3000 else fromIntegral budget
+                           , trSuccess = Just (n /= 3) }
+      assertEqual "do not start the other side of an exhausted pair" 3 =<< readIORef launches
+      case measured of
+        Right pairs -> assertEqual "previous complete pairs remain usable" 1 (length pairs)
+        Left res -> assertFailure (show res)
+  , testCase "slow processes produce fewer complete pairs" $ do
+      launches <- newIORef (0 :: Int)
+      measured <- runPerfPairs [True, False, True, False] 5000 (Just 7) $ \_ _ budget -> do
+        modifyIORef' launches (+ 1)
+        return (result (sample 3000 0 1)) { trTestDuration = fromIntegral (max 3000 budget) }
+      assertEqual "do not launch a pair that cannot fit its known preparation time" 2 =<< readIORef launches
+      case measured of
+        Right pairs -> assertEqual "long indivisible invocations reduce the number of pairs" 1 (length pairs)
+        Left res -> assertFailure (show res)
+  , testCase "process aggregation gives each process equal weight" $ do
+      let process mean n = result $ KM.insert "loop_iterations" (Aeson.toJSON n)
+            (changeIdentity "time_budget_ms" (Aeson.Number 1250) (sample mean 999 n))
+          runs = zipWith process [10, 20, 30, 40] [1, 10, 100, 1000]
+      combined <- requireAggregate "comparison" runs
+      obj <- requirePerfData combined
+      assertEqual "count processes, not inner iterations" 4 (trNumIterations combined)
+      assertEqual "retain elapsed runtime" 400 (trTestDuration combined)
+      assertEqual "equal process weights" 25 =<< requireNumber "avg_wall_duration" obj
+      assertEqual "raw count also denotes processes" 4 =<< requireNumber "num_iterations" obj
+      assertEqual "retain actual inner loop count" 1111 =<< requireNumber "loop_iterations" obj
+      assertEqual "minimum is a process mean" 10 =<< requireNumber "min_wall_duration" obj
+      assertEqual "maximum is a process mean" 40 =<< requireNumber "max_wall_duration" obj
+      assertEqual "median interpolates between processes" 25 =<< requireNumber "median_wall_duration" obj
+      sd <- requireNumber "stdev_wall_duration" obj
+      assertBool "spread is between process means" (abs (sd - sqrt (500 / 3)) < 0.000001)
+      info <- requireObject "perf_info" obj
+      assertEqual "budgets sum across processes" 5000 =<< requireNumber "time_budget_ms" info
+      assertEqual "retain ordered raw process measurements" (Just (Aeson.toJSON (map trRaw runs))) (KM.lookup "process_samples" obj)
+  , testCase "process aggregation rejects incomplete or incompatible runs" $ do
+      let good = result (sample 10 1 10)
+          rejected runs = assertBool "cannot aggregate invalid processes" (case aggregatePerfRuns "comparison" runs of Nothing -> True; _ -> False)
+      rejected []
+      forM_ [good { trComplete = False }, good { trSuccess = Just False }, good { trCached = True },
+             good { trNumFailures = 1 }, good { trSkipped = True }, good { trName = "other" },
+             result (changeIdentity "scale" (Aeson.Number 8) (sample 10 1 10)),
+             result (KM.delete "avg_wall_duration" (sample 10 1 10))] $ \bad -> rejected [good, bad]
+      combined <- requireAggregate "comparison" [good, good]
+      rejected [combined, combined]
+      assertBool "pair IDs cannot be empty" (case aggregatePerfRuns "" [good] of Nothing -> True; _ -> False)
+  , testCase "process aggregation omits partial metrics and uses maximum RSS" $ do
+      let first = result $ KM.insert "peak_rss" (Aeson.Number 300) $ sample 10 1 10 `KM.union` KM.fromList
+            [("mem_usage_delta_avg", Aeson.Number 1000), ("min_mem_usage_delta", Aeson.Number 1),
+             ("stdev_mem_usage_delta", Aeson.Number 2), ("avg_instructions", Aeson.Number 100)]
+          second = result $ KM.insert "peak_rss" (Aeson.Number 100) (sample 12 1 10)
+      combined <- requireAggregate "comparison" [first, second]
+      obj <- requirePerfData combined
+      assertEqual "peak RSS is the maximum process footprint" 300 =<< requireNumber "peak_rss" obj
+      forM_ ["mem_usage_delta_avg", "min_mem_usage_delta", "stdev_mem_usage_delta", "avg_instructions"] $ \key ->
+        assertEqual "a partial metric cannot inherit one process's value" Nothing (KM.lookup key obj)
+  , testCase "paired differences cancel shared process drift" $ do
+      old <- requireAggregate "pair-id" (map (result . (\mean -> sample mean 999 1000)) [10, 100, 30, 200]) >>= requirePerfData
+      new <- requireAggregate "pair-id" (map (result . (\mean -> sample mean 999 1000)) [12, 102, 32, 202])
+      obj <- requirePerfData new
+      assertEqual "four independent pairs" (Just 4) (perfPairedCount old obj)
+      assertEqual "common drift cancels in paired differences" (Just (2, 2)) (perfMeanInterval "wall_duration" old obj)
+      case perfJson (Just old) new of
+        Just (Aeson.Object report) -> forM_ ["measurements", "baseline"] $ \key -> do
+          measurement <- requireObject key report
+          forM_ ["comparison_id", "process_samples"] $ \field ->
+            assertBool "recorded JSON preserves pairing" (KM.member field measurement)
+        _ -> assertFailure "expected paired JSON"
+  , testCase "aggregate counter status explains incomplete process coverage" $ do
+      let available = sample 10 0 10 `KM.union` KM.insert "avg_cycles" (Aeson.Number 50) (counterSample 100 2)
+      info <- requireObject "counter_info" available
+      let unavailable = foldr KM.delete (KM.insert "counter_info"
+            (Aeson.Object (KM.insert "status" (Aeson.String "permission denied") info)) available)
+            ["avg_instructions", "avg_cycles", "avg_ipc"]
+      combined <- requireAggregate "comparison" [result available, result unavailable]
+      obj <- requirePerfData combined
+      counters <- requireObject "counter_info" obj
+      assertEqual "the first process cannot advertise complete hardware coverage"
+        (Just (Aeson.String "incomplete process counters")) (KM.lookup "status" counters)
+      forM_ ["avg_instructions", "avg_cycles", "avg_ipc"] $ \key ->
+        assertEqual "partial hardware means remain absent" Nothing (KM.lookup key obj)
+      assertBool "the table explains why hardware measurements are absent"
+        ("hardware counters unavailable: incomplete process counters" `isInfixOf` unlines (renderPerf 119 False Nothing combined))
+  , testCase "unrelated aggregate recordings do not become paired samples" $ do
+      old <- requireAggregate "old-id" (map (result . (\mean -> sample mean 0 10000)) [10, 100, 30, 200]) >>= requirePerfData
+      new <- requireAggregate "new-id" (map (result . (\mean -> sample mean 0 10000)) [12, 102, 32, 202]) >>= requirePerfData
+      assertEqual "matching process counts do not establish pairing" Nothing (perfPairedCount old new)
+      case perfMeanInterval "wall_duration" old new of
+        Just (lo, hi) -> assertBool "historical uncertainty uses process spread" (lo < 0 && hi > 0)
+        Nothing -> assertFailure "expected an unpaired process interval"
+      assertEqual "malformed sample counts cannot establish pairs" Nothing
+        (perfPairedCount old (KM.insert "comparison_id" (Aeson.String "old-id") (KM.insert "num_iterations" (Aeson.Number 3) new)))
+  , testCase "paired tables show both means and explain weak evidence" $ do
+      old <- requireAggregate "comparison" [result (sample 10 0 10000)] >>= requirePerfData
+      new <- requireAggregate "comparison" [result (sample 12 0 10000)]
+      obj <- requirePerfData new
+      assertEqual "inner iterations cannot replace process pairs" Nothing (perfMeanInterval "wall_duration" old obj)
+      forM_ [39, 79, 119, 160] $ \cols -> forM_ [False, True] $ \color -> do
+        let rows = renderPerf cols color (Just old) new
+            text = unlines rows
+        assertBool text (all ((<= cols) . termVisibleLength) rows)
+        assertBool "uncertainty needs multiple pairs" (not (any (`isInfixOf` text) ["⚡", "💩"]))
+        assertBool text ("inconclusive" `isInfixOf` text)
+        when (cols >= 79) $ do
+          assertBool text (all (`isInfixOf` head rows) ["baseline", "current", "delta"])
+          assertBool text ("1 process pair;" `isInfixOf` text)
+          let wall = maybe "" id (find ("wall time" `isInfixOf`) rows)
+          assertBool wall (all (`isInfixOf` wall) ["10.0", "12.0", "+20.0%"])
+      noisyOld <- requireAggregate "noisy" (map (result . (\mean -> sample mean 0 10)) [10, 100, 30, 200]) >>= requirePerfData
+      noisyNew <- requireAggregate "noisy" (map (result . (\mean -> sample mean 0 10)) [11, 103, 27, 205])
+      assertBool "overlapping paired intervals are explicitly inconclusive"
+        ("inconclusive; interval includes no change" `isInfixOf` unlines (renderPerf 119 False (Just noisyOld) noisyNew))
   , testCase "timing and allocation changes use the recorded measurement" $ do
       let old = identified $ KM.fromList [("avg_wall_duration", Aeson.Number 10), ("mem_usage_delta_avg", Aeson.Number 100)]
           new = identified $ KM.fromList [("avg_wall_duration", Aeson.Number 12), ("mem_usage_delta_avg", Aeson.Number 50)]
@@ -772,6 +996,69 @@ perfIntegrationTests =
           assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
           assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
           assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
+          _ <- runOK ["--record", "--name", "first|second"]
+          localBefore <- readBaseline
+          let external = proj </> "before.perf_data"
+          copyFile baseline external
+          externalBytes <- BL.readFile external
+          BL.length externalBytes `seq` return ()
+          fileOut <- runOK ["--compare", external, "--record", "--name", "first", "--json"]
+          filePerf <- singleJsonTest fileOut >>= requireObject "performance"
+          assertEqual "an explicit file supplies the comparison" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" filePerf)
+          assertEqual "record updates never overwrite the compared file" externalBytes =<< BL.readFile external
+          localAfter <- readBaseline
+          let withoutFirst = M.adjust (M.delete "_test_first_wrapper") "perf_record.sample"
+          assertEqual "record preserves every unselected local entry" (withoutFirst localBefore) (withoutFirst localAfter)
+          let git args = do
+                (code, out, err) <- readCreateProcessWithExitCode (proc "git" args) { cwd = Just proj } ""
+                assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
+                return out
+              processSamples obj = case KM.lookup "process_samples" obj >>= AesonTypes.parseMaybe Aeson.parseJSON of
+                Just samples -> return (samples :: [Aeson.Object])
+                Nothing -> assertFailure "missing ordered process measurements" >> fail "missing process samples"
+          _ <- git ["init", "-q"]
+          _ <- git ["add", "Build.act", "src"]
+          _ <- git ["-c", "user.name=Acton tests", "-c", "user.email=tests@example.invalid",
+                    "commit", "--no-gpg-sign", "-qm", "Add performance fixture"]
+          appendFile (proj </> "Build.act") "\n# Staged local change\n"
+          _ <- git ["add", "Build.act"]
+          appendFile (proj </> "src/sample.act") "\n# Unstaged local change\n"
+          sourceBefore <- readFile (proj </> "src/sample.act")
+          length sourceBefore `seq` return ()
+          indexBefore <- git ["ls-files", "--stage"]
+          statusBefore <- git ["status", "--porcelain", "--untracked-files=no"]
+          worktreesBefore <- git ["worktree", "list", "--porcelain"]
+          forM_ [("first", False, 1, []), ("looped", True, 25000, ["--scale", "25000"])] $ \(test, loop, scale, args) -> do
+            out <- runOK (["--compare", "git:HEAD", "--name", test, "--time", "1s", "--json"] ++ args)
+            comparison <- singleJsonTest out >>= requireObject "performance"
+            current <- requireObject "measurements" comparison
+            old <- requireObject "baseline" comparison
+            currentSamples <- processSamples current
+            oldSamples <- processSamples old
+            assertBool "live comparisons produce complete process pairs" (not (null currentSamples) && length currentSamples <= 4)
+            assertEqual "both sides have one observation per pair" (length currentSamples) (length oldSamples)
+            assertEqual "only this comparison's processes are paired" (KM.lookup "comparison_id" old) (KM.lookup "comparison_id" current)
+            sequences <- forM (zip oldSamples currentSamples) $ \(a, b) ->
+              (,) <$> requireNumber "sequence" a <*> requireNumber "sequence" b
+            let order = [a < b | (a, b) <- sequences]
+            assertBool "execution follows a randomized balanced schedule, possibly stopped early"
+              (order `elem` map (take (length order)) perfPairOrders)
+            assertBool "accepted pairs remain in chronological order"
+              (and [max a b < min c d | ((a, b), (c, d)) <- zip sequences (drop 1 sequences)])
+            forM_ (zip oldSamples currentSamples) $ \(a, b) -> do
+              forM_ [a, b] $ \sample -> do
+                info <- requireObject "perf_info" sample
+                assertEqual "both versions use the same workload scale" (Just (Aeson.Number scale)) (KM.lookup "scale" info)
+                assertEqual "whole-invocation and loop scopes are preserved" (Just (Aeson.Bool loop)) (KM.lookup "loop" info)
+                assertBool "every measured process has excluded warmup" . (> 0) =<< requireNumber "warmup_duration_ms" info
+            oldSource <- requireObject "source" old
+            currentSource <- requireObject "source" current
+            assertEqual "baseline records the committed revision" (Just (Aeson.Bool False)) (KM.lookup "git_dirty" oldSource)
+            assertEqual "current includes local modifications" (Just (Aeson.Bool True)) (KM.lookup "git_dirty" currentSource)
+            assertEqual "Git comparison leaves the source intact" sourceBefore =<< readFile (proj </> "src/sample.act")
+            assertEqual "Git comparison preserves staged changes" indexBefore =<< git ["ls-files", "--stage"]
+            assertEqual "Git comparison preserves tracked file status" statusBefore =<< git ["status", "--porcelain", "--untracked-files=no"]
+            assertEqual "the baseline worktree is removed after comparison" worktreesBefore =<< git ["worktree", "list", "--porcelain"]
 
 parseOptions :: [String] -> O.ParserResult C.CmdLineOptions
 parseOptions = O.execParserPure C.cmdLinePrefs (O.info (C.cmdLineParser O.<**> O.helper) mempty)
@@ -802,6 +1089,16 @@ requireNumber :: Aeson.Key -> Aeson.Object -> IO Double
 requireNumber key obj = case KM.lookup key obj of
     Just (Aeson.Number value) -> return (realToFrac value)
     _ -> assertFailure ("missing number " ++ show key ++ " in " ++ show obj) >> fail "missing number"
+
+requireAggregate :: String -> [TestResult] -> IO TestResult
+requireAggregate comparison runs = case aggregatePerfRuns comparison runs of
+    Just res -> return res
+    Nothing -> assertFailure "expected complete comparable process measurements" >> fail "aggregation failed"
+
+requirePerfData :: TestResult -> IO Aeson.Object
+requirePerfData res = case testPerfData res of
+    Just obj -> return obj
+    Nothing -> assertFailure "expected performance measurements" >> fail "missing performance data"
 
 identity :: Aeson.Object
 identity = KM.fromList

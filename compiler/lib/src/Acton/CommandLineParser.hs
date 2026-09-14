@@ -512,12 +512,15 @@ testCommand :: Parser TestCommand
 testCommand =
     hsubparser
       (  command "list" (info (TestList <$> testOptions OrdinaryOptions) (progDesc "List project tests"))
-      <> command "perf" (info (TestPerf <$> testOptions PerfOptions) (progDesc "Measure test performance"))
+      <> command "perf" (info perfCommand (progDesc "Measure test performance"))
       <> command "scale" (info scaleCommand (progDesc "Measure how performance changes with workload scale"))
       <> command "stress" (info (TestStress <$> testOptions OrdinaryOptions) (progDesc "Run stress tests"))
       )
     <|> (TestRun <$> testOptions OrdinaryOptions)
   where
+    perfCommand = (\baseline opts -> TestPerf opts { testCompare = baseline })
+      <$> optional (strOption (long "compare" <> metavar "FILE|git:REF" <> help "Compare against a saved perf_data baseline or interleaved runs of a Git revision"))
+      <*> testOptions PerfOptions
     scaleCommand = scaling
       <$> flag LinearAxes LogAxes (long "log" <> help "Use logarithmic chart axes (default: linear)")
       <*> optional (strOption (long "compare" <> metavar "FILE|git:REF" <> help "Compare against a saved scaling journal or Git revision; live runs remeasure baseline sizes"))
@@ -545,7 +548,7 @@ testOptions mode = mkTestOptions
            PerfOptions -> pure Nothing
            OrdinaryOptions -> optional (option auto (long "max-time" <> metavar "MS" <> help "Maximum time to run a test in milliseconds (0 = no time limit, mode defaults when omitted)")))
     <*> ordinary Nothing (optional (option auto (long "min-time" <> metavar "MS" <> help "Minimum time to run a test in milliseconds")))
-    <*> (if mode == PerfOptions then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
+    <*> (if mode == PerfOptions then option durationReader (long "time" <> metavar "DURATION" <> value 5000 <> help "Total budget per benchmark and version, including calibration (e.g. 5s or 250ms; default: 5s)") else pure 5000)
     <*> (if mode == PerfOptions then optional (option scaleReader (long "scale" <> metavar "N" <> help "Use this positive workload scale for t.loop(), skipping calibration")) else pure Nothing)
     <*> (if mode == ScaleOptions then optional (option scaleReader (long "start-scale" <> metavar "N" <> help "First positive workload scale in a scaling study (default: 1)")) else pure Nothing)
     <*> (if mode == ScaleOptions then optional (option scaleReader (long "end-scale" <> metavar "N" <> help "Measure through this workload scale and finish, subject to resource limits")) else pure Nothing)
