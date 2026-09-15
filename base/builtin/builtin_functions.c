@@ -355,14 +355,14 @@ B_NoneType $HashableTupleD_hash($HashableTuple wit, $WORD a, B_hasher h) {
     B_tuple wits = wit->W_Hashable;
     B_tuple ta = (B_tuple)a;
     for (int i = 0; i < wits->size; i++) {
-        // Each component hashes into its own hasher and only the digest enters
-        // the outer stream, so component boundaries cannot shift: without this,
+        // We hash each component, followed by the number of bytes it
+        // contributed, so component boundaries cannot shift: without this,
         // ("ab", "c") and ("a", "bc") would hash equal.
         B_Hashable w = (B_Hashable)wits->components[i];
-        B_hasher hi = B_hasherG_new(NULL);
-        w->$class->hash(w, ta->components[i], hi);
-        uint64_t d = B_hasherD_finalize(hi);
-        zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&d, sizeof(d));
+        uint64_t before = zig_hash_wyhash_total_len(h->_hasher);
+        w->$class->hash(w, ta->components[i], h);
+        uint64_t n = zig_hash_wyhash_total_len(h->_hasher) - before;
+        zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&n, sizeof(n));
     }
     return B_None;
 }
