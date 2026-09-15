@@ -35,6 +35,17 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Add the generic `Freeze[A]` protocol and global `freeze()` function for
+  producing an immutable form of a value. For sets, `freeze(a_set)` returns a
+  hashable `iset` that can be used as a dictionary key or nested inside another
+  set. [#3122]
+- Preserve embedded NUL characters when decoding `bytes` or `bytearray` to
+  `str`, and use the complete string for comparison, hashing, iteration,
+  prefix and suffix checks, and JSON keys and values. Decoding now rejects
+  invalid UTF-8 or trailing JSON input after a NUL instead of accepting a
+  truncated prefix, and `json.decode()` rejects non-object roots. Where libc
+  is available, string comparisons use its optimized memory comparison rather
+  than Zig's bytewise fallback. [#3125] [#3126] [#3128]
 - Allow list equality and inequality when elements implement only `Eq`,
   while ordering comparisons continue to require `Ord`. [#3120]
 - Add immutable `iset` values whose hashable elements make the set hashable as
@@ -72,19 +83,31 @@
 ### Testing & CI
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
-  [#3112] [#3113] [#3115] [#3117] [#3118]
+  [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
     collection benchmarks.
+  - `acton test perf --compare` accepts saved measurements or a Git revision;
+    for example, `acton test perf --name my_test --compare git:main` compares
+    a selected benchmark with `main`. Git comparisons build both versions,
+    measure interleaved balanced pairs of fresh processes at a shared workload
+    scale, and report uncertainty from the paired results while including
+    uncommitted current-tree changes.
   - Reports compare recorded baselines and show timing distributions, GC,
     allocation and memory statistics, peak RSS, and optional CPU, instruction,
     cycle, and IPC counters, with consistent elapsed-time measurement on macOS.
   - `acton test scale` varies `t.scale()` workloads across configurable start
     and end bounds, samples until growth stabilizes or resource limits stop the
     study, and supports three terminal charts for time, time per scale, and
-    allocated bytes, plus journals, replay, and comparison with recorded
-    studies.
+    allocated bytes with readable binary units, plus journals and replay.
+    Comparisons can use a recorded study or a Git revision, measuring the
+    selected revision and the current working tree, including uncommitted
+    changes, at the same completed workload sizes. Explicit end bounds apply to
+    both revisions independently, and macOS scaling accounts for reclaimable
+    memory before stopping.
+  - Scaling charts default to zero-based linear axes, with `--log` available
+    for wide ranges; compared curves share axes and show both final values.
 - Update standard-library tests to the supported testing signatures, restoring
   discovery and execution of tests that used the legacy callback form. [#3111]
 
@@ -4894,6 +4917,13 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3117]: https://github.com/actonlang/acton/pull/3117
 [#3118]: https://github.com/actonlang/acton/pull/3118
 [#3120]: https://github.com/actonlang/acton/pull/3120
+[#3121]: https://github.com/actonlang/acton/pull/3121
+[#3122]: https://github.com/actonlang/acton/pull/3122
+[#3124]: https://github.com/actonlang/acton/pull/3124
+[#3125]: https://github.com/actonlang/acton/pull/3125
+[#3126]: https://github.com/actonlang/acton/pull/3126
+[#3127]: https://github.com/actonlang/acton/pull/3127
+[#3128]: https://github.com/actonlang/acton/pull/3128
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
