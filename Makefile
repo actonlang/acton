@@ -710,11 +710,16 @@ else
 ZIG_DOWNLOAD_URL ?= $(patsubst %/,%,$(ZIG_DOWNLOAD_BASE_URL))/$(ZIG_TARBALL)
 endif
 
-dist/zig: deps-download/$(ZIG_TARBALL)
-	mkdir -p "$@"
-	cd "$@" && tar Jx --strip-components=1 -f "../../$^"
-	rm -rf "$@/doc"
-	cp -a deps/zig-extras/* "$@"
+dist/zig: dist/zig/.patched
+	touch "$@"
+
+dist/zig/.patched: deps-download/$(ZIG_TARBALL) deps/zig-memcmp.patch
+	mkdir -p "$(@D)"
+	cd "$(@D)" && tar Jx --strip-components=1 -f "../../$<"
+	rm -rf "$(@D)/doc"
+	cp -a deps/zig-extras/* "$(@D)"
+	cd "$(@D)" && patch -p1 -t -N < ../../deps/zig-memcmp.patch
+	touch "$@"
 
 
 # By default Zig downloads come from ziglang.org. CI can set
