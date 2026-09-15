@@ -71,7 +71,7 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
 }
 
 // enumerate //////////////////////////////////////////////////////////////////////////
-
+/*
 void B_IteratorD_enumerate_init(B_IteratorD_enumerate self, B_Iterator it, B_int n) {
     self->it = it;
     self->nxt = fromB_int(n);
@@ -118,6 +118,7 @@ B_Iterator B_enumerate(B_Iterable wit, $WORD iter, B_int start) {
         start = toB_int(0);
     return (B_Iterator)B_IteratorD_enumerateG_new(it,start); 
 }
+*/
 
 B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
     B_CollectionD_SequenceD_list w = B_CollectionD_SequenceD_listG_witness;
@@ -125,7 +126,6 @@ B_list B_sorted(B_Ord wit, B_Iterable wit2, $WORD iter) {
     B_tim_sort(wit, res->data, res->length);
     return res;
 }
-
 
 // EqOpt //////////////////////////////////////////////////////
 
