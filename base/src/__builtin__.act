@@ -978,32 +978,33 @@ def chr(i: Integral) -> str:
 def divmod [A(Integral)] (a : A, b : A) -> (A, A): 
     return Integral.__divmod__(a,b)
 
-# class enumerate[A](Iterator[(int,A)]):
-#     def __init__(self, it: Iterable[A], start: ?int):
-#         self.itr = iter(it)
-#         if start is not None:
-#             self.start = start
-#         else:
-#             self.start = 0
-# 
-#     def __next__(self):
-#         res = (self.start,next(self.itr))
-#         self.start += 1
-#         return res
-
-def enumerate[A](it: Iterable[A], start: ?int) -> Iterator[(int,A)]:
-    NotImplemented
+#def enumerate[A](it: Iterable[A], start: ?int) -> Iterator[(int,A)]:
+#     NotImplemented
     
-class filter[A,B(value)](Iterator[A]):
-    def __init__(self, p: (A)->B, it: Iterable[A]):
+class enumerate[A](Iterator[(int,A)]):
+    def __init__(self, it: Iterable[A], start: ?int):
+        self.itr = iter(it)
+        if start is not None:
+            self.start = start
+        else:
+            self.start = 0
+
+    mut def __next__(self):
+        res = (self.start,next(self.itr))
+        self.start += 1
+        return res
+
+class filter[A](Iterator[A]):
+    def __init__(self, p: (A)->bool, it: Iterable[A]):
         self.p = p
         self.itr = iter(it)
 
     def __next__(self):
         x = next(self.itr)
-        while not bool(self.p(x)):
+        while not (self.p(x)):
             x = next(self.itr)
         return x
+
 
 mut def freeze[A](x: Freeze[A]) -> A:
     """Consume an exclusively owned value and return its immutable form.
