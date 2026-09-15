@@ -15,7 +15,7 @@ import TestPerf
 import TestFormat (testColorApply, testColorBold)
 import Codec.Compression.Zlib (compress)
 import Control.Applicative ((<|>))
-import TerminalSize (queryTermSize, termFitAnsiRight)
+import TerminalSize (queryTermSize, termFitAnsiRight, termVisibleLength)
 import Control.Concurrent (threadDelay)
 import Control.Exception
 import Control.Monad
@@ -662,6 +662,12 @@ chartStyle (Chart _ WallTime _ _) = ("Wall time (ms)", [56, 189, 248])
 chartStyle (Chart _ TimePerScale _ _) = ("Time / scale (µs)", [192, 132, 252])
 chartStyle chart = ("Allocated (" ++ snd (chartUnit chart) ++ ")", [244, 114, 182])
 
+baselineColor :: [Int]
+baselineColor = [251, 146, 60]
+
+chartColor :: [Int] -> String
+chartColor rgb = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
+
 -- Allocation chart values are KiB. Choose one display unit for both curves,
 -- including their ranges, without changing the plotted coordinates.
 chartUnit :: Chart -> (Double, String)
@@ -744,18 +750,13 @@ printScaleReport useColor axes name points baseline = when (not (IM.null points 
         putStrLn "Time charts omit sizes with zero clock readings (below resolution); allocation data is retained."
       let charts = scaleCharts axes points baseline
       forM_ [chart | chart@(Chart _ _ current old) <- charts, not (null current && null old)] $ \chart@(Chart _ _ _ old) -> do
-        let rgb = snd (chartStyle chart)
-            accent = "\ESC[38;2;" ++ intercalate ";" (map show rgb) ++ "m"
-            output = chartText graphics width height chart
-            headingRows = length output - height - 2
-            style row line
-              | row < headingRows = paint [testColorBold, accent] line
-              | row < headingRows + height = take 11 line ++ paint [accent] (drop 11 line)
-              | otherwise = line
+        let accent = chartColor (snd (chartStyle chart))
+            recorded = if graphics then chartColor baselineColor else accent
+            output = chartText useColor graphics width height chart
         when (not (null old)) $
-          putStrLn (paint [accent] "  ● ━ current" ++ "    " ++ paint [if graphics then "\ESC[38;2;251;146;60m" else accent] "◆ ┄ baseline" ++ "    ◈ overlapping points")
+          putStrLn (paint [recorded] "  ◆ ┄ baseline" ++ "    " ++ paint [accent] "● ━ current" ++ "    ◈ overlapping points")
         when (axes == C.LogAxes && linearY chart) (putStrLn "  Linear allocation axis, including zero.")
-        putStr (unlines (zipWith style [0..] output))
+        putStr (unlines output)
         when graphics $ do
           -- The text reserves space first, including when output scrolls.
           -- C=1 keeps the image from moving the cursor; return below the axes.
@@ -822,31 +823,35 @@ linearY (Chart C.LinearAxes _ _ _) = True
 linearY (Chart _ Allocated points baseline) = any ((== 0) . chartMinimum) (points ++ baseline)
 linearY _ = False
 
-chartText :: Bool -> Int -> Int -> Chart -> [String]
-chartText graphics width height chart@(Chart _ _ raw old) =
+chartText :: Bool -> Bool -> Int -> Int -> Chart -> [String]
+chartText useColor graphics width height chart@(Chart _ _ raw old) =
     headings ++
-    [ pad 10 (fromMaybe "" (lookup row labels)) ++ "│" ++ plotRow row | row <- [0..height-1] ] ++
+    [ pad 10 (fromMaybe "" (lookup row labels)) ++ "│" ++ paint [accent] (plotRow row) | row <- [0..height-1] ] ++
     [replicate 10 ' ' ++ "└" ++ replicate width '─', "     scale " ++ xlabels]
   where
     (xticks, yticks, points, baseline, guide) = layout chart
-    title = "  ◆ " ++ fst (chartStyle chart)
-    latest = [(label, p) | (label, p:_) <- [("current", reverse raw), ("baseline", reverse old)]]
+    paint = testColorApply useColor
+    accent = chartColor (snd (chartStyle chart))
+    recorded = if graphics then chartColor baselineColor else accent
+    title = paint [testColorBold, accent] ("  ◆ " ++ fst (chartStyle chart))
+    latest = [(label, p) | (label, p:_) <- [("baseline", reverse old), ("current", reverse raw)]]
     differentScales = case latest of
       [(_, a), (_, b)] -> chartScale a /= chartScale b
       _ -> False
-    lastValue = if null latest then "" else "last " ++ intercalate " · "
-      [ (if null old then "" else label ++ " ") ++ chartNumber (chartMean p / fst (chartUnit chart))
+    lastValue = if null latest then "" else paint [testColorBold, accent] "last" ++ " " ++ intercalate " · "
+      [ paint [testColorBold, if label == "baseline" then recorded else accent] $
+        (if null old then "" else label ++ " ") ++ chartNumber (chartMean p / fst (chartUnit chart))
         ++ (if differentScales then " @ " ++ printf "%.0f" (chartScale p) else "")
         ++ (if chartComplete p then "" else " (partial)") | (label, p) <- latest ]
     headings
       | null lastValue = [title]
-      | length title + length lastValue + 3 <= width + 11 =
-          [title ++ replicate (width + 11 - length title - length lastValue) ' ' ++ lastValue]
+      | termVisibleLength title + termVisibleLength lastValue + 3 <= width + 11 =
+          [title ++ replicate (width + 11 - termVisibleLength title - termVisibleLength lastValue) ' ' ++ lastValue]
       | otherwise = title : wrap (words lastValue)
     wrap [] = []
     wrap (word:rest) = fit word rest
       where
-        fit line (word:rest) | length line + length word + 1 <= width + 9 = fit (line ++ " " ++ word) rest
+        fit line (word:rest) | termVisibleLength line + termVisibleLength word + 1 <= width + 9 = fit (line ++ " " ++ word) rest
         fit line rest = ("  " ++ line) : wrap rest
     labels = [(y height value, label) | (value, label) <- yticks]
     -- Give the end ticks priority and leave a gap between labels on narrow
@@ -942,7 +947,7 @@ chartPixels useColor cols rows chart = BS.pack (concatMap pixel [0..width*height
               | i `mod` width `elem` gridX || i `div` width `elem` gridY -> [128, 128, 128, 50]
               | otherwise -> [0, 0, 0, 0]
     accent alpha = map fromIntegral (if useColor then snd (chartStyle chart) else [190, 190, 190]) ++ [alpha]
-    recorded = (if useColor then [251, 146, 60] else [235, 235, 235]) ++ [255]
+    recorded = (if useColor then map fromIntegral baselineColor else [235, 235, 235]) ++ [255]
     gold = (if useColor then [251, 191, 36] else [150, 150, 150]) ++ [210]
 
 -- Direct transmission works without a shared filesystem (including over SSH).

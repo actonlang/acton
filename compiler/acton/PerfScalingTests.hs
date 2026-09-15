@@ -1054,16 +1054,16 @@ scaleReportTests = testGroup "terminal charts"
           chart = scaleCharts C.LogAxes points IM.empty !! 2
       assertEqual "missing samples do not become zeros or partial averages"
         (Chart C.LogAxes Allocated [ChartPoint 1 0 1 2 True, ChartPoint 2 0 0 0 False] []) chart
-      let output = unlines (chartText False 67 12 chart)
+      let output = unlines (chartText False False 67 12 chart)
       assertBool output ("         0│" `isInfixOf` output && '○' `elem` output)
       assertEqual "zero allocation still renders graphics" (67 * 8 * 12 * 16 * 4)
         (BS.length (chartPixels True 67 12 chart))
       let small = Chart C.LogAxes Allocated [ChartPoint 1 0 0 0 True,
                                    ChartPoint 2 (16/1024) (16/1024) (16/1024) True] []
       assertBool "small allocation volumes use the full vertical range"
-        ('●' `elem` concat (take 5 (chartText False 67 12 small)))
+        ('●' `elem` concat (take 5 (chartText False False 67 12 small)))
       assertBool "small allocation volumes use bytes"
-        ("Allocated (B)" `isInfixOf` head (chartText False 67 12 small))
+        ("Allocated (B)" `isInfixOf` head (chartText False False 67 12 small))
       withRecording (header 2 : map (KM.insert "module" (Aeson.String "alpha") .
         KM.insert "test" (Aeson.String "same")) events ++ [ending]) $ \path run -> do
           (code, out, err) <- run
@@ -1080,7 +1080,7 @@ scaleReportTests = testGroup "terminal charts"
   , testCase "allocation comparisons share binary units across both curves and ranges" $ do
       let current = [ChartPoint 1 1024 1024 1024 True]
           baseline low = [ChartPoint 1 low 512 2097152 True]
-          render old = chartText False 67 12 (Chart C.LogAxes Allocated current old)
+          render old = chartText False False 67 12 (Chart C.LogAxes Allocated current old)
       assertBool "the current curve alone uses MiB"
         ("Allocated (MiB)" `isInfixOf` head (render []))
       forM_ [0, 1] $ \low -> do
@@ -1088,7 +1088,7 @@ scaleReportTests = testGroup "terminal charts"
         assertBool "the baseline range selects GiB on linear and logarithmic axes"
           ("Allocated (GiB)" `isInfixOf` head output)
         assertBool "both last values use the shared unit"
-          ("last current 9.77e-4 · baseline 4.88e-4" `isInfixOf` head output)
+          ("last baseline 4.88e-4 · current 9.77e-4" `isInfixOf` head output)
         assertBool "axis labels use GiB"
           (any (isInfixOf (if low == 0 then "2.00│" else "0.954│")) output)
   , testCase "saved journals replay outside a project, preserving separate tests and partial sizes" $
@@ -1183,7 +1183,7 @@ scaleReportTests = testGroup "terminal charts"
         assertEqual (out ++ err) ExitSuccess code
         assertBool out ("baseline" `isInfixOf` out && "current" `isInfixOf` out)
         assertEqual "comparisons still show three charts" 3
-          (length (filter ("  ◆ " `isPrefixOf`) (lines out)))
+          (length [() | line <- lines out, "  ◆ " `isPrefixOf` line, not ("  ◆ ┄ " `isPrefixOf` line)])
         forM_ [("machine-b", 2, "machine identity"), ("machine-a", 3, "worker count")] $ \(machine, workers, reason) -> do
           BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
             [header 3, measured "machine-a" 2 1, measured machine workers 3, ending]])
@@ -1193,7 +1193,7 @@ scaleReportTests = testGroup "terminal charts"
   , testCase "linear comparisons share zero-based axes with evenly spaced workload sizes" $ do
       let current = [ChartPoint n 1 1 1 True | n <- [50,100]]
           old = [ChartPoint 200 1 1 1 True]
-          output = chartText False 67 12 (Chart C.LinearAxes TimePerScale current old)
+          output = chartText False False 67 12 (Chart C.LinearAxes TimePerScale current old)
           marks = [(col, mark) | (col, mark) <- zip [0..] (drop 11 (output !! 1)), mark `elem` ['●', '◆']]
       assertEqual "baseline size 200 sets the shared range; current size 100 is halfway across"
         [(16, '●'), (33, '●'), (66, '◆')] marks
@@ -1201,7 +1201,7 @@ scaleReportTests = testGroup "terminal charts"
         ["scale", "0", "50.0", "100", "150", "200"] (words (last output))
       let zero = Chart C.LinearAxes WallTime [ChartPoint 1 0 0 0 True] []
       assertBool "zero time appears on the origin rather than disappearing"
-        ('●' `elem` (chartText False 67 12 zero !! 12))
+        ('●' `elem` (chartText False False 67 12 zero !! 12))
       assertEqual "all-zero timing still renders graphics" (67 * 8 * 12 * 16 * 4)
         (BS.length (chartPixels True 67 12 zero))
   , testCase "the proportional guide uses the largest completed size, without fitting or extrapolating" $ do
@@ -1231,12 +1231,12 @@ scaleReportTests = testGroup "terminal charts"
       let p n value done = ChartPoint n value value value done
           cases =
             [ ([p 2048 314 True], [], "last 314")
-            , ([p 2048 314 True], [p 2048 549 True], "last current 314 · baseline 549")
-            , ([p 2048 314 False], [p 4096 549 False], "last current 314 @ 2048 (partial) · baseline 549 @ 4096 (partial)")
+            , ([p 2048 314 True], [p 2048 549 True], "last baseline 549 · current 314")
+            , ([p 2048 314 False], [p 4096 549 False], "last baseline 549 @ 4096 (partial) · current 314 @ 2048 (partial)")
             , ([], [p 4096 549 False], "last baseline 549 (partial)")
             ]
       forM_ cases $ \(current, old, expected) -> forM_ [27,67,96] $ \width -> forM_ [False,True] $ \graphics -> do
-        let output = chartText graphics width 12 (Chart C.LinearAxes WallTime current old)
+        let output = chartText False graphics width 12 (Chart C.LinearAxes WallTime current old)
             headingRows = length output - 14
             summary = unwords (words (unwords (take headingRows output)))
         assertBool summary (expected `isInfixOf` summary)
@@ -1250,15 +1250,15 @@ scaleReportTests = testGroup "terminal charts"
       forM_ [C.LinearAxes, C.LogAxes] $ \axes ->
        forM_ curves $ \points -> forM_ [(27,4), (67,12), (96,12)] $ \(width, height) -> do
         let chart = Chart axes WallTime points []
-            output = chartText False width height chart
+            output = chartText False False width height chart
         assertBool "title, plot and axis labels are retained" (length output >= height + 3)
         assertBool (show output) (all ((<= width + 11) . length) output)
         assertBool "text fallback has no escape codes" (all (notElem '\ESC') output)
         assertEqual "RGBA has four bytes per pixel" (width * 8 * height * 16 * 4)
           (BS.length (chartPixels True width height chart))
-      let partial = unlines (chartText False 67 12 (Chart C.LogAxes WallTime [ChartPoint 1 1 1 1 False] []))
+      let partial = unlines (chartText False False 67 12 (Chart C.LogAxes WallTime [ChartPoint 1 1 1 1 False] []))
       assertBool "a completed sample in an unfinished point stays hollow" ('○' `elem` partial)
-      let narrow = chartText False 27 8 (Chart C.LogAxes WallTime
+      let narrow = chartText False False 27 8 (Chart C.LogAxes WallTime
             [ChartPoint 1 1 1 1 True, ChartPoint 1e6 1e6 1e6 1e6 True] [])
       assertEqual "narrow axes show whole, separated decade labels"
         ["scale", "1", "100", "1e4", "1e6"] (words (last narrow))
@@ -1266,7 +1266,7 @@ scaleReportTests = testGroup "terminal charts"
       let current = [ChartPoint 1 1 2 3 True, ChartPoint 10 4 5 6 False]
           old = [ChartPoint 1 10 12 14 True, ChartPoint 1e6 800 900 1000 False]
           chart = Chart C.LogAxes WallTime current old
-          text = unlines (chartText False 67 12 chart)
+          text = unlines (chartText False False 67 12 chart)
           colors = rgbas (BS.unpack (chartPixels True 27 4 chart))
       forM_ ['●', '○', '◆', '◇'] $ \mark -> assertBool "both series and partial samples remain distinguishable" (mark `elem` text)
       assertBool "old sizes beyond an interrupted new curve remain visible" ("1e6" `isInfixOf` text)
@@ -1275,7 +1275,7 @@ scaleReportTests = testGroup "terminal charts"
       assertBool "monochrome preserves both styles without colored pixels"
         (all (\(r,g,b,_) -> r == g && g == b) (rgbas (BS.unpack (chartPixels False 27 4 chart))))
       assertEqual "recorded points do not change the proportional guide" [] (chartGuide chart)
-      let coincident = unlines (chartText False 67 12 (Chart C.LogAxes WallTime (take 1 current) (take 1 current)))
+      let coincident = unlines (chartText False False 67 12 (Chart C.LogAxes WallTime (take 1 current) (take 1 current)))
       assertBool "coincident means retain both series' presence" ('◈' `elem` coincident)
   , testCase "graphics selection is conservative and never applies to redirected output" $ do
       forM_ [[("TERM", "xterm-kitty")], [("TERM", "xterm-ghostty")],
