@@ -3227,7 +3227,7 @@ B_str B_bytesD_hex(B_bytes s) {
         return null_str;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int len = s->nbytes * 2;
-    char *result = acton_malloc_atomic(len);
+    char *result = acton_malloc_atomic(len + 1);
 
     // Hex digit lookup table
     const char hex_digits[] = "0123456789abcdef";
@@ -3238,6 +3238,7 @@ B_str B_bytesD_hex(B_bytes s) {
         result[i*2] = hex_digits[byte >> 4];     // High nibble
         result[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
     }
+    result[len] = '\0';
 
     // Convert to Acton string without copying
     return to_str_noc(result);

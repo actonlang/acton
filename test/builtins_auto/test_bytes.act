@@ -249,6 +249,17 @@ def test_bytes_hex():
     print("bytes.hex(): {result}")
     return result == "deadbeef"
 
+def test_bytes_hex_exact_length():
+    # Exercise several allocation sizes, including 16-byte digest inputs.
+    for count in range(1, 65):
+        source = b"\x00\x7f\x80\xff" * count
+        result = source.hex()
+        expected = "007f80ff" * count
+        if len(result) != 2 * len(source) or result != expected or result.encode() != expected.encode():
+            print("bytes.hex() included data beyond its {2 * len(source)} hex digits")
+            return False
+    return True
+
 def test_bytes_from_hex():
     result = bytes.from_hex("deadbeef").hex()
     print("bytes.from_hex('deadbeef').hex(): {result}")
@@ -302,6 +313,7 @@ tests = {
     "test_bytes_startswith_single_char": test_bytes_startswith_single_char,
     "test_bytes_startswith_longer_prefix": test_bytes_startswith_longer_prefix,
     "test_bytes_hex": test_bytes_hex,
+    "test_bytes_hex_exact_length": test_bytes_hex_exact_length,
     "test_bytes_from_hex": test_bytes_from_hex,
 }
 
