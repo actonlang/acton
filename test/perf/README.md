@@ -110,7 +110,70 @@ keep the string implementation and benchmark sources the same in both runs.
 
 ## Comparing implementations
 
-Record the first implementation, then run the second against the same reference:
+To compare Acton itself, run the repository utility:
+
+```sh
+utils/perf-compare main --module builtin_functions --name sum
+utils/perf-compare main --module collection_iterators --scale 100000 --time 2s
+utils/perf-compare main --project ../my-app --module benchmarks
+```
+
+The launcher can be called from any directory. By default it uses `test/perf`
+in the Acton checkout containing the utility. Use `--project PATH` to select
+another benchmark project containing `Build.act` and `src`. Relative paths
+are resolved from the directory where you invoke the utility:
+
+```sh
+cd /path/to/my-app
+/path/to/acton/utils/perf-compare main --project . --name lookup
+```
+
+The revision defaults to the local `main` branch. The utility builds that revision
+and the current Acton checkout with `make`, including local changes to builtins,
+the runtime or compiler. Both installations compile the same snapshot of the
+selected project's `Build.act` and `src`, with separate generated outputs. The
+old compiler must support these benchmarks and their performance measurement format.
+The benchmark project must be self-contained: files outside `Build.act` and
+`src`, including relative local dependencies, are not copied into the snapshot.
+
+Each benchmark runs in four pairs of fresh processes. Two pairs run baseline
+first and two run current first, in shuffled order. Without `--scale`, an excluded
+baseline pilot chooses the shared workload scale. Each process performs the
+normal warmup. `--time` is the budget for each process, defaulting to one second:
+roughly eight seconds per benchmark plus the pilot, builds and process startup.
+Slow invocations can overrun the budget. Cached build checks still occur between
+processes; the initial builds finish before measurements begin.
+
+The summary gives each process mean equal weight and estimates the wall-time
+change from the four paired differences. An interval spanning zero is
+inconclusive. Extra inner loop samples do not count as independent processes.
+The machine, workload scale, build settings and measurement scope must match.
+
+Results live under the selected project's `out/perf_compare/<timestamp>/`:
+build logs, the benchmark source snapshot, each process's JSON output, and `comparison.json`
+with execution order, provenance and the summary. Results are saved as commands
+complete. Temporary benchmark builds are removed on completion or a reported
+error; the project's `perf_data` and existing test build output stay in place.
+Ctrl-C uses the runtime's default behavior and may leave child processes or
+temporary builds behind. Command logs are written when each process finishes.
+
+The baseline checkout and compiler build are retained at
+`~/.cache/acton/worktrees/<repository-id>/compiler-<commit>/` for reuse. The
+repository ID hashes the shared Git directory's path. The utility refuses a
+cached checkout with source changes and serializes utility runs on the machine.
+To reclaim a cached build, use `git worktree remove --force <path>` while the
+utility is idle. The utility is written in Acton. Its launcher compiles it with
+`dist/bin/acton`, or an installed `acton` if the local compiler is missing. It
+requires the normal Acton build tools on Linux or macOS; it adds no compiler
+options.
+
+From `utils/perf_compare`, build the utility with `../../dist/bin/acton build
+--release`, then run its checks with `../../dist/bin/acton test --release
+--jobs 1`. These use temporary Git repositories and fake compiler commands,
+without live benchmarks.
+
+For a manual comparison, record the first implementation, then run the second
+against the same reference:
 
 ```sh
 acton test perf --module builtin_functions --module collection_iterators --scale 1024 --record

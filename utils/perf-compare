@@ -1,0 +1,14 @@
+#!/bin/sh
+# Build the Acton utility with the local compiler, or an installed one.
+set -eu
+repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+compiler="$repo/dist/bin/acton"
+if [ ! -x "$compiler" ]; then
+    compiler=$(command -v acton) || { echo "Build Acton with make first, or install acton." >&2; exit 1; }
+fi
+(
+    cd "$repo/utils/perf_compare"
+    "$compiler" build --quiet --release src/perf_compare.act
+)
+export ACTON_PERF_REPO="$repo"
+exec "$repo/utils/perf_compare/out/bin/perf_compare" "$@"
