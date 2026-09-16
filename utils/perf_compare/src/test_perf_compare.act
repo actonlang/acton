@@ -1,0 +1,491 @@
+import argparse
+import file
+import json
+import math
+import perf_compare
+import process
+import testing
+
+
+def report_source() -> str:
+    return r"""{"tests":[{
+        "module":"nested.work","raw_name":"_test_touch","status":"OK",
+        "cached":false,"skipped":false,"performance":{"measurements":{
+            "avg_wall_duration":10.0,"num_iterations":100,
+            "perf_info":{"machine":"machine","version":"3",
+                "build":{"cpu":"","db":false,"no_dbp":false,"no_threads":false,"optimize":"ReleaseFast","target":"aarch64-macos-none"},
+                "tags":[],"gc":"natural","loop":true,"workers":1,"scale":257}
+        }}
+    }]}"""
+
+
+def measured(mean: float=10.0, iterations: int=100) -> dict[str, ?value]:
+    source = report_source().replace('"avg_wall_duration":10.0', f'"avg_wall_duration":{mean}')
+    source = source.replace('"num_iterations":100', f'"num_iterations":{iterations}')
+    return perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+
+
+def number(val: ?value) -> float:
+    if isinstance(val, float):
+        return val
+    if isinstance(val, int):
+        return float(val)
+    raise AssertionError("Expected a number")
+
+
+def _test_cli_defaults_and_selection():
+    defaults = perf_compare.parse_args(["perf-compare"])
+    assert "ref" not in defaults.options
+    assert defaults.get_str("time") == "1s"
+    assert "scale" not in defaults.options
+    assert "project" not in defaults.options
+    args = perf_compare.parse_args([
+        "perf-compare", "HEAD~2", "--module", "nested.work", "--name", "touch",
+        "--scale", "100000", "--time", "500ms", "--project", "external project"
+    ])
+    assert args.get_str("ref") == "HEAD~2"
+    assert args.get_strlist("module") == ["nested.work"]
+    assert args.get_strlist("name") == ["touch"]
+    assert args.get_int("scale") == 100000
+    assert args.get_str("time") == "500ms"
+    assert args.get_str("project") == "external project"
+
+
+def _test_cli_rejects_invalid_budgets():
+    for flag, text in [
+        ("--time", "0s"), ("--time", "-1s"), ("--time", "nan"),
+        ("--time", "1"), ("--time", "1xs"), ("--time", "1s extra"),
+        ("--scale", "0"), ("--scale", "-1"), ("--scale", "1.5")
+    ]:
+        rejected = False
+        try:
+            perf_compare.parse_args(["perf-compare", flag, text])
+        except argparse.ArgumentError:
+            rejected = True
+        assert rejected, f"Accepted {flag} {text}"
+    for time in [".5s", "2.5s", "1ms", "2m", "1h"]:
+        args = perf_compare.parse_args(["perf-compare", "--time", time])
+        assert args.get_str("time") == time
+
+
+def _test_selects_raw_names_in_sorted_order():
+    data = json.decode(r"""{"modules":[
+        {"name":"z","tests":[{"name":"touch","raw_name":"_test_touch"}]},
+        {"name":"a","tests":[{"raw_name":"_test_z"},{"raw_name":"_test_a"}]}
+    ]}""")
+    assert perf_compare.selected(data) == [("a", "_test_a"), ("a", "_test_z"), ("z", "_test_touch")]
+    assert perf_compare.selected(json.decode(r'{"modules":[]}')) == []
+
+
+def _test_report_parsing_ignores_build_progress():
+    source = json.encode(json.decode(report_source()))
+    data = perf_compare.parse_report("Resolving dependencies...\nCompilation done\n" + source + "\n")
+    assert number(perf_compare.measurement(data, ("nested.work", "_test_touch"))["avg_wall_duration"]) == 10.0
+    for output in ["No tests\n", "{{truncated\n", "[]\n"]:
+        rejected = False
+        try:
+            perf_compare.parse_report(output)
+        except ValueError:
+            rejected = True
+        assert rejected
+
+
+def _test_requires_one_fresh_successful_result():
+    for original, changed in [
+        ('"cached":false', '"cached":true'),
+        ('"skipped":false', '"skipped":true'),
+        ('"status":"OK"', '"status":"FAIL"'),
+        ('"module":"nested.work"', '"module":"other"'),
+        ('"raw_name":"_test_touch"', '"raw_name":"_test_other"'),
+        ('"num_iterations":100', '"num_iterations":0'),
+        ('"avg_wall_duration":10.0', '"avg_wall_duration":-1.0')
+    ]:
+        rejected = False
+        try:
+            perf_compare.measurement(json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
+        except ValueError:
+            rejected = True
+        assert rejected, f"Accepted invalid measurement: {changed}"
+    for source in [
+        r'{"tests":[]}',
+        r'{"tests":[{"module":"nested.work","raw_name":"_test_touch","status":"OK","cached":false,"skipped":false,"performance":null}]}'
+    ]:
+        rejected = False
+        try:
+            perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+        except ValueError:
+            rejected = True
+        assert rejected
+
+
+def _test_requires_complete_measurement_identity():
+    for key in ["machine", "version", "build", "tags", "gc", "loop", "workers", "scale"]:
+        source = report_source().replace(f'"{key}":', f'"missing_{key}":')
+        rejected = False
+        try:
+            perf_compare.measurement(json.decode(source), ("nested.work", "_test_touch"))
+        except ValueError:
+            rejected = True
+        assert rejected, f"Accepted missing identity: {key}"
+
+
+def _test_requires_compatible_measurement_identity():
+    baseline = measured()
+    perf_compare.comparable(baseline, measured())
+    reordered = report_source().replace(
+        r'{"cpu":"","db":false,"no_dbp":false,"no_threads":false,"optimize":"ReleaseFast","target":"aarch64-macos-none"}',
+        r'{"target":"aarch64-macos-none","optimize":"ReleaseFast","no_threads":false,"no_dbp":false,"db":false,"cpu":""}'
+    )
+    perf_compare.comparable(baseline, perf_compare.measurement(json.decode(reordered), ("nested.work", "_test_touch")))
+    for original, changed in [
+        ('"machine":"machine"', '"machine":"other"'),
+        ('"version":"3"', '"version":"2"'),
+        ('"optimize":"ReleaseFast"', '"optimize":"Debug"'),
+        ('"target":"aarch64-macos-none"', '"target":"x86_64-linux-musl"'),
+        ('"no_threads":false', '"no_threads":true'),
+        ('"tags":[]', '"tags":["other"]'),
+        ('"gc":"natural"', '"gc":"disabled"'),
+        ('"loop":true', '"loop":false'),
+        ('"workers":1', '"workers":2'),
+        ('"scale":257', '"scale":258')
+    ]:
+        current = perf_compare.measurement(json.decode(report_source().replace(original, changed)), ("nested.work", "_test_touch"))
+        rejected = False
+        try:
+            perf_compare.comparable(baseline, current)
+        except ValueError:
+            rejected = True
+        assert rejected, f"Accepted incompatible identity: {changed}"
+
+
+def _test_canonical_preserves_string_keys():
+    first = perf_compare.canonical(json.decode(r'{"abc":1,"def":2}'))
+    reordered = perf_compare.canonical(json.decode(r'{"def":2,"abc":1}'))
+    changed = perf_compare.canonical(json.decode(r'{"abc":1,"ghi":2}'))
+    assert first == reordered
+    assert first != changed
+
+
+def _test_paired_interval_weights_processes_equally():
+    pairs: list[dict[str, dict[str, ?value]]] = []
+    for old, change, iterations in [(10.0, -1.0, 1), (20.0, -2.0, 10), (30.0, -3.0, 100), (40.0, -4.0, 1000)]:
+        pairs.append({"baseline": measured(old, iterations), "current": measured(old + change)})
+    summary = perf_compare.summarize(pairs)
+    assert number(summary["baseline_ms"]) == 25.0
+    assert number(summary["current_ms"]) == 22.5
+    interval = summary["difference_ci95_ms"]
+    if isinstance(interval, list):
+        assert len(interval) == 2
+        # Paired changes are -1, -2, -3, -4, regardless of each process's loop count.
+        half = 3.183 * math.sqrt(5.0 / 3.0) / 2.0
+        assert abs(number(interval[0]) - (-2.5 - half)) < 0.000000001
+        assert abs(number(interval[1]) - (-2.5 + half)) < 0.000000001
+    else:
+        raise AssertionError("Missing paired interval")
+
+
+def _test_pair_order_is_balanced():
+    # Check the invariant, without requiring any random outcome to occur.
+    for _ in range(20):
+        order = perf_compare.pair_order()
+        assert len(order) == 4
+        assert len([first for first in order if first]) == 2
+        assert len([first for first in order if not first]) == 2
+
+
+actor _test_comparison_preserves_checkout(t: testing.EnvT):
+    fc = file.FileCap(t.env.cap)
+    fs = file.FS(fc)
+    pc = process.ProcessCap(t.env.cap)
+    temporary = fs.mktmpdir(prefix="perf-compare-test-")
+    root = temporary + "/repo"
+    external = temporary + "/external project"
+    binary = "/".join(fs.exepath().split("/")[:-1]) + "/perf_compare"
+    recording_root = root + "/test/perf/out/perf_compare"
+    command = ["env", "ACTON_PERF_REPO=" + root, "HOME=" + temporary + "/home", "PERF_FIXTURE=" + temporary,
+               binary, "baseline", "--module", "nested.work", "--name", "touch"]
+    external_command = ["env", "PERF_FIXTURE_SNAPSHOT=" + temporary + "/external snapshot"] + command
+    var stage = "fixture setup"
+    var pending: ?proc(bytes) -> None = None
+    var log_path = ""
+    var expect_success = True
+    var worktree_path = ""
+    var finished = False
+
+    proc def write(path: str, contents: str) -> None:
+        f = file.WriteFile(file.WriteFileCap(fc), path)
+        await async f.write(contents.encode())
+        await async f.close()
+
+    proc def read(path: str) -> str:
+        f = file.ReadFile(file.ReadFileCap(fc), path)
+        contents = f.read().decode()
+        await async f.close()
+        return contents
+
+    proc def exists(path: str) -> bool:
+        try:
+            await async fs.stat(path)
+            return True
+        except OSError:
+            return False
+
+    proc def cleanup() -> None:
+        finished = True
+        pending = None
+        await async fs.rmtree(temporary)
+        await async fs.rmdir(temporary)
+
+    proc def fail(error: Exception) -> None:
+        if finished:
+            return
+        cleanup()
+        if isinstance(error, AssertionError):
+            t.failure(AssertionError(f"{stage}: {error}"))
+        else:
+            t.error(error)
+
+    action def on_exit(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes) -> None:
+        continuation = pending
+        pending = None
+        if continuation is not None and not finished:
+            try:
+                output = stdout + stderr
+                write(log_path, output.decode())
+                assert ((code == 0 and sig == 0) == expect_success), output.decode()
+                continuation(output)
+            except Exception as error:
+                fail(error)
+
+    action def on_error(p: process.Process, error: str) -> None:
+        fail(OSError(error))
+
+    proc def run(cmd: list[str], logfile: str, continuation: proc(bytes) -> None, success: bool=True) -> None:
+        assert pending is None, "Fixture started overlapping commands"
+        pending = continuation
+        log_path = temporary + "/" + logfile
+        expect_success = success
+        process.RunProcess(pc, cmd, on_exit, on_error, workdir=temporary, env=None)
+
+    proc def latest_incomplete(has_study: bool) -> None:
+        latest = sorted(fs.listdir(recording_root))[-1]
+        manifest = json.decode(read(recording_root + "/" + latest + "/comparison.json"))
+        assert perf_compare.text(manifest["status"]) == "incomplete"
+        studies = perf_compare.array(manifest["tests"])
+        assert len(studies) == (1 if has_study else 0)
+        for study in studies:
+            assert "summary" not in perf_compare.obj(study)
+        for project in set(read(temporary + "/projects").splitlines()):
+            assert not exists(project), "Failed comparison retained a temporary benchmark project"
+
+    proc def parse_failure_done(output: bytes) -> None:
+        assert "No JSON report" in output.decode()
+        latest_incomplete(True)
+        cleanup()
+        t.success()
+
+    proc def command_failure_done(output: bytes) -> None:
+        assert "exited with 17" in output.decode()
+        latest_incomplete(True)
+        stage = "malformed report in process callback"
+        run(["env", "PERF_FIXTURE_MODE=parse"] + command + ["--scale", "257"], "parse.log", parse_failure_done, success=False)
+
+    proc def dirty_done(output: bytes) -> None:
+        assert "Cached compiler checkout has changed" in output.decode()
+        assert read(worktree_path + "/builtin.c") == "edited cached checkout\n"
+        latest_incomplete(False)
+        write(worktree_path + "/builtin.c", "old builtin\n")
+        stage = "nonzero benchmark command"
+        run(["env", "PERF_FIXTURE_MODE=fail"] + command + ["--scale", "257"], "failure.log", command_failure_done, success=False)
+
+    proc def checkout_verified(output: bytes) -> None:
+        assert read(worktree_path + "/builtin.c") == "old builtin\n"
+        write(worktree_path + "/builtin.c", "edited cached checkout\n")
+        stage = "dirty cached checkout rejection"
+        run(command, "dirty.log", dirty_done, success=False)
+
+    proc def measurements_done(output: bytes) -> None:
+        worktrees: list[str] = []
+        for project in [root + "/test/perf", external]:
+            stage = "recording count " + project
+            project_recordings = project + "/out/perf_compare"
+            recordings = sorted(fs.listdir(project_recordings))
+            assert len(recordings) == 2
+            assert sorted(fs.listdir(project + "/out")) == ["perf_compare", "preserved"]
+            assert read(project + "/out/preserved") == "existing output\n"
+            for index, recording in enumerate(recordings):
+                stage = "recorded measurements " + project + "/" + recording
+                directory = project_recordings + "/" + recording
+                manifest = json.decode(read(directory + "/comparison.json"))
+                assert perf_compare.text(manifest["status"]) == "complete", "Comparison did not complete"
+                # A child process reports the physical cwd, which can differ from
+                # mktmpdir's path spelling (for example /var versus /private/var).
+                expected_project = read(temporary + "/cwd").strip() + "/external project" if project == external and index == 1 else project
+                recorded_project = perf_compare.text(manifest["project"])
+                assert recorded_project == expected_project, f"Expected project {repr(expected_project)}, got {repr(recorded_project)}"
+                benchmark_hash = perf_compare.text(manifest["benchmark_hash"])
+                assert len(benchmark_hash) == 32, f"Invalid MD5 benchmark hash: {repr(benchmark_hash)}"
+                worktree = perf_compare.text(manifest["worktree"])
+                assert len(worktree.split("/")[-2]) == 32, f"Invalid repository hash in worktree: {repr(worktree)}"
+                worktrees.append(worktree)
+                assert exists(directory + "/worktree.log") == (len(worktrees) == 1), "Unexpected cached worktree creation"
+                assert exists(directory + "/1-pilot.json") == (index == 0), "Unexpected calibration pilot"
+                studies = perf_compare.array(manifest["tests"])
+                assert len(studies) == 1
+                study = perf_compare.obj(studies[0])
+                assert number(study["scale"]) == 257.0
+                assert len(perf_compare.array(study["pairs"])) == 4
+                order = [perf_compare.text(item) for item in perf_compare.array(study["order"])]
+                assert len(order) == 8
+                assert len([i for i in range(4) if order[2 * i].endswith("-baseline.json")]) == 2
+                for filename in order:
+                    assert exists(directory + "/" + filename)
+                summary = perf_compare.obj(study["summary"])
+                assert number(summary["baseline_ms"]) == 10.0
+                assert number(summary["current_ms"]) == 8.0
+        stage = "cached worktree and pilot reuse"
+        assert len(set(worktrees)) == 1, "Cached worktree path changed between runs"
+        worktree_path = worktrees[0]
+        assert exists(worktree_path)
+        for project in set(read(temporary + "/projects").splitlines()):
+            stage = "temporary project cleanup " + project
+            assert not exists(project), "Temporary benchmark project was not removed"
+        stage = "checkout preservation"
+        run(["sh", "verify.sh"], "verify.log", checkout_verified)
+
+    proc def external_absolute_done(output: bytes) -> None:
+        stage = "relative project path with spaces"
+        run(external_command + ["--project", "external project", "--scale", "257"], "relative.log", measurements_done)
+
+    proc def default_done(output: bytes) -> None:
+        stage = "absolute project path with spaces"
+        run(external_command + ["--project", external], "absolute.log", external_absolute_done)
+
+    proc def automatic_done(output: bytes) -> None:
+        stage = "explicit-scale comparison"
+        run(command + ["--scale", "257"], "run-1.log", default_done)
+
+    proc def invalid_source_done(output: bytes) -> None:
+        assert "Benchmark project must contain a src directory:" in output.decode()
+        assert not exists(temporary + "/builds"), "Invalid project started a compiler build"
+        assert not exists(temporary + "/invalid-src/out")
+        stage = "automatic-scale comparison"
+        run(command, "run-0.log", automatic_done)
+
+    proc def invalid_build_done(output: bytes) -> None:
+        assert "Benchmark project must contain Build.act:" in output.decode()
+        assert not exists(temporary + "/builds"), "Invalid project started a compiler build"
+        assert not exists(temporary + "/invalid-build/out")
+        stage = "missing source directory"
+        run(command + ["--project", "invalid-src"], "invalid-src.log", invalid_source_done, success=False)
+
+    proc def setup_done(output: bytes) -> None:
+        stage = "missing Build.act"
+        run(command + ["--project", "invalid-build"], "invalid-build.log", invalid_build_done, success=False)
+
+    try:
+        # Fake compilers check the source snapshot and each invocation's arguments.
+        write(temporary + "/fake-acton", r"""#!/bin/sh
+set -eu
+checkout=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+side=baseline
+[ ! -d "$checkout/.git" ] || side=current
+snapshot=${PERF_FIXTURE_SNAPSHOT:-$PERF_FIXTURE/snapshot}
+cmp Build.act "$snapshot/Build.act"
+diff -r src "$snapshot/src"
+printf '%s\n' "$PWD" >> "$PERF_FIXTURE/projects"
+case "$1 $2" in
+    'test list')
+        [ "$*" = 'test list --release --json --module nested.work --name touch' ]
+        cat "$PERF_FIXTURE/list.json"
+        ;;
+    'build --test')
+        [ "$3" = '--release' ]
+        cmp "$4" src/nested/work.act
+        mkdir out
+        printf '%s' "$side" > out/built
+        touch "$PERF_FIXTURE/built-$side"
+        ;;
+    'test perf')
+        [ "$(cat out/built)" = "$side" ]
+        test -f "$PERF_FIXTURE/built-baseline"
+        test -f "$PERF_FIXTURE/built-current"
+        case "${PERF_FIXTURE_MODE:-}" in
+            fail) printf 'fixture benchmark failed\n'; exit 17 ;;
+            parse) printf 'not a JSON report\n'; exit 0 ;;
+        esac
+        if [ "$*" = 'test perf --release --jobs 1 --json --time 1s --module nested.work --name _test_touch' ]; then
+            [ "$side" = baseline ]
+            cat "$PERF_FIXTURE/pilot.json"
+            exit 0
+        fi
+        [ "$*" = 'test perf --release --jobs 1 --json --time 1s --module nested.work --name _test_touch --scale 257' ]
+        cat "$PERF_FIXTURE/$side.json"
+        ;;
+    *) exit 1 ;;
+esac
+""")
+        write(temporary + "/setup.sh", r"""set -eu
+pwd -P > cwd
+mkdir -p repo/test/perf/src/nested home invalid-build/src invalid-src
+touch invalid-src/Build.act
+cd repo
+git init -q
+git config user.name Test
+git config user.email test@example.invalid
+printf '/dist/\n/test/perf/out/\n' > .gitignore
+printf 'name = "perf"\n' > test/perf/Build.act
+printf 'old benchmark\n' > test/perf/src/nested/work.act
+printf 'old builtin\n' > builtin.c
+cp ../fake-acton fake-acton
+cat > Makefile <<'MAKE'
+all:
+	printf 'build\n' >> "$$PERF_FIXTURE/builds"
+	mkdir -p dist/bin
+	cp fake-acton dist/bin/acton
+	chmod +x dist/bin/acton
+MAKE
+git add .
+git commit -qm baseline
+git branch baseline
+printf 'current builtin\n' > builtin.c
+git add builtin.c
+git commit -qm current
+printf 'current build file\n' >> test/perf/Build.act
+printf 'staged benchmark\n' > test/perf/src/nested/work.act
+git add test/perf/src/nested/work.act
+printf 'unstaged benchmark\n' >> test/perf/src/nested/work.act
+printf 'untracked helper\n' > test/perf/src/helper.act
+mkdir test/perf/out
+printf 'existing output\n' > test/perf/out/preserved
+cp .git/index ../index.before
+git rev-parse HEAD > ../head.before
+git status --porcelain > ../status.before
+mkdir ../snapshot
+cp test/perf/Build.act ../snapshot/Build.act
+cp -R test/perf/src ../snapshot/src
+mkdir -p "../external project/src/nested" "../external project/out" "../external snapshot"
+printf 'external build file\n' > "../external project/Build.act"
+printf 'external benchmark\n' > "../external project/src/nested/work.act"
+printf 'existing output\n' > "../external project/out/preserved"
+cp "../external project/Build.act" "../external snapshot/Build.act"
+cp -R "../external project/src" "../external snapshot/src"
+""")
+        write(temporary + "/verify.sh", r"""set -eu
+cmp repo/.git/index index.before
+git -C repo rev-parse HEAD > head.after
+cmp head.before head.after
+git -C repo status --porcelain > status.after
+cmp status.before status.after
+cmp repo/test/perf/Build.act snapshot/Build.act
+diff -r repo/test/perf/src snapshot/src
+cmp "external project/Build.act" "external snapshot/Build.act"
+diff -r "external project/src" "external snapshot/src"
+""")
+        write(temporary + "/list.json", r'{"modules":[{"name":"nested.work","tests":[{"raw_name":"_test_touch"}]}]}' + "\n")
+        write(temporary + "/baseline.json", json.encode(json.decode(report_source())) + "\n")
+        write(temporary + "/current.json", json.encode(json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":8.0'))) + "\n")
+        write(temporary + "/pilot.json", json.encode(json.decode(report_source().replace('"avg_wall_duration":10.0', '"avg_wall_duration":1000.0'))) + "\n")
+        run(["sh", "setup.sh"], "setup.log", setup_done)
+    except Exception as error:
+        fail(error)

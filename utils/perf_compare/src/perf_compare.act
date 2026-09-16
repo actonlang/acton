@@ -1,0 +1,533 @@
+"""Compare two Acton builds using the same benchmark project sources."""
+
+import argparse
+import crypto.hash.md5
+import file
+import json
+import math
+import process
+import random
+import re
+import time
+
+
+def obj(v: ?value) -> dict[str, ?value]:
+    if isinstance(v, dict):
+        return v
+    raise ValueError("Expected a JSON object")
+
+def array(v: ?value) -> list[?value]:
+    if isinstance(v, list):
+        return v
+    raise ValueError("Expected a JSON array")
+
+def text(v: ?value) -> str:
+    if isinstance(v, str):
+        return v
+    raise ValueError("Expected a JSON string")
+
+def number(v: ?value) -> float:
+    if isinstance(v, int):
+        return float(v)
+    if isinstance(v, float):
+        if v == v and abs(v) <= 1.7976931348623157e308:
+            return v
+    raise ValueError("Expected a finite JSON number")
+
+def flag(v: ?value) -> bool:
+    if isinstance(v, bool):
+        return v
+    raise ValueError("Expected a JSON boolean")
+
+def canonical(v: ?value) -> str:
+    # Object order is irrelevant when comparing measurement metadata.
+    if isinstance(v, dict):
+        fields = obj(v)
+        return "{{" + ",".join([json.encode({"key": k}) + ":" + canonical(fields[k]) for k in sorted(fields.keys())]) + "}}"
+    if isinstance(v, list):
+        return "[" + ",".join([canonical(item) for item in v]) + "]"
+    return json.encode({"value": v})
+
+def parse_args(argv: list[str]) -> argparse.Args:
+    p = argparse.Parser()
+    p.add_arg("ref", "baseline Git revision (default: main)", required=False)
+    p.add_option("project", "str", help="benchmark project directory, relative to the current directory (default: Acton's test/perf)")
+    p.add_option("module", "strlist", default=[], help="benchmark module; repeat to select several")
+    p.add_option("name", "strlist", default=[], help="benchmark name or regular expression")
+    p.add_option("scale", "int", help="fixed workload scale; otherwise calibrate with the baseline")
+    p.add_option("time", "str", default="1s", help="budget per process; eight processes per benchmark")
+    args = p.parse(argv)
+    if "scale" in args.options and args.get_int("scale") < 1:
+        raise argparse.ArgumentError("--scale must be a positive integer")
+    duration = args.get_str("time")
+    if re.match(r"^([0-9]+(\.[0-9]+)?|\.[0-9]+)(ms|s|m|h)$", duration) is None:
+        raise argparse.ArgumentError("--time requires a duration such as 1s or 500ms")
+    unit = "ms" if duration.endswith("ms") else duration[-1:]
+    ms = float(duration[: -len(unit)]) * {"ms": 1, "s": 1000, "m": 60000, "h": 3600000}[unit]
+    if ms < 1 or ms >= 9223372036854775808.0:
+        raise argparse.ArgumentError("--time must be at least 1ms and fit in a machine integer")
+    if "ref" in args.options and args.get_str("ref").startswith("-"):
+        raise argparse.ArgumentError("Invalid Git revision")
+    return args
+
+def parse_report(output: str) -> dict[str, ?value]:
+    # Older compilers can print build progress before the final JSON report.
+    for line in reversed(output.splitlines()):
+        if line.startswith("{{"):
+            return json.decode(line)
+    raise ValueError("No JSON report in command output")
+
+def selected(data: dict[str, ?value]) -> list[(str, str)]:
+    tests = []
+    for module in array(data["modules"]):
+        m = obj(module)
+        for test in array(m["tests"]):
+            tests.append((text(m["name"]), text(obj(test)["raw_name"])))
+    return sorted(tests)
+
+def identity() -> list[str]:
+    return ["machine", "version", "build", "tags", "gc", "loop", "workers", "scale"]
+
+def measurement(data: dict[str, ?value], test: (str, str)) -> dict[str, ?value]:
+    module, raw_name = test
+    results = array(data["tests"])
+    if len(results) != 1:
+        raise ValueError("Expected exactly one result for " + (module + "." + raw_name))
+    result = obj(results[0])
+    if (text(result["module"]), text(result["raw_name"])) != test:
+        raise ValueError("Unexpected benchmark result")
+    if text(result["status"]) != "OK" or flag(result["cached"]) or flag(result["skipped"]) or result["performance"] is None:
+        raise ValueError("No successful fresh measurement for " + (module + "." + raw_name))
+    measured = obj(obj(result["performance"])["measurements"])
+    info = obj(measured["perf_info"])
+    for key in identity():
+        if info.get(key) is None or (key in ["machine", "version"] and text(info[key]) == ""):
+            raise ValueError("Missing performance identity: " + key)
+    if number(measured["num_iterations"]) < 1 or number(measured["avg_wall_duration"]) < 0:
+        raise ValueError("Invalid wall-time measurement")
+    return measured
+
+def comparable(old: dict[str, ?value], new: dict[str, ?value]) -> None:
+    for key in identity():
+        if canonical(obj(old["perf_info"])[key]) != canonical(obj(new["perf_info"])[key]):
+            raise ValueError("Cannot compare measurements: " + key + " differs")
+
+def pair_order() -> list[bool]:
+    # All six balanced schedules are equally likely.
+    return random.choice([[True, True, False, False], [True, False, True, False],
+                          [True, False, False, True], [False, True, True, False],
+                          [False, True, False, True], [False, False, True, True]])
+
+def summarize(pairs: list[dict[str, dict[str, ?value]]]) -> dict[str, ?value]:
+    # Each fresh process contributes one mean; inner loops are not independent.
+    old = [number(pair["baseline"]["avg_wall_duration"]) for pair in pairs]
+    new = [number(pair["current"]["avg_wall_duration"]) for pair in pairs]
+    differences = [b - a for a, b in zip(old, new)]
+    mean = sum(differences) / 4
+    half = 3.183 * math.sqrt(sum([(d - mean) ** 2 for d in differences]) / 3) / 2
+    return {"baseline_ms": sum(old) / 4, "current_ms": sum(new) / 4,
+            "difference_ci95_ms": [mean - half, mean + half]}
+
+def show_comparison(pairs: list[dict[str, dict[str, ?value]]]) -> dict[str, ?value]:
+    print(f"  {'measurement':<16} {'baseline':>14} {'current':>14} {'change':>10}")
+    metrics = [("wall time", "avg_wall_duration", "ms"),
+               ("CPU user", "avg_cpu_user", "ms"), ("CPU system", "avg_cpu_system", "ms"),
+               ("allocated", "mem_usage_delta_avg", "B"),
+               ("instructions", "avg_instructions", ""), ("cycles", "avg_cycles", "")]
+    runs = [pair[side] for pair in pairs for side in ["baseline", "current"]]
+    for label, key, unit in metrics:
+        try:
+            values = [number(run.get(key)) for run in runs]
+            if key in ["avg_instructions", "avg_cycles"]:
+                infos = [obj(run["counter_info"]) for run in runs]
+                keys = ["version", "backend", "scope"]
+                if any([info.get(k) is None for info in infos for k in keys]):
+                    continue
+                scopes = [[canonical(info[k]) for k in keys] for info in infos]
+                if any([scope != scopes[0] for scope in scopes]):
+                    continue
+            old = sum(values[::2]) / 4
+            new = sum(values[1::2]) / 4
+            delta = ("%+.1f" % (100 * (new / old - 1))) + "%" if old != 0 else "—"
+            divisor = 1.0
+            if unit == "B":
+                for size_unit in ["B", "KiB", "MiB", "GiB", "TiB"]:
+                    unit = size_unit
+                    if max([old, new]) / divisor < 1024 or unit == "TiB":
+                        break
+                    divisor *= 1024
+            suffix = " " + unit if unit else ""
+            baseline = ("%.4g" % (old / divisor)) + suffix
+            current = ("%.4g" % (new / divisor)) + suffix
+            print(f"  {label:<16} {baseline:>14} {current:>14} {delta:>10}")
+        except ValueError:
+            continue
+        except KeyError:
+            continue
+    summary = summarize(pairs)
+    ci = array(summary["difference_ci95_ms"])
+    lo, hi = number(ci[0]), number(ci[1])
+    print("  Wall mean change, approx. 95% paired CI: " + ("%+.4g" % lo) + " … " + ("%+.4g" % hi) + " ms")
+    if lo <= 0 and hi >= 0:
+        print("  Inconclusive: the interval includes zero.")
+    return summary
+
+
+def digest_text(digest: bytes) -> str:
+    # Keep the utility usable with compilers predating the bytes.hex() fix.
+    return "".join(["%02x" % byte for byte in digest])
+
+
+actor main(env: Env):
+    fcap = file.FileCap(env.cap)
+    rcap = file.ReadFileCap(fcap)
+    wcap = file.WriteFileCap(fcap)
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(fcap)
+    var args = argparse.Args()
+    var root = ""
+    var benchmark = ""
+    var cache = ""
+    var output = ""
+    var baseline = ""
+    var temporary = ""
+    var lock: ?file.WriteFile = None
+    var finished = False
+    var child: ?process.RunProcess = None
+    var pending: ?proc(bytes) -> None = None
+    var command_name = ""
+    var log_path = ""
+    var manifest: dict[str, ?value] = {}
+    var studies: list[?value] = []
+    var tests: list[(str, str)] = []
+    var projects: dict[str, str] = {}
+    var selection: list[str] = []
+    var side_index = 0
+    var builds: list[(str, str)] = []
+    var build_index = 0
+    var test_index = 0
+    var flags: list[str] = []
+    var work_scale: ?int = None
+    var reference: ?dict[str, ?value] = None
+    var study: dict[str, ?value] = {}
+    var schedule: list[str] = []
+    var sample_index = 0
+    var pair: dict[str, dict[str, ?value]] = {}
+    var pairs: list[dict[str, dict[str, ?value]]] = []
+    var order: list[?value] = []
+    var saved_pairs: list[?value] = []
+
+    proc def read(path: str) -> bytes:
+        f = file.ReadFile(rcap, path)
+        try:
+            return f.read()
+        finally:
+            await async f.close()
+
+    proc def write(path: str, data: bytes) -> None:
+        f = file.WriteFile(wcap, path)
+        try:
+            await async f.write(data)
+        finally:
+            await async f.close()
+
+    proc def exists(path: str) -> bool:
+        try:
+            await async fs.stat(path)
+            return True
+        except OSError:
+            return False
+
+    proc def mkdirs(path: str) -> None:
+        if not exists(path):
+            parent = "/".join(path.split("/")[:-1])
+            if parent and parent != path:
+                mkdirs(parent)
+            await async fs.mkdir(path)
+
+    proc def save() -> None:
+        write(output + "/comparison.json", (json.encode(manifest, pretty=True) + "\n").encode())
+
+    proc def finish(code: int) -> None:
+        if finished:
+            return
+        finished = True
+        try:
+            if manifest:
+                save()
+                print("\nResults: " + output)
+        except Exception as error:
+            print("perf-compare: " + str(error), err=True)
+            code = 1
+        try:
+            if temporary:
+                await async fs.rmtree(temporary)
+                await async fs.rmdir(temporary)
+        except Exception as error:
+            print("perf-compare: " + str(error), err=True)
+            code = 1
+        held_lock = lock
+        if held_lock is not None:
+            try:
+                await async held_lock.close()
+            except Exception as error:
+                print("perf-compare: " + str(error), err=True)
+                code = 1
+        env.exit(code)
+
+    proc def fail(error: Exception) -> None:
+        print("perf-compare: " + str(error), err=True)
+        finish(1)
+
+    def command_done(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes):
+        try:
+            # RunProcess calls us after exit and both output streams reach EOF.
+            write(log_path, stdout + stderr)
+            if code != 0 or sig != 0:
+                status = 128 + sig if sig else code
+                raise RuntimeError(f"{command_name} exited with {status}; see {log_path}")
+            step = pending
+            pending = None
+            child = None
+            if step is not None:
+                step(stdout)
+        except Exception as error:
+            fail(error)
+
+    def command_error(p: process.Process, message: str):
+        try:
+            write(log_path, (message + "\n").encode())
+        except Exception as error:
+            print("perf-compare: " + str(error), err=True)
+        fail(OSError(message))
+
+    proc def run(command: list[str], directory: str, log: str, done: proc(bytes) -> None) -> None:
+        assert pending is None
+        pending = done
+        command_name = command[0]
+        log_path = log
+        child = process.RunProcess(pcap, command, command_done, command_error, workdir=directory)
+
+    proc def git(checkout: str, command: list[str], done: proc(bytes) -> None) -> None:
+        run(["git", "-C", checkout] + command, checkout, output + "/git.log", done)
+
+    proc def source_hash(path: str) -> str:
+        digest = crypto.hash.md5.Hasher()
+        proc def visit(relative: str) -> None:
+            entry = path + "/" + relative
+            if fs.stat(entry).is_dir():
+                for name in sorted(fs.listdir(entry)):
+                    visit(relative + "/" + name if relative else name)
+            else:
+                digest.update(relative.encode() + b"\x00" + read(entry))
+        visit("")
+        return digest_text(digest.finalize())
+
+    proc def baseline_resolved(data: bytes) -> None:
+        manifest["baseline"] = data.decode().strip()
+        git(root, ["rev-parse", "HEAD"], current_resolved)
+
+    proc def current_resolved(data: bytes) -> None:
+        manifest["current"] = data.decode().strip()
+        git(root, ["status", "--porcelain"], current_status)
+
+    proc def current_status(data: bytes) -> None:
+        manifest["dirty"] = bool(data.strip())
+        print("Baseline: " + text(manifest["ref"]) + " (" + text(manifest["baseline"])[:12] + ")")
+        print("Current: " + text(manifest["current"])[:12] + (" with local changes" if data.strip() else ""))
+        save()
+        git(root, ["rev-parse", "--path-format=absolute", "--git-common-dir"], repository_resolved)
+
+    proc def repository_resolved(data: bytes) -> None:
+        repository = digest_text(crypto.hash.md5.hash(data.strip()))
+        baseline = cache + "/worktrees/" + repository + "/compiler-" + text(manifest["baseline"])
+        mkdirs(cache + "/worktrees/" + repository)
+        manifest["worktree"] = baseline
+        if exists(baseline):
+            check_baseline(b"")
+        else:
+            run(["git", "worktree", "add", "--detach", baseline, text(manifest["baseline"])],
+                root, output + "/worktree.log", check_baseline)
+
+    proc def check_baseline(data: bytes) -> None:
+        git(baseline, ["rev-parse", "HEAD"], baseline_head)
+
+    proc def baseline_head(data: bytes) -> None:
+        if data.decode().strip() != text(manifest["baseline"]):
+            raise RuntimeError("Cached compiler checkout has changed: " + baseline)
+        git(baseline, ["status", "--porcelain"], baseline_status)
+
+    proc def baseline_status(data: bytes) -> None:
+        if data.strip():
+            raise RuntimeError("Cached compiler checkout has changed: " + baseline)
+        snapshot = output + "/sources"
+        await async fs.mkdir(snapshot)
+        await async fs.copyfile(benchmark + "/Build.act", snapshot + "/Build.act")
+        await async fs.mkdir(snapshot + "/src")
+        await async fs.copytree(benchmark + "/src", snapshot + "/src")
+        manifest["benchmark_hash"] = source_hash(snapshot)
+        manifest["benchmark_hash_algorithm"] = "md5"
+        save()
+        build_compiler()
+
+    proc def build_compiler() -> None:
+        side = ["baseline", "current"][side_index]
+        checkout = baseline if side_index == 0 else root
+        log = output + "/" + side + "-build.log"
+        print(f"Building {side} Acton (log: {log})")
+        run(["make"], checkout, log, compiler_built)
+
+    proc def compiler_built(data: bytes) -> None:
+        side_index += 1
+        if side_index < 2:
+            build_compiler()
+        else:
+            temporary = fs.mktmpdir(prefix="acton-perf-compare-")
+            for side in ["baseline", "current"]:
+                project = temporary + "/" + side
+                await async fs.mkdir(project)
+                await async fs.copytree(output + "/sources", project)
+                projects[side] = project
+            side_index = 0
+            discover()
+
+    proc def discover() -> None:
+        side = ["baseline", "current"][side_index]
+        checkout = baseline if side_index == 0 else root
+        run([checkout + "/dist/bin/acton", "test", "list", "--release", "--json"] + selection,
+            projects[side], output + "/" + side + "-list.json", discovered)
+
+    proc def discovered(data: bytes) -> None:
+        found = selected(parse_report(data.decode()))
+        if not found or (tests and found != tests):
+            raise RuntimeError("Both compilers must discover the same nonempty set of benchmarks")
+        tests = found
+        side_index += 1
+        if side_index < 2:
+            discover()
+        else:
+            modules = sorted(set([module for module, name in tests]))
+            builds = [(side, module) for side in ["baseline", "current"] for module in modules]
+            build_benchmark()
+
+    proc def build_benchmark() -> None:
+        if build_index == len(builds):
+            start_test()
+            return
+        side, module = builds[build_index]
+        checkout = baseline if side == "baseline" else root
+        source = projects[side] + "/src/" + module.replace(".", "/") + ".act"
+        run([checkout + "/dist/bin/acton", "build", "--test", "--release", source],
+            projects[side], output + f"/{side}-benchmark-build-{build_index}.log", benchmark_built)
+
+    proc def benchmark_built(data: bytes) -> None:
+        build_index += 1
+        build_benchmark()
+
+    proc def measure(side: str, filename: str, done: proc(bytes) -> None) -> None:
+        checkout = baseline if side == "baseline" else root
+        command = [checkout + "/dist/bin/acton", "test", "perf", "--release", "--jobs", "1",
+                   "--json", "--time", args.get_str("time")] + flags
+        run(command, projects[side], output + "/" + filename, done)
+
+    proc def start_test() -> None:
+        if test_index == len(tests):
+            manifest["status"] = "complete"
+            finish(0)
+            return
+        module, raw_name = tests[test_index]
+        print("\n" + module + "." + raw_name)
+        escaped = "".join(["\\" + c if c in r"\.^$*+?{{}}[]|()" else c for c in raw_name])
+        flags = ["--module", module, "--name", escaped]
+        reference = None
+        work_scale = None
+        if "scale" in args.options:
+            work_scale = args.get_int("scale")
+            start_pairs()
+        else:
+            print("  Choosing workload scale (excluded pilot)")
+            measure("baseline", f"{test_index + 1}-pilot.json", pilot_done)
+
+    proc def pilot_done(data: bytes) -> None:
+        pilot = measurement(parse_report(data.decode()), tests[test_index])
+        reference = pilot
+        info = obj(pilot["perf_info"])
+        if flag(info["loop"]):
+            work_scale = int(number(info["scale"]))
+        start_pairs()
+
+    proc def start_pairs() -> None:
+        scale = work_scale
+        if scale is not None:
+            flags += ["--scale", str(scale)]
+        print(f"  Scale {scale if scale is not None else 1}; four pairs; {args.get_str('time')} per process")
+        module, raw_name = tests[test_index]
+        pairs = []
+        order = []
+        saved_pairs = []
+        study = {"module": module, "name": raw_name, "scale": scale, "order": order, "pairs": saved_pairs}
+        studies.append(study)
+        schedule = [side for old_first in pair_order()
+                    for side in (["baseline", "current"] if old_first else ["current", "baseline"])]
+        sample_index = 0
+        sample()
+
+    proc def sample() -> None:
+        if sample_index == len(schedule):
+            study["summary"] = show_comparison(pairs)
+            save()
+            test_index += 1
+            start_test()
+            return
+        pair_number = sample_index // 2 + 1
+        if sample_index % 2 == 0:
+            pair = {}
+            print(f"  Pair {pair_number}/4: {' → '.join(schedule[sample_index:sample_index + 2])}")
+        side = schedule[sample_index]
+        filename = f"{test_index + 1}-{pair_number}-{side}.json"
+        order.append(filename)
+        save()
+        measure(side, filename, measured)
+
+    proc def measured(data: bytes) -> None:
+        result = measurement(parse_report(data.decode()), tests[test_index])
+        previous = reference
+        if previous is not None:
+            comparable(previous, result)
+        else:
+            reference = result
+        pair[schedule[sample_index]] = result
+        if sample_index % 2 == 1:
+            pairs.append(pair)
+            saved_pairs.append({side: pair[side] for side in ["baseline", "current"]})
+        sample_index += 1
+        save()
+        sample()
+
+    try:
+        args = parse_args(["perf-compare"] + env.argv[1:])
+        root = text(env.getenv("ACTON_PERF_REPO"))
+        benchmark = args.get_str("project") if "project" in args.options else root + "/test/perf"
+        if not benchmark.startswith("/"):
+            benchmark = fs.cwd() + "/" + benchmark
+        if not exists(benchmark + "/Build.act") or not fs.stat(benchmark + "/Build.act").is_file():
+            raise ValueError("Benchmark project must contain Build.act: " + benchmark)
+        if not exists(benchmark + "/src") or not fs.stat(benchmark + "/src").is_dir():
+            raise ValueError("Benchmark project must contain a src directory: " + benchmark)
+        cache = fs.homedir() + "/.cache/acton"
+        mkdirs(cache)
+        lock = file.WriteFile(wcap, cache + "/perf-compare.lock", lock=True)
+        stamp = time.utcnow().str_iso8601_ns().replace(":", "-")
+        output = benchmark + "/out/perf_compare/" + stamp
+        mkdirs(output)
+        ref = args.get_str("ref") if "ref" in args.options else "main"
+        manifest = {"ref": ref, "project": benchmark, "time": args.get_str("time"), "tests": studies, "status": "incomplete"}
+        selection = [v for key in ["module", "name"] for item in args.get_strlist(key) for v in ["--" + key, item]]
+        print("Project: " + benchmark)
+        print("Results: " + output)
+        git(root, ["rev-parse", "--verify", ref + "^{{commit}}"], baseline_resolved)
+    except argparse.PrintUsage as error:
+        print(error.error_message)
+        finish(0)
+    except Exception as error:
+        fail(error)
