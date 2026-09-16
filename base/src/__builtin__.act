@@ -108,8 +108,30 @@ class list[A] (object):
     def count[B(Eq)](self, val: B) -> int:
         NotImplemented
 
+class maybe[A](value):
+    pass
+
+class just[A](maybe[A]):
+    def __init__(self, val: A) -> None:
+        self.val = val
+
+class nothing[A](maybe[A]):
+    def __init__(self) -> None:
+        pass
+
 class Iterator[A] (object):
-    __next__     : () -> A
+    # Any concrete Iterator must override at least one of these mutually recursive methods.
+    def __next__(self) -> A:
+        x = self.__next_maybe__()
+        if isinstance(x, just):
+            return x.val
+        raise StopIteration()
+
+    def __next_maybe__(self) -> maybe[A]:
+        try:
+            return just(self.__next__())
+        except StopIteration:
+            return nothing()
     
 
 protocol Iterable[A]:
@@ -1005,7 +1027,6 @@ class filter[A](Iterator[A]):
             x = next(self.itr)
         return x
 
-
 mut def freeze[A](x: Freeze[A]) -> A:
     """Consume an exclusively owned value and return its immutable form.
 
@@ -1039,6 +1060,11 @@ class map[A,B](Iterator[B]):
         self.itr = iter(it)
     def __next__(self):
         return self.f(next(self.itr))
+    def __next_maybe__(self) -> maybe[B]:
+        x = self.itr.__next_maybe__()
+        if isinstance(x, just):
+            return just(self.f(x.val))
+        return nothing()
 
 def max [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
     res: ?A = dflt
@@ -1079,6 +1105,9 @@ def min_def [A(Ord)] (it: Iterable[A], dflt: A) -> A:
 
 def next(x : Iterator[A]) -> A:
     return x.__next__()
+
+def next_maybe(x : Iterator[A]) -> maybe[A]:
+    return x.__next_maybe__()
 
 def ord(c: str) -> int:
     NotImplemented

@@ -232,17 +232,12 @@ B_NoneType B_dictD___init__(B_dict dict, B_Hashable hashwit, B_Iterable wit, $WO
     dict->table = NULL;
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit,iterable);
-        if ($PUSH()) {
-            while(true) {
-                B_tuple nxt = (B_tuple)it->$class->__next__(it);
+        B_tuple nxt;
+        while(true) {
+            if (it->$class->__next_maybe__(it,&nxt))
                 B_dictD_setitem(dict,hashwit,nxt->components[0],nxt->components[1]);
-            }
-            $DROP();
-        } else {
-            B_BaseException ex = $POP();
-            if ($ISINSTANCE0(ex, B_StopIteration)) {
-            } else
-                $RAISE(ex);
+            else
+                break;
         }
     }
     return B_None;
@@ -415,6 +410,24 @@ static $WORD B_IteratorD_dictD_next(B_IteratorD_dict self) {
     return NULL;
 }
 
+static bool B_IteratorD_dictD_next_maybe(B_IteratorD_dict self, $WORD *out) {
+    if (!self->src->table)
+        return false;
+    int i = self->nxt;
+    $table table = self->src->table;
+    int n = table->tb_nentries;
+    while (i < n) {
+        $entry_t entry = &TB_ENTRIES(table)[i];
+        if (entry->value != DELETED) {
+            self->nxt = i + 1;
+            *out = entry->key;
+            return true;
+        }
+        i++;
+    }
+    return false;
+}
+
 B_IteratorD_dict B_IteratorD_dictG_new(B_dict dict) {
     return $NEW(B_IteratorD_dict, dict);
 }
@@ -449,7 +462,8 @@ B_IteratorD_dict B_IteratorD_dict__deserialize(B_IteratorD_dict res, $Serial$sta
 
 
 struct B_IteratorD_dictG_class B_IteratorD_dictG_methods = {"B_IteratorD_dict",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dictD_init,
-                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,B_IteratorD_dictD_str, B_IteratorD_dictD_next};
+                                                      B_IteratorD_dictD_serialize, B_IteratorD_dict__deserialize, B_IteratorD_dictD_bool,B_IteratorD_dictD_str,B_IteratorD_dictD_str,
+                                                      B_IteratorD_dictD_next, B_IteratorD_dictD_next_maybe};
 
 
 B_Iterator B_MappingD_dictD___iter__ (B_MappingD_dict wit, B_dict dict) {
@@ -596,6 +610,24 @@ static $WORD B_IteratorD_dict_values_next(B_IteratorD_dict_values self) {
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict values iterator terminated")));
     return NULL; // to avoid compiler warning
 }
+
+static bool B_IteratorD_dict_values_next_maybe(B_IteratorD_dict_values self, $WORD *out) {
+    int i = self->nxt;
+    $table table = self->src->table;
+    if (!table)
+        return false;
+    int n = table->tb_nentries;
+    while (i < n) {
+        $entry_t entry = &TB_ENTRIES(table)[i];
+        if (entry->value != DELETED) {
+            self->nxt = i + 1;
+            *out = entry->value;
+            return true;
+        }
+        i++;
+    }
+    return false;
+}
  
 B_IteratorD_dict_values B_IteratorD_dict_valuesG_new(B_dict dict) {
     return $NEW(B_IteratorD_dict_values, dict);
@@ -630,7 +662,7 @@ B_IteratorD_dict_values B_IteratorD_dict_values_deserialize(B_IteratorD_dict_val
 
 struct B_IteratorD_dict_valuesG_class B_IteratorD_dict_valuesG_methods = {"B_IteratorD_dict_values",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_values_init,
                                                                     B_IteratorD_dict_values_serialize, B_IteratorD_dict_values_deserialize, B_IteratorD_dict_values_bool, B_IteratorD_dict_values_str,B_IteratorD_dict_values_str,
-                                                                    B_IteratorD_dict_values_next};
+                                                                    B_IteratorD_dict_values_next, B_IteratorD_dict_values_next_maybe};
 
 // items iterator
 
@@ -650,6 +682,24 @@ static $WORD B_IteratorD_dict_items_next(B_IteratorD_dict_items self) {
     }
     $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("dict items iterator terminated")));
     return NULL; // to avoid compiler warning
+}
+
+static bool B_IteratorD_dict_items_next_maybe(B_IteratorD_dict_items self, $WORD *out) {
+    int i = self->nxt;
+    $table table = self->src->table;
+    if (!table)
+        return false;
+    int n = table->tb_nentries;
+    while (i < n) {
+        $entry_t entry = &TB_ENTRIES(table)[i];
+        if (entry->value != DELETED) {
+            self->nxt = i + 1;
+            *out = $NEWTUPLE(2, entry->key, entry->value);
+            return true;
+        }
+        i++;
+    }
+    return false;
 }
  
 B_IteratorD_dict_items B_IteratorD_dict_itemsG_new(B_dict dict) {
@@ -686,7 +736,8 @@ B_IteratorD_dict_items B_IteratorD_dict_items_deserialize(B_IteratorD_dict_items
 
 
 struct B_IteratorD_dict_itemsG_class B_IteratorD_dict_itemsG_methods = {"B_IteratorD_dict_items",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_dict_items_init,
-                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str, B_IteratorD_dict_items_str, B_IteratorD_dict_items_next};
+                                                                  B_IteratorD_dict_items_serialize, B_IteratorD_dict_items_deserialize,B_IteratorD_dict_items_bool, B_IteratorD_dict_items_str, B_IteratorD_dict_items_str,
+                                                                  B_IteratorD_dict_items_next, B_IteratorD_dict_items_next_maybe};
 
 
 B_Iterator B_MappingD_dictD_values (B_MappingD_dict wit, B_dict dict) {

@@ -43,6 +43,7 @@ struct B_IteratorD_setG_class {
     B_str (*__str__)(B_IteratorD_set);
     B_str (*__repr__)(B_IteratorD_set);
     $WORD(*__next__)(B_IteratorD_set);
+    bool (*__next_maybe__)(B_IteratorD_set, $WORD *);
 };
 
 struct B_IteratorD_set {

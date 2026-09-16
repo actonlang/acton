@@ -86,6 +86,19 @@ B_int B_rangeD___next__(B_range self) {
     return toB_int($rangeD_U__next__(self));
 }
 
+bool B_rangeD___next_maybe__(B_range self, $WORD *out) {
+    if (self->remaining-- <= 0)
+        return false;
+    *out = toB_int(self->nxt += self->step);
+    return true;
+}
+bool $rangeD_U__next_maybe__(B_range self, int64_t *out) {
+    if (self->remaining-- <= 0)
+        return false;
+    *out = self->nxt += self->step;
+    return true;
+}
+
 /*
 void B_IteratorD_rangeD_init(B_IteratorD_range self, B_range rng) {
     int64_t stp = self->step = rng->step;

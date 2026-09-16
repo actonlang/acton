@@ -154,6 +154,7 @@ primAnnot           = gPrim "annot"
 primRaiseValueError = gPrim "raiseValueError"
 primUGetItem        = gPrim "listD_U__getitem__"
 primUNext           = gPrim "rangeD_U__next__"
+primHasNativeNextMaybe = gPrim "has_native_next_maybe"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
 
@@ -245,7 +246,8 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
                             (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
-                            (noq primUNext,         NDef scUNext NoDec Nothing)
+                            (noq primUNext,         NDef scUNext NoDec Nothing),
+                            (noq primHasNativeNextMaybe, NDef scHasNativeNextMaybe NoDec Nothing)
                       ]
 
 --  class $Cont[T] (value): pass
@@ -598,6 +600,13 @@ scRaiseValueError   = tSchema [qbind a] tRaiseValErr
 -- Raw range iteration primitive used when normalizing for-loops over range.
 scUNext             = tSchema [] tUNext
   where tUNext      = tFun fxMut (posRow tRange posNil) kwdNil tInt
+
+-- $has_native_next_maybe : [A] => Iterator[A] -> bool
+-- True when the iterator class overrides Iterator.__next_maybe__.
+scHasNativeNextMaybe = tSchema [qbind a] tHasNativeNextMaybe
+  where tHasNativeNextMaybe
+                        = tFun fxPure (posRow (tIterator (tVar a)) posNil) kwdNil tBool
+        a               = TV KType $ name "A"
         
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
@@ -664,4 +673,3 @@ isPUSHF _                       = False
 
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False
-

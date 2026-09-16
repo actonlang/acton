@@ -1734,10 +1734,27 @@ static B_str B_IteratorD_strD_next(B_IteratorD_str self) {
     return NULL; // to avoid compiler warning
 }
 
+static bool B_IteratorD_strD_next_maybe(B_IteratorD_str self, $WORD *out) {
+    if (self->nxt >= self->src->nbytes)
+        return false;
+    unsigned char *p = &self->src->str[self->nxt];
+    B_str res;
+    if (*p < ASCII_CHAR_TABLE_SIZE) {
+        self->nxt++;
+        res = &ascii_char_strs[*p];
+    } else {
+        self->nxt += byte_length2(*p);
+        res = mk_char(p);
+    }
+    *out = res;
+    return true;
+}
+
 
 struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_strD_init,
                                                     B_IteratorD_strD_serialize, B_IteratorD_str$_deserialize,
-                                                    B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str, B_IteratorD_strD_next};
+                                                    B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str,
+                                                    B_IteratorD_strD_next, B_IteratorD_strD_next_maybe};
 
 // now, define __iter__
 
@@ -2659,6 +2676,13 @@ static B_int B_IteratorD_bytearrayD_next(B_IteratorD_bytearray self) {
     return toB_int(self->src->str[self->nxt++]);
 }
 
+static bool B_IteratorD_bytearrayD_next_maybe(B_IteratorD_bytearray self, $WORD *out) {
+    if (self->nxt >= self->src->nbytes)
+        return false;
+    *out = toB_int(self->src->str[self->nxt++]);
+    return true;
+}
+
 B_NoneType B_IteratorD_bytearrayD_init(B_IteratorD_bytearray self, B_bytearray b) {
     self->src = b;
     self->nxt = 0;
@@ -2696,7 +2720,8 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     B_IteratorD_bytearrayD_bool,
     B_IteratorD_bytearrayD_str,
     B_IteratorD_bytearrayD_str,
-    B_IteratorD_bytearrayD_next
+    B_IteratorD_bytearrayD_next,
+    B_IteratorD_bytearrayD_next_maybe
 };
 
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
@@ -3825,9 +3850,17 @@ static B_int B_IteratorD_bytesD_next(B_IteratorD_bytes self) {
     return toB_int(self->src->str[self->nxt++]);
 }
 
+static bool B_IteratorD_bytesD_next_maybe(B_IteratorD_bytes self, $WORD *out) {
+    if (self->nxt >= self->src->nbytes)
+        return false;
+    *out = toB_int(self->src->str[self->nxt++]);
+    return true;
+}
+
 struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_bytesD_init,
                                                         B_IteratorD_bytesD_serialize, B_IteratorD_bytes$_deserialize,
-                                                        B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str, B_IteratorD_bytesD_next};
+                                                        B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str,
+                                                        B_IteratorD_bytesD_next, B_IteratorD_bytesD_next_maybe};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
     return (B_Iterator)$NEW(B_IteratorD_bytes,str);
