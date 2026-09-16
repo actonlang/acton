@@ -397,7 +397,7 @@ class PerfLoop(Iterator[int]):
     def claim(self) -> PerfLoop:
         NotImplemented
 
-    def __next__(self) -> int:
+    def __next__(self) -> maybe[int]:
         NotImplemented
 
     def close(self) -> None:

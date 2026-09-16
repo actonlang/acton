@@ -120,19 +120,8 @@ class nothing[A](maybe[A]):
         pass
 
 class Iterator[A] (object):
-    # Any concrete Iterator must override at least one of these mutually recursive methods.
-    def __next__(self) -> A:
-        x = self.__next_maybe__()
-        if isinstance(x, just):
-            return x.val
-        raise StopIteration()
-
-    def __next_maybe__(self) -> maybe[A]:
-        try:
-            return just(self.__next__())
-        except StopIteration:
-            return nothing()
-    
+    def __next__(self) -> maybe[A]:
+        raise NotImplementedError("")
 
 protocol Iterable[A]:
     __iter__     : () -> Iterator[A]
@@ -150,7 +139,7 @@ class range(Iterator[int]):
     """
     def __init__(self, start: int, stop: ?int, step: int=1) -> None:
         NotImplemented
-    def __next__(self)->int:
+    def __next__(self)->maybe[int]:
         NotImplemented
 
 class str (atom):
@@ -1012,9 +1001,13 @@ class enumerate[A](Iterator[(int,A)]):
             self.start = 0
 
     mut def __next__(self):
-        res = (self.start,next(self.itr))
-        self.start += 1
-        return res
+        nxt = self.itr.__next__()
+        if isinstance(nxt,just):
+            res = (self.start,nxt.val)
+            self.start += 1
+            return just(res)
+        else:
+            return nothing()
 
 class filter[A](Iterator[A]):
     def __init__(self, p: (A)->bool, it: Iterable[A]):
@@ -1022,10 +1015,18 @@ class filter[A](Iterator[A]):
         self.itr = iter(it)
 
     def __next__(self):
-        x = next(self.itr)
-        while not (self.p(x)):
-            x = next(self.itr)
-        return x
+        nxt = self.itr.__next__()
+        if isinstance(nxt,just):
+            x = nxt.val
+            while not (self.p(x)):
+                nxt2 = self.itr.__next__()
+
+                if isinstance(nxt2,just):
+                    x = nxt2.val
+                else:
+                    return nothing()
+            return just(x)
+        return nothing()
 
 mut def freeze[A](x: Freeze[A]) -> A:
     """Consume an exclusively owned value and return its immutable form.
@@ -1058,11 +1059,10 @@ class map[A,B](Iterator[B]):
     def __init__(self, f: (A) -> B, it: Iterable[A]):
         self.f = f
         self.itr = iter(it)
-    def __next__(self):
-        return self.f(next(self.itr))
-    def __next_maybe__(self) -> maybe[B]:
-        x = self.itr.__next_maybe__()
-        if isinstance(x, just):
+
+    def __next__(self) -> maybe[B]:
+        x = self.itr.__next__()
+        if isinstance(x,just):
             return just(self.f(x.val))
         return nothing()
 
@@ -1103,11 +1103,9 @@ def min_def [A(Ord)] (it: Iterable[A], dflt: A) -> A:
         res = x if x < res else res
     return res
 
-def next(x : Iterator[A]) -> A:
-    return x.__next__()
 
-def next_maybe(x : Iterator[A]) -> maybe[A]:
-    return x.__next_maybe__()
+def next(x : Iterator[A]) -> maybe[A]:
+    return x.__next__()
 
 def ord(c: str) -> int:
     NotImplemented
@@ -1171,7 +1169,12 @@ class zip[A,B](Iterator[(A,B)]):
         self.b = iter(b)
         
     def __next__(self):
-        return (next(self.a), next(self.b))
+        nxta = self.a.__next__()
+        if isinstance(nxta,just):
+            nxtb = self.b.__next__()
+            if isinstance(nxtb,just):
+               return just((nxta.val,nxtb.val))
+        return nothing()
 
 def gcd(a : bigint, b :bigint) -> bigint:
     NotImplemented

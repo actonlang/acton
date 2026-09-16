@@ -24,8 +24,7 @@ struct B_IteratorD_listG_class {
   bool (*__bool__)(B_IteratorD_list);
   B_str (*__str__)(B_IteratorD_list);
   B_str (*__repr__)(B_IteratorD_list);
-  $WORD(*__next__)(B_IteratorD_list);
-  bool (*__next_maybe__)(B_IteratorD_list, $WORD *);
+  bool (*__next__)(B_IteratorD_list, $WORD *);
 };
 
 struct B_IteratorD_list {

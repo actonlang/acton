@@ -108,7 +108,8 @@ builtinStaticKey gn                 = case gn of
 
 genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       localX = HashSet.empty,
-                                                      retX = tNone, maybeOutX = Nothing, maybeValueX = [], volVarsX = [], lineEmitX = Nothing }
+                                                      retX = tNone, maybeOutX = Nothing, maybeValueX = [], rawMaybeValueX = HashSet.empty,
+                                                      rangeIterX = HashSet.empty, volVarsX = [], lineEmitX = Nothing }
 
 type GenEnv                         = EnvF GenX
 
@@ -117,6 +118,8 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , retX :: Type
                                            , maybeOutX :: Maybe Type
                                            , maybeValueX :: [(Name, Type)]
+                                           , rawMaybeValueX :: HashSet.HashSet Name
+                                           , rangeIterX :: HashSet.HashSet Name
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
                                            }
@@ -135,6 +138,12 @@ setMaybeOut t env                   = modX env $ \x -> x{ maybeOutX = t }
 
 setMaybeValue n t env               = modX env $ \x -> x{ maybeValueX = (n,t) : maybeValueX x }
 
+setRawMaybeValue n env              = modX env $ \x -> x{ rawMaybeValueX = HashSet.insert n (rawMaybeValueX x) }
+
+setRangeIter n env                  = modX env $ \x -> x{ rangeIterX = HashSet.insert n (rangeIterX x) }
+
+clearRangeIters ns env              = modX env $ \x -> x{ rangeIterX = foldr HashSet.delete (rangeIterX x) ns }
+
 isGlobal env n                      = n `HashSet.member` globalX x && not (n `HashSet.member` localX x)
   where x                           = envX env
 
@@ -152,6 +161,10 @@ ret env                             = retX $ envX env
 maybeOut env                        = maybeOutX $ envX env
 
 maybeValue env n                    = lookup n (maybeValueX $ envX env)
+
+rawMaybeValue env n                 = n `HashSet.member` rawMaybeValueX (envX env)
+
+rangeIter env n                     = n `HashSet.member` rangeIterX (envX env)
 
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
@@ -226,21 +239,21 @@ rawParams env (TRow _ _ _ t TVar{}) = rawType env t
 rawParams env t@TVar{}              = gen env t
 rawParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
-maybeOutParamName                   = text "$next_maybe_out"
+maybeOutParamName                   = text "$next_out"
 
 maybeOutParam                       = word <+> char '*' <> maybeOutParamName
 
 boolType                            = text "bool"
 
-isNextMaybeMethodName (Derived _ n) = n == nextMaybeKW
-isNextMaybeMethodName n             = n == nextMaybeKW
+isNextMethodName (Derived _ n)      = n == nextKW
+isNextMethodName n                  = n == nextKW
 
 maybeValueType (TCon _ (TC q [t]))
   | q == qnMaybe                    = Just t
 maybeValueType _                    = Nothing
 
 isMaybeOutFunction n (TFun _ fx _ _ t)
-                                    = isNextMaybeMethodName n && case maybeValueType (exposeMsg fx t) of
+                                    = isNextMethodName n && case maybeValueType (exposeMsg fx t) of
                                                                   Just _ -> True
                                                                   Nothing -> False
 isMaybeOutFunction _ _              = False
@@ -892,13 +905,19 @@ genSuite env (s:ss)
   | Just valT <- maybeOut env,
     Just c <- genMaybeOutAssignReturn env valT s ss
                                     = (emit (sloc s) $+$ c, [])
-  | Just (ss', env', c, vs') <- genNextMaybeAssignIf env s ss
+  | Just (ss', env', c, vs') <- genNextAssignIf env s ss
                                     = let (cs,vs) = genSuite env' ss'
                                       in ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filterDefined env vs)
   | otherwise                       = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filterDefined env vs)
-    where (cs,vs)                   = genSuite (ldefine (envOf s) env) ss
+    where env1                      = rangeIterEnvAfter env s (ldefine (envOf s) env)
+          (cs,vs)                   = genSuite env1 ss
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
+
+rangeIterEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
+  | Just _ <- rangeIterSource env t e
+                                    = setRangeIter n (clearRangeIters [n] env1)
+rangeIterEnvAfter _ s env1          = clearRangeIters (bound s) env1
 
 genMaybeOutAssignReturn env valT (Assign _ [PVar _ n _] e) (Return _ (Just (Var _ n')) : ss)
   | sameLocalName n n'              = Just $ genMaybeOutReturn env valT e $+$ fst (genSuite env ss)
@@ -912,9 +931,9 @@ genMaybeOutReturn env valT e
                                       text "return true" <> semi
   | isNothingValue env e            = text "return false" <> semi
   | otherwise                       = lbrace $+$
-                                      nest 4 (gen env (tMaybe valT) <+> text "$next_maybe_tmp" <+> equals <+> genExp env (tMaybe valT) e <> semi $+$
-                                              text "if" <+> parens (text "$ISINSTANCE0" <> parens (text "$next_maybe_tmp" <> comma <+> gen env qnJust)) <+> lbrace $+$
-                                              nest 4 (char '*' <> maybeOutParamName <+> equals <+> parens (parens (gen env tJustValue) <> text "$next_maybe_tmp") <> text "->val" <> semi $+$
+                                      nest 4 (gen env (tMaybe valT) <+> text "$next_tmp" <+> equals <+> genExp env (tMaybe valT) e <> semi $+$
+                                              text "if" <+> parens (text "$ISINSTANCE0" <> parens (text "$next_tmp" <> comma <+> gen env qnJust)) <+> lbrace $+$
+                                              nest 4 (char '*' <> maybeOutParamName <+> equals <+> parens (parens (gen env tJustValue) <> text "$next_tmp") <> text "->val" <> semi $+$
                                                       text "return true" <> semi) $+$
                                               rbrace $+$
                                               text "return false" <> semi) $+$
@@ -943,24 +962,45 @@ isNothingCtor env (Var _ n)         = unalias env n == qnNothing
 isNothingCtor env (TApp _ f _)      = isNothingCtor env f
 isNothingCtor _ _                   = False
 
-nextMaybeIterator env (Call _ f PosNil KwdNil)
+nextIterator env (Call _ f PosNil KwdNil)
   | Dot _ e n <- stripTApp f,
-    n == nextMaybeKW                = Just e
-nextMaybeIterator env (Call _ f (PosArg e PosNil) KwdNil)
-  | isNextMaybeFunction env f       = Just e
-nextMaybeIterator env (Box _ e)     = nextMaybeIterator env e
-nextMaybeIterator env (Paren _ e)   = nextMaybeIterator env e
-nextMaybeIterator _ _               = Nothing
+    n == nextKW                     = Just e
+nextIterator env (Box _ e)          = nextIterator env e
+nextIterator env (Paren _ e)        = nextIterator env e
+nextIterator _ _                    = Nothing
 
 stripTApp (TApp _ f _)              = stripTApp f
 stripTApp e                         = e
 
-isNextMaybeFunction env (Var _ n)   = unalias env n == qnNextMaybe
-isNextMaybeFunction env (TApp _ f _)= isNextMaybeFunction env f
-isNextMaybeFunction _ _             = False
+genNextBoolCall env e out           = callee <> parens (gen env e <> comma <+> char '&' <> gen env out)
+  where callee                      = genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextKW
 
-genNextMaybeBoolCall env e out      = callee <> parens (gen env e <> comma <+> char '&' <> gen env out)
-  where callee                      = genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextMaybeKW
+genRangeNextBoolCall env e out      = text "$rangeD_U__next_i64" <> parens (gen env e <> comma <+> char '&' <> gen env out)
+
+rangeIterSource env t e
+  | boxedRepType t == tIterator tInt = rangeIterExpr env e
+  | otherwise                       = Nothing
+
+rangeIterExpr env e
+  | boxedRepType (typeOf env e) == tRange
+                                    = Just e
+rangeIterExpr env (Paren _ e)       = rangeIterExpr env e
+rangeIterExpr env (Box _ e)         = rangeIterExpr env e
+rangeIterExpr env (Call _ f (PosArg _ (PosArg r PosNil)) KwdNil)
+  | isIteratorIterCall env f,
+    boxedRepType (typeOf env r) == tRange
+                                    = Just r
+rangeIterExpr _ _                   = Nothing
+
+isIteratorIterCall env f
+  | Var _ n <- stripTApp f          = unalias env n == gBuiltin (Derived (Derived nIterable nIterator) iterKW)
+isIteratorIterCall _ _              = False
+
+rangeNextIterator env (Var _ (NoQ n))
+  | rangeIter env n                 = True
+rangeNextIterator env (Paren _ e)   = rangeNextIterator env e
+rangeNextIterator env (Box _ e)     = rangeNextIterator env e
+rangeNextIterator _ _               = False
 
 maybeInstanceTest env n e
   | IsInstance _ (Var _ (NoQ n')) c <- stripBoxing e,
@@ -991,6 +1031,15 @@ maybeJustValueExpr env (Paren _ e)  = maybeJustValueExpr env e
 maybeJustValueExpr env (Box _ e)    = maybeJustValueExpr env e
 maybeJustValueExpr env (UnBox _ e)  = maybeJustValueExpr env e
 maybeJustValueExpr _ _              = Nothing
+
+genMaybeValueRaw env t n
+  | rawMaybeValue env n             = gen env (NoQ n)
+  | otherwise                       = gen env (B.unbox (boxedRepType t) (Var NoLoc (NoQ n)))
+
+genMaybeValueBox env n
+  | rawMaybeValue env n,
+    Just t <- maybeValue env n      = genBoxed env t (gen env (NoQ n))
+  | otherwise                       = gen env (NoQ n)
 
 maybeValueUsesOK n ss               = all (maybeValueStmtOK n) ss
 
@@ -1078,7 +1127,7 @@ castedMaybeJustVarNoEnv _ _         = Nothing
 
 isCastToJustNoEnv (TApp _ (Var _ n) [_, TCon _ (TC c _)])
   | n == primCAST,
-    c == qnJust                    = True
+    c == qnJust                     = True
 isCastToJustNoEnv (TApp _ f _)      = isCastToJustNoEnv f
 isCastToJustNoEnv _                 = False
 
@@ -1100,17 +1149,21 @@ maybeValueOpArgOK n (OpArg _ e)     = maybeValueExprOK n e
 
 maybeValueSlizOK n (Sliz _ a b c)   = all (maybeValueExprOK n) [ e | Just e <- [a,b,c] ]
 
-genNextMaybeAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch cond b] els) : ss)
+genNextAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch cond b] els) : ss)
   | Just valT <- maybeValueType t,
-    Just it <- nextMaybeIterator env e,
+    Just it <- nextIterator env e,
     Just testJust <- maybeInstanceTest env n cond,
     n `notElem` free ss             =
-      let env1                      = ldefine (envOf s) env
+      let rawRange                  = valT == tInt && rangeNextIterator env it
+          env1                      = ldefine (envOf s) env
           envRest                   = ldefine (envOf ifs) env1
-          call                      = genNextMaybeBoolCall env it n
+          call | rawRange           = genRangeNextBoolCall env it n
+               | otherwise         = genNextBoolCall env it n
           condDoc | testJust        = call
                   | otherwise       = char '!' <> parens call
-          justEnv                   = setMaybeValue n valT env1
+          justEnv0                  = setMaybeValue n valT env1
+          justEnv | rawRange        = setRawMaybeValue n justEnv0
+                  | otherwise       = justEnv0
           noValueEnv                = env1
           thenEnv | testJust        = justEnv
                   | otherwise       = noValueEnv
@@ -1120,19 +1173,25 @@ genNextMaybeAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch c
           branchOK False            = n `notElem` free b && maybeValueUsesOK n els
           (bdoc, vs1)               = genSuite thenEnv b
           (edoc, vs2)               = genElse elseEnv els
-          stmt                      = word <+> gen env n <> semi $+$
+          outType | rawRange        = gen env (TUnboxed NoLoc tInt)
+                  | otherwise       = word
+          stmt                      = outType <+> gen env n <> semi $+$
                                       text "if" <+> parens condDoc <+> char '{' $+$
                                       nest 4 bdoc $+$
                                       char '}' $+$
                                       edoc
       in if branchOK testJust then Just (ss, envRest, stmt, vs1 ++ vs2) else Nothing
-genNextMaybeAssignIf _ _ _          = Nothing
+genNextAssignIf _ _ _               = Nothing
 
 genTypeDecl env n t                 = genVolatile env n <+> storageType env t
 
 genVolatile env n                   = if isVolVar n env then text "volatile" else empty
 
 genStmt env (Decl _ ds)             = (empty, [])
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | not (n `HashSet.member` localDefined env),
+    Just r <- rangeIterSource env t e
+                                    = (gen env tRange <+> gen env n <+> equals <+> genExp env tRange r <> semi, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env)
                                     = (genTypeDecl env n t <+> gen env n <+> equals <+> assignRHS env n t e <> semi, [])
@@ -1314,7 +1373,7 @@ genUCallArg env t e
 -- Already-raw expressions are left alone; boxed values are unboxed here.
 genRawExpr env e
   | Just n <- maybeJustValueExpr env e
-                                    = gen env (B.unbox (boxedRepType (typeOf env e)) (Var NoLoc (NoQ n)))
+                                    = genMaybeValueRaw env (typeOf env e) n
   | rawExpr env e                   = gen env e
   | B.isUnboxable t                 = gen env (B.unbox t e)
   | otherwise                       = gen env e
@@ -1325,7 +1384,7 @@ genRawExpr env e
 -- surrounding context has established that the C value must be raw.
 genRawExprAs env t e
   | Just n <- maybeJustValueExpr env e
-                                    = gen env (B.unbox (boxedRepType t) (Var NoLoc (NoQ n)))
+                                    = genMaybeValueRaw env t n
   | rawExpr env e                   = gen env e
 genRawExprAs env t (Box _ e)
   | boxedExpr env e                 = gen env (B.unbox t' e)
@@ -1345,10 +1404,7 @@ rawExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = True
   | callableReturnsRaw env f        = True
 rawExpr env (Call _ (Var _ n) _ KwdNil)
-  | n == primUNext || n == primHasNativeNextMaybe
-                                    = True
-rawExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
-  | n == primHasNativeNextMaybe     = True
+  | n == primUNext                  = True
 rawExpr env e@(BinOp _ e1 op e2)
   | op `elem` [And, Or]             = boxedRepType (typeOf env e) == tBool
 rawExpr env e@(BinOp _ e1 op e2)
@@ -1372,11 +1428,9 @@ boxedExpr env Box{}                 = True
 boxedExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
   | n == primCAST                   = True
   | n == primUGetItem               = True
-  | n == primHasNativeNextMaybe     = False
 boxedExpr env (Call _ (Var _ n) _ KwdNil)
   | n == primUNext                  = False
   | n == primUGetItem               = True
-  | n == primHasNativeNextMaybe     = False
 boxedExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = False
 boxedExpr env (Call _ f _ KwdNil)   = callReturnsBoxed env f
@@ -1632,9 +1686,6 @@ isInternalQName (QName _ n)         = isInternal n
 genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
-genCall env _ (Var _ n) (PosArg e PosNil)
-  | n == primHasNativeNextMaybe     = parens (genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextMaybeKW <+>
-                                               text "!=" <+> text "B_IteratorG_methods." <> gen env nextMaybeKW)
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
   | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
   where -- unbox (TNil _ _) p          = empty
@@ -1824,19 +1875,19 @@ genEnter env ts e n p
         t                           = typeOf env e
         env1                        = ldefine [(tmpV,NVar t)] env
 genEnter env ts e n PosNil
-  | n == nextMaybeKW                = genNextMaybeCallAsMaybe env ts e n
+  | n == nextKW                     = genNextCallAsMaybe env ts e n
 genEnter env ts e n p               = dotCast env True ts e n (genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env n) <> parens (gen env e <> comma' (genCallPosArgs env r p))
   where TFun _ _ r _ _              = dotCallRType env ts e n
 
-genNextMaybeCallAsMaybe env ts e n  = text "({" <+>
-                                      word <+> text "$next_maybe_val" <> semi $+$
-                                      gen env (tMaybe valT) <+> text "$next_maybe_res" <> semi $+$
-                                      text "if" <+> parens (callee <> parens (gen env e <> comma <+> char '&' <> text "$next_maybe_val")) <+> lbrace $+$
-                                      nest 4 (text "$next_maybe_res" <+> equals <+> parens (gen env (tMaybe valT)) <> newcon' env qnJust <> parens (text "$next_maybe_val") <> semi) $+$
+genNextCallAsMaybe env ts e n       = text "({" <+>
+                                      word <+> text "$next_val" <> semi $+$
+                                      gen env (tMaybe valT) <+> text "$next_res" <> semi $+$
+                                      text "if" <+> parens (callee <> parens (gen env e <> comma <+> char '&' <> text "$next_val")) <+> lbrace $+$
+                                      nest 4 (text "$next_res" <+> equals <+> parens (gen env (tMaybe valT)) <> newcon' env qnJust <> parens (text "$next_val") <> semi) $+$
                                       rbrace <+> text "else" <+> lbrace $+$
-                                      nest 4 (text "$next_maybe_res" <+> equals <+> parens (gen env (tMaybe valT)) <> newcon' env qnNothing <> parens empty <> semi) $+$
+                                      nest 4 (text "$next_res" <+> equals <+> parens (gen env (tMaybe valT)) <> newcon' env qnNothing <> parens empty <> semi) $+$
                                       rbrace $+$
-                                      text "$next_maybe_res;" <+> text "})"
+                                      text "$next_res;" <+> text "})"
   where TFun _ fx _ _ rt            = dotCallRType env ts e n
         valT                        = case maybeValueType (exposeMsg fx rt) of
                                         Just t -> t
@@ -1915,7 +1966,7 @@ instance Gen Expr where
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env e@(Dot _ _ _)
       | Just n <- maybeJustValueExpr env e
-                                    = gen env (NoQ n)
+                                    = genMaybeValueBox env n
     gen env (Dot _ e n)             = genDot env [] e n
     gen env e0@(DotI _ e i)         = parens $ parens (parens (gen env t) <> parens (gen env e)) <> text "->" <> gen env componentsKW <> brackets (pretty i)
       where t                       = boxedRepType (typeOf env e)
@@ -1977,14 +2028,11 @@ instance Gen Expr where
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
         | f == primUNext            = genCall env [] e p
-        | f == primHasNativeNextMaybe = genCall env [] (Var NoLoc primHasNativeNextMaybe) p
         | f `elem` [primPUSH,primPUSHF]
                                     = gen env f <> parens(empty)
   --      | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e
-    gen env (UnBox _ (Call _ (TApp _ (Var _ f) _) p KwdNil))
-        | f == primHasNativeNextMaybe = genCall env [] (Var NoLoc primHasNativeNextMaybe) p
     gen env (UnBox t e@(Call _ (Dot _ (Var _ w) op) (PosArg x (PosArg y PosNil)) KwdNil))  -- use macro for int (in)equality tests
                                     = case findQName w env of
                                         NVar (TCon _ (TC p [TCon _ (TC t [])]))
@@ -1995,6 +2043,9 @@ instance Gen Expr where
 
     gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
+    gen env (UnBox _ e)
+      | Just n <- maybeJustValueExpr env e,
+        rawMaybeValue env n         = gen env (NoQ n)
     gen env (UnBox t (Int _ n s))   = genUnboxedIntLiteral t n s
              
     gen env (UnBox _ (Float _ x s)) = text s

@@ -197,11 +197,8 @@ static B_NoneType B_set_table_init_from_iterable(B_set_table *set, B_Hashable ha
     if (wit && iterable) {
         B_Iterator it = wit->$class->__iter__(wit, iterable);
         $WORD nxt;
-        while(true) {
-            if (it->$class->__next_maybe__(it,&nxt))
-                B_set_table_add(set, hashwit, nxt);
-            else
-                break;
+        while (it->$class->__next__(it, &nxt)) {
+            B_set_table_add(set, hashwit, nxt);
         }
     }
     return B_None;
@@ -524,15 +521,6 @@ static B_setentry *B_IteratorD_set_next_entry_maybe(B_IteratorD_set self) {
     }
     return NULL;
 }
-
-static $WORD B_IteratorD_set_next_entry(B_IteratorD_set self) {
-    B_setentry *entry = B_IteratorD_set_next_entry_maybe(self);
-    if (entry)
-        return entry;
-    $RAISE((B_BaseException)$NEW(B_StopIteration, to$str("set iterator terminated")));
-    return NULL;
-}
-
 static B_Iterator B_set_iter_table($WORD src, B_set_table *set) {
     B_IteratorD_set iter = acton_malloc(sizeof(struct B_IteratorD_set));
     iter->$class = &B_IteratorD_setG_methods;
@@ -541,13 +529,7 @@ static B_Iterator B_set_iter_table($WORD src, B_set_table *set) {
     iter->nxt = 0;
     return (B_Iterator)iter;
 }
-
-static $WORD B_IteratorD_set_next(B_IteratorD_set self) {
-    $WORD res = B_IteratorD_set_next_entry(self);
-    return ((B_setentry *)res)->key;
-}
-
-static bool B_IteratorD_set_next_maybe(B_IteratorD_set self, $WORD *out) {
+static bool B_IteratorD_set_next(B_IteratorD_set self, $WORD *out) {
     B_setentry *entry = B_IteratorD_set_next_entry_maybe(self);
     if (!entry)
         return false;
@@ -590,8 +572,7 @@ B_IteratorD_set B_IteratorD_setD__deserialize(B_IteratorD_set res, $Serial$state
 struct B_IteratorD_setG_class B_IteratorD_setG_methods = {"B_IteratorD_set", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
                                                           B_IteratorD_set_init, B_IteratorD_set_serialize,
                                                           B_IteratorD_setD__deserialize, B_IteratorD_set_bool,
-                                                          B_IteratorD_set_str, B_IteratorD_set_str, B_IteratorD_set_next,
-                                                          B_IteratorD_set_next_maybe};
+                                                          B_IteratorD_set_str, B_IteratorD_set_str, B_IteratorD_set_next};
 
 // Set[set] wrappers ////////////////////////////////////////////////////////////////////////////////
 
@@ -629,16 +610,9 @@ B_NoneType B_SetD_setD_update(B_SetD_set wit, B_set set, B_Iterable otherwit, $W
     if (set == other)
         return B_None;
     B_Iterator it = otherwit->$class->__iter__(otherwit, other);
-    if ($PUSH()) {
-        while (true) {
-            $WORD elem = it->$class->__next__(it);
-            B_set_table_add(&set->data, hashwit, elem);
-        }
-        $DROP();
-    } else {
-        B_BaseException ex = $POP();
-        if (! $ISINSTANCE0(ex, B_StopIteration))
-            $RAISE(ex);
+    $WORD next;
+    while (it->$class->__next__(it, &next)) {
+        B_set_table_add(&set->data, hashwit, next);
     }
     return B_None;
 }
