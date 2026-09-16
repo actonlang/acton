@@ -478,7 +478,8 @@ bool B_isetD___bool__(B_iset self) {
 }
 
 B_str B_isetD___str__(B_iset self) {
-    return B_TimesD_strD___add__ (NULL, to$str("i"),B_set_table_str(&self->data));
+    B_str contents = B_set_table_str(&self->data);
+    return $FORMAT("iset(%s)", contents->str);
 }
 
 B_str B_isetD___repr__(B_iset self) {
