@@ -56,9 +56,10 @@
   the same object instead of comparing their contents. This avoids unnecessary
   work for large values and containers, and means lists, dictionaries, and
   tuples compare equal to themselves even when they contain `NaN`. [#3106]
-- Implement builtin helpers such as `filter`, `map`, `max`, `min`, `sum`, and
-  `zip` in Acton and streamline collection iteration to avoid allocation-heavy
-  iterator handling in common builtin operations. [#3104]
+- Implement builtin helpers such as `enumerate`, `filter`, `map`, `max`, `min`,
+  `sum`, and `zip` in Acton and streamline collection iteration to avoid
+  allocation-heavy iterator handling in common builtin operations. [#3104]
+  [#3131]
 - Drain queued writes before closing server-side TCP connections, preventing
   large response payloads from being truncated when
   `TCPListenConnection.close()` follows `write()`. [#3110]
@@ -84,6 +85,7 @@
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
   [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
+  [#3130]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
@@ -108,8 +110,14 @@
     memory before stopping.
   - Scaling charts default to zero-based linear axes, with `--log` available
     for wide ranges; compared curves share axes and show both final values.
+  - Comparison summaries and legends list the baseline before the current run,
+    color each label to match its curve, and keep wrapped headings aligned.
 - Update standard-library tests to the supported testing signatures, restoring
   discovery and execution of tests that used the legacy callback form. [#3111]
+
+### Compatibility Notes
+- Require predicates passed to `filter()` to return `bool`; code that returned
+  another truthy value must convert it explicitly. [#3131]
 
 ## [0.30.0] - 2026-09-03
 
@@ -4924,6 +4932,8 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3126]: https://github.com/actonlang/acton/pull/3126
 [#3127]: https://github.com/actonlang/acton/pull/3127
 [#3128]: https://github.com/actonlang/acton/pull/3128
+[#3130]: https://github.com/actonlang/acton/pull/3130
+[#3131]: https://github.com/actonlang/acton/pull/3131
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
