@@ -7,10 +7,18 @@ def _test_zip():
 actor main(env):
     z = _test_zip()
     a = next(z)
-    if a.0 != "1" or a.1 != "2":
+    if isinstance(a,just):
+        av = a.val
+        if av.0 != "1" or av.1 != "2":
+            env.exit(1)
+    else:
         env.exit(1)
     b = next(z)
-    if b.0 != "2" or b.1 != "1":
+    if isinstance(b,just):
+        bv = b.val
+        if bv.0 != "2" or bv.1 != "1":
+            env.exit(1)
+    else:
         env.exit(1)
     env.exit(0)
     

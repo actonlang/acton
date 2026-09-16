@@ -9,21 +9,17 @@ pure def check (l : __builtin__.list[__builtin__.int]) -> __builtin__.bool:
         N_1w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
         N_2res: __builtin__.list[__builtin__.int] = []
         N_3iter: __builtin__.Iterator[__builtin__.int] = W_check_6.__iter__(l)
-        if $PUSH():
-            while True:
-                if True:
-                    pass
-                else:
-                    break
-                x: __builtin__.int = N_3iter.__next__()
-                N_1w.append(N_2res, x)
-            $DROP()
-        else:
-            N_5x: __builtin__.BaseException = $POP()
-            if isinstance(N_5x, __builtin__.StopIteration):
+        while True:
+            if True:
                 pass
             else:
-                $RAISE(N_5x)
+                break
+            N_4maybe: __builtin__.maybe[__builtin__.int] = N_3iter.__next__()
+            if isinstance(N_4maybe, __builtin__.just):
+                x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_4maybe).val
+                N_1w.append(N_2res, x)
+            else:
+                break
         return N_2res
     if W_check_21.__ne__(N_compfun(), [W_check_18.__fromatom__(1), W_check_18.__fromatom__(2), W_check_18.__fromatom__(3)]):
         return False
@@ -42,26 +38,22 @@ W_main_31: __builtin__.Eq[__builtin__.list[?__builtin__.int]] = __builtin__.EqD_
 W_main_12: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
 
 actor main (env : __builtin__.Env):
-    pure def N_6compfun () -> __builtin__.list[__builtin__.int]:
-        N_7w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
-        N_8res: __builtin__.list[__builtin__.int] = []
-        N_9iter: __builtin__.Iterator[__builtin__.int] = W_main_12.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])
-        if $PUSH():
-            while True:
-                if True:
-                    pass
-                else:
-                    break
-                x: __builtin__.int = N_9iter.__next__()
-                N_7w.append(N_8res, W_main_20.__mul__(x, W_main_43.__fromatom__(2)))
-            $DROP()
-        else:
-            N_11x: __builtin__.BaseException = $POP()
-            if isinstance(N_11x, __builtin__.StopIteration):
+    pure def N_7compfun () -> __builtin__.list[__builtin__.int]:
+        N_8w: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+        N_9res: __builtin__.list[__builtin__.int] = []
+        N_10iter: __builtin__.Iterator[__builtin__.int] = W_main_12.__iter__([W_main_43.__fromatom__(1), W_main_43.__fromatom__(2)])
+        while True:
+            if True:
                 pass
             else:
-                $RAISE(N_11x)
-        return N_8res
-    if W_main_31.__eq__(N_6compfun(), [W_main_43.__fromatom__(2), W_main_43.__fromatom__(4)]):
+                break
+            N_11maybe: __builtin__.maybe[__builtin__.int] = N_10iter.__next__()
+            if isinstance(N_11maybe, __builtin__.just):
+                x: __builtin__.int = $CAST@[__builtin__.maybe[__builtin__.int], __builtin__.just[__builtin__.int]](N_11maybe).val
+                N_8w.append(N_9res, W_main_20.__mul__(x, W_main_43.__fromatom__(2)))
+            else:
+                break
+        return N_9res
+    if W_main_31.__eq__(N_7compfun(), [W_main_43.__fromatom__(2), W_main_43.__fromatom__(4)]):
         env.exit(W_main_43.__fromatom__(0))
     env.exit(W_main_43.__fromatom__(1))

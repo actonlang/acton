@@ -320,27 +320,14 @@ instance Norm Stmt where
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
     norm' env s@(For l p e b els)
-      | Just r <- rangeIteratorArg e = do i <- newName "range_iter"
-                                          v <- newName "val"
-                                          normSuite env [sAssign (pVar i tRange) r,
-                                                         handleStop (While l (eBool True) (rangeBody v i) []) els]
-      | otherwise                   = do i <- newName "iter"
+                                    = do i <- newName "iter"
                                          m <- newName "maybe"
                                          v <- newName "val"
                                          done <- newName "done"
-                                         normSuite env [sAssign (pVar i $ conv env t) e,
-                                                        sIf [Branch (hasNativeNextMaybe i) (maybeLoop m v i done)]
-                                                            [handleStop (While l (eBool True) (body v i) []) els]]
+                                         normSuite env (sAssign (pVar i $ conv env t) e : maybeLoop m v i done)
       where t@(TCon _ (TC c [t']))  = expTypeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
-            nextMaybe i             = eCall (eDot (eVar i) nextMaybeKW) []
-            rangeNext i             = eCall (eQVar primUNext) [eVar i]
-            hasNativeNextMaybe i    = eCall (tApp (eQVar primHasNativeNextMaybe) [t']) [eVar i]
-            handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
-            body v i
-               | isPVar p           = sAssign p (next i) : b
-               | otherwise          = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
-            maybeBody m v i done    = [sAssign (pVar m (tMaybe t')) (nextMaybe i),
+            maybeBody m v i done    = [sAssign (pVar m (tMaybe t')) (next i),
                                        sIf [Branch (eIsInstance m qnJust) (maybeValBody m v)]
                                            (maybeDone done)]
             maybeValBody m v
@@ -351,24 +338,12 @@ instance Norm Stmt where
                | null els           = [sBreak]
                | otherwise          = [sAssign (pVar done tBool) (eBool True), sBreak]
             maybeLoop m v i done
-               | null els           = [Try l [While l (eBool True) (maybeBody m v i done) []]
-                                              [Handler (Except l0 qnStopIteration) [sPass]] [] []]
+               | null els           = [While l (eBool True) (maybeBody m v i done) []]
                | otherwise          = [sAssign (pVar done tBool) (eBool False),
-                                       Try l [While l (eBool True) (maybeBody m v i done) []]
-                                             [Handler (Except l0 qnStopIteration) [sAssign (pVar done tBool) (eBool True)]] [] [],
+                                       While l (eBool True) (maybeBody m v i done) [],
                                        sIf [Branch (eVar done) els] []]
-            rangeBody v i
-               | isPVar p           = sAssign p (rangeNext i) : b
-               | otherwise          = sAssign (pVar v t') (rangeNext i) : sAssign p (eVar v) : b
             isPVar PVar{}           = True
             isPVar _                = False
-            rangeIteratorArg (Call _ f (PosArg r PosNil) KwdNil)
-               | isIterCall f && expTypeOf env r == tRange = Just r
-            rangeIteratorArg (Paren _ e) = rangeIteratorArg e
-            rangeIteratorArg _       = Nothing
-            isIterCall (Dot _ _ n)   = n == iterKW
-            isIterCall (TApp _ f _)  = isIterCall f
-            isIterCall _             = False
     {-
     with EXPRESSION as PATTERN:
         SUITE

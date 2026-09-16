@@ -45,6 +45,11 @@ def test_independent_storage():
 def test_serialization():
     saved = SavedSet(iset(range(100)) - iset(range(3, 100)))
     first = next(saved.iterator)
+    fst = 0
+    if isinstance(first,just):
+        fst = first.val
+    else:
+        raise ValueError("unexpected iteration termination")
     payload = serialize(saved)
     restored = deserialize(payload)
     if not isinstance(restored, SavedSet):
@@ -52,7 +57,7 @@ def test_serialization():
     if isinstance(restored, SavedSet):
         if restored.values != saved.values or serialize(restored) != payload:
             raise ValueError("iset serialization lost values or shared references")
-        if iset(restored.iterator) != saved.values - iset([first]):
+        if iset(restored.iterator) != saved.values - iset([fst]):
             raise ValueError("iset iterator did not resume after deserialization")
         if hash(restored.values) != hash(saved.values):
             raise ValueError("iset hash changed after serialization")

@@ -16,6 +16,9 @@ B_Iterator B_IterableD_IteratorD___iter__(B_IterableD_Iterator wit, B_Iterator s
     return self;
 }
  
-$WORD $next(B_Iterator it) {
-    return it->$class->__next__(it);
+B_maybe $next(B_Iterator it) {
+    $WORD value;
+    if (it->$class->__next__(it, &value))
+        return (B_maybe)B_justG_new(value);
+    return (B_maybe)B_nothingG_new();
 }

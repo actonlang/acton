@@ -1718,23 +1718,7 @@ bool B_IteratorD_strD_bool(B_IteratorD_str self) {
 B_str B_IteratorD_strD_str(B_IteratorD_str self) {
     return $FORMAT("<str iterator object at %p>", self);
 }
-
-// this is next function for forward iteration
-static B_str B_IteratorD_strD_next(B_IteratorD_str self) {
-    if (self->nxt < self->src->nbytes) {
-        unsigned char *p = &self->src->str[self->nxt];
-        if (*p < ASCII_CHAR_TABLE_SIZE) {
-            self->nxt++;
-            return &ascii_char_strs[*p];
-        }
-        self->nxt +=byte_length2(*p);
-        return mk_char(p);
-    }
-    $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("str iterator terminated")));
-    return NULL; // to avoid compiler warning
-}
-
-static bool B_IteratorD_strD_next_maybe(B_IteratorD_str self, $WORD *out) {
+static bool B_IteratorD_strD_next(B_IteratorD_str self, $WORD *out) {
     if (self->nxt >= self->src->nbytes)
         return false;
     unsigned char *p = &self->src->str[self->nxt];
@@ -1746,7 +1730,7 @@ static bool B_IteratorD_strD_next_maybe(B_IteratorD_str self, $WORD *out) {
         self->nxt += byte_length2(*p);
         res = mk_char(p);
     }
-    *out = res;
+    *out = (B_value)res;
     return true;
 }
 
@@ -1754,7 +1738,7 @@ static bool B_IteratorD_strD_next_maybe(B_IteratorD_str self, $WORD *out) {
 struct B_IteratorD_strG_class B_IteratorD_strG_methods = {"B_IteratorD_str",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_strD_init,
                                                     B_IteratorD_strD_serialize, B_IteratorD_str$_deserialize,
                                                     B_IteratorD_strD_bool, B_IteratorD_strD_str, B_IteratorD_strD_str,
-                                                    B_IteratorD_strD_next, B_IteratorD_strD_next_maybe};
+                                                    B_IteratorD_strD_next};
 
 // now, define __iter__
 
@@ -2669,17 +2653,10 @@ bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray 
 // Container
 
 // Iterable
-
-static B_int B_IteratorD_bytearrayD_next(B_IteratorD_bytearray self) {
-    if (self->nxt >= self->src->nbytes)
-        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytearray iterator terminated")));
-    return toB_int(self->src->str[self->nxt++]);
-}
-
-static bool B_IteratorD_bytearrayD_next_maybe(B_IteratorD_bytearray self, $WORD *out) {
+static bool B_IteratorD_bytearrayD_next(B_IteratorD_bytearray self, $WORD *out) {
     if (self->nxt >= self->src->nbytes)
         return false;
-    *out = toB_int(self->src->str[self->nxt++]);
+    *out = (B_value)toB_int(self->src->str[self->nxt++]);
     return true;
 }
 
@@ -2720,8 +2697,7 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
     B_IteratorD_bytearrayD_bool,
     B_IteratorD_bytearrayD_str,
     B_IteratorD_bytearrayD_str,
-    B_IteratorD_bytearrayD_next,
-    B_IteratorD_bytearrayD_next_maybe
+    B_IteratorD_bytearrayD_next
 };
 
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
@@ -2828,16 +2804,9 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
     int len = self->nbytes;
     B_bytearray other;
     NEW_UNFILLED_BYTEARRAY(other,0);
-    if ($PUSH()) {
-        while(1) {
-            $WORD w = it->$class->__next__(it);
-            B_SequenceD_bytearrayD_append(wit, other,w);
-        }
-        $DROP();
-    } else {
-        B_BaseException ex = $POP();
-        if (! $ISINSTANCE0(ex, B_StopIteration))
-            $RAISE(ex);
+    $WORD next;
+    while (it->$class->__next__(it, &next)) {
+        B_SequenceD_bytearrayD_append(wit, other, next);
     }
     int olen = other->nbytes;
     int64_t start, stop, step, slen;
@@ -3842,25 +3811,17 @@ bool B_IteratorD_bytesD_bool(B_IteratorD_bytes self) {
 B_str B_IteratorD_bytesD_str(B_IteratorD_bytes self) {
     return $FORMAT("<bytes iterator object at %p>", self);
 }
-
-// this is next function for forward iteration
-static B_int B_IteratorD_bytesD_next(B_IteratorD_bytes self) {
-    if (self->nxt >= self->src->nbytes)
-        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("bytes iterator terminated")));
-    return toB_int(self->src->str[self->nxt++]);
-}
-
-static bool B_IteratorD_bytesD_next_maybe(B_IteratorD_bytes self, $WORD *out) {
+static bool B_IteratorD_bytesD_next(B_IteratorD_bytes self, $WORD *out) {
     if (self->nxt >= self->src->nbytes)
         return false;
-    *out = toB_int(self->src->str[self->nxt++]);
+    *out = (B_value)toB_int(self->src->str[self->nxt++]);
     return true;
 }
 
 struct B_IteratorD_bytesG_class B_IteratorD_bytesG_methods = {"B_IteratorD_bytes",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_bytesD_init,
                                                         B_IteratorD_bytesD_serialize, B_IteratorD_bytes$_deserialize,
                                                         B_IteratorD_bytesD_bool, B_IteratorD_bytesD_str,  B_IteratorD_bytesD_str,
-                                                        B_IteratorD_bytesD_next, B_IteratorD_bytesD_next_maybe};
+                                                        B_IteratorD_bytesD_next};
 
 B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
     return (B_Iterator)$NEW(B_IteratorD_bytes,str);

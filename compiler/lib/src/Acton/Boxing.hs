@@ -415,13 +415,12 @@ targetType env (Var _ n)
 targetType env e                    = typeOf env e
 
 
-prims = [primISINSTANCE, primISNOTNONE, primISNONE, primHasNativeNextMaybe]
+prims = [primISINSTANCE, primISNOTNONE, primISNONE]
 
 unboxedPrim p
   | p == primISINSTANCE            = primISINSTANCE0
   | p == primISNOTNONE             = primISNOTNONE0
   | p == primISNONE                = primISNONE0
-  | p == primHasNativeNextMaybe    = primHasNativeNextMaybe
 
  
 unbox _ (Box _ e)               = e
