@@ -325,16 +325,38 @@ instance Norm Stmt where
                                           normSuite env [sAssign (pVar i tRange) r,
                                                          handleStop (While l (eBool True) (rangeBody v i) []) els]
       | otherwise                   = do i <- newName "iter"
+                                         m <- newName "maybe"
                                          v <- newName "val"
+                                         done <- newName "done"
                                          normSuite env [sAssign (pVar i $ conv env t) e,
-                                                        handleStop (While l (eBool True) (body v i) []) els]
+                                                        sIf [Branch (hasNativeNextMaybe i) (maybeLoop m v i done)]
+                                                            [handleStop (While l (eBool True) (body v i) []) els]]
       where t@(TCon _ (TC c [t']))  = expTypeOf env e
             next i                  = eCall (eDot (eVar i) nextKW) []
+            nextMaybe i             = eCall (eDot (eVar i) nextMaybeKW) []
             rangeNext i             = eCall (eQVar primUNext) [eVar i]
+            hasNativeNextMaybe i    = eCall (tApp (eQVar primHasNativeNextMaybe) [t']) [eVar i]
             handleStop loop els     = Try l [loop] [Handler (Except l0 qnStopIteration) (mkBody els)] [] []
             body v i
                | isPVar p           = sAssign p (next i) : b
                | otherwise          = sAssign (pVar v t') (next i) : sAssign p (eVar v) : b
+            maybeBody m v i done    = [sAssign (pVar m (tMaybe t')) (nextMaybe i),
+                                       sIf [Branch (eIsInstance m qnJust) (maybeValBody m v)]
+                                           (maybeDone done)]
+            maybeValBody m v
+               | isPVar p           = sAssign p (maybeVal m) : b
+               | otherwise          = sAssign (pVar v t') (maybeVal m) : sAssign p (eVar v) : b
+            maybeVal m              = eDot (eCAST (tMaybe t') (tJust t') (eVar m)) attrVal
+            maybeDone done
+               | null els           = [sBreak]
+               | otherwise          = [sAssign (pVar done tBool) (eBool True), sBreak]
+            maybeLoop m v i done
+               | null els           = [Try l [While l (eBool True) (maybeBody m v i done) []]
+                                              [Handler (Except l0 qnStopIteration) [sPass]] [] []]
+               | otherwise          = [sAssign (pVar done tBool) (eBool False),
+                                       Try l [While l (eBool True) (maybeBody m v i done) []]
+                                             [Handler (Except l0 qnStopIteration) [sAssign (pVar done tBool) (eBool True)]] [] [],
+                                       sIf [Branch (eVar done) els] []]
             rangeBody v i
                | isPVar p           = sAssign p (rangeNext i) : b
                | otherwise          = sAssign (pVar v t') (rangeNext i) : sAssign p (eVar v) : b

@@ -82,16 +82,12 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     $WORD w;
     B_Iterator it = wit->$class->__iter__(wit,iterable);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
-    if ($PUSH()) {
-        while(true) {
-            $WORD e = it->$class->__next__(it);
+    while(true) {
+        $WORD e;
+        if (it->$class->__next_maybe__(it,&e))
             wit2->$class->append(wit2, lst, e);
-        }
-        $DROP();
-    } else {
-        B_BaseException ex = $POP();
-        if (! $ISINSTANCE0(ex, B_StopIteration))
-            $RAISE(ex);
+        else
+            break;
     }
     return B_None;
 }
@@ -328,6 +324,13 @@ static $WORD B_IteratorD_listD_next(B_IteratorD_list self) {
     return self->src->data[self->nxt++];
 }
 
+static bool B_IteratorD_listD_next_maybe(B_IteratorD_list self, $WORD *out) {
+    if (self->nxt >= self->src->length)
+        return false;
+    *out = self->src->data[self->nxt++];
+    return true;
+}
+
 B_IteratorD_list B_IteratorD_listG_new(B_list lst) {
     return $NEW(B_IteratorD_list, lst);
 }
@@ -359,7 +362,8 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$sta
 }
 
 struct B_IteratorD_listG_class B_IteratorD_listG_methods = {"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,
-                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
+                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,
+                                                      B_IteratorD_listD_next, B_IteratorD_listD_next_maybe};
 
 // Now, we can define the protocol methods
 
