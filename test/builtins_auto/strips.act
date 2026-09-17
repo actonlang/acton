@@ -44,5 +44,26 @@ actor main(env):
     if j.strip() != bytearray(b'abc'):
         print("Unexpected result for strip j")
         env.exit(1)
-    
+
+    # stripping away every character must yield the empty string
+    k = " ".rstrip()
+    if k != "" or len(k) != 0:
+        print("Unexpected result for rstrip k",repr(k),len(k))
+        env.exit(1)
+
+    l = " \t\n\r ".strip()
+    if l != "" or len(l) != 0:
+        print("Unexpected result for strip l",repr(l),len(l))
+        env.exit(1)
+
+    m = "aaa".strip("a")
+    if m != "" or len(m) != 0:
+        print("Unexpected result for strip m",repr(m),len(m))
+        env.exit(1)
+
+    n = "∀ö∃".rstrip("∃ö∀")
+    if n != "" or len(n) != 0:
+        print("Unexpected result for rstrip n",repr(n),len(n))
+        env.exit(1)
+
     env.exit(0)
