@@ -108,6 +108,103 @@ assembled independently of the encoder. Embedded NUL and malformed input are
 covered by the functional JSON tests. When comparing JSON implementations,
 keep the string implementation and benchmark sources the same in both runs.
 
+## GC pressure over a retained inventory
+
+`gc_heap` retains an inventory of small records, each holding an integer key,
+a list and four freshly allocated strings. `cold_inventory` keeps these
+records unchanged; `updates` replaces groups spread throughout the inventory.
+
+Scale is the retained record count. Each measured body creates four times
+that many temporary records, rounded up to complete 4,096-record chunks:
+`4096 * ceil(4 * scale / 4096)`. At scale 1,000,000, one body creates
+4,001,792 temporary records. The updates case also replaces four groups of
+up to 32 live records per chunk. Replaced groups become garbage, while the
+retained record count stays fixed. Larger bodies spread collection costs
+across more allocation work, including in `acton test scale`, which measures
+only one body per sample.
+
+On the Linux x86-64 build used for these experiments, one million records
+retain roughly 308 MiB of GC objects (about 11 million separate allocations).
+Four million records retain roughly 1.2 GiB. These estimates exclude runtime
+and collector overhead; a configured heap allowance is not the live size.
+
+A local bank of 32 payload patterns keeps the mix of string sizes unchanged
+as records are replaced. Each record still allocates its own four payload
+strings. Verification compares every retained payload against precomputed
+expected values, avoiding the previous full inventory's worth of temporary
+comparison strings. It also checks keys, group sizes and total record count.
+Setup and final inventory verification are outside `t.loop()`. Numeric checks
+avoid boxed comparison values and enumeration tuples. The complete final
+traversal keeps the full inventory reachable throughout measurement. After
+verification, each group and then the outer list is cleared, limiting how
+much of a previous inventory stale conservative roots can retain between
+invocations.
+Each body checks its own checksum, and temporary numeric labels cycle within
+a bounded range so prolonged runs do not accumulate an overflowing checksum.
+
+A coprime stride distributes replacements over every group at arbitrary
+positive scales. At small scales, one chunk can replace a group more than
+once. Ordinary tests run one 4,096-record chunk at scale 1. The fixture uses
+normal automatic collection, without forced collections between bodies.
+
+```sh
+acton test --module gc_heap
+acton test perf --module gc_heap --scale 100000 --time 10s
+acton test perf --module gc_heap --scale 1000000 --time 20s
+acton test perf --module gc_heap --scale 4000000 --time 60s
+acton test scale --module gc_heap --name cold_inventory --start-scale 1024 --end-scale 1000000 --max-memory 2GiB
+```
+
+Choose an explicit scale for repeatable comparisons. Scale now increases
+both the retained heap and the work per body; timings are not directly
+comparable to the earlier fixed-4,096-record version of this fixture.
+Compare the two compiler builds using the same current source snapshot.
+
+Large fixtures need time for construction, warmup and verification as well
+as measured bodies. All consume the overall budget. Increase `--time` if
+preparation leaves few or no measured bodies. "Performance time budget
+exhausted during preparation" means the process finished without a usable
+measurement. A body already in progress can finish after its time slice.
+Peak RSS includes preparation and runtime overhead, not just live payload.
+
+Read whole-body wall time, allocated bytes and total CPU together. Confirm
+that the run includes measured GC work; neither a positive record count nor
+a large allocation multiplier alone guarantees collection. The reported GC
+counter is not a pause distribution or completed-collection count, and does
+not measure all incremental work.
+
+To compare compiler-runtime `memset` or `memcmp` changes, use the toolchain
+comparison utility from the repository root:
+
+```sh
+utils/perf-compare origin/main --module gc_heap --scale 1000000 --time 20s
+```
+
+It builds both Acton revisions with `make` and gives both compilers the same
+snapshot of the current `test/perf/Build.act` and `src`. The baseline therefore
+does not need to contain `gc_heap`. `main` selects the local branch;
+`origin/main` selects the fetched remote-tracking revision. The frontend's
+`acton test perf --compare git:REF` uses the same current compiler and runtime
+for both application revisions, so it does not compare these patches.
+
+For a controlled one-million-record comparison, keep the initial and maximum
+GC heap equal and explicitly set marking parallelism:
+
+```sh
+GC_INITIAL_HEAP_SIZE=2G GC_MAXIMUM_HEAP_SIZE=2G GC_MARKERS=4 \
+  utils/perf-compare origin/main --module gc_heap --scale 1000000 --time 20s
+```
+
+`2G` means 2 GiB. The equal sizes prevent ordinary heap growth during the
+comparison; they do not cap total process RSS. Four GC markers include the
+thread initiating collection. This controls GC parallelism while preserving
+Acton's normal runtime worker configuration. Both revisions inherit identical
+settings. These are benchmark controls, not proposed production defaults.
+Larger inventories may need a larger heap allowance, and a cap that is too
+small can cause allocation failure. Keep the environment with your results:
+the comparison JSON does not record GC environment variables. Repeat the
+comparison in fresh processes to check that results remain consistent.
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:

@@ -1,0 +1,134 @@
+import testing
+
+
+# Scale is the retained record count. Each body allocates four times that many
+# temporary records, rounded up to complete 4096-record chunks. Updates replace
+# four live groups per chunk. Setup and full verification are outside t.loop().
+WIDTH = 32
+CHUNK_RECORDS = 4096
+REPLACEMENTS = 4
+
+
+class Record(object):
+    key: int
+    leaves: list[str]
+
+    def __init__(self, key: int, suffixes: list[str]):
+        self.key = key
+        # Every nonempty concatenation allocates a fresh payload. The small
+        # suffix bank controls sizes without sharing the resulting strings.
+        text = suffixes[key % WIDTH]
+        self.leaves = ["name-" + text, "status-" + text, "release-" + text, "address-" + text]
+
+
+def payload_patterns() -> (list[str], list[list[str]]):
+    # Local to one invocation: 32 varying suffixes and their expected payloads.
+    # Verification reuses these instead of constructing a second heap's worth
+    # of expected strings and lists after each measured invocation.
+    suffixes = [str(i) * (1 + i % 4) for i in range(WIDTH)]
+    expected = [["name-" + text, "status-" + text, "release-" + text, "address-" + text]
+                for text in suffixes]
+    return suffixes, expected
+
+def make_group(first: int, count: int, suffixes: list[str]) -> list[Record]:
+    return [Record(first + i, suffixes) for i in range(count)]
+
+def consume(records: list[Record]) -> int:
+    result = 0
+    for record in records:
+        result += record.key
+        for leaf in record.leaves:
+            result += len(leaf)
+    return result
+
+def discard_records(first: int, suffixes: list[str]) -> int:
+    result = 0
+    for offset in range(0, CHUNK_RECORDS, WIDTH):
+        result += consume(make_group(first + offset, WIDTH, suffixes))
+    return result
+
+def inventory(count: int, suffixes: list[str]) -> list[list[Record]]:
+    groups = []
+    for first in range(0, count, WIDTH):
+        size = WIDTH if WIDTH < count - first else count - first
+        groups.append(make_group(first, size, suffixes))
+    return groups
+
+def replacement_stride(group_count: int) -> int:
+    # A coprime stride visits every group at any positive workload scale.
+    stride = 7919
+    while True:
+        left = stride
+        right = group_count
+        while right != 0:
+            remainder = left % right
+            left = right
+            right = remainder
+        if left == 1:
+            break
+        stride += 1
+    return stride
+
+def verify_inventory(groups: list[list[Record]], count: int, unchanged: bool,
+                     expected: list[list[str]]):
+    seen = 0
+    for group in groups:
+        testing.assertTrue(len(group) > 0 and len(group) <= WIDTH)
+        first = group[0].key
+        offset = 0
+        for record in group:
+            testing.assertTrue(record.key == first + offset)
+            if unchanged:
+                testing.assertTrue(record.key == seen)
+            testing.assertEqual(record.leaves, expected[record.key % WIDTH])
+            offset += 1
+            seen += 1
+    testing.assertTrue(seen == count)
+
+def exercise(t: testing.SyncT, updates: bool):
+    count = t.scale()
+    suffixes, expected = payload_patterns()
+    groups = inventory(count, suffixes)
+    stride = replacement_stride(len(groups))
+    chunks = (4 * count + CHUNK_RECORDS - 1) // CHUNK_RECORDS
+    # Cycle numeric labels through 256 chunks, with every group still starting
+    # on a 32-pattern boundary. Objects and payload buffers remain freshly
+    # allocated even when a label repeats; live payload sizes stay unchanged.
+    first_key = 1000000
+    key_limit = first_key + 256 * (CHUNK_RECORDS + REPLACEMENTS * WIDTH)
+    next_key = first_key
+    replacement_cursor = 0
+    for _ in t.loop():
+        # Reset per body so the checksum cannot accumulate over a long run.
+        checksum = 0
+        for _ in range(chunks):
+            checksum += discard_records(next_key, suffixes)
+            if updates:
+                for replacement in range(REPLACEMENTS):
+                    index = replacement_cursor
+                    size = len(groups[index])
+                    first = next_key + CHUNK_RECORDS + replacement * WIDTH
+                    groups[index] = make_group(first, size, suffixes)
+                    checksum += consume(groups[index])
+                    replacement_cursor = (replacement_cursor + stride) % len(groups)
+            next_key += CHUNK_RECORDS + REPLACEMENTS * WIDTH
+            if next_key == key_limit:
+                next_key = first_key
+        testing.assertTrue(checksum > 0)
+    # Read every retained object after measurement, keeping the full graph
+    # reachable throughout the loop. Also tolerate setup exhausting the budget.
+    verify_inventory(groups, count, not updates, expected)
+    # After measurement and verification, detach the graph to limit accidental
+    # retention through stale worker-stack roots across invocations.
+    for group in groups:
+        group.clear()
+    groups.clear()
+
+
+def _test_cold_inventory(t: testing.SyncT):
+    """Proportional garbage pressure over an unchanged, retained inventory."""
+    exercise(t, False)
+
+def _test_updates(t: testing.SyncT):
+    """Proportional garbage pressure with distributed inventory replacement."""
+    exercise(t, True)
