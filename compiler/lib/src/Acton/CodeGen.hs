@@ -138,6 +138,8 @@ setMaybeOut t env                   = modX env $ \x -> x{ maybeOutX = t }
 
 setMaybeValue n t env               = modX env $ \x -> x{ maybeValueX = (n,t) : maybeValueX x }
 
+-- maybeValueX records the payload type after an isinstance(just) test.  The
+-- raw set marks payload temps that are already stored as raw C values.
 setRawMaybeValue n env              = modX env $ \x -> x{ rawMaybeValueX = HashSet.insert n (rawMaybeValueX x) }
 
 setRangeIter n env                  = modX env $ \x -> x{ rangeIterX = HashSet.insert n (rangeIterX x) }
@@ -914,6 +916,8 @@ genSuite env (s:ss)
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
 
+-- Remember locals that are exactly range iterators, and forget the mark if a
+-- name is rebound.  The next() peephole uses this to select the raw int path.
 rangeIterEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
   | Just _ <- rangeIterSource env t e
                                     = setRangeIter n (clearRangeIters [n] env1)
@@ -975,8 +979,11 @@ stripTApp e                         = e
 genNextBoolCall env e out           = callee <> parens (gen env e <> comma <+> char '&' <> gen env out)
   where callee                      = genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextKW
 
+-- Specialized bool/out call for range[int]; the out slot is int64_t, not $WORD.
 genRangeNextBoolCall env e out      = text "$rangeD_U__next_i64" <> parens (gen env e <> comma <+> char '&' <> gen env out)
 
+-- Recognize iterator variables initialized from range, either directly or
+-- through the protocol __iter__ call inserted by earlier passes.
 rangeIterSource env t e
   | boxedRepType t == tIterator tInt = rangeIterExpr env e
   | otherwise                       = Nothing
@@ -1032,6 +1039,8 @@ maybeJustValueExpr env (Box _ e)    = maybeJustValueExpr env e
 maybeJustValueExpr env (UnBox _ e)  = maybeJustValueExpr env e
 maybeJustValueExpr _ _              = Nothing
 
+-- Maybe payload temps are usually boxed $WORDs.  The range fast path stores a
+-- raw int64_t temp, so raw contexts use it directly and boxed contexts re-box it.
 genMaybeValueRaw env t n
   | rawMaybeValue env n             = gen env (NoQ n)
   | otherwise                       = gen env (B.unbox (boxedRepType t) (Var NoLoc (NoQ n)))
@@ -1150,6 +1159,8 @@ maybeValueOpArgOK n (OpArg _ e)     = maybeValueExprOK n e
 maybeValueSlizOK n (Sliz _ a b c)   = all (maybeValueExprOK n) [ e | Just e <- [a,b,c] ]
 
 genNextAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch cond b] els) : ss)
+  -- Collapse: m = it.__next__(); if isinstance(m, just): ...
+  -- into a single bool/out next call.  Direct range[int] iterators use int64_t.
   | Just valT <- maybeValueType t,
     Just it <- nextIterator env e,
     Just testJust <- maybeInstanceTest env n cond,
