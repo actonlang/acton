@@ -24,8 +24,12 @@ def test_operations():
         raise ValueError("iset disjointness failed")
     if a != iset([1, 2, 3]) or b != iset([3, 4]):
         raise ValueError("iset operations changed their operands")
-    if set(a) != {1, 2, 3} or str(iset([1])) != "i{{1}}" or str(empty) != "i{{}}":
-        raise ValueError("iset iteration or formatting failed")
+    if set(a) != {1, 2, 3}:
+        raise ValueError("iset iteration failed")
+    if str(iset([1])) != "iset({{1}})" or str(empty) != "iset({{}})":
+        raise ValueError("iset str formatting failed")
+    if repr(iset([1])) != "iset({{1}})" or repr(empty) != "iset({{}})":
+        raise ValueError("iset repr formatting failed")
 
 def test_independent_storage():
     source = set(range(100))
