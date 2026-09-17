@@ -1519,11 +1519,11 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
 B_str B_strD_rstrip(B_str s, B_str cs) {
     if (s->nchars == 0) return s;
     if (cs==NULL) cs = whitespace_str;
-    unsigned char *p = s->str + s->nbytes;
+    unsigned char *end = s->str + s->nbytes;   // exclusive end of the result
     int i, k;
     for (i = 0; i < s->nchars; i++) {
+        unsigned char *p = skip_chars(end,-1,0); // last char before end
         unsigned char *q = cs->str;
-        p = skip_chars(p,-1,0);
         for (k = 0; k < cs->nchars; k++) {
             if (equal_bytes(p,q,byte_length2(*q)))
                 break;
@@ -1531,10 +1531,10 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
                 q += byte_length2(*q);
         }
         if (k == cs->nchars) break;
+        end = p;
     }
-    p = skip_chars(p,1,0);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars-i,p-s->str);
+    NEW_UNFILLED_STR(res,s->nchars-i,end-s->str);
     memcpy(res->str,s->str,res->nbytes);
     return res;
 }
