@@ -1,6 +1,15 @@
 --- a/lib/compiler_rt.zig
 +++ b/lib/compiler_rt.zig
-@@ -305,7 +305,12 @@
+@@ -302,10 +302,20 @@
+         _ = @import("compiler_rt/memcpy.zig");
+         if (!ofmt_c) {
+-            symbol(&memset, "memset");
++            // Prefer libc's optimized fill when it provides one.
++            // Zig's bundled musl and WASI libcs get memset from compiler-rt.
++            if (!builtin.link_libc or
++                builtin.target.isMuslLibC() or
++                builtin.target.isWasiLibC())
++                symbol(&memset, "memset");
              symbol(&__memset, "__memset");
          }
          _ = @import("compiler_rt/memmove.zig");

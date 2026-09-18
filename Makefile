@@ -713,12 +713,12 @@ endif
 dist/zig: dist/zig/.patched
 	touch "$@"
 
-dist/zig/.patched: deps-download/$(ZIG_TARBALL) deps/zig-memcmp.patch
+dist/zig/.patched: deps-download/$(ZIG_TARBALL) deps/zig-compiler-rt.patch
 	mkdir -p "$(@D)"
 	cd "$(@D)" && tar Jx --strip-components=1 -f "../../$<"
 	rm -rf "$(@D)/doc"
 	cp -a deps/zig-extras/* "$(@D)"
-	cd "$(@D)" && patch -p1 -t -N < ../../deps/zig-memcmp.patch
+	cd "$(@D)" && patch -p1 -t -N < ../../deps/zig-compiler-rt.patch
 	touch "$@"
 
 

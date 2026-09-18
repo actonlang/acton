@@ -54,7 +54,7 @@ debian/changelog
 debian/files
 
 deps/*
-!deps/zig-memcmp.patch
+!deps/zig-compiler-rt.patch
 !deps/*/
 !deps/*/build.zig
 !deps/*/build.zig.zon
