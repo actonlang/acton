@@ -365,7 +365,7 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=f87d6c88f5905cc4aed28c801130b94b1632c1fa
+LIBGC_REF=3559b100bc8f3cb676ac53cb2fb52046afeeac42
 LIBGC_BUILD_ZIG=deps/libgc/build.zig
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
