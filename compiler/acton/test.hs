@@ -8,6 +8,7 @@ import Data.Maybe (catMaybes)
 import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.Aeson as Ae
+import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy.Char8 as LBS
 
 import Control.Exception (catch, IOException)
@@ -1693,6 +1694,7 @@ parseFlagTests =
 actonProjTests =
   testGroup "compiler project tests"
   [ dependencyDeclarationTests
+  , gcBuildOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2095,6 +2097,134 @@ actonProjTests =
         testBuild "" ExitSuccess False proj
         assertBool "bar root stub should be removed after source deletion" . not =<< doesFileExist barRoot
         assertBool "bar binary should be removed after source deletion" . not =<< doesFileExist barBin
+  ]
+
+gcBuildOptionTests = testGroup "GC metadata build options"
+  [ testCase "collector variants preserve live graphs and shared projects" $
+      withSystemTempDirectory "acton-gc-build-options" $ \tmp -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        environment <- getEnvironment
+        let app = tmp </> "app"
+            other = tmp </> "other"
+            bridge = tmp </> "bridge"
+            shared = tmp </> "shared"
+            runEnv = ("GC_MARKERS", "2") : filter (not . isPrefixOf "GC_" . fst) environment
+            gcOptions bits perObject =
+              [("gc_use_mark_bits", if bits then "true" else "false")
+              ,("gc_mark_bit_per_object", if perObject then "true" else "false")]
+            writeProject :: FilePath -> String -> [(String, FilePath)] -> [(String, String)] -> IO ()
+            writeProject dir name deps options = do
+              createDirectoryIfMissing True (dir </> "src")
+              let fp = Fingerprint.formatFingerprint
+                    (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+              writeFile (dir </> "Build.act") $ unlines $
+                [ "name = " ++ show name
+                , "fingerprint = " ++ fp
+                , "dependencies = {" ++ intercalate ", "
+                    [show n ++ ": (path=" ++ show p ++ ")" | (n, p) <- deps] ++ "}"
+                ] ++ ["build_options = {" ++ intercalate ", "
+                       [show k ++ ": " ++ show v | (k, v) <- options] ++ "}" | not (null options)]
+            writeApp dir name = writeProject dir name [("bridge", "../bridge")]
+            build dir flags = readCreateProcessWithExitCode
+              (proc acton (["build", "--color", "never"] ++ flags))
+                { cwd = Just dir, env = Just runEnv } ""
+            expectSuccess label (code, out, err) =
+              assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+            runApp dir = do
+              result@(_, out, _) <- readCreateProcessWithExitCode
+                (proc (dir </> "out/bin/main") ["--rts-wthreads", "2"])
+                  { cwd = Just dir, env = Just runEnv } ""
+              expectSuccess "retained graph should survive collection" result
+              assertEqual "every retained record should be verified" "{\"count\":1024}\n" out
+        -- Every root choice conflicts with at least one dependency's settings.
+        writeProject shared "shared" [] (gcOptions True True)
+        writeFile (shared </> "src/lib.act") $ unlines
+          [ "class Record(object):"
+          , "    key: int"
+          , "    leaves: list[str]"
+          , "    def __init__(self, key: int):"
+          , "        self.key = key"
+          , "        text = str(key)"
+          , "        self.leaves = [\"name-\" + text, \"status-\" + text, \"release-\" + text, \"address-\" + text]"
+          , ""
+          , "def make(count: int) -> list[Record]:"
+          , "    return [Record(i) for i in range(count)]"
+          , ""
+          , "def churn() -> int:"
+          , "    total = 0"
+          , "    for _ in range(64):"
+          , "        garbage = make(128)"
+          , "        total += garbage[-1].key"
+          , "    return total"
+          , ""
+          , "def verify(records: list[Record]) -> int:"
+          , "    for key, record in enumerate(records):"
+          , "        assert record.key == key"
+          , "        text = str(key)"
+          , "        assert record.leaves == [\"name-\" + text, \"status-\" + text, \"release-\" + text, \"address-\" + text]"
+          , "    return len(records)"
+          ]
+        writeProject bridge "bridge" [("shared", "../shared")] (gcOptions False False)
+        writeFile (bridge </> "src/lib.act") $ unlines
+          [ "import shared"
+          , ""
+          , "def make() -> list[shared.Record]:"
+          , "    return shared.make(1024)"
+          , ""
+          , "def churn() -> int:"
+          , "    return shared.churn()"
+          , ""
+          , "def verify(records: list[shared.Record]) -> int:"
+          , "    return shared.verify(records)"
+          ]
+        forM_ [(app, "gc_app"), (other, "gc_other")] $ \(dir, name) -> do
+          writeApp dir name (gcOptions False False)
+          writeFile (dir </> "src/main.act") $ unlines
+            [ "import acton.rts"
+            , "import bridge"
+            , "import std.json as json"
+            , ""
+            , "actor main(env):"
+            , "    records = bridge.make()"
+            , "    large = \"x\" * 16384"
+            , "    acton.rts.gc(env.syscap)"
+            , "    assert bridge.churn() == 8128"
+            , "    acton.rts.gc(env.syscap)"
+            , "    assert large == \"x\" * 16384"
+            , "    print(json.encode({\"count\": bridge.verify(records)}))"
+            , "    env.exit(0)"
+            ]
+        let sharedFiles = [dir </> file | dir <- [bridge, shared], file <- ["Build.act", "src/lib.act"]]
+        originalShared <- mapM BS.readFile sharedFiles
+        let checkShared = mapM BS.readFile sharedFiles >>=
+              assertEqual "root options must not rewrite shared dependency sources" originalShared
+        -- Deliberately retain all generated outputs between configurations.
+        forM_ [(False, False), (True, False), (False, True), (True, True)] $ \(bits, perObject) -> do
+          writeApp app "gc_app" (gcOptions bits perObject)
+          expectSuccess ("build collector " ++ show (bits, perObject)) =<< build app []
+          runApp app
+          checkShared
+        originalApp <- BS.readFile (app </> "out/bin/main")
+        expectSuccess "second app sharing dependencies" =<< build other []
+        runApp other
+        BS.readFile (app </> "out/bin/main") >>=
+          assertEqual "building another root must not replace the first executable" originalApp
+        runApp app
+        expectSuccess "rebuild the first root after shared dependency reuse" =<< build app []
+        runApp app
+        writeApp app "gc_app" []
+        expectSuccess "omitting options restores the default collector" =<< build app []
+        runApp app
+        writeApp app "gc_app" (gcOptions True True)
+        expectSuccess "database linkage uses the same collector configuration" =<< build app ["--db"]
+        -- Database executables require a server; compilation covers their linkage.
+        forM_ [("gc_use_mark_bits", "invalid"), ("gc_mark_bit_per_object", "invalid"),
+               ("gc_unknown_option", "true")] $ \option@(key, _) -> do
+          writeApp app "gc_app" [option]
+          (code, out, err) <- build app []
+          assertBool ("invalid option should fail: " ++ show option ++ "\n" ++ out ++ err) (code /= ExitSuccess)
+          assertBool ("diagnostic should identify " ++ key ++ "\n" ++ out ++ err) (key `isInfixOf` (out ++ err))
+        checkShared
   ]
 
 dependencyDeclarationTests =

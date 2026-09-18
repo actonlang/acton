@@ -2838,6 +2838,8 @@ genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
                  , "        .optimize = optimize,"
                  , "        .no_threads = no_threads,"
                  , "        .db = db,"
+                 , "        .gc_use_mark_bits = gc_use_mark_bits,"
+                 , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
                  , "        .acton_modules = " ++ show selectedCsv ++ ","
                  , "        .acton_root_stubs = \"\","
                  , "    });"

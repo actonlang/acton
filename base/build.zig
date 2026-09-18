@@ -34,6 +34,8 @@ pub fn build(b: *std.Build) void {
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
+    const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -50,6 +52,8 @@ pub fn build(b: *std.Build) void {
         .BUILD_SHARED_LIBS = false,
         .enable_large_config = true,
         .enable_mmap = true,
+        .enable_mark_bits = gc_use_mark_bits,
+        .enable_mark_bit_per_obj = gc_mark_bit_per_object,
     });
 
     const dep_libmbedtls = b.dependency("libmbedtls", .{
@@ -293,6 +297,8 @@ pub fn build(b: *std.Build) void {
         const libactondb_dep = b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
+            .gc_use_mark_bits = gc_use_mark_bits,
+            .gc_mark_bit_per_object = gc_mark_bit_per_object,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }

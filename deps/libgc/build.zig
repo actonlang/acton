@@ -100,6 +100,10 @@ pub fn build(b: *std.Build) void {
         "Support pointer mask/shift set at runtime") orelse false;
     const enable_large_config = b.option(bool, "enable_large_config",
         "Optimize for large heap or root set") orelse false;
+    const enable_mark_bits = b.option(bool, "enable_mark_bits",
+        "Use packed mark bits (otherwise keep the upstream default)") orelse false;
+    const enable_mark_bit_per_obj = b.option(bool, "enable_mark_bit_per_obj",
+        "Track marks per object (otherwise keep the upstream default)") orelse false;
     const enable_gc_assertions = b.option(bool, "enable_gc_assertions",
         "Enable collector-internal assertion checking") orelse false;
     const enable_mmap = b.option(bool, "enable_mmap",
@@ -323,6 +327,14 @@ pub fn build(b: *std.Build) void {
 
     if (enable_large_config) {
         flags.append("-D LARGE_CONFIG") catch unreachable;
+    }
+
+    if (enable_mark_bits) {
+        flags.append("-D USE_MARK_BITS") catch unreachable;
+    }
+
+    if (enable_mark_bit_per_obj) {
+        flags.append("-D MARK_BIT_PER_OBJ") catch unreachable;
     }
 
     if (enable_gc_assertions) {

@@ -68,3 +68,30 @@ Compiler options such as target, CPU, optimization, database support and
 threading remain controlled by their existing command-line flags. Their Zig
 option names (`target`, `cpu`, `ofmt`, `dynamic-linker`, `optimize`, `db`, `no_threads`,
 `cpedantic` and names beginning with `acton_`) are reserved and cannot appear in `build_options`.
+
+### GC mark layout
+
+Applications can opt into a different BDWGC mark representation:
+
+```python
+build_options = {
+    "gc_use_mark_bits": "true",
+    "gc_mark_bit_per_object": "true",
+}
+```
+
+`gc_use_mark_bits` packs marks into bits instead of using the collector's
+default representation. With parallel marking, the default is byte marks;
+without parallel marking, BDWGC already uses bits. `gc_mark_bit_per_object`
+indexes marks by object instead of allocation granule. The options are
+independent, so either can be enabled on its own.
+
+Both default to `"false"`, preserving BDWGC's existing choices. Packed marks
+reduce metadata size but may increase contention between marking threads.
+Per-object indexing changes the work needed to find an object's mark.
+Measure both on the application's workload before choosing them.
+
+These are compile-time settings shared by the application, its Acton
+dependencies, the standard library and database support. They preserve
+parallel marking support and do not select incremental or generational
+collection. They cannot be changed by a running application.
