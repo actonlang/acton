@@ -30,6 +30,7 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified Acton.Hashing as Hashing
+import qualified Acton.Testing as Testing
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -2133,6 +2134,25 @@ main = do
       testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
+    describe "Test run context" $ do
+      let legacy = Ae.object
+            [ "compilerVersion" Ae..= ("test" :: String)
+            , "target" Ae..= ("native" :: String)
+            , "optimize" Ae..= ("ReleaseFast" :: String)
+            , "mode" Ae..= ("TestModeRun" :: String)
+            , "args" Ae..= ([] :: [String])
+            ]
+          defaults = Testing.TestRunContext "test" "native" "ReleaseFast" "TestModeRun" [] M.empty
+      it "preserves default build identities from earlier test caches" $ do
+        Ae.fromJSON legacy `shouldBe` Ae.Success defaults
+        Ae.toJSON defaults `shouldBe` legacy
+      it "includes application build options in test cache keys" $ do
+        let enabled = defaults { Testing.trcBuildOptions = M.singleton "lto" "true" }
+            disabled = defaults { Testing.trcBuildOptions = M.singleton "lto" "false" }
+        Ae.decode (Ae.encode enabled) `shouldBe` Just enabled
+        (Testing.contextHashBytes enabled == Testing.contextHashBytes defaults) `shouldBe` False
+        (Testing.contextHashBytes enabled == Testing.contextHashBytes disabled) `shouldBe` False
+
     -- BuildSpec: parsing and update-in-place of Build.act (canonical layout)
     describe "BuildSpec" $ do
       let followsBuildAct fields = unlines
@@ -2140,6 +2160,139 @@ main = do
             , "fingerprint = 0x1234abcd5678ef00"
             , "dependencies = {\"yang\": (" ++ fields ++ ")}"
             ]
+          optionsBuildAct expr = unlines
+            [ "name = \"demo\""
+            , "fingerprint = 0x1234abcd5678ef00"
+            , "# Application settings"
+            , "build_options = " ++ expr
+            , "# Keep this comment"
+            ]
+          optionsJSON opts = Ae.encode (Ae.object
+            [ "name" Ae..= ("demo" :: String)
+            , "fingerprint" Ae..= ("0x1234abcd5678ef00" :: String)
+            , "build_options" Ae..= opts
+            ])
+
+      it "round-trips literal build options through JSON, rendering and updates" $ do
+        let source = optionsBuildAct "{\"feature\": \"true\", \"label\": \"{{hello}} \\\"world\\\"\", \"empty\": \"\"}"
+            expected = M.fromList [("feature", "true"), ("label", "{hello} \"world\""), ("empty", "")]
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.build_options spec `shouldBe` expected
+            let json = BuildSpec.encodeBuildSpecJSON spec
+            Ae.eitherDecode' json `shouldBe` Right spec
+            forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source json] $ \result ->
+              case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure err
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "decodes and round-trips escaped build option arguments" $ do
+        let cases =
+              [ ("\"C:\\\\tmp\\\\fleet\"", "C:\\tmp\\fleet")
+              , ("r\"C:\\tmp\\fleet\"", "C:\\tmp\\fleet")
+              , ("\"line\\n\\ttab\\rreturn\"", "line\n\ttab\rreturn")
+              , ("\"\\a\\b\\f\\v\"", "\a\b\f\v")
+              , ("\"\\x1fa\\177\"", "\x1f\&a\DEL")
+              , ("\"\\x31a\"", "1a")
+              , ("\"\\xc3\\xa5\"", "å")
+              , ("\"\\u00e5\\U0001f30d\"", "å🌍")
+              , ("\"å🌍\"", "å🌍")
+              , ("'\\\"quoted\\\"'", "\"quoted\"")
+              , ("r\"\\\"quoted\\\"\"", "\\\"quoted\\\"")
+              , ("\"first\" \"second\"", "firstsecond")
+              ]
+        forM_ cases $ \(literal, expectedValue) -> do
+          let source = optionsBuildAct ("{\"\\x6cabel\": " ++ literal ++ "}")
+              expected = M.singleton "label" expectedValue
+          case BuildSpec.parseBuildAct source of
+            Left err -> expectationFailure (literal ++ ": " ++ err)
+            Right (spec,_,_) -> do
+              BuildSpec.build_options spec `shouldBe` expected
+              Ae.eitherDecode' (optionsJSON expected) `shouldBe` Right spec
+              forM_ [Right (BuildSpec.renderBuildAct spec), BuildSpec.updateBuildActFromJSON source (optionsJSON expected)] $ \result ->
+                case result of
+                  Left err -> expectationFailure err
+                  Right rendered -> case BuildSpec.parseBuildAct rendered of
+                    Left err -> expectationFailure (rendered ++ ": " ++ err)
+                    Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "defaults absent build options to an empty map" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n"
+            json = "{\"name\":\"demo\",\"fingerprint\":\"0x1234abcd5678ef00\"}"
+        case BuildSpec.parseBuildAct source of
+          Left err -> expectationFailure err
+          Right (spec,_,_) -> do
+            BuildSpec.build_options spec `shouldBe` M.empty
+            BuildSpec.renderBuildAct spec `shouldSatisfy` (not . isInfixOf "build_options")
+            Ae.eitherDecode' json `shouldBe` Right spec
+
+      it "preserves omitted build options and replaces or clears explicit updates" $ do
+        let source = optionsBuildAct "{\"feature\": \"true\", \"label\": \"old\"}"
+            updates =
+              [ ("{\"description\":\"Updated project\"}", M.fromList [("feature", "true"), ("label", "old")])
+              , ("{\"build_options\":{\"other-feature\":\"false\"}}", M.singleton "other-feature" "false")
+              , ("{\"build_options\":{}}", M.empty)
+              ]
+        forM_ updates $ \(json, expected) ->
+          case BuildSpec.updateBuildActFromJSON source json of
+            Left err -> expectationFailure err
+            Right rendered -> do
+              rendered `shouldSatisfy` isInfixOf "# Application settings"
+              rendered `shouldSatisfy` isInfixOf "# Keep this comment"
+              case BuildSpec.parseBuildAct rendered of
+                Left err -> expectationFailure err
+                Right (spec,_,_) -> BuildSpec.build_options spec `shouldBe` expected
+
+      it "appends build options when updating a project without them" $ do
+        let source = "name = \"demo\"\nfingerprint = 0x1234abcd5678ef00\n# Tail\n"
+        case BuildSpec.updateBuildActFromJSON source "{\"build_options\":{\"feature\":\"true\"}}" of
+          Left err -> expectationFailure err
+          Right rendered -> do
+            rendered `shouldSatisfy` isPrefixOf source
+            case BuildSpec.parseBuildAct rendered of
+              Left err -> expectationFailure err
+              Right (spec,_,_) -> BuildSpec.build_options spec `shouldBe` M.singleton "feature" "true"
+
+      it "rejects nonliteral build option dictionaries, keys and values" $ do
+        forM_ ["options", "[]", "None", "{feature: \"true\"}", "{17: \"true\"}", "{\"feature\": True}", "{\"feature\": 17}", "{\"feature\": \"{value}\"}"] $ \expr ->
+          case BuildSpec.parseBuildAct (optionsBuildAct expr) of
+            Left err -> err `shouldSatisfy` isInfixOf "plain string literals"
+            Right _ -> expectationFailure ("Accepted nonliteral build options: " ++ expr)
+        forM_ [Ae.Null, Ae.Bool True, Ae.toJSON (["feature"] :: [String]), Ae.object ["feature" Ae..= True]] $ \value -> do
+          case Ae.eitherDecode' (optionsJSON value) :: Either String BuildSpec.BuildSpec of
+            Left _ -> pure ()
+            Right _ -> expectationFailure ("Accepted invalid build options JSON: " ++ show value)
+          case BuildSpec.updateBuildActFromJSON (optionsBuildAct "{}") (Ae.encode (Ae.object ["build_options" Ae..= value])) of
+            Left _ -> pure ()
+            Right _ -> expectationFailure ("Accepted invalid build option update: " ++ show value)
+
+      it "rejects invalid and compiler-owned build option names in source and JSON" $ do
+        let invalid = ["", "-feature", "1feature", "feature=value", "feature name", "feature.name"] :: [String]
+            reserved = ["target", "cpu", "optimize", "ofmt", "dynamic-linker", "db", "no_threads", "cpedantic", "acton_modules", "acton_custom"]
+        forM_ ([(key, "names must start") | key <- invalid] ++ [(key, "managed by the Acton compiler") | key <- reserved]) $ \(key, message) -> do
+          let opts = M.singleton key ("true" :: String)
+          case BuildSpec.parseBuildAct (optionsBuildAct ("{" ++ show key ++ ": \"true\"}")) of
+            Left err -> err `shouldSatisfy` isInfixOf message
+            Right _ -> expectationFailure ("Accepted build option name: " ++ show key)
+          case Ae.eitherDecode' (optionsJSON opts) :: Either String BuildSpec.BuildSpec of
+            Left err -> err `shouldSatisfy` isInfixOf message
+            Right _ -> expectationFailure ("Accepted JSON build option name: " ++ show key)
+          case BuildSpec.updateBuildActFromJSON (optionsBuildAct "{}") (Ae.encode (Ae.object ["build_options" Ae..= opts])) of
+            Left err -> err `shouldSatisfy` isInfixOf message
+            Right _ -> expectationFailure ("Accepted build option update name: " ++ show key)
+
+      it "rejects build option values that cannot be passed as process arguments" $ do
+        let opts = M.singleton "feature" "one\0two" :: M.Map String String
+        case Ae.eitherDecode' (optionsJSON opts) :: Either String BuildSpec.BuildSpec of
+          Left err -> err `shouldSatisfy` isInfixOf "NUL"
+          Right _ -> expectationFailure "Accepted NUL in a build option value"
+        forM_ ["\\0", "\\x00", "\\u0000", "\\U00000000"] $ \escape ->
+          case BuildSpec.parseBuildAct (optionsBuildAct ("{\"feature\": \"one" ++ escape ++ "two\"}")) of
+            Left err -> err `shouldSatisfy` isInfixOf "NUL"
+            Right _ -> expectationFailure ("Accepted escaped NUL: " ++ escape)
 
       it "preserves followed dependencies through JSON, rendering and updates" $ do
         let buildAct = followsBuildAct "follows=\"stratoweave.yang\""

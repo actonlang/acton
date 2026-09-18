@@ -49,3 +49,22 @@ fingerprint = 0x1234abcd5678ef00
 ```
 
 `name` and `fingerprint` are required for Acton projects. Acton validates that the fingerprint matches the name’s lineage prefix. A mismatch indicates a rename or a fork, so the build fails and tells you to generate a new fingerprint for the new name. If either field is missing, the build fails with guidance to add it.
+
+## Application build options
+
+`build_options` is an optional dictionary of string names and string values in
+`Build.act`. It supplies options to the application's Zig build, with each entry
+passed as `-Dname=value`. Values are literal arguments, not Zig expressions.
+An unknown option or a value of the wrong type fails the build.
+
+The root application's options govern its build, including test executables.
+Options in a dependency's `Build.act` apply when building that dependency as a
+project itself; they do not override the consuming application's choices.
+Changing options rebuilds the affected artifacts without requiring a clean and
+invalidates cached test results. Performance recordings retain the selected
+options so comparisons can measure configuration changes.
+
+Compiler options such as target, CPU, optimization, database support and
+threading remain controlled by their existing command-line flags. Their Zig
+option names (`target`, `cpu`, `ofmt`, `dynamic-linker`, `optimize`, `db`, `no_threads`,
+`cpedantic` and names beginning with `acton_`) are reserved and cannot appear in `build_options`.

@@ -8,6 +8,7 @@ module TestRunner
   ) where
 
 import qualified Acton.CommandLineParser as C
+import qualified Acton.BuildSpec as BuildSpec
 import Acton.Testing
 import Acton.Compile
 import qualified Acton.Syntax as A
@@ -319,7 +320,8 @@ runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo 
                          else putStrLn "Nothing to test"
       return (0, [])
     else do
-      host <- readPerfHostInfo opts topts
+      buildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath paths)
+      host <- readPerfHostInfo opts topts buildOptions
       forM_ baseline $ \old -> forM_ (M.elems (recordingTests old)) $ \series ->
         forM_ (seriesInfo series >>= (`perfHostReason` host)) $ \reason ->
           ioError (userError ("Cannot compare: " ++ reason))
@@ -419,8 +421,10 @@ runPerfComparison color gopts topts (oldOpts, oldPaths, oldSource) (newOpts, new
     ident <- show <$> getCurrentTime
     schedule <- randomRIO (0, length perfPairOrders - 1)
     start <- getTime Monotonic
-    oldHost <- readPerfHostInfo oldOpts topts
-    newHost <- readPerfHostInfo newOpts topts
+    oldBuildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath oldPaths)
+    newBuildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath newPaths)
+    oldHost <- readPerfHostInfo oldOpts topts oldBuildOptions
+    newHost <- readPerfHostInfo newOpts topts newBuildOptions
     forM_ (perfHostReason oldHost newHost) $ \reason -> printErrorAndExit ("Cannot compare: " ++ reason)
     recorded <- if C.testRecord topts then readPerfData (projPath newPaths </> "perf_data") else return M.empty
     let name = displayTestName testName
@@ -527,9 +531,10 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
             putStrLn "Nothing to test"
             return 0
       else do
+        buildOptions <- BuildSpec.build_options <$> loadBuildSpec (projPath paths)
         let maxNameLen = maximum (0 : map (length . tsDisplay) specs)
             nameWidth = max 20 (maxNameLen + 5)
-            runContext = mkRunContext opts topts mode
+            runContext = mkRunContext opts topts mode buildOptions
             ctxHash = contextHashBytes runContext
             useCache = not (C.testNoCache topts) && mode == TestModeRun
         when (mode == TestModePerf) $ forM_ (C.testCompare topts) $ \path -> do
@@ -538,7 +543,7 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
         perfData <- if mode == TestModePerf then readPerfData (maybe (projPath paths </> "perf_data") id (C.testCompare topts)) else return M.empty
         recorded <- if C.testRecord topts && isJust (C.testCompare topts)
           then readPerfData (projPath paths </> "perf_data") else return perfData
-        perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts else return AesonKM.empty
+        perfHostInfo <- if mode == TestModePerf then readPerfHostInfo opts topts buildOptions else return AesonKM.empty
         let detailLines res =
               map staticLine (formatTestDetailLines useColorOut (C.testShowLog topts) res) ++
               if mode == TestModePerf
@@ -737,12 +742,13 @@ runProjectTests useColorOut gopts opts paths topts mode modules maxParallel = do
               _ <- printTestSummary (tpuUseColor ui) (timeEnd - timeStart) showCached results
               return (testExitCode results)
   where
-    mkRunContext opts' topts' mode' = TestRunContext
+    mkRunContext opts' topts' mode' buildOptions = TestRunContext
       { trcCompilerVersion = getVer
       , trcTarget = C.target opts'
       , trcOptimize = show (C.optimize opts')
       , trcMode = show mode'
       , trcArgs = testCmdArgs mode' topts'
+      , trcBuildOptions = buildOptions
       }
 
 testExitCode :: [TestResult] -> Int
@@ -1666,13 +1672,13 @@ type PerfData = M.Map String (M.Map String Aeson.Value)
 
 -- Keep raw machine identifiers out of recordings. An unknown identity disables
 -- comparisons; a CPU model or OS version is not a machine identifier.
-readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> IO Aeson.Object
-readPerfHostInfo opts topts = do
+readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> M.Map String String -> IO Aeson.Object
+readPerfHostInfo opts topts buildOptions = do
     identity <- try readIdentity :: IO (Either IOException (Maybe String))
     let machine = case identity of
           Right (Just raw) -> Just (BS.unpack (Base16.encode (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw)))))
           _ -> Nothing
-    return $ AesonKM.fromList
+    return $ AesonKM.fromList $
       [ (AesonKey.fromString "machine", Aeson.toJSON machine)
       , (AesonKey.fromString "build", Aeson.object
           [ AesonKey.fromString "optimize" Aeson..= show (C.optimize opts)
@@ -1685,7 +1691,8 @@ readPerfHostInfo opts topts = do
       , (AesonKey.fromString "tags", Aeson.toJSON (Set.toAscList (Set.fromList tags)))
       , (AesonKey.fromString "version", Aeson.toJSON ("3" :: String))
       , (AesonKey.fromString "gc", Aeson.toJSON ("natural" :: String))
-      ]
+      ] ++ [ (AesonKey.fromString "build_options", Aeson.toJSON buildOptions)
+           | not (M.null buildOptions) ]
   where
     tags = filter (not . null)
       [ dropWhile isSpace (reverse (dropWhile isSpace (reverse tag)))
@@ -1706,7 +1713,7 @@ readPerfHostInfo opts topts = do
 annotatePerfResult :: Aeson.Object -> TestResult -> TestResult
 annotatePerfResult host res = case trRaw res of
     Aeson.Object obj | Just info <- perfInfo obj ->
-      let extra = AesonKM.filterWithKey (\key _ -> AesonKey.toString key `elem` ["machine", "build", "tags"]) host
+      let extra = AesonKM.filterWithKey (\key _ -> AesonKey.toString key `elem` ["machine", "build", "build_options", "tags"]) host
       in res { trRaw = Aeson.Object (AesonKM.insert (AesonKey.fromString "perf_info") (Aeson.Object (extra `AesonKM.union` info)) obj) }
     _ -> res
 

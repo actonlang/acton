@@ -560,7 +560,9 @@ readScaleRecording path = withBinaryFile path ReadMode $ \input -> do
                       | KM.lookup "scaling" current /= Just (Aeson.Bool True)
                         || KM.lookup "loop" current /= Just (Aeson.Bool True) -> Just "sample is not a scaling measurement"
                       | otherwise -> perfSamplingReason current current
-                          <|> (seriesInfo previous >>= (`perfSamplingReason` current))
+                          <|> perfBuildOptionsReason current current
+                          <|> (seriesInfo previous >>= (\previous ->
+                            perfSamplingReason previous current <|> perfBuildOptionsReason previous current))
               reason <- if kind == "test_end"
                 then Just <$> either (invalid line) return (AesonTypes.parseEither (Aeson..: "reason") event)
                 else return (seriesReason previous)

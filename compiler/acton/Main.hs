@@ -412,6 +412,7 @@ createProject name = do
           , BuildSpec.fingerprint = fp
           , BuildSpec.dependencies = M.empty
           , BuildSpec.zig_dependencies = M.empty
+          , BuildSpec.build_options = M.empty
           , BuildSpec.libraries = M.empty
           }
     createDirectoryIfMissing True srcRoot
@@ -2999,7 +3000,8 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
                              , if no_threads then ["-Dno_threads"] else []
                              , if C.cpedantic opts then ["-Dcpedantic"] else []
                              ]
-        zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs
+        buildOptionArgs = ["-D" ++ key ++ "=" ++ value | (key, value) <- M.toList (BuildSpec.build_options rootSpec)]
+        zigArgs = baseArgs ++ prefixArgs ++ targetArgs ++ cpuArgs ++ optArgs ++ moduleArgs ++ featureArgs ++ buildOptionArgs
 
     logTiming gopts opts (maybe putStrLn progressLogLine mProgressUI) "root and build file preparation" prepStart
     success <- runZig gopts opts zigExe zigArgs paths (Just (projPath paths)) mProgressUI

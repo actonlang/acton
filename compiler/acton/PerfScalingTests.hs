@@ -1168,6 +1168,12 @@ scaleReportTests = testGroup "terminal charts"
              "tags" Aeson..= ([] :: [String]), "build" Aeson..= Aeson.object
                ["target" Aeson..= ("native" :: String), "optimize" Aeson..= ("ReleaseFast" :: String),
                 "cpu" Aeson..= ("" :: String), "no_threads" Aeson..= False, "db" Aeson..= False, "no_dbp" Aeson..= False]]
+          configured = KM.mapWithKey (\key value -> case (key, value) of
+            ("result", Aeson.Object result) -> Aeson.Object (KM.mapWithKey (\field info -> case (field, info) of
+              ("perf_info", Aeson.Object fields) -> Aeson.Object (KM.insert "build_options"
+                (Aeson.toJSON (M.singleton ("lto" :: String) ("true" :: String))) fields)
+              _ -> info) result)
+            _ -> value)
           events = [header 3, measured "machine-a" 2 1, measured "machine-a" 2 3, ending]
       withRecording events $ \path _ -> do
         recording <- readScaleRecording path
@@ -1190,6 +1196,16 @@ scaleReportTests = testGroup "terminal charts"
           (code, out, err) <- compare
           assertBool (out ++ err) (code /= ExitSuccess && reason `isInfixOf` err)
           assertBool "no invalid overlay is displayed" (not ("Scaling charts:" `isInfixOf` out))
+        BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
+          [header 3, measured "machine-a" 2 1, configured (measured "machine-a" 2 3), ending]])
+        mixed <- readScaleRecording path
+        let mixedSeries = recordingTests mixed M.! ("alpha", "same")
+        assertEqual "one series cannot mix build configurations" (Just "build options differ")
+          (scaleSeriesReason mixedSeries mixedSeries)
+        BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <- map configured events])
+        tuned <- readScaleRecording path
+        assertEqual "separate studies may compare build configurations" Nothing
+          (scaleSeriesReason series (recordingTests tuned M.! ("alpha", "same")))
   , testCase "linear comparisons share zero-based axes with evenly spaced workload sizes" $ do
       let current = [ChartPoint n 1 1 1 True | n <- [50,100]]
           old = [ChartPoint 200 1 1 1 True]

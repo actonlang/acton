@@ -5,7 +5,7 @@ module TestPerf
   , perfStatKey
   , perfInfo
   , perfCounterInfo
-  , perfHostReason, perfSamplingReason
+  , perfHostReason, perfSamplingReason, perfBuildOptionsReason
   , perfComparisonReason
   , perfBaselineScale
   , perfComparable
@@ -16,9 +16,10 @@ module TestPerf
   ) where
 
 import Acton.Testing (TestResult(..))
-import Control.Monad (guard)
+import Control.Monad (guard, forM_)
 import Data.Maybe (isJust, mapMaybe)
 import Data.List (find, sort)
+import qualified Data.Map as M
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as AesonTypes
 import qualified Data.Aeson.Key as AesonKey
@@ -104,6 +105,18 @@ perfSamplingReason old new
 perfHostReason :: Aeson.Object -> Aeson.Object -> Maybe String
 perfHostReason = metadataReason hostKeys
 
+-- Build options may be the subject of a comparison, but each aggregate must
+-- describe one configuration. Missing options in older recordings mean defaults.
+perfBuildOptionsReason :: Aeson.Object -> Aeson.Object -> Maybe String
+perfBuildOptionsReason old new = case (options old, options new) of
+    (Just a, Just b) | a == b -> Nothing
+                     | otherwise -> Just "build options differ"
+    _ -> Just "build options are unavailable"
+  where
+    options obj = case AesonKM.lookup (AesonKey.fromString "build_options") obj of
+      Nothing -> Just M.empty
+      Just value -> AesonTypes.parseMaybe Aeson.parseJSON value :: Maybe (M.Map String String)
+
 -- Select the recorded workload scale before launching the process. The completed
 -- run must still pass the actual worker-count and loop checks above.
 perfBaselineScale :: Aeson.Object -> Aeson.Object -> Maybe Int
@@ -166,6 +179,9 @@ aggregatePerfRuns comparison runs = do
     guard (not (null comparison))
     objects <- mapM testPerfData runs
     obj <- testPerfData first
+    info <- perfInfo obj
+    infos <- mapM perfInfo objects
+    guard (all (not . isJust . perfBuildOptionsReason info) infos)
     guard (all (\r -> trModule r == trModule first && trName r == trName first
                   && trNumFailures r == 0 && trNumErrors r == 0 && trNumSkipped r == 0) runs)
     guard (all (\other -> perfComparable "wall_duration" obj other
@@ -251,6 +267,10 @@ perfPairedCount old new = do
     bs <- processSamples new
     guard (length as == length bs && perfComparable "wall_duration" old new)
     guard (all (perfComparable "wall_duration" old) as && all (perfComparable "wall_duration" new) bs)
+    forM_ [(old, as), (new, bs)] $ \(aggregate, samples) -> do
+      info <- perfInfo aggregate
+      infos <- mapM perfInfo samples
+      guard (all (not . isJust . perfBuildOptionsReason info) infos)
     return (length as)
 
 -- | Approximate 95% interval in the metric's units. Paired runs use differences

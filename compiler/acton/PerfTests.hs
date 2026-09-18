@@ -330,6 +330,25 @@ perfTests = testGroup "performance baselines"
       combined <- requireAggregate "comparison" [good, good]
       rejected [combined, combined]
       assertBool "pair IDs cannot be empty" (case aggregatePerfRuns "" [good] of Nothing -> True; _ -> False)
+  , testCase "build options compare across configurations without mixing process samples" $ do
+      let options = Aeson.toJSON (M.singleton ("lto" :: String) ("true" :: String))
+          plain = sample 10 1 10
+          tuned = changeIdentity "build_options" options (sample 9 1 10)
+      assertBool "configuration changes can be measured" (perfComparable "wall_duration" plain tuned)
+      old <- requireAggregate "options" (replicate 2 (result plain)) >>= requirePerfData
+      newResult <- requireAggregate "options" (replicate 2 (result tuned))
+      new <- requirePerfData newResult
+      info <- requireObject "perf_info" new
+      assertEqual "aggregation retains the selected options" (Just options) (KM.lookup "build_options" info)
+      assertEqual "each side keeps a separate configuration" (Just 2) (perfPairedCount old new)
+      assertBool "an aggregate cannot mix build configurations"
+        (case aggregatePerfRuns "options" [result plain, result tuned] of Nothing -> True; _ -> False)
+      case perfJson (Just old) newResult of
+        Just (Aeson.Object report) -> do
+          measurements <- requireObject "measurements" report
+          recordedInfo <- requireObject "perf_info" measurements
+          assertEqual "JSON retains build option provenance" (Just options) (KM.lookup "build_options" recordedInfo)
+        _ -> assertFailure "expected performance report"
   , testCase "process aggregation omits partial metrics and uses maximum RSS" $ do
       let first = result $ KM.insert "peak_rss" (Aeson.Number 300) $ sample 10 1 10 `KM.union` KM.fromList
             [("mem_usage_delta_avg", Aeson.Number 1000), ("min_mem_usage_delta", Aeson.Number 1),
