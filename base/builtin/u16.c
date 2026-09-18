@@ -260,6 +260,6 @@ bool B_OrdD_u16D___ge__ (B_OrdD_u16 wit, B_u16 a, B_u16 b) {
 // B_HashableD_u16 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_u16D_hash(B_HashableD_u16 wit, B_u16 a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&(a->val),8));
+    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&a->val,sizeof(a->val)));
     return B_None;
 }
