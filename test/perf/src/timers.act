@@ -14,9 +14,10 @@ actor TimerBenchmark(t: testing.AsyncT, order: int):
     def run():
         # Advance only after every callback, so each loop body includes enqueue,
         # dequeue and delivery. The last timer also advances the logical clock.
-        try:
-            count = 1000 * next(iterations)
-        except StopIteration:
+        c = next(iterations)
+        if isinstance(c,just):
+            count = 1000 * c.val
+        else:
             t.success()
             return
 

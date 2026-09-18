@@ -37,7 +37,9 @@ void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict da
     B_tuple item;
 
     for (int i=0; i < data->numelements; i++) {
-        item = (B_tuple)iter->$class->__next__(iter);
+        $WORD next;
+        iter->$class->__next__(iter, &next);
+        item = (B_tuple)next;
         B_str name = (B_str)item->components[0];
         yyjson_mut_val *key = yyjson_mut_strn(doc, (char *)name->str, name->nbytes);
         B_value v = item->components[1];
@@ -313,7 +315,7 @@ B_list stdQ_jsonQ_decode_arr(yyjson_val *arr) {
 B_dict stdQ_jsonQ__decode (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts((char *)fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
     yyjson_val *root = yyjson_doc_get_root(doc);
 
     B_dict res = $NEW(B_dict,(B_Hashable)B_HashableD_strG_witness,NULL,NULL);
@@ -338,7 +340,7 @@ B_dict stdQ_jsonQ__decode (B_str data) {
 B_list stdQ_jsonQ__decode_list (B_str data) {
     // Read JSON and get root
     yyjson_read_err err;
-    yyjson_doc *doc = yyjson_read_opts(fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
+    yyjson_doc *doc = yyjson_read_opts((char *)fromB_str(data), data->nbytes, YYJSON_READ_BIGNUM_AS_RAW, &stdQ_jsonQ_acton_alc, &err);
     if (!doc) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);

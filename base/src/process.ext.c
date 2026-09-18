@@ -124,7 +124,9 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         B_tuple item;
 
         for (int i = 0; i < self->new_env->numelements; i++) {
-            item = (B_tuple)iter->$class->__next__(iter);
+            $WORD next;
+            iter->$class->__next__(iter, &next);
+            item = (B_tuple)next;
             char *key = (char *)fromB_str((B_str)item->components[0]);
             char *value = (char *)fromB_str((B_str)item->components[1]);
             size_t env_size = strlen(key) + strlen(value) + 2;

@@ -76,14 +76,24 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     return res;
 }
 */
-int64_t $rangeD_U__next__(B_range self) {
+bool $rangeD_U__next_i64(B_range self, int64_t *out) {
     if (self->remaining-- <= 0)
-        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("range iterator terminated")));
-    return self->nxt += self->step;
+        return false;
+    *out = self->nxt += self->step;
+    return true;
 }
-
-B_int B_rangeD___next__(B_range self) {
-    return toB_int($rangeD_U__next__(self));
+int64_t $rangeD_U__next__(B_range self) {
+    int64_t value;
+    if (!$rangeD_U__next_i64(self, &value))
+        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("range iterator terminated")));
+    return value;
+}
+bool B_rangeD___next__(B_range self, $WORD *out) {
+    int64_t value;
+    if (!$rangeD_U__next_i64(self, &value))
+        return false;
+    *out = (B_value)toB_int(value);
+    return true;
 }
 
 /*

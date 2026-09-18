@@ -2129,9 +2129,10 @@ main = do
       testCodeGen env0 ["boxparam"]
       testCodeGen env0 ["witness_forward"]
       testCodeGenContains env0 "protocol_generic_siblings" ["SecondD_InheritedD___init__"]
-      -- A local that is live across a for-loop must be emitted as `volatile` so it
-      -- survives the loop's StopIteration setjmp/longjmp under optimization.
-      testCodeGenContains env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
+      -- Non-throwing iteration lowers for-loops to a bool/out __next__ call, so
+      -- locals live across the loop no longer need StopIteration longjmp protection.
+      testCodeGenContains env0 "forloop_volatile" ["$class->__next__(N_iter, &N_1maybe)", "B_str marker = B_None;"]
+      testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do
@@ -3446,27 +3447,39 @@ testCodeGen env0 modulePaths = do
 
 -- pass 9 CodeGen, targeted: run the full pipeline (through Boxing) and assert that
 -- specific substrings appear in the generated C, without a brittle full-file golden.
+codeGenCFor :: Acton.Env.Env0 -> String -> IO String
+codeGenCFor env0 modulePath = do
+  (env, parsed) <- parseAct env0 modulePath
+  kchecked <- Acton.Kinds.check env parsed
+  (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
+  (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
+  (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
+  (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
+  (lifted, liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
+  boxed <- Acton.Boxing.doBoxing liftEnv lifted
+  let act_file = "test" </> "src" </> modulePath ++ ".act"
+  srcText <- readFile act_file
+  let srcbase = "test" </> "src" </> modulePath
+  (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
+  return c
+
 testCodeGenContains :: Acton.Env.Env0 -> String -> [String] -> Spec
 testCodeGenContains env0 modulePath expected = do
-  c <- runIO $ do
-    (env, parsed) <- parseAct env0 modulePath
-    kchecked <- Acton.Kinds.check env parsed
-    (nmod, tchecked, env0Typed, _) <- Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
-    (normalized, normEnv) <- Acton.Normalizer.normalize env0Typed tchecked
-    (deacted, deactEnv) <- Acton.Deactorizer.deactorize normEnv normalized
-    (cpstyled, cpsEnv) <- Acton.CPS.convert deactEnv deacted
-    (lifted, liftEnv) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-    boxed <- Acton.Boxing.doBoxing liftEnv lifted
-    let act_file = "test" </> "src" </> modulePath ++ ".act"
-    srcText <- readFile act_file
-    let srcbase = "test" </> "src" </> modulePath
-    (_, _, c) <- Acton.CodeGen.generate liftEnv srcbase srcText True boxed "test-hash"
-    return c
+  c <- runIO $ codeGenCFor env0 modulePath
 
   describe modulePath $
     forM_ expected $ \sub ->
       it ("generated C contains " ++ show sub) $
         c `shouldContain` sub
+
+testCodeGenDoesNotContain :: Acton.Env.Env0 -> String -> [String] -> Spec
+testCodeGenDoesNotContain env0 modulePath forbidden = do
+  c <- runIO $ codeGenCFor env0 modulePath
+
+  describe modulePath $
+    forM_ forbidden $ \sub ->
+      it ("generated C does not contain " ++ show sub) $
+        c `shouldSatisfy` (not . isInfixOf sub)
 
 
 testDocstrings :: Acton.Env.Env0 -> String -> Spec

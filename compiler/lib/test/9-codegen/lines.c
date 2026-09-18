@@ -494,10 +494,11 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("loop body"), toB_int(((int64_t)((linesQ_main)(self))->i))), B_None, B_None, B_None, B_None);
     }
     B_Iterator N_3iter = B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)B_SequenceD_listG_witness->W_Collection, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
-    if ($PUSH()) {
-        #line 73 "test/src/lines.act"
-        while (true) {
-            B_int j = ((B_int (*) ($WORD))((B_Iterator)(N_3iter))->$class->__next__)(N_3iter);
+    #line 73 "test/src/lines.act"
+    while (true) {
+        $WORD N_4maybe;
+        if (((B_Iterator)(N_3iter))->$class->__next__(N_3iter, &N_4maybe)) {
+            B_int j = N_4maybe;
             #line 74 "test/src/lines.act"
             if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, j, toB_int(2LL))) {
                 #line 75 "test/src/lines.act"
@@ -506,18 +507,11 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
             #line 76 "test/src/lines.act"
             ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("for j"), j), B_None, B_None, B_None, B_None);
         }
-        $DROP();
-    }
-    else {
-        B_BaseException N_5x = $POP();
-        if ($ISINSTANCE0(N_5x, B_StopIteration)) {
-        }
         else {
-            $RAISE(N_5x);
-            __builtin_unreachable();
+            break;
         }
     }
-    B_BaseException N_7xx;
+    B_BaseException N_8xx;
     if ($PUSHF()) {
         if ($PUSH()) {
             #line 80 "test/src/lines.act"
@@ -531,15 +525,15 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
             $DROP();
         }
         else {
-            B_BaseException N_6x = $POP();
+            B_BaseException N_7x = $POP();
             B_ValueError e;
-            if ($ISINSTANCE0(N_6x, B_ValueError)) {
-                e = ((B_ValueError)N_6x);
+            if ($ISINSTANCE0(N_7x, B_ValueError)) {
+                e = ((B_ValueError)N_7x);
                 #line 84 "test/src/lines.act"
                 ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("caught"), to$str("ValueError")), B_None, B_None, B_None, B_None);
             }
             else {
-                $RAISE(N_6x);
+                $RAISE(N_7x);
                 __builtin_unreachable();
             }
         }
@@ -547,13 +541,13 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         __builtin_unreachable();
     }
     else {
-        N_7xx = $POP();
+        N_8xx = $POP();
         #line 86 "test/src/lines.act"
         ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("finally")), B_None, B_None, B_None, B_None);
-        if ($ISINSTANCE0(N_7xx, $SEQ)) {
+        if ($ISINSTANCE0(N_8xx, $SEQ)) {
         }
         else {
-            $RAISE(N_7xx);
+            $RAISE(N_8xx);
             __builtin_unreachable();
         }
     }
