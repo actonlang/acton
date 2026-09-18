@@ -222,6 +222,8 @@ bool B_OrdD_floatD___ge__ (B_OrdD_float wit, B_float a, B_float b) {
 // B_HashableD_float ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_floatD_hash(B_HashableD_float wit, B_float a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a, 8));
+    // Equal positive and negative zero must contribute the same bytes.
+    double val = a->val == 0.0 ? 0.0 : a->val;
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&val, sizeof(val)));
     return B_None;
 }
