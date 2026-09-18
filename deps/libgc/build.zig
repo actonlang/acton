@@ -167,7 +167,6 @@ pub fn build(b: *std.Build) void {
         "mark_rts.c",
         "misc.c",
         "new_hblk.c",
-        "obj_map.c",
         "os_dep.c",
         "ptr_chck.c",
         "reclaim.c",
@@ -616,11 +615,13 @@ pub fn build(b: *std.Build) void {
                    "cordtest", "cord/tests/cordtest.c");
         // TODO: add de test (Windows only)
     }
+    addTest(b, gc, test_step, flags, "dbgfunctest", "tests/dbgfunc.c");
     addTest(b, gc, test_step, flags, "hugetest", "tests/huge.c");
     addTest(b, gc, test_step, flags, "leaktest", "tests/leak.c");
     addTest(b, gc, test_step, flags, "middletest", "tests/middle.c");
     addTest(b, gc, test_step, flags, "realloctest", "tests/realloc.c");
     addTest(b, gc, test_step, flags, "smashtest", "tests/smash.c");
+    addTest(b, gc, test_step, flags, "typedtest", "tests/typed.c");
     // TODO: add staticroots test
     if (enable_gc_debug) {
         addTest(b, gc, test_step, flags, "tracetest", "tests/trace.c");
