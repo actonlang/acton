@@ -1,0 +1,27 @@
+def check_hash[A(Hashable)](a: A, b: A, different: A):
+    assert a == b
+    assert hash(a) == hash(b)
+    assert seed_hash(u64(17), a) == seed_hash(u64(17), b)
+    assert hash(a) != hash(different)
+    # More than four entries exercise lookup through cached hashes.
+    d = {(a, i): "found" for i in range(8)}
+    for i in range(8):
+        assert d[(b, i)] == "found"
+    assert len({a, b, different}) == 2
+
+actor main(env):
+    try:
+        check_hash(i32("-42"), i32("-42"), i32(43))
+        check_hash(i16("-42"), i16("-42"), i16(43))
+        check_hash(i8("-42"), i8("-42"), i8(43))
+        check_hash(u32("42"), u32("42"), u32(43))
+        check_hash(u16("42"), u16("42"), u16(43))
+        check_hash(u8("42"), u8("42"), u8(43))
+        check_hash(u1(1), u1(1), u1(0))
+        check_hash(True, bool(1), False)
+        check_hash(float("1.25"), float("1.25"), float("1.5"))
+        check_hash(float("0.0"), float("-0.0"), float("1.0"))
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

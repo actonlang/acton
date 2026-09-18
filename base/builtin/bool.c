@@ -81,6 +81,6 @@ bool B_HashableD_boolD___ne__(B_HashableD_bool wit, B_bool a, B_bool b) {
 }
 
 B_NoneType B_HashableD_boolD_hash(B_HashableD_bool wit, B_bool a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val), 8));
+    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a->val, sizeof(a->val)));
     return B_None;
 }

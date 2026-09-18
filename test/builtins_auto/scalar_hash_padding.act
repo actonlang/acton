@@ -1,0 +1,26 @@
+def with_padding[A](value: A, padding: u8) -> A:
+    NotImplemented
+
+def check_padding[A(Hashable)](value: A):
+    a = with_padding(value, u8(85))
+    b = with_padding(value, u8(170))
+    assert a == b
+    assert hash(a) == hash(b) and hash(a) == hash(value)
+    assert seed_hash(u64(17), a) == seed_hash(u64(17), b)
+    assert len({a, b}) == 1
+    d = {(a, i): "found" for i in range(8)}
+    for i in range(8):
+        assert d[(b, i)] == "found"
+
+actor main(env):
+    try:
+        check_padding(False)
+        check_padding(True)
+        check_padding(u1(1))
+        check_padding(u8(42))
+        check_padding(u16(42))
+        check_padding(u32(42))
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)
