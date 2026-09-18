@@ -365,11 +365,11 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=529f51427d25e4932c5b89aacb72f93ced4e2fd6
+LIBGC_REF=f87d6c88f5905cc4aed28c801130b94b1632c1fa
 LIBGC_BUILD_ZIG=deps/libgc/build.zig
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/bdwgc/bdwgc/archive/$(LIBGC_REF).tar.gz
+	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
 dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
 	rm -rf "$@"
