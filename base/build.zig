@@ -36,6 +36,12 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
+    const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
+
+    if (gc_disable_thp and target.result.os.tag != .linux) {
+        std.log.err("gc_disable_thp requires a Linux target", .{});
+        std.process.exit(1);
+    }
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -216,6 +222,10 @@ pub fn build(b: *std.Build) void {
             std.log.err("Error appending flags: {}", .{err});
             std.process.exit(1);
         };
+    }
+
+    if (gc_disable_thp) {
+        flags.append(b.allocator, "-DACTON_GC_DISABLE_THP") catch unreachable;
     }
 
     if (use_db) {

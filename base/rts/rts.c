@@ -50,6 +50,9 @@
 #endif
 #ifdef __linux__
 #include <sys/prctl.h>
+#ifdef ACTON_GC_DISABLE_THP
+#include <sys/mman.h>
+#endif
 #endif
 
 #include "common.h"
@@ -2520,11 +2523,25 @@ void print_help(struct option *opt) {
     exit(0);
 }
 
+#ifdef ACTON_GC_DISABLE_THP
+static void GC_CALLBACK gc_disable_thp(void *space, size_t size) {
+    // Called with the GC allocator lock held, including failed allocations.
+    if (space && madvise(space, size, MADV_NOHUGEPAGE) != 0) {
+        static const char message[] = "Acton RTS: gc_disable_thp: MADV_NOHUGEPAGE failed\n";
+        (void)write(STDERR_FILENO, message, sizeof(message) - 1);
+        _exit(1);
+    }
+}
+#endif
+
 void DaveNull () {}
 
 int main(int argc, char **argv) {
     rts_perf_init();
     // Init garbage collector and suppress warnings
+#ifdef ACTON_GC_DISABLE_THP
+    GC_set_on_os_get_mem(gc_disable_thp);
+#endif
     GC_INIT();
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();

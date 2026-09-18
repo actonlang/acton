@@ -1,0 +1,6 @@
+def check(enabled: bool) -> int:
+    NotImplemented
+
+actor main(env):
+    assert check(env.argv[1] == "true") == 0
+    env.exit(0)
