@@ -16,6 +16,11 @@
   reusable warm-build output. [#3099]
 
 ### CLI & Project Workflow
+- Allow applications to pass literal Zig build options through `build_options`
+  in `Build.act`, including optional packed GC mark bits and per-object mark
+  indexing. The root application's choices apply across its build, invalidate
+  cached tests when changed, and are recorded with performance results.
+  [#3140]
 - Add dependency `follows` declarations in `Build.act` so a project can import
   a package selected through another dependency, while requiring every directly
   imported package to be declared by the importing project. [#3091]
@@ -39,6 +44,9 @@
   producing an immutable form of a value. For sets, `freeze(a_set)` returns a
   hashable `iset` that can be used as a dictionary key or nested inside another
   set. [#3122]
+- Return exactly two hexadecimal characters per input byte from `bytes.hex()`,
+  preventing unrelated memory from being included in the result and corrupting
+  hash strings. [#3133]
 - Preserve embedded NUL characters when decoding `bytes` or `bytearray` to
   `str`, and use the complete string for comparison, hashing, iteration,
   prefix and suffix checks, and JSON keys and values. Decoding now rejects
@@ -48,14 +56,24 @@
   than Zig's bytewise fallback. [#3125] [#3126] [#3128]
 - Allow list equality and inequality when elements implement only `Eq`,
   while ordering comparisons continue to require `Ord`. [#3120]
+- Hash `bool`, narrow integers, and `float` by value, so equal values in
+  separate objects work reliably as set elements and dictionary keys. Positive
+  and negative floating zero now produce the same hash. [#3141]
 - Add immutable `iset` values whose hashable elements make the set hashable as
   a whole, allowing them to be used as dictionary keys and nested inside other
-  sets while mutable `set` values remain unhashable. [#3103] [#3109]
+  sets while mutable `set` values remain unhashable, and format them as
+  `iset({...})` in `str()` and `repr()` output. [#3103] [#3109] [#3135]
+- Return a valid empty string from `str.rstrip()` and `str.strip()` when they
+  remove every character, including multibyte characters and custom strip
+  sets. [#3138]
 - Speed up `==` and `!=` for `str`, `bytes`, `bytearray`, `bigint`, `list`,
   `dict`, and tuple values by returning immediately when both operands refer to
   the same object instead of comparing their contents. This avoids unnecessary
   work for large values and containers, and means lists, dictionaries, and
   tuples compare equal to themselves even when they contain `NaN`. [#3106]
+- Use libc's optimized memory fill where available, reducing time and CPU use
+  in GC-heavy workloads while retaining Zig's implementation on platforms that
+  need it. [#3139]
 - Implement builtin helpers such as `enumerate`, `filter`, `map`, `max`, `min`,
   `sum`, and `zip` in Acton and streamline collection iteration to avoid
   allocation-heavy iterator handling in common builtin operations. [#3104]
@@ -85,7 +103,7 @@
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
   [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
-  [#3130]
+  [#3130] [#3134] [#3139]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
@@ -96,6 +114,14 @@
     measure interleaved balanced pairs of fresh processes at a shared workload
     scale, and report uncertainty from the paired results while including
     uncommitted current-tree changes.
+  - `utils/perf-compare` compares changes to Acton's compiler, runtime, or
+    builtins against a Git revision using identical benchmark sources and a
+    shared workload scale. It runs balanced process pairs, reuses cached
+    baseline builds, supports selecting another benchmark project, and saves
+    the source snapshot and measurements.
+  - GC benchmarks measure collection under temporary allocations while
+    retaining and updating an inventory of records, supporting comparisons of
+    runtime and collector settings at explicit workload sizes.
   - Reports compare recorded baselines and show timing distributions, GC,
     allocation and memory statistics, peak RSS, and optional CPU, instruction,
     cycle, and IPC counters, with consistent elapsed-time measurement on macOS.
@@ -4934,6 +4960,13 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3128]: https://github.com/actonlang/acton/pull/3128
 [#3130]: https://github.com/actonlang/acton/pull/3130
 [#3131]: https://github.com/actonlang/acton/pull/3131
+[#3133]: https://github.com/actonlang/acton/pull/3133
+[#3134]: https://github.com/actonlang/acton/pull/3134
+[#3135]: https://github.com/actonlang/acton/pull/3135
+[#3138]: https://github.com/actonlang/acton/pull/3138
+[#3139]: https://github.com/actonlang/acton/pull/3139
+[#3140]: https://github.com/actonlang/acton/pull/3140
+[#3141]: https://github.com/actonlang/acton/pull/3141
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
