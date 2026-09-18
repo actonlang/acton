@@ -269,6 +269,7 @@ renderReplBuildAct deps mproj =
       , BuildSpec.fingerprint = "0x81091a566daa4f54"
       , BuildSpec.dependencies = deps'
       , BuildSpec.zig_dependencies = M.empty
+      , BuildSpec.build_options = M.empty
       , BuildSpec.libraries = M.fromList
           [ (replEvalModuleName, BuildSpec.Library [replEvalModuleName] "dynamic")
           , (replSessionModuleName, BuildSpec.Library [replSessionModuleName] "dynamic")

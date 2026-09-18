@@ -40,6 +40,8 @@ pub fn build(b: *std.Build) void {
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
+    const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
         std.log.err("Missing required build option -Dacton_modules=...", .{});
@@ -57,6 +59,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .no_threads = no_threads,
         .db = db,
+        .gc_use_mark_bits = gc_use_mark_bits,
+        .gc_mark_bit_per_object = gc_mark_bit_per_object,
     });
 
     // Dependencies from Build.act
@@ -344,6 +348,8 @@ pub fn build(b: *std.Build) void {
         const maybe_actondb_dep = if (db) b.dependency("actondb", .{
             .target = target,
             .optimize = optimize,
+            .gc_use_mark_bits = gc_use_mark_bits,
+            .gc_mark_bit_per_object = gc_mark_bit_per_object,
         }) else null;
 
         for (root_c_files.items) |entry| {

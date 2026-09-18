@@ -1,0 +1,28 @@
+import buildy
+
+actor main(env):
+    options = {"feature": "true", "label": r"C:\temp"}
+    spec = buildy.BuildSpec("demo", "0x1234abcd5678ef00", build_options=options)
+    assert buildy.BuildSpec.from_json(spec.to_json()).build_options == options
+    defaults = buildy.BuildSpec("demo", "0x1234abcd5678ef00")
+    assert buildy.BuildSpec.from_json(defaults.to_json()).build_options == {}
+    nested = buildy.BuildSpec.from_json(r'''{"name":"demo","fingerprint":"0x1234abcd5678ef00","dependencies":{"dep":{"path":"../dep"}},"zig_dependencies":{"cdep":{"path":"../cdep","options":{"feature":"true"},"artifacts":["lib"]}},"build_options":{"feature":"true"}}''')
+    assert nested.dependencies["dep"].path == "../dep"
+    assert nested.zig_dependencies["cdep"].options == {"feature": "true"}
+    assert nested.build_options == {"feature": "true"}
+
+    for invalid in [{"cpu": "native"}, {"bad=name": "true"}, {"feature": chr(0)}]:
+        rejected = False
+        try:
+            buildy.BuildSpec("demo", "0x1234abcd5678ef00", build_options=invalid)
+        except buildy.BuildSpecError:
+            rejected = True
+        assert rejected
+    for invalid in [r'{"feature":true}', r'{"feature":17}', r'{"feature":null}', r'{"feature":"\u0000"}', r'{"cpu":"native"}', "null", "[]"]:
+        rejected = False
+        try:
+            buildy.BuildSpec.from_json(r'{"name":"demo","fingerprint":"0x1234abcd5678ef00","build_options":' + invalid + r'}')
+        except ValueError:
+            rejected = True
+        assert rejected
+    env.exit(0)

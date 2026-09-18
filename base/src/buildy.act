@@ -17,6 +17,14 @@ def zig_safe_name(name: str) -> str:
         raise BuildSpecError(f"Invalid dependency name '{name}', must start with a letter and only contain letters, numbers and underscores")
     return name
 
+def check_build_option(name: str, value: str):
+    if re.match(r"\A[a-zA-Z_][a-zA-Z0-9_-]*\z", name) is None:
+        raise BuildSpecError(f"Invalid build option '{name}': names must start with an ASCII letter or underscore and contain only ASCII letters, digits, underscores or hyphens")
+    if name in ["target", "cpu", "optimize", "ofmt", "dynamic-linker", "db", "no_threads", "cpedantic"] or name.startswith("acton_"):
+        raise BuildSpecError(f"Invalid build option '{name}': this option is managed by the Acton compiler")
+    if chr(0) in value:
+        raise BuildSpecError(f"Invalid build option '{name}': values cannot contain NUL characters")
+
 
 class BuildSpec(object):
     """Build configuration, the content of Build.act
@@ -27,20 +35,25 @@ class BuildSpec(object):
     - zig_dependencies are dependencies on Zig projects, which could in turn be
       Zig, C or C++ libraries that get linked in with the project
     - fingerprint identifies the project lineage
+    - build_options are application build options, passed as literal strings
     """
     name: str
     description: ?str
     dependencies: dict[str, PkgDependency]
     zig_dependencies: dict[str, ZigDependency]
+    build_options: dict[str, str]
     # Acton-managed package fingerprint (string, e.g. "0x1234abcd...")
     fingerprint: str
 
-    def __init__(self, name: str, fingerprint: str, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}):
+    def __init__(self, name: str, fingerprint: str, description: ?str=None, dependencies: dict[str, PkgDependency]={}, zig_dependencies: dict[str, ZigDependency]={}, build_options: dict[str, str]={}):
+        for key, value in build_options.items():
+            check_build_option(key, value)
         self.name = name
         self.fingerprint = fingerprint
         self.description = description
         self.dependencies = dependencies
         self.zig_dependencies = zig_dependencies
+        self.build_options = build_options
 
     @staticmethod
     def from_json(data: str):
@@ -50,10 +63,12 @@ class BuildSpec(object):
         description = None
         new_dependencies = {}
         new_zig_dependencies = {}
+        new_build_options = {}
         fingerprint = ""
         has_fingerprint = False
         if isinstance(jd, dict):
-            for key, value in jd.items():
+            entries: dict[str, ?value] = jd
+            for key, value in entries.items():
                 if isinstance(key, str):
                     if key == "name":
                         if value is None:
@@ -74,7 +89,8 @@ class BuildSpec(object):
                         if value is None:
                             new_dependencies = {}
                         elif isinstance(value, dict):
-                            for dep_name, dep_attrs in value.items():
+                            dependencies: dict[str, ?value] = value
+                            for dep_name, dep_attrs in dependencies.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
                                     dep = PkgDependency.from_json(dep_name, dep_attrs)
                                     new_dependencies[dep_name] = dep
@@ -86,7 +102,8 @@ class BuildSpec(object):
                         if value is None:
                             new_zig_dependencies = {}
                         elif isinstance(value, dict):
-                            for dep_name, dep_attrs in value.items():
+                            zig_dependencies: dict[str, ?value] = value
+                            for dep_name, dep_attrs in zig_dependencies.items():
                                 if isinstance(dep_name, str) and isinstance(dep_attrs, dict):
                                     dep = ZigDependency.from_json(dep_name, dep_attrs)
                                     new_zig_dependencies[dep_name] = dep
@@ -94,6 +111,16 @@ class BuildSpec(object):
                                     raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
                         else:
                             raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
+                    elif key == "build_options":
+                        if isinstance(value, dict):
+                            options: dict[str, ?value] = value
+                            for option_name, option_value in options.items():
+                                if isinstance(option_name, str) and isinstance(option_value, str):
+                                    new_build_options[option_name] = option_value
+                                else:
+                                    raise ValueError("Invalid build spec JSON, build_options should be a dict of strings")
+                        else:
+                            raise ValueError("Invalid build spec JSON, build_options should be a dict of strings")
                     elif key == "fingerprint":
                         if value is None:
                             has_fingerprint = False
@@ -111,7 +138,7 @@ class BuildSpec(object):
                 raise ValueError("Invalid build spec JSON, name is required")
             if not has_fingerprint:
                 raise ValueError("Invalid build spec JSON, fingerprint is required")
-            return BuildSpec(name, fingerprint, description, new_dependencies, new_zig_dependencies)
+            return BuildSpec(name, fingerprint, description, new_dependencies, new_zig_dependencies, new_build_options)
         raise ValueError("Invalid build spec JSON, top level should be a dict")
 
     def to_json(self) -> str:
@@ -126,6 +153,7 @@ class BuildSpec(object):
             "fingerprint": self.fingerprint,
             "dependencies": res_deps,
             "zig_dependencies": res_zigdeps,
+            "build_options": self.build_options,
         }
         description = self.description
         if description is not None:

@@ -187,6 +187,31 @@ does not need to contain `gc_heap`. `main` selects the local branch;
 `acton test perf --compare git:REF` uses the same current compiler and runtime
 for both application revisions, so it does not compare these patches.
 
+To compare GC mark layouts with one compiler, set `build_options` in this
+project's `Build.act`:
+
+```python
+build_options = {
+    "gc_use_mark_bits": "true",
+    "gc_mark_bit_per_object": "true",
+}
+```
+
+Then compare against a revision with the same benchmark source and the baseline
+`Build.act` settings:
+
+```sh
+acton test perf --module gc_heap --name cold_inventory --scale 1000000 \
+  --time 20s --compare git:REF
+```
+
+Each checkout uses its own root options, so this
+comparison can measure the layout change with the current compiler. Test the
+options separately as well as together; removing them restores defaults. Perf
+and scale recordings retain the options, and ordinary test caches are
+invalidated when they change. `utils/perf-compare` gives both compilers the same
+`Build.act`, so use it for changes to the compiler or collector implementation.
+
 For a controlled one-million-record comparison, keep the initial and maximum
 GC heap equal and explicitly set marking parallelism:
 

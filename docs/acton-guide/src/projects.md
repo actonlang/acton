@@ -49,3 +49,49 @@ fingerprint = 0x1234abcd5678ef00
 ```
 
 `name` and `fingerprint` are required for Acton projects. Acton validates that the fingerprint matches the name’s lineage prefix. A mismatch indicates a rename or a fork, so the build fails and tells you to generate a new fingerprint for the new name. If either field is missing, the build fails with guidance to add it.
+
+## Application build options
+
+`build_options` is an optional dictionary of string names and string values in
+`Build.act`. It supplies options to the application's Zig build, with each entry
+passed as `-Dname=value`. Values are literal arguments, not Zig expressions.
+An unknown option or a value of the wrong type fails the build.
+
+The root application's options govern its build, including test executables.
+Options in a dependency's `Build.act` apply when building that dependency as a
+project itself; they do not override the consuming application's choices.
+Changing options rebuilds the affected artifacts without requiring a clean and
+invalidates cached test results. Performance recordings retain the selected
+options so comparisons can measure configuration changes.
+
+Compiler options such as target, CPU, optimization, database support and
+threading remain controlled by their existing command-line flags. Their Zig
+option names (`target`, `cpu`, `ofmt`, `dynamic-linker`, `optimize`, `db`, `no_threads`,
+`cpedantic` and names beginning with `acton_`) are reserved and cannot appear in `build_options`.
+
+### GC mark layout
+
+Applications can opt into a different BDWGC mark representation:
+
+```python
+build_options = {
+    "gc_use_mark_bits": "true",
+    "gc_mark_bit_per_object": "true",
+}
+```
+
+`gc_use_mark_bits` packs marks into bits instead of using the collector's
+default representation. With parallel marking, the default is byte marks;
+without parallel marking, BDWGC already uses bits. `gc_mark_bit_per_object`
+indexes marks by object instead of allocation granule. The options are
+independent, so either can be enabled on its own.
+
+Both default to `"false"`, preserving BDWGC's existing choices. Packed marks
+reduce metadata size but may increase contention between marking threads.
+Per-object indexing changes the work needed to find an object's mark.
+Measure both on the application's workload before choosing them.
+
+These are compile-time settings shared by the application, its Acton
+dependencies, the standard library and database support. They preserve
+parallel marking support and do not select incremental or generational
+collection. They cannot be changed by a running application.

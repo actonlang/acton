@@ -87,16 +87,18 @@ data TestRunContext = TestRunContext
   , trcOptimize        :: String
   , trcMode            :: String
   , trcArgs            :: [String]
+  , trcBuildOptions    :: M.Map String String
   } deriving (Show, Eq)
 
 instance Aeson.ToJSON TestRunContext where
-  toJSON ctx = Aeson.object
+  toJSON ctx = Aeson.object $
     [ AesonKey.fromString "compilerVersion" Aeson..= trcCompilerVersion ctx
     , AesonKey.fromString "target" Aeson..= trcTarget ctx
     , AesonKey.fromString "optimize" Aeson..= trcOptimize ctx
     , AesonKey.fromString "mode" Aeson..= trcMode ctx
     , AesonKey.fromString "args" Aeson..= trcArgs ctx
-    ]
+    ] ++ [ AesonKey.fromString "build_options" Aeson..= trcBuildOptions ctx
+         | not (M.null (trcBuildOptions ctx)) ]
 
 instance Aeson.FromJSON TestRunContext where
   parseJSON = Aeson.withObject "TestRunContext" $ \o ->
@@ -106,6 +108,7 @@ instance Aeson.FromJSON TestRunContext where
       <*> o Aeson..: AesonKey.fromString "optimize"
       <*> o Aeson..: AesonKey.fromString "mode"
       <*> o Aeson..: AesonKey.fromString "args"
+      <*> o Aeson..:? AesonKey.fromString "build_options" Aeson..!= M.empty
 
 data TestCachedResult = TestCachedResult
   { tcrComplete     :: Bool
