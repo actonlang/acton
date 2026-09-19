@@ -1,0 +1,112 @@
+import testing
+
+
+# Scale is the number of keys. Each loop body hashes that many keys, once per
+# key, so per-operation figures are per key hashed. Keys are prepared before
+# t.loop(): only hashing, table work and output allocation are timed. The
+# single-value cases hash the same payloads without a tuple around them, which
+# separates a change to composite hashing from a change to the str, int, u64 or
+# float hash underneath it. The nested case hashes the triple's strings as
+# ((str, str), str), so its difference from the triple is the cost of nesting.
+def strings(size: int) -> list[str]:
+    return ["left" + str(i) for i in range(size)]
+
+def str_pairs(size: int) -> list[(str, str)]:
+    return [("left" + str(i), "right" + str(i)) for i in range(size)]
+
+def str_triples(size: int) -> list[(str, str, str)]:
+    return [("left" + str(i), "mid" + str(i), "right" + str(i)) for i in range(size)]
+
+def str_nested(size: int) -> list[((str, str), str)]:
+    return [(("left" + str(i), "mid" + str(i)), "right" + str(i)) for i in range(size)]
+
+def ints(size: int) -> list[int]:
+    return [i for i in range(size)]
+
+def int_pairs(size: int) -> list[(int, int)]:
+    return [(i, i + 1) for i in range(size)]
+
+def u64s(size: int) -> list[u64]:
+    return [u64(i) for i in range(size)]
+
+def floats(size: int) -> list[float]:
+    return [float(i) for i in range(size)]
+
+
+def hash_all[A(Hashable)](t: testing.SyncT, xs: list[A]):
+    # One pass outside the loop gives the per-body checksum to compare against.
+    expected: u64 = 0
+    for x in xs:
+        expected += hash(x)
+    checksum: u64 = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        for x in xs:
+            checksum += hash(x)
+    testing.assertEqual(checksum, expected * u64(repeats))
+
+def entries[A(Hashable)](keys: list[A]) -> list[(A, int)]:
+    return [(k, i) for i, k in enumerate(keys)]
+
+def construct_dict[A(Hashable)](t: testing.SyncT, xs: list[(A, int)]):
+    count = 0
+    repeats = 0
+    last: dict[A, int] = {}
+    for _ in t.loop():
+        repeats += 1
+        last = dict(xs)
+        count += len(last)
+    testing.assertEqual(count, repeats * len(xs))
+    if repeats > 0:
+        for k, v in xs:
+            testing.assertEqual(last[k], v)
+
+def update_dict[A(Hashable)](t: testing.SyncT, xs: list[(A, int)]):
+    # Every key is present from the start, so this measures lookup without
+    # table growth.
+    target: dict[A, int] = dict(xs)
+    count = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        target.update(xs)
+        count += len(target)
+    testing.assertEqual(count, repeats * len(xs))
+
+
+def _test_hash_str(t: testing.SyncT):
+    hash_all(t, strings(t.scale()))
+
+def _test_hash_str_pair(t: testing.SyncT):
+    hash_all(t, str_pairs(t.scale()))
+
+def _test_hash_str_triple(t: testing.SyncT):
+    hash_all(t, str_triples(t.scale()))
+
+def _test_hash_str_nested(t: testing.SyncT):
+    hash_all(t, str_nested(t.scale()))
+
+def _test_hash_int(t: testing.SyncT):
+    hash_all(t, ints(t.scale()))
+
+def _test_hash_int_pair(t: testing.SyncT):
+    hash_all(t, int_pairs(t.scale()))
+
+def _test_hash_u64(t: testing.SyncT):
+    hash_all(t, u64s(t.scale()))
+
+def _test_hash_float(t: testing.SyncT):
+    hash_all(t, floats(t.scale()))
+
+def _test_dict_str(t: testing.SyncT):
+    construct_dict(t, entries(strings(t.scale())))
+
+def _test_dict_str_pair(t: testing.SyncT):
+    construct_dict(t, entries(str_pairs(t.scale())))
+
+def _test_dict_str_pair_update(t: testing.SyncT):
+    update_dict(t, entries(str_pairs(t.scale())))
+
+def _test_dict_str_update(t: testing.SyncT):
+    update_dict(t, entries(strings(t.scale())))

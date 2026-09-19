@@ -396,7 +396,7 @@ static void B_set_hash_table(B_set_table *set, B_Hashable hashwit, B_hasher h) {
         }
     }
     uint64_t parts[3] = { set->numelements, sum, xors };
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)parts, sizeof(parts)));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)parts, sizeof(parts));
 }
 
 // set object methods ///////////////////////////////////////////////////////////////////////////////

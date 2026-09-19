@@ -230,6 +230,29 @@ small can cause allocation failure. Keep the environment with your results:
 the comparison JSON does not record GC environment variables. Repeat the
 comparison in fresh processes to check that results remain consistent.
 
+## Tuple hashing
+
+`tuple_hashing` covers the hash path: single values, two- and three-component
+tuples, a nested tuple, and dict construction and update with those keys. Scale
+is the number of keys, and each loop body hashes every key once, so
+per-operation figures are per key hashed. Keys are prepared before `t.loop()`;
+only hashing, table work and output allocation are timed. The single-value
+cases hash the same payloads without a tuple around them, which separates a
+composite hashing change from a change to the underlying str, int, u64 or float
+hash. The nested case hashes the triple's strings as `((str, str), str)`, so its
+difference from the triple is the cost of nesting.
+
+```sh
+acton test perf --module tuple_hashing --scale 1024 --time 3s --record
+acton test scale --module tuple_hashing --name hash_str_pair --start-scale 1 --end-scale 65536
+```
+
+Allocation is the sharpest signal here, because it is exact from run to run
+while wall time and instruction counts on these short bodies move with GC
+scheduling. A composite hash that allocates per component shows up as
+allocation growing with tuple arity; hashing that copies its input shows up as
+allocation growing with `string_operations`' scale.
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:

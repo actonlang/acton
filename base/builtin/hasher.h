@@ -26,7 +26,7 @@ extern struct B_hasherG_class B_hasherG_methods;
 B_hasher B_hasherG_new(B_u64);
 
 void *zig_hash_wyhash_init(uint64_t seed);
-void zig_hash_wyhash_update(void *hasher, B_bytes data);
+void zig_hash_wyhash_update(void *hasher, const uint8_t *ptr, size_t len);
 uint64_t zig_hash_wyhash_final(void *hasher);
 
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);

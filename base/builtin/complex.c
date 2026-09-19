@@ -143,6 +143,6 @@ bool B_EqD_complexD___ne__ (B_EqD_complex wit, B_complex a, B_complex b) {
 // B_HashableD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_complexD_hash(B_HashableD_complex wit, B_complex a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&(a->val), 16));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&(a->val), 16);
     return B_None;
 }

@@ -50,7 +50,7 @@ bool B_HashableD_WORD_ne(B_HashableD_WORD wit, $WORD a, $WORD b) {
 }
 
 B_NoneType B_HashableD_WORD_hash(B_HashableD_WORD wit, $WORD a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a, 8));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&a, 8);
     return B_None;
 }
 
