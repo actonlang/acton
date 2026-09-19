@@ -21,6 +21,7 @@ import System.FilePath.Posix
 import System.Process
 import System.TimeIt
 import System.IO.Temp (withSystemTempDirectory)
+import qualified System.Info
 
 import Test.Tasty
 import Test.Tasty.ExpectedFailure
@@ -1695,6 +1696,7 @@ actonProjTests =
   testGroup "compiler project tests"
   [ dependencyDeclarationTests
   , gcBuildOptionTests
+  , gcThpBuildOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2225,6 +2227,37 @@ gcBuildOptionTests = testGroup "GC metadata build options"
           assertBool ("invalid option should fail: " ++ show option ++ "\n" ++ out ++ err) (code /= ExitSuccess)
           assertBool ("diagnostic should identify " ++ key ++ "\n" ++ out ++ err) (key `isInfixOf` (out ++ err))
         checkShared
+  ]
+
+gcThpBuildOptionTests = testGroup "GC transparent huge pages"
+  [ testCase "heap growth and page reuse preserve the selected policy" $
+      withSystemTempDirectory "acton-gc-thp" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        environment <- getEnvironment
+        createDirectoryIfMissing True (proj </> "src")
+        forM_ ["main.act", "main.ext.c"] $ \file ->
+          copyFile ("test/project/gc_thp/src" </> file) (proj </> "src" </> file)
+        let runEnv = [("GC_MARKERS", "2"), ("GC_INITIAL_HEAP_SIZE", "1M")]
+                  ++ filter (not . isPrefixOf "GC_" . fst) environment
+            fingerprint = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_thp") 1)
+            writeOptions enabled = writeFile (proj </> "Build.act") $ unlines
+              [ "name = \"gc_thp\""
+              , "fingerprint = " ++ fingerprint
+              , "build_options = {\"gc_disable_thp\": " ++ show enabled ++ "}"
+              ]
+            expectSuccess label (code, out, err) =
+              assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+        -- Reuse generated outputs to exercise rebuilding between both policies.
+        forM_ ["false", "true", "false"] $ \enabled -> do
+          writeOptions enabled
+          expectSuccess "build selected THP policy" =<< readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"])
+              { cwd = Just proj, env = Just runEnv } ""
+          expectSuccess "GC mappings retain their policy" =<< readCreateProcessWithExitCode
+            (proc (proj </> "out/bin/main") [enabled, "--rts-wthreads", "2"])
+              { cwd = Just proj, env = Just runEnv } ""
+  | System.Info.os == "linux"
   ]
 
 dependencyDeclarationTests =

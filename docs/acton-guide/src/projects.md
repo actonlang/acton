@@ -95,3 +95,28 @@ These are compile-time settings shared by the application, its Acton
 dependencies, the standard library and database support. They preserve
 parallel marking support and do not select incremental or generational
 collection. They cannot be changed by a running application.
+
+### GC transparent huge pages
+
+On Linux, an application can keep GC memory on ordinary pages:
+
+```python
+build_options = {
+    "gc_disable_thp": "true",
+}
+```
+
+This defaults to `"false"`, leaving the operating system's transparent huge
+page (THP) policy unchanged. When enabled, the runtime applies
+`MADV_NOHUGEPAGE` to memory obtained by the collector, starting with its initial
+allocation. It does not change the policy for the rest of the process. The
+setting persists when the collector releases physical pages and reuses them.
+
+Ordinary pages can reduce dirty-page tracking work for incremental or
+generational collection. Huge pages can improve address translation and
+memory access performance, so measure both choices for the application.
+This option does not enable incremental or generational collection itself.
+
+Enabling it for a non-Linux target fails the build. If the kernel rejects
+`MADV_NOHUGEPAGE`, the application exits with an error instead of continuing
+with an ineffective setting.

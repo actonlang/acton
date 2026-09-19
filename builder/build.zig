@@ -42,6 +42,7 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
+    const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
         std.log.err("Missing required build option -Dacton_modules=...", .{});
@@ -61,6 +62,7 @@ pub fn build(b: *std.Build) void {
         .db = db,
         .gc_use_mark_bits = gc_use_mark_bits,
         .gc_mark_bit_per_object = gc_mark_bit_per_object,
+        .gc_disable_thp = gc_disable_thp,
     });
 
     // Dependencies from Build.act

@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
+    const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     print("Acton Standard Library Builder\nBuilding in {s}\n", .{buildroot_path});
 
@@ -38,6 +39,7 @@ pub fn build(b: *std.Build) void {
         .db = db,
         .gc_use_mark_bits = gc_use_mark_bits,
         .gc_mark_bit_per_object = gc_mark_bit_per_object,
+        .gc_disable_thp = gc_disable_thp,
     });
 
     const dep_libpcre2 = b.dependency("libpcre2", .{
