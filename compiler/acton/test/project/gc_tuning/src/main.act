@@ -1,0 +1,49 @@
+import acton.rts
+import shared
+
+def check(backend: int, page_hash_log2: int, incremental: bool) -> int:
+    NotImplemented
+
+actor main(env):
+    backend = int(env.argv[1])
+    log2 = int(env.argv[2])
+    incremental = env.argv[3] == "true"
+    selected = {0: "auto", 64: "soft_dirty", 128: "userfaultfd"}[backend]
+
+    records = shared.make()
+    assert check(backend, log2, incremental) == 0
+
+    info = acton.rts.get_gc_info(env.syscap)
+    assert info.configured_backend == selected
+    assert info.backend == (selected if incremental else "none")
+    assert info.page_hash_table_log2 == u64(log2 if log2 else 21)
+    assert info.markers == 2
+    assert info.free_space_divisor == 5
+    assert info.full_frequency == 7
+    assert info.heap_size > 0
+    assert info.heap_size >= info.free_bytes
+    assert info.free_bytes >= info.unmapped_bytes
+
+    if backend != 0:
+        assert selected in info.supported_backends
+        assert "mprotect" not in info.supported_backends
+        other = "userfaultfd" if backend == 64 else "soft_dirty"
+        assert other not in info.supported_backends
+
+    if incremental:
+        target = env.getenv("GC_PAUSE_TIME_TARGET")
+        assert target is not None
+        if int(target!) == 999999:
+            assert info.mode == "generational"
+            assert info.pause_target_ms is None
+        else:
+            assert info.mode == "incremental"
+            assert info.pause_target_ms is not None
+            assert info.pause_target_ms! == float(target!)
+    else:
+        assert info.mode == "ordinary"
+        assert info.pause_target_ms is None
+
+    assert shared.verify(records) == 256
+    print("GC tuning OK")
+    env.exit(0)

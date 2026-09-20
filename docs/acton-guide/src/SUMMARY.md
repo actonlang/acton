@@ -91,6 +91,7 @@
   - [Stress testing](testing/stress.md)
   - [Perf comparison](testing/perf_record.md)
 - [Build System](compilation.md)
+  - [Application build options](compilation/build_options.md)
   - [Incremental compilation](compilation/incremental.md)
 - [Package Management](package_management.md)
   - [Package Index](pkg/package_index.md)

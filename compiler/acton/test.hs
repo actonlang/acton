@@ -1697,6 +1697,7 @@ actonProjTests =
   [ dependencyDeclarationTests
   , gcBuildOptionTests
   , gcThpBuildOptionTests
+  , gcTuningBuildOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2259,6 +2260,150 @@ gcThpBuildOptionTests = testGroup "GC transparent huge pages"
               { cwd = Just proj, env = Just runEnv } ""
   | System.Info.os == "linux"
   ]
+
+gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
+  [ testCase "root settings rebuild the collector and shared dependencies" $
+      withFixture $ \acton app shared runEnv writeOptions -> do
+        let uffdTarget = System.Info.arch ++ "-linux-gnu.2.34"
+            build flags = readCreateProcessWithExitCode
+              (proc acton (["build", "--color", "never"] ++ flags))
+                { cwd = Just app, env = Just runEnv } ""
+            run backend log2 incremental extraEnv = readCreateProcessWithExitCode
+              (proc (app </> "out/bin/main")
+                [show backend, show log2, if incremental then "true" else "false",
+                 "--rts-wthreads", "2"])
+                { cwd = Just app, env = Just (extraEnv ++ runEnv) } ""
+            assertRuns backend log2 incremental extraEnv = do
+              result@(_, out, _) <- run backend log2 incremental extraEnv
+              expectSuccess "GC configuration and retained objects" result
+              assertEqual "application completes" "GC tuning OK\n" out
+            expectUnavailable backend (code, out, err) = do
+              assertBool ("explicit backend should be rejected\n" ++ out ++ err)
+                (code /= ExitSuccess)
+              assertBool ("failure should identify the requested backend\n" ++ out ++ err)
+                ("requested GC dirty tracking backend" `isInfixOf` err
+                 && backend `isInfixOf` err && "unavailable" `isInfixOf` err)
+              assertEqual "failed activation must not run the application" "" out
+            expectActivation backend result@(code, out, _) =
+              if code == ExitSuccess
+                then assertEqual "selected backend completes the application" "GC tuning OK\n" out
+                else expectUnavailable backend result
+            activeEnv pauseTarget = [("GC_ENABLE_INCREMENTAL", "1"),
+                                    ("GC_PAUSE_TIME_TARGET", pauseTarget)]
+            sourceFiles = [shared </> "Build.act", shared </> "src/lib.act"]
+            parseComponent part
+              | not (null part) && all (\c -> c >= '0' && c <= '9') part =
+                  case reads part of
+                    [(value, "")] -> Just (value :: Integer)
+                    _ -> Nothing
+              | otherwise = Nothing
+            glibcVersion out = case words out of
+              ["glibc", version] -> case mapM parseComponent (splitOn "." version) of
+                Just (major : minor : _) -> Just (major, minor)
+                _ -> Nothing
+              _ -> Nothing
+            skipUffd reason = do
+              putStrLn ("Skipping userfaultfd runtime checks: " ++ reason
+                        ++ "; glibc >= 2.34 is required. Compile coverage is retained.")
+              pure False
+        libc <- readCreateProcessWithExitCode
+          (proc "getconf" ["GNU_LIBC_VERSION"]){ env = Just runEnv } ""
+          `catch` (\(err :: IOException) -> pure (ExitFailure 127, "", show err))
+        canRunUffd <- case libc of
+          (ExitSuccess, out, _) -> case glibcVersion out of
+            Just version | version >= (2, 34) -> pure True
+                         | otherwise -> skipUffd ("host reports " ++ unwords (words out))
+            Nothing -> skipUffd ("unrecognized getconf output " ++ show out)
+          (code, out, err) -> skipUffd ("getconf GNU_LIBC_VERSION failed ("
+                                      ++ show code ++ "): " ++ out ++ err)
+        originalShared <- mapM BS.readFile sourceFiles
+        -- Keep all generated output and dependency caches between selections.
+        forM_ [([], 0, 0), (options "soft_dirty" "23", 64, 23),
+               (options "userfaultfd" "23", 128, 23),
+               (options "auto" "0", 0, 0)] $ \(selected, backend, log2) -> do
+          writeOptions selected
+          expectSuccess "build selected collector" =<<
+            build (if backend == 128 then ["--target", uffdTarget] else [])
+          when (backend /= 128 || canRunUffd) $ do
+            assertRuns backend log2 False []
+            when (backend /= 0) $ do
+              let name = if backend == 64 then "soft_dirty" else "userfaultfd"
+              -- Kernel policy may disallow UFFD or soft-dirty in CI. Only the
+              -- explicit startup rejection is acceptable in place of success.
+              forM_ ["999999", "123"] $ \pauseTarget ->
+                expectActivation name =<< run backend log2 True (activeEnv pauseTarget)
+              -- An inherited preference must not defeat explicit selection.
+              -- Explicit builds omit the mprotect fallback entirely.
+              expectActivation name =<< run backend log2 True
+                (("GC_USE_GETWRITEWATCH", "0") : activeEnv "999999")
+          mapM BS.readFile sourceFiles >>=
+            assertEqual "root settings must not rewrite dependency sources" originalShared
+        writeOptions (options "soft_dirty" "23")
+        expectSuccess "database dependency uses the selected collector" =<< build ["--db"]
+        -- No database server is needed: the DB build checks linkage, then the
+        -- ordinary executable checks reuse of output after that build.
+        expectSuccess "return to ordinary linkage without cleaning" =<< build []
+        assertRuns 64 23 False []
+  | System.Info.os == "linux", System.Info.arch `elem` ["x86_64", "aarch64"]
+  ] ++
+  [ testCase "invalid values and unsupported targets fail clearly" $
+      withFixture $ \acton app _ runEnv writeOptions -> do
+        forM_ invalidConfigurations $ \(selected, flags, key) -> do
+          writeOptions selected
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton (["build", "--color", "never"] ++ flags))
+              { cwd = Just app, env = Just runEnv } ""
+          assertBool ("invalid configuration should fail: " ++ show selected
+                      ++ " " ++ show flags ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name " ++ key ++ "\n" ++ out ++ err)
+            (key `isInfixOf` (out ++ err))
+  ]
+  where
+    options backend log2 = [("gc_dirty_tracking_backend", backend),
+                            ("gc_page_hash_table_log2", log2)]
+    invalidConfigurations =
+      [ ([(key, value)], [], key)
+      | (key, value) <- [("gc_dirty_tracking_backend", "invalid"),
+                        ("gc_page_hash_table_log2", "invalid"),
+                        ("gc_page_hash_table_log2", "-1"),
+                        ("gc_page_hash_table_log2", "31")]
+      ] ++
+      [ ([("gc_dirty_tracking_backend", backend)], ["--target", target],
+         "gc_dirty_tracking_backend")
+      | (backend, target) <- [("soft_dirty", "aarch64-macos"),
+                             ("userfaultfd", "aarch64-macos"),
+                             ("userfaultfd", "x86_64-linux-gnu.2.27"),
+                             ("userfaultfd", "x86_64-linux-musl"),
+                             ("userfaultfd", "riscv64-linux-gnu.2.36")]
+      ]
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    withFixture action = withSystemTempDirectory "acton-gc-tuning" $ \tmp -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      environment <- getEnvironment
+      let app = tmp </> "app"
+          shared = tmp </> "shared"
+          runEnv = [("GC_MARKERS", "2"), ("GC_FREE_SPACE_DIVISOR", "5"),
+                    ("GC_FULL_FREQUENCY", "7")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
+          fingerprint name = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+          writeProject dir name deps selected = writeFile (dir </> "Build.act") $ unlines
+            [ "name = " ++ show name
+            , "fingerprint = " ++ fingerprint name
+            , "dependencies = {" ++ deps ++ "}"
+            , "build_options = {" ++ intercalate ", "
+                [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
+            ]
+          writeOptions = writeProject app "gc_tuning" "\"shared\": (path=\"../shared\")"
+      forM_ [app, shared] $ \dir -> createDirectoryIfMissing True (dir </> "src")
+      forM_ ["main.act", "main.ext.c"] $ \file ->
+        copyFile ("test/project/gc_tuning/src" </> file) (app </> "src" </> file)
+      copyFile "test/project/gc_tuning/src/shared.act" (shared </> "src/lib.act")
+      -- Dependency declarations deliberately conflict with root defaults.
+      writeProject shared "shared" "" (options "userfaultfd" "22")
+      action acton app shared runEnv writeOptions
 
 dependencyDeclarationTests =
   testGroup "dependency declarations"

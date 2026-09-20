@@ -1,0 +1,16 @@
+class Record(object):
+    key: int
+    text: str
+
+    def __init__(self, key: int):
+        self.key = key
+        self.text = "retained-" + str(key)
+
+def make() -> list[Record]:
+    return [Record(key) for key in range(256)]
+
+def verify(records: list[Record]) -> int:
+    for key, record in enumerate(records):
+        assert record.key == key
+        assert record.text == "retained-" + str(key)
+    return len(records)
