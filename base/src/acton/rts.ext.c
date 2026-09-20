@@ -1,5 +1,6 @@
 #define GC_THREADS 1
 #include <gc.h>
+#include <acton_gc_config.h>
 
 #include <time.h>
 #include <uv.h>
@@ -45,6 +46,88 @@ B_tuple actonQ_rtsQ_get_gc_time (B_SysCap cap) {
                             toB_u64(sweep)
                             );
     return res;
+}
+
+struct acton_gc_info {
+    struct GC_prof_stats_s stats;
+    struct GC_timeval_s time_limit;
+    unsigned backend;
+    unsigned supported_backends;
+    int incremental;
+    GC_word free_space_divisor;
+    int full_frequency;
+};
+
+static void *GC_CALLBACK read_gc_info(void *data) {
+    struct acton_gc_info *info = data;
+#if ACTON_GC_THREADS
+    GC_get_prof_stats_unsafe(&info->stats, sizeof(info->stats));
+#else
+    GC_get_prof_stats(&info->stats, sizeof(info->stats));
+#endif
+#if defined(__wasi__)
+    info->time_limit.tv_ms = GC_get_time_limit();
+    info->time_limit.tv_nsec = 0;
+#else
+    info->time_limit = GC_get_time_limit_tv();
+#endif
+    info->backend = GC_get_actual_vdb();
+    info->supported_backends = GC_get_supported_vdbs();
+    info->incremental = GC_is_incremental_mode();
+    info->free_space_divisor = GC_get_free_space_divisor();
+    info->full_frequency = GC_get_full_freq();
+    return NULL;
+}
+
+static const struct {
+    unsigned flag;
+    const char *name;
+} gc_backends[] = {
+    {GC_VDB_MPROTECT, "mprotect"},
+    {GC_VDB_MANUAL, "manual"},
+    {GC_VDB_DEFAULT, "default"},
+    {GC_VDB_GWW, "get_write_watch"},
+    {GC_VDB_PROC, "proc"},
+    {GC_VDB_SOFT, "soft_dirty"},
+    {GC_VDB_UFFDWP, "userfaultfd"},
+};
+
+B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
+    struct acton_gc_info info;
+#if ACTON_GC_THREADS
+    GC_call_with_reader_lock(read_gc_info, &info, 0);
+#else
+    read_gc_info(&info);
+#endif
+
+    // Construct Acton values only after releasing the collector lock.
+    const char *mode = !info.incremental ? "ordinary"
+        : info.time_limit.tv_ms == GC_TIME_UNLIMITED ? "generational"
+        : "incremental";
+    const char *backend = info.backend == GC_VDB_NONE ? "none" : "unknown";
+    B_list supported = B_listG_new(NULL, NULL);
+    B_SequenceD_list sequence = B_SequenceD_listG_witness;
+    for (size_t i = 0; i < sizeof(gc_backends) / sizeof(gc_backends[0]); i++) {
+        if (info.backend == gc_backends[i].flag)
+            backend = gc_backends[i].name;
+        if (info.supported_backends & gc_backends[i].flag)
+            sequence->$class->append(sequence, supported,
+                                    to$str((char *)gc_backends[i].name));
+    }
+    B_float pause_target = (B_float)B_None;
+    if (info.incremental && info.time_limit.tv_ms != GC_TIME_UNLIMITED)
+        pause_target = to$float((double)info.time_limit.tv_ms
+                               + (double)info.time_limit.tv_nsec / 1000000.0);
+
+    return $NEWTUPLE(12,
+        to$str((char *)mode), to$str(ACTON_GC_DIRTY_TRACKING_BACKEND),
+        to$str((char *)backend), supported,
+        toB_u64(acton_gc_get_page_hash_table_log2()),
+        toB_u64(info.stats.markers_m1 + 1), pause_target,
+        toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
+        toB_u64(info.stats.heapsize_full),
+        toB_u64(info.stats.free_bytes_full),
+        toB_u64(info.stats.unmapped_bytes));
 }
 
 B_u64 actonQ_rtsQ_get_heap_size (B_SysCap cap) {

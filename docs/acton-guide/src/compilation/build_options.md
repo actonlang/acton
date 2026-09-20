@@ -123,3 +123,35 @@ ordinary collection. It is independent of object mark-bit layout.
 
 Measure the application's workload before choosing a larger table. Increasing
 this value does not remove dirty-tracking faults or guarantee fewer collections.
+
+## Inspecting the collector
+
+An application can inspect its current collector configuration:
+
+```python
+import acton.rts
+
+actor main(env):
+    info = acton.rts.get_gc_info(env.syscap)
+    print(info.mode)
+    print(info.configured_backend)
+    print(info.backend)
+    env.exit(0)
+```
+
+`configured_backend` is the build choice; `backend` is the active mechanism,
+using the same `soft_dirty` and `userfaultfd` names. In ordinary mode the active
+backend is `none`. `supported_backends` lists compiled capabilities, not a
+promise that the host kernel permits them.
+
+The result also reports `page_hash_table_log2`, available `markers` (including
+the initiating thread), `pause_target_ms`, `free_space_divisor`,
+`full_frequency`, `heap_size`, `free_bytes` and `unmapped_bytes`. The pause
+target is `None` for ordinary and unlimited generational collection, and is
+not a guaranteed maximum pause. Available markers need not participate in
+every incremental marking attempt.
+
+Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
+capacity. Their difference approximates occupied GC heap, not resident memory
+or deployment memory. The query takes a consistent snapshot and does not
+change collector policy or force a collection.

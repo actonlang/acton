@@ -2288,8 +2288,8 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
               if code == ExitSuccess
                 then assertEqual "selected backend completes the application" "GC tuning OK\n" out
                 else expectUnavailable backend result
-            activeEnv = [("GC_ENABLE_INCREMENTAL", "1"),
-                         ("GC_PAUSE_TIME_TARGET", "999999")]
+            activeEnv pauseTarget = [("GC_ENABLE_INCREMENTAL", "1"),
+                                    ("GC_PAUSE_TIME_TARGET", pauseTarget)]
             sourceFiles = [shared </> "Build.act", shared </> "src/lib.act"]
         originalShared <- mapM BS.readFile sourceFiles
         -- Keep all generated output and dependency caches between selections.
@@ -2303,11 +2303,12 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
             let name = if backend == 64 then "soft_dirty" else "userfaultfd"
             -- Kernel policy may disallow UFFD or soft-dirty in CI. Only the
             -- explicit startup rejection is acceptable in place of success.
-            expectActivation name =<< run backend log2 True activeEnv
+            forM_ ["999999", "123"] $ \pauseTarget ->
+              expectActivation name =<< run backend log2 True (activeEnv pauseTarget)
             -- An inherited preference must not defeat explicit selection.
             -- Explicit builds omit the mprotect fallback entirely.
             expectActivation name =<< run backend log2 True
-              (("GC_USE_GETWRITEWATCH", "0") : activeEnv)
+              (("GC_USE_GETWRITEWATCH", "0") : activeEnv "999999")
           mapM BS.readFile sourceFiles >>=
             assertEqual "root settings must not rewrite dependency sources" originalShared
         writeOptions (options "soft_dirty" "23")
@@ -2356,7 +2357,9 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
       environment <- getEnvironment
       let app = tmp </> "app"
           shared = tmp </> "shared"
-          runEnv = ("GC_MARKERS", "2") : filter (not . isPrefixOf "GC_" . fst) environment
+          runEnv = [("GC_MARKERS", "2"), ("GC_FREE_SPACE_DIVISOR", "5"),
+                    ("GC_FULL_FREQUENCY", "7")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
           fingerprint name = Fingerprint.formatFingerprint
             (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
           writeProject dir name deps selected = writeFile (dir </> "Build.act") $ unlines
