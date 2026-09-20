@@ -22,6 +22,7 @@
 #define GC_THREADS 1
 #endif
 #include <gc.h>
+#include <acton_gc_config.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #else
@@ -2543,6 +2544,14 @@ int main(int argc, char **argv) {
     GC_set_on_os_get_mem(gc_disable_thp);
 #endif
     GC_INIT();
+#if ACTON_GC_REQUIRED_VDB != 0
+    if (getenv("GC_ENABLE_INCREMENTAL") != NULL
+            && GC_get_actual_vdb() != ACTON_GC_REQUIRED_VDB) {
+        fprintf(stderr, "Acton RTS: requested GC dirty tracking backend %s is unavailable\n",
+                ACTON_GC_DIRTY_TRACKING_BACKEND);
+        exit(1);
+    }
+#endif
     GC_set_warn_proc(DaveNull);
     acton_init_alloc();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);

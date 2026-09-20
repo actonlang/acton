@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
+    const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -24,6 +25,7 @@ pub fn build(b: *std.Build) void {
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
+        .dirty_tracking_backend = gc_dirty_tracking_backend,
     });
 
     const dep_libnetstring = b.dependency("libnetstring", .{

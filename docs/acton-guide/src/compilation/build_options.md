@@ -68,3 +68,32 @@ This option does not enable incremental or generational collection itself.
 Enabling it for a non-Linux target fails the build. If the kernel rejects
 `MADV_NOHUGEPAGE`, the application exits with an error instead of continuing
 with an ineffective setting.
+
+## GC dirty tracking backend
+
+Linux applications can select the collector's dirty-page tracking backend:
+
+```python
+build_options = {
+    "gc_dirty_tracking_backend": "soft_dirty",
+}
+```
+
+The choices are `"auto"` (the default), `"soft_dirty"` and `"userfaultfd"`.
+Automatic selection preserves BDWGC's platform choices and fallback behavior.
+Explicit choices require a Linux GNU target. `userfaultfd` additionally requires
+x86, x86_64 or aarch64 and a glibc target of 2.34 or newer. Both explicit backends
+can therefore be compared using `--target x86_64-linux-gnu.2.36`.
+
+This is a build setting, shared by the application and its dependencies,
+including database support. It does not enable incremental or generational
+collection. For example, `GC_ENABLE_INCREMENTAL=1` enables that machinery when
+launching the executable; `GC_PAUSE_TIME_TARGET=999999` selects generational
+collection without a marking time limit.
+
+An explicit choice compiles out the `mprotect` fallback. If incremental
+collection is requested through `GC_ENABLE_INCREMENTAL` at startup and the
+selected backend cannot be activated, the runtime exits with an error. An
+ordinary collection run does not require the backend to be active. Native code
+that enables incremental collection later must check `GC_get_actual_vdb()`;
+this build option does not add a live backend-switching API.
