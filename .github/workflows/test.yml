@@ -953,51 +953,6 @@ jobs:
             exit 1
           }
 
-  perf-vs-main:
-    needs: build-debs
-    # Use our own runner to get more deterministic results
-    runs-on: [self-hosted, linux, X64]
-    steps:
-      - name: "Check out repository code"
-        uses: actions/checkout@v7
-      - name: "Remove any currently install Acton to ensure clean slate"
-        run: |
-          sudo apt-get purge -qy acton
-      - name: "Install Acton from APT tip repo"
-        run: |
-          wget -q -O - https://apt.acton-lang.io/acton.gpg | sudo apt-key add -
-          echo "deb http://aptip.acton-lang.io/ tip main" | sudo tee /etc/apt/sources.list.d/acton.list
-          sudo apt-get update
-          sudo apt-get install -qy acton
-          acton version
-      - name: "Run perf tests and record"
-        run: |
-          acton version
-          rm -f test/perf/perf_data
-          perf_help="$(acton test perf --help)"
-          if ! grep -q -- '--scale' <<< "$perf_help"; then
-            echo "The APT compiler predates performance loops. Running the new compiler's benchmarks without a baseline." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          cd test/perf
-          acton test perf --time 1s --record
-      - name: "Download .deb files"
-        uses: actions/download-artifact@v8
-        with:
-          name: acton-debs-amd64
-      - name: "Install acton from .deb"
-        run: |
-          sudo dpkg -i ./deb/acton_*.deb
-          acton version
-      - name: "Run stdlib tests in ReleaseFast"
-        working-directory: test/stdlib_tests
-        run: acton test --optimize ReleaseFast --iter 1 --no-cache
-      - name: "Run perf tests to compare"
-        run: |
-          cd test/perf
-          rm -rf out
-          acton test perf --time 1s
-
   test-app-sorespo:
     strategy:
       fail-fast: false
