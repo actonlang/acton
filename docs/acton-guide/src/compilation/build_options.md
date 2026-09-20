@@ -97,3 +97,29 @@ selected backend cannot be activated, the runtime exits with an error. An
 ordinary collection run does not require the backend to be active. Native code
 that enables incremental collection later must check `GC_get_actual_vdb()`;
 this build option does not add a live backend-switching API.
+
+## GC page-hash table size
+
+Applications with large heaps can experiment with a larger page-hash table:
+
+```python
+build_options = {
+    "gc_page_hash_table_log2": "23",
+}
+```
+
+The value is the base-two logarithm of the number of entries. Values from 1
+through 30 are accepted; `"0"` (the default) keeps the collector's usual size.
+This is a build setting and is shared by all application dependencies,
+including database support.
+
+In Acton's 64-bit large-heap configuration the default is 21: 256 KiB per table.
+With 4 KiB collector blocks, addresses 8 GiB apart share an entry. Setting 23
+uses 1 MiB per table and moves that address interval to 32 GiB. Larger tables
+can reduce unnecessary rescanning when clean pages share entries with dirty
+pages. They cost more memory and clearing/copying work. Several tables exist,
+including conservative-pointer blacklisting tables, so this also affects
+ordinary collection. It is independent of object mark-bit layout.
+
+Measure the application's workload before choosing a larger table. Increasing
+this value does not remove dirty-tracking faults or guarantee fewer collections.

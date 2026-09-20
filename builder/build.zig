@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
+    const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
@@ -64,6 +65,7 @@ pub fn build(b: *std.Build) void {
         .gc_use_mark_bits = gc_use_mark_bits,
         .gc_mark_bit_per_object = gc_mark_bit_per_object,
         .gc_dirty_tracking_backend = gc_dirty_tracking_backend,
+        .gc_page_hash_table_log2 = gc_page_hash_table_log2,
         .gc_disable_thp = gc_disable_thp,
     });
 
@@ -355,6 +357,7 @@ pub fn build(b: *std.Build) void {
             .gc_use_mark_bits = gc_use_mark_bits,
             .gc_mark_bit_per_object = gc_mark_bit_per_object,
             .gc_dirty_tracking_backend = gc_dirty_tracking_backend,
+            .gc_page_hash_table_log2 = gc_page_hash_table_log2,
         }) else null;
 
         for (root_c_files.items) |entry| {

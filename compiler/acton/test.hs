@@ -2268,13 +2268,13 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
             build flags = readCreateProcessWithExitCode
               (proc acton (["build", "--color", "never", "--target", target] ++ flags))
                 { cwd = Just app, env = Just runEnv } ""
-            run backend incremental extraEnv = readCreateProcessWithExitCode
+            run backend log2 incremental extraEnv = readCreateProcessWithExitCode
               (proc (app </> "out/bin/main")
-                [show backend, if incremental then "true" else "false",
+                [show backend, show log2, if incremental then "true" else "false",
                  "--rts-wthreads", "2"])
                 { cwd = Just app, env = Just (extraEnv ++ runEnv) } ""
-            assertRuns backend incremental extraEnv = do
-              result@(_, out, _) <- run backend incremental extraEnv
+            assertRuns backend log2 incremental extraEnv = do
+              result@(_, out, _) <- run backend log2 incremental extraEnv
               expectSuccess "GC configuration and retained objects" result
               assertEqual "application completes" "GC tuning OK\n" out
             expectUnavailable backend (code, out, err) = do
@@ -2293,29 +2293,29 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
             sourceFiles = [shared </> "Build.act", shared </> "src/lib.act"]
         originalShared <- mapM BS.readFile sourceFiles
         -- Keep all generated output and dependency caches between selections.
-        forM_ [([], 0), (options "soft_dirty", 64),
-               (options "userfaultfd", 128),
-               (options "auto", 0)] $ \(selected, backend) -> do
+        forM_ [([], 0, 0), (options "soft_dirty" "23", 64, 23),
+               (options "userfaultfd" "23", 128, 23),
+               (options "auto" "0", 0, 0)] $ \(selected, backend, log2) -> do
           writeOptions selected
           expectSuccess "build selected collector" =<< build []
-          assertRuns backend False []
+          assertRuns backend log2 False []
           when (backend /= 0) $ do
             let name = if backend == 64 then "soft_dirty" else "userfaultfd"
             -- Kernel policy may disallow UFFD or soft-dirty in CI. Only the
             -- explicit startup rejection is acceptable in place of success.
-            expectActivation name =<< run backend True activeEnv
+            expectActivation name =<< run backend log2 True activeEnv
             -- An inherited preference must not defeat explicit selection.
             -- Explicit builds omit the mprotect fallback entirely.
-            expectActivation name =<< run backend True
+            expectActivation name =<< run backend log2 True
               (("GC_USE_GETWRITEWATCH", "0") : activeEnv)
           mapM BS.readFile sourceFiles >>=
             assertEqual "root settings must not rewrite dependency sources" originalShared
-        writeOptions (options "soft_dirty")
+        writeOptions (options "soft_dirty" "23")
         expectSuccess "database dependency uses the selected collector" =<< build ["--db"]
         -- No database server is needed: the DB build checks linkage, then the
         -- ordinary executable checks reuse of output after that build.
         expectSuccess "return to ordinary linkage without cleaning" =<< build []
-        assertRuns 64 False []
+        assertRuns 64 23 False []
   | System.Info.os == "linux", System.Info.arch `elem` ["x86_64", "aarch64"]
   ] ++
   [ testCase "invalid values and unsupported targets fail clearly" $
@@ -2332,10 +2332,14 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
             (key `isInfixOf` (out ++ err))
   ]
   where
-    options backend = [("gc_dirty_tracking_backend", backend)]
+    options backend log2 = [("gc_dirty_tracking_backend", backend),
+                            ("gc_page_hash_table_log2", log2)]
     invalidConfigurations =
       [ ([(key, value)], [], key)
-      | (key, value) <- [("gc_dirty_tracking_backend", "invalid")]
+      | (key, value) <- [("gc_dirty_tracking_backend", "invalid"),
+                        ("gc_page_hash_table_log2", "invalid"),
+                        ("gc_page_hash_table_log2", "-1"),
+                        ("gc_page_hash_table_log2", "31")]
       ] ++
       [ ([("gc_dirty_tracking_backend", backend)], ["--target", target],
          "gc_dirty_tracking_backend")
@@ -2368,7 +2372,7 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
         copyFile ("test/project/gc_tuning/src" </> file) (app </> "src" </> file)
       copyFile "test/project/gc_tuning/src/shared.act" (shared </> "src/lib.act")
       -- Dependency declarations deliberately conflict with root defaults.
-      writeProject shared "shared" "" (options "userfaultfd")
+      writeProject shared "shared" "" (options "userfaultfd" "22")
       action acton app shared runEnv writeOptions
 
 dependencyDeclarationTests =

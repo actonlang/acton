@@ -129,6 +129,12 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         }
     }
+    const page_hash_table_log2 = b.option(u8, "page_hash_table_log2",
+        "Log2 of page-hash entries (0 keeps the default)") orelse 0;
+    if (page_hash_table_log2 > 30) {
+        std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
+        std.process.exit(1);
+    }
     const enable_gc_assertions = b.option(bool, "enable_gc_assertions",
         "Enable collector-internal assertion checking") orelse false;
     const enable_mmap = b.option(bool, "enable_mmap",
@@ -170,6 +176,9 @@ pub fn build(b: *std.Build) void {
     if (required_vdb == 0x40) {
         flags.appendSlice(&.{ "-D NO_UFFDWP_VDB", "-D SOFT_VDB" }) catch unreachable;
     }
+
+    if (page_hash_table_log2 != 0)
+        flags.append(b.fmt("-DLOG_PHT_ENTRIES={d}", .{page_hash_table_log2})) catch unreachable;
 
     // Always enabled.
     flags.append("-D ALL_INTERIOR_POINTERS") catch unreachable;
@@ -533,13 +542,32 @@ pub fn build(b: *std.Build) void {
     const acton_gc_config = generated.add("acton_gc_config.h", b.fmt(
         \\#ifndef ACTON_GC_CONFIG_H
         \\#define ACTON_GC_CONFIG_H
+        \\#include <gc.h>
         \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
         \\#define ACTON_GC_REQUIRED_VDB {d}
         \\#define ACTON_GC_THREADS {d}
+        \\#ifdef __cplusplus
+        \\extern "C" {{
+        \\#endif
+        \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
+        \\#ifdef __cplusplus
+        \\}}
+        \\#endif
         \\#endif
         \\
     , .{ dirty_tracking_backend, required_vdb, @intFromBool(enable_threads) }));
     gc.installHeader(acton_gc_config, "acton_gc_config.h");
+    // Resolve upstream defaults and extra compiler flags in the collector itself.
+    gc.root_module.addCSourceFile(.{
+        .file = generated.add("acton_gc_config.c",
+            \\#include "private/gc_priv.h"
+            \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void) {
+            \\    return LOG_PHT_ENTRIES;
+            \\}
+            \\
+        ),
+        .flags = flags.items,
+    });
 
     var gccpp: *std.Build.Step.Compile = undefined;
     var gctba: *std.Build.Step.Compile = undefined;

@@ -20,12 +20,17 @@ static void *gc_tuning_active_backend(void *result) {
     return NULL;
 }
 
-int64_t gc_tuningQ_mainQ_check(int64_t backend, bool incremental) {
+int64_t gc_tuningQ_mainQ_check(int64_t backend, int64_t page_hash_log2,
+                              bool incremental) {
     const char *selected = backend == GC_VDB_SOFT ? "soft_dirty"
                            : backend == GC_VDB_UFFDWP ? "userfaultfd"
                                                     : "auto";
     gc_tuning_require(strcmp(ACTON_GC_DIRTY_TRACKING_BACKEND, selected) == 0,
                       "collector backend metadata does not match the root");
+    unsigned default_log2 = sizeof(void *) == 8 ? 21 : 20;
+    gc_tuning_require(acton_gc_get_page_hash_table_log2()
+                          == (page_hash_log2 ? page_hash_log2 : default_log2),
+                      "collector page-hash size does not match the root");
     unsigned supported = GC_get_supported_vdbs();
     if (backend == GC_VDB_SOFT) {
         gc_tuning_require((supported & GC_VDB_SOFT) != 0,

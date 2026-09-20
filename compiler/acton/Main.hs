@@ -2841,6 +2841,7 @@ genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
                  , "        .gc_use_mark_bits = gc_use_mark_bits,"
                  , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
                  , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
+                 , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
                  , "        .gc_disable_thp = gc_disable_thp,"
                  , "        .acton_modules = " ++ show selectedCsv ++ ","
                  , "        .acton_root_stubs = \"\","
