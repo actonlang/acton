@@ -969,12 +969,18 @@ isNothingCtor _ _                   = False
 nextIterator env (Call _ f PosNil KwdNil)
   | Dot _ e n <- stripTApp f,
     n == nextKW                     = Just e
+nextIterator env (Call _ f (PosArg e PosNil) KwdNil)
+  | isNextFunction env f            = Just e
 nextIterator env (Box _ e)          = nextIterator env e
 nextIterator env (Paren _ e)        = nextIterator env e
 nextIterator _ _                    = Nothing
 
 stripTApp (TApp _ f _)              = stripTApp f
 stripTApp e                         = e
+
+isNextFunction env (Var _ n)        = unalias env n == gBuiltin (name "next")
+isNextFunction env (TApp _ f _)     = isNextFunction env f
+isNextFunction _ _                  = False
 
 genNextBoolCall env e out           = callee <> parens (gen env e <> comma <+> char '&' <> gen env out)
   where callee                      = genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextKW
@@ -1159,7 +1165,7 @@ maybeValueOpArgOK n (OpArg _ e)     = maybeValueExprOK n e
 maybeValueSlizOK n (Sliz _ a b c)   = all (maybeValueExprOK n) [ e | Just e <- [a,b,c] ]
 
 genNextAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch cond b] els) : ss)
-  -- Collapse: m = it.__next__(); if isinstance(m, just): ...
+  -- Collapse: m = it.__next__()/next(it); if isinstance(m, just): ...
   -- into a single bool/out next call.  Direct range[int] iterators use int64_t.
   | Just valT <- maybeValueType t,
     Just it <- nextIterator env e,

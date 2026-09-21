@@ -2133,6 +2133,8 @@ main = do
       -- locals live across the loop no longer need StopIteration longjmp protection.
       testCodeGenContains env0 "forloop_volatile" ["$class->__next__(N_iter, &N_1maybe)", "B_str marker = B_None;"]
       testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
+      testCodeGenContains env0 "next_peephole" ["$class->__next__(it, &item)"]
+      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)", "B_justG_new"]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do
