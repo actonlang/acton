@@ -117,17 +117,16 @@ static void testing_loop_batch(testingQ_PerfLoop self, uint64_t completed) {
     self->_batch_size = count;
 }
 
-B_int testingQ_PerfLoopD___next__(testingQ_PerfLoop self) {
+bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
     uint64_t state = __atomic_load_n(&self->_state, __ATOMIC_ACQUIRE);
     for (;;) {
         if (!(state & TESTING_LOOP_CLAIMED) ||
             (state & (TESTING_LOOP_CLOSED | TESTING_LOOP_INVALID | TESTING_LOOP_BUSY))) {
             testing_loop_invalid(self, "Cannot advance a closed or concurrent t.loop()");
-            return NULL;
+            return false;
         }
         if (state & TESTING_LOOP_EXHAUSTED) {
-            $RAISE((B_BaseException)B_StopIterationG_new(to$str("t.loop() exhausted")));
-            return NULL;
+            return false;
         }
         if (__atomic_compare_exchange_n(&self->_state, &state,
                                          state | TESTING_LOOP_BUSY, false,
@@ -139,7 +138,8 @@ B_int testingQ_PerfLoopD___next__(testingQ_PerfLoop self) {
         self->_batch_left--;
         B_int scale = self->_yield_scale;
         __atomic_fetch_and(&self->_state, ~((uint64_t)TESTING_LOOP_BUSY), __ATOMIC_RELEASE);
-        return scale;
+        *out = (B_value)scale;
+        return true;
     }
 
     uint64_t completed = (state & TESTING_LOOP_STARTED) ? self->_batch_size : 0;
@@ -169,12 +169,13 @@ B_int testingQ_PerfLoopD___next__(testingQ_PerfLoop self) {
         __atomic_fetch_or(&self->_state, TESTING_LOOP_INVALID, __ATOMIC_RELAXED);
         __atomic_fetch_and(&self->_state, ~((uint64_t)TESTING_LOOP_BUSY), __ATOMIC_RELEASE);
         $RAISE(exception);
-        return NULL;
+        return false;
     }
     __atomic_fetch_and(&self->_state, ~((uint64_t)TESTING_LOOP_BUSY), __ATOMIC_RELEASE);
     if (!scale)
-        $RAISE((B_BaseException)B_StopIterationG_new(to$str("t.loop() exhausted")));
-    return scale;
+        return false;
+    *out = (B_value)scale;
+    return true;
 }
 
 B_NoneType testingQ_PerfLoopD_close(testingQ_PerfLoop self) {

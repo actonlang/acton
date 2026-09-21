@@ -598,7 +598,7 @@ scRaiseValueError   = tSchema [qbind a] tRaiseValErr
 -- Raw range iteration primitive used when normalizing for-loops over range.
 scUNext             = tSchema [] tUNext
   where tUNext      = tFun fxMut (posRow tRange posNil) kwdNil tInt
-        
+
 --  $WRAP           : [A,B,C] => ($Actor, proc(*A,**B)->C) -> action(*A,**B)->C
 scWRAP              = tSchema [qbind a, qbind b, qbind c] tWRAP
   where tWRAP       = tFun0 [tActor, abcFun fxProc] (abcFun fxAction)
@@ -664,4 +664,3 @@ isPUSHF _                       = False
 
 isRAISE (Call _ (Var _ x) _ _)  = x == primRAISE
 isRAISE _                       = False
-

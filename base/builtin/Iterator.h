@@ -1,2 +1,2 @@
 
-$WORD $next(B_Iterator);
+B_maybe $next(B_Iterator);

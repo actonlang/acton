@@ -37,7 +37,7 @@ struct B_IteratorD_strG_class {
     bool (*__bool__)(B_IteratorD_str);
     B_str (*__str__)(B_IteratorD_str);
     B_str (*__repr__)(B_IteratorD_str);
-    B_str (*__next__)(B_IteratorD_str);
+    bool (*__next__)(B_IteratorD_str, $WORD *);
 };
 
 struct B_IteratorD_str {
@@ -78,7 +78,7 @@ struct B_IteratorD_bytearrayG_class {
     bool (*__bool__)(B_IteratorD_bytearray);
     B_str (*__str__)(B_IteratorD_bytearray);
     B_str (*__repr__)(B_IteratorD_bytearray);
-    B_int (*__next__)(B_IteratorD_bytearray);
+    bool (*__next__)(B_IteratorD_bytearray, $WORD *);
 };
 
 struct B_IteratorD_bytearray {
@@ -123,7 +123,7 @@ struct B_IteratorD_bytesG_class {
     bool (*__bool__)(B_IteratorD_bytes);
     B_str (*__str__)(B_IteratorD_bytes);
     B_str (*__repr__)(B_IteratorD_bytes);
-    B_int (*__next__)(B_IteratorD_bytes);
+    bool (*__next__)(B_IteratorD_bytes, $WORD *);
 };
 
 struct B_IteratorD_bytes {

@@ -22,7 +22,7 @@ struct B_IteratorD_dictG_class {
     bool (*__bool__)(B_IteratorD_dict);
     B_str (*__str__)(B_IteratorD_dict);
     B_str (*__repr__)(B_IteratorD_dict);
-    $WORD(*__next__)(B_IteratorD_dict);
+    bool (*__next__)(B_IteratorD_dict, $WORD *);
 };
 
 struct B_IteratorD_dict {
@@ -48,7 +48,7 @@ struct B_IteratorD_dict_valuesG_class {
     bool (*__bool__)(B_IteratorD_dict_values);
     B_str (*__str__)(B_IteratorD_dict_values);
     B_str (*__repr__)(B_IteratorD_dict_values);
-    $WORD(*__next__)(B_IteratorD_dict_values);
+    bool (*__next__)(B_IteratorD_dict_values, $WORD *);
 };
 
 struct B_IteratorD_dict_values {
@@ -74,7 +74,7 @@ struct B_IteratorD_dict_itemsG_class {
     bool (*__bool__)(B_IteratorD_dict_items);
     B_str (*__str__)(B_IteratorD_dict_items);
     B_str (*__repr__)(B_IteratorD_dict_items);
-    $WORD(*__next__)(B_IteratorD_dict_items);
+    bool (*__next__)(B_IteratorD_dict_items, $WORD *);
 };
 
 struct B_IteratorD_dict_items {

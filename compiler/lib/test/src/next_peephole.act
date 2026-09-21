@@ -1,0 +1,7 @@
+# CodeGen regression fixture for allocation-free explicit iteration.
+def first(items: list[str]) -> ?str:
+    it = iter(items)
+    item = next(it)
+    if isinstance(item, just):
+        return item.val
+    return None

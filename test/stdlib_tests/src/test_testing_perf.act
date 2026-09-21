@@ -139,7 +139,8 @@ def _test_ordinary_loop_and_closed_context(t: testing.SyncT):
     unused.close()
     assert unused.status() == 0
     unfinished = testing.PerfLoop()
-    assert next(unfinished.claim()) == 1
+    uc = next(unfinished.claim())
+    assert isinstance(uc,just) and uc.val == 1
     unfinished.close()
     assert unfinished.status() == 1
 

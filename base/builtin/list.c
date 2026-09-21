@@ -79,19 +79,11 @@ B_NoneType B_listD___init__(B_list lst, B_Iterable wit, $WORD iterable) {
     if (!iterable || !wit) {
         return B_None;
     }
-    $WORD w;
     B_Iterator it = wit->$class->__iter__(wit,iterable);
     B_SequenceD_list wit2 = B_SequenceD_listG_new();
-    if ($PUSH()) {
-        while(true) {
-            $WORD e = it->$class->__next__(it);
-            wit2->$class->append(wit2, lst, e);
-        }
-        $DROP();
-    } else {
-        B_BaseException ex = $POP();
-        if (! $ISINSTANCE0(ex, B_StopIteration))
-            $RAISE(ex);
+    $WORD e;
+    while (it->$class->__next__(it, &e)) {
+        wit2->$class->append(wit2, lst, e);
     }
     return B_None;
 }
@@ -321,11 +313,11 @@ B_list B_TimesD_SequenceD_listD___mul__ (B_TimesD_SequenceD_list wit, B_list lst
 
 // first define the Iterator instance ///
 
-
-static $WORD B_IteratorD_listD_next(B_IteratorD_list self) {
+static bool B_IteratorD_listD_next(B_IteratorD_list self, $WORD *out) {
     if (self->nxt >= self->src->length)
-        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("list iterator terminated")));
-    return self->src->data[self->nxt++];
+        return false;
+    *out = self->src->data[self->nxt++];
+    return true;
 }
 
 B_IteratorD_list B_IteratorD_listG_new(B_list lst) {
@@ -359,7 +351,8 @@ B_IteratorD_list B_IteratorD_list$_deserialize(B_IteratorD_list res, $Serial$sta
 }
 
 struct B_IteratorD_listG_class B_IteratorD_listG_methods = {"B_IteratorD_list",UNASSIGNED,($SuperG_class)&B_IteratorG_methods, B_IteratorD_listD_init,
-                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,B_IteratorD_listD_str,B_IteratorD_listD_next};
+                                                      B_IteratorD_listD_serialize, B_IteratorD_list$_deserialize,B_IteratorD_listD_bool,B_IteratorD_listD_str,
+                                                      B_IteratorD_listD_str,B_IteratorD_listD_next};
 
 // Now, we can define the protocol methods
 
@@ -451,16 +444,9 @@ B_NoneType B_SequenceD_listD___setslice__(B_SequenceD_list wit, B_list lst, B_It
     B_list other = B_listD_new(0);
     B_SequenceD_list wit3 = B_SequenceD_listG_new();
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
-    if ($PUSH()) {
-        while(1) {
-            $WORD w = it->$class->__next__(it);
-            wit3->$class->append(wit3, other, w);
-        }
-        $DROP();
-    } else {
-        B_BaseException ex = $POP();
-        if (! $ISINSTANCE0(ex, B_StopIteration))
-            $RAISE(ex);
+    $WORD next;
+    while (it->$class->__next__(it, &next)) {
+        wit3->$class->append(wit3, other, next);
     }
     int olen = other->length;
     int64_t start, stop, step, slen;

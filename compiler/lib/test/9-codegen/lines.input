@@ -217,23 +217,19 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
             break
         print@[(__builtin__.str, __builtin__.int)](("\"loop body\"", (BOX __builtin__.int self.i)), None, None, None, None)
     N_3iter: __builtin__.Iterator[?__builtin__.int] = __builtin__.CollectionD_SequenceD_listD___iter__@[?__builtin__.int](__builtin__.SequenceD_list@[?__builtin__.int]().W_Collection, [(BOX __builtin__.int (UNBOX __builtin__.int 1)), (BOX __builtin__.int (UNBOX __builtin__.int 2)), (BOX __builtin__.int (UNBOX __builtin__.int 3))])
-    if (BOX __builtin__.bool $PUSH()):
-        while True:
-            if True:
-                pass
-            else:
-                break
-            j: ?__builtin__.int = N_3iter.__next__()
+    while True:
+        if True:
+            pass
+        else:
+            break
+        N_4maybe: __builtin__.maybe[?__builtin__.int] = N_3iter.__next__()
+        if isinstance(N_4maybe, __builtin__.just):
+            j: ?__builtin__.int = $CAST@[__builtin__.maybe[?__builtin__.int], __builtin__.just[?__builtin__.int]](N_4maybe).val
             if (BOX __builtin__.bool W_Apa_759.__eq__(j, (BOX __builtin__.int (UNBOX __builtin__.int 2)))):
                 continue
             print@[(__builtin__.str, ?__builtin__.int)](("\"for j\"", j), None, None, None, None)
-        $DROP()
-    else:
-        N_5x: __builtin__.BaseException = $POP()
-        if isinstance(N_5x, __builtin__.StopIteration):
-            pass
         else:
-            $RAISE(N_5x)
+            break
     if (BOX __builtin__.bool $PUSHF()):
         if (BOX __builtin__.bool $PUSH()):
             if (BOX __builtin__.bool W_Apa_785.__eq__((BOX __builtin__.int self.v), (BOX __builtin__.int (UNBOX __builtin__.int 0)))):
@@ -241,20 +237,20 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
             print@[(__builtin__.str,)](("\"unreached\"",), None, None, None, None)
             $DROP()
         else:
-            N_6x: __builtin__.BaseException = $POP()
-            if isinstance(N_6x, ValueError):
-                e: ValueError = N_6x
+            N_7x: __builtin__.BaseException = $POP()
+            if isinstance(N_7x, ValueError):
+                e: ValueError = N_7x
                 print@[(__builtin__.str, __builtin__.str)](("\"caught\"", "\"ValueError\""), None, None, None, None)
             else:
-                $RAISE(N_6x)
+                $RAISE(N_7x)
         $RAISE($SEQ())
     else:
-        N_7xx: __builtin__.BaseException = $POP()
+        N_8xx: __builtin__.BaseException = $POP()
         print@[(__builtin__.str,)](("\"finally\"",), None, None, None, None)
-        if isinstance(N_7xx, $SEQ):
+        if isinstance(N_8xx, $SEQ):
             pass
         else:
-            $RAISE(N_7xx)
+            $RAISE(N_8xx)
     $AFTER@[__builtin__.int]((BOX __builtin__.float (UNBOX __builtin__.float 1)), L_20proc(self))
     return self.nopG_local(C_cont)
 class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
