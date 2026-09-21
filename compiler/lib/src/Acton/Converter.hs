@@ -194,10 +194,12 @@ quals env q                             = [ (v, p) | QBind v ps <- q, p <- ps, i
 
 qualAttr p v n                          = Derived (tvarWit v p) n
 
-sibName ws n                            = Derived (baseName ws) n
+-- Sibling witnesses are named the same way their runtime selection path is
+-- followed: each successive protocol wraps the witness selected so far.
+sibName ws n                            = foldl (\n' w -> Derived (deriveQ w) n') n ws
 
 baseName [w]                            = deriveQ w
-baseName (w : ws)                       = Derived (baseName ws) (deriveQ w)
+baseName (w : ws)                       = foldl (\n w' -> Derived (deriveQ w') n) (deriveQ w) ws
 
 baseGName ws                            = modOf (head ws) $ baseName ws
 
@@ -242,7 +244,10 @@ fixupSelf s                             = s
 
 convEnvProtos env                       = convertModules convSources conv env
   where
-    convSources (Derived _ n)           = [n]
+    -- A generated sibling witness can be derived several levels below the
+    -- source protocol/extension entry.  Keep peeling the generated prefix so
+    -- lazy module interfaces can reach that original entry in one pass.
+    convSources (Derived _ n)           = n : convSources n
     convSources _                       = []
 
     conv m (n, NDef sc d doc)           = [(n, NDef (convS sc) d doc)]

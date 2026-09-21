@@ -1,16 +1,18 @@
 struct B_HashableD_bytes B_HashableD_bytesG_instance;
 struct B_TimesD_bytes B_TimesD_bytesG_instance;
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance;
-struct B_SliceableD_bytes B_SliceableD_bytesG_instance;
+struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance;
 struct B_OrdD_bytes B_OrdD_bytesG_instance;
 struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance;
 struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance;
 struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_instance;
+struct B_SliceableD_SequenceD_bytearray B_SliceableD_SequenceD_bytearrayG_instance;
+struct B_IndexedD_SliceableD_SequenceD_bytearray B_IndexedD_SliceableD_SequenceD_bytearrayG_instance;
 struct B_SequenceD_bytearray B_SequenceD_bytearrayG_instance;
 struct B_OrdD_bytearray B_OrdD_bytearrayG_instance;
 struct B_HashableD_str B_HashableD_strG_instance;
 struct B_TimesD_str B_TimesD_strG_instance;
-struct B_SliceableD_str B_SliceableD_strG_instance;
+struct B_ISliceableD_str B_ISliceableD_strG_instance;
 struct B_ContainerD_str B_ContainerD_strG_instance;
 struct B_OrdD_str B_OrdD_strG_instance;
 // struct B_IterableD_range B_IterableD_rangeG_instance;
@@ -22,7 +24,8 @@ struct B_OrdD_list B_OrdD_listG_instance;
 struct B_ContainerD_list B_ContainerD_listG_instance;
 struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance;
 struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
-struct B_SequenceD_list B_SequenceD_listG_instance;
+struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance;
+struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance;
 struct B_SequenceD_list B_SequenceD_listG_instance;
 struct B_HashableD_complex B_HashableD_complexG_instance;
 struct B_EqD_complex B_EqD_complexG_instance;
@@ -98,16 +101,47 @@ struct B_HashableD_bool B_HashableD_boolG_instance;
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods};
-struct B_SliceableD_bytes B_SliceableD_bytesG_instance = {&B_SliceableD_bytesG_methods};
+struct B_ISliceableD_bytes B_ISliceableD_bytesG_instance = {
+    &B_ISliceableD_bytesG_methods,
+    (B_Eq)&B_OrdD_intG_instance
+};
 struct B_OrdD_bytes B_OrdD_bytesG_instance = {&B_OrdD_bytesG_methods};
 struct B_ContainerD_bytearray B_ContainerD_bytearrayG_instance = {&B_ContainerD_bytearrayG_methods};
-struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance = {&B_TimesD_SequenceD_bytearrayG_methods, (B_Sequence)&B_SequenceD_bytearrayG_instance};
-struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_instance = {&B_CollectionD_SequenceD_bytearrayG_methods, (B_Sequence)&B_SequenceD_bytearrayG_instance};
-struct  B_SequenceD_bytearray B_SequenceD_bytearrayG_instance = {&B_SequenceD_bytearrayG_methods, (B_Eq)&B_OrdD_bigintG_methods, (B_Collection)&B_CollectionD_SequenceD_bytearrayG_instance, (B_Times)&B_TimesD_SequenceD_bytearrayG_instance};
+struct B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_instance = {
+    &B_TimesD_SequenceD_bytearrayG_methods,
+    (B_ISequence)&B_SequenceD_bytearrayG_instance,
+    (B_Sequence)&B_SequenceD_bytearrayG_instance
+};
+struct B_CollectionD_SequenceD_bytearray B_CollectionD_SequenceD_bytearrayG_instance = {
+    &B_CollectionD_SequenceD_bytearrayG_methods,
+    (B_ISequence)&B_SequenceD_bytearrayG_instance,
+    (B_Sequence)&B_SequenceD_bytearrayG_instance
+};
+struct B_IndexedD_SliceableD_SequenceD_bytearray B_IndexedD_SliceableD_SequenceD_bytearrayG_instance = {
+    &B_IndexedD_SliceableD_SequenceD_bytearrayG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Sliceable)&B_SliceableD_SequenceD_bytearrayG_instance,
+    (B_Sequence)&B_SequenceD_bytearrayG_instance
+};
+struct B_SliceableD_SequenceD_bytearray B_SliceableD_SequenceD_bytearrayG_instance = {
+    &B_SliceableD_SequenceD_bytearrayG_methods,
+    (B_Indexed)&B_IndexedD_SliceableD_SequenceD_bytearrayG_instance,
+    (B_Sequence)&B_SequenceD_bytearrayG_instance
+};
+struct B_SequenceD_bytearray B_SequenceD_bytearrayG_instance = {
+    &B_SequenceD_bytearrayG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Collection)&B_CollectionD_SequenceD_bytearrayG_instance,
+    (B_Times)&B_TimesD_SequenceD_bytearrayG_instance,
+    (B_Sliceable)&B_SliceableD_SequenceD_bytearrayG_instance
+};
 struct B_OrdD_bytearray B_OrdD_bytearrayG_instance = {&B_OrdD_bytearrayG_methods};
 struct B_HashableD_str B_HashableD_strG_instance = {&B_HashableD_strG_methods};
 struct B_TimesD_str B_TimesD_strG_instance = {&B_TimesD_strG_methods};
-struct B_SliceableD_str B_SliceableD_strG_instance = {&B_SliceableD_strG_methods};
+struct B_ISliceableD_str B_ISliceableD_strG_instance = {
+    &B_ISliceableD_strG_methods,
+    (B_Eq)&B_OrdD_intG_instance
+};
 struct B_ContainerD_str B_ContainerD_strG_instance = {&B_ContainerD_strG_methods};
 struct B_OrdD_str B_OrdD_strG_instance = {&B_OrdD_strG_methods};
 //struct B_IterableD_range B_IterableD_rangeG_instance = {&B_IterableD_rangeG_methods};
@@ -117,9 +151,34 @@ struct B_OrdD_dict B_OrdD_dictG_instance = {&B_OrdD_dictG_methods};
 struct B_MappingD_dict B_MappingD_dictG_instance = {&B_MappingD_dictG_methods};
 struct B_OrdD_list B_OrdD_listG_instance = {&B_OrdD_listG_methods};
 struct B_ContainerD_list B_ContainerD_listG_instance = {&B_ContainerD_listG_methods};
-struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance = {&B_TimesD_SequenceD_listG_methods, (B_Sequence)&B_SequenceD_listG_instance};
-struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance = {&B_CollectionD_SequenceD_listG_methods, (B_Sequence)&B_SequenceD_listG_instance};
-struct B_SequenceD_list B_SequenceD_listG_instance = {&B_SequenceD_listG_methods, (B_Eq)&B_OrdD_bigintG_methods, (B_Collection)&B_CollectionD_SequenceD_listG_instance, (B_Times)&B_TimesD_SequenceD_listG_instance};
+struct B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_instance = {
+    &B_TimesD_SequenceD_listG_methods,
+    (B_ISequence)&B_SequenceD_listG_instance,
+    (B_Sequence)&B_SequenceD_listG_instance
+};
+struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance = {
+    &B_CollectionD_SequenceD_listG_methods,
+    (B_ISequence)&B_SequenceD_listG_instance,
+    (B_Sequence)&B_SequenceD_listG_instance
+};
+struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance = {
+    &B_IndexedD_SliceableD_SequenceD_listG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Sliceable)&B_SliceableD_SequenceD_listG_instance,
+    (B_Sequence)&B_SequenceD_listG_instance
+};
+struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance = {
+    &B_SliceableD_SequenceD_listG_methods,
+    (B_Indexed)&B_IndexedD_SliceableD_SequenceD_listG_instance,
+    (B_Sequence)&B_SequenceD_listG_instance
+};
+struct B_SequenceD_list B_SequenceD_listG_instance = {
+    &B_SequenceD_listG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Collection)&B_CollectionD_SequenceD_listG_instance,
+    (B_Times)&B_TimesD_SequenceD_listG_instance,
+    (B_Sliceable)&B_SliceableD_SequenceD_listG_instance
+};
 struct B_HashableD_complex B_HashableD_complexG_instance = {&B_HashableD_complexG_methods};
 struct B_EqD_complex B_EqD_complexG_instance = {&B_EqD_complexG_methods};
 struct B_DivD_complex B_DivD_complexG_instance = {&B_DivD_complexG_methods};
@@ -198,7 +257,7 @@ struct B_HashableD_bool  B_HashableD_boolG_instance = {&B_HashableD_boolG_method
 B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytesG_instance;
 B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytesG_instance;
 B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytesG_instance;
-B_SliceableD_bytes B_SliceableD_bytesG_witness = &B_SliceableD_bytesG_instance;
+B_ISliceableD_bytes B_ISliceableD_bytesG_witness = &B_ISliceableD_bytesG_instance;
 B_OrdD_bytes B_OrdD_bytesG_witness = &B_OrdD_bytesG_instance;
 B_ContainerD_bytearray B_ContainerD_bytearrayG_witness = &B_ContainerD_bytearrayG_instance;
 B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness = &B_TimesD_SequenceD_bytearrayG_instance;
@@ -207,7 +266,7 @@ B_SequenceD_bytearray B_SequenceD_bytearrayG_witness = &B_SequenceD_bytearrayG_i
 B_OrdD_bytearray B_OrdD_bytearrayG_witness = &B_OrdD_bytearrayG_instance;
 B_HashableD_str B_HashableD_strG_witness = &B_HashableD_strG_instance;
 B_TimesD_str B_TimesD_strG_witness = &B_TimesD_strG_instance;
-B_SliceableD_str B_SliceableD_strG_witness = &B_SliceableD_strG_instance;
+B_ISliceableD_str B_ISliceableD_strG_witness = &B_ISliceableD_strG_instance;
 B_ContainerD_str B_ContainerD_strG_witness = &B_ContainerD_strG_instance;
 B_OrdD_str B_OrdD_strG_witness = &B_OrdD_strG_instance;
 //B_IterableD_range B_IterableD_rangeG_witness = &B_IterableD_rangeG_instance;

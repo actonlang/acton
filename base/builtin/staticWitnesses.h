@@ -1,7 +1,7 @@
 extern B_HashableD_bytes B_HashableD_bytesG_witness;
 extern B_TimesD_bytes B_TimesD_bytesG_witness;
 extern B_ContainerD_bytes B_ContainerD_bytesG_witness;
-extern B_SliceableD_bytes B_SliceableD_bytesG_witness;
+extern B_ISliceableD_bytes B_ISliceableD_bytesG_witness;
 extern B_OrdD_bytes B_OrdD_bytesG_witness;
 extern B_ContainerD_bytearray B_ContainerD_bytearrayG_witness;
 extern B_TimesD_SequenceD_bytearray B_TimesD_SequenceD_bytearrayG_witness;
@@ -10,7 +10,7 @@ extern B_SequenceD_bytearray B_SequenceD_bytearrayG_witness;
 extern B_OrdD_bytearray B_OrdD_bytearrayG_witness;
 extern B_HashableD_str B_HashableD_strG_witness;
 extern B_TimesD_str B_TimesD_strG_witness;
-extern B_SliceableD_str B_SliceableD_strG_witness;
+extern B_ISliceableD_str B_ISliceableD_strG_witness;
 extern B_ContainerD_str B_ContainerD_strG_witness;
 extern B_OrdD_str B_OrdD_strG_witness;
 // extern B_IterableD_range B_IterableD_rangeG_witness;

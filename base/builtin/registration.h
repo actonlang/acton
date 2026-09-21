@@ -81,8 +81,7 @@
 
 #define BIGINT_ID 63
 
-// Prim witness classes and witness singletons; 71 remains headroom for future
-// preassigned ids, so adding one does not shift the dynamically assigned ids below.
+// Prim witness classes, witness singletons, and immutable builtin collection classes.
 #define EQOPT_ID 64
 #define EQTUPLE_ID 65
 #define ORDTUPLE_ID 66
@@ -90,6 +89,7 @@
 #define WEQNONE_ID 68
 #define IDENTITYACTOR_ID 69
 #define ISET_ID 70
+#define ILIST_ID 71
 
 #define PREASSIGNED 72
 
