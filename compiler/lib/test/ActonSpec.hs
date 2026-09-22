@@ -151,10 +151,16 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
-    describe "Zon (build.zig.zon reader)" $ do
+    describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of
                        Left e  -> error ("parse failed: " ++ e)
                        Right v -> Zon.zonDependencies v
+      it "escapes Zig string contents and preserves Unicode" $ do
+        let value = "packages/wid\"gets\\dir\n\r\t\0\x01\&a\x1f\x7f/\x00e5\x1f600"
+        Zon.escapeString value `shouldBe`
+          "packages/wid\\\"gets\\\\dir\\n\\r\\t\\x00\\x01a\\x1f\\x7f/\x00e5\x1f600"
+        Zon.parseZon ("\"" ++ Zon.escapeString value ++ "\"") `shouldBe` Right (Zon.ZString value)
+        Zon.escapeString "" `shouldBe` ""
       it "extracts url/hash and defaults lazy to false" $ do
         let src = unlines
               [ ".{"

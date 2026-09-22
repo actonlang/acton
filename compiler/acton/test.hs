@@ -2703,6 +2703,19 @@ archiveDependencyTests =
         removeFile archive
         expectSuccess "reuse fetched archive offline" =<< run app ["build", "--skip-build"]
 
+  , testCase "builds quoted archive subdirectories and local overrides" $
+      withFixture $ \tmp app archive run -> do
+        add run app archive "widgets" "packages/wid\"gets"
+        add run app archive "tools" "packages/tools"
+        let local = tmp </> "local-\"tools"
+        writeProject local "tools" []
+        writeFile (local </> "src/lib.act") "def value() -> int:\n    return 22\n"
+        expectSuccess "build quoted dependency paths" =<< run app
+          ["build", "--color", "never", "--dep", "tools=" ++ local]
+        (code, out, err) <- readCreateProcessWithExitCode (proc (app </> "out/bin/main") []) ""
+        assertEqual ("run built application: " ++ err) ExitSuccess code
+        assertEqual "uses the selected project and local override" "43\n" out
+
   , testCase "pkg add preserves or replaces the archive subdirectory" $
       withFixture $ \_ app archive run -> do
         add run app archive "widgets" "packages/widgets"
@@ -2785,6 +2798,8 @@ archiveDependencyTests =
       writeFile (packages </> "common/src/lib.act") "def value() -> int:\n    return 20\n"
       writeProject (packages </> "widgets") "widgets" [("common", "../common")]
       writeFile (packages </> "widgets/src/lib.act") "import common\n\ndef value() -> int:\n    return common.value() + 1\n"
+      writeProject (packages </> "wid\"gets") "widgets" [("common", "../common")]
+      writeFile (packages </> "wid\"gets/src/lib.act") "import common\n\ndef value() -> int:\n    return common.value() + 1\n"
       writeProject (packages </> "tools") "tools" []
       writeFile (packages </> "tools/src/lib.act") "def value() -> int:\n    return 21\n"
       writeProject (packages </> "no-src") "empty" []
