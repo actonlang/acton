@@ -6,6 +6,7 @@ module Acton.BuildSpec
   , Library(..)
   , BuildSpec(..)
   , concreteDependencies
+  , checkSubdir
   , encodeBuildSpecJSON
   , renderBuildAct
   , parseBuildAct
@@ -30,6 +31,8 @@ import qualified Data.Text.Encoding as TE
 import Numeric (readHex, readOct, showHex)
 import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
+import qualified System.FilePath.Posix as Posix
+import qualified System.FilePath.Windows as Windows
 
 import Control.Applicative ((<|>))
 import Control.Monad (foldM)
@@ -66,6 +69,7 @@ data PkgDep = PkgDep
   , repo_url  :: Maybe String
   , repo_ref  :: Maybe String
   , follows   :: Maybe String
+  , subdir    :: Maybe String
   } deriving (Eq, Show, Generic)
 
 instance FromJSON PkgDep where
@@ -74,21 +78,25 @@ instance FromJSON PkgDep where
     case f of
       Just ref -> either fail pure (checkFollows ref (map K.toString (KM.keys o)))
       Nothing -> pure ()
+    s <- if KM.member "subdir" o then Just <$> o .: "subdir" else pure Nothing
+    mapM_ (either fail pure . checkSubdir) s
     PkgDep <$> o .:? "url"
            <*> o .:? "hash"
            <*> o .:? "path"
            <*> o .:? "repo_url"
            <*> o .:? "repo_ref"
            <*> pure f
+           <*> pure s
 
 instance ToJSON PkgDep where
-  toJSON (PkgDep u h p ru rr f) = Ae.object $ catMaybes
+  toJSON (PkgDep u h p ru rr f s) = Ae.object $ catMaybes
     [ ("url"      .=) <$> u
     , ("hash"     .=) <$> h
     , ("path"     .=) <$> p
     , ("repo_url" .=) <$> ru
     , ("repo_ref" .=) <$> rr
     , ("follows"  .=) <$> f
+    , ("subdir"   .=) <$> s
     ]
 
 data ZigDep = ZigDep
@@ -622,12 +630,13 @@ renderExpr e = Pr.render (Pr.pretty e)
 --     key2="val2"
 -- )
 renderPkgTuple :: PkgDep -> String
-renderPkgTuple (PkgDep u h p ru rr f) =
+renderPkgTuple (PkgDep u h p ru rr f s) =
   let fields = catMaybes
         [ fmap (\x -> ("repo_url", mkStr x)) ru
         , fmap (\x -> ("repo_ref", mkStr x)) rr
         , fmap (\x -> ("url", mkStr x)) u
         , fmap (\x -> ("hash", mkStr x)) h
+        , fmap (\x -> ("subdir", mkStr x)) s
         , fmap (\x -> ("path", mkStr x)) p
         , fmap (\x -> ("follows", mkStr x)) f
         ]
@@ -720,22 +729,39 @@ tupleToPkg dep (S.Tuple _ _ kargs) = do
            Just ref -> case checkFollows ref (Map.keys m) of
              Left msg -> Left (InvalidDependency dep msg)
              Right () -> Right (Just ref)
+  s <- case Map.lookup "subdir" m of
+         Nothing -> Right Nothing
+         Just expr -> case exprToSimpleString expr of
+           Nothing -> Left (InvalidDependency dep "subdir must be a plain string literal")
+           Just dir -> case checkSubdir dir of
+             Left msg -> Left (InvalidDependency dep msg)
+             Right () -> Right (Just dir)
   Right $ Just PkgDep { url = Map.lookup "url" m >>= exprToSimpleString
                      , hash = Map.lookup "hash" m >>= exprToSimpleString
                      , path = Map.lookup "path" m >>= exprToSimpleString
                      , repo_url = Map.lookup "repo_url" m >>= exprToSimpleString
                      , repo_ref = Map.lookup "repo_ref" m >>= exprToSimpleString
                      , follows = f
+                     , subdir = s
                      }
 tupleToPkg dep (S.Paren _ e) = tupleToPkg dep e
 tupleToPkg _ _ = Right Nothing
+
+-- | Archive project paths use portable, relative directory names.
+checkSubdir :: String -> Either String ()
+checkSubdir dir
+  | null dir || Posix.isAbsolute dir || Windows.hasDrive dir
+    || '\\' `elem` dir || '\0' `elem` dir
+    || ".." `elem` Posix.splitDirectories dir =
+      Left "subdir must be a non-empty relative path using / and without .. components or NUL"
+  | otherwise = Right ()
 
 checkFollows :: String -> [String] -> Either String ()
 checkFollows ref fields
   | length names < 2 || not (all validName names) =
       Left "follows must name a dependency through another dependency, for example \"stratoweave.yang\""
-  | any (`elem` fields) ["url", "hash", "path", "repo_url", "repo_ref"] =
-      Left "follows cannot be combined with url, hash, path, repo_url or repo_ref"
+  | any (`elem` fields) ["url", "hash", "path", "repo_url", "repo_ref", "subdir"] =
+      Left "follows cannot be combined with url, hash, path, repo_url, repo_ref or subdir"
   | otherwise = Right ()
   where
     names = split ref

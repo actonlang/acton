@@ -195,6 +195,7 @@ data PkgAddOptions = PkgAddOptions
     , pkgAddRepoRef  :: String
     , pkgAddPkgName  :: String
     , pkgAddHash     :: String
+    , pkgAddSubdir   :: Maybe String
     , pkgAddGithubToken :: String
     } deriving Show
 
@@ -434,6 +435,7 @@ pkgAddOptions = PkgAddOptions
     <*> strOption (long "repo-ref" <> metavar "REF" <> value "" <> help "Git ref (branch, tag or SHA) to use")
     <*> strOption (long "pkg-name" <> metavar "NAME" <> value "" <> help "Package name in index (defaults to NAME)")
     <*> strOption (long "hash" <> metavar "HASH" <> value "" <> help "Hash of dependency")
+    <*> optional (strOption (long "subdir" <> metavar "PATH" <> help "Project directory inside the dependency archive"))
     <*> githubTokenOption
 
 pkgRemoveOptions :: Parser PkgRemoveOptions

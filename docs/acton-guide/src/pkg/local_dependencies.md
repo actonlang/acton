@@ -25,3 +25,8 @@ dependency is local or fetched from a repository. In the example above,
 ```admonish
 You can temporarily override the path to a dependency through the `--dep` argument, e.g. `acton build --dep foo=../foo`. This can be useful to fork a library and make local modifications to it before submitting them back upstream.
 ```
+
+For an archive dependency with `subdir`, a local `path` or `--dep` override
+points directly to the Acton project root. Acton does not append `subdir` to
+that local path. For example, override `subdir="packages/widgets"` with
+`--dep widgets=../monorepo/packages/widgets`.

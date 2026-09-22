@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | A small reader for Zig's ZON object notation (@build.zig.zon@).
+-- | Reading Zig's ZON object notation and escaping generated string contents.
 --
 -- Acton only needs enough of ZON to discover the dependencies a zig package
 -- declares, so it can pre-seed zig's package cache through the proxy-aware HTTP
@@ -19,13 +19,14 @@ module Acton.Zon
   , parseZon
   , zonDependencies
   , readZonDependencies
+  , escapeString
   ) where
 
 import Control.Monad (void)
-import Data.Char (chr, isAlphaNum, isDigit)
+import Data.Char (chr, ord, isAlphaNum, isDigit)
 import Data.List (intercalate)
 import Data.Void (Void)
-import Numeric (readHex)
+import Numeric (readHex, showHex)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
@@ -36,6 +37,19 @@ import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void String
+
+-- | Escape Zig string contents without adding surrounding quotes.
+escapeString :: String -> String
+escapeString = concatMap escape
+  where
+    escape '"'  = "\\\""
+    escape '\\' = "\\\\"
+    escape '\n' = "\\n"
+    escape '\r' = "\\r"
+    escape '\t' = "\\t"
+    escape c
+      | c < ' ' || c == '\x7f' = "\\x" ++ (if ord c < 16 then "0" else "") ++ showHex (ord c) ""
+      | otherwise = [c]
 
 -- | A parsed ZON value. Only the shapes that actually occur in build.zig.zon
 -- are distinguished; everything else is consumed but kept opaque.
