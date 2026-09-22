@@ -29,6 +29,8 @@ import Test.Tasty.Golden (goldenVsString)
 import Test.Tasty.HUnit
 
 import qualified PkgCommands
+import qualified Acton.BuildSpec as BuildSpec
+import qualified Data.Map as M
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Options.Applicative as OA
@@ -89,6 +91,7 @@ main = do
       , PerfScalingTests.perfMemoryTests
       , crossCompileTests
       , pkgCliTests
+      , archiveDependencyTests
       ] ++ [ testGroup "live performance" [PerfTests.perfIntegrationTests, PerfScalingTests.scaleIntegrationTests]
            | lookup "ACTON_TEST_PERFORMANCE" environment == Just "1" ]
   where timeout :: Timeout
@@ -2678,6 +2681,140 @@ crossCompileTests =
   , testCase "build helloworld --target x86_64-windows-gnu" $ do
         runActon "build --target x86_64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
   ]
+
+archiveDependencyTests =
+  testGroup "archive dependencies"
+  [ testCase "builds two archive projects and a relative sibling dependency" $
+      withFixture $ \tmp app archive run -> do
+        add run app archive "widgets" "packages/widgets"
+        add run app archive "tools" "packages/tools"
+        widgets <- readDep app "widgets"
+        tools <- readDep app "tools"
+        assertEqual "both projects retain the archive hash" (BuildSpec.hash widgets) (BuildSpec.hash tools)
+        expectSuccess "show unfetched archive" =<< run app ["pkg", "show"]
+        expectSuccess "build selected projects" =<< run app ["build", "--color", "never"]
+        (code, out, err) <- readCreateProcessWithExitCode (proc (app </> "out/bin/main") []) ""
+        assertEqual ("run built application: " ++ err) ExitSuccess code
+        assertEqual "uses both selected projects and their sibling" "42\n" out
+        zon <- readFile (app </> "build.zig.zon")
+        assertBool "Zig uses the selected widgets directory" ("/packages/widgets\"" `isInfixOf` zon)
+        assertBool "Zig uses the selected tools directory" ("/packages/tools\"" `isInfixOf` zon)
+        assertBool "Zig includes the sibling dependency" ("/packages/common\"" `isInfixOf` zon)
+        removeFile archive
+        expectSuccess "reuse fetched archive offline" =<< run app ["build", "--skip-build"]
+
+  , testCase "pkg add preserves or replaces the archive subdirectory" $
+      withFixture $ \_ app archive run -> do
+        add run app archive "widgets" "packages/widgets"
+        expectSuccess "add without replacing subdir" =<< run app ["pkg", "add", "widgets", "--url", archive]
+        dep <- readDep app "widgets"
+        assertEqual "preserved subdir" (Just "packages/widgets") (BuildSpec.subdir dep)
+        add run app archive "widgets" "."
+        dep' <- readDep app "widgets"
+        assertEqual "explicit root selection" (Just ".") (BuildSpec.subdir dep')
+
+  , testCase "local overrides point directly to the project" $
+      withFixture $ \tmp app archive run -> do
+        add run app archive "widgets" "packages/missing"
+        add run app archive "tools" "packages/tools"
+        let local = tmp </> "local-widgets"
+        writeProject local "widgets" []
+        writeFile (local </> "src/lib.act") "def value() -> int:\n    return 21\n"
+        expectSuccess "override archive selection" =<< run app
+          ["build", "--skip-build", "--dep", "widgets=" ++ local]
+        -- A persistent path override has the same meaning as --dep.
+        source <- readFile (app </> "Build.act")
+        let patch = Ae.encode (M.singleton "dependencies" (M.singleton "widgets"
+              (M.fromList [("path", local), ("subdir", "packages/missing")])))
+        case BuildSpec.updateBuildActFromJSON source patch of
+          Left err -> assertFailure err
+          Right updated -> length updated `seq` writeFile (app </> "Build.act") updated
+        writeFile (app </> "src/main.act") "import widgets\n\nactor main(env):\n    print(widgets.value())\n    env.exit(0)\n"
+        expectSuccess "persistent local override" =<< run app ["build", "--skip-build"]
+
+  , testCase "rejects missing and non-project archive subdirectories" $
+      withFixture $ \_ app archive run ->
+        forM_ ["packages/missing", "packages", "packages/no-src"] $ \dir -> do
+          add run app archive "widgets" dir
+          expectFailure "invalid project selection" "Expected Build.act and src/" =<< run app ["fetch"]
+
+  , testCase "rejects archive subdirectories that escape through a symlink" $
+      withFixture $ \tmp app archive run -> do
+        add run app archive "widgets" "packages/widgets"
+        expectSuccess "fetch archive" =<< run app ["fetch"]
+        dep <- readDep app "widgets"
+        let Just hash = BuildSpec.hash dep
+            cache = tmp </> "home/.cache/acton/deps" </> ("widgets-" ++ hash)
+            outside = tmp </> "outside"
+        writeProject outside "widgets" []
+        createDirectoryLink outside (cache </> "escape")
+        add run app archive "widgets" "escape"
+        expectFailure "symlink selection" "escapes the archive" =<< run app ["fetch"]
+
+  , testCase "pkg add rejects invalid subdirectories before fetching" $
+      withFixture $ \_ app _ run ->
+        forM_ ["", "../outside", "/outside", "C:/outside"] $ \dir ->
+          expectFailure "invalid subdir" "subdir must be" =<< run app
+            ["pkg", "add", "widgets", "--url", "/missing.tar.gz", "--subdir", dir]
+  ]
+  where
+    writeProject :: FilePath -> String -> [(String, FilePath)] -> IO ()
+    writeProject dir name deps = do
+      createDirectoryIfMissing True (dir </> "src")
+      let fp = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+      writeFile (dir </> "Build.act") $ unlines
+        [ "name = " ++ show name
+        , "fingerprint = " ++ fp
+        , "dependencies = {" ++ intercalate ", "
+            [show dep ++ ": (path=" ++ show path ++ ")" | (dep, path) <- deps] ++ "}"
+        ]
+
+    withFixture action = withSystemTempDirectory "acton-archive-subdir" $ \tmp -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      env0 <- getEnvironment
+      let app = tmp </> "app"
+          repo = tmp </> "monorepo-snapshot"
+          archive = tmp </> "monorepo.tar.gz"
+          homeDir = tmp </> "home"
+          env = ("HOME", homeDir) : filter ((/= "HOME") . fst) env0
+          run dir args = readCreateProcessWithExitCode (proc acton args){ cwd = Just dir, env = Just env } ""
+          packages = repo </> "packages"
+      createDirectoryIfMissing True homeDir
+      writeProject (packages </> "common") "common" []
+      writeFile (packages </> "common/src/lib.act") "def value() -> int:\n    return 20\n"
+      writeProject (packages </> "widgets") "widgets" [("common", "../common")]
+      writeFile (packages </> "widgets/src/lib.act") "import common\n\ndef value() -> int:\n    return common.value() + 1\n"
+      writeProject (packages </> "tools") "tools" []
+      writeFile (packages </> "tools/src/lib.act") "def value() -> int:\n    return 21\n"
+      writeProject (packages </> "no-src") "empty" []
+      removeDirectory (packages </> "no-src/src")
+      -- Keep macOS metadata entries from adding files beside the archive wrapper.
+      expectSuccess "create archive" =<< readCreateProcessWithExitCode
+        (proc "tar" ["-C", tmp, "-czf", archive, "monorepo-snapshot"])
+          { env = Just (("COPYFILE_DISABLE", "1") : filter ((/= "COPYFILE_DISABLE") . fst) env0) } ""
+      writeProject app "app" []
+      writeFile (app </> "src/main.act") "import widgets\nimport tools\n\nactor main(env):\n    print(widgets.value() + tools.value())\n    env.exit(0)\n"
+      action tmp app archive run
+
+    add run app archive name dir = expectSuccess "add archive project" =<< run app
+      ["pkg", "add", name, "--url", archive, "--subdir", dir]
+
+    readDep app name = do
+      source <- readFile (app </> "Build.act")
+      case BuildSpec.parseBuildAct source of
+        Left err -> assertFailure err >> error "invalid Build.act"
+        Right (spec,_,_) -> case M.lookup name (BuildSpec.dependencies spec) of
+          Nothing -> assertFailure ("missing dependency " ++ name) >> error "missing dependency"
+          Just dep -> return dep
+
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\n" ++ out ++ err) ExitSuccess code
+
+    expectFailure label detail (code, out, err) = do
+      assertEqual (label ++ "\n" ++ out ++ err) (ExitFailure 1) code
+      assertBool (label ++ ": expected " ++ show detail ++ "\n" ++ out ++ err)
+        (detail `isInfixOf` (out ++ err))
 
 pkgCliTests =
   testGroup "pkg CLI"

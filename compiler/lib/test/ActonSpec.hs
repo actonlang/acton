@@ -2297,6 +2297,43 @@ main = do
             Left err -> err `shouldSatisfy` isInfixOf "NUL"
             Right _ -> expectationFailure ("Accepted escaped NUL: " ++ escape)
 
+      it "preserves archive subdirectories through JSON, rendering and updates" $ do
+        forM_ ["packages/widgets", ".", "./packages/widgets/"] $ \dir -> do
+          let source = followsBuildAct ("url=\"https://example.com/repo.tar.gz\", hash=\"abc\", subdir=" ++ show dir)
+          case BuildSpec.parseBuildAct source of
+            Left err -> expectationFailure err
+            Right (spec,_,_) -> do
+              (BuildSpec.subdir =<< M.lookup "yang" (BuildSpec.dependencies spec)) `shouldBe` Just dir
+              let json = BuildSpec.encodeBuildSpecJSON spec
+              Ae.eitherDecode' json `shouldBe` Right spec
+              forM_ [ Right (BuildSpec.renderBuildAct spec)
+                    , BuildSpec.updateBuildActFromJSON source json
+                    ] $ \result -> case result of
+                Left err -> expectationFailure err
+                Right rendered -> case BuildSpec.parseBuildAct rendered of
+                  Left err -> expectationFailure err
+                  Right (spec2,_,_) -> spec2 `shouldBe` spec
+
+      it "rejects invalid archive subdirectories in Build.act and JSON" $ do
+        forM_ (["", "/tmp/widgets", "../widgets", "packages/../../widgets", "packages/../widgets", "C:/widgets", "C:widgets", "packages\\widgets", "one\0two"] :: [String]) $ \dir -> do
+          case BuildSpec.parseBuildAct (followsBuildAct ("subdir=" ++ show dir)) of
+            Left _ -> pure ()
+            Right _ -> expectationFailure ("Accepted invalid subdir: " ++ show dir)
+          let json = Ae.encode (Ae.object ["subdir" Ae..= dir])
+          case Ae.eitherDecode' json :: Either String BuildSpec.PkgDep of
+            Left err -> err `shouldSatisfy` isInfixOf "subdir must be"
+            Right _ -> expectationFailure ("Accepted invalid JSON subdir: " ++ show dir)
+
+      it "rejects nonliteral archive subdirectories" $ do
+        forM_ ["17", "None", "[\"packages\"]", "directory", "\"{directory}\""] $ \value ->
+          case BuildSpec.parseBuildAct (followsBuildAct ("subdir=" ++ value)) of
+            Left err -> err `shouldSatisfy` isInfixOf "subdir must be a plain string literal"
+            Right _ -> expectationFailure ("Accepted nonliteral subdir: " ++ value)
+        forM_ ["17", "null", "[\"packages\"]"] $ \value ->
+          case Ae.eitherDecode' (BL.fromStrict (B8.pack ("{\"subdir\":" ++ value ++ "}"))) :: Either String BuildSpec.PkgDep of
+            Left _ -> pure ()
+            Right _ -> expectationFailure ("Accepted non-string JSON subdir: " ++ value)
+
       it "preserves followed dependencies through JSON, rendering and updates" $ do
         let buildAct = followsBuildAct "follows=\"stratoweave.yang\""
         case BuildSpec.parseBuildAct buildAct of
@@ -2335,7 +2372,7 @@ main = do
             Right _ -> expectationFailure ("Accepted non-string JSON follows value: " ++ value)
 
       it "rejects concrete source fields alongside follows" $ do
-        forM_ ["url", "hash", "path", "repo_url", "repo_ref"] $ \field -> do
+        forM_ ["url", "hash", "path", "repo_url", "repo_ref", "subdir"] $ \field -> do
           let fields = "follows=\"stratoweave.yang\", " ++ field ++ "=\"value\""
           case BuildSpec.parseBuildAct (followsBuildAct fields) of
             Left err -> err `shouldSatisfy` isInfixOf "follows cannot be combined"

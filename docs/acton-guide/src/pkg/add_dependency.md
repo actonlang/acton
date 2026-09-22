@@ -61,3 +61,34 @@ actor main(env):
     print(foo.foo())
     env.exit(0)
 ```
+
+For a repository containing multiple Acton projects, select a project with
+`--subdir`:
+
+```console
+acton pkg add widgets --repo-url https://github.com/example/monorepo --subdir packages/widgets
+```
+
+You can also combine `--subdir` with `--url` for a direct archive URL. The
+dependency declaration records the selection:
+
+```python
+dependencies = {
+    "widgets": (
+        url="https://example.com/monorepo.tar.gz",
+        hash="...",  # Filled in by acton pkg add
+        subdir="packages/widgets",
+    ),
+}
+```
+
+`subdir` is the path to the project within the archive. Omit the outer wrapper
+directory, such as `monorepo-<commit>`, from this path.
+
+Acton preserves the fetched package's directory layout, so the selected project
+can use a sibling dependency such as `path="../common"`. Multiple dependencies
+can select different projects from the same archive and share its hash.
+
+Omitting `subdir` selects the archive root. `acton pkg upgrade` preserves the
+selection. Running `acton pkg add` again also preserves it unless you supply
+`--subdir`; use `--subdir .` to select the root explicitly.

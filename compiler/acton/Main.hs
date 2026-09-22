@@ -1295,11 +1295,12 @@ pkgShow gopts = do
       putStrLn "Note: dependency tree is partial; some dependencies are not fetched yet. Run 'acton fetch'."
   where
     describeDep dep =
-      case BuildSpec.hash dep of
+      (case BuildSpec.hash dep of
         Just h -> "hash=" ++ h
         Nothing -> case BuildSpec.path dep of
                      Just p | not (null p) -> "path=" ++ p
-                     _ -> "unversioned"
+                     _ -> "unversioned")
+      ++ maybe "" (\dir -> ", subdir=" ++ dir) (BuildSpec.subdir dep)
 
     isHashDep dep =
       case BuildSpec.path dep of
@@ -2708,7 +2709,7 @@ addImplicitStdDependency sys spec
   | otherwise = spec { BuildSpec.dependencies = M.insert "std" stdDep deps }
   where
     deps = BuildSpec.dependencies spec
-    stdDep = BuildSpec.PkgDep Nothing Nothing (Just (joinPath [sys, "std"])) Nothing Nothing Nothing
+    stdDep = BuildSpec.PkgDep Nothing Nothing (Just (joinPath [sys, "std"])) Nothing Nothing Nothing Nothing
 
 applyPkgDepPathOverrides :: FilePath -> M.Map String FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 applyPkgDepPathOverrides projRoot depPathOverrides spec =
@@ -2900,7 +2901,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
       let rawPath = case BuildSpec.path dep of
                       Just p | not (null p) -> p
                       _ -> case BuildSpec.hash dep of
-                             Just h -> joinPath [depsRoot, name ++ "-" ++ h]
+                             Just h -> joinPath ([depsRoot, name ++ "-" ++ h] ++ maybeToList (BuildSpec.subdir dep))
                              Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
           pathAbs = collapseDots $
                       if isAbsolutePath rawPath

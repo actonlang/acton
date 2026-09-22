@@ -13,6 +13,13 @@ Project discovery in `Acton.Compile` only follows Acton package dependencies.
 Those edges determine the project graph used for module ordering, cache reuse,
 import visibility, and type-check planning.
 
+Archive dependencies may select a project using `subdir`. Project discovery
+uses the selected directory as the root for the project's configuration,
+sources, outputs, and relative dependencies. The fetched directory layout
+remains intact, so projects can refer to siblings using local paths. Explicit
+local paths and `--dep` overrides take precedence over `subdir`. Generated Zig
+inputs use the same selected project roots.
+
 Concrete path and archive declarations determine version selection. A
 declaration such as `"seeds": (follows="garden.seeds")` contributes no
 root pin or version choice: after concrete dependency resolution and

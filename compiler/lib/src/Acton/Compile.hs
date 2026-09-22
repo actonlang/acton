@@ -5408,7 +5408,7 @@ depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
               in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
 
 -- | Resolve a dependency's base directory from a BuildSpec PkgDep.
--- Prefers explicit path, otherwise uses the hashed cache location.
+-- Prefers an explicit project path, otherwise selects subdir in the cached archive.
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
 resolveDepBase base name dep =
     case BuildSpec.path dep of
@@ -5416,7 +5416,21 @@ resolveDepBase base name dep =
       _ -> case BuildSpec.hash dep of
              Just h -> do
                home <- getHomeDirectory
-               normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
+               root <- normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
+               case BuildSpec.subdir dep of
+                 Nothing -> return root
+                 Just dir -> do
+                   selected <- normalizePathSafe (root </> dir)
+                   unless (selected == root || addTrailingPathSeparator root `isPrefixOf` selected) $
+                     throwProjectError ("Dependency " ++ name ++ " subdir " ++ show dir ++ " escapes the archive")
+                   cached <- doesDirectoryExist root
+                   when cached $ do
+                     isProject <- isActonProjectRoot selected
+                     unless isProject $
+                       throwProjectError ("Dependency " ++ name ++ " subdir " ++ show dir
+                                          ++ " is not an Acton project root: " ++ selected
+                                          ++ "\nExpected Build.act and src/ in the selected directory.")
+                   return selected
              Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
 
 -- | Recursively collect out/types paths for all declared dependencies.

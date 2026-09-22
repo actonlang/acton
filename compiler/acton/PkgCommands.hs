@@ -154,6 +154,7 @@ pkgAddCommand :: C.GlobalOptions -> C.PkgAddOptions -> IO ()
 pkgAddCommand _ opts = do
     let depName = C.pkgAddName opts
     validateDepName depName
+    mapM_ (requireRight . BuildSpec.checkSubdir) (C.pkgAddSubdir opts)
     cwd <- getCurrentDirectory
     spec0 <- loadBuildSpec cwd
     manager <- newProxyManager
@@ -165,7 +166,7 @@ pkgAddCommand _ opts = do
     (depUrl, depRepoUrl, depRepoRef) <- decideUrl manager token depName urlArg repoUrlArg repoRefArg pkgNameArg
     zigExe <- getZigExe
     hash <- requireRight =<< zigFetchHash zigExe depUrl
-    let (spec1, msgs) = upsertPkgDep spec0 depName depUrl hash depRepoUrl depRepoRef
+    let (spec1, msgs) = upsertPkgDep spec0 depName depUrl hash depRepoUrl depRepoRef (C.pkgAddSubdir opts)
     mapM_ putStrLn msgs
     writeBuildSpec spec1
   where
@@ -201,6 +202,7 @@ resolveLibraryDependency depName = do
       , BuildSpec.repo_url = Just repoUrl
       , BuildSpec.repo_ref = Nothing
       , BuildSpec.follows = Nothing
+      , BuildSpec.subdir = Nothing
       }
 
 pkgRemoveCommand :: C.GlobalOptions -> C.PkgRemoveOptions -> IO ()
@@ -494,8 +496,8 @@ writeInstallManifest path manifest =
         Nothing -> []
         Just repoRef -> ["repo_ref" Aeson..= repoRef]
 
-upsertPkgDep :: BuildSpec.BuildSpec -> String -> String -> String -> Maybe String -> Maybe String -> (BuildSpec.BuildSpec, [String])
-upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
+upsertPkgDep :: BuildSpec.BuildSpec -> String -> String -> String -> Maybe String -> Maybe String -> Maybe String -> (BuildSpec.BuildSpec, [String])
+upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef depSubdir =
     case M.lookup depName (BuildSpec.dependencies spec) of
       Just dep ->
         let (msgs1, dep1) = updateUrl dep { BuildSpec.follows = Nothing }
@@ -503,7 +505,10 @@ upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
             dep3 = case depRepoUrl of
                      Nothing -> dep2
                      Just ru -> dep2 { BuildSpec.repo_url = Just ru, BuildSpec.repo_ref = depRepoRef }
-            deps' = M.insert depName dep3 (BuildSpec.dependencies spec)
+            dep4 = case depSubdir of
+                     Nothing -> dep3
+                     Just s -> dep3 { BuildSpec.subdir = Just s }
+            deps' = M.insert depName dep4 (BuildSpec.dependencies spec)
         in (spec { BuildSpec.dependencies = deps' }, msgs1 ++ msgs2)
       Nothing ->
         let newDep = BuildSpec.PkgDep
@@ -513,6 +518,7 @@ upsertPkgDep spec depName depUrl depHash depRepoUrl depRepoRef =
               , BuildSpec.repo_url = depRepoUrl
               , BuildSpec.repo_ref = depRepoRef
               , BuildSpec.follows = Nothing
+              , BuildSpec.subdir = depSubdir
               }
             deps' = M.insert depName newDep (BuildSpec.dependencies spec)
         in (spec { BuildSpec.dependencies = deps' }, ["Added new package dependency " ++ depName ++ " with hash " ++ depHash])
