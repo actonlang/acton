@@ -72,7 +72,8 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
-                        us1             = [ convProto p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
+                        us1             = nub ([ convProto p' | (ws',p) <- ps0, catRight ws' == ws,
+                                                                 p' <- primaryAncestry env p ] ++ [cValue])
                         us0             = [ TC (baseGName w) (tcargs $ convProto p) |
                                             w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p
@@ -99,6 +100,11 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
 inherited (Left _ : _)                  = True
 inherited _                             = False
+
+-- A sibling witness is cast to the protocol selected at its path.  Preserve
+-- that protocol's converted (left/primary) ancestry so its method table and
+-- instance fields have the same prefix, without pulling in sibling branches.
+primaryAncestry env p                   = p : [ p' | (ws,p') <- fst $ findCon env p, null $ catRight ws ]
 
 wtails (w:ws)
   | null ws'                            = []
@@ -140,7 +146,8 @@ convExtension env n1 c0 q ps0 eq wmap b opts
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
-                        us1             = [ instProto t0 p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
+                        us1             = nub ([ instProto t0 p' | (ws',p) <- ps0, catRight ws' == ws,
+                                                                   p' <- primaryAncestry env p ] ++ [cValue])
                         us0             = [ TC (baseGName w) (tcargs $ instProto t0 p) |
                                             w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p
@@ -194,10 +201,12 @@ quals env q                             = [ (v, p) | QBind v ps <- q, p <- ps, i
 
 qualAttr p v n                          = Derived (tvarWit v p) n
 
-sibName ws n                            = Derived (baseName ws) n
+-- Sibling witnesses are named the same way their runtime selection path is
+-- followed: each successive protocol wraps the witness selected so far.
+sibName ws n                            = foldl (\n' w -> Derived (deriveQ w) n') n ws
 
 baseName [w]                            = deriveQ w
-baseName (w : ws)                       = Derived (baseName ws) (deriveQ w)
+baseName (w : ws)                       = foldl (\n w' -> Derived (deriveQ w') n) (deriveQ w) ws
 
 baseGName ws                            = modOf (head ws) $ baseName ws
 
@@ -242,7 +251,10 @@ fixupSelf s                             = s
 
 convEnvProtos env                       = convertModules convSources conv env
   where
-    convSources (Derived _ n)           = [n]
+    -- A generated sibling witness can be derived several levels below the
+    -- source protocol/extension entry.  Keep peeling the generated prefix so
+    -- lazy module interfaces can reach that original entry in one pass.
+    convSources (Derived _ n)           = n : convSources n
     convSources _                       = []
 
     conv m (n, NDef sc d doc)           = [(n, NDef (convS sc) d doc)]

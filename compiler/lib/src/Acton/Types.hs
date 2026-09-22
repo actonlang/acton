@@ -2015,13 +2015,13 @@ instance Infer Expr where
                                              t0 <- newUnivar env
                                              w <- newWitness
                                              (cs2,t,e') <- infer env e
-                                             return (Proto (locinfo2 76 e) env w t (pIndexed ti t0) :
+                                             return (Proto (locinfo2 76 e) env w t (pIIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
     infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
                                              (cs2,t,e') <- infer env e
                                              t0 <- newUnivar env
                                              w <- newWitness
-                                             return (Proto (locinfo2 77 e) env w t (pSliceable t0) :
+                                             return (Proto (locinfo2 77 e) env w t (pISliceable t0) :
                                                      cs1++cs2, t, eCall (eDot (eVar w) getsliceKW) [e', sliz2exp sl'])
     infer env (Cond l e1 e e2)          = do t0 <- newUnivar env
                                              (cs0,env',s,_,e') <- inferTest env e

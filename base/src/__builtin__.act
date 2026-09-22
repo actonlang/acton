@@ -80,6 +80,10 @@ class slice(value):
     def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
         NotImplemented
 
+class ilist[A](object):
+    def __init__(self, val: ?Iterable[A]) -> None:
+        NotImplemented
+
 class list[A] (object):
     def __init__(self, val: ?Iterable[A]) -> None:
         NotImplemented
@@ -578,6 +582,10 @@ class complex (value):
     def from_real_imag(real: Real, imag: Real) -> complex:
         NotImplemented
 
+class idict[A(Hashable),B] (object):
+    def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+        NotImplemented
+
 class dict[A(Hashable),B] (object):
     def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
         NotImplemented
@@ -808,13 +816,17 @@ extension complex (Hashable):
 
 ## Collection protocols ############################################################################
 
-protocol Indexed[A (Eq),B]:
+protocol IIndexed[A (Eq),B]:
     __getitem__  : (A) -> B
+
+protocol Indexed[A (Eq),B] (IIndexed[A,B]):
     __setitem__  : mut(A,B) -> None
     __delitem__  : mut(A) -> None
 
-protocol Sliceable[A] (Indexed[int,A]):
+protocol ISliceable[A] (IIndexed[int,A]):
     __getslice__ : (slice) -> Self
+
+protocol Sliceable[A](ISliceable[A], Indexed[int,A]):
     __setslice__ : mut(slice,Iterable[A]) -> None
     __delslice__ : mut(slice) -> None
 
@@ -829,16 +841,22 @@ protocol Container[A(Eq)] (Collection[A]):
 
 
 
-#   Indexed         Iterable        Plus
-#    |               |               |
-#    |               |               |
-#   Sliceable       Collection      Times
-#    |               |               |
-#    |               |               |
-#   Sequence <-------- <--------------
+#   IIndexed               Iterable       Plus
+#     |      \                |            |
+#     |        Indexed        |            |
+#     |           |           |            |
+#   ISliceable    |        Collection     Times
+#     |       \   |           |            |
+#     |        Sliceable      |            |
+#     |           |           |            |
+#   ISequence <-- + <--------- <------------
+#             \   |
+#              Sequence
 
-protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
+protocol ISequence[A] (ISliceable[A], Collection[A], Times[int]):
     __reversed__ : () -> Iterator[A]
+
+protocol Sequence[A] (ISequence[A], Sliceable[A]):
     insert      : mut(int,A) -> None
     append      : mut(A) -> None
     reverse     : mut() -> None
@@ -851,23 +869,27 @@ protocol Sequence[A] (Sliceable[A], Collection[A], Times[int]):
 #   Collection
 #    |
 #    |
-#   Container       Indexed
-#    |               |
-#    |               |
-#   Mapping <---------
+#   Container       IIndexed
+#    |                |     \
+#    |                |      Indexed
+#   IMapping <---------        |
+#    |                         |
+#    |                         |
+#   Mapping <-------------------
 
-protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
+protocol IMapping[A(Eq),B] (Container[A], IIndexed[A,B]):
     get         : (A) -> ?B
     get_def     : (A,B) -> B
-    pop         : mut(A) -> ?B
-    pop_def     : mut(A,B) -> B
     keys        : () -> Iterator[A]
     values      : () -> Iterator[B]
     items       : () -> Iterator[(A,B)]
-    update      : mut(Iterable[(A,B)]) -> None
-    popitem     : () -> (A,B)
-    setdefault  : mut(A,B) -> ?B
 
+protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
+    pop         : mut(A) -> ?B
+    pop_def     : mut(A,B) -> B
+    update      : mut(Iterable[(A,B)]) -> None
+    popitem     : mut() -> (A,B)
+    setdefault  : mut(A,B) -> ?B
 
 
 #   Iterable
@@ -907,10 +929,28 @@ extension list[A(Eq)] (Eq):
     NotImplemented
 extension list[A(Ord)] (Ord):
     NotImplemented
+extension list[A] (Freeze[ilist[A]]):
+    NotImplemented
+
+extension ilist[A] (ISequence[A]):
+    NotImplemented
+extension ilist[A(Eq)] (Container[A]):
+    NotImplemented
+extension ilist[A(Eq)] (Eq):
+    NotImplemented
+extension ilist[A(Ord)] (Ord):
+    NotImplemented
 
 extension dict[A(Hashable),B] (Mapping[A,B]):
     NotImplemented
 extension dict[A(Hashable),B(Eq)] (Ord):
+    NotImplemented
+extension dict[A(Hashable),B] (Freeze[idict[A,B]]):
+    NotImplemented
+
+extension idict[A(Hashable),B] (IMapping[A,B]):
+    NotImplemented
+extension idict[A(Hashable),B(Eq)] (Ord):
     NotImplemented
 
 extension set[A(Hashable)] (Set[A]):
@@ -935,7 +975,7 @@ extension str (Ord):
     NotImplemented
 extension str (Container[str]):
     NotImplemented
-extension str (Sliceable[str]):
+extension str (ISliceable[str]):
     NotImplemented
 extension str (Times[int]):
     NotImplemented
@@ -951,7 +991,7 @@ extension bytearray (Container[int]):
 
 extension bytes (Ord):
     NotImplemented
-extension bytes (Sliceable[int]):
+extension bytes (ISliceable[int]):
     NotImplemented
 extension bytes (Container[int]):
     NotImplemented

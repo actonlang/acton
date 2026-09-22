@@ -183,9 +183,9 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          ss <- normSuite env $ normList v 0 ps pt
                                          return (pVar v $ conv env t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
-          where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIndexed) getitemKW)
+          where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIIndexed) getitemKW)
                                         [eVar v, Int NoLoc n (show n)])
-        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnSliceable) getsliceKW)
+        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnISliceable) getsliceKW)
                                         [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
         normList v n [] Nothing     = []
         t                           = typeOf env p
