@@ -72,7 +72,8 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
-                        us1             = [ convProto p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
+                        us1             = nub ([ convProto p' | (ws',p) <- ps0, catRight ws' == ws,
+                                                                 p' <- primaryAncestry env p ] ++ [cValue])
                         us0             = [ TC (baseGName w) (tcargs $ convProto p) |
                                             w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p
@@ -99,6 +100,11 @@ convProtocol env n0 q ps0 eq wmap b     = mainClass : sibClasses
 
 inherited (Left _ : _)                  = True
 inherited _                             = False
+
+-- A sibling witness is cast to the protocol selected at its path.  Preserve
+-- that protocol's converted (left/primary) ancestry so its method table and
+-- instance fields have the same prefix, without pulling in sibling branches.
+primaryAncestry env p                   = p : [ p' | (ws,p') <- fst $ findCon env p, null $ catRight ws ]
 
 wtails (w:ws)
   | null ws'                            = []
@@ -140,7 +146,8 @@ convExtension env n1 c0 q ps0 eq wmap b opts
         allsibs                         = [ sib ws ws0 p | (ws,ws0,p) <- ps, not (null ws) ]
           where sib ws ws0 p            = (ws, tcname p, us, witArgs w0 wmap, inherited ws0)
                   where us              = us0 ++ us1
-                        us1             = [ instProto t0 p | (ws',p) <- ps0, catRight ws' == ws ] ++ [cValue]
+                        us1             = nub ([ instProto t0 p' | (ws',p) <- ps0, catRight ws' == ws,
+                                                                   p' <- primaryAncestry env p ] ++ [cValue])
                         us0             = [ TC (baseGName w) (tcargs $ instProto t0 p) |
                                             w <- zipWith (:) (wheads ws0) (wtails ws0), (_,p) <- ps0, tcname p == head w ]
                         w0              = if inherited ws0 then tcname main else tcname p

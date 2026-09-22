@@ -426,6 +426,14 @@ int64_t B_listD_count(B_list self, B_Eq eqwit, $WORD val) {
     return B_list_base_count((B_list_base)self, eqwit, val);
 }
 
+// Freeze[list] ////////////////////////////////////////////////////////////////////////////////////
+
+B_ilist B_FreezeD_listD_freeze(B_FreezeD_list wit, B_list self) {
+    B_ilist frozen = (B_ilist)self;
+    frozen->$class = &B_ilistG_methods;
+    return frozen;
+}
+
 B_ilist B_ilistG_new(B_Iterable wit, $WORD iterable) {
     return $NEW(B_ilist, wit, iterable);
 }
@@ -439,7 +447,8 @@ bool B_ilistD___bool__(B_ilist self) {
 }
 
 B_str B_ilistD___str__(B_ilist self) {
-    return B_TimesD_strD___add__(NULL, to$str("i"), B_list_base_str((B_list_base)self));
+    B_str contents = B_list_base_str((B_list_base)self);
+    return $FORMAT("ilist(%s)", contents->str);
 }
 
 B_str B_ilistD___repr__(B_ilist self) {
@@ -558,8 +567,8 @@ B_NoneType B_SequenceD_listD_reverse(B_SequenceD_list wit, B_list lst) {
     return B_list_base_reverse((B_list_base)lst);
 }
 
-$WORD B_SliceableD_SequenceD_listD___getitem__(B_SliceableD_SequenceD_list wit, B_list lst, int64_t n) {
-    return B_list_base_getitem((B_list_base)lst, n);
+$WORD B_SliceableD_SequenceD_listD___getitem__(B_SliceableD_SequenceD_list wit, B_list lst, B_int n) {
+    return B_list_base_getitem((B_list_base)lst, n->val);
 }
 
 B_list B_SliceableD_SequenceD_listD___getslice__(B_SliceableD_SequenceD_list wit, B_list lst, B_slice slc) {
@@ -576,8 +585,8 @@ B_NoneType B_SliceableD_SequenceD_listD___delslice__(B_SliceableD_SequenceD_list
 }
 
 $WORD B_IndexedD_SliceableD_SequenceD_listD___getitem__(B_IndexedD_SliceableD_SequenceD_list wit,
-                                                        B_list lst, int64_t n) {
-    return B_list_base_getitem((B_list_base)lst, n);
+                                                        B_list lst, B_int n) {
+    return B_list_base_getitem((B_list_base)lst, n->val);
 }
 
 B_NoneType B_IndexedD_SliceableD_SequenceD_listD___setitem__(B_IndexedD_SliceableD_SequenceD_list wit,

@@ -582,6 +582,10 @@ class complex (value):
     def from_real_imag(real: Real, imag: Real) -> complex:
         NotImplemented
 
+class idict[A(Hashable),B] (object):
+    def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+        NotImplemented
+
 class dict[A(Hashable),B] (object):
     def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
         NotImplemented
@@ -865,23 +869,27 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
 #   Collection
 #    |
 #    |
-#   Container       Indexed
-#    |               |
-#    |               |
-#   Mapping <---------
+#   Container       IIndexed
+#    |                |     \
+#    |                |      Indexed
+#   IMapping <---------        |
+#    |                         |
+#    |                         |
+#   Mapping <-------------------
 
-protocol Mapping[A(Eq),B] (Container[A], Indexed[A,B]):
+protocol IMapping[A(Eq),B] (Container[A], IIndexed[A,B]):
     get         : (A) -> ?B
     get_def     : (A,B) -> B
-    pop         : mut(A) -> ?B
-    pop_def     : mut(A,B) -> B
     keys        : () -> Iterator[A]
     values      : () -> Iterator[B]
     items       : () -> Iterator[(A,B)]
-    update      : mut(Iterable[(A,B)]) -> None
-    popitem     : () -> (A,B)
-    setdefault  : mut(A,B) -> ?B
 
+protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
+    pop         : mut(A) -> ?B
+    pop_def     : mut(A,B) -> B
+    update      : mut(Iterable[(A,B)]) -> None
+    popitem     : mut() -> (A,B)
+    setdefault  : mut(A,B) -> ?B
 
 
 #   Iterable
@@ -921,6 +929,8 @@ extension list[A(Eq)] (Eq):
     NotImplemented
 extension list[A(Ord)] (Ord):
     NotImplemented
+extension list[A] (Freeze[ilist[A]]):
+    NotImplemented
 
 extension ilist[A] (ISequence[A]):
     NotImplemented
@@ -934,6 +944,13 @@ extension ilist[A(Ord)] (Ord):
 extension dict[A(Hashable),B] (Mapping[A,B]):
     NotImplemented
 extension dict[A(Hashable),B(Eq)] (Ord):
+    NotImplemented
+extension dict[A(Hashable),B] (Freeze[idict[A,B]]):
+    NotImplemented
+
+extension idict[A(Hashable),B] (IMapping[A,B]):
+    NotImplemented
+extension idict[A(Hashable),B(Eq)] (Ord):
     NotImplemented
 
 extension set[A(Hashable)] (Set[A]):

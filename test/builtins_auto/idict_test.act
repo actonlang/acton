@@ -1,0 +1,97 @@
+class SavedDict:
+    values: idict[str, int]
+    alias: idict[str, int]
+    iterator: Iterator[(str, int)]
+
+    def __init__(self, values: idict[str, int]):
+        self.values = values
+        self.alias = values
+        self.iterator = values.items()
+
+
+def test_operations(env):
+    d = idict([("a", 1), ("b", 2), ("a", 3)])
+    empty: idict[str, int] = idict()
+
+    if len(d) != 2 or not d or empty:
+        print("idict construction or truth value failed")
+        env.exit(1)
+    if d["a"] != 3 or d["b"] != 2:
+        print("idict item lookup failed")
+        env.exit(1)
+    if "a" not in d or "missing" in d:
+        print("idict membership failed")
+        env.exit(1)
+
+    found = d.get("a")
+    missing = d.get("missing")
+    if found is None or (found is not None and found != 3) or missing is not None:
+        print("idict get failed")
+        env.exit(1)
+    if d.get_def("missing", 17) != 17:
+        print("idict get_def failed")
+        env.exit(1)
+    if list(d) != ["a", "b"] or list(d.keys()) != ["a", "b"]:
+        print("idict key iteration failed")
+        env.exit(1)
+    if list(d.values()) != [3, 2] or list(d.items()) != [("a", 3), ("b", 2)]:
+        print("idict value or item iteration failed")
+        env.exit(1)
+
+    same = idict([("b", 2), ("a", 3)])
+    larger = idict([("a", 3), ("b", 2), ("c", 4)])
+    if d != same or not d < larger or not d <= same or not larger > d or d < same:
+        print("idict equality or ordering failed")
+        env.exit(1)
+
+
+def test_independent_storage(env):
+    source = {"a": 1, "b": 2}
+    frozen = idict(source.items())
+    source["a"] = 99
+    source["c"] = 3
+    copy = dict(frozen.items())
+    copy["b"] = 88
+
+    if frozen != idict([("a", 1), ("b", 2)]):
+        print("idict shares mutable storage with a dict")
+        env.exit(1)
+    if copy != {"a": 1, "b": 88}:
+        print("constructing dict from idict failed")
+        env.exit(1)
+
+
+def test_serialization(env):
+    saved = SavedDict(idict([("a", 1), ("b", 2), ("c", 3)]))
+    first = next(saved.iterator)
+    payload = serialize(saved)
+    restored = deserialize(payload)
+
+    if not isinstance(restored, SavedDict):
+        print("idict state did not deserialize")
+        env.exit(1)
+    if isinstance(restored, SavedDict):
+        if restored.values != saved.values or restored.alias != restored.values:
+            print("idict serialization lost values")
+            env.exit(1)
+        if serialize(restored) != payload:
+            print("idict serialization is not stable")
+            env.exit(1)
+
+        remaining = idict(restored.iterator)
+        if isinstance(first, just):
+            expected = dict(saved.values.items())
+            del expected[first.val.0]
+            if remaining != idict(expected.items()):
+                print("idict iterator did not resume after deserialization")
+                env.exit(1)
+        else:
+            print("unexpected idict iteration termination")
+            env.exit(1)
+
+
+actor main(env):
+    test_operations(env)
+    test_independent_storage(env)
+    test_serialization(env)
+    env.exit(0)

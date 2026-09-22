@@ -1,10 +1,42 @@
 typedef struct $table_struct *$table;
 
+/*
+ * Common storage shared by dict and idict.  Keep the concrete structures: C
+ * runtime clients access dict fields directly.  dict.c uses B_dict_base so the
+ * hash-table implementation is independent of the public mutability wrapper.
+ */
+typedef struct B_dict_base *B_dict_base;
+
+struct __attribute__((__may_alias__)) B_dict_base {
+    $SuperG_class $class;
+    long numelements;
+    $table table;
+};
+
 struct B_dict {
     struct B_dictG_class *$class;
     long numelements;               // nr of elements in dictionary
     $table table;                   // the hashtable
 };
+
+struct B_idict {
+    struct B_idictG_class *$class;
+    long numelements;
+    $table table;
+};
+
+_Static_assert(sizeof(struct B_dict_base) == sizeof(struct B_dict),
+               "generic dict and dict must have the same size");
+_Static_assert(sizeof(struct B_dict_base) == sizeof(struct B_idict),
+               "generic dict and idict must have the same size");
+_Static_assert(offsetof(struct B_dict_base, numelements) == offsetof(struct B_dict, numelements),
+               "generic dict and dict must have the same element-count offset");
+_Static_assert(offsetof(struct B_dict_base, numelements) == offsetof(struct B_idict, numelements),
+               "generic dict and idict must have the same element-count offset");
+_Static_assert(offsetof(struct B_dict_base, table) == offsetof(struct B_dict, table),
+               "generic dict and dict must have the same table offset");
+_Static_assert(offsetof(struct B_dict_base, table) == offsetof(struct B_idict, table),
+               "generic dict and idict must have the same table offset");
 
 // Iterators over dicts ///////////////////////////////////////////////////////
 
@@ -27,7 +59,8 @@ struct B_IteratorD_dictG_class {
 
 struct B_IteratorD_dict {
     struct B_IteratorD_dictG_class *$class;
-    B_dict src;
+    $WORD src;
+    B_dict_base data;
     int nxt;
 };
 
@@ -53,7 +86,8 @@ struct B_IteratorD_dict_valuesG_class {
 
 struct B_IteratorD_dict_values {
     struct B_IteratorD_dict_valuesG_class *$class;
-    B_dict src;
+    $WORD src;
+    B_dict_base data;
     int nxt;
 };
 
@@ -79,7 +113,8 @@ struct B_IteratorD_dict_itemsG_class {
 
 struct B_IteratorD_dict_items {
     struct B_IteratorD_dict_itemsG_class *$class;
-    B_dict src;
+    $WORD src;
+    B_dict_base data;
     int nxt;
 };
 

@@ -1,0 +1,43 @@
+def object_address(val: object) -> u64:
+    NotImplemented
+
+def check_list(source: list[int], expected: ilist[int], env: Env):
+    obj = object_address(source)
+    frozen = freeze(source)
+    if object_address(frozen) != obj:
+        print("freeze copied the list")
+        env.exit(1)
+    if type(frozen) != type(expected):
+        print("freeze did not change the list class")
+        env.exit(1)
+    if frozen != expected or ilist(iter(frozen)) != expected:
+        print("freeze lost list elements")
+        env.exit(1)
+    rendered = "ilist(" + str(list(expected)) + ")"
+    if str(frozen) != rendered or repr(frozen) != rendered:
+        print("ilist string formatting failed")
+        env.exit(1)
+
+def check_dict(source: dict[str,int], expected: idict[str,int], env: Env):
+    obj = object_address(source)
+    frozen = freeze(source)
+    if object_address(frozen) != obj:
+        print("freeze copied the dictionary")
+        env.exit(1)
+    if type(frozen) != type(expected):
+        print("freeze did not change the dictionary class")
+        env.exit(1)
+    if frozen != expected or idict(iter(frozen.items())) != expected:
+        print("freeze lost dictionary entries")
+        env.exit(1)
+    rendered = "idict(" + str(dict(expected.items())) + ")"
+    if str(frozen) != rendered or repr(frozen) != rendered:
+        print("idict string formatting failed")
+        env.exit(1)
+
+actor main(env):
+    check_list([], ilist(),env)
+    check_list([1, 2, 3], ilist([1, 2, 3]),env)
+    check_dict({}, idict(),env)
+    check_dict({"one": 1, "two": 2}, idict([("one", 1), ("two", 2)]),env)
+    env.exit(0)

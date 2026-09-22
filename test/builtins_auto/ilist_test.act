@@ -1,0 +1,17 @@
+actor main(env):
+   lst = [1, 3, 7]
+   ilst = ilist(lst)
+   lst.append(5)
+   if ilst[1] != 3:
+       print("ilist indexing wrong")
+       env.exit(1)
+   if ilst != ilist([1,3,7]):
+       print("ilist construction failed")
+       env.exit(1)
+   lst.append(5)
+   if ilst != ilist([1,3,7]):
+       print("ilist shares memory with list")
+       env.exit(1)
+#   print(ilst)
+   env.exit(0)
+   
