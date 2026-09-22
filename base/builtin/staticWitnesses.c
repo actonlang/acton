@@ -27,6 +27,9 @@ struct B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_instance;
 struct B_SliceableD_SequenceD_list B_SliceableD_SequenceD_listG_instance;
 struct B_IndexedD_SliceableD_SequenceD_list B_IndexedD_SliceableD_SequenceD_listG_instance;
 struct B_SequenceD_list B_SequenceD_listG_instance;
+struct B_TimesD_ISequenceD_ilist B_TimesD_ISequenceD_ilistG_instance;
+struct B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_instance;
+struct B_ISequenceD_ilist B_ISequenceD_ilistG_instance;
 struct B_HashableD_complex B_HashableD_complexG_instance;
 struct B_EqD_complex B_EqD_complexG_instance;
 struct B_DivD_complex B_DivD_complexG_instance;
@@ -179,6 +182,20 @@ struct B_SequenceD_list B_SequenceD_listG_instance = {
     (B_Times)&B_TimesD_SequenceD_listG_instance,
     (B_Sliceable)&B_SliceableD_SequenceD_listG_instance
 };
+struct B_TimesD_ISequenceD_ilist B_TimesD_ISequenceD_ilistG_instance = {
+    &B_TimesD_ISequenceD_ilistG_methods,
+    (B_ISequence)&B_ISequenceD_ilistG_instance
+};
+struct B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_instance = {
+    &B_CollectionD_ISequenceD_ilistG_methods,
+    (B_ISequence)&B_ISequenceD_ilistG_instance
+};
+struct B_ISequenceD_ilist B_ISequenceD_ilistG_instance = {
+    &B_ISequenceD_ilistG_methods,
+    (B_Eq)&B_OrdD_intG_instance,
+    (B_Collection)&B_CollectionD_ISequenceD_ilistG_instance,
+    (B_Times)&B_TimesD_ISequenceD_ilistG_instance
+};
 struct B_HashableD_complex B_HashableD_complexG_instance = {&B_HashableD_complexG_methods};
 struct B_EqD_complex B_EqD_complexG_instance = {&B_EqD_complexG_methods};
 struct B_DivD_complex B_DivD_complexG_instance = {&B_DivD_complexG_methods};
@@ -283,6 +300,9 @@ B_ContainerD_list B_ContainerD_listG_witness = &B_ContainerD_listG_instance;
 B_TimesD_SequenceD_list B_TimesD_SequenceD_listG_witness = &B_TimesD_SequenceD_listG_instance;
 B_CollectionD_SequenceD_list B_CollectionD_SequenceD_listG_witness = &B_CollectionD_SequenceD_listG_instance;
 B_SequenceD_list B_SequenceD_listG_witness = &B_SequenceD_listG_instance;
+B_TimesD_ISequenceD_ilist B_TimesD_ISequenceD_ilistG_witness = &B_TimesD_ISequenceD_ilistG_instance;
+B_CollectionD_ISequenceD_ilist B_CollectionD_ISequenceD_ilistG_witness = &B_CollectionD_ISequenceD_ilistG_instance;
+B_ISequenceD_ilist B_ISequenceD_ilistG_witness = &B_ISequenceD_ilistG_instance;
 B_HashableD_complex B_HashableD_complexG_witness = &B_HashableD_complexG_instance;
 B_EqD_complex B_EqD_complexG_witness = &B_EqD_complexG_instance;
 B_DivD_complex B_DivD_complexG_witness = &B_DivD_complexG_instance;

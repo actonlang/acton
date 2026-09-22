@@ -84,7 +84,7 @@ class ilist[A](object):
     def __init__(self, val: ?Iterable[A]) -> None:
         NotImplemented
 
-class list[A] (ilist[A]):
+class list[A] (object):
     def __init__(self, val: ?Iterable[A]) -> None:
         NotImplemented
     def clear(self) -> None:
