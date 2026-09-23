@@ -2135,6 +2135,8 @@ main = do
       testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
       testCodeGenContains env0 "next_peephole" ["$class->__next__(it, &item)"]
       testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)", "B_justG_new"]
+      testCodeGenContains env0 "static_witness_path" ["B_SequenceD_listG_witness->W_Sliceable->W_Indexed"]
+      testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do
