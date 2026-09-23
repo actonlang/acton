@@ -72,7 +72,7 @@ methName (GName m n)                = GName m (Derived n (globalName "methods"))
 derivedHead (Derived d@(Derived{}) _) = derivedHead d
 derivedHead (Derived n _)           = n
 
-staticWitnessName (Dot _ c@(Call _ _ _ KwdNil) a) = (nm, NoQ a:as)
+staticWitnessName (Dot _ c a)       = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
     | m == mBuiltin                 = (Just v, [])
@@ -1675,9 +1675,9 @@ genGeneratedMethodCall env n ts (PosArg w p)
 genGeneratedMethodCall env n _ p    = gen env (generatedMethodQName n) <> parens (gen env p)
 
 staticWitnessValue env e            = case staticWitnessName e of
-                                        (Just obj, path) -> foldl field (staticwitness env (unalias env obj)) path
+                                        (Just obj, path) -> foldr field (staticwitness env (unalias env obj)) path
                                         _                -> gen env e
-  where field d n                   = d <> text "->" <> gen env n
+  where field n d                   = d <> text "->" <> gen env n
 
 -- Compute the C-facing callable type used for argument rendering.  Public
 -- polymorphic callables are matched against a wildcard instantiation so
