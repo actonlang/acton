@@ -1,0 +1,2 @@
+def replace(xs: list[int], index: int):
+    xs[index] = 0
