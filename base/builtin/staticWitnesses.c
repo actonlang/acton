@@ -1,5 +1,3 @@
-struct B_EqD_atom B_EqD_atomG_instance;
-struct B_HashableD_atom B_HashableD_atomG_instance;
 struct B_HashableD_bytes B_HashableD_bytesG_instance;
 struct B_TimesD_bytes B_TimesD_bytesG_instance;
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance;
@@ -104,8 +102,6 @@ struct B_LogicalD_IntegralD_bigint B_LogicalD_IntegralD_bigintG_instance;
 struct B_MinusD_IntegralD_bigint B_MinusD_IntegralD_bigintG_instance;
 struct B_IntegralD_bigint B_IntegralD_bigintG_instance;
 struct B_HashableD_bool B_HashableD_boolG_instance;
-struct B_EqD_atom B_EqD_atomG_instance = {&B_EqD_atomG_methods};
-struct B_HashableD_atom B_HashableD_atomG_instance = {&B_HashableD_atomG_methods};
 struct B_HashableD_bytes B_HashableD_bytesG_instance = {&B_HashableD_bytesG_methods};
 struct B_TimesD_bytes B_TimesD_bytesG_instance = {&B_TimesD_bytesG_methods};
 struct B_ContainerD_bytes B_ContainerD_bytesG_instance = {&B_ContainerD_bytesG_methods};
@@ -281,8 +277,6 @@ struct B_IntegralD_bigint B_IntegralD_bigintG_instance = {&B_IntegralD_bigintG_m
 struct B_HashableD_bool  B_HashableD_boolG_instance = {&B_HashableD_boolG_methods};
 
 
-B_EqD_atom B_EqD_atomG_witness = &B_EqD_atomG_instance;
-B_HashableD_atom B_HashableD_atomG_witness = &B_HashableD_atomG_instance;
 B_HashableD_bytes B_HashableD_bytesG_witness = &B_HashableD_bytesG_instance;
 B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytesG_instance;
 B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytesG_instance;

@@ -1,5 +1,3 @@
-extern B_EqD_atom B_EqD_atomG_witness;
-extern B_HashableD_atom B_HashableD_atomG_witness;
 extern B_HashableD_bytes B_HashableD_bytesG_witness;
 extern B_TimesD_bytes B_TimesD_bytesG_witness;
 extern B_ContainerD_bytes B_ContainerD_bytesG_witness;

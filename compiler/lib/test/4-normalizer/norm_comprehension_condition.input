@@ -13,11 +13,11 @@ W_main_43: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 
 W_main_20: __builtin__.Times[__builtin__.int, __builtin__.int] = __builtin__.IntegralD_int()
 
-W_main_72: __builtin__.Eq[__builtin__.atom] = __builtin__.EqD_atom()
+W_main_72: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
-W_main_70: __builtin__.Eq[?__builtin__.atom] = $EqOpt@[__builtin__.atom](W_main_72)
+W_main_70: __builtin__.Eq[?__builtin__.int] = $EqOpt@[__builtin__.int](W_main_72)
 
-W_main_31: __builtin__.Eq[__builtin__.list[?__builtin__.atom]] = __builtin__.EqD_list@[?__builtin__.atom](W_main_70)
+W_main_31: __builtin__.Eq[__builtin__.list[?__builtin__.int]] = __builtin__.EqD_list@[?__builtin__.int](W_main_70)
 
 W_main_12: __builtin__.Iterable[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]().W_Collection
 
