@@ -1,0 +1,184 @@
+class OtherAtom(atom):
+    def __init__(self):
+        pass
+
+extension OtherAtom (Hashable):
+    def __eq__(self, other: OtherAtom) -> bool:
+        return True
+
+    def hash(self, h: hasher):
+        h.update(b"other")
+
+def equal[A(Eq)](a: A, b: A) -> bool:
+    return a == b and not (a != b)
+
+def hash_equal[A(Hashable)](a: A, b: A) -> bool:
+    return a == b and hash(a) == hash(b)
+
+def check_widening[A(atom,Hashable)](a: A, b: A):
+    widened: atom = a
+    key: atom = b
+    assert hash(a) == hash(widened)
+    assert seed_hash(u64(17), a) == seed_hash(u64(17), widened)
+    s: set[A] = {a}
+    widened_set: set[atom] = s
+    assert key in widened_set
+    d: dict[A, str] = {a: "found"}
+    widened_dict: dict[atom, str] = d
+    assert widened_dict[key] == "found"
+    widened_dict[key] = "updated"
+    assert d[b] == "updated" and len(d) == 1
+
+def test_widening():
+    check_widening(int(1), int("1"))
+    check_widening(i32(1), i32("1"))
+    check_widening(i16(1), i16("1"))
+    check_widening(i8(1), i8("1"))
+    check_widening(u64(1), u64("1"))
+    check_widening(u32(1), u32("1"))
+    check_widening(u16(1), u16("1"))
+    check_widening(u8(1), u8("1"))
+    check_widening(u1(1), u1("1"))
+    check_widening(bigint(1), bigint("1"))
+    check_widening(float(1), float("1"))
+    check_widening(complex.from_real_imag(1, 2), complex.from_real_imag(1.0, 2.0))
+    check_widening(True, bool(1))
+    check_widening("1", str(1))
+    check_widening(b"1", bytes([49]))
+    # Dictionaries with more than four entries use their cached hashes for lookup.
+    d: dict[int, str] = {i: str(i) for i in range(16)}
+    widened: dict[atom, str] = d
+    for i in range(16):
+        key: atom = i
+        assert widened[key] == str(i)
+        widened[key] = "updated"
+        assert d[i] == "updated" and len(d) == 16 - i
+        del widened[key]
+        assert i not in d
+
+def test_supported_types():
+    assert "7" != 7 and not ("7" == 7)
+    a: list[atom] = [int(1), i32(1), i16(1), i8(1), u64(1), u32(1),
+                     u16(1), u8(1), u1(1), bigint(1), float(1),
+                     complex.from_real_imag(1, 0), True, "1", b"1"]
+    b: list[atom] = [int("1"), i32("1"), i16("1"), i8("1"), u64("1"), u32("1"),
+                     u16("1"), u8("1"), u1("1"), bigint("1"), float("1"),
+                     complex.from_real_imag(1.0, 0.0), bool(1), str(1), bytes([49])]
+    different: list[atom] = [int(2), i32(2), i16(2), i8(2), u64(2), u32(2),
+                             u16(2), u8(2), u1(0), bigint(2), float(2),
+                             complex.from_real_imag(1, 2), False, "2", b"2"]
+    d: dict[atom, int] = {}
+    s: set[atom] = set()
+    for i in range(len(a)):
+        assert equal(a[i], b[i])
+        assert hash_equal(a[i], b[i])
+        assert seed_hash(u64(17), a[i]) == seed_hash(u64(17), b[i])
+        assert a[i] != different[i] and not (a[i] == different[i])
+        assert hash(a[i]) != hash(different[i])
+        d[a[i]] = i
+        s.add(a[i])
+        s.add(b[i])
+        for j in range(len(a)):
+            if i != j:
+                assert a[i] != b[j] and not (a[i] == b[j])
+    assert len(d) == len(a) and len(s) == len(a)
+    for i in range(len(a)):
+        assert d[b[i]] == i and b[i] in s
+        assert different[i] not in d and different[i] not in s
+        d[b[i]] = i + 1
+        assert d[a[i]] == i + 1
+    assert len(d) == len(a)
+    assert a == b and a != different
+    nested: dict[(atom, atom), str] = {(a[0], a[-1]): "pair"}
+    assert nested[(b[0], b[-1])] == "pair"
+
+def test_values():
+    a: atom = bigint("1" + "0" * 100)
+    b: atom = bigint("1" + "0" * 100)
+    c: atom = bigint("2" + "0" * 100)
+    assert equal(a, b) and hash_equal(a, b) and a != c
+    x: atom = "hello" * 100
+    y: atom = "hello" * 100
+    assert equal(x, y) and hash_equal(x, y)
+    positive: atom = float("0.0")
+    negative: atom = float("-0.0")
+    assert equal(positive, negative) and hash_equal(positive, negative)
+    d = {positive: "zero"}
+    assert d[negative] == "zero"
+    nan: atom = float("nan")
+    assert not (nan == nan) and nan != nan
+    complex_nan: atom = complex.from_real_imag(float("nan"), 1.0)
+    assert not (complex_nan == complex_nan) and complex_nan != complex_nan
+    binary: atom = b"\x00\xff"
+    assert hash_equal(binary, bytes([0, 255]))
+    mutable: value = bytearray(b"1")
+    assert not isinstance(mutable, atom)
+
+def test_stream():
+    a: atom = float("1.25")
+    b: atom = float("1.25")
+    h1 = hasher(u64(17))
+    h2 = hasher(u64(17))
+    "prefix".hash(h1)
+    "prefix".hash(h2)
+    a.hash(h1)
+    b.hash(h2)
+    "suffix".hash(h1)
+    "suffix".hash(h2)
+    assert h1.finalize() == h2.finalize()
+    assert seed_hash(u64(0), a) == hash(a)
+    assert seed_hash(u64(17), a) != hash(a)
+
+def expect_comparison_error(a: atom, b: atom):
+    try:
+        assert a == b
+    except ValueError as e:
+        assert e.error_message == "Unsupported atom type"
+    else:
+        raise ValueError("atom == accepted an unsupported type")
+    try:
+        assert a != b
+    except ValueError as e:
+        assert e.error_message == "Unsupported atom type"
+    else:
+        raise ValueError("atom != accepted an unsupported type")
+
+def test_unsupported():
+    assert OtherAtom() == OtherAtom()
+    other: atom = OtherAtom()
+    known: list[atom] = [int(1), i32(1), i16(1), i8(1), u64(1), u32(1),
+                         u16(1), u8(1), u1(1), bigint(1), float(1),
+                         complex.from_real_imag(1, 0), True, "1", b"1"]
+    expect_comparison_error(other, other)
+    for a in known:
+        expect_comparison_error(other, a)
+        expect_comparison_error(a, other)
+    try:
+        assert hash(other) == u64(0)
+    except ValueError as e:
+        assert e.error_message == "Unsupported atom type"
+    else:
+        raise ValueError("atom hash accepted an unsupported type")
+    h = hasher()
+    "prefix".hash(h)
+    try:
+        other.hash(h)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("atom stream hash accepted an unsupported type")
+    expected = hasher()
+    "prefix".hash(expected)
+    assert h.finalize() == expected.finalize()
+
+actor main(env):
+    try:
+        test_supported_types()
+        test_widening()
+        test_values()
+        test_stream()
+        test_unsupported()
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

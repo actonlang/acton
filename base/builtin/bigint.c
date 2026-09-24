@@ -138,8 +138,8 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         set_str(&res->val, ((B_str)a)->str, base);
         return res;
     }
-    fprintf(stderr,"internal error: B_bigintG_new: argument not of atomic type\n");
-    exit(-1);
+    $RAISE((B_BaseException)$NEW(B_ValueError,to$str("integer type constructor: unsupported atom type")));
+    return NULL;
 }
 
 B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_int base){
