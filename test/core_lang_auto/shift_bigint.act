@@ -1,0 +1,9 @@
+actor main(env):
+    foo: bigint = 24
+    bar = foo >> 1
+    foo >>= 1
+    if foo == bar:
+        env.exit(0)
+    else:
+        print("Not equal:", foo, "and", bar)
+        env.exit(1)
