@@ -218,7 +218,7 @@ class str (atom):
     def zfill        (self, width: int) -> str:
         NotImplemented
 
-class bytes (value):
+class bytes (atom):
     def __init__     (self, iterable: Iterable[int]) -> None:
         NotImplemented
     def capitalize   (self) -> bytes:
@@ -574,7 +574,7 @@ class hasher(object):
 protocol Hashable (Eq):
     hash : (hasher) -> None
     
-class complex (value):
+class complex (atom):
     def __init__(self, val: Number) -> None:
         NotImplemented
 

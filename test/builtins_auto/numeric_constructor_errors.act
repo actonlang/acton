@@ -25,6 +25,8 @@ def check_unsupported(a: atom):
 actor main(env):
     try:
         check_unsupported(OtherAtom())
+        check_unsupported(b"1")
+        check_unsupported(complex(1))
         assert int("123") == 123
         assert int("10", 2) == 2
         assert bigint("123") == bigint(123)
