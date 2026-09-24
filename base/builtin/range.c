@@ -38,56 +38,18 @@ B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step
     }
     stp = self->step = ustep;
     int64_t r = ustop - ustart;
-    self->nxt = ustart - stp;
-    self->remaining = r/stp + (r%stp != 0);
+    self->nxt = ustart - stp; //__next__ will add stp
+    self->remaining = stp > 0 ? (r > 0 ? r/stp + (r%stp != 0) : 0): ( r < 0 ? r/stp + (r%stp != 0) : 0);
     return B_None;
 }
 
-/*
-B_bool B_rangeD___bool__(B_range self) {
-    return toB_bool ((self->step > 0 && self->stop > self->start) ||
-                    (self->start > self->stop));
-}
-
-B_str B_rangeD___str__(B_range self) {
-    return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
-}
-
-B_str B_rangeD___repr__(B_range self) {
-    return $FORMAT("range(%ld,%ld,%ld)", self->start, self->stop, self->step);
-}
-
-void B_rangeD___serialize__(B_range self, $Serial$state state) {
-    $ROW row = $add_header(RANGE_ID,3,state);
-    row->blob[0] = ($WORD)self->start;
-    row->blob[1] = ($WORD)self->stop;
-    row->blob[2] = ($WORD)self->step;
-}
-
-B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
-    $ROW this = state->row;
-    state->row = this->next;
-    state->row_no++;
-    B_range res = acton_malloc(sizeof(struct B_range));
-    res->$class = &B_rangeG_methods;
-    res->start = (int64_t)this->blob[0];
-    res->stop = (int64_t)this->blob[1];
-    res->step = (int64_t)this->blob[2];
-    return res;
-}
-*/
 bool $rangeD_U__next_i64(B_range self, int64_t *out) {
     if (self->remaining-- <= 0)
         return false;
     *out = self->nxt += self->step;
     return true;
 }
-int64_t $rangeD_U__next__(B_range self) {
-    int64_t value;
-    if (!$rangeD_U__next_i64(self, &value))
-        $RAISE ((B_BaseException)$NEW(B_StopIteration, to$str("range iterator terminated")));
-    return value;
-}
+
 bool B_rangeD___next__(B_range self, $WORD *out) {
     int64_t value;
     if (!$rangeD_U__next_i64(self, &value))
@@ -95,17 +57,6 @@ bool B_rangeD___next__(B_range self, $WORD *out) {
     *out = (B_value)toB_int(value);
     return true;
 }
-
-/*
-void B_IteratorD_rangeD_init(B_IteratorD_range self, B_range rng) {
-    int64_t stp = self->step = rng->step;
-    int64_t r = rng->stop - rng->start;
-    self->nxt = rng->start - stp;
-    self->remaining = r/stp + (r%stp != 0);
-    self->box = rng->box;
-}                                    
-*/
-
 
 bool B_rangeD___bool__(B_range self) {
     return true;
@@ -132,21 +83,4 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     res->remaining = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
-/*
-struct B_IteratorD_rangeG_class B_IteratorD_rangeG_methods = {
-    "B_IteratorD_range",
-    UNASSIGNED,
-    ($SuperG_class)&B_IteratorG_methods,
-    B_IteratorD_rangeD_init,
-    B_IteratorD_rangeD_serialize,
-    B_IteratorD_range$_deserialize,
-    B_IteratorD_rangeD_bool,
-    B_IteratorD_rangeD_str,
-    B_IteratorD_rangeD_str,
-    B_IteratorD_rangeD_next
-};
 
-B_Iterator B_IterableD_rangeD___iter__ (B_IterableD_range wit, B_range rng) {
-    return (B_Iterator)$NEW(B_IteratorD_range,rng);
-}
-*/
