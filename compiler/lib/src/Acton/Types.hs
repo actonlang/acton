@@ -865,7 +865,7 @@ instance InfEnv Stmt where
 
     infEnv env (AugAssign l targ o e)   = do (cs0,t0,e0,tg) <- infTarg env targ
                                              t1 <- newUnivar env
-                                             (cs1,e) <- inferSub env t1 e
+                                             (cs1,e) <- inferSub env (rtype o t1) e
                                              let (proto,kw) = oper t1 o
                                              t <- if o `elem` [MultA,DivA] then newUnivar env else pure t1
                                              w <- newWitness
@@ -884,6 +884,9 @@ instance InfEnv Stmt where
             oper _ BOrA                 = (pLogical,  iorKW)
             oper _ BAndA                = (pLogical,  iandKW)
             oper _ MMultA               = (pMatrix,   imatmulKW)
+            rtype ShiftLA t             = tInt
+            rtype ShiftRA t             = tInt
+            rtype _ t                   = t
 
             aug t0 t x f e (TgVar _)    = do tryUnify env (locinfo l 46) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
