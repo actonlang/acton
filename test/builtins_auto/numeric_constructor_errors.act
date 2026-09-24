@@ -1,0 +1,35 @@
+class OtherAtom(atom):
+    def __init__(self):
+        pass
+
+def expect_value_error[A](convert: () -> A):
+    try:
+        convert()
+    except ValueError:
+        return
+    raise AssertionError("Expected ValueError for an unsupported numeric conversion")
+
+def check_unsupported(a: atom):
+    expect_value_error(lambda: int(a))
+    expect_value_error(lambda: i32(a))
+    expect_value_error(lambda: i16(a))
+    expect_value_error(lambda: i8(a))
+    expect_value_error(lambda: u64(a))
+    expect_value_error(lambda: u32(a))
+    expect_value_error(lambda: u16(a))
+    expect_value_error(lambda: u8(a))
+    expect_value_error(lambda: u1(a))
+    expect_value_error(lambda: bigint(a))
+    expect_value_error(lambda: float(a))
+
+actor main(env):
+    try:
+        check_unsupported(OtherAtom())
+        assert int("123") == 123
+        assert int("10", 2) == 2
+        assert bigint("123") == bigint(123)
+        assert float("1.5") == 1.5
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

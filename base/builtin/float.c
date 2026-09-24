@@ -51,8 +51,8 @@ double B_floatG_new(B_atom a) {
         else
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float_fromatom(): invalid str literal for type float")));
     }
-    fprintf(stderr,"internal error: float_fromatom: argument not of atomic type");
-    exit(-1);
+    $RAISE((B_BaseException)$NEW(B_ValueError,to$str("float(): unsupported atom type")));
+    return 0.0;
 
 }
 
