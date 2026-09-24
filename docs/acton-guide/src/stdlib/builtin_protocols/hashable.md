@@ -104,6 +104,7 @@ def test_hashable_point():
 
 Many built-in value types implement `Hashable`, including:
 
+- `atom`
 - `bool`
 - `int`, `bigint`, and the fixed-width integer types
 - `float`
@@ -111,6 +112,15 @@ Many built-in value types implement `Hashable`, including:
 - `str`
 - `bytes`
 - `iset`, whose elements must also implement `Hashable`
+
+Values typed as `atom` compare equal when they have the same recognized
+built-in type and equal values. For example, `int(1)`, `float(1)`, and
+`True` are distinct atom keys. `bytes` and `complex` are also atoms;
+`bytearray` is not. Atom hashing reuses the recognized type's
+hash, so widening a set or dictionary to atom keys preserves lookups.
+Different atom types may share a hash; equality keeps their keys distinct.
+Equality and hashing raise `ValueError` for unrecognized atom types,
+including user-defined classes that directly extend `atom`.
 
 An immutable set's hash depends on its elements, regardless of insertion
 order. Immutable sets can therefore be dictionary keys or elements of

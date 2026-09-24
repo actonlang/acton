@@ -1000,6 +1000,108 @@ extension bytes (Times[int]):
 extension bytes (Hashable):
     NotImplemented
 
+extension atom (Eq):
+    def __eq__(a: atom, b: atom) -> bool:
+        if isinstance(a, int):
+            if isinstance(b, int):
+                return a == b
+        elif isinstance(a, i32):
+            if isinstance(b, i32):
+                return a == b
+        elif isinstance(a, i16):
+            if isinstance(b, i16):
+                return a == b
+        elif isinstance(a, i8):
+            if isinstance(b, i8):
+                return a == b
+        elif isinstance(a, u64):
+            if isinstance(b, u64):
+                return a == b
+        elif isinstance(a, u32):
+            if isinstance(b, u32):
+                return a == b
+        elif isinstance(a, u16):
+            if isinstance(b, u16):
+                return a == b
+        elif isinstance(a, u8):
+            if isinstance(b, u8):
+                return a == b
+        elif isinstance(a, u1):
+            if isinstance(b, u1):
+                return a == b
+        elif isinstance(a, bigint):
+            if isinstance(b, bigint):
+                return a == b
+        elif isinstance(a, float):
+            if isinstance(b, float):
+                return a == b
+        elif isinstance(a, complex):
+            if isinstance(b, complex):
+                return a == b
+        elif isinstance(a, bool):
+            if isinstance(b, bool):
+                return a == b
+        elif isinstance(a, str):
+            if isinstance(b, str):
+                return a == b
+        elif isinstance(a, bytes):
+            if isinstance(b, bytes):
+                return a == b
+        else:
+            raise ValueError("Unsupported atom type")
+        if (isinstance(b, int)
+            or isinstance(b, i32)
+            or isinstance(b, i16)
+            or isinstance(b, i8)
+            or isinstance(b, u64)
+            or isinstance(b, u32)
+            or isinstance(b, u16)
+            or isinstance(b, u8)
+            or isinstance(b, u1)
+            or isinstance(b, bigint)
+            or isinstance(b, float)
+            or isinstance(b, complex)
+            or isinstance(b, bool)
+            or isinstance(b, str)
+            or isinstance(b, bytes)):
+            return False
+        raise ValueError("Unsupported atom type")
+
+extension atom (Hashable):
+    def hash(self, h: hasher):
+        if isinstance(self, int):
+            self.hash(h)
+        elif isinstance(self, i32):
+            self.hash(h)
+        elif isinstance(self, i16):
+            self.hash(h)
+        elif isinstance(self, i8):
+            self.hash(h)
+        elif isinstance(self, u64):
+            self.hash(h)
+        elif isinstance(self, u32):
+            self.hash(h)
+        elif isinstance(self, u16):
+            self.hash(h)
+        elif isinstance(self, u8):
+            self.hash(h)
+        elif isinstance(self, u1):
+            self.hash(h)
+        elif isinstance(self, bigint):
+            self.hash(h)
+        elif isinstance(self, float):
+            self.hash(h)
+        elif isinstance(self, complex):
+            self.hash(h)
+        elif isinstance(self, bool):
+            self.hash(h)
+        elif isinstance(self, str):
+            self.hash(h)
+        elif isinstance(self, bytes):
+            self.hash(h)
+        else:
+            raise ValueError("Unsupported atom type")
+
 ## Builtin functions #####################################################
 
 def abs(x : Number) -> Real:
