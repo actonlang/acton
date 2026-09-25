@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 #include <math.h>
 #include <ctype.h>
@@ -16,6 +17,18 @@
 
 #include "../rts/common.h"
 #include "common.h"
+
+// Stack representations used by CodeGen for non-throwing iterator results.
+// The payload representation is fixed for the lifetime of each local.
+typedef struct {
+    bool just;
+    $WORD val;
+} $MaybeWord;
+
+typedef struct {
+    bool just;
+    int64_t val;
+} $MaybeI64;
 
 struct B_NoneType;
 typedef struct B_NoneType *B_NoneType;
@@ -115,4 +128,3 @@ typedef struct $Catcher *$Catcher;
 #include "staticWitnesses.h"
 #include "utils.h"
 #include "hasher.h"
-

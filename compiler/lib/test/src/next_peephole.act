@@ -5,3 +5,51 @@ def first(items: list[str]) -> ?str:
     if isinstance(item, just):
         return item.val
     return None
+
+# Production and consumption need not be adjacent, and the tag test may be
+# part of a larger condition.  The iterator expression is also evaluated once
+# into a generated C temporary rather than requiring a source-level binding.
+def separated(items: list[str], wanted: str) -> ?str:
+    item = next(iter(items))
+    same = True
+    if isinstance(item, just) and same:
+        if item.val == wanted:
+            return item.val
+    return None
+
+def identity_maybe(x: maybe[str]) -> maybe[str]:
+    return x
+
+# An otherwise unsupported use materializes an ordinary value-semantic maybe.
+def materialized(items: list[str]) -> maybe[str]:
+    item = next(iter(items))
+    return identity_maybe(item)
+
+def range_value(stop: int) -> int:
+    it = iter(range(stop))
+    item = next(it)
+    same = True
+    if isinstance(item, just) and same:
+        return item.val + 1
+    return -1
+
+def identity_maybe_int(x: maybe[int]) -> maybe[int]:
+    return x
+
+def identity_iterator_int(x: Iterator[int]) -> Iterator[int]:
+    return x
+
+# A range-backed local casts back to its declared iterator representation when
+# it crosses an ordinary call boundary.
+def escaped_range(stop: int) -> ?int:
+    it = iter(range(stop))
+    generic = identity_iterator_int(it)
+    item = next(generic)
+    if isinstance(item, just):
+        return item.val
+    return None
+
+# Direct range iteration keeps its payload raw until a boxed maybe is needed.
+def materialized_range(stop: int) -> maybe[int]:
+    item = next(iter(range(stop)))
+    return identity_maybe_int(item)

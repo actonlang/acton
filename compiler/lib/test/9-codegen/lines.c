@@ -496,9 +496,12 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
     B_Iterator N_3iter = B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)B_SequenceD_listG_witness->W_Collection, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     #line 73 "test/src/lines.act"
     while (true) {
-        $WORD N_4maybe;
-        if (((B_Iterator)(N_3iter))->$class->__next__(N_3iter, &N_4maybe)) {
-            B_int j = N_4maybe;
+        $MaybeWord N_4maybe;
+        B_Iterator N_4maybeG_next_iter = N_3iter;
+        N_4maybe.just = N_4maybeG_next_iter->$class->__next__(N_4maybeG_next_iter, &N_4maybe.val);
+        B_int j;
+        if (N_4maybe.just) {
+            j = N_4maybe.val;
             #line 74 "test/src/lines.act"
             if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_759))->$class->__eq__)(linesQ_W_Apa_759, j, toB_int(2LL))) {
                 #line 75 "test/src/lines.act"

@@ -108,18 +108,26 @@ builtinStaticKey gn                 = case gn of
 
 genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       localX = HashSet.empty,
-                                                      retX = tNone, maybeOutX = Nothing, maybeValueX = [], rawMaybeValueX = HashSet.empty,
-                                                      rangeIterX = HashSet.empty, volVarsX = [], lineEmitX = Nothing }
+                                                      retX = tNone, maybeOutX = Nothing, localRepX = [],
+                                                      volVarsX = [], lineEmitX = Nothing }
 
 type GenEnv                         = EnvF GenX
+
+-- A local maybe normally carries a boxed $WORD payload.  Specialized
+-- producers, currently range[int], may instead keep the payload unboxed.
+data PayloadRep                     = PayloadWord
+                                    | PayloadRaw Type
+
+-- Physical representations known only to CodeGen; the type checker still
+-- sees these bindings as ordinary maybe[A] and Iterator[int] values.
+data LocalRep                       = MaybeLocal Type PayloadRep
+                                    | RangeLocal
 
 data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , localX :: HashSet.HashSet Name
                                            , retX :: Type
                                            , maybeOutX :: Maybe Type
-                                           , maybeValueX :: [(Name, Type)]
-                                           , rawMaybeValueX :: HashSet.HashSet Name
-                                           , rangeIterX :: HashSet.HashSet Name
+                                           , localRepX :: [(Name, LocalRep)]
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
                                            }
@@ -136,15 +144,11 @@ setRet t env                        = modX env $ \x -> x{ retX = t }
 
 setMaybeOut t env                   = modX env $ \x -> x{ maybeOutX = t }
 
-setMaybeValue n t env               = modX env $ \x -> x{ maybeValueX = (n,t) : maybeValueX x }
+-- LocalRep records CodeGen-only physical representations that differ from a
+-- binding's Acton type.
+setLocalRep n rep env               = modX env $ \x -> x{ localRepX = (n,rep) : filter ((/= n) . fst) (localRepX x) }
 
--- maybeValueX records the payload type after an isinstance(just) test.  The
--- raw set marks payload temps that are already stored as raw C values.
-setRawMaybeValue n env              = modX env $ \x -> x{ rawMaybeValueX = HashSet.insert n (rawMaybeValueX x) }
-
-setRangeIter n env                  = modX env $ \x -> x{ rangeIterX = HashSet.insert n (rangeIterX x) }
-
-clearRangeIters ns env              = modX env $ \x -> x{ rangeIterX = foldr HashSet.delete (rangeIterX x) ns }
+clearLocalReps ns env               = modX env $ \x -> x{ localRepX = filter ((`notElem` ns) . fst) (localRepX x) }
 
 isGlobal env n                      = n `HashSet.member` globalX x && not (n `HashSet.member` localX x)
   where x                           = envX env
@@ -162,11 +166,15 @@ ret env                             = retX $ envX env
 
 maybeOut env                        = maybeOutX $ envX env
 
-maybeValue env n                    = lookup n (maybeValueX $ envX env)
+localRep env n                      = lookup n (localRepX $ envX env)
 
-rawMaybeValue env n                 = n `HashSet.member` rawMaybeValueX (envX env)
+maybeLocal env n                    = case localRep env n of
+                                        Just ml@MaybeLocal{} -> Just ml
+                                        _                    -> Nothing
 
-rangeIter env n                     = n `HashSet.member` rangeIterX (envX env)
+rangeIter env n                     = case localRep env n of
+                                        Just RangeLocal -> True
+                                        _               -> False
 
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
@@ -907,21 +915,27 @@ genSuite env (s:ss)
   | Just valT <- maybeOut env,
     Just c <- genMaybeOutAssignReturn env valT s ss
                                     = (emit (sloc s) $+$ c, [])
-  | Just (ss', env', c, vs') <- genNextAssignIf env s ss
-                                    = let (cs,vs) = genSuite env' ss'
-                                      in ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filterDefined env vs)
   | otherwise                       = ((emit (sloc s) $+$ c) $+$ cs, vs' ++ filterDefined env vs)
-    where env1                      = rangeIterEnvAfter env s (ldefine (envOf s) env)
+    where env1                      = genEnvAfter env s
           (cs,vs)                   = genSuite env1 ss
           (c,vs')                   = genStmt (setVolVars vs env) s
           emit                      = getLineEmit env
 
--- Remember locals that are exactly range iterators, and forget the mark if a
--- name is rebound.  The next() peephole uses this to select the raw int path.
-rangeIterEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
+-- Extend both the ordinary name environment and CodeGen's representation
+-- facts after a statement, so production and consumption may be separated.
+genEnvAfter env s                   = localRepEnvAfter env s $ ldefine (envOf s) env
+
+genEnvAfterSuite                    = foldl genEnvAfter
+
+-- Track locals whose C representation differs from their Acton type.  A new
+-- binding either introduces one such representation or clears any stale one.
+localRepEnvAfter env s env1
+  | Just (n, _, ml) <- nextMaybeLocal env s
+                                    = setLocalRep n ml env1
+localRepEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
   | Just _ <- rangeIterSource env t e
-                                    = setRangeIter n (clearRangeIters [n] env1)
-rangeIterEnvAfter _ s env1          = clearRangeIters (bound s) env1
+                                    = setLocalRep n RangeLocal env1
+localRepEnvAfter _ s env1           = clearLocalReps (bound s) env1
 
 genMaybeOutAssignReturn env valT (Assign _ [PVar _ n _] e) (Return _ (Just (Var _ n')) : ss)
   | sameLocalName n n'              = Just $ genMaybeOutReturn env valT e $+$ fst (genSuite env ss)
@@ -966,6 +980,7 @@ isNothingCtor env (Var _ n)         = unalias env n == qnNothing
 isNothingCtor env (TApp _ f _)      = isNothingCtor env f
 isNothingCtor _ _                   = False
 
+-- Extract the receiver from either it.__next__() or next(it).
 nextIterator env (Call _ f PosNil KwdNil)
   | Dot _ e n <- stripTApp f,
     n == nextKW                     = Just e
@@ -982,47 +997,41 @@ isNextFunction env (Var _ n)        = unalias env n == gBuiltin (name "next")
 isNextFunction env (TApp _ f _)     = isNextFunction env f
 isNextFunction _ _                  = False
 
-genNextBoolCall env e out           = callee <> parens (gen env e <> comma <+> char '&' <> gen env out)
-  where callee                      = genReceiver env e <> text "->" <> gen env classKW <> text "->" <> gen env nextKW
-
--- Specialized bool/out call for range[int]; the out slot is int64_t, not $WORD.
-genRangeNextBoolCall env e out      = text "$rangeD_U__next_i64" <> parens (gen env e <> comma <+> char '&' <> gen env out)
-
 -- Recognize iterator variables initialized from range, either directly or
 -- through the protocol __iter__ call inserted by earlier passes.
 rangeIterSource env t e
-  | boxedRepType t == tIterator tInt = rangeIterExpr env e
+  | boxedRepType t == tIterator tInt = rangeNextSource env e
   | otherwise                       = Nothing
 
+-- Peel the forms introduced around a range by typing and protocol lowering.
 rangeIterExpr env e
   | boxedRepType (typeOf env e) == tRange
                                     = Just e
 rangeIterExpr env (Paren _ e)       = rangeIterExpr env e
 rangeIterExpr env (Box _ e)         = rangeIterExpr env e
+rangeIterExpr env e@(Call _ f _ KwdNil)
+  | isRangeFunction env f           = Just e
 rangeIterExpr env (Call _ f (PosArg _ (PosArg r PosNil)) KwdNil)
-  | isIteratorIterCall env f,
-    boxedRepType (typeOf env r) == tRange
-                                    = Just r
+  | isIteratorIterCall env f        = rangeIterExpr env r
 rangeIterExpr _ _                   = Nothing
 
+isRangeFunction env f
+  | Var _ n <- stripTApp f          = unalias env n == qnRange
+isRangeFunction _ _                 = False
+
 isIteratorIterCall env f
-  | Var _ n <- stripTApp f          = unalias env n == gBuiltin (Derived (Derived nIterable nIterator) iterKW)
+  | Var _ n <- stripTApp f          = let q = unalias env n
+                                      in q == gBuiltin (name "iter") ||
+                                         q == gBuiltin (Derived (Derived nIterable nIterator) iterKW)
 isIteratorIterCall _ _              = False
 
-rangeNextIterator env (Var _ (NoQ n))
-  | rangeIter env n                 = True
-rangeNextIterator env (Paren _ e)   = rangeNextIterator env e
-rangeNextIterator env (Box _ e)     = rangeNextIterator env e
-rangeNextIterator _ _               = False
-
-maybeInstanceTest env n e
-  | IsInstance _ (Var _ (NoQ n')) c <- stripBoxing e,
-    n == n',
-    unalias env c == qnJust         = Just True
-  | IsInstance _ (Var _ (NoQ n')) c <- stripBoxing e,
-    n == n',
-    unalias env c == qnNothing      = Just False
-maybeInstanceTest _ _ _             = Nothing
+-- Return the physical range value underlying an iterator expression.  This
+-- covers both a previously bound range iterator and next(iter(range(...))).
+rangeNextSource env e@(Var _ (NoQ n))
+  | rangeIter env n                 = Just e
+rangeNextSource env (Paren _ e)     = rangeNextSource env e
+rangeNextSource env (Box _ e)       = rangeNextSource env e
+rangeNextSource env e               = rangeIterExpr env e
 
 castedMaybeJustVar env (Call _ f (PosArg (Var _ (NoQ n)) PosNil) KwdNil)
   | isCastToJust env f              = Just n
@@ -1036,179 +1045,123 @@ isCastToJust env (TApp _ (Var _ n) [_, TCon _ (TC c _)])
 isCastToJust env (TApp _ f _)       = isCastToJust env f
 isCastToJust _ _                    = False
 
+-- Recognize the cast-to-just followed by .val that narrowing inserts after an
+-- isinstance test.  It can then read the tagged local's payload directly.
 maybeJustValueExpr env (Dot _ e n)
   | n == attrVal,
     Just v <- castedMaybeJustVar env e,
-    Just _ <- maybeValue env v      = Just v
+    Just _ <- maybeLocal env v      = Just v
 maybeJustValueExpr env (Paren _ e)  = maybeJustValueExpr env e
 maybeJustValueExpr env (Box _ e)    = maybeJustValueExpr env e
 maybeJustValueExpr env (UnBox _ e)  = maybeJustValueExpr env e
 maybeJustValueExpr _ _              = Nothing
 
--- Maybe payload temps are usually boxed $WORDs.  The range fast path stores a
--- raw int64_t temp, so raw contexts use it directly and boxed contexts re-box it.
-genMaybeValueRaw env t n
-  | rawMaybeValue env n             = gen env (NoQ n)
-  | otherwise                       = gen env (B.unbox (boxedRepType t) (Var NoLoc (NoQ n)))
+maybeLocalType (MaybeLocal _ PayloadWord)
+                                    = text "$MaybeWord"
+maybeLocalType (MaybeLocal _ (PayloadRaw t))
+                                    = rawTypeForMaybe t
 
-genMaybeValueBox env n
-  | rawMaybeValue env n,
-    Just t <- maybeValue env n      = genBoxed env t (gen env (NoQ n))
-  | otherwise                       = gen env (NoQ n)
+rawTypeForMaybe t
+  | boxedRepType t == tInt          = text "$MaybeI64"
+  | otherwise                       = error ("unsupported raw maybe payload type: " ++ prstr t)
 
-maybeValueUsesOK n ss               = all (maybeValueStmtOK n) ss
+genMaybeTag env n                   = gen env (NoQ n) <> text ".just"
 
-maybeValueStmtOK n s
-  | n `notElem` free s              = True
-maybeValueStmtOK n (Expr _ e)       = maybeValueExprOK n e
-maybeValueStmtOK n (Assign _ ps e)  = n `notElem` bound ps && maybeValueExprOK n e
-maybeValueStmtOK n (MutAssign _ tg e)
-                                    = maybeValueExprOK n tg && maybeValueExprOK n e
-maybeValueStmtOK n (AugAssign _ tg _ e)
-                                    = maybeValueExprOK n tg && maybeValueExprOK n e
-maybeValueStmtOK n (Return _ e)     = maybeValueMaybeExprOK n e
-maybeValueStmtOK n (Raise _ e)      = maybeValueExprOK n e
-maybeValueStmtOK n (If _ bs els)    = all (maybeValueBranchOK n) bs && maybeValueUsesOK n els
-maybeValueStmtOK n (While _ e b els)
-                                    = maybeValueExprOK n e && maybeValueUsesOK n b && maybeValueUsesOK n els
-maybeValueStmtOK n (Try _ b hs els fin)
-                                    = maybeValueUsesOK n b && all (maybeValueHandlerOK n) hs && maybeValueUsesOK n els && maybeValueUsesOK n fin
-maybeValueStmtOK n (After _ _ e e') = maybeValueExprOK n e && maybeValueExprOK n e'
-maybeValueStmtOK _ _                = False
+genMaybePayload env n               = gen env (NoQ n) <> text ".val"
 
-maybeValueBranchOK n (Branch e ss)  = maybeValueExprOK n e && maybeValueUsesOK n ss
+-- Produce the payload in the representation requested by its context.
+genMaybePayloadRaw env t n          = case maybeLocal env n of
+                                        Just (MaybeLocal _ PayloadWord) -> parens (parens (gen env (boxedRepType t)) <> payload) <> text "->val"
+                                        Just (MaybeLocal _ PayloadRaw{}) -> payload
+                                        Nothing -> error ("missing maybe local: " ++ prstr n)
+  where payload                     = genMaybePayload env n
 
-maybeValueHandlerOK n (Handler ex ss)
-                                    = n `notElem` bound ex && maybeValueUsesOK n ss
+-- Convert only when necessary: raw range payloads are boxed on demand, while
+-- the usual $WORD payload is already in its boxed representation.
+genMaybePayloadBoxed env n          = case maybeLocal env n of
+                                        Just (MaybeLocal _ PayloadWord) -> payload
+                                        Just (MaybeLocal t PayloadRaw{}) -> genBoxed env t payload
+                                        Nothing -> error ("missing maybe local: " ++ prstr n)
+  where payload                     = genMaybePayload env n
 
-maybeValueMaybeExprOK n Nothing     = True
-maybeValueMaybeExprOK n (Just e)    = maybeValueExprOK n e
+-- Reconstruct a normal heap maybe[A] when the tagged local is used as a whole
+-- value (for example as an argument or return value).
+genMaterializedMaybe env n (MaybeLocal t _)
+                                    = parens (genMaybeTag env n <+> text "?" <+> justValue <+> text ":" <+> nothingValue)
+  where castMaybe d                 = parens (gen env (tMaybe t)) <> d
+        justValue                   = castMaybe (newcon' env qnJust <> parens (genMaybePayloadBoxed env n))
+        nothingValue                = castMaybe (newcon' env qnNothing <> parens empty)
 
-maybeValueExprOK n e
-  | Just v <- maybeJustValueExprNoEnv n e,
-    v == n                          = True
-  | n `notElem` free e              = True
-maybeValueExprOK n (Call _ f p k)   = maybeValueExprOK n f && maybeValuePosOK n p && maybeValueKwdOK n k
-maybeValueExprOK n (Let _ ss e)     = maybeValueUsesOK n ss && maybeValueExprOK n e
-maybeValueExprOK n (TApp _ e _)     = maybeValueExprOK n e
-maybeValueExprOK n (Async _ e)      = maybeValueExprOK n e
-maybeValueExprOK n (Await _ e)      = maybeValueExprOK n e
-maybeValueExprOK n (Index _ e i)    = maybeValueExprOK n e && maybeValueExprOK n i
-maybeValueExprOK n (Slice _ e sl)   = maybeValueExprOK n e && maybeValueSlizOK n sl
-maybeValueExprOK n (Cond _ e1 e e2) = all (maybeValueExprOK n) [e1,e,e2]
-maybeValueExprOK n (IsInstance _ e _)
-                                    = maybeValueExprOK n e
-maybeValueExprOK n (BinOp _ e1 _ e2)
-                                    = maybeValueExprOK n e1 && maybeValueExprOK n e2
-maybeValueExprOK n (CompOp _ e ops)= maybeValueExprOK n e && all (maybeValueOpArgOK n) ops
-maybeValueExprOK n (UnOp _ _ e)     = maybeValueExprOK n e
-maybeValueExprOK n (Dot _ e _)      = maybeValueExprOK n e
-maybeValueExprOK n (Rest _ e _)     = maybeValueExprOK n e
-maybeValueExprOK n (DotI _ e _)     = maybeValueExprOK n e
-maybeValueExprOK n (RestI _ e _)    = maybeValueExprOK n e
-maybeValueExprOK n (Opt _ e _)      = maybeValueExprOK n e
-maybeValueExprOK n (OptChain _ e)   = maybeValueExprOK n e
-maybeValueExprOK n (Lambda _ ps ks e _)
-                                    = n `elem` bound (ps,ks) || maybeValueExprOK n e
-maybeValueExprOK n (Yield _ e)      = maybeValueMaybeExprOK n e
-maybeValueExprOK n (YieldFrom _ e)  = maybeValueExprOK n e
-maybeValueExprOK n (Tuple _ p k)    = maybeValuePosOK n p && maybeValueKwdOK n k
-maybeValueExprOK n (List _ es)      = all (maybeValueElemOK n) es
-maybeValueExprOK n (Dict _ as)      = all (maybeValueAssocOK n) as
-maybeValueExprOK n (Set _ es)       = all (maybeValueElemOK n) es
-maybeValueExprOK n (Paren _ e)      = maybeValueExprOK n e
-maybeValueExprOK n (Box _ e)        = maybeValueExprOK n e
-maybeValueExprOK n (UnBox _ e)      = maybeValueExprOK n e
-maybeValueExprOK _ _                = False
+maybeLocalVar env (Var _ (NoQ n))
+  | Just ml <- maybeLocal env n     = Just (n, ml)
+maybeLocalVar env (Paren _ e)       = maybeLocalVar env e
+maybeLocalVar env (Box _ e)         = maybeLocalVar env e
+maybeLocalVar env (UnBox _ e)       = maybeLocalVar env e
+maybeLocalVar _ _                   = Nothing
 
-maybeJustValueExprNoEnv n (Dot _ e a)
-  | a == attrVal                    = castedMaybeJustVarNoEnv n e
-maybeJustValueExprNoEnv n (Paren _ e)
-                                    = maybeJustValueExprNoEnv n e
-maybeJustValueExprNoEnv n (Box _ e) = maybeJustValueExprNoEnv n e
-maybeJustValueExprNoEnv n (UnBox _ e)
-                                    = maybeJustValueExprNoEnv n e
-maybeJustValueExprNoEnv _ _         = Nothing
+-- Lower just/nothing tests on tagged locals to their boolean tag.  Returning
+-- Nothing leaves unrelated isinstance expressions to the general generator.
+genMaybeInstance env e c
+  | Just (n, _) <- maybeLocalVar env e,
+    unalias env c == qnJust         = Just (genMaybeTag env n)
+  | Just (n, _) <- maybeLocalVar env e,
+    unalias env c == qnNothing      = Just (char '!' <> parens (genMaybeTag env n))
+genMaybeInstance _ _ _              = Nothing
 
-castedMaybeJustVarNoEnv n (Call _ f (PosArg (Var _ (NoQ n')) PosNil) KwdNil)
-  | n == n',
-    isCastToJustNoEnv f             = Just n
-castedMaybeJustVarNoEnv n (Paren _ e)
-                                    = castedMaybeJustVarNoEnv n e
-castedMaybeJustVarNoEnv n (Box _ e) = castedMaybeJustVarNoEnv n e
-castedMaybeJustVarNoEnv n (UnBox _ e)
-                                    = castedMaybeJustVarNoEnv n e
-castedMaybeJustVarNoEnv _ _         = Nothing
+-- Decide whether a fresh assignment can use a tagged stack local, and select
+-- the raw int64 payload when its producer is a range iterator.
+nextMaybeLocal env (Assign _ [PVar _ n (Just t)] e)
+  | not (n `HashSet.member` localDefined env),
+    Just valT <- maybeValueType t,
+    Just it <- nextIterator env e   = case if valT == tInt then rangeNextSource env it else Nothing of
+                                        Just range -> Just (n, range, MaybeLocal valT (PayloadRaw tInt))
+                                        Nothing    -> Just (n, it, MaybeLocal valT PayloadWord)
+nextMaybeLocal _ _                  = Nothing
 
-isCastToJustNoEnv (TApp _ (Var _ n) [_, TCon _ (TC c _)])
-  | n == primCAST,
-    c == qnJust                     = True
-isCastToJustNoEnv (TApp _ f _)      = isCastToJustNoEnv f
-isCastToJustNoEnv _                 = False
+nextIterName n                      = Derived n (globalName "next_iter")
 
-maybeValuePosOK n (PosArg e p)      = maybeValueExprOK n e && maybeValuePosOK n p
-maybeValuePosOK n (PosStar e)       = maybeValueExprOK n e
-maybeValuePosOK _ PosNil            = True
+genNextBoolCallOn recv out          = recv <> text "->$class->__next__" <> parens (recv <> comma <+> char '&' <> out)
 
-maybeValueKwdOK n (KwdArg _ e k)    = maybeValueExprOK n e && maybeValueKwdOK n k
-maybeValueKwdOK n (KwdStar e)       = maybeValueExprOK n e
-maybeValueKwdOK _ KwdNil            = True
+genRangeNextBoolCallOn recv out     = text "$rangeD_U__next_i64" <> parens (recv <> comma <+> char '&' <> out)
 
-maybeValueElemOK n (Elem e)         = maybeValueExprOK n e
-maybeValueElemOK n (Star e)         = maybeValueExprOK n e
+-- A range-backed iterator is stored as B_range locally.  Keep that physical
+-- representation for the specialized next call; ordinary expression uses
+-- are cast back to their declared Iterator[int] representation below.
+genRangePhysical env (Var _ (NoQ n))
+  | rangeIter env n                 = gen env (NoQ n)
+genRangePhysical env e              = genExp env tRange e
 
-maybeValueAssocOK n (Assoc k v)     = maybeValueExprOK n k && maybeValueExprOK n v
-maybeValueAssocOK n (StarStar e)    = maybeValueExprOK n e
-
-maybeValueOpArgOK n (OpArg _ e)     = maybeValueExprOK n e
-
-maybeValueSlizOK n (Sliz _ a b c)   = all (maybeValueExprOK n) [ e | Just e <- [a,b,c] ]
-
-genNextAssignIf env s@(Assign _ [PVar _ n (Just t)] e) (ifs@(If _ [Branch cond b] els) : ss)
-  -- Collapse: m = it.__next__()/next(it); if isinstance(m, just): ...
-  -- into a single bool/out next call.  Direct range[int] iterators use int64_t.
-  | Just valT <- maybeValueType t,
-    Just it <- nextIterator env e,
-    Just testJust <- maybeInstanceTest env n cond,
-    n `notElem` free ss             =
-      let rawRange                  = valT == tInt && rangeNextIterator env it
-          env1                      = ldefine (envOf s) env
-          envRest                   = ldefine (envOf ifs) env1
-          call | rawRange           = genRangeNextBoolCall env it n
-               | otherwise         = genNextBoolCall env it n
-          condDoc | testJust        = call
-                  | otherwise       = char '!' <> parens call
-          justEnv0                  = setMaybeValue n valT env1
-          justEnv | rawRange        = setRawMaybeValue n justEnv0
-                  | otherwise       = justEnv0
-          noValueEnv                = env1
-          thenEnv | testJust        = justEnv
-                  | otherwise       = noValueEnv
-          elseEnv | testJust        = noValueEnv
-                  | otherwise       = justEnv
-          branchOK True             = maybeValueUsesOK n b && n `notElem` free els
-          branchOK False            = n `notElem` free b && maybeValueUsesOK n els
-          (bdoc, vs1)               = genSuite thenEnv b
-          (edoc, vs2)               = genElse elseEnv els
-          outType | rawRange        = gen env (TUnboxed NoLoc tInt)
-                  | otherwise       = word
-          stmt                      = outType <+> gen env n <> semi $+$
-                                      text "if" <+> parens condDoc <+> char '{' $+$
-                                      nest 4 bdoc $+$
-                                      char '}' $+$
-                                      edoc
-      in if branchOK testJust then Just (ss, envRest, stmt, vs1 ++ vs2) else Nothing
-genNextAssignIf _ _ _               = Nothing
+-- Emit production independently of any later consumer.  The receiver
+-- temporary both evaluates the iterator expression once and gives the
+-- bool/out call a stable C expression.
+genNextMaybeLocal env n it ml@(MaybeLocal _ payloadRep)
+                                    = genVolatile env n <+> maybeLocalType ml <+> gen env n <> semi $+$
+                                      iterType <+> iterNameDoc <+> equals <+> iterValue <> semi $+$
+                                      genMaybeTag env n <+> equals <+> call <> semi
+  where iterName                    = nextIterName n
+        iterNameDoc                 = gen env iterName
+        iterType                    = case payloadRep of
+                                        PayloadWord  -> repType env (boxedRepType (typeOf env it))
+                                        PayloadRaw{} -> gen env tRange
+        iterValue                   = case payloadRep of
+                                        PayloadWord  -> gen env it
+                                        PayloadRaw{} -> genRangePhysical env it
+        call                        = case payloadRep of
+                                        PayloadWord  -> genNextBoolCallOn iterNameDoc (genMaybePayload env n)
+                                        PayloadRaw{} -> genRangeNextBoolCallOn iterNameDoc (genMaybePayload env n)
 
 genTypeDecl env n t                 = genVolatile env n <+> storageType env t
 
 genVolatile env n                   = if isVolVar n env then text "volatile" else empty
 
 genStmt env (Decl _ ds)             = (empty, [])
+genStmt env s
+  | Just (n, it, ml) <- nextMaybeLocal env s
+                                    = (genNextMaybeLocal env n it ml, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env),
     Just r <- rangeIterSource env t e
-                                    = (gen env tRange <+> gen env n <+> equals <+> genExp env tRange r <> semi, [])
+                                    = (gen env tRange <+> gen env n <+> equals <+> genRangePhysical env r <> semi, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env)
                                     = (genTypeDecl env n t <+> gen env n <+> equals <+> assignRHS env n t e <> semi, [])
@@ -1390,7 +1343,7 @@ genUCallArg env t e
 -- Already-raw expressions are left alone; boxed values are unboxed here.
 genRawExpr env e
   | Just n <- maybeJustValueExpr env e
-                                    = genMaybeValueRaw env (typeOf env e) n
+                                    = genMaybePayloadRaw env (typeOf env e) n
   | rawExpr env e                   = gen env e
   | B.isUnboxable t                 = gen env (B.unbox t e)
   | otherwise                       = gen env e
@@ -1401,7 +1354,7 @@ genRawExpr env e
 -- surrounding context has established that the C value must be raw.
 genRawExprAs env t e
   | Just n <- maybeJustValueExpr env e
-                                    = genMaybeValueRaw env t n
+                                    = genMaybePayloadRaw env t n
   | rawExpr env e                   = gen env e
 genRawExprAs env t (Box _ e)
   | boxedExpr env e                 = gen env (B.unbox t' e)
@@ -1953,6 +1906,10 @@ genExp' env e
 genBoxed env t e                    = text ("toB_"++render(pretty (noq (tcname(tcon (boxedRepType t)))))) <> parens e
 
 instance Gen Expr where
+    gen env (Var _ (NoQ n))
+      | Just ml <- maybeLocal env n = genMaterializedMaybe env n ml
+    gen env (Var _ (NoQ n))
+      | rangeIter env n             = parens (gen env (tIterator tInt)) <> gen env (NoQ n)
     gen env (Var _ n)
       | Just _ <- generatedMethodClass env n []
                                     = gen env (generatedMethodQName n)
@@ -1979,11 +1936,14 @@ instance Gen Expr where
     gen env c@(Call _ e p _)        = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
-    gen env (Let _ ss e)            = text "({" <+> fst(genSuite env ss) $+$ gen (ldefine (envOf ss) env) e <> text ";})"
+    gen env (Let _ ss e)            = text "({" <+> fst(genSuite env ss) $+$ gen (genEnvAfterSuite env ss) e <> text ";})"
+    gen env (IsInstance _ e c)
+      | Just d <- genMaybeInstance env e c
+                                    = genBoxed env tBool d
     gen env (IsInstance _ e c)      = gen env primISINSTANCE <> parens (gen env e <> comma <+> genQName env c)
     gen env e@(Dot _ _ _)
       | Just n <- maybeJustValueExpr env e
-                                    = genMaybeValueBox env n
+                                    = genMaybePayloadBoxed env n
     gen env (Dot _ e n)             = genDot env [] e n
     gen env e0@(DotI _ e i)         = parens $ parens (parens (gen env t) <> parens (gen env e)) <> text "->" <> gen env componentsKW <> brackets (pretty i)
       where t                       = boxedRepType (typeOf env e)
@@ -2059,10 +2019,13 @@ instance Gen Expr where
       where tname                   = genQName env qnBigint 
 
     gen env (UnBox _ (IsInstance _ e c))
+      | Just d <- genMaybeInstance env e c
+                                    = d
+    gen env (UnBox _ (IsInstance _ e c))
                                     = gen env primISINSTANCE0 <> parens(gen env e <> comma <+> genQName env c)
-    gen env (UnBox _ e)
-      | Just n <- maybeJustValueExpr env e,
-        rawMaybeValue env n         = gen env (NoQ n)
+    gen env (UnBox t e)
+      | Just n <- maybeJustValueExpr env e
+                                    = genMaybePayloadRaw env t n
     gen env (UnBox t (Int _ n s))   = genUnboxedIntLiteral t n s
              
     gen env (UnBox _ (Float _ x s)) = text s
