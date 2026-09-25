@@ -28,7 +28,7 @@ acton/
 ├── ecolift/          # Ecosystem lift process → [See ecolift/CLAUDE.md]
 ├── test/             # Test suites
 ├── docs/             # Documentation (mdBook)
-└── build.zig         # Main build configuration
+└── builder/          # build.zig template for Acton projects
 ```
 
 ## Component-Specific Guides
@@ -136,7 +136,7 @@ typedef struct actor_state_t {
 ## Important Files
 
 - `Makefile` - Top-level build orchestration
-- `build.zig` - Main Zig build configuration
+- `builder/build.zig` - Template for the build.zig that `acton build` generates into a project's `out/zig/`
 - `compiler/stack.yaml` - Haskell dependencies
 - `*/Build.act` - Acton package configurations
 

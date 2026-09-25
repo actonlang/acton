@@ -1,5 +1,4 @@
 *.swp
 .acton.lock
 .acton.lock
-build.zig*
 out

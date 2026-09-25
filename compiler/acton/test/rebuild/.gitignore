@@ -1,6 +1,5 @@
 /src/
 /deps/
 /out/
-/build.zig*
 /.acton.compile.lock
 /.acton.lock

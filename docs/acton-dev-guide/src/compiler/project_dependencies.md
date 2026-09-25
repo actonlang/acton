@@ -71,7 +71,16 @@ authorize a source import from an undeclared package.
 ## Generated `build.zig` inputs
 
 `acton build` generates a `build.zig` and `build.zig.zon` for the current
-project in `compiler/acton/Main.hs`.
+project in `compiler/acton/Main.hs`. They are written to `out/zig/` in the
+project, not to the project root, and zig is invoked with
+`--build-file out/zig/build.zig`. Zig treats the directory holding
+`build.zig` as the build root, so the builder template
+(`builder/build.zig`) resolves the project root two levels up and takes all
+project paths, such as the generated C sources under `out/types`, from there.
+Paths in `build.zig.zon` are relative to `out/zig/`, and an Acton package
+dependency points at that package's `out/zig/` directory. Projects shipped in
+the Acton distribution (base, std) keep their checked-in build files at their
+root.
 
 At that point Acton combines:
 

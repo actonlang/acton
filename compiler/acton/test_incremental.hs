@@ -222,8 +222,6 @@ ensureCleanProjectAt :: FilePath -> IO ()
 ensureCleanProjectAt proj = do
   ensureCleanAt proj
   removeDirIfExists (proj </> "deps")
-  removeIfExists (proj </> "build.zig")
-  removeIfExists (proj </> "build.zig.zon")
   removeIfExists (proj </> ".acton.compile.lock")
   removeIfExists (proj </> ".acton.lock")
 
