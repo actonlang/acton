@@ -365,18 +365,18 @@ dist/deps/libbsdnt: deps-download/$(LIBBSDNT_REF).tar.gz $(LIBBSDNT_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libgc --------------------------------------------
-LIBGC_REF=3559b100bc8f3cb676ac53cb2fb52046afeeac42
-LIBGC_BUILD_ZIG=deps/libgc/build.zig
+# Built with the build.zig of the bdwgc tree itself. The tests are kept so that
+# `zig build test` can run in dist/deps/libgc.
+LIBGC_REF=8721943424d3d2e10b74b02b8adc029562270857
 deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz $(LIBGC_BUILD_ZIG)
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
-	cp "$(TD)/$(LIBGC_BUILD_ZIG)" "$@/build.zig"
-	rm -rf "$@/.github" "$@/autogen.sh" "$@/cord/tests" "$@/docs" "$@/tests" "$@/tools"
+	rm -rf "$@/.github" "$@/autogen.sh" "$@/docs" "$@/tools"
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------

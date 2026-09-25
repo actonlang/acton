@@ -94,6 +94,7 @@ pub fn build(b: *std.Build) void {
     // Must match the collector options in backend/build.zig, so that both
     // resolve to the same libgc.
     const gc_enable_threads = !target.result.cpu.arch.isWasm();
+    const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -107,7 +108,7 @@ pub fn build(b: *std.Build) void {
     const dep_libgc = b.dependency("libgc", .{
         .target = target,
         .optimize = optimize,
-        .BUILD_SHARED_LIBS = false,
+        .linkage = .static,
         .enable_threads = gc_enable_threads,
         .enable_large_config = true,
         .enable_mmap = true,
@@ -115,8 +116,10 @@ pub fn build(b: *std.Build) void {
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
+    if (enable_lto) libgc.lto = .thin;
 
     // acton_gc_config.h describes the collector configuration to the RTS and
     // to C extensions.
@@ -456,4 +459,12 @@ pub fn build(b: *std.Build) void {
     const run_base_tests = b.addRunArtifact(base_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_base_tests.step);
+}
+
+// x86_64 macOS builds leave out mprotect-based dirty tracking. Under
+// Rosetta 2, incremental collection with it hangs when 12 or more threads
+// run; it is untested on Intel Macs. Incremental mode then treats every
+// page as dirty, as all macOS builds did before.
+pub fn gcEnableMprotectVdb(t: std.Target) bool {
+    return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
 }
