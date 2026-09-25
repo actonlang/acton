@@ -336,8 +336,12 @@ actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
         NotImplemented
 
 
-actor WriteFile(cap: WriteFileCap, filename: str, lock=False):
+actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     """Write a file
+
+    The file is created if it does not exist. Opening the file truncates it,
+    unless append is set: then the content is kept and every write goes to
+    the end of the file.
     """
     var _fd = -1
 

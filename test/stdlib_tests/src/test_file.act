@@ -91,6 +91,42 @@ actor _test_write_file_writes_in_order(t: testing.EnvT):
     except Exception as exc:
         t.error(exc)
 
+actor _test_write_file_append(t: testing.EnvT):
+    """append creates the file, keeps its content and writes at the end."""
+    try:
+        fc = file.FileCap(t.env.cap)
+        wfc = file.WriteFileCap(fc)
+        rfc = file.ReadFileCap(fc)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        filename = file.join_path([tmpdir, "test-file"])
+
+        wf = file.WriteFile(wfc, filename, append=True)
+        await async wf.write(b"one\n")
+        await async wf.close()
+        wf = file.WriteFile(wfc, filename, append=True)
+        await async wf.write(b"two\n")
+        await async wf.close()
+        rf = file.ReadFile(rfc, filename)
+        appended = rf.read()
+        rf.close()
+
+        wf = file.WriteFile(wfc, filename)
+        await async wf.write(b"three\n")
+        await async wf.close()
+        rf = file.ReadFile(rfc, filename)
+        truncated = rf.read()
+        rf.close()
+
+        testing.assertEqual(b"one\ntwo\n", appended)
+        testing.assertEqual(b"three\n", truncated)
+        await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
 actor _test_fs_copyfile(t: testing.EnvT):
     try:
         fc = file.FileCap(t.env.cap)
