@@ -10,7 +10,6 @@
 **/*.hi
 **/*.o
 **/a.out
-**/build.zig*
 **/core
 **/build-cache
 **/zig-cache
@@ -56,14 +55,10 @@ debian/files
 deps/*
 !deps/zig-compiler-rt.patch
 !deps/*/
-!deps/*/build.zig
-!deps/*/build.zig.zon
 deps-download
 
 bdeps/*
 !bdeps/*/
-!bdeps/*/build.zig
-!bdeps/*/build.zig.zon
 !bdeps/*/*.c
 bdeps/out
 bdeps/**/zig-out
