@@ -258,6 +258,14 @@ actor FS(cap: FileCap):
         """Remove a file"""
         NotImplemented
 
+    action def rename(src: str, dst: str) -> None:
+        """Rename a file or directory
+
+        An existing file at dst is replaced. Raises FileNotFoundError for src
+        when src, or the directory that dst names, does not exist.
+        """
+        NotImplemented
+
     action def rmdir(dirname: str) -> None:
         """Remove a directory"""
         NotImplemented
@@ -336,8 +344,12 @@ actor ReadFile(cap: ReadFileCap, filename: str, lock=False):
         NotImplemented
 
 
-actor WriteFile(cap: WriteFileCap, filename: str, lock=False):
+actor WriteFile(cap: WriteFileCap, filename: str, lock=False, append=False):
     """Write a file
+
+    The file is created if it does not exist. Opening the file truncates it,
+    unless append is set: then the content is kept and every write goes to
+    the end of the file.
     """
     var _fd = -1
 

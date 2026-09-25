@@ -272,6 +272,24 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     return $R_CONT(C_cont, B_None);
 }
 
+// action def rename(src: str, dst: str) -> None:
+$R fileQ_FSD_renameG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
+    uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
+    int r = uv_fs_rename(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), NULL);
+    if (r == UV_ENOENT) {
+        uv_fs_req_cleanup(req);
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(src)));
+    } else if (r < 0) {
+        char errmsg[1024] = "Error renaming file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        uv_fs_req_cleanup(req);
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+    uv_fs_req_cleanup(req);
+    return $R_CONT(C_cont, B_None);
+}
+
 // action def stat(filename: str) -> FileStat:
 $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
@@ -411,7 +429,8 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
 $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename),  UV_FS_O_RDWR | UV_FS_O_CREAT | UV_FS_O_TRUNC, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);
+    int flags = UV_FS_O_RDWR | UV_FS_O_CREAT | (self->append ? UV_FS_O_APPEND : UV_FS_O_TRUNC);
+    int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), flags, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error opening file for writing: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -457,17 +476,24 @@ $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
 
 $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
+    char *p = (char *)data->str;
+    size_t left = data->nbytes;
 
-    int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, 0, NULL);
-    if (r < 0) {
-        char errmsg[1024] = "Error writing to file: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+    // Offset -1 writes at the current position, so each write continues where
+    // the previous one ended. A write can write less than asked for, so write
+    // until all data is written.
+    while (left > 0) {
+        uv_buf_t buf = uv_buf_init(p, left);
+        int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, -1, NULL);
         uv_fs_req_cleanup(req);
-        log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
-
+        if (r < 0) {
+            char errmsg[1024] = "Error writing to file: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+        }
+        p += r;
+        left -= (size_t)r;
     }
-    uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
 }

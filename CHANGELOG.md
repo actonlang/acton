@@ -122,6 +122,11 @@
 - Use a stable min-heap for runtime timers, making large batches of `after`
   callbacks with increasing or equal deadlines scale logarithmically while
   preserving FIFO order for equal deadlines. [#3092]
+- Write each chunk passed to `file.WriteFile.write()` at the current position
+  instead of at offset 0, so later writes no longer overwrite earlier ones,
+  and write all of the data when the system writes only part of it.
+- Add `append` to `file.WriteFile` to keep the content of a file and write at
+  its end, and add `file.FS.rename()` to rename a file or directory.
 
 ### Packages & Distribution
 - Use Ubuntu 20.04 for Linux x86_64 CI and release artifacts to preserve glibc
