@@ -490,6 +490,10 @@ main = do
         sourceHashFor (hashDecl NoLoc (Just "doc ä\0x")) `shouldNotBe`
           sourceHashFor (hashDecl NoLoc (Just "doc äx"))
 
+      it "keeps source AST hashes sensitive to the after baseline" $ do
+        let afterDecl now = (hashDecl NoLoc Nothing) { S.dbody = [S.After NoLoc now (S.Float NoLoc 1.0 "1.0") (S.eCallVar (S.name "f") [])] }
+        sourceHashFor (afterDecl True) `shouldNotBe` sourceHashFor (afterDecl False)
+
       it "pins the source AST feed-operation hash format" $ do
         Base16.encode (sourceHashFor (hashDecl NoLoc (Just "doc"))) `shouldBe`
           "8c47274762de31c4eadf30ef3a01a17d2253a4514ab67745699c7989f8888b5b"
@@ -1207,6 +1211,30 @@ main = do
             Left err -> expectationFailure $ "Parse failed: " ++ err
             Right [S.Expr _ expr@S.OptChain{}] -> loc expr `shouldNotBe` NoLoc
             Right other -> expectationFailure $ "Unexpected AST: " ++ show other
+
+      describe "After statements" $ do
+        let afterIn body = parseStmtAst ("def f():\n    " ++ body)
+            afterParts body = case afterIn body of
+              Right [S.Decl _ [S.Def{S.dbody = [S.After _ now e _]}]] -> Right (now, e)
+              other -> Left (show other)
+            expectAfter body now delay = afterParts body `shouldBe` fmap ((,) now) (parseExprAst delay)
+
+        it "measures the delay from the current time after the now keyword" $
+          expectAfter "after now 3.8: g()" True "3.8"
+        it "measures a plain delay from the inherited baseline" $
+          expectAfter "after 3.8: g()" False "3.8"
+        it "takes a parenthesized delay after the now keyword" $
+          expectAfter "after now (d * 2): g()" True "(d * 2)"
+        it "reads now without a following delay as a variable" $
+          expectAfter "after now: g()" False "now"
+        it "reads now followed by an attribute as a variable" $
+          expectAfter "after now.delay: g()" False "now.delay"
+        it "reads now as a variable inside the delay after the now keyword" $
+          expectAfter "after now now: g()" True "now"
+        it "prints the now keyword" $
+          case afterIn "after now 3.8: g()" of
+            Right [S.Decl _ [S.Def{S.dbody = [s]}]] -> Pretty.print s `shouldBe` "after now 3.8: g()"
+            other -> expectationFailure $ "Unexpected parse: " ++ show other
 
       describe "Completion" $ do
         it "completes inherited transform input attributes" $ do

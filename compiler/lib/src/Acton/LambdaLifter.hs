@@ -416,6 +416,7 @@ llSub env e                             = ll env e
 primSubst n
   | n == primASYNCc                     = primASYNC
   | n == primAFTERc                     = primAFTER
+  | n == primAFTER_NOWc                 = primAFTER_NOW
   | n == primAWAITc                     = primAWAIT
   | n == primPUSH_Cc                    = primPUSH_C
   | n == primPUSHF_Cc                   = primPUSHF_C

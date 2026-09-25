@@ -591,6 +591,7 @@ instance Conv Expr where
     conv env (Var l n)
       | n == primASYNCf                 = Var l primASYNCc
       | n == primAFTERf                 = Var l primAFTERc
+      | n == primAFTER_NOWf             = Var l primAFTER_NOWc
       | n == primAWAITf                 = Var l primAWAITc
       | otherwise                       = Var l n
     conv env (Call l e ps KwdNil)       = Call l (conv env e) (conv env ps) KwdNil

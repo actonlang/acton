@@ -206,6 +206,7 @@ $Cont $CONSTCONT($WORD, $Cont);
 
 B_Msg $ASYNC($Actor, $Cont);
 B_Msg $AFTER(B_float, $Cont);
+B_Msg $AFTER_NOW(B_float, $Cont);
 $R $AWAIT($Cont, B_Msg);
 
 void init_db_queue(long);

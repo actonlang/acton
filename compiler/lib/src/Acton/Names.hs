@@ -211,7 +211,7 @@ instance Vars Stmt where
     freeQ (With _ items b)          = freeQ items ++ (freeQ b `diffQ` bound items)
     freeQ (Data _ p b)              = freeQ p ++ freeQ b
     freeQ (VarAssign _ ps e)        = freeQ ps ++ freeQ e
-    freeQ (After _ e e')            = freeQ e ++ freeQ e'
+    freeQ (After _ _ e e')          = freeQ e ++ freeQ e'
     freeQ (Decl _ ds)               = freeQ ds `diffQ` bound ds
     freeQ (Signature _ ns t d)      = freeQ t
 

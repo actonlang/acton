@@ -1073,7 +1073,7 @@ maybeValueStmtOK n (While _ e b els)
                                     = maybeValueExprOK n e && maybeValueUsesOK n b && maybeValueUsesOK n els
 maybeValueStmtOK n (Try _ b hs els fin)
                                     = maybeValueUsesOK n b && all (maybeValueHandlerOK n) hs && maybeValueUsesOK n els && maybeValueUsesOK n fin
-maybeValueStmtOK n (After _ e e')   = maybeValueExprOK n e && maybeValueExprOK n e'
+maybeValueStmtOK n (After _ _ e e') = maybeValueExprOK n e && maybeValueExprOK n e'
 maybeValueStmtOK _ _                = False
 
 maybeValueBranchOK n (Branch e ss)  = maybeValueExprOK n e && maybeValueUsesOK n ss
@@ -1694,7 +1694,7 @@ genCallableType env ts e@(Var _ n)
         t0                          = typeInstOf env (map (const tWild) ts) e
 genCallableType env ts e            = typeInstOf env ts e
 
-boxedCPrim n                        = n `elem` [primAFTER, primAFTERc, primAFTERf]
+boxedCPrim n                        = n `elem` [primAFTER, primAFTERc, primAFTERf, primAFTER_NOW, primAFTER_NOWc, primAFTER_NOWf]
 
 isInternalQName (NoQ n)             = isInternal n
 isInternalQName (GName _ n)         = isInternal n

@@ -1,0 +1,32 @@
+# A plain after measures its delay from the baseline of the message being
+# handled, while after now measures it from the current time. Sleeping in the
+# handler puts the baseline 0.3 s behind the current time, so the plain
+# after 0.25 is already due and must fire before after now 0.2.
+
+import acton.rts
+import time
+
+actor main(env):
+    var order = []
+
+    acton.rts.sleep(env.syscap, 0.3)
+    scheduled = time.Stopwatch()
+
+    def inherited():
+        order.append("inherited")
+
+    def from_now():
+        order.append("now")
+        elapsed = scheduled.elapsed().to_float()
+        if order != ["inherited", "now"]:
+            print("Unexpected timer order:", order)
+            env.exit(1)
+        elif elapsed < 0.19:
+            print("after now fired too early:", elapsed)
+            env.exit(1)
+        else:
+            env.exit(0)
+
+    after now 0.2: from_now()
+    after 0.25: inherited()
+    after 10.0: env.exit(1)

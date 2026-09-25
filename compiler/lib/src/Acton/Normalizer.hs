@@ -267,7 +267,7 @@ instance Norm Stmt where
     norm env (While l e b els)      = While l (eBool True) <$> normSuite (pushMark LOOP env) (sIf1 e [sPass] (els++[sBreak]) : b) <*> return []
     norm env (Data l mbp ss)        = Data l <$> norm env mbp <*> normSuite env ss
     norm env (VarAssign l ps e)     = VarAssign l <$> norm env ps <*> norm env e
-    norm env (After l e e')         = After l <$> norm env e <*> norm env e'
+    norm env (After l now e e')     = After l now <$> norm env e <*> norm env e'
     norm env (Signature l ns t d)   = return $ Signature l ns (conv env t) d
     norm env s                      = error ("norm unexpected stmt: " ++ prstr s)
 

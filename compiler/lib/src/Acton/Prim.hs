@@ -47,14 +47,17 @@ primCont            = gPrim "Cont"
 
 primASYNCf          = gPrim "ASYNCf"
 primAFTERf          = gPrim "AFTERf"
+primAFTER_NOWf      = gPrim "AFTER_NOWf"
 primAWAITf          = gPrim "AWAITf"
 
 primASYNCc          = gPrim "ASYNCc"
 primAFTERc          = gPrim "AFTERc"
+primAFTER_NOWc      = gPrim "AFTER_NOWc"
 primAWAITc          = gPrim "AWAITc"
 
 primASYNC           = gPrim "ASYNC"
 primAFTER           = gPrim "AFTER"
+primAFTER_NOW       = gPrim "AFTER_NOW"
 primAWAIT           = gPrim "AWAIT"
 
 primPUSH_Cc         = gPrim "PUSH_Cc"
@@ -162,14 +165,17 @@ unAnnot t_ann (Call _ (TApp _ (Var _ n) [t,_]) (PosArg w (PosArg e PosNil)) KwdN
 
 primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing),
                             (noq primAFTERf,        NDef scAFTERf NoDec Nothing),
+                            (noq primAFTER_NOWf,    NDef scAFTERf NoDec Nothing),
                             (noq primAWAITf,        NDef scAWAITf NoDec Nothing),
 
                             (noq primASYNCc,        NDef scASYNCc NoDec Nothing),
                             (noq primAFTERc,        NDef scAFTERc NoDec Nothing),
+                            (noq primAFTER_NOWc,    NDef scAFTERc NoDec Nothing),
                             (noq primAWAITc,        NDef scAWAITc NoDec Nothing),
 
                             (noq primASYNC,         NDef scASYNC NoDec Nothing),
                             (noq primAFTER,         NDef scAFTER NoDec Nothing),
+                            (noq primAFTER_NOW,     NDef scAFTER NoDec Nothing),
                             (noq primAWAIT,         NDef scAWAIT NoDec Nothing),
 
                             (noq primPUSH_Cc,       NDef scPUSH_Cc NoDec Nothing),
