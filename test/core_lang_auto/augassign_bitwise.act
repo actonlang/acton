@@ -1,0 +1,86 @@
+# Augmented bitwise assignments (|=, &=, ^=) on builtin and user-defined
+# Logical types, for variable, attribute and index targets
+
+class Bits(object):
+    def __init__(self, v: int):
+        self.v = v
+
+extension Bits (Logical):
+    def __and__(a, b):
+        return Bits(a.v & b.v)
+    def __or__(a, b):
+        return Bits(a.v | b.v)
+    def __xor__(a, b):
+        return Bits(a.v ^ b.v)
+
+class Holder(object):
+    def __init__(self, x: u64):
+        self.x = x
+
+def local_int() -> (int, int, int):
+    x = 12
+    x ^= 10
+    y = 12
+    y |= 10
+    z = 12
+    z &= 10
+    return (x, y, z)
+
+def local_u64() -> (u64, u64, u64):
+    x: u64 = 12
+    x ^= 10
+    y: u64 = 12
+    y |= u64(10)
+    z: u64 = 12
+    z &= u64(10)
+    return (x, y, z)
+
+def local_i32() -> i32:
+    x: i32 = -1
+    x ^= i32(10)
+    return x
+
+actor main(env):
+    failures: list[str] = []
+
+    def expect(what: str, ok: bool):
+        if not ok:
+            failures.append(what)
+
+    acc: u64 = 0
+    acc ^= u64(5)
+    acc ^= u64(3)
+    expect("u64 actor state ^=", acc == 6)
+
+    expect("int ^= |= &=", local_int() == (6, 14, 8))
+    expect("u64 ^= |= &=", local_u64() == (u64(6), u64(14), u64(8)))
+    expect("i32 ^=", local_i32() == i32(-11))
+
+    h = Holder(12)
+    h.x ^= u64(10)
+    expect("attribute ^=", h.x == 6)
+
+    l = [12, 12]
+    l[1] ^= 10
+    expect("list index ^=", l == [12, 6])
+
+    d = {"a": u64(12)}
+    d["a"] ^= u64(10)
+    expect("dict index ^=", d["a"] == 6)
+
+    s = {1, 2, 3}
+    s ^= {2, 3, 4}
+    expect("set ^=", s == {1, 4})
+
+    b = Bits(12)
+    b ^= Bits(10)
+    expect("Logical ^=", b.v == 6)
+    b |= Bits(9)
+    expect("Logical |=", b.v == 15)
+    b &= Bits(5)
+    expect("Logical &=", b.v == 5)
+
+    if failures:
+        print("Failed:", failures)
+        env.exit(1)
+    env.exit(0)
