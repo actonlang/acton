@@ -3,6 +3,18 @@
 ## Unreleased
 
 ### Language
+- Add first-class immutable collection types by splitting collection protocols
+  into read-only and mutable parts. `IIndexed`, `ISliceable`, `ISequence`,
+  `IMapping`, and `ISet` expose access without mutation; `ilist`, `idict`, and
+  `iset` implement these read-only protocols, while `list`, `dict`, and `set`
+  add the corresponding mutation operations. The generic `Freeze[A]` protocol
+  and `freeze()` consume mutable collections into their immutable forms, with
+  hashable `iset` values usable as dictionary keys or nested sets. [#3122]
+  [#3152]
+- End iteration through ordinary control flow instead of exceptions.
+  `Iterator.__next__()` and `next()` now return `maybe[A]`, using `just(value)`
+  for items and `nothing()` for exhaustion. This makes some iteration-heavy
+  real-world applications more than twice as fast. [#3137]
 - Treat `mut` and `pure` effects as temporarily interchangeable, allowing APIs
   written with either effect to compose while immutable local mutation rules
   are being redesigned. [#3084]
@@ -11,11 +23,33 @@
 - Compile protocols that inherit another protocol with fixed type arguments
   without passing those type arguments to the wrong witness constructor, fixing
   C generation for nested protocol inheritance. [#3098]
+- Reuse statically known witnesses reached through multiple inherited
+  protocols instead of constructing them repeatedly, including for list
+  indexing and mutation. This makes affected benchmark programs run at three
+  to six times their previous speed. [#3155]
+- Compile augmented `<<=` and `>>=` assignments with an `int` shift count for
+  types such as `bigint`, matching the right-hand type accepted by ordinary
+  shift expressions. [#3158]
 - Preserve unchanged generated root stubs and Zig build files when their
   contents match, avoiding timestamp-only rewrites that invalidate otherwise
   reusable warm-build output. [#3099]
 
 ### CLI & Project Workflow
+- Select an Acton project within a dependency archive with `subdir` in
+  `Build.act` or `acton pkg add --subdir`, so monorepos can provide multiple
+  packages from one archive while preserving sibling path dependencies.
+  Package upgrades retain the selection, and local overrides point directly to
+  the selected project root. [#3153]
+- Allow applications to pass literal Zig build options through `build_options`
+  in `Build.act`, including GC mark layout, dirty-page tracking backend, and
+  page-hash table size controls. The root application's choices apply across
+  its build, invalidate cached tests when changed, and are recorded with
+  performance results. Explicit Linux backends fail instead of silently
+  falling back when unavailable. [#3140] [#3146]
+- Allow Linux applications to set `gc_disable_thp` in `Build.act` to keep GC
+  memory on ordinary pages, including newly allocated and reused heap memory.
+  The updated bundled collector applies the setting without changing the
+  default page policy. [#3142] [#3143]
 - Add dependency `follows` declarations in `Build.act` so a project can import
   a package selected through another dependency, while requiring every directly
   imported package to be declared by the importing project. [#3091]
@@ -35,10 +69,20 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
-- Add the generic `Freeze[A]` protocol and global `freeze()` function for
-  producing an immutable form of a value. For sets, `freeze(a_set)` returns a
-  hashable `iset` that can be used as a dictionary key or nested inside another
-  set. [#3122]
+- Add `acton.rts.get_gc_info()` for inspecting the collector's mode, configured
+  and active dirty-tracking backends, marking and collection policy, and
+  current heap, free, and unmapped byte counts. [#3146]
+- Update the bundled collector so unlimited generational collection can use
+  parallel marking, idle `userfaultfd` monitoring sleeps, write protection
+  handles Linux memory-mapping boundaries, and custom stop callbacks remain
+  installed. [#3144]
+- Include `bytes` and `complex` in `atom`, allowing APIs that accept immutable
+  builtin values to receive them. Unsupported `atom` inputs to numeric
+  constructors now raise `ValueError` instead of terminating the process.
+  [#3156] [#3159]
+- Return exactly two hexadecimal characters per input byte from `bytes.hex()`,
+  preventing unrelated memory from being included in the result and corrupting
+  hash strings. [#3133]
 - Preserve embedded NUL characters when decoding `bytes` or `bytearray` to
   `str`, and use the complete string for comparison, hashing, iteration,
   prefix and suffix checks, and JSON keys and values. Decoding now rejects
@@ -48,14 +92,26 @@
   than Zig's bytewise fallback. [#3125] [#3126] [#3128]
 - Allow list equality and inequality when elements implement only `Eq`,
   while ordering comparisons continue to require `Ord`. [#3120]
+- Hash `bool`, narrow integers, and `float` by value, so equal values in
+  separate objects work reliably as set elements and dictionary keys. Positive
+  and negative floating zero now produce the same hash. [#3141]
 - Add immutable `iset` values whose hashable elements make the set hashable as
   a whole, allowing them to be used as dictionary keys and nested inside other
-  sets while mutable `set` values remain unhashable. [#3103] [#3109]
+  sets while mutable `set` values remain unhashable, and format them as
+  `iset({...})` in `str()` and `repr()` output. [#3103] [#3109] [#3135]
+- Return a valid empty string from `str.rstrip()` and `str.strip()` when they
+  remove every character, including multibyte characters and custom strip
+  sets. [#3138]
 - Speed up `==` and `!=` for `str`, `bytes`, `bytearray`, `bigint`, `list`,
   `dict`, and tuple values by returning immediately when both operands refer to
   the same object instead of comparing their contents. This avoids unnecessary
   work for large values and containers, and means lists, dictionaries, and
   tuples compare equal to themselves even when they contain `NaN`. [#3106]
+- Keep `range()` empty when its step points away from the stop value instead of
+  yielding an erroneous element. [#3157]
+- Use libc's optimized memory fill where available, reducing time and CPU use
+  in GC-heavy workloads while retaining Zig's implementation on platforms that
+  need it. [#3139]
 - Implement builtin helpers such as `enumerate`, `filter`, `map`, `max`, `min`,
   `sum`, and `zip` in Acton and streamline collection iteration to avoid
   allocation-heavy iterator handling in common builtin operations. [#3104]
@@ -85,7 +141,7 @@
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
   [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
-  [#3130]
+  [#3130] [#3134] [#3139]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
@@ -96,6 +152,14 @@
     measure interleaved balanced pairs of fresh processes at a shared workload
     scale, and report uncertainty from the paired results while including
     uncommitted current-tree changes.
+  - `utils/perf-compare` compares changes to Acton's compiler, runtime, or
+    builtins against a Git revision using identical benchmark sources and a
+    shared workload scale. It runs balanced process pairs, reuses cached
+    baseline builds, supports selecting another benchmark project, and saves
+    the source snapshot and measurements.
+  - GC benchmarks measure collection under temporary allocations while
+    retaining and updating an inventory of records, supporting comparisons of
+    runtime and collector settings at explicit workload sizes.
   - Reports compare recorded baselines and show timing distributions, GC,
     allocation and memory statistics, peak RSS, and optional CPU, instruction,
     cycle, and IPC counters, with consistent elapsed-time measurement on macOS.
@@ -112,10 +176,21 @@
     for wide ranges; compared curves share axes and show both final values.
   - Comparison summaries and legends list the baseline before the current run,
     color each label to match its curve, and keep wrapped headings aligned.
+- Stop running full baseline performance comparisons on every pull request;
+  use `acton test perf --compare` or `utils/perf-compare` when a change needs
+  targeted measurement. [#3145]
 - Update standard-library tests to the supported testing signatures, restoring
   discovery and execution of tests that used the legacy callback form. [#3111]
 
 ### Compatibility Notes
+- Generic code that only reads indexed, sliced, sequential, or mapping values
+  should use `IIndexed`, `ISliceable`, `ISequence`, or `IMapping`. `str` and
+  `bytes` implement `ISliceable`, `ilist` implements `ISequence`, and `idict`
+  implements `IMapping` rather than the corresponding mutable protocols.
+  [#3152]
+- Custom iterators must return `just(value)` for each item and `nothing()` at
+  exhaustion. Code that calls `next()` or `__next__()` directly must inspect
+  the returned `maybe` value. [#3137]
 - Require predicates passed to `filter()` to return `bool`; code that returned
   another truthy value must convert it explicitly. [#3131]
 
@@ -4934,6 +5009,26 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3128]: https://github.com/actonlang/acton/pull/3128
 [#3130]: https://github.com/actonlang/acton/pull/3130
 [#3131]: https://github.com/actonlang/acton/pull/3131
+[#3133]: https://github.com/actonlang/acton/pull/3133
+[#3134]: https://github.com/actonlang/acton/pull/3134
+[#3135]: https://github.com/actonlang/acton/pull/3135
+[#3137]: https://github.com/actonlang/acton/pull/3137
+[#3138]: https://github.com/actonlang/acton/pull/3138
+[#3139]: https://github.com/actonlang/acton/pull/3139
+[#3140]: https://github.com/actonlang/acton/pull/3140
+[#3141]: https://github.com/actonlang/acton/pull/3141
+[#3142]: https://github.com/actonlang/acton/pull/3142
+[#3143]: https://github.com/actonlang/acton/pull/3143
+[#3144]: https://github.com/actonlang/acton/pull/3144
+[#3145]: https://github.com/actonlang/acton/pull/3145
+[#3146]: https://github.com/actonlang/acton/pull/3146
+[#3152]: https://github.com/actonlang/acton/pull/3152
+[#3153]: https://github.com/actonlang/acton/pull/3153
+[#3155]: https://github.com/actonlang/acton/pull/3155
+[#3156]: https://github.com/actonlang/acton/pull/3156
+[#3157]: https://github.com/actonlang/acton/pull/3157
+[#3158]: https://github.com/actonlang/acton/pull/3158
+[#3159]: https://github.com/actonlang/acton/pull/3159
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
