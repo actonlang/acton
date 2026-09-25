@@ -2711,7 +2711,7 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
     createDirectoryIfMissing True buildDir
-    writeFileIfChanged (buildDir </> "build.zig") (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
+    writeFileIfChanged (buildDir </> "build.zig") (genBuildZig buildZigTemplate absSys mergedSpec resolvedZigs depModuleOpts)
     writeFileIfChanged (buildDir </> "build.zig.zon") (genBuildZigZon buildZonTemplate relSys depsRootAbs absSys projAbs buildDir fp zonName mergedSpec resolvedZigs)
 
 addImplicitStdDependency :: FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
@@ -2822,8 +2822,8 @@ resolveZigDepRefs pkgDepNames refs =
          , resolved : acc
          )
 
-genBuildZig :: String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> M.Map String String -> String
-genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
+genBuildZig :: String -> FilePath -> BuildSpec.BuildSpec -> [ZigDepResolved] -> M.Map String String -> String
+genBuildZig template sys spec zigDeps depModuleOpts =
     let
         depsDefs = concatMap pkgDepDef (M.toList (BuildSpec.dependencies spec))
         zigDefs  = concatMap zigDepDef zigDeps
@@ -2844,22 +2844,33 @@ genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
              ++ (if sline == "// exe: link with dependencies / get headers from Build.act" then [exeLinks] else [])
     in unlines $ header ++ concatMap inject (lines template)
   where
-    pkgDepDef (name, _) =
+    sysDepsPath = sys </> "deps"
+
+    pkgDepDef (name, dep) =
       let selectedCsv = M.findWithDefault "" name depModuleOpts
-      in unlines [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
-                 , "        .target = target,"
-                 , "        .optimize = optimize,"
-                 , "        .no_threads = no_threads,"
-                 , "        .db = db,"
-                 , "        .gc_use_mark_bits = gc_use_mark_bits,"
-                 , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
-                 , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
-                 , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
-                 , "        .gc_disable_thp = gc_disable_thp,"
-                 , "        .acton_modules = " ++ show selectedCsv ++ ","
-                 , "        .acton_root_stubs = \"\","
-                 , "    });"
-                 ]
+          -- Distribution packages have a checked-in build.zig instead of one
+          -- generated from the builder template (see zigBuildDir). The only
+          -- one that is a package dependency is std, which always builds all
+          -- of its modules and, like base, declares only the options above.
+          -- Zig reports any other option as invalid.
+          moduleOpts
+            | maybe False (isSysProject sys) (BuildSpec.path dep) = []
+            | otherwise = [ "        .acton_modules = " ++ show selectedCsv ++ ","
+                          , "        .acton_root_stubs = \"\","
+                          ]
+      in unlines $ [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+                   , "        .target = target,"
+                   , "        .optimize = optimize,"
+                   , "        .no_threads = no_threads,"
+                   , "        .db = db,"
+                   , "        .gc_use_mark_bits = gc_use_mark_bits,"
+                   , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
+                   , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
+                   , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
+                   , "        .gc_disable_thp = gc_disable_thp,"
+                   ]
+                   ++ moduleOpts
+                   ++ [ "    });" ]
     pkgLibLink (name, _) =
       "    libActonProject.root_module.linkLibrary(actdep_" ++ name ++ ".artifact(\"ActonProject\"));\n"
       ++ "    for (explicit_static_libraries.items) |libActonExplicit| {\n"
