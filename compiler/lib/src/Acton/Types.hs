@@ -882,6 +882,7 @@ instance InfEnv Stmt where
             oper _ ShiftLA              = (pIntegral, ilshiftKW)
             oper _ ShiftRA              = (pIntegral, irshiftKW)
             oper _ BOrA                 = (pLogical,  iorKW)
+            oper _ BXorA                = (pLogical,  ixorKW)
             oper _ BAndA                = (pLogical,  iandKW)
             oper _ MMultA               = (pMatrix,   imatmulKW)
             rtype ShiftLA t             = tInt
