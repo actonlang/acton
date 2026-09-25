@@ -1897,6 +1897,47 @@ actonProjTests =
             ("if (enable_lto) libActonProject.lto = .thin;" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should enable LTO for executables"
             ("if (enable_lto) executable.lto = .thin;" `isInfixOf` rootBuildZig)
+  , testCase "package deps only get build options they declare" $ do
+        withSystemTempDirectory "acton-dep-build-options" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let app = tmp </> "app"
+              lib = tmp </> "lib1"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True (app </> "src")
+          createDirectoryIfMissing True (lib </> "src")
+          writeFile (app </> "Build.act") $ unlines
+            [ "name = \"app\""
+            , "fingerprint = " ++ mkFp "app"
+            , "dependencies = {"
+            , "    \"lib1\": (path=\"../lib1\")"
+            , "}"
+            ]
+          writeFile (app </> "src" </> "app.act") $ unlines
+            [ "import lib1.greet"
+            , ""
+            , "actor main(env):"
+            , "    print(lib1.greet.hello())"
+            , "    env.exit(0)"
+            ]
+          writeFile (lib </> "Build.act") $ unlines
+            [ "name = \"lib1\""
+            , "fingerprint = " ++ mkFp "lib1"
+            ]
+          writeFile (lib </> "src" </> "greet.act") $ unlines
+            [ "def hello() -> str:"
+            , "    return \"x\""
+            ]
+          -- Zig only warns about options a dependency does not declare, and
+          -- acton hides zig's stderr on success unless --verbose-zig is given.
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--verbose-zig"]){ cwd = Just app } ""
+          let output = cmdOut ++ cmdErr
+          assertEqual ("acton build should succeed\n" ++ output) ExitSuccess returnCode
+          assertBool ("zig stderr should be shown\n" ++ output)
+            ("Acton Standard Library Builder" `isInfixOf` output)
+          assertBool ("zig should not reject options passed to package deps\n" ++ output)
+            (not ("invalid option" `isInfixOf` output))
   , testCase "transitive zig deps deduplicate by identity and split on collision" $ do
         withSystemTempDirectory "acton-zig-transitive-dedup" $ \tmp -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
