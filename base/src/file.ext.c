@@ -272,6 +272,24 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     return $R_CONT(C_cont, B_None);
 }
 
+// action def rename(src: str, dst: str) -> None:
+$R fileQ_FSD_renameG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
+    uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
+    int r = uv_fs_rename(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), NULL);
+    if (r == UV_ENOENT) {
+        uv_fs_req_cleanup(req);
+        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(src)));
+    } else if (r < 0) {
+        char errmsg[1024] = "Error renaming file: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        uv_fs_req_cleanup(req);
+        log_warn(errmsg);
+        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+    }
+    uv_fs_req_cleanup(req);
+    return $R_CONT(C_cont, B_None);
+}
+
 // action def stat(filename: str) -> FileStat:
 $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));

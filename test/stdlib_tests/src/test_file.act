@@ -127,6 +127,42 @@ actor _test_write_file_append(t: testing.EnvT):
     except Exception as exc:
         t.error(exc)
 
+actor _test_fs_rename(t: testing.EnvT):
+    """rename replaces an existing target and reports a missing source."""
+    try:
+        fc = file.FileCap(t.env.cap)
+        wfc = file.WriteFileCap(fc)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        src = file.join_path([tmpdir, "src"])
+        dst = file.join_path([tmpdir, "dst"])
+        wf = file.WriteFile(wfc, src)
+        await async wf.write(b"src\n")
+        await async wf.close()
+        wf = file.WriteFile(wfc, dst)
+        await async wf.write(b"dst\n")
+        await async wf.close()
+
+        await async fs.rename(src, dst)
+        rf = file.ReadFile(file.ReadFileCap(fc), dst)
+        renamed = rf.read()
+        rf.close()
+        testing.assertEqual(b"src\n", renamed)
+        testing.assertEqual(["dst"], fs.listdir(tmpdir))
+
+        missing = False
+        try:
+            await async fs.rename(src, dst)
+        except FileNotFoundError:
+            missing = True
+        testing.assertTrue(missing, "rename of a missing file raises FileNotFoundError")
+        await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
 actor _test_fs_copyfile(t: testing.EnvT):
     try:
         fc = file.FileCap(t.env.cap)

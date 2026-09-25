@@ -258,6 +258,14 @@ actor FS(cap: FileCap):
         """Remove a file"""
         NotImplemented
 
+    action def rename(src: str, dst: str) -> None:
+        """Rename a file or directory
+
+        An existing file at dst is replaced. Raises FileNotFoundError for src
+        when src, or the directory that dst names, does not exist.
+        """
+        NotImplemented
+
     action def rmdir(dirname: str) -> None:
         """Remove a directory"""
         NotImplemented
