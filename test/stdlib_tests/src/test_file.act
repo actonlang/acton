@@ -68,6 +68,29 @@ actor _test_fs_write_read_file(t: testing.EnvT):
     except Exception as exc:
         t.error(exc)
 
+actor _test_write_file_writes_in_order(t: testing.EnvT):
+    """Each write continues where the previous one ended."""
+    try:
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        filename = file.join_path([tmpdir, "test-file"])
+        wf = file.WriteFile(file.WriteFileCap(fc), filename)
+        await async wf.write(b"first\n")
+        await async wf.write(b"second\n")
+        await async wf.close()
+
+        rf = file.ReadFile(file.ReadFileCap(fc), filename)
+        rd = rf.read()
+        rf.close()
+        testing.assertEqual(b"first\nsecond\n", rd)
+        await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
 actor _test_fs_copyfile(t: testing.EnvT):
     try:
         fc = file.FileCap(t.env.cap)

@@ -457,17 +457,24 @@ $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
 
 $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes data) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
+    char *p = (char *)data->str;
+    size_t left = data->nbytes;
 
-    int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, 0, NULL);
-    if (r < 0) {
-        char errmsg[1024] = "Error writing to file: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+    // Offset -1 writes at the current position, so each write continues where
+    // the previous one ended. A write can write less than asked for, so write
+    // until all data is written.
+    while (left > 0) {
+        uv_buf_t buf = uv_buf_init(p, left);
+        int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, -1, NULL);
         uv_fs_req_cleanup(req);
-        log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
-
+        if (r < 0) {
+            char errmsg[1024] = "Error writing to file: ";
+            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+            log_warn(errmsg);
+            $RAISE(((B_BaseException)B_OSErrorG_new(to$str(errmsg))));
+        }
+        p += r;
+        left -= (size_t)r;
     }
-    uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
 }
