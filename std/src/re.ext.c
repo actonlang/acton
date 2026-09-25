@@ -39,9 +39,11 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
     if (start_offset < 0) {
         $RAISE(((B_BaseException)B_ValueErrorG_new(to_str_noc("PCRE2 matching failed: negative start_pos"))));
     }
-    if ((size_t)start_offset > text_length) {
+    if (start_offset > arg_text->nchars) {
         $RAISE(((B_BaseException)B_ValueErrorG_new(to_str_noc("start position is greater than string length"))));
     }
+    // start_pos is a code point index; PCRE2 takes a byte offset
+    start_offset = $byte_no(arg_text, start_offset);
 
     int errornumber;
     PCRE2_SIZE erroroffset;
@@ -145,9 +147,9 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
         }
     }
 
-    // Entire match offsets
-    PCRE2_SIZE match_start = ovector[0];
-    PCRE2_SIZE match_end = ovector[1];
+    // Entire match offsets, as code point indexes
+    int64_t match_start = $char_no(arg_text, ovector[0]);
+    int64_t match_end = $char_no(arg_text, ovector[1]);
 
     pcre2_match_data_free(match_data);
     pcre2_code_free(re);
