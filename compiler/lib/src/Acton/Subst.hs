@@ -108,7 +108,7 @@ instance VFree Stmt where
     vfree (Try _ b hs els fin)     = vfree b ++ vfree hs ++ vfree els ++ vfree fin
     vfree (With _ is b)            = vfree is ++ vfree b
     vfree (VarAssign _ ps e)       = vfree ps ++ vfree e
-    vfree (After _ e e')           = vfree e ++ vfree e'
+    vfree (After _ _ e e')         = vfree e ++ vfree e'
     vfree (Decl _ ds)              = vfree ds
     vfree (Signature _ ns tsc d)   = vfree tsc
     vfree s                        = []
@@ -293,7 +293,7 @@ instance VSubst Stmt where
     vsubst s (Try l b hs els fin)   = Try l (vsubst s b) (vsubst s hs) (vsubst s els) (vsubst s fin)
     vsubst s (With l is b)          = With l (vsubst s is) (vsubst s b)
     vsubst s (VarAssign l ps e)     = VarAssign l (vsubst s ps) (vsubst s e)
-    vsubst s (After l e e')         = After l (vsubst s e) (vsubst s e')
+    vsubst s (After l now e e')     = After l now (vsubst s e) (vsubst s e')
     vsubst s (Decl l ds)            = Decl l (vsubst s ds)
     vsubst s (Signature l ns tsc d) = Signature l ns (vsubst s tsc) d
     vsubst s stmt                   = stmt
@@ -460,7 +460,7 @@ instance UFree Stmt where
     ufree (Try _ b hs els fin)      = ufree b ++ ufree hs ++ ufree els ++ ufree fin
     ufree (With _ is b)             = ufree is ++ ufree b
     ufree (VarAssign _ ps e)        = ufree ps ++ ufree e
-    ufree (After _ e e')            = ufree e ++ ufree e'
+    ufree (After _ _ e e')          = ufree e ++ ufree e'
     ufree (Decl _ ds)               = ufree ds
     ufree (Signature _ ns tsc d)    = ufree tsc
     ufree s                         = []

@@ -26,7 +26,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,34]
+version = [0,35]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -55,7 +55,7 @@ data Stmt       = Expr          { sloc::SrcLoc, expr::Expr }
                 | With          { sloc::SrcLoc, witems::[WithItem], body::Suite }
                 | Data          { sloc::SrcLoc, mbpat::Maybe Pattern, dsuite::Suite }
                 | VarAssign     { sloc::SrcLoc, patterns::[Pattern], expr::Expr }
-                | After         { sloc::SrcLoc, expr::Expr, expr2::Expr }
+                | After         { sloc::SrcLoc, fromNow::Bool, expr::Expr, expr2::Expr }
                 | Signature     { sloc::SrcLoc, vars::[Name], typ::TSchema, dec::Deco }
                 | Decl          { sloc::SrcLoc, decls::[Decl] }
                 deriving (Show,Read,NFData,Generic)
@@ -681,7 +681,7 @@ instance Eq Stmt where
     x@With{}            ==  y@With{}            = witems x == witems y && body x == body y
     x@Data{}            ==  y@Data{}            = mbpat x == mbpat y && dsuite x == dsuite y
     x@VarAssign{}       ==  y@VarAssign{}       = patterns x == patterns y && expr x == expr y
-    x@After{}           ==  y@After{}           = expr x == expr y && expr2 x == expr2 y
+    x@After{}           ==  y@After{}           = fromNow x == fromNow y && expr x == expr y && expr2 x == expr2 y
     x@Decl{}            ==  y@Decl{}            = decls x == decls y
     x@Signature{}       ==  y@Signature{}       = vars x == vars y && typ x == typ y && dec x == dec y
     _                   ==  _                   = False

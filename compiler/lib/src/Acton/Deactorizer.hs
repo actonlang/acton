@@ -117,11 +117,12 @@ instance Deact Stmt where
     deact env (VarAssign l [p@(PVar _ n _)] e)
                                     = MutAssign l (selfRef n) <$> deact env e
       where t                       = typeOf env p
-    deact env (After l e1 e2)       = do delta <- deact env e1
+    deact env (After l now e1 e2)   = do delta <- deact env e1
                                          lambda <- deact env $ Lambda l0 PosNIL KwdNIL e2 fxProc
-                                         return $ Expr l $ Call l0 (tApp (eQVar primAFTERf) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
+                                         return $ Expr l $ Call l0 (tApp (eQVar prim) [t2]) (PosArg delta $ PosArg lambda PosNil) KwdNil
       where t2                      = typeOf env e2
             t                       = tFun fxProc posNil kwdNil t2
+            prim                    = if now then primAFTER_NOWf else primAFTERf
     deact env (Decl l ds)           = do ds1 <- deact env1 ds
                                          return $ Decl l $ ds1 ++ [ newact env1 n q p Nothing | Actor _ n q p _ _ _ <- ds, not $ abstractActor env1 (NoQ n) ]
       where env1                    = define (envOf ds) env
@@ -330,7 +331,7 @@ instance LambdaFree Stmt where
     lamfree (If _ bs els)           = concat [ lamfree e | Branch e ss <- bs ]
     lamfree (While _ e b els)       = lamfree e
     lamfree (VarAssign _ p e)       = lamfree e
-    lamfree (After l e1 e2)         = lamfree e1 ++ free e2         -- deact will turn e2 into a lambda
+    lamfree (After l _ e1 e2)       = lamfree e1 ++ free e2         -- deact will turn e2 into a lambda
     lamfree _                       = []
 
 instance LambdaFree Expr where

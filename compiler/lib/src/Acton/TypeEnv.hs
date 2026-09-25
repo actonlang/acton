@@ -880,7 +880,7 @@ instance USubst Stmt where
     usubstWith s (Try l b hs els fin)     = Try l (usubstWith s b) (usubstWith s hs) (usubstWith s els) (usubstWith s fin)
     usubstWith s (With l is b)            = With l (usubstWith s is) (usubstWith s b)
     usubstWith s (VarAssign l ps e)       = VarAssign l (usubstWith s ps) (usubstWith s e)
-    usubstWith s (After l e e')           = After l (usubstWith s e) (usubstWith s e')
+    usubstWith s (After l now e e')       = After l now (usubstWith s e) (usubstWith s e')
     usubstWith s (Decl l ds)              = Decl l (usubstWith s ds)
     usubstWith s (Signature l ns tsc d)   = Signature l ns (usubstWith s tsc) d
     usubstWith s stmt                     = stmt

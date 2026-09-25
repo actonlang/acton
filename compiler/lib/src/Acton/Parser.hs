@@ -1823,10 +1823,11 @@ after_stmt :: Parser S.Stmt
 after_stmt = addLoc $ do
                 l <- rwordLoc "after"
                 assertDefAct l "after"
-                e <- expr
-                colon
+                -- 'now' is a soft keyword: it only measures the delay from the current time when a delay
+                -- expression and ':' follow it, so 'after now: f()' still reads a variable named now
+                (now,e) <- try ((,) True <$> (rword "now" *> expr) <* colon) <|> ((,) False <$> expr <* colon)
                 e' <- expr
-                return $ S.After NoLoc e e'
+                return $ S.After NoLoc now e e'
 
 var_stmt :: Parser S.Stmt
 var_stmt = addLoc $ do

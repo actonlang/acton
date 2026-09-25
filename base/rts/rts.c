@@ -1006,6 +1006,17 @@ B_Msg $AFTER(B_float sec, $Cont cont) {
     return m;
 }
 
+// Like $AFTER, but the delay counts from the current time instead of from the
+// baseline of the message being handled
+B_Msg $AFTER_NOW(B_float sec, $Cont cont) {
+    $Actor self = GET_SELF();
+    rtsd_printf("# AFTER_NOW by %ld", self->$globkey);
+    time_t baseline = current_time() + sec->val * 1000000;
+    B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
+    PUSH_outgoing(self, m);
+    return m;
+}
+
 $R $AWAIT($Cont cont, B_Msg m) {
     return $R_WAIT(cont, m);
 }

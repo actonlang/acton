@@ -301,7 +301,7 @@ instance KCheck Stmt where
     kchk env (With l is b)          = With l <$> kchk env is <*> kchkSuite env b
     kchk env (Data l mbt ss)        = Data l <$> kchk env mbt <*> kchkSuite env ss
     kchk env (VarAssign l ps e)     = VarAssign l <$> kchk env ps <*> kchk env e
-    kchk env (After l e e')         = After l <$> kchk env e <*> kchk env e'
+    kchk env (After l now e e')     = After l now <$> kchk env e <*> kchk env e'
     kchk env (Decl l ds)            = Decl l <$> kchk env ds
     kchk env (Signature l ns sc d)  = Signature l ns <$> (kchk env =<< instKWild (autoQuantS env sc)) <*> return d
 
@@ -659,7 +659,7 @@ instance KSubst Stmt where
     ksubst g (With l is b)          = With l <$> ksubst g is <*> ksubst g b
     ksubst g (Data l mbt ss)        = Data l <$> ksubst g mbt <*> ksubst g ss
     ksubst g (VarAssign l ps e)     = VarAssign l <$> ksubst g ps <*> ksubst g e
-    ksubst g (After l e e')         = After l <$> ksubst g e <*> ksubst g e'
+    ksubst g (After l now e e')     = After l now <$> ksubst g e <*> ksubst g e'
     ksubst g (Decl l ds)            = Decl l <$> ksubst g ds
     ksubst g (Signature l ns t d)   = Signature l ns <$> ksubst g t <*> return d
 

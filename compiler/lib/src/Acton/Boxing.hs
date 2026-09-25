@@ -546,7 +546,7 @@ rtypeOfFun env f@(Var _ n)
                                         _            -> typeOf env f
 rtypeOfFun env f                    = typeOf env f
 
-boxedCPrim n                        = n `elem` [primAFTER, primAFTERc, primAFTERf]
+boxedCPrim n                        = n `elem` [primAFTER, primAFTERc, primAFTERf, primAFTER_NOW, primAFTER_NOWc, primAFTER_NOWf]
 
 isInternalQName (NoQ n)             = isInternal n
 isInternalQName (GName _ n)         = isInternal n

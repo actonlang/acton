@@ -799,12 +799,12 @@ instance InfEnv Stmt where
                                              let te' = [ (n, NSVar t) | n <- bound pats, let NVar t = findName n (define te env) ]
                                              return (cs, te', VarAssign l pats' e')
 
-    infEnv env (After l e1 e2)          = do (cs1,e1') <- inferSub env tFloat e1
+    infEnv env (After l now e1 e2)      = do (cs1,e1') <- inferSub env tFloat e1
                                              (cs2,t,e2') <- infer env e2
                                              -- TODO: constrain t
                                              fx <- currFX
                                              return (Cast (locinfo l 34) env fxProc fx :
-                                                     cs1++cs2, [], After l e1' e2')
+                                                     cs1++cs2, [], After l now e1' e2')
 
     infEnv env (Signature l ns sc@(TSchema _ q t) dec)
       | not $ null bad                  = illegalSigOverride (head bad)
@@ -1532,7 +1532,7 @@ scanSelfAssigns env self classBody stmts = scanSuite [] stmts
     scanSuite seen (Break _ : rest)     = scanSuite seen rest
     scanSuite seen (Continue _ : rest)  = scanSuite seen rest
     scanSuite seen (Delete _ _ : rest)  = scanSuite seen rest
-    scanSuite _ (After _ _ _ : _)       = []  -- STOP: after statement (async)
+    scanSuite _ (After{} : _)           = []  -- STOP: after statement (async)
     -- Check nested function declarations for self references
     scanSuite seen (Decl _ decls : rest)
         | all (checkDeclNoSelfReference self seen) decls
@@ -1671,7 +1671,7 @@ inferClassAttributes self stmts = nub $ scanAll stmts
                                           scanAll rest
     -- TODO: uh, do what with "with"??
     scanAll (With _ witems body : rest) = scanAll body ++ scanAll rest
-    scanAll (After _ _ _ : rest)        = scanAll rest  -- After has expressions, not suite
+    scanAll (After{} : rest)            = scanAll rest  -- After has expressions, not suite
     -- Skip declarations - we don't scan nested function bodies
     scanAll (Decl _ _ : rest)           = scanAll rest
     -- Continue past other statements

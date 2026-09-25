@@ -402,7 +402,7 @@ feedStmt stmt sink = case stmt of
   A.With _ ws b          -> feedTag 25 sink >> feedList feedWithItem ws sink >> feedSuite b sink
   A.Data _ mbp b         -> feedTag 26 sink >> feedMaybe feedPattern mbp sink >> feedSuite b sink
   A.VarAssign _ ps e     -> feedTag 27 sink >> feedList feedPattern ps sink >> feedExpr e sink
-  A.After _ e e'         -> feedTag 28 sink >> feedExpr e sink >> feedExpr e' sink
+  A.After _ now e e'     -> feedTag 28 sink >> feedBool now sink >> feedExpr e sink >> feedExpr e' sink
   A.Signature _ ns t dec -> feedTag 29 sink >> feedList feedName ns sink >> feedTSchema t sink >> feedDeco dec sink
   A.Decl _ ds            -> feedTag 30 sink >> feedList feedDecl ds sink
 
@@ -1140,7 +1140,7 @@ implItemSplitDeps mn env localNames item =
         in splitSuiteDirect bound' b (splitListInto (splitWithItemDirect bound) ws acc)
       A.Data _ mbp b         -> splitSuiteDirect bound b (splitMaybeInto (splitPatternDirect bound) mbp acc)
       A.VarAssign _ ps e     -> splitExprDirect bound e (splitListInto (splitPatternDirect bound) ps acc)
-      A.After _ e e'         -> splitExprDirect bound e' (splitExprDirect bound e acc)
+      A.After _ _ e e'       -> splitExprDirect bound e' (splitExprDirect bound e acc)
       A.Signature _ _ t _    -> splitTSchemaDirect bound t acc
       A.Decl _ ds            -> splitListInto (splitDeclDirect bound) ds acc
 
