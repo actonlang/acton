@@ -49,6 +49,9 @@
 #include <sys/time.h>
 #include <sys/wait.h>
 #endif
+#ifdef __APPLE__
+#include <fcntl.h>
+#endif
 #ifdef __linux__
 #include <sys/prctl.h>
 #ifdef ACTON_GC_DISABLE_THP
@@ -2390,6 +2393,39 @@ static void get_exe_path(char *name_buf, size_t buf_size) {
     name_buf[buf_size - 1] = 0;
 }
 
+#ifdef __APPLE__
+// In incremental and generational mode, the collector's mprotect dirty
+// tracking makes other threads take write faults on protected heap pages
+// while lldb is attached. debugserver takes over the task's EXC_BAD_ACCESS
+// exception port when it attaches, so these faults reach lldb instead of
+// the collector's handler. lldb then reports a crash, --one-line-on-crash
+// exits before "thread backtrace all" runs, and on detach the fault is
+// delivered as SIGBUS. This setting makes debugserver leave EXC_BAD_ACCESS
+// to the task's own handler.
+#define LLDB_IGNORE_BAD_ACCESS "settings set platform.plugin.darwin.ignored-exceptions EXC_BAD_ACCESS"
+
+// Older lldb versions lack the setting, and lldb --batch stops at the first
+// failing command, before it attaches. Try the command on its own first.
+static bool lldb_can_ignore_bad_access() {
+    int probe_pid = fork();
+    if (probe_pid < 0)
+        return false;
+    if (!probe_pid) {
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, 1);
+            dup2(devnull, 2);
+        }
+        execlp("lldb", "lldb", "--batch", "-O", LLDB_IGNORE_BAD_ACCESS, NULL);
+        _exit(127);
+    }
+    int status;
+    if (waitpid(probe_pid, &status, 0) != probe_pid)
+        return false;
+    return WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+#endif
+
 void print_trace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
@@ -2401,6 +2437,10 @@ void print_trace() {
     int child_pid = fork();
     if (!child_pid) {
         dup2(2, 1); // redirect output to stderr
+#ifdef __APPLE__
+        if (lldb_can_ignore_bad_access())
+            execlp("lldb", "lldb", "-O", LLDB_IGNORE_BAD_ACCESS, "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
+#endif
         execlp("lldb", "lldb", "-p", pid_buf, "--batch", "-o", "thread backtrace all", "-o", "exit", "--one-line-on-crash", "exit", name_buf, NULL);
         execlp("gdb", "gdb", "--quiet", "--batch", "-n", "-ex", "set confirm off", "-ex", "set pagination off", "-ex", "set debuginfod enabled off", "-ex", "thread", "-ex", "thread apply all backtrace full", name_buf, pid_buf, NULL);
         fprintf(stderr, "Unable to get detailed backtrace using lldb or gdb\n");
