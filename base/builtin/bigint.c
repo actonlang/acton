@@ -659,7 +659,7 @@ B_NoneType B_HashableD_bigintD_hash(B_HashableD_bigint wit, B_bigint a, B_hasher
         data = 0UL;
     else
         data = (long)a->val.n[0];
-    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)&data,8));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&data, 8);
     return B_None;
 }
 

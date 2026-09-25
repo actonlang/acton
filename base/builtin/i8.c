@@ -267,6 +267,6 @@ bool B_OrdD_i8D___ge__ (B_OrdD_i8 wit, B_i8 a, B_i8 b) {
 // B_HashableD_i8 ///////////////////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_i8D_hash(B_HashableD_i8 wit, B_i8 a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, to$bytesD_len((char *)&a->val, sizeof(a->val)));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)&a->val, sizeof(a->val));
     return B_None;
 }

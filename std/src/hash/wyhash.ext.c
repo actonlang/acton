@@ -1,7 +1,7 @@
 void stdQ_hashQ_wyhashQ___ext_init__() {}
 
 void *zig_hash_wyhash_init(uint64_t seed);
-void zig_hash_wyhash_update(void *hasher, B_bytes data);
+void zig_hash_wyhash_update(void *hasher, const uint8_t *ptr, size_t len);
 uint64_t zig_hash_wyhash_final(void *hasher);
 uint64_t zig_hash_wyhash_hash(uint64_t seed, B_bytes data);
 
@@ -11,7 +11,7 @@ B_NoneType stdQ_hashQ_wyhashQ_HasherD__init (stdQ_hashQ_wyhashQ_Hasher self, uin
 }
 
 B_NoneType stdQ_hashQ_wyhashQ_HasherD_update (stdQ_hashQ_wyhashQ_Hasher self, B_bytes data) {
-    zig_hash_wyhash_update((void *)(uintptr_t)self->_hasher, data);
+    zig_hash_wyhash_update((void *)(uintptr_t)self->_hasher, data->str, data->nbytes);
     return B_None;
 }
 

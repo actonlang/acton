@@ -4,7 +4,7 @@ B_NoneType B_hasherD___init__ (B_hasher self, B_u64 seed) {  // seed is optional
 }
 
 B_NoneType B_hasherD_update (B_hasher self, B_bytes data) {
-    zig_hash_wyhash_update(self->_hasher, data);
+    zig_hash_wyhash_update(self->_hasher, data->str, data->nbytes);
     return B_None;
 }
 

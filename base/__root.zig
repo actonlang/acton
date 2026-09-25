@@ -80,10 +80,8 @@ export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
     return hasher_ptr;
 }
 
-export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, data: *acton.bytes) callconv(.c) void {
-    const len: usize = @intCast(data.nbytes); // destination type from context
-    const slice = data.str[0..len];
-    hasher.update(slice);
+export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, ptr: [*]const u8, len: usize) callconv(.c) void {
+    hasher.update(ptr[0..len]);
 }
 
 export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.c) u64 {

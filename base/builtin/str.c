@@ -1631,7 +1631,7 @@ bool B_OrdD_strD___ge__ (B_OrdD_str wit, B_str a, B_str b) {
 // B_Hashable ///////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher,to$bytesD_len((char *)a->str, a->nbytes));
+    zig_hash_wyhash_update(h->_hasher, (const uint8_t *)a->str, a->nbytes);
     return B_None;
 }
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
@@ -3924,7 +3924,7 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
 
 
 B_NoneType B_HashableD_bytesD_hash(B_HashableD_bytes wit, B_bytes a, B_hasher h) {
-    zig_hash_wyhash_update(h->_hasher, a);
+    zig_hash_wyhash_update(h->_hasher, a->str, a->nbytes);
     return B_None;
 }
 
