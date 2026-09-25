@@ -538,37 +538,6 @@ pub fn build(b: *std.Build) void {
     gc.root_module.addIncludePath(b.path("include"));
     gc.root_module.link_libc = true;
 
-    const generated = b.addWriteFiles();
-    const acton_gc_config = generated.add("acton_gc_config.h", b.fmt(
-        \\#ifndef ACTON_GC_CONFIG_H
-        \\#define ACTON_GC_CONFIG_H
-        \\#include <gc.h>
-        \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
-        \\#define ACTON_GC_REQUIRED_VDB {d}
-        \\#define ACTON_GC_THREADS {d}
-        \\#ifdef __cplusplus
-        \\extern "C" {{
-        \\#endif
-        \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
-        \\#ifdef __cplusplus
-        \\}}
-        \\#endif
-        \\#endif
-        \\
-    , .{ dirty_tracking_backend, required_vdb, @intFromBool(enable_threads) }));
-    gc.installHeader(acton_gc_config, "acton_gc_config.h");
-    // Resolve upstream defaults and extra compiler flags in the collector itself.
-    gc.root_module.addCSourceFile(.{
-        .file = generated.add("acton_gc_config.c",
-            \\#include "private/gc_priv.h"
-            \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void) {
-            \\    return LOG_PHT_ENTRIES;
-            \\}
-            \\
-        ),
-        .flags = flags.items,
-    });
-
     var gccpp: *std.Build.Step.Compile = undefined;
     var gctba: *std.Build.Step.Compile = undefined;
     if (enable_cplusplus) {

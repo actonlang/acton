@@ -18,10 +18,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Must match the collector options in base/build.zig, so that both
+    // resolve to the same libgc.
     const dep_libgc = b.dependency("libgc", .{
         .target = target,
         .optimize = optimize,
         .BUILD_SHARED_LIBS = false,
+        .enable_threads = !target.result.cpu.arch.isWasm(),
         .enable_large_config = true,
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
