@@ -33,7 +33,18 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
 
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
-    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch @panic("ASD");
+    // Acton generates this file into <project>/out/zig, so the project root,
+    // which holds the generated C sources under out/types, is two levels up
+    // from the build root. Resolve it lexically so the paths we hand to the C
+    // compiler carry no out/zig/../.. segments; -ffile-prefix-map below only
+    // matches the normalized form.
+    const project_root = b.pathResolve(&.{ b.build_root.path orelse ".", "..", ".." });
+    const project_path: std.Build.LazyPath = .{ .cwd_relative = project_root };
+    const project_dir = std.Io.Dir.cwd().openDir(io, project_root, .{}) catch |err| {
+        std.log.err("Error opening project root {s}: {}", .{ project_root, err });
+        std.process.exit(1);
+    };
+    defer project_dir.close(io);
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     // LTO = ThinLTO, set in all packages explicitly
@@ -55,7 +66,7 @@ pub fn build(b: *std.Build) void {
         std.process.exit(1);
     };
 
-    print("Acton Project Builder - building {s}\n", .{buildroot_path});
+    print("Acton Project Builder - building {s}\n", .{project_root});
 
     const actonbase_dep = b.dependency("base", .{
         .target = target,
@@ -83,7 +94,7 @@ pub fn build(b: *std.Build) void {
         if (!std.mem.endsWith(u8, item, ".c")) continue;
         if (std.mem.endsWith(u8, item, ".root.c")) continue;
         if (std.mem.endsWith(u8, item, ".test_root.c")) continue;
-        b.build_root.handle.access(io, item, .{}) catch |err| switch (err) {
+        project_dir.access(io, item, .{}) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.warn("Skipping missing selected C source: {s}", .{item});
                 continue;
@@ -114,7 +125,7 @@ pub fn build(b: *std.Build) void {
             std.log.err("Invalid root stub path (expected under out/types): {s}", .{item});
             std.process.exit(1);
         }
-        b.build_root.handle.access(io, item, .{}) catch |err| switch (err) {
+        project_dir.access(io, item, .{}) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.warn("Skipping missing selected root stub: {s}", .{item});
                 continue;
@@ -128,9 +139,9 @@ pub fn build(b: *std.Build) void {
             std.log.err("Error allocating root FilePath entry: {}", .{err});
             std.process.exit(1);
         };
-        fPath.full_path = joinPath(b.allocator, buildroot_path, item);
+        fPath.full_path = joinPath(b.allocator, project_root, item);
         const item_dir = std.fs.path.dirname(item) orelse ".";
-        fPath.dir = joinPath(b.allocator, buildroot_path, item_dir);
+        fPath.dir = joinPath(b.allocator, project_root, item_dir);
         fPath.filename = b.allocator.dupe(u8, std.fs.path.basename(item)) catch |err| {
             std.log.err("Error allocating root filename entry: {}", .{err});
             std.process.exit(1);
@@ -148,12 +159,12 @@ pub fn build(b: *std.Build) void {
 
     if (c_files.items.len == 0) {
         const dummy_rel = "out/types/acton_empty.c";
-        const dummy_abs = joinPath(b.allocator, buildroot_path, dummy_rel);
-        b.build_root.handle.createDirPath(io, "out/types") catch |err| {
+        const dummy_abs = joinPath(b.allocator, project_root, dummy_rel);
+        project_dir.createDirPath(io, "out/types") catch |err| {
             std.log.err("Error creating out/types directory: {}", .{err});
             std.process.exit(1);
         };
-        const dummy_file = b.build_root.handle.createFile(io, dummy_rel, .{}) catch |err| {
+        const dummy_file = project_dir.createFile(io, dummy_rel, .{}) catch |err| {
             std.log.err("Error creating dummy C file: {}", .{err});
             std.process.exit(1);
         };
@@ -191,7 +202,7 @@ pub fn build(b: *std.Build) void {
 
     var file_prefix_map = std.ArrayList(u8).empty;
     defer file_prefix_map.deinit(b.allocator);
-    const file_prefix_path_path = std.fs.path.dirname(buildroot_path) orelse buildroot_path;
+    const file_prefix_path_path = std.fs.path.dirname(project_root) orelse project_root;
     file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
     file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
@@ -227,10 +238,10 @@ pub fn build(b: *std.Build) void {
     }) catch unreachable;
 
     for (c_files.items) |entry| {
-        libActonProject.root_module.addCSourceFile(.{ .file = b.path(entry), .flags = flags.items });
+        libActonProject.root_module.addCSourceFile(.{ .file = project_path.path(b, entry), .flags = flags.items });
     }
 
-    libActonProject.root_module.addIncludePath(b.path("."));
+    libActonProject.root_module.addIncludePath(project_path.path(b, "."));
 
     var explicit_libraries = ArrayList(*std.Build.Step.Compile).empty;
     var explicit_static_libraries = ArrayList(*std.Build.Step.Compile).empty;
@@ -272,9 +283,9 @@ pub fn build(b: *std.Build) void {
         while (source_it.next()) |raw_source| {
             const source = std.mem.trim(u8, raw_source, " \t\r");
             if (source.len == 0) continue;
-            libActonExplicit.root_module.addCSourceFile(.{ .file = b.path(source), .flags = flags.items });
+            libActonExplicit.root_module.addCSourceFile(.{ .file = project_path.path(b, source), .flags = flags.items });
         }
-        libActonExplicit.root_module.addIncludePath(b.path("."));
+        libActonExplicit.root_module.addIncludePath(project_path.path(b, "."));
         libActonExplicit.root_module.include_dirs.append(b.allocator, .{ .other_step = actonbase_dep.artifact("Acton") }) catch |err| {
             std.log.err("Error appending base include path for explicit library: {}", .{err});
             std.process.exit(1);
@@ -329,9 +340,9 @@ pub fn build(b: *std.Build) void {
     // from builtin above, but if errors were to occur, we could do the same
     // for those files as well. Obviously, this is not ideal and we should
     // investigate further, find the root cause and address it.
-    libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
+    libActonProject.installHeadersDirectory(project_path.path(b, "out/types"), "out/types", .{});
 
-    var hiter_dir = b.build_root.handle.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
+    var hiter_dir = project_dir.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
 
@@ -342,7 +353,7 @@ pub fn build(b: *std.Build) void {
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".h")) {
                     const file_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
-                    libActonProject.installHeader(b.path(file_path), file_path);
+                    libActonProject.installHeader(project_path.path(b, file_path), file_path);
                 }
             }
         } else {
@@ -399,8 +410,8 @@ pub fn build(b: *std.Build) void {
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
             @memcpy(exe_rel_path[0..9], "out/types");
             @memcpy(exe_rel_path[9..], entry.file_path);
-            executable.root_module.addCSourceFile(.{ .file = b.path(exe_rel_path), .flags = flags.items });
-            executable.root_module.addIncludePath(b.path("."));
+            executable.root_module.addCSourceFile(.{ .file = project_path.path(b, exe_rel_path), .flags = flags.items });
+            executable.root_module.addIncludePath(project_path.path(b, "."));
             executable.root_module.linkLibrary(libActonProject);
             for (explicit_libraries.items) |libActonExplicit| {
                 if (libActonExplicit.linkage == .dynamic) {
@@ -420,7 +431,7 @@ pub fn build(b: *std.Build) void {
                     },
                     .linux => {
                         executable.rdynamic = true;
-                        executable.root_module.addLibraryPath(b.path("out/lib"));
+                        executable.root_module.addLibraryPath(project_path.path(b, "out/lib"));
                         for (explicit_dynamic_library_installs.items) |install_step| {
                             executable.step.dependOn(install_step);
                         }

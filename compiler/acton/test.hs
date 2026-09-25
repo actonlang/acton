@@ -394,9 +394,7 @@ compilerTests =
     ]
 
   , testCase "deps" $ do
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/out") ""
-        (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/build.zig*") ""
         (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (shell $ "rm -rf ../../test/compiler/test_deps/deps/a/out") ""
         runActon "build" ExitSuccess False "../../test/compiler/test_deps/"
 
@@ -783,7 +781,7 @@ compilerTests =
           when (returnCode /= ExitSuccess) $
             assertFailure ("root build failed:\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
 
-          midBuildZon <- readFile (midProj </> "build.zig.zon")
+          midBuildZon <- readFile (midProj </> "out/zig/build.zig.zon")
           assertBool "mid build.zig.zon should point at the canonical dep root"
             ("dep_keep" `isInfixOf` midBuildZon)
           assertBool "mid build.zig.zon should not keep the overridden raw dep path"
@@ -897,7 +895,7 @@ compilerTests =
               , "    env.exit(0)"
               ]
             runActon "build" ExitSuccess False proj
-            zon <- readFile (proj </> "build.zig.zon")
+            zon <- readFile (proj </> "out/zig/build.zig.zon")
             let nameVal =
                   let isNameLine l = ".name = ." `isPrefixOf` dropWhile isSpace l
                   in case find isNameLine (lines zon) of
@@ -1510,7 +1508,7 @@ parseFlagTests =
               (Fingerprint.updateFingerprintPrefix
                 (Fingerprint.fingerprintPrefixForName name) 1)
             rootFile = proj </> "out/types/main.root.c"
-            files = [rootFile, proj </> "build.zig", proj </> "build.zig.zon"]
+            files = [rootFile, proj </> "out/zig/build.zig", proj </> "out/zig/build.zig.zon"]
             oldTime = posixSecondsToUTCTime 1
             build root = do
               (code, out, err) <- readCreateProcessWithExitCode
@@ -1526,6 +1524,9 @@ parseFlagTests =
           , "    env.exit(12)"
           ]
         build "first"
+        forM_ ["build.zig", "build.zig.zon"] $ \file ->
+          assertBool (file ++ " should not be generated in the project root") . not
+            =<< doesFileExist (proj </> file)
         -- Use a known timestamp so this also detects rewrites on coarse filesystems.
         forM_ files $ \file -> setModificationTime file oldTime
         build "first"
@@ -1752,7 +1753,7 @@ actonProjTests =
         let proj = "../../test/compiler/acton_proj_deps"
             depA = proj </> "deps/dep_a"
             depB = proj </> "deps/dep_b"
-            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/out") ""
         mapM_ wipe [proj, depA, depB]
         actonExe <- canonicalizePath "../../dist/bin/acton"
         -- Build main project via acton; dependencies should be built automatically
@@ -1760,7 +1761,7 @@ actonProjTests =
         -- Run produced binary
         (cRun, _outRun, _errRun) <- readCreateProcessWithExitCode (shell "./out/bin/main"){ cwd = Just proj } ""
         assertEqual "project binary should run" ExitSuccess cRun
-        zon <- readFile (proj </> "build.zig.zon")
+        zon <- readFile (proj </> "out/zig/build.zig.zon")
         assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
         assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
         (cSig, outSig, _errSig) <- readCreateProcessWithExitCode (proc actonExe ["sig", "dep_a"]){ cwd = Just proj } ""
@@ -1772,7 +1773,7 @@ actonProjTests =
   , testCase "builds dependencies even if unused in imports" $ do
         let proj = "../../test/compiler/unused_dep"
             depU = proj </> "deps/dep_unused"
-            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/out") ""
         mapM_ wipe [proj, depU]
         testBuild "" ExitSuccess False proj
         let depObj = depU </> "out/types/acton_empty.c"
@@ -1783,13 +1784,13 @@ actonProjTests =
             depA = proj </> "deps/dep_a"
             depB = proj </> "deps/dep_b"
             depC = proj </> "deps/dep_c"
-            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/build.zig " ++ p ++ "/build.zig.zon " ++ p ++ "/out") ""
+            wipe p = void $ readCreateProcessWithExitCode (shell $ "rm -rf " ++ p ++ "/out") ""
             expect needle hay msg = assertBool msg (needle `isInfixOf` hay)
             expectAny needles hay msg = assertBool msg (any (`isInfixOf` hay) needles)
         mapM_ wipe [proj, depA, depB, depC]
         runActon "build --dep dep_a=deps/dep_a --dep dep_b=deps/dep_b --dep ghost=deps/ghost" ExitSuccess False proj
-        rootZon <- readFile (proj </> "build.zig.zon")
-        depAZon <- readFile (depA </> "build.zig.zon")
+        rootZon <- readFile (proj </> "out/zig/build.zig.zon")
+        depAZon <- readFile (depA </> "out/zig/build.zig.zon")
         expect ".dep_a = .{" rootZon "root build.zig.zon should declare dep_a"
         expectAny ["dep_override/deps/dep_a", "dep_override\\deps\\dep_a"] rootZon "root build.zig.zon should use dep_a override path"
         expect ".dep_b = .{" rootZon "root build.zig.zon should declare dep_b"
@@ -1879,8 +1880,8 @@ actonProjTests =
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
           assertEqual "acton should build when package and zig deps share a name" ExitSuccess returnCode
           assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
-          rootZon <- readFile (rootProj </> "build.zig.zon")
-          rootBuildZig <- readFile (rootProj </> "build.zig")
+          rootZon <- readFile (rootProj </> "out/zig/build.zig.zon")
+          rootBuildZig <- readFile (rootProj </> "out/zig/build.zig")
           assertBool "root build.zig.zon should keep the package dep key" ("        .lmdb = .{" `isInfixOf` rootZon)
           assertBool "root build.zig.zon should namespace the zig dep key" ("        .acton_zig_lmdb = .{" `isInfixOf` rootZon)
           assertEqual "root build.zig.zon should emit the package dep key only once"
@@ -1985,8 +1986,8 @@ actonProjTests =
           (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build"]){ cwd = Just rootProj } ""
           assertEqual "acton should build with colliding transitive zig dep names" ExitSuccess returnCode
           assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
-          rootZon <- readFile (rootProj </> "build.zig.zon")
-          rootBuildZig <- readFile (rootProj </> "build.zig")
+          rootZon <- readFile (rootProj </> "out/zig/build.zig.zon")
+          rootBuildZig <- readFile (rootProj </> "out/zig/build.zig")
           assertBool "root build.zig.zon should include the first local zig dep name"
             ("        .acton_zig_shared = .{" `isInfixOf` rootZon)
           assertBool "root build.zig.zon should include the second colliding zig dep name"
@@ -2523,7 +2524,7 @@ dependencyDeclarationTests =
       expectSuccess "full build with the selected following dependency" =<<
         readCreateProcessWithExitCode (proc acton ["build", "--color", "never"]){ cwd = Just app } ""
       forM_ [app, platform] $ \dir -> do
-        zon <- readFile (dir </> "build.zig.zon")
+        zon <- readFile (dir </> "out/zig/build.zig.zon")
         assertBool (dir ++ " should use the selected yang path")
           (any (`isInfixOf` zon) ["first/yang", "first\\\\yang"])
         assertBool (dir ++ " should not use the discarded yang path")
@@ -2696,10 +2697,10 @@ archiveDependencyTests =
         (code, out, err) <- readCreateProcessWithExitCode (proc (app </> "out/bin/main") []) ""
         assertEqual ("run built application: " ++ err) ExitSuccess code
         assertEqual "uses both selected projects and their sibling" "42\n" out
-        zon <- readFile (app </> "build.zig.zon")
-        assertBool "Zig uses the selected widgets directory" ("/packages/widgets\"" `isInfixOf` zon)
-        assertBool "Zig uses the selected tools directory" ("/packages/tools\"" `isInfixOf` zon)
-        assertBool "Zig includes the sibling dependency" ("/packages/common\"" `isInfixOf` zon)
+        zon <- readFile (app </> "out/zig/build.zig.zon")
+        assertBool "Zig uses the selected widgets directory" ("/packages/widgets/out/zig\"" `isInfixOf` zon)
+        assertBool "Zig uses the selected tools directory" ("/packages/tools/out/zig\"" `isInfixOf` zon)
+        assertBool "Zig includes the sibling dependency" ("/packages/common/out/zig\"" `isInfixOf` zon)
         removeFile archive
         expectSuccess "reuse fetched archive offline" =<< run app ["build", "--skip-build"]
 

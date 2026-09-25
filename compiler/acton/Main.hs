@@ -422,8 +422,6 @@ createProject name = do
     writeFile (joinPath [ projDir, ".gitignore" ]) (
       ".acton.compile.lock\n" ++
       ".acton.lock\n" ++
-      "build.zig\n" ++
-      "build.zig.zon\n" ++
       "out\n"
       )
     writeFile (joinPath [ projDir, "README.md" ]) (
@@ -2185,7 +2183,6 @@ runCliPostCompile cliHooks gopts plan env = do
         globalTasks = cpGlobalTasks plan
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
-        sysRoot = addTrailingPathSeparator sysAbs
         proj = projName pathsRoot
     rootSpec <- case M.lookup rootProj projMap of
                   Just ctx -> return (projBuildSpec ctx)
@@ -2213,8 +2210,7 @@ runCliPostCompile cliHooks gopts plan env = do
     -- cannot retain module selections from an earlier build.
     forM_ (M.toList projMap) $ \(p, pctx) -> do
       let isRootProj = p == rootProj
-          isSysProj  = p == sysAbs || sysRoot `isPrefixOf` p
-      unless (isRootProj || isSysProj) $ do
+      unless (isRootProj || isSysProject sysAbs p) $ do
         when (C.verbose gopts) $
           logLine ("Generating build.zig for dependency project " ++ p)
         dummyPaths <- pathsForModule opts' projMap pctx (A.modName ["__gen_build__"])
@@ -2671,6 +2667,21 @@ generateFingerprint name = do
         fp = (fromIntegral prefix `shiftL` 32) .|. fromIntegral ident
     return (Fingerprint.formatFingerprint fp)
 
+-- | Whether a project is part of the Acton distribution (base, std, ...).
+isSysProject :: FilePath -> FilePath -> Bool
+isSysProject sysAbs projAbs =
+    projAbs == sysAbs || addTrailingPathSeparator sysAbs `isPrefixOf` projAbs
+
+-- | Directory holding the build.zig and build.zig.zon that zig builds a
+-- project from. Distribution projects have checked-in build files at their
+-- root. For every other project we generate them into out/zig, keeping the
+-- project root free of build system files. The builder template
+-- (builder/build.zig) takes the project root to be two levels up from it.
+zigBuildDir :: FilePath -> FilePath -> FilePath
+zigBuildDir sysAbs projAbs
+  | isSysProject sysAbs projAbs = projAbs
+  | otherwise                   = joinPath [projAbs, "out", "zig"]
+
 -- Render build.zig and build.zig.zon from templates and BuildSpec.
 -- Dependency paths come from the selected, deduplicated project graph.
 genBuildZigFiles :: BuildSpec.BuildSpec -> Paths -> M.Map String String -> M.Map String FilePath -> IO ()
@@ -2678,8 +2689,6 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
     let proj = projPath paths
     projAbs <- canonicalizePath proj
     let sys              = sysPath paths
-        buildZigPath     = joinPath [proj, "build.zig"]
-        buildZonPath     = joinPath [proj, "build.zig.zon"]
         distBuildZigPath = joinPath [sys, "builder", "build.zig"]
         distBuildZonPath = joinPath [sys, "builder", "build.zig.zon"]
     buildZigTemplate <- readFile distBuildZigPath
@@ -2688,7 +2697,8 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
         fp = BuildSpec.fingerprint spec
     (transPkgs, transZigs) <- collectDepsRecursive spec proj depPathOverrides
     absSys <- canonicalizePath sys
-    let relSys = relativeViaRoot projAbs absSys
+    let buildDir = zigBuildDir absSys projAbs
+        relSys = relativeViaRoot buildDir absSys
     homeDir <- getHomeDirectory
     depsRootAbs <- normalizePathSafe (joinPath [homeDir, ".cache", "acton", "deps"])
     normalizedSpec <- normalizeSpecPaths proj spec
@@ -2700,8 +2710,9 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
         mergedSpec = addImplicitStdDependency absSys mergedSpec1
         resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
-    writeFileIfChanged buildZigPath (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
-    writeFileIfChanged buildZonPath (genBuildZigZon buildZonTemplate relSys depsRootAbs projAbs fp zonName mergedSpec resolvedZigs)
+    createDirectoryIfMissing True buildDir
+    writeFileIfChanged (buildDir </> "build.zig") (genBuildZig buildZigTemplate (absSys </> "deps") mergedSpec resolvedZigs depModuleOpts)
+    writeFileIfChanged (buildDir </> "build.zig.zon") (genBuildZigZon buildZonTemplate relSys depsRootAbs absSys projAbs buildDir fp zonName mergedSpec resolvedZigs)
 
 addImplicitStdDependency :: FilePath -> BuildSpec.BuildSpec -> BuildSpec.BuildSpec
 addImplicitStdDependency sys spec
@@ -2880,8 +2891,12 @@ genBuildZig template sysDepsPath spec zigDeps depModuleOpts =
     zigExeLink resolved = concat [ "            executable.root_module.linkLibrary(dep_" ++ zigDepResolvedVarName resolved ++ ".artifact(\"" ++ art ++ "\"));\n"
                                  | art <- BuildSpec.artifacts (zigDepResolvedDep resolved) ]
 
-genBuildZigZon :: String -> String -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
-genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigDepsResolved =
+-- Dependency paths in Build.act are relative to the project root, while zig
+-- resolves the paths in build.zig.zon relative to the build directory, so we
+-- rebase against the former and emit paths relative to the latter. An Acton
+-- package dependency points at that package's own build directory.
+genBuildZigZon :: String -> String -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> BuildSpec.BuildSpec -> [ZigDepResolved] -> String
+genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint zonName spec zigDepsResolved =
     let
         pkgDeps = concatMap (pkgToZon projAbs depsRootAbs) (M.toList (BuildSpec.dependencies spec))
         zigDeps = concatMap zigToZon zigDepsResolved
@@ -2908,7 +2923,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                       if isAbsolutePath rawPath
                         then normalise rawPath
                         else normalise (rebasePath projRoot rawPath)
-          path = relativeViaRoot projRoot pathAbs
+          path = relativeViaRoot buildDir (zigBuildDir sysAbs pathAbs)
       in unlines [ "        ." ++ name ++ " = .{"
                  , "            .path = \"" ++ Zon.escapeString path ++ "\","
                  , "        },"
@@ -2920,7 +2935,7 @@ genBuildZigZon template relSys depsRootAbs projAbs fingerprint zonName spec zigD
                           if isAbsolutePath p
                             then normalise p
                             else normalise (rebasePath projAbs p)
-              relPath = relativeViaRoot projAbs absPath
+              relPath = relativeViaRoot buildDir absPath
           in unlines [ "        ." ++ zigDepResolvedPkgName resolved ++ " = .{"
                      , "            .path = \"" ++ Zon.escapeString relPath ++ "\","
                      , "        },"
@@ -2971,15 +2986,15 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
     sysAbs  <- normalizePathSafe (sysPath paths)
-    let sysRoot   = addTrailingPathSeparator sysAbs
-        isSysProj = projAbs == sysAbs || sysRoot `isPrefixOf` projAbs
 
     -- Generate build.zig and build.zig.zon directly from Build.act.
-    iff (not isSysProj) $
+    iff (not (isSysProject sysAbs projAbs)) $
       genBuildZigFiles rootSpec paths depModuleOpts depPathOverrides
 
     let zigExe = zig paths
-        baseArgs = ["build","--cache-dir", local_cache_dir,
+        buildFile = zigBuildDir sysAbs projAbs </> "build.zig"
+        baseArgs = ["build","--build-file", buildFile,
+                            "--cache-dir", local_cache_dir,
                             "--global-cache-dir", global_cache_dir] ++
                    (if (C.verboseZig gopts) then ["--verbose"] else []) ++
                    (if C.timing gopts && not (quiet gopts opts) then ["--summary", "all", "--color", "off"] else [])
