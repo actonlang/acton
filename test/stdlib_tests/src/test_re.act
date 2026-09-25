@@ -49,7 +49,6 @@ def _test_match_named_groups():
     if m is not None:
         testing.assertEqual(m.named["mypattern"], "foobar", "named group ('foobar') match failed")
 
-
 def _test_match_named_groups_without_match():
     """Regexp matching with named groups but without a match on an inner group
     """
@@ -79,6 +78,11 @@ def _test_match_matches():
     testing.assertEqual(ms[2].group[0], "foo3", "failed to match third match")
     testing.assertEqual(ms[3].group[0], "foo4", "failed to match fourth match")
 
+def _test_match_matches_zero_width_non_ascii():
+    """matches steps over a non-ASCII character after a zero-width match"""
+    ms = re.matches("x*", "éa")
+    testing.assertEqual([m.start_pos for m in ms], [0, 1])
+
 def _test_match_positions():
     """Test that match positions (start_pos and end_pos) are correct."""
     # In "abc def ghi", the substring "def" starts at index 4 and ends at index 7 (0-based indexing)
@@ -91,6 +95,16 @@ def _test_match_positions():
         testing.assertEqual(m.end_pos, 7)
         # Also verify the substring matches what we expect
         testing.assertEqual(m.string[m.start_pos:m.end_pos], "def")
+
+def _test_match_positions_non_ascii():
+    """Match positions are code point indexes, also for non-ASCII strings"""
+    s = "åäö def ghi"
+    m = re.match("def", s)
+    testing.assertNotNone(m, "Should have matched 'def'")
+    if m is not None:
+        testing.assertEqual(m.start_pos, 4)
+        testing.assertEqual(m.end_pos, 7)
+        testing.assertEqual(s[m.start_pos:m.end_pos], "def")
 
 def _test_match_start_pos():
     """Test that start_pos controls where the search begins."""
@@ -110,6 +124,17 @@ def _test_match_start_pos():
 
     m3 = re.match("def", s, start_pos=5)
     testing.assertNone(m3, "start_pos should skip earlier matches")
+
+def _test_match_start_pos_non_ascii():
+    """start_pos is a code point index, also for non-ASCII strings"""
+    s = "éa éa"
+    m1 = re.match("a", s, 2)
+    testing.assertNotNone(m1, "Should have matched second 'a' starting at index 2")
+    if m1 is not None:
+        testing.assertEqual(m1.start_pos, 4)
+        testing.assertEqual(m1.end_pos, 5)
+    m2 = re.match("a", s, 5)
+    testing.assertNone(m2, "start_pos at end of string should give no match")
 
 def _test_split_no_match():
     """Split: pattern does not match anywhere"""

@@ -23,6 +23,14 @@ unsigned char *fromB_str(B_str str);
 
 B_str $FORMAT(const char *format, ...);
 
+// Find byte position in text from char position.
+// Assume i is a valid char index in text
+int $byte_no(B_str text, int i);
+
+// Find char position in text from byte position.
+// Assume that i is first byte of a char in text.
+int $char_no(B_str text, int i);
+
 // Iterators over str's ///////////////////////////////////////////////////////
 
 typedef struct B_IteratorD_str *B_IteratorD_str; ;

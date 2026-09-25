@@ -514,7 +514,7 @@ static B_str str_transform(B_str s, transform f) {
 
 // Find char position in text from byte position.
 // Assume that i is first byte of a char in text.
-static int char_no(B_str text,int i) {
+int $char_no(B_str text,int i) {
     if (text->nbytes == text->nchars) // ASCII string
         return i;
     int res = 0;
@@ -546,11 +546,13 @@ static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
 
 // Find byte position in text from char position.
 // Assume i is a valid char index in text
-static int byte_no(B_str text, int i) {
+int $byte_no(B_str text, int i) {
+    if (text->nbytes == text->nchars) // ASCII string
+        return i;
     int res = 0;
     unsigned char *t = text->str;
     for (int k=0; k<i; k++)
-        res += byte_length2(t[k]);
+        res += byte_length2(t[res]);
     return res;
 }
 
@@ -1037,7 +1039,7 @@ int64_t B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int n = bmh(p,sub->str,q-p,sub->nbytes);
     if (n<0) return -1;
-    return char_no(s,n+p-s->str);
+    return $char_no(s,n+p-s->str);
 }
 
 int64_t B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
@@ -1346,7 +1348,7 @@ int64_t B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int n = rbmh(p,sub->str,q-p,sub->nbytes);
     if (n<0) return -1;
-    return char_no(s,n+p-s->str);
+    return $char_no(s,n+p-s->str);
 }
 
 
