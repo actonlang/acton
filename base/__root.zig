@@ -84,6 +84,10 @@ export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, ptr: [*]const u8, len
     hasher.update(ptr[0..len]);
 }
 
+export fn zig_hash_wyhash_total_len(hasher: *std.hash.Wyhash) callconv(.c) u64 {
+    return hasher.total_len;
+}
+
 export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.c) u64 {
     return hasher.final();
 }
