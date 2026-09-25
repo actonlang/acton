@@ -2165,10 +2165,20 @@ main = do
       testCodeGenContains env0 "protocol_generic_siblings" ["SecondD_InheritedD___init__"]
       -- Non-throwing iteration lowers for-loops to a bool/out __next__ call, so
       -- locals live across the loop no longer need StopIteration longjmp protection.
-      testCodeGenContains env0 "forloop_volatile" ["$class->__next__(N_iter, &N_1maybe)", "B_str marker = B_None;"]
+      testCodeGenContains env0 "forloop_volatile" ["N_1maybeG_next_iter->$class->__next__(N_1maybeG_next_iter, &N_1maybe.val)", "B_str marker = B_None;"]
       testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
-      testCodeGenContains env0 "next_peephole" ["$class->__next__(it, &item)"]
-      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)", "B_justG_new"]
+      testCodeGenContains env0 "next_peephole"
+        [ "$MaybeWord item;"
+        , "itemG_next_iter->$class->__next__(itemG_next_iter, &item.val)"
+        , "if ((item.just&&same))"
+        , "(item.just ? (B_maybe)B_justG_new(item.val) : (B_maybe)B_nothingG_new())"
+        , "B_range it = B_rangeG_new"
+        , "identity_iterator_int((B_Iterator)it)"
+        , "$MaybeI64 item;"
+        , "$rangeD_U__next_i64(itemG_next_iter, &item.val)"
+        , "B_justG_new(toB_int(item.val))"
+        ]
+      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)"]
       testCodeGenContains env0 "static_witness_path" ["B_SequenceD_listG_witness->W_Sliceable->W_Indexed"]
       testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
