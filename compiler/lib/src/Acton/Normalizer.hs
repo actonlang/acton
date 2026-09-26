@@ -540,10 +540,7 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
-    norm env (Call l e p k)
-      | Just (t, e1, e2) <- listGetItemCall env e (joinArg p k)
-                                    = eCall (tApp (eQVar primUGetItem) [conv env t]) <$> mapM (norm env) [e1, e2]
-      | otherwise                   = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
+    norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv env ts)
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
     norm env (Dot l (Var l' x) n)
@@ -578,18 +575,6 @@ instance Norm Expr where
     norm env e@SetComp{}            = deferComp env e
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
-
-listGetItemCall env (Dot _ _ n) (PosArg e (PosArg ix PosNil))
-  | n == getitemKW,
-    expTypeOf env ix == tInt,
-    Just t <- listElementType (typeOf env e)
-                                    = Just (t, e, ix)
-listGetItemCall env (TApp _ e _) p  = listGetItemCall env e p
-listGetItemCall env _ _             = Nothing
-
-listElementType (TCon _ (TC q [t]))
-  | q == qnList                     = Just t
-listElementType _                   = Nothing
 
 deferComp env e                     = do f <- newName "compfun"
                                          let p = getLambdavars env

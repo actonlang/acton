@@ -2179,8 +2179,27 @@ main = do
         , "B_justG_new(toB_int(item.val))"
         ]
       testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)"]
-      testCodeGenContains env0 "static_witness_path" ["B_SequenceD_listG_witness->W_Sliceable->W_Indexed"]
+      testCodeGenContains env0 "static_witness_path"
+        [ "$listD_U__setitem__(xs, index, toB_int(0LL))"
+        , "B_SequenceD_listG_witness->W_Sliceable"
+        ]
       testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
+      testCodeGenContains env0 "raw_builtin_indexing"
+        [ "$listD_U__getitem__(xs, i)"
+        , "$listD_U__setitem__(xs, i, toB_int(v))"
+        , "$listD_U__delitem__(xs, i)"
+        , "$ilistD_U__getitem__(xs, i)"
+        , "$strD_U__getitem__(xs, i)"
+        , "$bytesD_U__getitem__(xs, i)"
+        , "$bytearrayD_U__getitem__(xs, i)"
+        , "$bytearrayD_U__setitem__(xs, i, v)"
+        , "$bytearrayD_U__delitem__(xs, i)"
+        , "toB_int(i)"
+        ]
+      testCodeGenDoesNotContain env0 "raw_builtin_indexing"
+        [ "$dictD_U__getitem__"
+        , "B_int i"
+        ]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do

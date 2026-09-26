@@ -1397,10 +1397,12 @@ boxedExpr env (Paren _ e)           = boxedExpr env e
 boxedExpr env Box{}                 = True
 boxedExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
   | n == primCAST                   = True
-  | n == primUGetItem               = True
+  | n `elem` [primUGetItem, primUIListGetItem]
+                                    = True
 boxedExpr env (Call _ (Var _ n) _ KwdNil)
   | n == primUNext                  = False
-  | n == primUGetItem               = True
+  | n `elem` [primUGetItem, primUIListGetItem]
+                                    = True
 boxedExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = False
 boxedExpr env (Call _ f _ KwdNil)   = callReturnsBoxed env f

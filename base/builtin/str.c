@@ -1751,11 +1751,15 @@ B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str s) {
 
 // IIndexed //////////////////////////////////////////////////////////////////////////
 
-B_str B_ISliceableD_strD___getitem__ (B_ISliceableD_str wit, B_str s, B_int i) {
+B_str $strD_U__getitem__(B_str s, int64_t i) {
     unsigned char *p = s->str;
-    int ix = get_index(i->val,s->nchars);
+    int ix = get_index(i,s->nchars);
     p = skip_chars(p,ix,s->nchars == s->nbytes);
     return mk_char(p);
+}
+
+B_str B_ISliceableD_strD___getitem__ (B_ISliceableD_str wit, B_str s, B_int i) {
+    return $strD_U__getitem__(s, i->val);
 }
 
 // ISliceable /////////////////////////////////////////////////////////////////////////////////////
@@ -2699,18 +2703,15 @@ bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytea
 
 // Sequence
 
-B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    int64_t ix = n->val;
+int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
         $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytearray")));
-    return toB_int((int64_t)self->str[ix0]);
+    return (int64_t)self->str[ix0];
 }
 
-B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
-    int64_t ix = n->val;
+B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t ix, int64_t val) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
-   long val = v->val;
     if (ix0<0 || ix0 >= self->nbytes)
         $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("setitem: index outside bytearray")));
     if (val<0 || val>255)
@@ -2719,8 +2720,7 @@ B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_byte
     return B_None;
 }
 
-B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
-    int64_t ix = n->val;
+B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     int len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
@@ -2728,6 +2728,18 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
     self->nbytes--;
     return B_None;
+}
+
+B_int B_SequenceD_bytearrayD___getitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
+    return toB_int($bytearrayD_U__getitem__(self, n->val));
+}
+
+B_NoneType B_SequenceD_bytearrayD___setitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n, B_int v) {
+    return $bytearrayD_U__setitem__(self, n->val, v->val);
+}
+
+B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_bytearray self, B_int n) {
+    return $bytearrayD_U__delitem__(self, n->val);
 }
 
 B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
@@ -3872,12 +3884,15 @@ bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B
 
 // ISliceable
 
-B_int B_ISliceableD_bytesD___getitem__ (B_ISliceableD_bytes wit, B_bytes str, B_int n) {
-    long ix = n->val;
-    long ix0 = ix < 0 ? str->nbytes + ix : ix;
+int64_t $bytesD_U__getitem__(B_bytes str, int64_t ix) {
+    int64_t ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
         $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytesarray")));
-    return toB_int((long)str->str[ix0]);
+    return (int64_t)str->str[ix0];
+}
+
+B_int B_ISliceableD_bytesD___getitem__ (B_ISliceableD_bytes wit, B_bytes str, B_int n) {
+    return toB_int($bytesD_U__getitem__(str, n->val));
 }
 
 B_bytes B_ISliceableD_bytesD___getslice__ (B_ISliceableD_bytes wit, B_bytes str, B_slice slc) {

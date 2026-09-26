@@ -194,6 +194,44 @@ directMethodImpl env qn n           = case findQName qn env of
                                         Just NDef{} -> True
                                         _           -> False
 
+-- Statically resolved indexing on builtin containers can use a private raw
+-- worker.  The public protocol method and witness table keep their boxed ABI;
+-- only the direct call selected above is replaced.  rtypeOfFun then drives the
+-- usual argument/result boxing for the worker's declared representation.
+rawBuiltinMethodCall                :: BoxEnv -> Name -> PosArg -> Maybe Expr
+rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs p)
+                                         case rtypeOfFun env f of
+                                           TFun _ _ pr _ rest -> Just $ tryBox rest $ eCallP f (fixargs env p pr)
+                                           _                  -> Nothing
+
+rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
+rawBuiltinMethod env attr es@(recv:_)
+                                    = case (unalias env (typeOf env recv), attr, es) of
+                                        (TCon _ (TC q [t]), n, [_, _])
+                                          | q == qnList, n == getitemKW
+                                            -> Just $ tApp (eQVar primUGetItem) [t]
+                                          | q == qnList, n == delitemKW
+                                            -> Just $ tApp (eQVar primUListDelItem) [t]
+                                          | q == qnIList, n == getitemKW
+                                            -> Just $ tApp (eQVar primUIListGetItem) [t]
+                                        (TCon _ (TC q [t]), n, [_, _, _])
+                                          | q == qnList, n == setitemKW
+                                            -> Just $ tApp (eQVar primUListSetItem) [t]
+                                        (TCon _ (TC q []), n, [_, _])
+                                          | q == qnStr, n == getitemKW
+                                            -> Just $ eQVar primUStrGetItem
+                                          | q == qnBytes, n == getitemKW
+                                            -> Just $ eQVar primUBytesGetItem
+                                          | q == qnBytearray, n == getitemKW
+                                            -> Just $ eQVar primUBytearrayGetItem
+                                          | q == qnBytearray, n == delitemKW
+                                            -> Just $ eQVar primUBytearrayDelItem
+                                        (TCon _ (TC q []), n, [_, _, _])
+                                          | q == qnBytearray, n == setitemKW
+                                            -> Just $ eQVar primUBytearraySetItem
+                                        _   -> Nothing
+rawBuiltinMethod _ _ _             = Nothing
+
 -- Unboxing helpers -------------------------------------
 
 -- returns the uninstantiated type of method n in class c, i.e. the type of the corresponding method in oldest superclass.
@@ -630,6 +668,9 @@ instance Boxing Expr where
       boxingDirectOrDynamic w attr p rt pr rest
                                     = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
                                         Just (sw, tc)
+                                          | directMethodImpl env (tcname tc) attr,
+                                            Just c <- rawBuiltinMethodCall env attr p
+                                            -> return (HashSet.empty, c)
                                           | directMethodImpl env (tcname tc) attr
                                             -> return (HashSet.empty, tryBox rest $ staticWitnessCall sw tc attr (fixargs env p pr))
                                         Just _        -> do let c = eCallP (eDot (eQVar w) attr) (fixargs env p pr)
