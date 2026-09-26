@@ -2320,7 +2320,7 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
 B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
     int64_t n = B_bytearrayD_find(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,s,toB_bytearray(""),toB_bytearray(""));
+        return $NEWTUPLE(3,B_bytearrayD_copy(s),toB_bytearray(""),toB_bytearray(""));
     } else {
         int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
@@ -2330,7 +2330,7 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
         int nbr = s->nbytes - sep->nbytes - nb;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-        return $NEWTUPLE(3,ls,sep,rs);
+        return $NEWTUPLE(3,ls,B_bytearrayD_copy(sep),rs);
     }
 }
 
@@ -2413,7 +2413,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
     int64_t n = B_bytearrayD_rfind(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),s);
+        return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),B_bytearrayD_copy(s));
     } else {
         int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
@@ -2423,7 +2423,7 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
         B_bytearray rs;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-        return  $NEWTUPLE(3,ls,sep,rs);
+        return  $NEWTUPLE(3,ls,B_bytearrayD_copy(sep),rs);
     }
 }
 
