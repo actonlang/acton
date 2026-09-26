@@ -18,17 +18,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Must match the collector options in base/build.zig, so that both
+    // resolve to the same libgc.
     const dep_libgc = b.dependency("libgc", .{
         .target = target,
         .optimize = optimize,
-        .BUILD_SHARED_LIBS = false,
+        .linkage = .static,
+        .enable_threads = !target.result.cpu.arch.isWasm(),
         .enable_large_config = true,
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
+    const libgc = dep_libgc.artifact("gc");
+    if (enable_lto) libgc.lto = .thin;
 
     const dep_libnetstring = b.dependency("libnetstring", .{
         .target = target,
@@ -108,7 +114,7 @@ pub fn build(b: *std.Build) void {
         .flags = flags.items
     });
     libactondb.root_module.addCMacro("LOG_USER_COLOR", "");
-    libactondb.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    libactondb.root_module.linkLibrary(libgc);
     libactondb.root_module.linkLibrary(dep_libprotobuf_c.artifact("protobuf-c"));
     libactondb.root_module.linkLibrary(dep_libuuid.artifact("uuid"));
     libactondb.root_module.link_libc = true;

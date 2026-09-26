@@ -25,6 +25,46 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
+// The ACTON_GC_REQUIRED_VDB value (a GC_VDB_* constant, or 0 for automatic
+// selection) for gc_dirty_tracking_backend, which must be supported by target.
+fn gcRequiredVdb(t: std.Target, backend: []const u8) u8 {
+    const required_vdb: u8 = if (std.mem.eql(u8, backend, "auto")) 0
+        else if (std.mem.eql(u8, backend, "soft_dirty")) 0x40
+        else if (std.mem.eql(u8, backend, "userfaultfd")) 0x80
+        else {
+            std.log.err("gc_dirty_tracking_backend must be auto, soft_dirty or userfaultfd", .{});
+            std.process.exit(1);
+        };
+    if (required_vdb != 0 and (t.os.tag != .linux or !t.abi.isGnu())) {
+        std.log.err("gc_dirty_tracking_backend={s} requires a Linux GNU target", .{backend});
+        std.process.exit(1);
+    }
+    if (required_vdb == 0x80) {
+        const supported_arch = switch (t.cpu.arch) {
+            .x86, .x86_64, .aarch64 => true,
+            else => false,
+        };
+        const glibc_version = t.os.versionRange().gnuLibCVersion() orelse
+            std.SemanticVersion{ .major = 0, .minor = 0, .patch = 0 };
+        if (!supported_arch or glibc_version.order(.{ .major = 2, .minor = 34, .patch = 0 }) == .lt) {
+            std.log.err("gc_dirty_tracking_backend=userfaultfd requires x86, x86_64 or aarch64 and glibc 2.34 or newer", .{});
+            std.process.exit(1);
+        }
+    }
+    return required_vdb;
+}
+
+// The C compiler flags of the collector sources in lib.
+fn cSourceFlags(lib: *std.Build.Step.Compile) []const []const u8 {
+    for (lib.root_module.link_objects.items) |link_object| {
+        switch (link_object) {
+            .c_source_files => |c_source_files| return c_source_files.flags,
+            else => {},
+        }
+    }
+    @panic("no C sources in libgc");
+}
+
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
     const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
@@ -44,6 +84,17 @@ pub fn build(b: *std.Build) void {
         std.log.err("gc_disable_thp requires a Linux target", .{});
         std.process.exit(1);
     }
+    // Validate here, before the collector's own option checks, so that the
+    // diagnostics name the Build.act options.
+    const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
+    if (gc_page_hash_table_log2 > 30) {
+        std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
+        std.process.exit(1);
+    }
+    // Must match the collector options in backend/build.zig, so that both
+    // resolve to the same libgc.
+    const gc_enable_threads = !target.result.cpu.arch.isWasm();
+    const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
 
@@ -57,14 +108,62 @@ pub fn build(b: *std.Build) void {
     const dep_libgc = b.dependency("libgc", .{
         .target = target,
         .optimize = optimize,
-        .BUILD_SHARED_LIBS = false,
+        .linkage = .static,
+        .enable_threads = gc_enable_threads,
         .enable_large_config = true,
         .enable_mmap = true,
         .enable_mark_bits = gc_use_mark_bits,
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
+    const libgc = dep_libgc.artifact("gc");
+    if (enable_lto) libgc.lto = .thin;
+
+    // acton_gc_config.h describes the collector configuration to the RTS and
+    // to C extensions.
+    const gc_config_files = b.addWriteFiles();
+    const gc_config_h = gc_config_files.add("acton_gc_config.h", b.fmt(
+        \\#ifndef ACTON_GC_CONFIG_H
+        \\#define ACTON_GC_CONFIG_H
+        \\#include <gc.h>
+        \\#define ACTON_GC_DIRTY_TRACKING_BACKEND "{s}"
+        \\#define ACTON_GC_REQUIRED_VDB {d}
+        \\#define ACTON_GC_THREADS {d}
+        \\#ifdef __cplusplus
+        \\extern "C" {{
+        \\#endif
+        \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
+        \\#ifdef __cplusplus
+        \\}}
+        \\#endif
+        \\#endif
+        \\
+    , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
+    // The effective page-hash size depends on the collector defaults and its
+    // configuration macros, so read it from the collector's private header,
+    // compiled with the C flags of libgc itself.
+    const gc_config = b.addObject(.{
+        .name = "acton_gc_config",
+        .root_module = b.createModule(.{
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        }),
+    });
+    if (enable_lto) gc_config.lto = .thin;
+    gc_config.root_module.addCSourceFile(.{
+        .file = gc_config_files.add("acton_gc_config.c",
+            \\#include "private/gc_priv.h"
+            \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void) {
+            \\    return LOG_PHT_ENTRIES;
+            \\}
+            \\
+        ),
+        .flags = cSourceFlags(libgc),
+    });
+    gc_config.root_module.addIncludePath(dep_libgc.path("include"));
 
     const dep_libmbedtls = b.dependency("libmbedtls", .{
         .target = target,
@@ -306,6 +405,9 @@ pub fn build(b: *std.Build) void {
 
     libActon.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
     libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));
+    libActon.root_module.addIncludePath(gc_config_files.getDirectory());
+    libActon.root_module.addObject(gc_config);
+    libActon.installHeader(gc_config_h, "acton_gc_config.h");
 
     if (use_db) {
         const libactondb_dep = b.dependency("actondb", .{
@@ -320,7 +422,7 @@ pub fn build(b: *std.Build) void {
     }
 
     libActon.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-    libActon.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    libActon.root_module.linkLibrary(libgc);
     libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedcrypto"));
     libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedtls"));
     libActon.root_module.linkLibrary(dep_libmbedtls.artifact("mbedx509"));
@@ -335,7 +437,7 @@ pub fn build(b: *std.Build) void {
     libActon.root_module.linkLibrary(dep_libyyjson.artifact("yyjson"));
 
     libActon.installLibraryHeaders(dep_libbsdnt.artifact("bsdnt"));
-    libActon.installLibraryHeaders(dep_libgc.artifact("gc"));
+    libActon.installLibraryHeaders(libgc);
     libActon.installLibraryHeaders(dep_libprotobuf_c.artifact("protobuf-c")); // TODO: remove, once telemetrify/prw is fixed
     libActon.installLibraryHeaders(dep_libuv.artifact("uv"));
 
@@ -352,9 +454,17 @@ pub fn build(b: *std.Build) void {
     if (enable_lto) base_tests.lto = .thin;
     base_tests.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
     base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
-    base_tests.root_module.linkLibrary(dep_libgc.artifact("gc"));
+    base_tests.root_module.linkLibrary(libgc);
     base_tests.root_module.link_libc = true;
     const run_base_tests = b.addRunArtifact(base_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_base_tests.step);
+}
+
+// x86_64 macOS builds leave out mprotect-based dirty tracking. Under
+// Rosetta 2, incremental collection with it hangs when 12 or more threads
+// run; it is untested on Intel Macs. Incremental mode then treats every
+// page as dirty, as all macOS builds did before.
+pub fn gcEnableMprotectVdb(t: std.Target) bool {
+    return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
 }
