@@ -2602,13 +2602,16 @@ gcCollectorOptionTests = testGroup "GC collector options"
   where
     -- Reported get_gc_info fields for a build without settings.
     defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
+                ("end_padding", "True"), ("small_object_size", "32"),
                 ("mark_range_stealing", "False"),
                 ("initial_mark_stack_size", "4096")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
              ("gc_mark_range_stealing", "true"),
-             ("gc_initial_mark_stack_size", "65536")]
+             ("gc_initial_mark_stack_size", "65536"),
+             ("gc_no_end_padding", "true")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
+                    ("end_padding", "False"), ("small_object_size", "16"),
                     ("mark_range_stealing", "True"),
                     ("initial_mark_stack_size", "65536")]
     -- The default initial mark stack has as many entries as a block has
@@ -2629,7 +2632,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_mark_range_stealing", "maybe"),
                         ("gc_initial_mark_stack_size", "2048"),
                         ("gc_initial_mark_stack_size", "12288"),
-                        ("gc_initial_mark_stack_size", "invalid")]
+                        ("gc_initial_mark_stack_size", "invalid"),
+                        ("gc_no_end_padding", "maybe")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")
@@ -2640,7 +2644,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
       acton <- canonicalizePath "../../dist/bin/acton"
       environment <- getEnvironment
       createDirectoryIfMissing True (proj </> "src")
-      forM_ ["main.act"] $ \file ->
+      forM_ ["main.act", "main.ext.c"] $ \file ->
         copyFile ("test/project/gc_options/src" </> file) (proj </> "src" </> file)
       let runEnv = [("GC_MARKERS", "2")]
                 ++ filter (not . isPrefixOf "GC_" . fst) environment

@@ -1,5 +1,9 @@
 import acton.rts
 
+def small_object_size() -> int:
+    """GC_size of a new 16-byte object"""
+    NotImplemented
+
 actor Worker(wid: int, report: action(int, int) -> None):
     def work():
         retained = [[wid, i, i + 1] for i in range(50000)]
@@ -17,6 +21,8 @@ actor main(env):
     # The test compares these lines with the settings it built.
     info = acton.rts.get_gc_info(env.syscap)
     print("block_size=" + str(info.block_size))
+    print("end_padding=" + str(info.end_padding))
+    print("small_object_size=" + str(small_object_size()))
     print("mark_range_stealing=" + str(info.mark_range_stealing))
     print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))
