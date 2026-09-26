@@ -29,6 +29,7 @@ actor main(env):
         assert info.backend == before.backend
         assert info.supported_backends == before.supported_backends
         assert info.page_hash_table_log2 == before.page_hash_table_log2
+        assert info.heap_growth_divisor == before.heap_growth_divisor
         assert info.heap_size > 0
         assert info.heap_size >= info.free_bytes
         assert info.free_bytes >= info.unmapped_bytes

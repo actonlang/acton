@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
+    const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -31,6 +32,7 @@ pub fn build(b: *std.Build) void {
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .heap_growth_divisor = gc_heap_growth_divisor,
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");

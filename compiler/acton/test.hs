@@ -1702,6 +1702,7 @@ actonProjTests =
   , gcBuildOptionTests
   , gcThpBuildOptionTests
   , gcTuningBuildOptionTests
+  , gcHeapGrowthBuildOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2490,6 +2491,61 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
       -- Dependency declarations deliberately conflict with root defaults.
       writeProject shared "shared" "" (options "userfaultfd" "22")
       action acton app shared runEnv writeOptions
+
+gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
+  [ testCase "build setting is the default and the environment overrides it" $
+      withFixture $ \acton proj runEnv writeOptions -> do
+        let build = readCreateProcessWithExitCode
+              (proc acton ["build", "--color", "never"])
+                { cwd = Just proj, env = Just runEnv } ""
+            run expected extraEnv = readCreateProcessWithExitCode
+              (proc (proj </> "out/bin/main") [show expected, "--rts-wthreads", "2"])
+                { cwd = Just proj, env = Just (extraEnv ++ runEnv) } ""
+            assertRuns expected extraEnv = do
+              result@(_, out, _) <- run (expected :: Int) extraEnv
+              expectSuccess "heap growth divisor and retained objects" result
+              assertEqual "application completes" "GC heap growth OK\n" out
+        -- Reuse generated outputs to exercise rebuilding between settings.
+        forM_ [([], 0), ([("gc_heap_growth_divisor", "16")], 16),
+               ([("gc_heap_growth_divisor", "0")], 0)] $ \(selected, expected) -> do
+          writeOptions selected
+          expectSuccess "build selected heap growth" =<< build
+          assertRuns expected []
+        writeOptions [("gc_heap_growth_divisor", "16")]
+        expectSuccess "build scaled heap growth" =<< build
+        assertRuns 4 [("GC_HEAP_GROWTH_DIVISOR", "4")]
+        assertRuns 0 [("GC_HEAP_GROWTH_DIVISOR", "0")]
+  , testCase "invalid values fail clearly" $
+      withFixture $ \acton proj runEnv writeOptions ->
+        forM_ ["invalid", "-1", "1.5"] $ \value -> do
+          writeOptions [("gc_heap_growth_divisor", value)]
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"])
+              { cwd = Just proj, env = Just runEnv } ""
+          assertBool ("invalid value should fail: " ++ value ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name gc_heap_growth_divisor\n" ++ out ++ err)
+            ("gc_heap_growth_divisor" `isInfixOf` (out ++ err))
+  ]
+  where
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    withFixture action = withSystemTempDirectory "acton-gc-growth" $ \proj -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      environment <- getEnvironment
+      createDirectoryIfMissing True (proj </> "src")
+      copyFile "test/project/gc_growth/src/main.act" (proj </> "src/main.act")
+      let runEnv = [("GC_MARKERS", "2")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
+          fingerprint = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_growth") 1)
+          writeOptions selected = writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"gc_growth\""
+            , "fingerprint = " ++ fingerprint
+            , "build_options = {" ++ intercalate ", "
+                [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
+            ]
+      action acton proj runEnv writeOptions
 
 dependencyDeclarationTests =
   testGroup "dependency declarations"

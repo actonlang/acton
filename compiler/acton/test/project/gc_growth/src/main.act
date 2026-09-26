@@ -1,0 +1,16 @@
+import acton.rts
+
+actor main(env):
+    expected = u64(int(env.argv[1]))
+    info = acton.rts.get_gc_info(env.syscap)
+    assert info.heap_growth_divisor == expected
+
+    # Grow the heap through several automatic expansions.
+    retained = [[i, i + 1, i + 2] for i in range(200000)]
+    grown = acton.rts.get_gc_info(env.syscap)
+    assert grown.heap_growth_divisor == expected
+    assert grown.heap_size > info.heap_size
+    for i, triple in enumerate(retained):
+        assert triple == [i, i + 1, i + 2]
+    print("GC heap growth OK")
+    env.exit(0)

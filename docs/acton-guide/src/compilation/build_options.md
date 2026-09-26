@@ -161,6 +161,37 @@ ordinary collection. It is independent of object mark-bit layout.
 Measure the application's workload before choosing a larger table. Increasing
 this value does not remove dirty-tracking faults or guarantee fewer collections.
 
+## GC heap growth
+
+Programs whose live data grows to gigabytes can let the collector expand the
+heap in larger steps:
+
+```python
+build_options = {
+    "gc_heap_growth_divisor": "16",
+}
+```
+
+Normally one automatic heap expansion adds at most a fixed amount (16 MiB in
+Acton's configuration), and the collector runs a full collection before
+expanding again. A heap that grows from nothing to 4 GiB therefore needs
+hundreds of full collections, each marking all live data. With a divisor of
+`N`, one expansion may add up to the heap size divided by `N` when that is
+larger than the fixed amount, so the number of these collections grows with
+the logarithm of the heap size instead. Building a 1 GiB list of small
+objects took 78 collections with the default, 53 with 16 and 39 with 8.
+
+The cost is a larger heap: a few percent with 16, more with smaller values.
+The free space divisor still bounds each expansion, so divisors at or below
+it (3 by default) all behave alike. The setting has no effect until the heap
+is larger than `N` times the fixed amount (256 MiB for 16).
+
+The default, `"0"`, keeps the fixed increment. Values must be non-negative
+integers. The `GC_HEAP_GROWTH_DIVISOR` environment variable overrides the
+build setting when the program starts; `0` there turns the scaling off.
+This is a build setting shared by the application and its dependencies,
+including database support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -183,7 +214,8 @@ promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, available `markers` (including
 the initiating thread), `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_size`, `free_bytes` and `unmapped_bytes`. The pause
+`full_frequency`, `heap_growth_divisor`, `heap_size`, `free_bytes` and
+`unmapped_bytes`. The pause
 target is `None` for ordinary and unlimited generational collection, and is
 not a guaranteed maximum pause. Available markers need not participate in
 every incremental marking attempt.
