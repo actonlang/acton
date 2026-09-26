@@ -23,6 +23,7 @@ actor main(env):
     print("block_size=" + str(info.block_size))
     print("end_padding=" + str(info.end_padding))
     print("small_object_size=" + str(small_object_size()))
+    print("thread_local_size_limit=" + str(info.thread_local_size_limit))
     print("mark_range_stealing=" + str(info.mark_range_stealing))
     print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))

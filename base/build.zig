@@ -84,6 +84,7 @@ pub fn build(b: *std.Build) void {
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -125,6 +126,14 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         }
     }
+    if (gc_thread_local_size_limit != 0) {
+        // Objects of more than half a block are allocated in whole blocks.
+        const max_limit: u32 = (if (gc_block_size != 0) gc_block_size else 4096) / 2;
+        if (gc_thread_local_size_limit % 16 != 0 or gc_thread_local_size_limit > max_limit) {
+            std.log.err("gc_thread_local_size_limit must be a multiple of 16 from 16 to {d} (half the heap block size), or 0 for the default", .{max_limit});
+            std.process.exit(1);
+        }
+    }
     // Must match the collector options in backend/build.zig, so that both
     // resolve to the same libgc.
     const gc_enable_threads = !target.result.cpu.arch.isWasm();
@@ -160,6 +169,7 @@ pub fn build(b: *std.Build) void {
         .enable_mark_range_stealing = gc_mark_range_stealing,
         .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_end_padding = !gc_no_end_padding,
+        .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -183,6 +193,7 @@ pub fn build(b: *std.Build) void {
         \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void);
         \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void);
         \\GC_API int GC_CALL acton_gc_get_end_padding(void);
+        \\GC_API unsigned GC_CALL acton_gc_get_thread_local_size_limit(void);
         \\#ifdef __cplusplus
         \\}}
         \\#endif
@@ -226,6 +237,13 @@ pub fn build(b: *std.Build) void {
             \\}
             \\GC_API int GC_CALL acton_gc_get_end_padding(void) {
             \\    return GC_get_all_interior_pointers() && !GC_get_dont_add_byte_at_end();
+            \\}
+            \\GC_API unsigned GC_CALL acton_gc_get_thread_local_size_limit(void) {
+            \\#ifdef THREAD_LOCAL_ALLOC
+            \\    return (GC_TINY_FREELISTS - 1) * GC_GRANULE_BYTES;
+            \\#else
+            \\    return 0;
+            \\#endif
             \\}
             \\
         ),
@@ -491,6 +509,7 @@ pub fn build(b: *std.Build) void {
             .gc_mark_range_stealing = gc_mark_range_stealing,
             .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
             .gc_no_end_padding = gc_no_end_padding,
+            .gc_thread_local_size_limit = gc_thread_local_size_limit,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
@@ -541,4 +560,12 @@ pub fn build(b: *std.Build) void {
 // page as dirty, as all macOS builds did before.
 pub fn gcEnableMprotectVdb(t: std.Target) bool {
     return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
+}
+
+// The collector's GC_TINY_FREELISTS for gc_thread_local_size_limit (0 keeps
+// the default): one thread-local free list per granule of two pointers, from
+// the list of empty objects up to the limit.
+pub fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
+    if (size_limit == 0) return 0;
+    return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
 }

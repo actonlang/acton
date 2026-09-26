@@ -8,6 +8,7 @@ actor main(env):
     assert before.page_hash_table_log2 > 0
     assert before.block_size >= 4096
     assert (before.block_size & (before.block_size - 1)) == 0
+    assert before.thread_local_size_limit <= before.block_size // 2
     assert before.markers >= 1
     assert before.initial_mark_stack_size >= 4096
     assert before.free_space_divisor > 0
@@ -34,6 +35,7 @@ actor main(env):
         assert info.page_hash_table_log2 == before.page_hash_table_log2
         assert info.block_size == before.block_size
         assert info.end_padding == before.end_padding
+        assert info.thread_local_size_limit == before.thread_local_size_limit
         assert info.mark_range_stealing == before.mark_range_stealing
         assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor

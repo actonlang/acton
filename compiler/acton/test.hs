@@ -2603,21 +2603,30 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- Reported get_gc_info fields for a build without settings.
     defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
                 ("end_padding", "True"), ("small_object_size", "32"),
+                ("thread_local_size_limit", "384"),
                 ("mark_range_stealing", "False"),
                 ("initial_mark_stack_size", "4096")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
              ("gc_mark_range_stealing", "true"),
              ("gc_initial_mark_stack_size", "65536"),
-             ("gc_no_end_padding", "true")]
+             ("gc_no_end_padding", "true"),
+             ("gc_thread_local_size_limit", "2048")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                     ("end_padding", "False"), ("small_object_size", "16"),
+                    ("thread_local_size_limit", "2048"),
                     ("mark_range_stealing", "True"),
                     ("initial_mark_stack_size", "65536")]
     -- The default initial mark stack has as many entries as a block has
     -- bytes.
-    others = [([("gc_block_size", "65536")],
-               [("block_size", "65536"), ("initial_mark_stack_size", "65536")])]
+    others = [([("gc_block_size", "65536"),
+                ("gc_thread_local_size_limit", "32768")],
+               [("block_size", "65536"), ("initial_mark_stack_size", "65536"),
+                ("thread_local_size_limit", "32768")]),
+              -- The smallest limit. Objects of every larger size come from
+              -- the global free lists, which the collector sets up on demand.
+              ([("gc_thread_local_size_limit", "16")],
+               [("thread_local_size_limit", "16")])]
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50")]
     overridden = [("alloc_budget_percent", "50")]
     -- Invalid settings and the option the diagnostic should name.
@@ -2633,7 +2642,10 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_initial_mark_stack_size", "2048"),
                         ("gc_initial_mark_stack_size", "12288"),
                         ("gc_initial_mark_stack_size", "invalid"),
-                        ("gc_no_end_padding", "maybe")]
+                        ("gc_no_end_padding", "maybe"),
+                        ("gc_thread_local_size_limit", "100"),
+                        ("gc_thread_local_size_limit", "4096"),
+                        ("gc_thread_local_size_limit", "invalid")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")

@@ -337,6 +337,30 @@ pointer alone. On the `gc_heap` benchmark, the heap and resident memory were
 9.5% smaller. The default is `"false"`. This is a build setting shared by the
 application and its dependencies, including database support.
 
+## GC thread-local allocation size
+
+Each thread allocates small objects from its own free lists, one list per size
+step (16 bytes on 64-bit targets), and takes the collector's allocator lock
+only to refill a list. Objects above a size limit do not use these lists:
+every allocation of one takes the lock. By default the limit is 384 bytes on
+64-bit targets. When several threads allocate many objects above it, they wait
+for the lock. The limit can be raised:
+
+```python
+build_options = {
+    "gc_thread_local_size_limit": "2048",
+}
+```
+
+The value is an object size in bytes, including the end padding byte, so with
+padding on a limit of 2048 covers allocations of up to 2047 bytes. It must be
+a multiple of 16 and at most half the heap block size: 2048 with the default
+4 KiB blocks, 8192 with 16 KiB blocks. `"0"` (the default) keeps the
+collector's limit. A higher limit makes each thread's table of free lists
+larger (by about 3 KB at 2048 and 64 KB at 32768), and each thread can hold
+partly used blocks of more sizes. This is a build setting shared by the
+application and its dependencies, including database support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -358,12 +382,13 @@ backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
-available `markers` (including the initiating thread), `mark_range_stealing`,
-`initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
-`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
-unlimited generational collection, and is not a guaranteed maximum pause.
-Available markers need not participate in every incremental marking attempt.
+`thread_local_size_limit`, available `markers` (including the initiating
+thread), `mark_range_stealing`, `initial_mark_stack_size`, `pause_target_ms`,
+`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
+`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
+pause target is `None` for ordinary and unlimited generational collection, and
+is not a guaranteed maximum pause. Available markers need not participate in
+every incremental marking attempt.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
