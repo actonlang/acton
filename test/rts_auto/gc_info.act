@@ -9,6 +9,7 @@ actor main(env):
     assert before.block_size >= 4096
     assert (before.block_size & (before.block_size - 1)) == 0
     assert before.markers >= 1
+    assert before.initial_mark_stack_size >= 4096
     assert before.free_space_divisor > 0
     if before.mode == "ordinary":
         assert before.backend == "none"
@@ -32,6 +33,8 @@ actor main(env):
         assert info.supported_backends == before.supported_backends
         assert info.page_hash_table_log2 == before.page_hash_table_log2
         assert info.block_size == before.block_size
+        assert info.mark_range_stealing == before.mark_range_stealing
+        assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
         assert info.alloc_budget_percent == before.alloc_budget_percent
         assert info.heap_size > 0
