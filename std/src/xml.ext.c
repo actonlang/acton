@@ -213,8 +213,17 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
     if (!ctxt)
         RAISE(stdQ_xmlQ_XmlParseError, to$str("XML parse error"), NULL, NULL);
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
-    xmlDocPtr doc = xmlCtxtReadMemory(ctxt, (char *)data->str, data->nbytes, NULL, NULL,
-                                      XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
+    xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
+    // Parse the str's bytes where they are instead of copying them: str
+    // memory never changes and ends in a NUL byte. libxml2 keeps the only
+    // pointer to it in memory the GC doesn't scan, so data must stay
+    // reachable until parsing is done.
+    xmlParserInputFlags flags = XML_INPUT_BUF_STATIC;
+    if (data->str[data->nbytes] == 0)
+        flags |= XML_INPUT_BUF_ZERO_TERMINATED;
+    xmlParserInputPtr input = xmlNewInputFromMemory(NULL, data->str, data->nbytes, flags);
+    xmlDocPtr doc = xmlCtxtParseDocument(ctxt, input);
+    GC_reachable_here(data);
     if (!doc) {
         const xmlError *err = xmlCtxtGetLastError(ctxt);
         B_str errmsg;
