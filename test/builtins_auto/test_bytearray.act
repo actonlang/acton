@@ -56,6 +56,15 @@ def test_bytearray_reverse():
     print("bytearray(b'test').reverse(): {result}")
     return result == bytearray(b"tset")
 
+def test_bytearray_str_quotes():
+    # Single quotes unless the data has a single quote and no double quote,
+    # and only the quote character used as delimiter is escaped
+    both = str(bytearray(bytes([39, 34])))
+    print("str(bytearray(bytes([39, 34]))): {both}")
+    return (str(bytearray(b"it's")) == "bytearray(b\"it's\")"
+            and str(bytearray(b'say "hi"')) == "bytearray(b'say \"hi\"')"
+            and both == "bytearray(b'\\'\"')")
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -292,6 +301,7 @@ tests = {
     "test_bytearray_append": test_bytearray_append,
     "test_bytearray_insert": test_bytearray_insert,
     "test_bytearray_reverse": test_bytearray_reverse,
+    "test_bytearray_str_quotes": test_bytearray_str_quotes,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

@@ -1894,12 +1894,12 @@ bool B_bytearrayD___bool__(B_bytearray s) {
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[11] = '\'';
         res->str[res->nbytes-2] = '\'';
@@ -3024,12 +3024,12 @@ bool B_bytesD___bool__(B_bytes s) {
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[1] = '\'';
         res->str[res->nbytes-1] = '\'';
