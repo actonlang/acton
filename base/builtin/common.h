@@ -7,6 +7,14 @@ typedef void *$WORD;
 
 void $default__init__($WORD);
 
+// Checked conversions used by generated code for fixed-width integer
+// constructors.  Keeping the source value raw avoids the old atom -> bigint
+// path; the caller casts the checked wide result to its destination type.
+int64_t $checked_int_from_i64(int64_t value, int64_t min, int64_t max, const char *type_name);
+uint64_t $checked_uint_from_i64(int64_t value, uint64_t max, const char *type_name);
+int64_t $checked_int_from_u64(uint64_t value, int64_t max, const char *type_name);
+uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_name);
+
 
 // void B_printobj(char *mess,$WORD obj);
 

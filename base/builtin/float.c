@@ -19,8 +19,8 @@
 double B_floatG_new(B_atom a) {
     if ($ISINSTANCE0(a,B_int)) return (double)((B_int)a)->val;
     if ($ISINSTANCE0(a,B_i32)) return (double)((B_i32)a)->val;
-    if ($ISINSTANCE0(a,B_i16)) return (double)((B_i8)a)->val;
-    if ($ISINSTANCE0(a,B_i8)) return (double)((B_i16)a)->val;
+    if ($ISINSTANCE0(a,B_i16)) return (double)((B_i16)a)->val;
+    if ($ISINSTANCE0(a,B_i8)) return (double)((B_i8)a)->val;
     if ($ISINSTANCE0(a,B_u64)) return (double)((B_u64)a)->val;
     if ($ISINSTANCE0(a,B_u32)) return (double)((B_u32)a)->val;
     if ($ISINSTANCE0(a,B_u16)) return (double)((B_u16)a)->val;

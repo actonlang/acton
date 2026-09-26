@@ -1,0 +1,91 @@
+def expect_value_error[A](convert: () -> A):
+    try:
+        convert()
+    except ValueError:
+        return
+    raise AssertionError("Expected ValueError for an out-of-range numeric conversion")
+
+def int_to_float(x: int) -> float:
+    return float(x)
+
+def i32_to_float(x: i32) -> float:
+    return float(x)
+
+def i16_to_float(x: i16) -> float:
+    return float(x)
+
+def i8_to_float(x: i8) -> float:
+    return float(x)
+
+def u64_to_float(x: u64) -> float:
+    return float(x)
+
+def u32_to_float(x: u32) -> float:
+    return float(x)
+
+def u16_to_float(x: u16) -> float:
+    return float(x)
+
+def u8_to_float(x: u8) -> float:
+    return float(x)
+
+def u1_to_float(x: u1) -> float:
+    return float(x)
+
+def atom_to_float(x: atom) -> float:
+    return float(x)
+
+actor main(env):
+    try:
+        # All fixed-width integer sources reach float without boxing.
+        assert int_to_float(-123456789) == -123456789.0
+        assert i32_to_float(i32(-123456)) == -123456.0
+        assert i16_to_float(i16(-1234)) == -1234.0
+        assert i8_to_float(i8(-100)) == -100.0
+        assert u64_to_float(u64(9007199254740992)) == 9007199254740992.0
+        assert u32_to_float(u32(4000000000)) == 4000000000.0
+        assert u16_to_float(u16(60000)) == 60000.0
+        assert u8_to_float(u8(250)) == 250.0
+        assert u1_to_float(u1(1)) == 1.0
+
+        # Widening conversions need no range check.
+        assert i16(i8(-128)) == -128
+        assert i32(u16(65535)) == 65535
+        assert int(u32(4294967295)) == 4294967295
+        assert u64(u32(4294967295)) == 4294967295
+
+        # Checked conversions accept both endpoints.
+        assert i8(int(-128)) == -128
+        assert i8(int(127)) == 127
+        assert i16(int(-32768)) == -32768
+        assert i16(int(32767)) == 32767
+        assert u8(int(0)) == 0
+        assert u8(int(255)) == 255
+        assert u1(int(0)) == 0
+        assert u1(int(1)) == 1
+        assert int(u64(9223372036854775807)) == 9223372036854775807
+        assert u8(u16(255)) == 255
+
+        expect_value_error(lambda: i8(int(-129)))
+        expect_value_error(lambda: i8(int(128)))
+        expect_value_error(lambda: i16(int(-32769)))
+        expect_value_error(lambda: i16(int(32768)))
+        expect_value_error(lambda: u8(int(-1)))
+        expect_value_error(lambda: u8(int(256)))
+        expect_value_error(lambda: u1(int(-1)))
+        expect_value_error(lambda: u1(int(2)))
+        expect_value_error(lambda: int(u64(9223372036854775808)))
+        expect_value_error(lambda: u8(u16(256)))
+
+        # A statically dynamic argument still exercises the general runtime path.
+        i16_atom: atom = i16(-1234)
+        i8_atom: atom = i8(-100)
+        assert atom_to_float(i16_atom) == -1234.0
+        assert atom_to_float(i8_atom) == -100.0
+        expect_value_error(lambda: i16("32768"))
+        expect_value_error(lambda: i8("128"))
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

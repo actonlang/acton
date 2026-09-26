@@ -2183,6 +2183,15 @@ main = do
         [ "$listD_U__setitem__(xs, index, toB_int(0LL))"
         , "B_SequenceD_listG_witness->W_Sliceable"
         ]
+      testCodeGenContains env0 "numeric_casts"
+        [ "double N_tmp = ((double)(x));"
+        , "int16_t N_1tmp = ((int16_t)(x));"
+        , "int8_t N_2tmp = ((int8_t)($checked_int_from_i64(x, INT8_MIN, INT8_MAX, \"i8\")));"
+        , "uint8_t N_3tmp = ((uint8_t)($checked_uint_from_i64(x, UINT8_MAX, \"u8\")));"
+        , "int64_t N_4tmp = ((int64_t)($checked_int_from_u64(x, INT64_MAX, \"int\")));"
+        , "uint8_t N_5tmp = ((uint8_t)($checked_uint_from_u64(x, UINT8_MAX, \"u8\")));"
+        ]
+      testCodeGenDoesNotContain env0 "numeric_casts" ["toB_int(x)", "B_bigintG_new", "B_floatG_new"]
       testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
       testCodeGenContains env0 "raw_builtin_indexing"
         [ "$listD_U__getitem__(xs, i)"
