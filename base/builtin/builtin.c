@@ -38,6 +38,7 @@
 #include "float.c"
 #include "bool.c"
 #include "complex.c"
+#include "array.c"
 #include "Iterator.c"
 #include "slice.c"
 //#include "hash.c"

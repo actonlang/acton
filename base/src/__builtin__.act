@@ -573,6 +573,22 @@ class hasher(object):
 
 protocol Hashable (Eq):
     hash : (hasher) -> None
+
+# Element types with a fixed, pointer-free runtime representation suitable for
+# array storage.  The initial implementation deliberately supports only the
+# two primary Acton numeric types, int and float.
+protocol ArrayElement:
+    pass
+
+class array[A(ArrayElement)] (object):
+    def __init__(self, length: int) -> None:
+        NotImplemented
+    def __len__(self) -> int:
+        NotImplemented
+    def __getitem__(self, index: int) -> A:
+        NotImplemented
+    def __setitem__(self, index: int, value: A) -> None:
+        NotImplemented
     
 class complex (atom):
     def __init__(self, val: Number) -> None:
@@ -803,6 +819,11 @@ extension float (Div[float]):
 extension float (Ord):
     NotImplemented
 extension float (Hashable):
+    NotImplemented
+
+extension int (ArrayElement):
+    NotImplemented
+extension float (ArrayElement):
     NotImplemented
 
 extension complex (Number):

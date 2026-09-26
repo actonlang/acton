@@ -1,0 +1,61 @@
+def check(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+def expect_index_error(xs: array[int], index: int) -> None:
+    try:
+        value = xs[index]
+    except IndexError:
+        return
+    raise AssertionError("expected IndexError")
+
+def generic_get[A(ArrayElement)](xs: array[A], index: int) -> A:
+    return xs[index]
+
+def generic_set[A(ArrayElement)](xs: array[A], index: int, value: A) -> None:
+    xs[index] = value
+
+actor main(env):
+    try:
+        ints: array[int] = array(4)
+        check(len(ints) == 4, "wrong int array length")
+        check(ints[0] == 0 and ints[3] == 0, "int array is not zero initialized")
+
+        ints[0] = -7
+        ints[3] = 40
+        ints[3] += 2
+        generic_set(ints, 1, 17)
+        check(ints[0] == -7 and ints[3] == 42, "int array mutation failed")
+        check(generic_get(ints, 1) == 17, "generic int array access failed")
+
+        floats: array[float] = array(3)
+        check(len(floats) == 3, "wrong float array length")
+        check(floats[0] == 0.0 and floats[2] == 0.0, "float array is not zero initialized")
+        floats[1] = 3.25
+        check(floats[1] == 3.25, "float array mutation failed")
+        generic_set(floats, 2, -1.5)
+        check(generic_get(floats, 2) == -1.5, "generic float array access failed")
+
+        expect_index_error(ints, -1)
+        expect_index_error(ints, 4)
+
+        try:
+            bad: array[int] = array(-1)
+            raise AssertionError("expected ValueError")
+        except ValueError:
+            pass
+
+        # Both the element kind and the raw payload survive serialization.
+        payload = serialize(ints)
+        restored_payload = serialize(deserialize(payload))
+        check(restored_payload == payload, "array serialization failed")
+        check(serialize(deserialize(serialize(floats))) == serialize(floats),
+              "float array serialization failed")
+        shared = [ints, ints]
+        check(serialize(deserialize(serialize(shared))) == serialize(shared),
+              "shared array serialization failed")
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)
