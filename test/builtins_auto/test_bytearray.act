@@ -56,6 +56,90 @@ def test_bytearray_reverse():
     print("bytearray(b'test').reverse(): {result}")
     return result == bytearray(b"tset")
 
+def test_bytearray_str_quotes():
+    # Single quotes unless the data has a single quote and no double quote,
+    # and only the quote character used as delimiter is escaped
+    both = str(bytearray(bytes([39, 34])))
+    print("str(bytearray(bytes([39, 34]))): {both}")
+    return (str(bytearray(b"it's")) == "bytearray(b\"it's\")"
+            and str(bytearray(b'say "hi"')) == "bytearray(b'say \"hi\"')"
+            and both == "bytearray(b'\\'\"')")
+
+def test_bytearray_split_sep():
+    # The pieces are new bytearrays, also when there is no separator
+    ba = bytearray(b"abc")
+    whole = ba.split(bytearray(b","))
+    whole[0].append(100)
+    comma = bytearray(b",")
+    print("bytearray split with a separator: {whole}")
+    return (ba == bytearray(b"abc")
+            and bytearray(b"a,b,c").split(comma, 0) == [bytearray(b"a,b,c")]
+            and bytearray(b"a,b,c").split(comma, 1) == [bytearray(b"a"), bytearray(b"b,c")]
+            and bytearray(b"a,,b,").split(comma) == [bytearray(b"a"), bytearray(b""), bytearray(b"b"), bytearray(b"")]
+            and bytearray(b"").split(comma) == [bytearray(b"")])
+
+def test_bytearray_partition_new_objects():
+    # partition and rpartition return new bytearrays, never the bytearray
+    # itself or the separator
+    ba = bytearray(b"abc")
+    sep = bytearray(b"b")
+    p = ba.partition(sep)
+    q = ba.partition(bytearray(b"x"))
+    r = ba.rpartition(sep)
+    t = ba.rpartition(bytearray(b"x"))
+    p.1.append(33)
+    q.0.append(33)
+    r.1.append(33)
+    t.2.append(33)
+    print("bytearray and separator after changing partition results: {ba} {sep}")
+    return (ba == bytearray(b"abc") and sep == bytearray(b"b")
+            and p.0 == bytearray(b"a") and p.2 == bytearray(b"c")
+            and r.0 == bytearray(b"a") and r.2 == bytearray(b"c"))
+
+def test_bytearray_del_slice_steps():
+    a = bytearray(b"abcdef")
+    del a[::-2]
+    b = bytearray(b"abcdef")
+    del b[4:1:-1]
+    c = bytearray(b"abcdef")
+    del c[::-1]
+    d = bytearray(b"abcdef")
+    del d[1::2]
+    print("del with slice steps: {a} {b} {c} {d}")
+    return (a == bytearray(b"ace") and b == bytearray(b"abf")
+            and c == bytearray(b"") and d == bytearray(b"ace"))
+
+def test_bytearray_byte_range():
+    # Values outside 0..255 are rejected like in item assignment, and no
+    # byte equals such a value
+    ba = bytearray(b"a")
+    rejected = 0
+    try:
+        ba.append(256)
+    except ValueError:
+        rejected += 1
+    try:
+        ba.insert(0, -1)
+    except ValueError:
+        rejected += 1
+    try:
+        ba[0:1] = [300]
+    except ValueError:
+        rejected += 1
+    probe = bytearray(bytes([255, 0]))
+    print("bytearray after rejected values: {ba}")
+    return (rejected == 3 and ba == bytearray(b"a")
+            and 255 in probe and 0 in probe and not (511 in probe)
+            and not (-1 in probe) and 256 not in probe)
+
+def test_bytearray_istitle():
+    # Title case needs at least one cased letter
+    print("bytearray istitle")
+    return (bytearray(b"Hello World").istitle() and bytearray(b"A1 B2").istitle()
+            and bytearray(b"A").istitle() and not bytearray(b"123").istitle()
+            and not bytearray(b" ").istitle() and not bytearray(b"hello").istitle()
+            and not bytearray(b"HEllo").istitle() and not bytearray(b"").istitle())
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -364,6 +448,12 @@ tests = {
     "test_bytearray_append": test_bytearray_append,
     "test_bytearray_insert": test_bytearray_insert,
     "test_bytearray_reverse": test_bytearray_reverse,
+    "test_bytearray_str_quotes": test_bytearray_str_quotes,
+    "test_bytearray_split_sep": test_bytearray_split_sep,
+    "test_bytearray_partition_new_objects": test_bytearray_partition_new_objects,
+    "test_bytearray_del_slice_steps": test_bytearray_del_slice_steps,
+    "test_bytearray_byte_range": test_bytearray_byte_range,
+    "test_bytearray_istitle": test_bytearray_istitle,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

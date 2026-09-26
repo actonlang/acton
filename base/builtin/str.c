@@ -1933,12 +1933,12 @@ bool B_bytearrayD___bool__(B_bytearray s) {
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[11] = '\'';
         res->str[res->nbytes-2] = '\'';
@@ -2216,19 +2216,21 @@ bool B_bytearrayD_istitle(B_bytearray s) {
     if (s->nbytes==0)
         return false;
     bool incasedrun = false;
+    bool cased = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
                 return false;
             incasedrun = true;
+            cased = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
                 return false;
         } else
             incasedrun = false;
     }
-    return true;
+    return cased;
 }
 
 bool B_bytearrayD_isupper(B_bytearray s) {
@@ -2328,7 +2330,7 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
 B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
     int64_t n = B_bytearrayD_find(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,s,toB_bytearray(""),toB_bytearray(""));
+        return $NEWTUPLE(3,B_bytearrayD_copy(s),toB_bytearray(""),toB_bytearray(""));
     } else {
         int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
@@ -2338,7 +2340,7 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
         int nbr = s->nbytes - sep->nbytes - nb;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-        return $NEWTUPLE(3,ls,sep,rs);
+        return $NEWTUPLE(3,ls,B_bytearrayD_copy(sep),rs);
     }
 }
 
@@ -2421,7 +2423,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
     int64_t n = B_bytearrayD_rfind(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),s);
+        return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),B_bytearrayD_copy(s));
     } else {
         int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytearray ls;
@@ -2431,7 +2433,7 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
         B_bytearray rs;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
-        return  $NEWTUPLE(3,ls,sep,rs);
+        return  $NEWTUPLE(3,ls,B_bytearrayD_copy(sep),rs);
     }
 }
 
@@ -2507,21 +2509,24 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
         if (sep->nbytes==0) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytearray: separator is empty string")));
         }
-        if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,toB_bytearray(""));
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            B_bytearray word;
+            NEW_UNFILLED_BYTEARRAY(word,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_bytearray ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_bytearrayD_partition(rs,sep);
-            ssep = (B_bytearray)t->components[1];
-            rs =  (B_bytearray)t->components[2];
-             wit->$class->append(wit,res,(B_bytearray)t->components[0]);
-        }
-        if (ssep->nbytes>0)
-            wit->$class->append(wit,res,rs);
+        B_bytearray word;
+        NEW_UNFILLED_BYTEARRAY(word,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }
@@ -2691,6 +2696,8 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
 };
 
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    if (n->val < 0 || n->val > 255)
+        return false;
     bool res = false;
     for (int i=0; i < self->nbytes; i++) {
         if (self->str[i] == (unsigned char)n->val) {
@@ -2739,6 +2746,8 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
 }
 
 B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
+    if (elem->val < 0 || elem->val > 255)
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("insert for bytearray: value outside [0..255]")));
     long ix = n;
     int len = self->nbytes;
     expand_bytearray(self,1);
@@ -2752,6 +2761,8 @@ B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray 
 }
 
 B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
+    if (elem->val < 0 || elem->val > 255)
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("append for bytearray: value outside [0..255]")));
     expand_bytearray(self,1);
     self->str[self->nbytes++] = (unsigned char)(elem->val & 0xff);
     self->str[self->nbytes] = '\0';
@@ -2838,6 +2849,12 @@ B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_by
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (slen==0) return B_None;
+    if (step < 0) {
+        // The loop below needs a positive step: delete the same bytes,
+        // taking them in increasing order
+        start += (slen-1)*step;
+        step = -step;
+    }
     unsigned char *p = self->str + start;
     for (int i=0; i<slen-1; i++) {
         memmove(p,p+i+1,step-1);
@@ -3032,12 +3049,12 @@ bool B_bytesD___bool__(B_bytes s) {
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
     int nbytes = s->nbytes+newbytes;
     NEW_UNFILLED_STR(res,nbytes,nbytes);
-    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[1] = '\'';
         res->str[res->nbytes-1] = '\'';
@@ -3316,19 +3333,21 @@ bool B_bytesD_istitle(B_bytes s) {
     if (s->nbytes==0)
         return false;
     bool incasedrun = false;
+    bool cased = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
                 return false;
             incasedrun = true;
+            cased = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
                 return false;
         } else
             incasedrun = false;
     }
-    return true;
+    return cased;
 }
 
 bool B_bytesD_isupper(B_bytes s) {
@@ -3632,21 +3651,24 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
         if (sep->nbytes==0) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytes: separator is empty string")));
         }
-        if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_bytes);
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            B_bytes word;
+            NEW_UNFILLED_BYTES(word,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_bytes ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_bytesD_partition(rs,sep);
-            ssep = (B_bytes)t->components[1];
-            rs =  (B_bytes)t->components[2];
-            wit->$class->append(wit,res,(B_bytes)t->components[0]);
-        }
-        if (ssep->nbytes>0)
-            wit->$class->append(wit,res,rs);
+        B_bytes word;
+        NEW_UNFILLED_BYTES(word,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }
@@ -3837,6 +3859,8 @@ int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    if (n->val < 0 || n->val > 255)
+        return false;
     bool res = false;
     for (int i=0; i < str->nbytes; i++) {
         if (str->str[i] == (unsigned char)n->val) {
