@@ -2223,6 +2223,8 @@ main = do
       testCodeGenContains env0 "raw_array"
         [ "B_ArrayElementD_intG_witness;"
         , "B_arrayG_new(W_make_int_array_"
+        , "B_arrayG_new(W_make_filled_int_array_"
+        , "toB_int(initial)"
         , "$arrayD_U__getitem_int(xs, i)"
         , "$arrayD_U__setitem_int(xs, i, value)"
         , "$arrayD_U__getitem_int(xs, i) + value"

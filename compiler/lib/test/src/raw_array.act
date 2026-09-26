@@ -2,6 +2,10 @@ def make_int_array(n: int) -> array[int]:
     result: array[int] = array(n)
     return result
 
+def make_filled_int_array(n: int, initial: int) -> array[int]:
+    result: array[int] = array(n, initial)
+    return result
+
 def int_get(xs: array[int], i: int) -> int:
     return xs[i]
 
