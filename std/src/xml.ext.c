@@ -207,11 +207,14 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
     // Parse with a context of our own and take a failure's error from it:
     // the context holds this parse's last diagnostic, whatever else libxml2
     // does. For an empty document that is "Document is empty".
+    // XML_PARSE_NO_GLOBAL_ERROR keeps errors out of libxml2's global last
+    // error record, so parsing writes no state shared between threads.
     xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
     if (!ctxt)
         RAISE(stdQ_xmlQ_XmlParseError, to$str("XML parse error"), NULL, NULL);
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
-    xmlDocPtr doc = xmlCtxtReadMemory(ctxt, (char *)data->str, data->nbytes, NULL, NULL, XML_PARSE_NOERROR);
+    xmlDocPtr doc = xmlCtxtReadMemory(ctxt, (char *)data->str, data->nbytes, NULL, NULL,
+                                      XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
     if (!doc) {
         const xmlError *err = xmlCtxtGetLastError(ctxt);
         B_str errmsg;
@@ -481,5 +484,8 @@ B_str stdQ_xmlQ_NodeD_encode(stdQ_xmlQ_Node self, B_bool pretty) {
 }
 
 void stdQ_xmlQ___ext_init__() {
-    // NOP
+    // libxml2 is built without thread support, so its one-time
+    // initialisation is not locked. Module init runs before any worker
+    // thread parses.
+    xmlInitParser();
 }

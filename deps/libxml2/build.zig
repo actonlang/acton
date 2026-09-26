@@ -43,7 +43,9 @@ pub fn build(b: *std.Build) void {
         .HAVE_SHLLOAD = null,
         .HAVE_STDINT_H = true,
         .XML_SYSCONFDIR = null,
-        .XML_THREAD_LOCAL = null,
+        // Keeps the random state for dictionary seeds per thread, so that
+        // parsing writes no shared state without thread support.
+        .XML_THREAD_LOCAL = "_Thread_local",
     });
     lib.root_module.addConfigHeader(config_header);
 
