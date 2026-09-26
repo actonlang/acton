@@ -2686,6 +2686,8 @@ struct B_IteratorD_bytearrayG_class B_IteratorD_bytearrayG_methods = {
 };
 
 bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearray self, B_int n) {
+    if (n->val < 0 || n->val > 255)
+        return false;
     bool res = false;
     for (int i=0; i < self->nbytes; i++) {
         if (self->str[i] == (unsigned char)n->val) {
@@ -2734,6 +2736,8 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
 }
 
 B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
+    if (elem->val < 0 || elem->val > 255)
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("insert for bytearray: value outside [0..255]")));
     long ix = n;
     int len = self->nbytes;
     expand_bytearray(self,1);
@@ -2747,6 +2751,8 @@ B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray 
 }
 
 B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray self, B_int elem) {
+    if (elem->val < 0 || elem->val > 255)
+        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("append for bytearray: value outside [0..255]")));
     expand_bytearray(self,1);
     self->str[self->nbytes++] = (unsigned char)(elem->val & 0xff);
     self->str[self->nbytes] = '\0';
@@ -3868,6 +3874,8 @@ int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_int n) {
+    if (n->val < 0 || n->val > 255)
+        return false;
     bool res = false;
     for (int i=0; i < str->nbytes; i++) {
         if (str->str[i] == (unsigned char)n->val) {
