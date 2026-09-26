@@ -5,8 +5,6 @@
 #include <dlfcn.h>
 #endif
 
-#define LIBXML_STATIC
-#include <libxml/xmlmemory.h>
 #include <tlsuv/tlsuv.h>
 
 #include "rts/common.h"
@@ -128,11 +126,6 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
     bsdnt_replace_allocator(acton__allocator.malloc,
                             acton__allocator.realloc,
                             acton__allocator.free);
-
-    xmlMemSetup(acton__allocator.free,
-                acton__allocator.malloc,
-                acton__allocator.realloc,
-                acton__allocator.strdup);
 
     return 0;
 }
