@@ -1,0 +1,17 @@
+def make_bitarray(n: int, initial: bool) -> bitarray:
+    return bitarray(n, initial)
+
+def make_default_bitarray(n: int) -> bitarray:
+    return bitarray(n)
+
+def bit_get(xs: bitarray, i: int) -> bool:
+    return xs[i]
+
+def bit_set(xs: bitarray, i: int, value: bool) -> None:
+    xs[i] = value
+
+def bit_flip(xs: bitarray, i: int) -> None:
+    xs[i] = not xs[i]
+
+def bit_len(xs: bitarray) -> int:
+    return len(xs)

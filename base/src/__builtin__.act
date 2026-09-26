@@ -589,6 +589,18 @@ class array[A(ArrayElement)] (object):
         NotImplemented
     def __setitem__(self, index: int, value: A) -> None:
         NotImplemented
+
+# Fixed-size packed storage for Boolean values.  Unlike sequence indexing,
+# negative indices are deliberately rejected rather than counted from the end.
+class bitarray (object):
+    def __init__(self, length: int, initial: bool=False) -> None:
+        NotImplemented
+    def __len__(self) -> int:
+        NotImplemented
+    def __getitem__(self, index: int) -> bool:
+        NotImplemented
+    def __setitem__(self, index: int, value: bool) -> None:
+        NotImplemented
     
 class complex (atom):
     def __init__(self, val: Number) -> None:

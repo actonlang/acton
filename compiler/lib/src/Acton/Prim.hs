@@ -169,6 +169,9 @@ primUArrayGetFloat  = gPrim "arrayD_U__getitem_float"
 primUArraySetInt    = gPrim "arrayD_U__setitem_int"
 primUArraySetFloat  = gPrim "arrayD_U__setitem_float"
 primUArrayLen       = gPrim "arrayD_U__len"
+primUBitarrayGetItem = gPrim "bitarrayD_U__getitem__"
+primUBitarraySetItem = gPrim "bitarrayD_U__setitem__"
+primUBitarrayLen    = gPrim "bitarrayD_U__len"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -277,6 +280,9 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUArraySetInt, NDef scUArraySetInt NoDec Nothing),
                             (noq primUArraySetFloat, NDef scUArraySetFloat NoDec Nothing),
                             (noq primUArrayLen, NDef scUArrayLen NoDec Nothing),
+                            (noq primUBitarrayGetItem, NDef scUBitarrayGetItem NoDec Nothing),
+                            (noq primUBitarraySetItem, NDef scUBitarraySetItem NoDec Nothing),
+                            (noq primUBitarrayLen, NDef scUBitarrayLen NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -654,6 +660,12 @@ scUArraySetFloat    = monotype $ tFun fxMut (posRow (tArray tFloat) (posRow tInt
 
 scUArrayLen         = tSchema [qbind a] $ tFun fxPure (posRow (tArray (tVar a)) posNil) kwdNil tInt
   where a           = TV KType $ name "A"
+
+scUBitarrayGetItem  = monotype $ tFun fxPure (posRow tBitarray (posRow tInt posNil)) kwdNil tBool
+
+scUBitarraySetItem  = monotype $ tFun fxMut (posRow tBitarray (posRow tInt (posRow tBool posNil))) kwdNil tNone
+
+scUBitarrayLen      = monotype $ tFun fxPure (posRow tBitarray posNil) kwdNil tInt
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)
