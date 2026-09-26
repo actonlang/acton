@@ -204,10 +204,16 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
 }
 
 xmlQ_Node xmlQ_decode(B_str data) {
+    // Parse with a context of our own and take a failure's error from it:
+    // the context holds this parse's last diagnostic, whatever else libxml2
+    // does. For an empty document that is "Document is empty".
+    xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
+    if (!ctxt)
+        RAISE(xmlQ_XmlParseError, to$str("XML parse error"), NULL, NULL);
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
-    xmlDocPtr doc = xmlReadMemory((char *)data->str, data->nbytes, NULL, NULL, XML_PARSE_NOERROR);
+    xmlDocPtr doc = xmlCtxtReadMemory(ctxt, (char *)data->str, data->nbytes, NULL, NULL, XML_PARSE_NOERROR);
     if (!doc) {
-        xmlErrorPtr err = xmlGetLastError();
+        xmlErrorPtr err = xmlCtxtGetLastError(ctxt);
         B_str errmsg;
         B_int line = NULL;
         B_int column = NULL;
@@ -240,8 +246,10 @@ xmlQ_Node xmlQ_decode(B_str data) {
         } else {
             errmsg = to$str("XML parse error");
         }
+        xmlFreeParserCtxt(ctxt);
         RAISE(xmlQ_XmlParseError, errmsg, line, column);
     }
+    xmlFreeParserCtxt(ctxt);
     xmlNodePtr root = xmlDocGetRootElement(doc);
     if (!root) {
         xmlFreeDoc(doc);

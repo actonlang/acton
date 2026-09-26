@@ -112,6 +112,16 @@ def _test_xml_declared_encoding():
     testing.assertEqual(len(d.children), 200)
     testing.assertEqual(xml.encode(d), s)
 
+def _test_xml_empty_document():
+    try:
+        xml.decode("")
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "Document is empty")
+        testing.assertEqual(e.line, 1)
+        testing.assertEqual(e.column, 1)
+    else:
+        testing.error("Expected exception on empty document")
+
 actor _XmlErrorDecoder(doc: str, expected: str, n: int, done: action(int) -> None):
     """Decode doc n times, count results other than the expected error"""
     def run():
@@ -137,6 +147,7 @@ actor _test_xml_concurrent_parse_errors(t: testing.AsyncT):
         ("<a/>junk", "Extra content at the end of the document @1:5"),
         ("   ", "Start tag expected, '<' not found @1:4"),
         (_item_list(1000)[:-7], "Premature end of data in tag list line 1 @1:41787"),
+        ("", "Document is empty @1:1"),
     ]
     var pending = len(cases)
     var wrong = 0
