@@ -20,6 +20,7 @@ actor main(env):
         ints: array[int] = array(4)
         check(len(ints) == 4, "wrong int array length")
         check(ints[0] == 0 and ints[3] == 0, "int array is not zero initialized")
+        check(str(ints) == "[|0, 0, 0, 0|]", "wrong int array string")
 
         ints[0] = -7
         ints[3] = 40
@@ -27,6 +28,11 @@ actor main(env):
         generic_set(ints, 1, 17)
         check(ints[0] == -7 and ints[3] == 42, "int array mutation failed")
         check(generic_get(ints, 1) == 17, "generic int array access failed")
+        check(repr(ints) == "[|-7, 17, 0, 42|]", "wrong int array repr")
+
+        filled_ints: array[int] = array(4, -9)
+        check(filled_ints[0] == -9 and filled_ints[3] == -9,
+              "int array fill failed")
 
         floats: array[float] = array(3)
         check(len(floats) == 3, "wrong float array length")
@@ -35,6 +41,16 @@ actor main(env):
         check(floats[1] == 3.25, "float array mutation failed")
         generic_set(floats, 2, -1.5)
         check(generic_get(floats, 2) == -1.5, "generic float array access failed")
+
+        filled_floats: array[float] = array(3, 1.25)
+        check(filled_floats[0] == 1.25 and filled_floats[2] == 1.25,
+              "float array fill failed")
+        check(str(filled_floats) == "[|1.25, 1.25, 1.25|]",
+              "wrong float array string")
+
+        empty: array[int] = array(0, 7)
+        check(str(empty) == "[||]" and repr(empty) == "[||]",
+              "wrong empty array representation")
 
         expect_index_error(ints, -1)
         expect_index_error(ints, 4)

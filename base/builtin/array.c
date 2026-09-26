@@ -8,7 +8,8 @@ static enum B_array_kind B_array_kind_from_witness(B_ArrayElement wit) {
     return B_ARRAY_INT; // unreachable; keeps conservative C compilers happy
 }
 
-static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t length) {
+static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t length,
+                                 $WORD initial) {
     if (length < 0)
         $RAISE((B_BaseException)$NEW(B_ValueError,
                                      to$str("array length must be non-negative")));
@@ -25,7 +26,19 @@ static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t l
 
     size_t nbytes = (size_t)length * sizeof(uint64_t);
     self->data = acton_malloc_atomic(nbytes);
-    memset(self->data, 0, nbytes);
+    if (initial == B_None) {
+        memset(self->data, 0, nbytes);
+    } else if (kind == B_ARRAY_INT) {
+        int64_t value = fromB_int((B_int)initial);
+        int64_t *data = self->data;
+        for (int64_t i = 0; i < length; i++)
+            data[i] = value;
+    } else {
+        double value = fromB_float((B_float)initial);
+        double *data = self->data;
+        for (int64_t i = 0; i < length; i++)
+            data[i] = value;
+    }
 }
 
 static int64_t B_array_checked_index(B_array self, int64_t index) {
@@ -35,15 +48,16 @@ static int64_t B_array_checked_index(B_array self, int64_t index) {
     return index;
 }
 
-B_array B_arrayG_new(B_ArrayElement wit, int64_t length) {
+B_array B_arrayG_new(B_ArrayElement wit, int64_t length, $WORD initial) {
     B_array self = acton_malloc(sizeof(struct B_array));
     self->$class = &B_arrayG_methods;
-    B_array_init_storage(self, B_array_kind_from_witness(wit), length);
+    B_array_init_storage(self, B_array_kind_from_witness(wit), length, initial);
     return self;
 }
 
-B_NoneType B_arrayD___init__(B_array self, B_ArrayElement wit, int64_t length) {
-    B_array_init_storage(self, B_array_kind_from_witness(wit), length);
+B_NoneType B_arrayD___init__(B_array self, B_ArrayElement wit, int64_t length,
+                            $WORD initial) {
+    B_array_init_storage(self, B_array_kind_from_witness(wit), length, initial);
     return B_None;
 }
 
@@ -52,7 +66,23 @@ bool B_arrayD___bool__(B_array self) {
 }
 
 B_str B_arrayD___str__(B_array self) {
-    return B_objectD___str__((B_object)self);
+    if (self->length > INT_MAX)
+        $RAISE((B_BaseException)$NEW(B_MemoryError,
+                                     to$str("array is too large to represent")));
+
+    B_list parts = B_listD_new((int)self->length);
+    if (self->kind == B_ARRAY_INT) {
+        int64_t *data = self->data;
+        for (int64_t i = 0; i < self->length; i++)
+            parts->data[parts->length++] = $FORMAT("%lld", data[i]);
+    } else {
+        double *data = self->data;
+        for (int64_t i = 0; i < self->length; i++)
+            parts->data[parts->length++] = $FORMAT("%g", data[i]);
+    }
+
+    B_str bracketed = B_strD_join_par('[', parts, ']');
+    return $FORMAT("[|%.*s|]", bracketed->nbytes - 2, bracketed->str + 1);
 }
 
 B_str B_arrayD___repr__(B_array self) {
@@ -141,7 +171,7 @@ B_array B_arrayD___deserialize__(B_array self, $Serial$state state) {
                                      to$str("invalid serialized array")));
 
     self->$class = &B_arrayG_methods;
-    B_array_init_storage(self, kind, length);
+    B_array_init_storage(self, kind, length, B_None);
     if (length > 0)
         memcpy(self->data, &row->blob[2], (size_t)length * sizeof(uint64_t));
     return self;

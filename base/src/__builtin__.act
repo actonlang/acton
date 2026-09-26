@@ -581,7 +581,7 @@ protocol ArrayElement:
     pass
 
 class array[A(ArrayElement)] (object):
-    def __init__(self, length: int) -> None:
+    def __init__(self, length: int, initial: ?A=None) -> None:
         NotImplemented
     def __len__(self) -> int:
         NotImplemented
