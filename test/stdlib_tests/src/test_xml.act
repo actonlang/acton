@@ -112,6 +112,48 @@ def _test_xml_declared_encoding():
     testing.assertEqual(len(d.children), 200)
     testing.assertEqual(xml.encode(d), s)
 
+actor _XmlErrorDecoder(doc: str, expected: str, n: int, done: action(int) -> None):
+    """Decode doc n times, count results other than the expected error"""
+    def run():
+        wrong = 0
+        for i in range(n):
+            try:
+                xml.decode(doc)
+                wrong += 1
+            except xml.XmlParseError as e:
+                if e.error_message + " @" + str(e.line) + ":" + str(e.column) != expected:
+                    wrong += 1
+            except Exception:
+                wrong += 1
+        done(wrong)
+
+actor _test_xml_concurrent_parse_errors(t: testing.AsyncT):
+    """Actors decoding invalid documents at the same time each get their own error"""
+    cases = [
+        ("<a>garbage", "Premature end of data in tag a line 1 @1:11"),
+        ("<a>\n  <b>\n  </c>\n</a>", "Opening and ending tag mismatch: b line 2 and c @3:7"),
+        ("<a>\n<b x=1/>\n</a>", "Couldn't find end of Start Tag b line 2 @2:6"),
+        ('<r>\n\n\n<e k="1" k="2"/></r>', "Attribute k redefined @4:15"),
+        ("<a/>junk", "Extra content at the end of the document @1:5"),
+        ("   ", "Start tag expected, '<' not found @1:4"),
+        (_item_list(1000)[:-7], "Premature end of data in tag list line 1 @1:41787"),
+    ]
+    var pending = len(cases)
+    var wrong = 0
+
+    def done(w: int):
+        pending -= 1
+        wrong += w
+        if pending == 0:
+            if wrong == 0:
+                t.success()
+            else:
+                t.failure(AssertionError(str(wrong) + " decodes raised the wrong error"))
+
+    for c in cases:
+        d = _XmlErrorDecoder(c.0, c.1, 300, done)
+        d.run()
+
 def _test_xml_unsupported_node():
     """A node type that xml.Node cannot represent raises XmlParseError"""
     try:

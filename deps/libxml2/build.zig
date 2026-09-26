@@ -75,6 +75,13 @@ pub fn build(b: *std.Build) void {
         "-DLIBXML_VERSION_STRING=\"" ++ libxml_version ++ "\"",
         "-DLIBXML_VERSION_EXTRA=",
     }) catch unreachable;
+    // Acton parses XML on several worker threads (on Windows the RTS runs a
+    // single thread). Thread support gives each thread its own copy of
+    // libxml2's global state, such as the last-error record that every
+    // parser diagnostic rewrites, and locks its one-time initialisation.
+    if (t.os.tag != .windows) {
+        flags.append(b.allocator, "-DLIBXML_THREAD_ENABLED") catch unreachable;
+    }
 
     const source_files = [_][]const u8{
         "buf.c",
