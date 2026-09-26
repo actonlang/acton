@@ -296,6 +296,60 @@ def test_bytearray_hex():
     print("bytearray.hex(): {result}")
     return result == "deadbeef"
 
+def test_bytearray_lower_upper():
+    # Only ASCII letters change case, all other bytes are copied unchanged
+    rest = bytes([0xc4, 0xe4, 0xd6, 0xf6, 0, 0x7f, 0xff])
+    source = bytearray(b"Hello, World! 123 " * 10 + rest)
+    lower = source.lower()
+    upper = source.upper()
+    print("bytearray lower: {lower}")
+    print("bytearray upper: {upper}")
+    return (lower == bytearray(b"hello, world! 123 " * 10 + rest)
+            and upper == bytearray(b"HELLO, WORLD! 123 " * 10 + rest)
+            and bytearray(b"").lower() == bytearray(b"")
+            and bytearray(b"").upper() == bytearray(b""))
+
+def test_bytearray_capitalize():
+    source = bytearray(bytes([0xe4]) + b"ABC dEF")
+    print("bytearray capitalize: {source.capitalize()}")
+    return (bytearray(b"hello WORLD").capitalize() == bytearray(b"Hello world")
+            and source.capitalize() == bytearray(bytes([0xe4]) + b"abc def"))
+
+def test_bytearray_isupper():
+    print("bytearray isupper")
+    return (bytearray(b"ABC").isupper() and bytearray(b"A1 B!").isupper()
+            and not bytearray(b"AbC").isupper() and not bytearray(b"123").isupper()
+            and not bytearray(b"").isupper() and not bytearray(bytes([0xc4])).isupper())
+
+def test_bytearray_expandtabs():
+    # bytearray has no encoding, so every byte takes one column
+    high = bytearray(bytes([0xe0, 0x41, 0x09, 0x42]))
+    print("bytearray expandtabs: {high.expandtabs(4)}")
+    return (bytearray(b"a\tb").expandtabs(4) == bytearray(b"a   b")
+            and bytearray(b"ab\ncd\te\rf\tg").expandtabs(4) == bytearray(b"ab\ncd  e\rf   g")
+            and bytearray(b"\t").expandtabs(0) == bytearray(b" ")
+            and bytearray(b"").expandtabs(4) == bytearray(b"")
+            and high.expandtabs(4) == bytearray(bytes([0xe0, 0x41, 0x20, 0x20, 0x42])))
+
+def test_bytearray_expandtabs_high_bytes():
+    # Bytes from 0xc0 up used to be copied as UTF-8 sequences, which read
+    # past the data and wrote past the result buffer on the stack
+    source = bytearray(bytes([0xf0, 0xf0, 0xf0, 0xf0]) * 4096)
+    result = source.expandtabs(1)
+    print("bytearray expandtabs of 0xf0 bytes: {len(result)} bytes")
+    return result == source
+
+def test_bytearray_expandtabs_default():
+    result = bytearray(b"a\tb").expandtabs()
+    print("bytearray expandtabs(): {result}")
+    return result == bytearray(b"a       b")
+
+def test_bytearray_expandtabs_wide():
+    # The result is as long as the input, whatever the tab size
+    result = bytearray(b"x" * 100).expandtabs(1000000)
+    print("bytearray expandtabs(1000000) without tabs: {len(result)} bytes")
+    return result == bytearray(b"x" * 100)
+
 def test_bytearray_from_hex():
     result = bytearray.from_hex("deadbeef").hex()
     print("bytearray.from_hex('deadbeef').hex(): {result}")
@@ -356,6 +410,13 @@ tests = {
     "test_bytearray_endswith_nul": test_bytearray_endswith_nul,
     "test_bytearray_hex": test_bytearray_hex,
     "test_bytearray_from_hex": test_bytearray_from_hex,
+    "test_bytearray_lower_upper": test_bytearray_lower_upper,
+    "test_bytearray_capitalize": test_bytearray_capitalize,
+    "test_bytearray_isupper": test_bytearray_isupper,
+    "test_bytearray_expandtabs": test_bytearray_expandtabs,
+    "test_bytearray_expandtabs_high_bytes": test_bytearray_expandtabs_high_bytes,
+    "test_bytearray_expandtabs_default": test_bytearray_expandtabs_default,
+    "test_bytearray_expandtabs_wide": test_bytearray_expandtabs_wide,
 }
 
 actor main(env):
