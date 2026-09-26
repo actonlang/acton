@@ -43,6 +43,13 @@ double mathQ_acosh(double x) {
 double mathQ_atanh(double x) {
   return atanh(x);
 }
+double mathQ_ldexp(double x, int64_t exp) {
+  if (exp > (int64_t)INT_MAX || exp < (int64_t)INT_MIN) {
+    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("Exponent out of valid range for ldexp: %lld", (long long)exp))));
+  }
+
+  return ldexp(x, (int)exp);
+}
 
 void mathQ___ext_init__() {
     //NOP
