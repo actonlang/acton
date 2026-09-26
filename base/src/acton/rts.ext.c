@@ -57,6 +57,7 @@ struct acton_gc_info {
     GC_word free_space_divisor;
     int full_frequency;
     GC_word heap_growth_divisor;
+    GC_word alloc_budget_percent;
 };
 
 static void *GC_CALLBACK read_gc_info(void *data) {
@@ -78,6 +79,7 @@ static void *GC_CALLBACK read_gc_info(void *data) {
     info->free_space_divisor = GC_get_free_space_divisor();
     info->full_frequency = GC_get_full_freq();
     info->heap_growth_divisor = GC_get_heap_growth_divisor();
+    info->alloc_budget_percent = GC_get_alloc_budget_percent();
     return NULL;
 }
 
@@ -121,13 +123,13 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(13,
+    return $NEWTUPLE(14,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(info.stats.markers_m1 + 1), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
-        toB_u64(info.heap_growth_divisor),
+        toB_u64(info.heap_growth_divisor), toB_u64(info.alloc_budget_percent),
         toB_u64(info.stats.heapsize_full),
         toB_u64(info.stats.free_bytes_full),
         toB_u64(info.stats.unmapped_bytes));

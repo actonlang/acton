@@ -2865,6 +2865,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
                    , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
                    , "        .gc_heap_growth_divisor = gc_heap_growth_divisor,"
+                   , "        .gc_alloc_budget_percent = gc_alloc_budget_percent,"
                    , "        .gc_disable_thp = gc_disable_thp,"
                    ]
                    ++ moduleOpts
