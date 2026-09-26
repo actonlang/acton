@@ -80,6 +80,7 @@ pub fn build(b: *std.Build) void {
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
+    const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -91,6 +92,14 @@ pub fn build(b: *std.Build) void {
     const gc_required_vdb = gcRequiredVdb(target.result, gc_dirty_tracking_backend);
     if (gc_page_hash_table_log2 > 30) {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
+        std.process.exit(1);
+    }
+    if (gc_block_size != 0 and (gc_block_size < 4096 or gc_block_size > 65536 or !std.math.isPowerOfTwo(gc_block_size))) {
+        std.log.err("gc_block_size must be a power of two from 4096 to 65536, or 0 for the default", .{});
+        std.process.exit(1);
+    }
+    if (gc_block_size > 32768 and gc_mark_bit_per_object) {
+        std.log.err("gc_block_size above 32768 is not supported with gc_mark_bit_per_object", .{});
         std.process.exit(1);
     }
     // Must match the collector options in backend/build.zig, so that both
@@ -120,6 +129,7 @@ pub fn build(b: *std.Build) void {
         .page_hash_table_log2 = gc_page_hash_table_log2,
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
+        .block_size = gc_block_size,
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -139,15 +149,16 @@ pub fn build(b: *std.Build) void {
         \\extern "C" {{
         \\#endif
         \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
+        \\GC_API unsigned GC_CALL acton_gc_get_block_size(void);
         \\#ifdef __cplusplus
         \\}}
         \\#endif
         \\#endif
         \\
     , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
-    // The effective page-hash size depends on the collector defaults and its
-    // configuration macros, so read it from the collector's private header,
-    // compiled with the C flags of libgc itself.
+    // The effective page-hash and block sizes depend on the collector defaults
+    // and its configuration macros, so read them from the collector's private
+    // header, compiled with the C flags of libgc itself.
     const gc_config = b.addObject(.{
         .name = "acton_gc_config",
         .root_module = b.createModule(.{
@@ -162,6 +173,9 @@ pub fn build(b: *std.Build) void {
             \\#include "private/gc_priv.h"
             \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void) {
             \\    return LOG_PHT_ENTRIES;
+            \\}
+            \\GC_API unsigned GC_CALL acton_gc_get_block_size(void) {
+            \\    return HBLKSIZE;
             \\}
             \\
         ),
@@ -423,6 +437,7 @@ pub fn build(b: *std.Build) void {
             .gc_page_hash_table_log2 = gc_page_hash_table_log2,
             .gc_heap_growth_divisor = gc_heap_growth_divisor,
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
+            .gc_block_size = gc_block_size,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }

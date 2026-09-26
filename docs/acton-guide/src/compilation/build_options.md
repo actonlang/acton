@@ -230,6 +230,36 @@ collections, in bytes with an optional `K`, `M` or `G` suffix. This is a build
 setting shared by the application and its dependencies, including database
 support.
 
+## GC heap block size
+
+The collector manages its heap in blocks. Each block holds objects of one size,
+and a thread refilling its free list of a size takes the allocator lock once
+per block. Larger blocks mean fewer lock acquisitions and fewer blocks to visit
+in each collection:
+
+```python
+build_options = {
+    "gc_block_size": "16384",
+}
+```
+
+Valid values are powers of two from `"4096"` to `"65536"`; `"0"` (the default)
+keeps the collector's 4 KiB blocks. Heap growth steps stay the same in bytes.
+On Apple silicon, 16 KiB is the page size. On the `gc_heap` benchmark on macOS,
+16 KiB blocks used 13% less CPU time with the same heap size, and 64 KiB blocks
+13-18% less.
+
+Objects larger than half a block get whole blocks, so larger blocks round
+large objects up more coarsely: with 64 KiB blocks, a 40 KiB array occupies
+64 KiB. A conservative false pointer into a free block also keeps more memory
+from reuse. When blocks are larger than pages, incremental and generational
+collection track dirty memory per block instead of per page. Measure memory
+use as well as time before choosing a size.
+
+`"65536"` cannot be combined with `gc_mark_bit_per_object`. This is a build
+setting shared by the application and its dependencies, including database
+support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -250,12 +280,12 @@ using the same `soft_dirty` and `userfaultfd` names. In ordinary mode the active
 backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
-The result also reports `page_hash_table_log2`, available `markers` (including
-the initiating thread), `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`,
-`heap_size`, `free_bytes` and `unmapped_bytes`. The pause
-target is `None` for ordinary and unlimited generational collection, and is
-not a guaranteed maximum pause. Available markers need not participate in
+The result also reports `page_hash_table_log2`, `block_size`, available
+`markers` (including the initiating thread), `pause_target_ms`,
+`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
+`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
+pause target is `None` for ordinary and unlimited generational collection, and
+is not a guaranteed maximum pause. Available markers need not participate in
 every incremental marking attempt.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped

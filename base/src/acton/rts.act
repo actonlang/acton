@@ -31,7 +31,7 @@ def get_gc_time(cap: SysCap) -> (total: u64, mark: u64, sweep: u64):
     """Get GC time in milliseconds"""
     NotImplemented
 
-def get_gc_info(cap: SysCap) -> (mode: str, configured_backend: str, backend: str, supported_backends: list[str], page_hash_table_log2: u64, markers: u64, pause_target_ms: ?float, free_space_divisor: u64, full_frequency: u64, heap_growth_divisor: u64, alloc_budget_percent: u64, heap_size: u64, free_bytes: u64, unmapped_bytes: u64):
+def get_gc_info(cap: SysCap) -> (mode: str, configured_backend: str, backend: str, supported_backends: list[str], page_hash_table_log2: u64, block_size: u64, markers: u64, pause_target_ms: ?float, free_space_divisor: u64, full_frequency: u64, heap_growth_divisor: u64, alloc_budget_percent: u64, heap_size: u64, free_bytes: u64, unmapped_bytes: u64):
     """Read the collector's build configuration and current policy and heap.
 
     mode is ordinary, generational or incremental. configured_backend is the
@@ -40,8 +40,9 @@ def get_gc_info(cap: SysCap) -> (mode: str, configured_backend: str, backend: st
     not guarantee that the running kernel supports them.
 
     page_hash_table_log2 describes 2**n page-hash bits per table, used by dirty
-    tracking and blacklisting. markers includes the initiating thread and is
-    the available marking parallelism, not the number active in every slice.
+    tracking and blacklisting. block_size is the heap block size in bytes.
+    markers includes the initiating thread and is the available marking
+    parallelism, not the number active in every slice.
     pause_target_ms is a best-effort marking time target, including any
     fractional millisecond, or None for ordinary and generational collection.
     full_frequency is the number of partial collections between full ones;

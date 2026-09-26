@@ -6,6 +6,8 @@ actor main(env):
     assert before.mode in ["ordinary", "generational", "incremental"]
     assert before.configured_backend in ["auto", "soft_dirty", "userfaultfd"]
     assert before.page_hash_table_log2 > 0
+    assert before.block_size >= 4096
+    assert (before.block_size & (before.block_size - 1)) == 0
     assert before.markers >= 1
     assert before.free_space_divisor > 0
     if before.mode == "ordinary":
@@ -29,6 +31,7 @@ actor main(env):
         assert info.backend == before.backend
         assert info.supported_backends == before.supported_backends
         assert info.page_hash_table_log2 == before.page_hash_table_log2
+        assert info.block_size == before.block_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
         assert info.alloc_budget_percent == before.alloc_budget_percent
         assert info.heap_size > 0
