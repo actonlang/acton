@@ -96,6 +96,19 @@ def test_bytearray_partition_new_objects():
             and p.0 == bytearray(b"a") and p.2 == bytearray(b"c")
             and r.0 == bytearray(b"a") and r.2 == bytearray(b"c"))
 
+def test_bytearray_del_slice_steps():
+    a = bytearray(b"abcdef")
+    del a[::-2]
+    b = bytearray(b"abcdef")
+    del b[4:1:-1]
+    c = bytearray(b"abcdef")
+    del c[::-1]
+    d = bytearray(b"abcdef")
+    del d[1::2]
+    print("del with slice steps: {a} {b} {c} {d}")
+    return (a == bytearray(b"ace") and b == bytearray(b"abf")
+            and c == bytearray(b"") and d == bytearray(b"ace"))
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -335,6 +348,7 @@ tests = {
     "test_bytearray_str_quotes": test_bytearray_str_quotes,
     "test_bytearray_split_sep": test_bytearray_split_sep,
     "test_bytearray_partition_new_objects": test_bytearray_partition_new_objects,
+    "test_bytearray_del_slice_steps": test_bytearray_del_slice_steps,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

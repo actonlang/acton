@@ -2833,6 +2833,12 @@ B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_by
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (slen==0) return B_None;
+    if (step < 0) {
+        // The loop below needs a positive step: delete the same bytes,
+        // taking them in increasing order
+        start += (slen-1)*step;
+        step = -step;
+    }
     unsigned char *p = self->str + start;
     for (int i=0; i<slen-1; i++) {
         memmove(p,p+i+1,step-1);
