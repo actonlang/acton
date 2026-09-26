@@ -2220,6 +2220,22 @@ main = do
         [ "$dictD_U__getitem__"
         , "B_int i"
         ]
+      testCodeGenContains env0 "raw_array"
+        [ "B_ArrayElementD_intG_witness;"
+        , "B_arrayG_new(W_make_int_array_"
+        , "$arrayD_U__getitem_int(xs, i)"
+        , "$arrayD_U__setitem_int(xs, i, value)"
+        , "$arrayD_U__getitem_int(xs, i) + value"
+        , "$arrayD_U__len(xs)"
+        , "$arrayD_U__getitem_float(xs, i)"
+        , "$arrayD_U__setitem_float(xs, i, value)"
+        ]
+      testCodeGenDoesNotContain env0 "raw_array"
+        [ "B_arrayD___getitem__(xs, i)"
+        , "B_arrayD___setitem__(xs, i"
+        , "toB_int(value)"
+        , "toB_float(value)"
+        ]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do

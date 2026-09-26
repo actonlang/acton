@@ -214,9 +214,20 @@ rawBuiltinMethod env attr es@(recv:_)
                                             -> Just $ tApp (eQVar primUListDelItem) [t]
                                           | q == qnIList, n == getitemKW
                                             -> Just $ tApp (eQVar primUIListGetItem) [t]
+                                          | q == qnArray, t == tInt, n == getitemKW
+                                            -> Just $ eQVar primUArrayGetInt
+                                          | q == qnArray, t == tFloat, n == getitemKW
+                                            -> Just $ eQVar primUArrayGetFloat
                                         (TCon _ (TC q [t]), n, [_, _, _])
                                           | q == qnList, n == setitemKW
                                             -> Just $ tApp (eQVar primUListSetItem) [t]
+                                          | q == qnArray, t == tInt, n == setitemKW
+                                            -> Just $ eQVar primUArraySetInt
+                                          | q == qnArray, t == tFloat, n == setitemKW
+                                            -> Just $ eQVar primUArraySetFloat
+                                        (TCon _ (TC q [t]), n, [_])
+                                          | q == qnArray, n == lenKW
+                                            -> Just $ tApp (eQVar primUArrayLen) [t]
                                         (TCon _ (TC q []), n, [_, _])
                                           | q == qnStr, n == getitemKW
                                             -> Just $ eQVar primUStrGetItem
@@ -657,6 +668,7 @@ instance Boxing Expr where
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
                                            | attr == fromatomKW      -> boxingFromAtom w es ts rt pr rest
+                                           | attr `elem` augopKWs    -> boxingBinop w (incr2bin attr) es ts rt pr rest
                                            | attr `elem` binopKWs    -> boxingBinop w attr es ts rt pr rest  -- rest indicates "result type", not any form of remainder
                                            | attr `elem` unopKWs     -> boxingUnop w attr es ts rt pr rest
                                            | attr `elem` eqordKWs    -> boxingCompop w attr es ts rt pr rest
@@ -718,6 +730,16 @@ instance Boxing Expr where
                                          (ws2,p1) <- boxing env p
                                          return (HashSet.union ws1 ws2, eCallP f1 (fixargs env p1 r))
         where  TFun _ _ r _ _       = rtypeOfFun env f
+    -- Arrays resolve indexing directly to class methods (they intentionally do
+    -- not implement Indexed, whose contract also includes deletion).  Give
+    -- those direct calls the same raw-worker lowering used for statically
+    -- resolved builtin protocol calls above.
+    boxing env (Call _ (Dot _ recv attr) p KwdNil)
+      | Just _ <- rawBuiltinMethod env attr (recv : posargs p)
+                                    = do (ws,p1) <- boxing env (PosArg recv p)
+                                         case rawBuiltinMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw builtin method lost during boxing"
     boxing env (Call l (Dot _ e n) PosNil KwdNil)
       | n == boolKW,
         Just rt <- unboxedRepType (typeOf env e)

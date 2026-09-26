@@ -91,8 +91,9 @@
 #define ISET_ID 70
 #define ILIST_ID 71
 #define IDICT_ID 72
+#define ARRAY_ID 73
 
-#define PREASSIGNED 73
+#define PREASSIGNED 74
 
 
 /*
