@@ -851,7 +851,7 @@ instance InfEnv Stmt where
       where asgn t0 t e0 e (TgVar n)    = do tryUnify env (locinfo l 40) t0 t
                                              return ( [], sAssign (pVar' n) e )
             asgn t0 t e0 e (TgIndex ix)
-              | Just et <- arrayElementType env t0
+              | Just et <- directIndexElementType env t0
                                         = do tryUnify env (locinfo l 41) et t
                                              (cs,ix) <- inferSub env tInt ix
                                              return (cs, sExpr $ eCall (eDot e0 setitemKW) [ix,e])
@@ -897,7 +897,7 @@ instance InfEnv Stmt where
             aug t0 t x f e (TgVar _)    = do tryUnify env (locinfo l 46) t0 t
                                              return ( [], sAssign (pVar' x) $ f [eVar x, e] )
             aug t0 t x f e (TgIndex ix)
-              | Just et <- arrayElementType env t0
+              | Just et <- directIndexElementType env t0
                                         = do tryUnify env (locinfo l 47) et t
                                              (cs,ix) <- inferSub env tInt ix
                                              let get = eCall (eDot (eVar x) getitemKW) [ix]
@@ -927,12 +927,13 @@ mkvar t e                               = do x <- newTmp
 
 data Tg                                 = TgVar Name | TgIndex Expr | TgSlice Sliz | TgDot Name
 
--- Arrays do not implement the resizable Indexed protocol, since that would
--- also promise __delitem__.  Index reads and writes therefore resolve directly
--- to array's class methods.
-arrayElementType env t                  = case unalias env t of
-                                             TCon _ (TC q [et]) | q == qnArray -> Just et
-                                             _                                -> Nothing
+-- Fixed-size arrays do not implement the resizable Indexed protocol, since
+-- that would also promise __delitem__. Index reads and writes therefore
+-- resolve directly to their concrete class methods.
+directIndexElementType env t            = case unalias env t of
+                                             TCon _ (TC q [et]) | q == qnArray     -> Just et
+                                             TCon _ (TC q [])   | q == qnBitarray  -> Just tBool
+                                             _                                    -> Nothing
 
 infTarg env e@(Var l (NoQ n))           = case findName n env of
                                              NReserved ->
@@ -2033,7 +2034,7 @@ instance Infer Expr where
                                              return (Cast (locinfo2 75 e) env fxProc fx :
                                                      cs1, t0, Await l e')
     infer env (Index l e ix)            = do (cs2,t,e') <- infer env e
-                                             case arrayElementType env t of
+                                             case directIndexElementType env t of
                                                Just et -> do (cs1,ix') <- inferSub env tInt ix
                                                              return (cs1++cs2, et, eCall (eDot e' getitemKW) [ix'])
                                                Nothing -> do ti <- newUnivar env
@@ -2349,7 +2350,7 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                              (cs1,t,e') <- if unwrap && actorSelf env then wrapped l attrUnwrap env cs1 [t] [e'] else pure (cs1,t,e')
                                              (cs2,prow,ps') <- infer env ps
                                              (cs3,krow,ks') <- infer env ks
-                                             case arrayLenCall env e prow ps' ks' of
+                                             case directLenCall env e prow ps' ks' of
                                                Just a  -> return (cs1++cs2++cs3, tInt, eCall (eDot a lenKW) [])
                                                Nothing -> do t0 <- newUnivar env
                                                              fx <- currFX
@@ -2364,10 +2365,10 @@ inferCall env unwrap l e ps ks          = do (cs1,t,e') <- infer env e{eloc = l}
                                                             -- return (Sub (DfltInfo l 837 (Just (Call l e ps ks)) []) w [] t (tFun fx prow krow t0) :
                                                                      cs1++cs2++cs3, t0, Call l (eCall (eVar w) [e']) ps' ks')
 
-arrayLenCall env (Var _ n) (TRow _ _ _ t TNil{}) (PosArg a PosNil) KwdNil
+directLenCall env (Var _ n) (TRow _ _ _ t TNil{}) (PosArg a PosNil) KwdNil
   | unalias env n == qnLen,
-    Just _ <- arrayElementType env t = Just a
-arrayLenCall _ _ _ _ _              = Nothing
+    Just _ <- directIndexElementType env t = Just a
+directLenCall _ _ _ _ _              = Nothing
 
 
 

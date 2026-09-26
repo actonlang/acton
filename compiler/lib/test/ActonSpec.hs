@@ -2236,6 +2236,19 @@ main = do
         , "toB_int(value)"
         , "toB_float(value)"
         ]
+      testCodeGenContains env0 "raw_bitarray"
+        [ "B_bitarrayG_new(n, toB_bool(initial))"
+        , "B_bitarrayG_new(n, B_None)"
+        , "$bitarrayD_U__getitem__(xs, i)"
+        , "$bitarrayD_U__setitem__(xs, i, value)"
+        , "$bitarrayD_U__setitem__(xs, i, (!$bitarrayD_U__getitem__(xs, i)))"
+        , "$bitarrayD_U__len(xs)"
+        ]
+      testCodeGenDoesNotContain env0 "raw_bitarray"
+        [ "xs->$class->__getitem__"
+        , "xs->$class->__setitem__"
+        , "xs->$class->__len__"
+        ]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do

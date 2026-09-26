@@ -1,0 +1,144 @@
+static uint64_t B_bitarray_word_count(int64_t length) {
+    return ((uint64_t)length + 63) / 64;
+}
+
+static uint64_t B_bitarray_tail_mask(int64_t length) {
+    unsigned used = (unsigned)((uint64_t)length & 63);
+    return used == 0 ? UINT64_MAX : (UINT64_C(1) << used) - 1;
+}
+
+static void B_bitarray_init_storage(B_bitarray self, int64_t length, bool initial) {
+    if (length < 0)
+        $RAISE((B_BaseException)$NEW(B_ValueError,
+                                     to$str("bitarray length must be non-negative")));
+
+    uint64_t word_count = B_bitarray_word_count(length);
+    if (word_count > SIZE_MAX / sizeof(uint64_t))
+        $RAISE((B_BaseException)$NEW(B_MemoryError,
+                                     to$str("bitarray is too large")));
+
+    self->length = length;
+    if (word_count == 0) {
+        self->data = NULL;
+        return;
+    }
+
+    size_t nbytes = (size_t)word_count * sizeof(uint64_t);
+    self->data = acton_malloc_atomic(nbytes);
+    memset(self->data, initial ? 0xff : 0, nbytes);
+    if (initial)
+        self->data[word_count - 1] &= B_bitarray_tail_mask(length);
+}
+
+static int64_t B_bitarray_checked_index(B_bitarray self, int64_t index) {
+    if (index < 0 || index >= self->length)
+        $RAISE((B_BaseException)$NEW(B_IndexError, index,
+                                     to$str("bitarray index out of range")));
+    return index;
+}
+
+B_bitarray B_bitarrayG_new(int64_t length, B_bool initial) {
+    B_bitarray self = acton_malloc(sizeof(struct B_bitarray));
+    self->$class = &B_bitarrayG_methods;
+    B_bitarray_init_storage(self, length, initial && initial->val);
+    return self;
+}
+
+B_NoneType B_bitarrayD___init__(B_bitarray self, int64_t length, B_bool initial) {
+    B_bitarray_init_storage(self, length, initial && initial->val);
+    return B_None;
+}
+
+bool B_bitarrayD___bool__(B_bitarray self) {
+    return self->length != 0;
+}
+
+B_str B_bitarrayD___str__(B_bitarray self) {
+    return B_objectD___str__((B_object)self);
+}
+
+B_str B_bitarrayD___repr__(B_bitarray self) {
+    return B_bitarrayD___str__(self);
+}
+
+bool $bitarrayD_U__getitem__(B_bitarray self, int64_t index) {
+    index = B_bitarray_checked_index(self, index);
+    uint64_t word = self->data[(uint64_t)index >> 6];
+    return (word >> ((uint64_t)index & 63)) & UINT64_C(1);
+}
+
+B_NoneType $bitarrayD_U__setitem__(B_bitarray self, int64_t index, bool value) {
+    index = B_bitarray_checked_index(self, index);
+    uint64_t *word = &self->data[(uint64_t)index >> 6];
+    uint64_t mask = UINT64_C(1) << ((uint64_t)index & 63);
+    if (value)
+        *word |= mask;
+    else
+        *word &= ~mask;
+    return B_None;
+}
+
+int64_t $bitarrayD_U__len(B_bitarray self) {
+    return self->length;
+}
+
+int64_t B_bitarrayD___len__(B_bitarray self) {
+    return self->length;
+}
+
+bool B_bitarrayD___getitem__(B_bitarray self, int64_t index) {
+    return $bitarrayD_U__getitem__(self, index);
+}
+
+B_NoneType B_bitarrayD___setitem__(B_bitarray self, int64_t index, bool value) {
+    return $bitarrayD_U__setitem__(self, index, value);
+}
+
+void B_bitarrayD___serialize__(B_bitarray self, $Serial$state state) {
+    uint64_t word_count = B_bitarray_word_count(self->length);
+    if (word_count > INT_MAX - 1)
+        $RAISE((B_BaseException)$NEW(B_ValueError,
+                                     to$str("bitarray is too large to serialize")));
+
+    // BITARRAY_ID is above ITEM_ID, so the generic serializer has already
+    // emitted the object header and installed self in its back-reference table.
+    $ROW row = $add_header(BITARRAY_ID, (int)word_count + 1, state);
+    row->blob[0] = ($WORD)(intptr_t)self->length;
+    if (word_count > 0)
+        memcpy(&row->blob[1], self->data, (size_t)word_count * sizeof(uint64_t));
+}
+
+B_bitarray B_bitarrayD___deserialize__(B_bitarray self, $Serial$state state) {
+    // The generic deserializer consumed the object header before dispatching
+    // here.  Register the object before consuming its packed payload.
+    if (!self) {
+        self = acton_malloc(sizeof(struct B_bitarray));
+        self->$class = &B_bitarrayG_methods;
+        B_dictD_setitem(state->done, (B_Hashable)B_HashableD_intG_witness,
+                        toB_int(state->row_no - 1), self);
+    }
+
+    $ROW row = state->row;
+    if (!row || row->class_id != BITARRAY_ID || row->blob_size < 1)
+        $RAISE((B_BaseException)$NEW(B_ValueError,
+                                     to$str("invalid serialized bitarray")));
+    state->row = row->next;
+    state->row_no++;
+
+    int64_t length = (int64_t)(intptr_t)row->blob[0];
+    if (length < 0)
+        $RAISE((B_BaseException)$NEW(B_ValueError,
+                                     to$str("invalid serialized bitarray")));
+    uint64_t word_count = B_bitarray_word_count(length);
+    if (word_count > INT_MAX - 1 || row->blob_size != (int)word_count + 1)
+        $RAISE((B_BaseException)$NEW(B_ValueError,
+                                     to$str("invalid serialized bitarray")));
+
+    self->$class = &B_bitarrayG_methods;
+    B_bitarray_init_storage(self, length, false);
+    if (word_count > 0) {
+        memcpy(self->data, &row->blob[1], (size_t)word_count * sizeof(uint64_t));
+        self->data[word_count - 1] &= B_bitarray_tail_mask(length);
+    }
+    return self;
+}
