@@ -714,6 +714,45 @@ struct byte_counts byte_count(unsigned char *s, int len) {
     return res;
 }
 
+// bytes and bytearray have no encoding, so case mapping only changes the
+// ASCII letters. ctype toupper/tolower would depend on the C locale.
+static unsigned char ascii_toupper(unsigned char c) {
+    return c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c;
+}
+
+static unsigned char ascii_tolower(unsigned char c) {
+    return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+}
+
+// Tab expansion for bytes and bytearray. Every byte other than tab, newline
+// and carriage return takes one column; newline and carriage return reset
+// the column. Returns the length of the result and, unless out is NULL,
+// writes the result to out.
+static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, unsigned char *out) {
+    int64_t len = 0;
+    int64_t col = 0;
+    for (int i = 0; i < nbytes; i++) {
+        unsigned char c = in[i];
+        if (c == '\t') {
+            int64_t n = tabsize - col % tabsize;
+            if (n > INT_MAX - len)
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("expandtabs: result too long")));
+            if (out)
+                memset(out + len, ' ', n);
+            len += n;
+            col += n;
+        } else {
+            if (len == INT_MAX)
+                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("expandtabs: result too long")));
+            if (out)
+                out[len] = c;
+            len++;
+            col = c == '\n' || c == '\r' ? 0 : col + 1;
+        }
+    }
+    return len;
+}
+
 void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
@@ -1947,9 +1986,9 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
     }
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
-    res->str[0] = toupper(s->str[0]);
+    res->str[0] = ascii_toupper(s->str[0]);
     for (int i=1; i<s->nbytes; i++)
-        res->str[i] = tolower(s->str[i]);
+        res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
 
@@ -2006,50 +2045,19 @@ bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int en
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
+    int stval = fromB_int(st);
     int enval = fromB_int(en);
-    unsigned char *p = &s->str[enval-sub->nbytes];
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    if (enval-stval < sub->nbytes) return false;
+    return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
-    if (s->nbytes == 0) {
-        return toB_bytearray("");
-    }
-    int pos = 0;
-    int expanded = 0;
-    int tabsize = fromB_int(tabsz);
+    int64_t tabsize = tabsz ? fromB_int(tabsz) : 8;
     tabsize = tabsize <= 0 ? 1 : tabsize;
-    unsigned char buffer[tabsize * s->nbytes];
-    unsigned char *p = s->str;
-    unsigned char *q = buffer;
-    for (int i=0; i<s->nbytes; i++) {
-        if (*p == '\t') {
-            int n = tabsize - pos % tabsize;
-            for (int j=0; j < n; j++) {
-                *q++ = ' ';
-            }
-            p++;
-            expanded += n-1;
-            pos+=n;
-        } else if (*p=='\n' || *p == '\r') {
-            *q++ = *p++;
-            pos = 0;
-        } else {
-            for (int j=0; j< byte_length2(*p); j++) {
-                *q++ = *p++;
-                pos++;
-            }
-        }
-    }
+    int len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,s->nbytes+expanded);
-    memcpy(res->str,buffer,s->nbytes+expanded);
+    NEW_UNFILLED_BYTEARRAY(res,len);
+    expandtabs_bytes(s->str, s->nbytes, tabsize, res->str);
     return res;
 }
 
@@ -2229,7 +2237,7 @@ bool B_bytearrayD_isupper(B_bytearray s) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
             return false;
-        if (c >= 'a' && c <= 'z')
+        if (c >= 'A' && c <= 'Z')
             has_upper = true;
     }
     return has_upper;
@@ -2290,7 +2298,7 @@ B_bytearray B_bytearrayD_lower(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
     for (int i=0; i< s->nbytes; i++)
-        res->str[i] = tolower(res->str[i]);
+        res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
 
@@ -2576,7 +2584,7 @@ B_bytearray B_bytearrayD_upper(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
     for (int i=0; i< s->nbytes; i++)
-        res->str[i] = toupper(res->str[i]);
+        res->str[i] = ascii_toupper(s->str[i]);
     return res;
 }
 
@@ -2607,29 +2615,29 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
 bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
     if (a == b)
         return true;
-    return strcmp((char *)a->str,(char *)b->str)==0;
+    return a->nbytes == b->nbytes && memcmp(a->str,b->str,a->nbytes)==0;
 }
 
 bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    if (a == b)
-        return false;
-    return strcmp((char *)a->str,(char *)b->str)!=0;
+    return !B_OrdD_bytearrayD___eq__(wit,a,b);
 }
 
 bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)<0;
+    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int c = memcmp(a->str,b->str,minl);
+    return c<0 || (c==0 && a->nbytes<b->nbytes);
 }
 
 bool B_OrdD_bytearrayD___le__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)<=0;
+    return !B_OrdD_bytearrayD___lt__(wit,b,a);
 }
 
 bool B_OrdD_bytearrayD___gt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)>0;
+    return B_OrdD_bytearrayD___lt__(wit,b,a);
 }
 
 bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)>=0;
+    return !B_OrdD_bytearrayD___lt__(wit,a,b);
 }
 
 // Container
@@ -3073,9 +3081,9 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
     }
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
-    res->str[0] = toupper(s->str[0]);
+    res->str[0] = ascii_toupper(s->str[0]);
     for (int i = 1; i < s->nbytes; i++)
-        res->str[i] = tolower(s->str[i]);
+        res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
 
@@ -3131,49 +3139,22 @@ bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    unsigned char *p = &s->str[fromB_int(en)-sub->nbytes];
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    int stval = fromB_int(st);
+    int enval = fromB_int(en);
+    if (enval-stval < sub->nbytes) return false;
+    return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
     if (s->nbytes == 0) {
         return null_bytes;
     }
-    int pos = 0;
-    int expanded = 0;
-    int tabsize = fromB_int(tabsz);
+    int64_t tabsize = tabsz ? fromB_int(tabsz) : 8;
     tabsize = tabsize <= 0 ? 1 : tabsize;
-    unsigned char buffer[tabsize * s->nbytes];
-    unsigned char *p = s->str;
-    unsigned char *q = buffer;
-    for (int i=0; i<s->nbytes; i++) {
-        if (*p == '\t') {
-            int n = tabsize - pos % tabsize;
-            for (int j=0; j < n; j++) {
-                *q++ = ' ';
-            }
-            p++;
-            expanded += n-1;
-            pos+=n;
-        } else if (*p=='\n' || *p == '\r') {
-            *q++ = *p++;
-            pos = 0;
-        } else {
-            for (int j=0; j< byte_length2(*p); j++) {
-                *q++ = *p++;
-                pos++;
-            }
-        }
-    }
+    int len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes+expanded);
-    memcpy(res->str,buffer,s->nbytes+expanded);
+    NEW_UNFILLED_BYTES(res,len);
+    expandtabs_bytes(s->str, s->nbytes, tabsize, res->str);
     return res;
 }
 
@@ -3356,7 +3337,7 @@ bool B_bytesD_isupper(B_bytes s) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
             return false;
-        if (c >= 'a' && c <= 'z')
+        if (c >= 'A' && c <= 'Z')
             has_upper = true;
     }
     return has_upper;
@@ -3417,7 +3398,7 @@ B_bytes B_bytesD_lower(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
     for (int i=0; i< s->nbytes; i++)
-        res->str[i] = tolower(res->str[i]);
+        res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
 
@@ -3728,7 +3709,7 @@ B_bytes B_bytesD_upper(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
     for (int i=0; i< s->nbytes; i++)
-        res->str[i] = toupper(res->str[i]);
+        res->str[i] = ascii_toupper(s->str[i]);
 
     return res;
 }

@@ -243,6 +243,14 @@ def test_bytes_startswith_longer_prefix():
     print("b'foo'.startswith(b'foobar'): {result}")
     return result == False
 
+def test_bytes_endswith_nul():
+    s = bytes([97, 0])
+    print("bytes endswith with NUL bytes")
+    return (s.endswith(bytes([0]))
+            and s.endswith(bytes([97, 0]))
+            and not s.endswith(bytes([97, 0]), 1)
+            and not b"a".endswith(b"ba"))
+
 def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
     result = b.hex()
@@ -259,6 +267,59 @@ def test_bytes_hex_exact_length():
             print("bytes.hex() included data beyond its {2 * len(source)} hex digits")
             return False
     return True
+
+def test_bytes_lower_upper():
+    # Only ASCII letters change case, all other bytes are copied unchanged
+    rest = bytes([0xc4, 0xe4, 0xd6, 0xf6, 0, 0x7f, 0xff])
+    source = b"Hello, World! 123 " * 10 + rest
+    lower = source.lower()
+    upper = source.upper()
+    print("bytes lower: {lower}")
+    print("bytes upper: {upper}")
+    return (lower == b"hello, world! 123 " * 10 + rest
+            and upper == b"HELLO, WORLD! 123 " * 10 + rest
+            and b"".lower() == b"" and b"".upper() == b"")
+
+def test_bytes_capitalize():
+    source = bytes([0xe4]) + b"ABC dEF"
+    print("bytes capitalize: {source.capitalize()}")
+    return (b"hello WORLD".capitalize() == b"Hello world"
+            and source.capitalize() == bytes([0xe4]) + b"abc def")
+
+def test_bytes_isupper():
+    print("bytes isupper")
+    return (b"ABC".isupper() and b"A1 B!".isupper() and not b"AbC".isupper()
+            and not b"123".isupper() and not b"".isupper()
+            and not bytes([0xc4]).isupper())
+
+def test_bytes_expandtabs():
+    # bytes have no encoding, so every byte takes one column
+    high = bytes([0xe0, 0x41, 0x09, 0x42])
+    print("bytes expandtabs: {high.expandtabs(4)}")
+    return (b"a\tb".expandtabs(4) == b"a   b"
+            and b"ab\ncd\te\rf\tg".expandtabs(4) == b"ab\ncd  e\rf   g"
+            and b"\t".expandtabs(0) == b" "
+            and b"".expandtabs(4) == b""
+            and high.expandtabs(4) == bytes([0xe0, 0x41, 0x20, 0x20, 0x42]))
+
+def test_bytes_expandtabs_high_bytes():
+    # Bytes from 0xc0 up used to be copied as UTF-8 sequences, which read
+    # past the data and wrote past the result buffer on the stack
+    source = bytes([0xf0, 0xf0, 0xf0, 0xf0]) * 4096
+    result = source.expandtabs(1)
+    print("bytes expandtabs of 0xf0 bytes: {len(result)} bytes")
+    return result == source
+
+def test_bytes_expandtabs_default():
+    result = b"a\tb".expandtabs()
+    print("bytes expandtabs(): {result}")
+    return result == b"a       b"
+
+def test_bytes_expandtabs_wide():
+    # The result is as long as the input, whatever the tab size
+    result = (b"x" * 100).expandtabs(1000000)
+    print("bytes expandtabs(1000000) without tabs: {len(result)} bytes")
+    return result == b"x" * 100
 
 def test_bytes_from_hex():
     result = bytes.from_hex("deadbeef").hex()
@@ -312,9 +373,17 @@ tests = {
     "test_bytes_startswith_empty": test_bytes_startswith_empty,
     "test_bytes_startswith_single_char": test_bytes_startswith_single_char,
     "test_bytes_startswith_longer_prefix": test_bytes_startswith_longer_prefix,
+    "test_bytes_endswith_nul": test_bytes_endswith_nul,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_hex_exact_length": test_bytes_hex_exact_length,
     "test_bytes_from_hex": test_bytes_from_hex,
+    "test_bytes_lower_upper": test_bytes_lower_upper,
+    "test_bytes_capitalize": test_bytes_capitalize,
+    "test_bytes_isupper": test_bytes_isupper,
+    "test_bytes_expandtabs": test_bytes_expandtabs,
+    "test_bytes_expandtabs_high_bytes": test_bytes_expandtabs_high_bytes,
+    "test_bytes_expandtabs_default": test_bytes_expandtabs_default,
+    "test_bytes_expandtabs_wide": test_bytes_expandtabs_wide,
 }
 
 actor main(env):
