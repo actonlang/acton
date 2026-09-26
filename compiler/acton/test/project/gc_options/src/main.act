@@ -16,6 +16,7 @@ actor Worker(wid: int, report: action(int, int) -> None):
 actor main(env):
     # The test compares these lines with the settings it built.
     info = acton.rts.get_gc_info(env.syscap)
+    print("block_size=" + str(info.block_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))
 
     var done = 0

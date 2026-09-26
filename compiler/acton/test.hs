@@ -2575,6 +2575,11 @@ gcCollectorOptionTests = testGroup "GC collector options"
         expectSuccess "build tuned collector" =<< build []
         assertReports "tuned collector" tunedReports []
         assertReports "environment overrides tuned settings" overridden overrides
+        forM_ others $ \(selected, reports) -> do
+          writeOptions selected
+          expectSuccess ("build collector with " ++ show selected) =<< build []
+          assertReports ("collector with " ++ show selected) reports []
+        writeOptions tuned
         -- A database build also builds the collector for the backend, which
         -- must use the same settings.
         expectSuccess "database build of tuned collector" =<< build ["--db"]
@@ -2596,17 +2601,25 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "0")]
+    defaults = [("alloc_budget_percent", "0"), ("block_size", "4096")]
     -- Build.act settings and the fields they should report.
-    tuned = [("gc_alloc_budget_percent", "100")]
-    tunedReports = [("alloc_budget_percent", "100")]
+    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384")]
+    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384")]
+    others = [([("gc_block_size", "65536")], [("block_size", "65536")])]
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50")]
     overridden = [("alloc_budget_percent", "50")]
     -- Invalid settings and the option the diagnostic should name.
     invalid =
       [ ([(key, value)], key)
       | (key, value) <- [("gc_alloc_budget_percent", "-1"),
-                        ("gc_alloc_budget_percent", "invalid")]
+                        ("gc_alloc_budget_percent", "invalid"),
+                        ("gc_block_size", "2048"),
+                        ("gc_block_size", "12288"),
+                        ("gc_block_size", "131072"),
+                        ("gc_block_size", "invalid")]
+      ] ++
+      [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
+         "gc_block_size")
       ]
     expectSuccess label (code, out, err) =
       assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
