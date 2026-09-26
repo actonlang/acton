@@ -17,28 +17,26 @@ extern fn acton_malloc_atomic(size: usize) ?*anyopaque;
 pub const bytes = extern struct {
     class: usize,
     nbytes: i32,              // length of str in bytes
-    str: [*]const u8            // str is UTF-8 encoded.
+    str: [*]const u8            // nbytes bytes, not NUL-terminated
 };
 
 // Allocate a bytes object with room for nbytes payload bytes, the same way
 // NEW_UNFILLED_BYTES in builtin/str.c does it: the object comes from
 // acton_malloc (scanned, it holds the str pointer), the payload from
-// acton_malloc_atomic (pointer-free) and is nbytes + 1 long with a
-// terminating NUL at str[nbytes]. bytes methods like decode() and endswith()
-// rely on that terminator. Since at least one byte is always allocated, an
-// empty result gets a real buffer instead of the dangling pointer a
-// zero-length Zig allocation yields. The caller fills str[0..nbytes]; class
-// is normally taken from an existing bytes value.
+// acton_malloc_atomic (pointer-free) and is exactly nbytes long, with no
+// terminator. An empty result still gets a real buffer from the collector
+// instead of the dangling pointer a zero-length Zig allocation yields. The
+// caller fills str[0..nbytes]; class is normally taken from an existing
+// bytes value.
 pub fn new_bytes(class: usize, nbytes: usize) *bytes {
     const res: *bytes = @ptrCast(@alignCast(acton_malloc(@sizeOf(bytes)) orelse {
         raise_MemoryError("OOM while allocating bytes");
         unreachable;
     }));
-    const buf: [*]u8 = @ptrCast(acton_malloc_atomic(nbytes + 1) orelse {
+    const buf: [*]u8 = @ptrCast(acton_malloc_atomic(nbytes) orelse {
         raise_MemoryError("OOM while allocating bytes");
         unreachable;
     });
-    buf[nbytes] = 0;
     res.* = .{
         .class = class,
         .nbytes = @intCast(nbytes),

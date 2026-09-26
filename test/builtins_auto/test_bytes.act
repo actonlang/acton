@@ -356,6 +356,26 @@ def test_bytes_expandtabs_wide():
     print("bytes expandtabs(1000000) without tabs: {len(result)} bytes")
     return result == b"x" * 100
 
+def test_bytes_splitlines_trailing_cr():
+    result = b"a\rb\r".splitlines(True)
+    print("b'a\\rb\\r'.splitlines(True): {result}")
+    return result == [b"a\r", b"b\r"]
+
+def test_bytes_serialize():
+    # Serialization stores exactly nbytes bytes, also for lengths that fill
+    # whole words and for data with NUL bytes
+    for n in [0, 1, 7, 8, 9, 15, 16, 17, 64]:
+        b = bytes([i % 3 for i in range(n)])
+        restored = deserialize(serialize(b))
+        if isinstance(restored, bytes):
+            if restored != b:
+                print("bytes of {n} bytes changed by serialization: {restored}")
+                return False
+        else:
+            print("bytes of {n} bytes did not deserialize as bytes")
+            return False
+    return True
+
 def test_bytes_from_hex():
     result = bytes.from_hex("deadbeef").hex()
     print("bytes.from_hex('deadbeef').hex(): {result}")
@@ -415,6 +435,8 @@ tests = {
     "test_bytes_endswith_nul": test_bytes_endswith_nul,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_hex_exact_length": test_bytes_hex_exact_length,
+    "test_bytes_splitlines_trailing_cr": test_bytes_splitlines_trailing_cr,
+    "test_bytes_serialize": test_bytes_serialize,
     "test_bytes_from_hex": test_bytes_from_hex,
     "test_bytes_lower_upper": test_bytes_lower_upper,
     "test_bytes_capitalize": test_bytes_capitalize,

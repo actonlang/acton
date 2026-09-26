@@ -64,7 +64,7 @@ B_IteratorD_str B_IteratorD_strG_new(B_str);
 struct B_bytearray {
     struct B_bytearrayG_class *$class;
     int nbytes;
-    unsigned char *str;
+    unsigned char *str;      // nbytes bytes, not NUL-terminated
     int capacity;
 };
 
@@ -104,7 +104,7 @@ B_IteratorD_bytearray B_IteratorD_bytearrayG_new(B_bytearray);
 struct B_bytes {
     struct B_bytesG_class *$class;
     int nbytes;
-    unsigned char *str;
+    unsigned char *str;      // nbytes bytes, not NUL-terminated
 };
 
 B_bytes to$bytes(char *str);

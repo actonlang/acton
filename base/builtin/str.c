@@ -331,20 +331,20 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
     (nm)->str = acton_malloc_atomic(nbtes + 1);       \
     (nm)->str[nbtes] = 0
 
+// bytes and bytearray data is nbytes long and not NUL-terminated; NUL is an
+// ordinary byte.
 #define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
     nm = acton_malloc(sizeof(struct B_bytearray));     \
     (nm)->$class = &B_bytearrayG_methods;         \
     (nm)->nbytes = nbtes;                       \
     (nm)->capacity = nbtes;                     \
-    (nm)->str = acton_malloc_atomic(nbtes + 1);       \
-    (nm)->str[nbtes] = 0
+    (nm)->str = acton_malloc_atomic(nbtes)
 
 #define NEW_UNFILLED_BYTES(nm,nbtes)            \
     nm = acton_malloc(sizeof(struct B_bytes));         \
     (nm)->$class = &B_bytesG_methods;             \
     (nm)->nbytes = nbtes;                       \
-    (nm)->str = acton_malloc_atomic(nbtes + 1);              \
-    (nm)->str[nbtes] = 0
+    (nm)->str = acton_malloc_atomic(nbtes)
 
 // Conversion to and from C strings
 
@@ -1897,8 +1897,8 @@ static void expand_bytearray(B_bytearray b,int n) {
     while (newcapacity < b->nbytes+n)
         newcapacity <<= 1;
     unsigned char *newstr = b->str==NULL
-        ? acton_malloc_atomic(newcapacity+1)
-        : acton_realloc(b->str,newcapacity+1);
+        ? acton_malloc_atomic(newcapacity)
+        : acton_realloc(b->str,newcapacity);
     if (newstr == NULL) {
         $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
     }
@@ -1925,8 +1925,8 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     int len = b->nbytes;
     self->nbytes = len;
     self->capacity = len;
-    self->str = acton_malloc_atomic(len+1);
-    memcpy(self->str,b->str,len+1);
+    self->str = acton_malloc_atomic(len);
+    memcpy(self->str,b->str,len);
     return B_None;
 }
 
@@ -1960,11 +1960,11 @@ B_str B_bytearrayD___repr__(B_bytearray s) {
 }
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
-    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+    int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
     long nbytes = (long)str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
-    memcpy(row->blob+1,str->str,nbytes+1);
+    memcpy(row->blob+1,str->str,nbytes);
 }
 
 B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
@@ -1977,8 +1977,9 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
     res->nbytes = (long)nbytes;
-    res->str = acton_malloc_atomic(nbytes+1);
-    memcpy(res->str,this->blob+1,nbytes+1);
+    res->capacity = (long)nbytes;
+    res->str = acton_malloc_atomic(nbytes);
+    memcpy(res->str,this->blob+1,nbytes);
     return res;
 }
 
@@ -2558,7 +2559,7 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
             p++;
         } else {
             B_bytearray line;
-            winend = *p=='\r' && *(p+1)=='\n';
+            winend = *p=='\r' && p+1 < s->str + s->nbytes && *(p+1)=='\n';
             int size = p-q + (keepends->val ? 1 + winend : 0);
             NEW_UNFILLED_BYTEARRAY(line,size);
             memcpy(line->str,q,size);
@@ -2613,7 +2614,7 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
     NEW_UNFILLED_BYTEARRAY(res,wval);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
-    int hassign = (*p=='+' | *p=='-');
+    int hassign = s->nbytes > 0 && (*p=='+' || *p=='-');
     if (hassign) {
         *q = *p;
         q++;
@@ -2773,7 +2774,7 @@ B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray 
     int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
     memmove(self->str + (ix0 + 1),
             self->str + ix0 ,
-            len - ix0 + 1); // +1 to move also terminating '\0'
+            len - ix0);
     self->str[ix0] = (unsigned char)(elem->val & 0xff);
     self->nbytes++;
     return B_None;
@@ -2784,7 +2785,6 @@ B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray 
         $RAISE((B_BaseException)$NEW(B_ValueError,to$str("append for bytearray: value outside [0..255]")));
     expand_bytearray(self,1);
     self->str[self->nbytes++] = (unsigned char)(elem->val & 0xff);
-    self->str[self->nbytes] = '\0';
     return B_None;
 }
 
@@ -2881,7 +2881,6 @@ B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_by
     }
     memmove(p,p+slen,len-1-(start+step*(slen-1)));
     self->nbytes-=slen;
-    self->str[self->nbytes] = '\0';
     return B_None;
 }
 
@@ -3049,8 +3048,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     int len = lst->length;
     self->nbytes = len;
-    self->str = acton_malloc_atomic(len+1);
-    self->str[len] = 0;
+    self->str = acton_malloc_atomic(len);
     for (int i=0; i< len; i++) {
         int n = fromB_int((B_int)lst->data[i]);
         if (0<=n && n <= 255)
@@ -3090,11 +3088,11 @@ B_str B_bytesD___repr__(B_bytes s) {
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
-    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+    int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTES_ID,1+nWords,state);
     long nbytes = (long)str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
-    memcpy(row->blob+1,str->str,nbytes+1);
+    memcpy(row->blob+1,str->str,nbytes);
 }
 
 B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
@@ -3106,8 +3104,8 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
     res->nbytes = (long)nbytes;
-    res->str = acton_malloc_atomic(nbytes+1);
-    memcpy(res->str,this->blob+1,nbytes+1);
+    res->str = acton_malloc_atomic(nbytes);
+    memcpy(res->str,this->blob+1,nbytes);
     return res;
 }
 
@@ -3690,7 +3688,7 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
             p++;
         } else {
             B_bytes line;
-            winend = *p=='\r' && *(p+1)=='\n';
+            winend = *p=='\r' && p+1 < s->str + s->nbytes && *(p+1)=='\n';
             int size = p-q + (keepends->val ? 1 + winend : 0);
             NEW_UNFILLED_BYTES(line,size);
             memcpy(line->str,q,size);
@@ -3746,7 +3744,7 @@ B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
     NEW_UNFILLED_BYTES(res,wval);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
-    int hassign = (*p=='+' | *p=='-');
+    int hassign = s->nbytes > 0 && (*p=='+' || *p=='-');
     if (hassign) {
         *q = *p;
         q++;
