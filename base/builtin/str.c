@@ -2208,19 +2208,21 @@ bool B_bytearrayD_istitle(B_bytearray s) {
     if (s->nbytes==0)
         return false;
     bool incasedrun = false;
+    bool cased = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
                 return false;
             incasedrun = true;
+            cased = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
                 return false;
         } else
             incasedrun = false;
     }
-    return true;
+    return cased;
 }
 
 bool B_bytearrayD_isupper(B_bytearray s) {
@@ -3350,19 +3352,21 @@ bool B_bytesD_istitle(B_bytes s) {
     if (s->nbytes==0)
         return false;
     bool incasedrun = false;
+    bool cased = false;
     for (int i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
                 return false;
             incasedrun = true;
+            cased = true;
         } else if (c >='a' && c <= 'z') {
             if (!incasedrun)
                 return false;
         } else
             incasedrun = false;
     }
-    return true;
+    return cased;
 }
 
 bool B_bytesD_isupper(B_bytes s) {

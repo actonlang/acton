@@ -55,6 +55,13 @@ def test_bytes_contains_range():
     return (255 in b and 0 in b and 65 in b and not (511 in b)
             and not (-1 in b) and not (256 in b) and 321 not in b)
 
+def test_bytes_istitle():
+    # Title case needs at least one cased letter
+    print("bytes istitle")
+    return (b"Hello World".istitle() and b"A1 B2".istitle() and b"A".istitle()
+            and not b"123".istitle() and not b" ".istitle() and not b"hello".istitle()
+            and not b"HEllo".istitle() and not b"".istitle())
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -301,6 +308,7 @@ tests = {
     "test_bytes_str_quotes": test_bytes_str_quotes,
     "test_bytes_split_sep": test_bytes_split_sep,
     "test_bytes_contains_range": test_bytes_contains_range,
+    "test_bytes_istitle": test_bytes_istitle,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,
