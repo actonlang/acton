@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
+    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
+    const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -37,6 +39,8 @@ pub fn build(b: *std.Build) void {
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
         .block_size = gc_block_size,
+        .enable_mark_range_stealing = gc_mark_range_stealing,
+        .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");

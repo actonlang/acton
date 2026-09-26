@@ -81,6 +81,8 @@ pub fn build(b: *std.Build) void {
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
+    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
+    const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -102,9 +104,33 @@ pub fn build(b: *std.Build) void {
         std.log.err("gc_block_size above 32768 is not supported with gc_mark_bit_per_object", .{});
         std.process.exit(1);
     }
+    if (gc_initial_mark_stack_size != 0) {
+        if (gc_initial_mark_stack_size < 4096 or !std.math.isPowerOfTwo(gc_initial_mark_stack_size)) {
+            std.log.err("gc_initial_mark_stack_size must be a power of two from 4096, or 0 for the default", .{});
+            std.process.exit(1);
+        }
+        // An entry is two pointers. The collector allocates the stack in
+        // whole heap blocks.
+        const entry_bytes: u64 = 2 * (target.result.ptrBitWidth() / 8);
+        const block_bytes: u64 = if (gc_block_size != 0) gc_block_size else 4096;
+        if (gc_initial_mark_stack_size * entry_bytes % block_bytes != 0) {
+            std.log.err("gc_initial_mark_stack_size must fill whole heap blocks: at least {d} entries on this target", .{block_bytes / entry_bytes});
+            std.process.exit(1);
+        }
+        // The collector computes the size of the stack in bytes in size_t.
+        const max_entries = (std.math.shl(u64, 1, target.result.ptrBitWidth()) -% 1) / entry_bytes;
+        if (gc_initial_mark_stack_size > max_entries) {
+            std.log.err("gc_initial_mark_stack_size must be at most {d} on this target", .{std.math.floorPowerOfTwo(u64, max_entries)});
+            std.process.exit(1);
+        }
+    }
     // Must match the collector options in backend/build.zig, so that both
     // resolve to the same libgc.
     const gc_enable_threads = !target.result.cpu.arch.isWasm();
+    if (gc_mark_range_stealing and !gc_enable_threads) {
+        std.log.err("gc_mark_range_stealing requires a target with threads", .{});
+        std.process.exit(1);
+    }
     const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
@@ -130,6 +156,8 @@ pub fn build(b: *std.Build) void {
         .heap_growth_divisor = gc_heap_growth_divisor,
         .alloc_budget_percent = gc_alloc_budget_percent,
         .block_size = gc_block_size,
+        .enable_mark_range_stealing = gc_mark_range_stealing,
+        .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -150,15 +178,17 @@ pub fn build(b: *std.Build) void {
         \\#endif
         \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
         \\GC_API unsigned GC_CALL acton_gc_get_block_size(void);
+        \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void);
+        \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void);
         \\#ifdef __cplusplus
         \\}}
         \\#endif
         \\#endif
         \\
     , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
-    // The effective page-hash and block sizes depend on the collector defaults
-    // and its configuration macros, so read them from the collector's private
-    // header, compiled with the C flags of libgc itself.
+    // The effective settings depend on the collector defaults and its
+    // configuration macros, so read them from the collector's private header,
+    // compiled with the C flags of libgc itself.
     const gc_config = b.addObject(.{
         .name = "acton_gc_config",
         .root_module = b.createModule(.{
@@ -176,6 +206,20 @@ pub fn build(b: *std.Build) void {
             \\}
             \\GC_API unsigned GC_CALL acton_gc_get_block_size(void) {
             \\    return HBLKSIZE;
+            \\}
+            \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void) {
+            \\#if defined(PARALLEL_MARK) && defined(STEAL_MARK_STACK_RANGES)
+            \\    return 1;
+            \\#else
+            \\    return 0;
+            \\#endif
+            \\}
+            \\// The same default as in mark.c.
+            \\#ifndef INITIAL_MARK_STACK_SIZE
+            \\#define INITIAL_MARK_STACK_SIZE (1 * HBLKSIZE)
+            \\#endif
+            \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void) {
+            \\    return INITIAL_MARK_STACK_SIZE;
             \\}
             \\
         ),
@@ -438,6 +482,8 @@ pub fn build(b: *std.Build) void {
             .gc_heap_growth_divisor = gc_heap_growth_divisor,
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
             .gc_block_size = gc_block_size,
+            .gc_mark_range_stealing = gc_mark_range_stealing,
+            .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }

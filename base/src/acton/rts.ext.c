@@ -123,12 +123,14 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(15,
+    return $NEWTUPLE(17,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(acton_gc_get_block_size()),
-        toB_u64(info.stats.markers_m1 + 1), pause_target,
+        toB_u64(info.stats.markers_m1 + 1),
+        toB_bool(acton_gc_get_mark_range_stealing()),
+        toB_u64(acton_gc_get_initial_mark_stack_size()), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
         toB_u64(info.heap_growth_divisor), toB_u64(info.alloc_budget_percent),
         toB_u64(info.stats.heapsize_full),

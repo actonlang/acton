@@ -17,6 +17,8 @@ actor main(env):
     # The test compares these lines with the settings it built.
     info = acton.rts.get_gc_info(env.syscap)
     print("block_size=" + str(info.block_size))
+    print("mark_range_stealing=" + str(info.mark_range_stealing))
+    print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))
 
     var done = 0

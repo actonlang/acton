@@ -2867,6 +2867,8 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_heap_growth_divisor = gc_heap_growth_divisor,"
                    , "        .gc_alloc_budget_percent = gc_alloc_budget_percent,"
                    , "        .gc_block_size = gc_block_size,"
+                   , "        .gc_mark_range_stealing = gc_mark_range_stealing,"
+                   , "        .gc_initial_mark_stack_size = gc_initial_mark_stack_size,"
                    , "        .gc_disable_thp = gc_disable_thp,"
                    ]
                    ++ moduleOpts

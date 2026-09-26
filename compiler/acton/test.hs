@@ -2601,11 +2601,20 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "0"), ("block_size", "4096")]
+    defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
+                ("mark_range_stealing", "False"),
+                ("initial_mark_stack_size", "4096")]
     -- Build.act settings and the fields they should report.
-    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384")]
-    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384")]
-    others = [([("gc_block_size", "65536")], [("block_size", "65536")])]
+    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
+             ("gc_mark_range_stealing", "true"),
+             ("gc_initial_mark_stack_size", "65536")]
+    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
+                    ("mark_range_stealing", "True"),
+                    ("initial_mark_stack_size", "65536")]
+    -- The default initial mark stack has as many entries as a block has
+    -- bytes.
+    others = [([("gc_block_size", "65536")],
+               [("block_size", "65536"), ("initial_mark_stack_size", "65536")])]
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50")]
     overridden = [("alloc_budget_percent", "50")]
     -- Invalid settings and the option the diagnostic should name.
@@ -2616,7 +2625,11 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_block_size", "2048"),
                         ("gc_block_size", "12288"),
                         ("gc_block_size", "131072"),
-                        ("gc_block_size", "invalid")]
+                        ("gc_block_size", "invalid"),
+                        ("gc_mark_range_stealing", "maybe"),
+                        ("gc_initial_mark_stack_size", "2048"),
+                        ("gc_initial_mark_stack_size", "12288"),
+                        ("gc_initial_mark_stack_size", "invalid")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")

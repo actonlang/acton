@@ -260,6 +260,59 @@ use as well as time before choosing a size.
 setting shared by the application and its dependencies, including database
 support.
 
+## GC mark stack
+
+The collector marks live objects by pushing references to be scanned onto a
+mark stack. With parallel marking, each marker thread works from a local stack
+and shares work through a global one.
+
+### Range stealing
+
+By default a marker scans the global mark stack for a few entries at a time,
+without a lock. The markers rescan entries that others have already taken,
+and more than one marker can take the same entry and scan its object. This is
+slow when the stack holds many small entries, as in generational collection,
+where the markers start from the objects on dirty pages. With range stealing,
+a marker instead claims a range of entries, sized to share the stack among the
+markers, with one atomic compare-and-swap, so that each entry is taken by one
+marker:
+
+```python
+build_options = {
+    "gc_mark_range_stealing": "true",
+}
+```
+
+Full collections were neither faster nor slower with it in measurements. The
+default is `"false"`. It requires a target with threads.
+
+### Initial size
+
+The global mark stack starts with as many entries as a heap block has bytes:
+4096 with the default blocks. When marking overflows it, the collector drops
+entries, later scans the heap for marked objects to recover the dropped work,
+and doubles the stack for the next collection. With large and wide data
+structures, overflows can recur for several collections and add seconds to
+pauses. The stack can start bigger:
+
+```python
+build_options = {
+    "gc_initial_mark_stack_size": "1048576",
+}
+```
+
+The value is a number of entries: a power of two of at least 4096 whose size
+fills whole heap blocks, which holds for every power of two from 4096 on
+64-bit targets. `"0"` (the default) keeps the initial size above. Each entry
+takes 16 bytes on 64-bit targets, so 1048576 entries use 16 MiB for the life
+of the process. In a multi-actor service with a heap of about 24 GB,
+1048576 entries removed the mark stack overflows seen with the default size
+and cut the total pause time from 50.6 to 20.0 seconds and the longest pause
+from 11.9 to 2.3 seconds.
+
+Both are build settings shared by the application and its dependencies,
+including database support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -281,12 +334,12 @@ backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, available
-`markers` (including the initiating thread), `pause_target_ms`,
-`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
-`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
-pause target is `None` for ordinary and unlimited generational collection, and
-is not a guaranteed maximum pause. Available markers need not participate in
-every incremental marking attempt.
+`markers` (including the initiating thread), `mark_range_stealing`,
+`initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
+`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
+`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
+unlimited generational collection, and is not a guaranteed maximum pause.
+Available markers need not participate in every incremental marking attempt.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
