@@ -313,6 +313,30 @@ from 11.9 to 2.3 seconds.
 Both are build settings shared by the application and its dependencies,
 including database support.
 
+## GC object end padding
+
+The collector treats a pointer into the interior of an object as a reference
+to it. So that a pointer just past the end of an object also keeps the object
+alive, the collector adds a byte to every allocation. With 16-byte size steps,
+the padding turns a 16-byte object into 32 bytes and a 32-byte object into 48.
+The padding can be turned off:
+
+```python
+build_options = {
+    "gc_no_end_padding": "true",
+}
+```
+
+Without padding, a pointer just past the end of an object points at the next
+object and keeps that one alive instead, so an object that is referenced only
+through such a pointer can be freed while still in use. Acton's runtime
+allocates strings and byte buffers with room for a terminating NUL, so its end
+pointers stay inside the object. Turn padding off only if the C extensions and
+C libraries in the application never keep an object alive through its end
+pointer alone. On the `gc_heap` benchmark, the heap and resident memory were
+9.5% smaller. The default is `"false"`. This is a build setting shared by the
+application and its dependencies, including database support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -333,8 +357,8 @@ using the same `soft_dirty` and `userfaultfd` names. In ordinary mode the active
 backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
-The result also reports `page_hash_table_log2`, `block_size`, available
-`markers` (including the initiating thread), `mark_range_stealing`,
+The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
+available `markers` (including the initiating thread), `mark_range_stealing`,
 `initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
 `full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
 `free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and

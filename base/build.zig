@@ -83,6 +83,7 @@ pub fn build(b: *std.Build) void {
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
+    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -158,6 +159,7 @@ pub fn build(b: *std.Build) void {
         .block_size = gc_block_size,
         .enable_mark_range_stealing = gc_mark_range_stealing,
         .initial_mark_stack_size = gc_initial_mark_stack_size,
+        .enable_end_padding = !gc_no_end_padding,
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -180,6 +182,7 @@ pub fn build(b: *std.Build) void {
         \\GC_API unsigned GC_CALL acton_gc_get_block_size(void);
         \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void);
         \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void);
+        \\GC_API int GC_CALL acton_gc_get_end_padding(void);
         \\#ifdef __cplusplus
         \\}}
         \\#endif
@@ -220,6 +223,9 @@ pub fn build(b: *std.Build) void {
             \\#endif
             \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void) {
             \\    return INITIAL_MARK_STACK_SIZE;
+            \\}
+            \\GC_API int GC_CALL acton_gc_get_end_padding(void) {
+            \\    return GC_get_all_interior_pointers() && !GC_get_dont_add_byte_at_end();
             \\}
             \\
         ),
@@ -484,6 +490,7 @@ pub fn build(b: *std.Build) void {
             .gc_block_size = gc_block_size,
             .gc_mark_range_stealing = gc_mark_range_stealing,
             .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
+            .gc_no_end_padding = gc_no_end_padding,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }

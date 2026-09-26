@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) void {
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
+    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     print("Acton Standard Library Builder\nBuilding in {s}\n", .{buildroot_path});
@@ -53,6 +54,7 @@ pub fn build(b: *std.Build) void {
         .gc_block_size = gc_block_size,
         .gc_mark_range_stealing = gc_mark_range_stealing,
         .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
+        .gc_no_end_padding = gc_no_end_padding,
         .gc_disable_thp = gc_disable_thp,
     });
 

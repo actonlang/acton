@@ -33,6 +33,7 @@ actor main(env):
         assert info.supported_backends == before.supported_backends
         assert info.page_hash_table_log2 == before.page_hash_table_log2
         assert info.block_size == before.block_size
+        assert info.end_padding == before.end_padding
         assert info.mark_range_stealing == before.mark_range_stealing
         assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
