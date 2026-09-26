@@ -3,6 +3,10 @@
 ## Unreleased
 
 ### Language
+- Add `after now delay: call()` for delays that start when the statement runs,
+  such as retry backoffs and pauses between requests. Plain `after` continues
+  to use the current message's scheduling baseline, keeping periodic work on a
+  steady schedule and catching up after stalls. [#3162]
 - Add first-class immutable collection types by splitting collection protocols
   into read-only and mutable parts. `IIndexed`, `ISliceable`, `ISequence`,
   `IMapping`, and `ISet` expose access without mutation; `ilist`, `idict`, and
@@ -20,6 +24,10 @@
   are being redesigned. [#3084]
 
 ### Compiler & Build
+- Generate allocation-free code for explicit `next()` and `__next__()` calls
+  even when producing and consuming the result are separated or the result is
+  tested inside a larger condition, while preserving ordinary `maybe` values
+  when they are passed elsewhere. [#3164]
 - Compile protocols that inherit another protocol with fixed type arguments
   without passing those type arguments to the wrong witness constructor, fixing
   C generation for nested protocol inheritance. [#3098]
@@ -30,11 +38,20 @@
 - Compile augmented `<<=` and `>>=` assignments with an `int` shift count for
   types such as `bigint`, matching the right-hand type accepted by ordinary
   shift expressions. [#3158]
+- Type check augmented `^=` assignments for builtin and user-defined `Logical`
+  types instead of crashing the compiler. [#3163]
+- Stop passing project-only module selection options to distribution packages
+  such as `std`, eliminating spurious Zig `invalid option` messages in verbose
+  build output and manually run build commands. [#3168]
 - Preserve unchanged generated root stubs and Zig build files when their
   contents match, avoiding timestamp-only rewrites that invalidate otherwise
   reusable warm-build output. [#3099]
 
 ### CLI & Project Workflow
+- Generate `build.zig` and `build.zig.zon` under `out/zig/` instead of the
+  project root, keeping generated build files out of source trees and removing
+  the need for project-specific ignore rules. Files left in project roots by
+  earlier versions are no longer used and can be deleted. [#3166]
 - Select an Acton project within a dependency archive with `subdir` in
   `Build.act` or `acton pkg add --subdir`, so monorepos can provide multiple
   packages from one archive while preserving sibling path dependencies.
@@ -69,6 +86,11 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Hash values from their existing byte representation instead of allocating a
+  `bytes` wrapper, and hash tuple components with one hasher while preserving
+  component boundaries. This removes per-value and per-component allocations,
+  making short values about 25% faster, two-component tuples roughly 45-50%
+  faster, and 64 KiB strings almost ten times faster to hash. [#3160] [#3161]
 - Add `acton.rts.get_gc_info()` for inspecting the collector's mode, configured
   and active dirty-tracking backends, marking and collection policy, and
   current heap, free, and unmapped byte counts. [#3146]
@@ -102,6 +124,10 @@
 - Return a valid empty string from `str.rstrip()` and `str.strip()` when they
   remove every character, including multibyte characters and custom strip
   sets. [#3138]
+- Report `re.Match.start_pos` and `end_pos` and accept `re.match()`'s
+  `start_pos` in character positions rather than UTF-8 byte offsets, keeping
+  regular-expression indexes consistent with Acton string indexing for
+  non-ASCII text. [#3165]
 - Speed up `==` and `!=` for `str`, `bytes`, `bytearray`, `bigint`, `list`,
   `dict`, and tuple values by returning immediately when both operands refer to
   the same object instead of comparing their contents. This avoids unnecessary
@@ -124,9 +150,9 @@
   preserving FIFO order for equal deadlines. [#3092]
 - Write each chunk passed to `file.WriteFile.write()` at the current position
   instead of at offset 0, so later writes no longer overwrite earlier ones,
-  and write all of the data when the system writes only part of it.
+  and write all of the data when the system writes only part of it. [#3167]
 - Add `append` to `file.WriteFile` to keep the content of a file and write at
-  its end, and add `file.FS.rename()` to rename a file or directory.
+  its end, and add `file.FS.rename()` to rename a file or directory. [#3167]
 
 ### Packages & Distribution
 - Use Ubuntu 20.04 for Linux x86_64 CI and release artifacts to preserve glibc
@@ -5034,6 +5060,15 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3157]: https://github.com/actonlang/acton/pull/3157
 [#3158]: https://github.com/actonlang/acton/pull/3158
 [#3159]: https://github.com/actonlang/acton/pull/3159
+[#3160]: https://github.com/actonlang/acton/pull/3160
+[#3161]: https://github.com/actonlang/acton/pull/3161
+[#3162]: https://github.com/actonlang/acton/pull/3162
+[#3163]: https://github.com/actonlang/acton/pull/3163
+[#3164]: https://github.com/actonlang/acton/pull/3164
+[#3165]: https://github.com/actonlang/acton/pull/3165
+[#3166]: https://github.com/actonlang/acton/pull/3166
+[#3167]: https://github.com/actonlang/acton/pull/3167
+[#3168]: https://github.com/actonlang/acton/pull/3168
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
