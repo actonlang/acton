@@ -207,7 +207,7 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
     xmlDocPtr doc = xmlReadMemory((char *)data->str, data->nbytes, NULL, NULL, XML_PARSE_NOERROR);
     if (!doc) {
-        xmlErrorPtr err = xmlGetLastError();
+        const xmlError *err = xmlGetLastError();
         B_str errmsg;
         B_int line = NULL;
         B_int column = NULL;

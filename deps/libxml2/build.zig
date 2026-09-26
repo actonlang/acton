@@ -1,14 +1,13 @@
 const std = @import("std");
-const print = @import("std").debug.print;
+
+const version = "2.15.4";
+const version_number = 21504;
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const t = target.result;
-
-    var flags = std.ArrayList([]const u8).empty;
-    defer flags.deinit(b.allocator);
 
     const lib = b.addLibrary(.{
         .name = "xml2",
@@ -21,111 +20,100 @@ pub fn build(b: *std.Build) void {
     if (enable_lto) lib.lto = .thin;
     lib.root_module.addIncludePath(b.path("include"));
 
-    const libxml_version = "2.12.0";
+    // getentropy() arrived in glibc 2.25; libxml2 falls back to a seed
+    // from the time and addresses without it.
+    const have_getentropy = switch (t.os.tag) {
+        .windows => false,
+        .linux => !t.isGnuLibC() or
+            t.os.version_range.linux.glibc.order(.{ .major = 2, .minor = 25, .patch = 0 }) != .lt,
+        else => true,
+    };
 
-    const config_header = b.addConfigHeader(
-        .{
-            .style = .blank,
-        },
-        .{
-            .ATTRIBUTE_DESTRUCTOR = false,
-            .HAVE_ARPA_INET_H = if (t.os.tag == .windows) null else true,
-            .HAVE_DLFCN_H = true,
-            .HAVE_DLOPEN = true,
-            .HAVE_DL_H = true,
-            .HAVE_FCNTL_H = true,
-            .HAVE_FTIME = true,
-            .HAVE_GETTIMEOFDAY = true,
-            .HAVE_INTTYPES_H = true,
-            .HAVE_ISASCII = true,
-            .HAVE_LIBHISTORY = false,
-            .HAVE_LIBREADLINE = false,
-            .HAVE_MMAP = true,
-            .HAVE_MUNMAP = true,
-            .HAVE_NETDB_H = true,
-            .HAVE_NETINET_IN_H = true,
-            .HAVE_POLL_H = true,
-            .HAVE_PTHREAD_H = true,
-            .HAVE_RAND_R = if (t.os.tag == .windows) null else true,
-            .HAVE_SHLLOAD = true,
-            .HAVE_STAT = true,
-            .HAVE_STDINT_H = true,
-            .HAVE_SYS_MMAN_H = true,
-            .HAVE_SYS_SELECT_H = true,
-            .HAVE_SYS_SOCKET_H = true,
-            .HAVE_SYS_STAT_H = true,
-            .HAVE_SYS_TIMEB_H = true,
-            .HAVE_SYS_TIME_H = true,
-            .HAVE_UNISTD_H = true,
-            .HAVE_VA_COPY = true,
-            .HAVE_ZLIB_H = false,
-            .HAVE___VA_COPY = true,
-            .LT_OBJDIR = ".libs/",
-            .SUPPORT_IP6 = false,
-            .VA_LIST_IS_ARRAY = false,
-            .VERSION = libxml_version,
-        },
-    );
+    const config_header = b.addConfigHeader(.{
+        .style = .{ .cmake = b.path("config.h.cmake.in") },
+        .include_path = "config.h",
+    }, .{
+        .HAVE_DECL_GETENTROPY = have_getentropy,
+        .HAVE_DECL_GLOB = t.os.tag != .windows,
+        .HAVE_DECL_MMAP = t.os.tag != .windows,
+        .HAVE_FUNC_ATTRIBUTE_DESTRUCTOR = null,
+        .HAVE_DLOPEN = null,
+        .HAVE_LIBHISTORY = null,
+        .HAVE_LIBREADLINE = null,
+        .HAVE_SHLLOAD = null,
+        .HAVE_STDINT_H = true,
+        .XML_SYSCONFDIR = null,
+        .XML_THREAD_LOCAL = null,
+    });
     lib.root_module.addConfigHeader(config_header);
-    lib.installConfigHeader(config_header);
 
-    flags.appendSlice(b.allocator, &.{
-        "-DLIBXML_STATIC",
-        "-DLIBXML_VERSION=201200",
-        "-DLIBXML_VERSION_STRING=\"" ++ libxml_version ++ "\"",
-        "-DLIBXML_VERSION_EXTRA=",
-    }) catch unreachable;
+    // Only the core parser and tree: none of the optional modules, as the
+    // xml module needs nothing else.
+    const version_header = b.addConfigHeader(.{
+        .style = .{ .autoconf_at = b.path("include/libxml/xmlversion.h.in") },
+        .include_path = "libxml/xmlversion.h",
+    }, .{
+        .VERSION = version,
+        .LIBXML_VERSION_NUMBER = version_number,
+        .LIBXML_VERSION_EXTRA = "",
+        .MODULE_EXTENSION = ".so",
+        .WITH_C14N = false,
+        .WITH_CATALOG = false,
+        .WITH_DEBUG = false,
+        .WITH_HTML = false,
+        .WITH_HTTP = false,
+        .WITH_ICONV = false,
+        .WITH_ICU = false,
+        .WITH_ISO8859X = false,
+        .WITH_MODULES = false,
+        .WITH_OUTPUT = false,
+        .WITH_PATTERN = false,
+        .WITH_PUSH = false,
+        .WITH_READER = false,
+        .WITH_REGEXPS = false,
+        .WITH_RELAXNG = false,
+        .WITH_SAX1 = false,
+        .WITH_SCHEMAS = false,
+        .WITH_SCHEMATRON = false,
+        .WITH_THREAD_ALLOC = false,
+        .WITH_THREADS = false,
+        .WITH_VALID = false,
+        .WITH_WRITER = false,
+        .WITH_XINCLUDE = false,
+        .WITH_XPATH = false,
+        .WITH_XPTR = false,
+        .WITH_ZLIB = false,
+    });
+    lib.root_module.addConfigHeader(version_header);
+    lib.installConfigHeader(version_header);
 
     const source_files = [_][]const u8{
         "buf.c",
-        "c14n.c",
-        "catalog.c",
         "chvalid.c",
-        "debugXML.c",
         "dict.c",
         "encoding.c",
         "entities.c",
         "error.c",
         "globals.c",
         "hash.c",
-        "HTMLparser.c",
-        "HTMLtree.c",
-        "legacy.c",
         "list.c",
-        "nanoftp.c",
-        "nanohttp.c",
         "parser.c",
         "parserInternals.c",
-        "pattern.c",
-        "relaxng.c",
-        "SAX.c",
         "SAX2.c",
-        "schematron.c",
         "threads.c",
         "tree.c",
         "uri.c",
         "valid.c",
-        "xinclude.c",
-        "xlink.c",
         "xmlIO.c",
         "xmlmemory.c",
-        "xmlmodule.c",
-        "xmlreader.c",
-        "xmlregexp.c",
-        "xmlsave.c",
-        "xmlschemas.c",
-        "xmlschemastypes.c",
         "xmlstring.c",
-        "xmlunicode.c",
-        "xmlwriter.c",
-        "xpath.c",
-        "xpointer.c",
-        "xzlib.c",
     };
 
-    lib.root_module.addCSourceFiles(.{ .files = &source_files, .flags = flags.items });
+    lib.root_module.addCSourceFiles(.{ .files = &source_files, .flags = &.{"-DLIBXML_STATIC"} });
     lib.root_module.link_libc = true;
-    lib.installHeadersDirectory(b.path("include/libxml"), "libxml", .{});
+    // xmlInitParser seeds its random numbers with BCryptGenRandom.
+    if (t.os.tag == .windows) lib.root_module.linkSystemLibrary("bcrypt", .{});
+    lib.installHeadersDirectory(b.path("include/libxml"), "libxml", .{ .include_extensions = &.{".h"} });
 
     b.installArtifact(lib);
 }

@@ -466,7 +466,7 @@ dist/deps/libuv: deps-download/$(LIBUV_REF).tar.gz $(LIBUV_BUILD_ZIG)
 	touch "$(TD)/$@"
 
 # /deps/libxml2 ------------------------------------------
-LIBXML2_REF=358ca4e6e34dd2b386aab1fdeb74a641c54940a0
+LIBXML2_REF=96498992efa48d52b0e8b83058bd88dbdaf153c1
 LIBXML2_BUILD_ZIG=deps/libxml2/build.zig
 deps-download/$(LIBXML2_REF).tar.gz:
 	mkdir -p deps-download
