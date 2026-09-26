@@ -243,6 +243,14 @@ def test_bytes_startswith_longer_prefix():
     print("b'foo'.startswith(b'foobar'): {result}")
     return result == False
 
+def test_bytes_endswith_nul():
+    s = bytes([97, 0])
+    print("bytes endswith with NUL bytes")
+    return (s.endswith(bytes([0]))
+            and s.endswith(bytes([97, 0]))
+            and not s.endswith(bytes([97, 0]), 1)
+            and not b"a".endswith(b"ba"))
+
 def test_bytes_hex():
     b = b'\xde\xad\xbe\xef'
     result = b.hex()
@@ -312,6 +320,7 @@ tests = {
     "test_bytes_startswith_empty": test_bytes_startswith_empty,
     "test_bytes_startswith_single_char": test_bytes_startswith_single_char,
     "test_bytes_startswith_longer_prefix": test_bytes_startswith_longer_prefix,
+    "test_bytes_endswith_nul": test_bytes_endswith_nul,
     "test_bytes_hex": test_bytes_hex,
     "test_bytes_hex_exact_length": test_bytes_hex_exact_length,
     "test_bytes_from_hex": test_bytes_from_hex,

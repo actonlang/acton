@@ -2006,15 +2006,10 @@ bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int en
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
+    int stval = fromB_int(st);
     int enval = fromB_int(en);
-    unsigned char *p = &s->str[enval-sub->nbytes];
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    if (enval-stval < sub->nbytes) return false;
+    return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
 
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
@@ -2607,29 +2602,29 @@ B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
 bool B_OrdD_bytearrayD___eq__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
     if (a == b)
         return true;
-    return strcmp((char *)a->str,(char *)b->str)==0;
+    return a->nbytes == b->nbytes && memcmp(a->str,b->str,a->nbytes)==0;
 }
 
 bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    if (a == b)
-        return false;
-    return strcmp((char *)a->str,(char *)b->str)!=0;
+    return !B_OrdD_bytearrayD___eq__(wit,a,b);
 }
 
 bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    return strcmp((char *)a->str,(char *)b->str)<0;
+    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int c = memcmp(a->str,b->str,minl);
+    return c<0 || (c==0 && a->nbytes<b->nbytes);
 }
 
 bool B_OrdD_bytearrayD___le__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)<=0;
+    return !B_OrdD_bytearrayD___lt__(wit,b,a);
 }
 
 bool B_OrdD_bytearrayD___gt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)>0;
+    return B_OrdD_bytearrayD___lt__(wit,b,a);
 }
 
 bool B_OrdD_bytearrayD___ge__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b){
-    return strcmp((char *)a->str,(char *)b->str)>=0;
+    return !B_OrdD_bytearrayD___lt__(wit,a,b);
 }
 
 // Container
@@ -3131,14 +3126,10 @@ bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    unsigned char *p = &s->str[fromB_int(en)-sub->nbytes];
-    unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
-        if (*p == 0 || *p++ != *q++) {
-            return false;
-        }
-    }
-    return true;
+    int stval = fromB_int(st);
+    int enval = fromB_int(en);
+    if (enval-stval < sub->nbytes) return false;
+    return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
 
 B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){

@@ -262,6 +262,24 @@ def test_bytearray_startswith_longer_prefix():
     print("bytearray(b'foo').startswith(bytearray(b'foobar')): {result}")
     return result == False
 
+def test_bytearray_compare_nul():
+    # NUL is an ordinary byte, comparisons must look at all bytes
+    a = bytearray(bytes([97, 0, 98]))
+    b = bytearray(bytes([97, 0, 99]))
+    prefix = bytearray(bytes([97, 0]))
+    print("bytearray comparisons with NUL bytes")
+    return (a != b and not a == b and a < b and a <= b and b > a and b >= a
+            and prefix < a and a > prefix and prefix != a
+            and a == bytearray(bytes([97, 0, 98])) and not a < a and a <= a)
+
+def test_bytearray_endswith_nul():
+    s = bytearray(bytes([97, 0]))
+    print("bytearray endswith with NUL bytes")
+    return (s.endswith(bytearray(bytes([0])))
+            and s.endswith(bytearray(bytes([97, 0])))
+            and not s.endswith(bytearray(bytes([97, 0])), 1)
+            and not bytearray(b"a").endswith(bytearray(b"ba")))
+
 def test_empty_bytearray_hex():
     result = bytearray(b"\xde\xad\xbe\xef").hex()
     print("empty bytearray.hex(): '{result}'")
@@ -334,6 +352,8 @@ tests = {
     "test_bytearray_startswith_empty": test_bytearray_startswith_empty,
     "test_bytearray_startswith_single_char": test_bytearray_startswith_single_char,
     "test_bytearray_startswith_longer_prefix": test_bytearray_startswith_longer_prefix,
+    "test_bytearray_compare_nul": test_bytearray_compare_nul,
+    "test_bytearray_endswith_nul": test_bytearray_endswith_nul,
     "test_bytearray_hex": test_bytearray_hex,
     "test_bytearray_from_hex": test_bytearray_from_hex,
 }
