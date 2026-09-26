@@ -2118,23 +2118,30 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
     return actBytearrayFromCStringLengthNoCopy(result, bytelen);
 }
 
-B_str B_bytearrayD_hex(B_bytearray s) {
+// Shared by bytes.hex and bytearray.hex. The result is built by length; the
+// hex digits are ASCII, so it has as many chars as bytes.
+static B_str hex_from_bytes(unsigned char *data, int nbytes) {
+    if (nbytes == 0)
+        return null_str;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
-    int len = s->nbytes * 2;
-    char *result = acton_malloc_atomic(len);
+    int len = nbytes * 2;
+    B_str res;
+    NEW_UNFILLED_STR(res, len, len);
 
     // Hex digit lookup table
     const char hex_digits[] = "0123456789abcdef";
 
     // Convert each byte to two hex digits
-    for (int i = 0; i < s->nbytes; i++) {
-        unsigned char byte = s->str[i];
-        result[i*2] = hex_digits[byte >> 4];     // High nibble
-        result[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
+    for (int i = 0; i < nbytes; i++) {
+        unsigned char byte = data[i];
+        res->str[i*2] = hex_digits[byte >> 4];     // High nibble
+        res->str[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
     }
+    return res;
+}
 
-    // Convert to Acton string without copying
-    return to_str_noc(result);
+B_str B_bytearrayD_hex(B_bytearray s) {
+    return hex_from_bytes(s->str, s->nbytes);
 }
 
 
@@ -3218,25 +3225,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
 }
 
 B_str B_bytesD_hex(B_bytes s) {
-    if (s->nbytes == 0)
-        return null_str;
-    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
-    int len = s->nbytes * 2;
-    char *result = acton_malloc_atomic(len + 1);
-
-    // Hex digit lookup table
-    const char hex_digits[] = "0123456789abcdef";
-
-    // Convert each byte to two hex digits
-    for (int i = 0; i < s->nbytes; i++) {
-        unsigned char byte = s->str[i];
-        result[i*2] = hex_digits[byte >> 4];     // High nibble
-        result[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
-    }
-    result[len] = '\0';
-
-    // Convert to Acton string without copying
-    return to_str_noc(result);
+    return hex_from_bytes(s->str, s->nbytes);
 }
 
 int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {

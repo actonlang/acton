@@ -350,6 +350,33 @@ def test_bytearray_expandtabs_wide():
     print("bytearray expandtabs(1000000) without tabs: {len(result)} bytes")
     return result == bytearray(b"x" * 100)
 
+def test_bytearray_hex_exact_length():
+    # Exercise empty input and buffers that exactly fill allocation size
+    # classes (8, 16, 24, 32, 64, 1024 bytes and so on) for both the hex
+    # output and the from_hex result. Several rounds let the collector reuse
+    # memory, so a read past the buffer is likely to find non-zero bytes.
+    lengths = list(range(0, 130)) + [255, 256, 257, 511, 512, 513, 1023, 1024, 1025, 2048, 4096]
+    for r in range(4):
+        for n in lengths:
+            source = bytes([(i * 37 + r * 11 + 1) % 256 for i in range(n)])
+            ba = bytearray(source)
+            try:
+                expected = source.hex()
+                result = ba.hex()
+                if len(result) != 2 * n or result != expected:
+                    print("bytearray.hex() of {n} bytes differs from bytes.hex(): {result}")
+                    return False
+                if bytearray.from_hex(result) != ba or bytearray.from_hex(result.upper()) != ba:
+                    print("bytearray.from_hex() did not round-trip {n} bytes")
+                    return False
+                if bytes.from_hex(result) != source or bytearray(bytes.from_hex(result)) != ba:
+                    print("bytes.from_hex() did not round-trip {n} bytes")
+                    return False
+            except ValueError:
+                print("hex round trip of {n} bytes raised ValueError")
+                return False
+    return True
+
 def test_bytearray_from_hex():
     result = bytearray.from_hex("deadbeef").hex()
     print("bytearray.from_hex('deadbeef').hex(): {result}")
@@ -409,6 +436,7 @@ tests = {
     "test_bytearray_compare_nul": test_bytearray_compare_nul,
     "test_bytearray_endswith_nul": test_bytearray_endswith_nul,
     "test_bytearray_hex": test_bytearray_hex,
+    "test_bytearray_hex_exact_length": test_bytearray_hex_exact_length,
     "test_bytearray_from_hex": test_bytearray_from_hex,
     "test_bytearray_lower_upper": test_bytearray_lower_upper,
     "test_bytearray_capitalize": test_bytearray_capitalize,
