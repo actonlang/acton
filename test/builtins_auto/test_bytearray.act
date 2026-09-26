@@ -65,6 +65,19 @@ def test_bytearray_str_quotes():
             and str(bytearray(b'say "hi"')) == "bytearray(b'say \"hi\"')"
             and both == "bytearray(b'\\'\"')")
 
+def test_bytearray_split_sep():
+    # The pieces are new bytearrays, also when there is no separator
+    ba = bytearray(b"abc")
+    whole = ba.split(bytearray(b","))
+    whole[0].append(100)
+    comma = bytearray(b",")
+    print("bytearray split with a separator: {whole}")
+    return (ba == bytearray(b"abc")
+            and bytearray(b"a,b,c").split(comma, 0) == [bytearray(b"a,b,c")]
+            and bytearray(b"a,b,c").split(comma, 1) == [bytearray(b"a"), bytearray(b"b,c")]
+            and bytearray(b"a,,b,").split(comma) == [bytearray(b"a"), bytearray(b""), bytearray(b"b"), bytearray(b"")]
+            and bytearray(b"").split(comma) == [bytearray(b"")])
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -302,6 +315,7 @@ tests = {
     "test_bytearray_insert": test_bytearray_insert,
     "test_bytearray_reverse": test_bytearray_reverse,
     "test_bytearray_str_quotes": test_bytearray_str_quotes,
+    "test_bytearray_split_sep": test_bytearray_split_sep,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

@@ -2499,21 +2499,24 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
         if (sep->nbytes==0) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytearray: separator is empty string")));
         }
-        if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,toB_bytearray(""));
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            B_bytearray word;
+            NEW_UNFILLED_BYTEARRAY(word,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_bytearray ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_bytearrayD_partition(rs,sep);
-            ssep = (B_bytearray)t->components[1];
-            rs =  (B_bytearray)t->components[2];
-             wit->$class->append(wit,res,(B_bytearray)t->components[0]);
-        }
-        if (ssep->nbytes>0)
-            wit->$class->append(wit,res,rs);
+        B_bytearray word;
+        NEW_UNFILLED_BYTEARRAY(word,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }
@@ -3651,21 +3654,24 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
         if (sep->nbytes==0) {
             $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytes: separator is empty string")));
         }
-        if (s->nbytes==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_bytes);
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            B_bytes word;
+            NEW_UNFILLED_BYTES(word,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_bytes ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nbytes>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_bytesD_partition(rs,sep);
-            ssep = (B_bytes)t->components[1];
-            rs =  (B_bytes)t->components[2];
-            wit->$class->append(wit,res,(B_bytes)t->components[0]);
-        }
-        if (ssep->nbytes>0)
-            wit->$class->append(wit,res,rs);
+        B_bytes word;
+        NEW_UNFILLED_BYTES(word,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }
