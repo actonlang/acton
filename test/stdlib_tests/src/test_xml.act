@@ -63,6 +63,65 @@ def _test_xml_parse_error():
     else:
         testing.error("Expected exception on parsing error")
 
+def _test_xml_parse_error_position():
+    try:
+        xml.decode("<a>\n  <b>\n  </c>\n</a>")
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "Opening and ending tag mismatch: b line 2 and c")
+        testing.assertEqual(e.line, 3)
+        testing.assertEqual(e.column, 7)
+    else:
+        testing.error("Expected exception on parsing error")
+
+def _item_list(n: int) -> str:
+    items = []
+    for i in range(n):
+        items.append('<item id="' + str(i) + '">value ' + str(i) + ' &amp; more</item>')
+    return "<list>" + "".join(items) + "</list>"
+
+def _test_xml_large_documents():
+    """Documents from tens of bytes to tens of kilobytes
+
+    libxml2 copies the document into an input buffer that starts small and
+    doubles until the document fits; these sizes cross several doublings.
+    """
+    for n in [1, 3, 50, 200, 1000]:
+        s = _item_list(n)
+        d = xml.decode(s)
+        testing.assertEqual(len(d.children), n)
+        testing.assertEqual(d.children[n - 1].text, "value " + str(n - 1) + " & more")
+        testing.assertEqual(xml.encode(d), s)
+
+def _test_xml_large_document_parse_error():
+    s = _item_list(1000)
+    try:
+        xml.decode(s[:-1])
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "expected '>'")
+        testing.assertEqual(e.line, 1)
+        testing.assertEqual(e.column, len(s))
+    else:
+        testing.error("Expected exception on parsing error")
+
+def _test_xml_declared_encoding():
+    """libxml2 converts input that declares an encoding other than UTF-8"""
+    d = xml.decode('<?xml version="1.0" encoding="ISO-8859-1"?><a>plain ascii</a>')
+    testing.assertEqual(d.text, "plain ascii")
+    s = _item_list(200)
+    d = xml.decode('<?xml version="1.0" encoding="ISO-8859-1"?>' + s)
+    testing.assertEqual(len(d.children), 200)
+    testing.assertEqual(xml.encode(d), s)
+
+def _test_xml_unsupported_node():
+    """A node type that xml.Node cannot represent raises XmlParseError"""
+    try:
+        xml.decode("<a><b>text<c><?pi data?></c></b></a>")
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "Unsupported XML node type 7")
+    else:
+        testing.error("Expected exception on unsupported node type")
+    testing.assertEqual(xml.encode(xml.decode("<a><b/></a>")), "<a><b/></a>")
+
 def _test_xml_entity_escaping_roundtrip():
     """Test roundtrip of already-encoded entities
 
