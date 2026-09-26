@@ -1,0 +1,36 @@
+import acton.rts
+
+actor Worker(wid: int, report: action(int, int) -> None):
+    def work():
+        retained = [[wid, i, i + 1] for i in range(50000)]
+        total = 0
+        for r in range(20):
+            garbage = [[r, i] for i in range(20000)]
+            total += len(garbage)
+        for i, triple in enumerate(retained):
+            if triple != [wid, i, i + 1]:
+                report(wid, -1)
+                return
+        report(wid, total)
+
+actor main(env):
+    # The test compares these lines with the settings it built.
+    info = acton.rts.get_gc_info(env.syscap)
+    print("alloc_budget_percent=" + str(info.alloc_budget_percent))
+
+    var done = 0
+
+    def report(wid: int, total: int):
+        if total != 20 * 20000:
+            print("worker", wid, "lost data")
+            env.exit(1)
+            return
+        done += 1
+        if done == 4:
+            print("GC options OK")
+            env.exit(0)
+
+    # Allocate from several worker threads at once.
+    for wid in range(4):
+        w = Worker(wid, report)
+        async w.work()

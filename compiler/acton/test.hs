@@ -1703,6 +1703,7 @@ actonProjTests =
   , gcThpBuildOptionTests
   , gcTuningBuildOptionTests
   , gcHeapGrowthBuildOptionTests
+  , gcCollectorOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2541,6 +2542,86 @@ gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
             (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_growth") 1)
           writeOptions selected = writeFile (proj </> "Build.act") $ unlines
             [ "name = \"gc_growth\""
+            , "fingerprint = " ++ fingerprint
+            , "build_options = {" ++ intercalate ", "
+                [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
+            ]
+      action acton proj runEnv writeOptions
+
+gcCollectorOptionTests = testGroup "GC collector options"
+  [ testCase "settings reach the collector and allocation still works" $
+      withFixture $ \acton proj runEnv writeOptions -> do
+        let build flags = readCreateProcessWithExitCode
+              (proc acton (["build", "--color", "never"] ++ flags))
+                { cwd = Just proj, env = Just runEnv } ""
+            assertReports label expected extraEnv = do
+              result@(_, out, _) <- readCreateProcessWithExitCode
+                (proc (proj </> "out/bin/main") ["--rts-wthreads", "4"])
+                  { cwd = Just proj, env = Just (extraEnv ++ runEnv) } ""
+              expectSuccess label result
+              forM_ expected $ \(key, value) ->
+                assertBool (label ++ ": expected " ++ key ++ "=" ++ value
+                            ++ " in the output\n" ++ out)
+                  ((key ++ "=" ++ value) `elem` lines out)
+              assertBool (label ++ ": application completes\n" ++ out)
+                ("GC options OK" `elem` lines out)
+        -- Reuse generated outputs to exercise rebuilding between settings.
+        writeOptions []
+        expectSuccess "build default collector" =<< build []
+        assertReports "default collector" defaults []
+        -- The environment overrides the runtime policy of either build.
+        assertReports "environment overrides" overridden overrides
+        writeOptions tuned
+        expectSuccess "build tuned collector" =<< build []
+        assertReports "tuned collector" tunedReports []
+        assertReports "environment overrides tuned settings" overridden overrides
+        -- A database build also builds the collector for the backend, which
+        -- must use the same settings.
+        expectSuccess "database build of tuned collector" =<< build ["--db"]
+        writeOptions []
+        expectSuccess "return to the default collector" =<< build []
+        assertReports "default collector again" defaults []
+  , testCase "invalid values fail clearly" $
+      withFixture $ \acton proj runEnv writeOptions ->
+        forM_ invalid $ \(selected, key) -> do
+          writeOptions selected
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"])
+              { cwd = Just proj, env = Just runEnv } ""
+          assertBool ("invalid setting should fail: " ++ show selected
+                      ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name " ++ key ++ "\n" ++ out ++ err)
+            (key `isInfixOf` (out ++ err))
+  ]
+  where
+    -- Reported get_gc_info fields for a build without settings.
+    defaults = [("alloc_budget_percent", "0")]
+    -- Build.act settings and the fields they should report.
+    tuned = [("gc_alloc_budget_percent", "100")]
+    tunedReports = [("alloc_budget_percent", "100")]
+    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50")]
+    overridden = [("alloc_budget_percent", "50")]
+    -- Invalid settings and the option the diagnostic should name.
+    invalid =
+      [ ([(key, value)], key)
+      | (key, value) <- [("gc_alloc_budget_percent", "-1"),
+                        ("gc_alloc_budget_percent", "invalid")]
+      ]
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    withFixture action = withSystemTempDirectory "acton-gc-options" $ \proj -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      environment <- getEnvironment
+      createDirectoryIfMissing True (proj </> "src")
+      forM_ ["main.act"] $ \file ->
+        copyFile ("test/project/gc_options/src" </> file) (proj </> "src" </> file)
+      let runEnv = [("GC_MARKERS", "2")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
+          fingerprint = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_options") 1)
+          writeOptions selected = writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"gc_options\""
             , "fingerprint = " ++ fingerprint
             , "build_options = {" ++ intercalate ", "
                 [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"

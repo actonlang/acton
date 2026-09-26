@@ -192,6 +192,44 @@ build setting when the program starts; `0` there turns the scaling off.
 This is a build setting shared by the application and its dependencies,
 including database support.
 
+## GC allocation budget
+
+By default the collector starts a collection after the program has allocated
+an amount derived from the previous collection: twice the pointer-containing
+live data, plus a quarter of the pointer-free live data, plus the roots (with
+thread stacks counted twice), all divided by the free space divisor (3 by
+default). A program whose live data is mostly strings, byte buffers or numbers
+therefore collects often compared with its heap size. The allocation budget
+instead makes the amount a percentage of all live data and roots, like Go's
+`GOGC`:
+
+```python
+build_options = {
+    "gc_alloc_budget_percent": "100",
+}
+```
+
+With `"100"`, a collection starts after the program has allocated as much as
+survived the previous collection, so the heap settles at about twice the live
+data. Larger values collect less often and use more memory. In incremental and
+generational mode the amount is halved, as with the default policy. On the
+`gc_heap` benchmark on macOS, 100 used 26-30% less CPU time and 28% more heap
+than the default.
+
+The budget is an upper bound. The heap still grows in steps set by the free
+space divisor and `gc_heap_growth_divisor`, and the collector collects before
+it grows the heap a second time since the previous collection. When the budget
+exceeds the free heap plus one growth step, collections therefore come
+earlier.
+
+The default, `"0"`, keeps the free space divisor policy. The
+`GC_ALLOC_BUDGET_PERCENT` environment variable overrides the build setting
+when the program starts; `0` there restores the default policy. Under either
+policy, `GC_MIN_BYTES_ALLOCD` sets the smallest amount allocated between
+collections, in bytes with an optional `K`, `M` or `G` suffix. This is a build
+setting shared by the application and its dependencies, including database
+support.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -214,8 +252,8 @@ promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, available `markers` (including
 the initiating thread), `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_growth_divisor`, `heap_size`, `free_bytes` and
-`unmapped_bytes`. The pause
+`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`,
+`heap_size`, `free_bytes` and `unmapped_bytes`. The pause
 target is `None` for ordinary and unlimited generational collection, and is
 not a guaranteed maximum pause. Available markers need not participate in
 every incremental marking attempt.
