@@ -2864,6 +2864,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_mark_bit_per_object = gc_mark_bit_per_object,"
                    , "        .gc_dirty_tracking_backend = gc_dirty_tracking_backend,"
                    , "        .gc_page_hash_table_log2 = gc_page_hash_table_log2,"
+                   , "        .gc_heap_growth_divisor = gc_heap_growth_divisor,"
                    , "        .gc_disable_thp = gc_disable_thp,"
                    ]
                    ++ moduleOpts
