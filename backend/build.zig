@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -43,6 +44,7 @@ pub fn build(b: *std.Build) void {
         .enable_mark_range_stealing = gc_mark_range_stealing,
         .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_end_padding = !gc_no_end_padding,
+        .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");
@@ -158,4 +160,10 @@ pub fn build(b: *std.Build) void {
     actondb.root_module.link_libc = true;
     actondb.root_module.link_libcpp = true;
     b.installArtifact(actondb);
+}
+
+// Same as gcTinyFreelists in base/build.zig.
+fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
+    if (size_limit == 0) return 0;
+    return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
 }

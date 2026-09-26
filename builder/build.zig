@@ -62,6 +62,7 @@ pub fn build(b: *std.Build) void {
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
@@ -90,6 +91,7 @@ pub fn build(b: *std.Build) void {
         .gc_mark_range_stealing = gc_mark_range_stealing,
         .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
         .gc_no_end_padding = gc_no_end_padding,
+        .gc_thread_local_size_limit = gc_thread_local_size_limit,
         .gc_disable_thp = gc_disable_thp,
     });
 
@@ -393,6 +395,7 @@ pub fn build(b: *std.Build) void {
             .gc_mark_range_stealing = gc_mark_range_stealing,
             .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
             .gc_no_end_padding = gc_no_end_padding,
+            .gc_thread_local_size_limit = gc_thread_local_size_limit,
         }) else null;
 
         for (root_c_files.items) |entry| {
