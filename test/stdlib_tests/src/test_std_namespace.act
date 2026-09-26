@@ -38,6 +38,16 @@ def _test_std_namespace_data_modules():
     testing.assertEqual(wyhash.hash(2, b"abc"), 0x32dd92e4b2915153)
 
 
+def _test_std_namespace_xml_decode():
+    testing.assertEqual(xml.encode(xml.decode("<a><b>hello</b></a>")), "<a><b>hello</b></a>")
+    try:
+        xml.decode("")
+    except xml.XmlParseError as e:
+        testing.assertEqual(e.error_message, "Document is empty")
+    else:
+        testing.error("std.xml.decode accepted an empty document")
+
+
 def _test_std_namespace_json_strings():
     source = r'{"key\u0000tail":"value\u0000tail"}'
     data = json.decode(source)
