@@ -98,6 +98,10 @@ ordinary collection run does not require the backend to be active. Native code
 that enables incremental collection later must check `GC_get_actual_vdb()`;
 this build option does not add a live backend-switching API.
 
+On macOS, arm64 builds track dirty pages with `mprotect`. x86_64 macOS builds
+leave it out, because incremental collection with it hangs under Rosetta 2;
+there, incremental and generational mode treat every heap page as dirty.
+
 ## GC page-hash table size
 
 Applications with large heaps can experiment with a larger page-hash table:
