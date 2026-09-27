@@ -13,6 +13,18 @@ B_str B_type(B_value a) {
     return to$str("None");
 }
 
+// Environment variable names and values are C strings, so they cannot hold
+// a NUL byte. Reject one rather than cut the name or value short at it, and
+// return a NUL-terminated copy to pass to libuv.
+static const char *env_cstring(B_bytes b, const char *what) {
+    if (memchr(b->str, 0, b->nbytes))
+        $RAISE((B_BaseException)B_ValueErrorG_new($FORMAT("environment variable %s contains a NUL byte", what)));
+    char *res = acton_malloc_atomic(b->nbytes + 1);
+    memcpy(res, b->str, b->nbytes);
+    res[b->nbytes] = '\0';
+    return res;
+}
+
 $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     // uv_os_getenv is not threadsafe but our Env actor forces serial execution
 
@@ -21,7 +33,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     char smallval[256];
     char *value = smallval;
 
-    const char* env_var = (char*)fromB_bytes(name);
+    const char* env_var = env_cstring(name, "name");
 
     // First, query the required buffer size by passing NULL as the buffer
     int r = uv_os_getenv(env_var, value, &len);
@@ -40,8 +52,8 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
 }
 
 $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {
-    const char* env_var = fromB_bytes(name);
-    const char* env_val = fromB_bytes(value);
+    const char* env_var = env_cstring(name, "name");
+    const char* env_val = env_cstring(value, "value");
     int r = uv_os_setenv(env_var, env_val);
     if (r < 0) {
         $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to set the environment variable %s: %s", env_var, uv_strerror(r))));
@@ -50,7 +62,7 @@ $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value)
 }
 
 $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
-    const char* env_var = fromB_bytes(name);
+    const char* env_var = env_cstring(name, "name");
     int r = uv_os_unsetenv(env_var);
     if (r < 0) {
         $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to unset the environment variable %s: %s", env_var, uv_strerror(r))));

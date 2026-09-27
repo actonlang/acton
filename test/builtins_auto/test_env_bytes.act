@@ -1,0 +1,54 @@
+# Environment variable names and values are C strings. The bytes variants of
+# the Env methods must reject a NUL byte instead of cutting the name or value
+# short at it.
+
+actor main(env):
+    nul = bytes([0])
+    name = b"ACTON_TEST_ENV_BYTES"
+
+    def check() -> list[str]:
+        failed = []
+        try:
+            await async env.setenvb(name, b"a" + nul + b"b")
+            failed.append("setenvb accepted a NUL byte in the value")
+        except ValueError:
+            pass
+        try:
+            await async env.setenvb(name + nul + b"X", b"value")
+            failed.append("setenvb accepted a NUL byte in the name")
+        except ValueError:
+            pass
+        try:
+            v = env.getenvb(b"PATH" + nul + b"X")
+            failed.append("getenvb accepted a NUL byte in the name")
+        except ValueError:
+            pass
+        try:
+            await async env.unsetenvb(name + nul)
+            failed.append("unsetenvb accepted a NUL byte in the name")
+        except ValueError:
+            pass
+
+        await async env.setenvb(name, b"value")
+        v = env.getenvb(name)
+        if v is not None:
+            if v != b"value":
+                failed.append("getenvb returned {v} instead of the value set by setenvb")
+        else:
+            failed.append("getenvb did not find the variable set by setenvb")
+        await async env.unsetenvb(name)
+        if env.getenvb(name) is not None:
+            failed.append("unsetenvb did not remove the variable")
+        return failed
+
+    try:
+        failed = check()
+        for f in failed:
+            print("FAILED: " + f)
+        if len(failed) == 0:
+            print("All env bytes checks OK")
+            env.exit(0)
+        env.exit(1)
+    except Exception as e:
+        print("Unexpected exception: {e}")
+        env.exit(1)
