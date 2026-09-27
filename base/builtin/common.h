@@ -67,7 +67,9 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
 
 #define $SKIPRES(cont)      (cont)
 
-#define RAISE($T, ...)      $RAISE((B_BaseException)$NEW($T, ##__VA_ARGS__))
+// Raise an existing exception, or construct one with per-call arguments.
+#define RAISE_EXC(exc)      $RAISE((B_BaseException)(exc))
+#define RAISE($T, ...)      RAISE_EXC($NEW($T, ##__VA_ARGS__))
 
 // $FORMAT is now a C function in str.c
 

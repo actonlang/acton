@@ -12,6 +12,15 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_ZeroDivisionError B_i8_zero_division_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "division by zero");
+struct B_ZeroDivisionError B_i8_truediv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "i8 truediv: division by zero");
+struct B_ZeroDivisionError B_i8_floordiv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "i8 floordiv: division by zero");
+struct B_ZeroDivisionError B_i8_mod_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "i8 mod: division by zero");
+
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
@@ -31,7 +40,7 @@ int8_t B_i8G_new(B_atom a, B_int base) {
     if (labs(sz) > 1 || (sz==1 && n > 0x7ful) || (sz == -1 && n > 0x80ul)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i8(): value %s out of range for type i8",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return (int8_t)(n*sz);
 }
@@ -104,7 +113,7 @@ B_i8 B_IntegralD_i8D___pow__(B_IntegralD_i8 wit,  B_i8 a, B_i8 b) {
     if ( bval < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %d ",bval);
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return toB_i8(i8_pow(aval,bval));
 }
@@ -187,7 +196,7 @@ B_tuple B_IntegralD_i8D___divmod__(B_IntegralD_i8 wit, B_i8 a, B_i8 b) {
 
 B_i8 B_IntegralD_i8D___floordiv__(B_IntegralD_i8 wit, B_i8 a, B_i8 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
+        RAISE_EXC(&B_i8_zero_division_error);
     return toB_i8(a->val / b->val);
 }
 
@@ -234,7 +243,7 @@ B_i8 B_MinusD_IntegralD_i8D___sub__(B_MinusD_IntegralD_i8 wit,  B_i8 a, B_i8 b) 
  
 B_float B_DivD_i8D___truediv__ (B_DivD_i8 wit, B_i8 a, B_i8 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
+        RAISE_EXC(&B_i8_zero_division_error);
     return toB_float((double)a->val/(double)b->val);
 }
 

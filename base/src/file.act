@@ -1,3 +1,8 @@
+_absolute_paths_error = ValueError("Both paths must be absolute (start with '/')")
+_absolute_cwd_error = ValueError("Working directory must be absolute (start with '/')")
+_above_root_error = ValueError("Relative path goes above root directory")
+
+
 class FileCap():
     def __init__(self, cap: WorldCap):
         pass
@@ -26,7 +31,7 @@ def get_relative_path(target_path: str, from_path: str) -> str:
     """
     # Validate inputs are absolute paths
     if not target_path.startswith('/') or not from_path.startswith('/'):
-        raise ValueError("Both paths must be absolute (start with '/')")
+        raise _absolute_paths_error
 
     # Split paths into components and remove empty strings
     target_parts = []
@@ -86,7 +91,7 @@ def resolve_relative_path(start_dir: str, rel_path: str) -> str:
         ValueError: If start_dir is not absolute or if rel_path is absolute
     """
     if not start_dir.startswith('/'):
-        raise ValueError("Working directory must be absolute (start with '/')")
+        raise _absolute_cwd_error
     if rel_path.startswith('/'):
         # Relative path is already absolute
         return rel_path
@@ -114,7 +119,7 @@ def resolve_relative_path(start_dir: str, rel_path: str) -> str:
     for part in rel_parts:
         if part == '..':
             if not result_parts:
-                raise ValueError("Relative path goes above root directory")
+                raise _above_root_error
             result_parts.pop()
         else:
             result_parts.append(part)

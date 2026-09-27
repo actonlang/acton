@@ -22,6 +22,15 @@
 #define PERTURB_SHIFT 5
 #define MIN_SIZE UINT64_C(8)
 
+static struct B_MemoryError B_set_table_too_large_error =
+    STATIC_EXCEPTION(B_MemoryError, "set table is too large");
+static struct B_MemoryError B_set_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
+static struct B_ValueError B_set_empty_pop_error =
+    STATIC_EXCEPTION(B_ValueError, "pop from an empty set");
+static struct B_ValueError B_set_invalid_iterator_source_error =
+    STATIC_EXCEPTION(B_ValueError, "set iterator source is not a set");
+
 static $WORD _dummy;
 #define dummy (&_dummy)
 #define ACTIVE_ENTRY(e) ((e)->key != NULL && (e)->key != dummy)
@@ -61,16 +70,16 @@ static void B_set_table_resize(B_set_table *set, uint64_t minsize) {
 
     while (newsize <= minsize) {
         if (newsize > UINT64_MAX / UINT64_C(2))
-            $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("set table is too large")));
+            RAISE_EXC(&B_set_table_too_large_error);
         newsize <<= 1;
     }
     if (newsize > SIZE_MAX / sizeof(B_setentry))
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("set table is too large")));
+        RAISE_EXC(&B_set_table_too_large_error);
 
     size_t table_size = (size_t)newsize * sizeof(B_setentry);
     B_setentry *newtable = acton_malloc(table_size);
     if (newtable == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
+        RAISE_EXC(&B_set_allocation_failed_error);
 
     memset(newtable, 0, table_size);
     set->mask = newsize - 1;
@@ -167,7 +176,7 @@ found_unused:
 
     uint64_t growth = set->numelements > UINT64_C(50000) ? UINT64_C(2) : UINT64_C(4);
     if (set->numelements > UINT64_MAX / growth)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("set table is too large")));
+        RAISE_EXC(&B_set_table_too_large_error);
     B_set_table_resize(set, set->numelements * growth);
 }
 
@@ -350,7 +359,7 @@ static void B_set_table_xor_into(B_set_table *res, B_set_table *set, B_set_table
 
 static $WORD B_set_table_pop(B_set_table *set) {
     if (set->numelements == 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("pop from an empty set")));
+        RAISE_EXC(&B_set_empty_pop_error);
 
     B_setentry *entry = set->table + (set->finger & set->mask);
     B_setentry *limit = set->table + set->mask;
@@ -504,7 +513,7 @@ static B_set_table *B_set_table_from_iter_src($WORD src) {
         return &((B_set)src)->data;
     if (cls == ($SuperG_class)&B_isetG_methods)
         return &((B_iset)src)->data;
-    $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("set iterator source is not a set")));
+    RAISE_EXC(&B_set_invalid_iterator_source_error);
     return NULL;
 }
 

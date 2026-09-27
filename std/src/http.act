@@ -4,6 +4,9 @@ import logging
 import net
 import time
 
+_unreachable_error = ValueError("Unreachable")
+
+
 responses : dict[int,bytes] = {
     100: b"Continue",
     101: b"Switching Protocols",
@@ -286,7 +289,7 @@ def parse_message(i: bytes, log: logging.Logger) -> (?Message, bytes):
 
                     else:
                         # TODO: InternalError?
-                        raise ValueError("Unreachable")
+                        raise _unreachable_error
         else:
             body = b""
             rest = rs[1]

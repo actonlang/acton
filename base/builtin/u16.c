@@ -12,6 +12,15 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_ZeroDivisionError B_u16_zero_division_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "division by zero");
+struct B_ZeroDivisionError B_u16_truediv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u16 truediv: division by zero");
+struct B_ZeroDivisionError B_u16_floordiv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u16 floordiv: division by zero");
+struct B_ZeroDivisionError B_u16_mod_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u16 mod: division by zero");
+
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 // only called with e>=0.
@@ -32,7 +41,7 @@ uint16_t B_u16G_new(B_atom a, B_int base) {  // base is optional
     if (sz  > 1 || sz < 0 || (sz==1 && n > 0xffff)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u16(): value %s out of range for type u16",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return n*sz;
 }
@@ -180,7 +189,7 @@ B_tuple B_IntegralD_u16D___divmod__(B_IntegralD_u16 wit, B_u16 a, B_u16 b) {
 
 B_u16 B_IntegralD_u16D___floordiv__(B_IntegralD_u16 wit, B_u16 a, B_u16 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
+        RAISE_EXC(&B_u16_zero_division_error);
     return toB_u16(a->val / b->val);
 }
 
@@ -227,7 +236,7 @@ B_u16 B_MinusD_IntegralD_u16D___sub__(B_MinusD_IntegralD_u16 wit,  B_u16 a, B_u1
  
 B_float B_DivD_u16D___truediv__ (B_DivD_u16 wit, B_u16 a, B_u16 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
+        RAISE_EXC(&B_u16_zero_division_error);
     return toB_float((double)a->val/(double)b->val);
 }
 

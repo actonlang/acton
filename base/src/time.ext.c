@@ -113,7 +113,7 @@ B_tuple timeQ_get_monotonic () {
         char errmsg[1024] = "Error getting time: ";
         uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
     }
     return $NEWTUPLE(2,
                      toB_int(ts.tv_sec),
@@ -126,7 +126,7 @@ B_tuple timeQ_get_realtime () {
         char errmsg[1024] = "Error getting time: ";
         uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
     }
     return $NEWTUPLE(2,
                      toB_int(ts.tv_sec),
@@ -157,7 +157,7 @@ B_tuple timeQ_localtime (int64_t seconds) {
         char errmsg[1024] = "Error getting time: ";
         uv_strerror_r(errno, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
     }
     return $NEWTUPLE(11,
                      toB_int(tm.tm_year + 1900),

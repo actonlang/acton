@@ -3,6 +3,13 @@
 #include "../rts/log.h"
 #include "yyjson.h"
 
+static struct B_ValueError jsonQ_float_out_of_range_error =
+    STATIC_EXCEPTION(B_ValueError, "JSON floating-point number is out of range");
+static struct B_ValueError jsonQ_root_not_object_error =
+    STATIC_EXCEPTION(B_ValueError, "JSON root is not an object");
+static struct B_ValueError jsonQ_root_not_array_error =
+    STATIC_EXCEPTION(B_ValueError, "JSON root is not an array");
+
 static void *my_malloc(void *ctx, size_t size) {
     return acton_malloc(size);
 }
@@ -102,7 +109,7 @@ void jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict data, b
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_dict: for key %s unknown type: %s", name->str, v->$class->$GCINFO))));
+                    RAISE(B_ValueError, $FORMAT("jsonQ_encode_dict: for key %s unknown type: %s", name->str, v->$class->$GCINFO));
             }
         } else {
             yyjson_mut_obj_add(node, key, yyjson_mut_null(doc));
@@ -178,7 +185,7 @@ void jsonQ_encode_list_into(yyjson_mut_doc *doc, yyjson_mut_val *node, B_list da
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_list: unknown type: %s", v->$class->$GCINFO))));
+                    RAISE(B_ValueError, $FORMAT("jsonQ_encode_list: unknown type: %s", v->$class->$GCINFO));
             }
         } else {
             yyjson_mut_arr_add_null(doc, node);
@@ -194,7 +201,7 @@ static B_value jsonQ_decode_integer(yyjson_val *val) {
         const char *raw = yyjson_get_raw(val);
         for (size_t i = 0; i < len; i++) {
             if (raw[i] == '.' || raw[i] == 'e' || raw[i] == 'E')
-                $RAISE((B_BaseException)B_ValueErrorG_new(actStrFromCString("JSON floating-point number is out of range")));
+                RAISE_EXC(&jsonQ_float_out_of_range_error);
         }
         char *number = acton_malloc_atomic(len + 1);
         memcpy(number, raw, len);
@@ -257,7 +264,7 @@ B_dict jsonQ_decode_obj(yyjson_val *obj) {
                 break;
             default:;
                 // unreachable
-                $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_encode_list: unknown type: %d", yyjson_get_type(val)))));
+                RAISE(B_ValueError, $FORMAT("jsonQ_encode_list: unknown type: %d", yyjson_get_type(val)));
         }
     }
     return res;
@@ -306,7 +313,7 @@ B_list jsonQ_decode_arr(yyjson_val *arr) {
                 break;
             default:;
                 // TODO: just handle all types?
-                $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("jsonQ_decode_arr: unknown type: %d", yyjson_get_type(val)))));
+                RAISE(B_ValueError, $FORMAT("jsonQ_decode_arr: unknown type: %d", yyjson_get_type(val)));
         }
     }
     return res;
@@ -324,13 +331,13 @@ B_dict jsonQ__decode (B_str data) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
         if (yyjson_get_type(obj) != YYJSON_TYPE_OBJ) {
             yyjson_doc_free(doc);
-            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("JSON root is not an object")));
+            RAISE_EXC(&jsonQ_root_not_object_error);
         }
         res = jsonQ_decode_obj(obj);
     } else {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
 
     yyjson_doc_free(doc);
@@ -344,13 +351,13 @@ B_list jsonQ__decode_list (B_str data) {
     if (!doc) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     if (yyjson_get_type(root) != YYJSON_TYPE_ARR) {
         yyjson_doc_free(doc);
-        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("JSON root is not an array"))));
+        RAISE_EXC(&jsonQ_root_not_array_error);
     }
 
     B_list res = jsonQ_decode_arr(root);

@@ -8,8 +8,12 @@ unsigned short fromB_u16(B_u16 n);
 
 uint16_t B_u16G_new(B_atom a, B_int base);
 
-#define u16_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u16 truediv: division by zero"))); (double)a/(double)b;} )
-#define u16_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u16 floordiv: division by zero")));  a/b;} )
-#define u16_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u16 mod: division by zero"))); a%b;} )
+extern struct B_ZeroDivisionError B_u16_truediv_zero_error;
+extern struct B_ZeroDivisionError B_u16_floordiv_zero_error;
+extern struct B_ZeroDivisionError B_u16_mod_zero_error;
+
+#define u16_DIV(a,b)       ( {if (b==0) RAISE_EXC(&B_u16_truediv_zero_error); (double)a/(double)b;} )
+#define u16_FLOORDIV(a,b)  ( {if (b==0) RAISE_EXC(&B_u16_floordiv_zero_error);  a/b;} )
+#define u16_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_u16_mod_zero_error); a%b;} )
 
 uint16_t u16_pow(uint16_t a, uint16_t b);

@@ -8,8 +8,12 @@ uint8_t fromB_u8(B_u8 n);
 
 uint8_t B_u8G_new(B_atom a, B_int base);
 
-#define u8_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u8 truediv: division by zero"))); (double)a/(double)b;} )
-#define u8_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u8 floordiv: division by zero")));  a/b;} )
-#define u8_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("u8 mod: division by zero"))); a%b;} )
+extern struct B_ZeroDivisionError B_u8_truediv_zero_error;
+extern struct B_ZeroDivisionError B_u8_floordiv_zero_error;
+extern struct B_ZeroDivisionError B_u8_mod_zero_error;
+
+#define u8_DIV(a,b)       ( {if (b==0) RAISE_EXC(&B_u8_truediv_zero_error); (double)a/(double)b;} )
+#define u8_FLOORDIV(a,b)  ( {if (b==0) RAISE_EXC(&B_u8_floordiv_zero_error);  a/b;} )
+#define u8_MOD(a,b)       ( {if (b==0) RAISE_EXC(&B_u8_mod_zero_error); a%b;} )
 
 uint8_t u8_pow(uint8_t a, uint8_t b);

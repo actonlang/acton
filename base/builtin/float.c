@@ -14,6 +14,13 @@
 
 #include <math.h>
 
+static struct B_ValueError B_float_int_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "float(): int value too big for type float");
+static struct B_ValueError B_float_invalid_literal_error =
+    STATIC_EXCEPTION(B_ValueError, "float_fromatom(): invalid str literal for type float");
+static struct B_ValueError B_float_unsupported_atom_error =
+    STATIC_EXCEPTION(B_ValueError, "float(): unsupported atom type");
+
 // General methods ///////////////////////////////////////////////////////////////////////
 
 double B_floatG_new(B_atom a) {
@@ -31,7 +38,7 @@ double B_floatG_new(B_atom a) {
         if (aval.size == 0) 
             return 0.0;
         if (labs(aval.size) > 16)
-            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("float(): int value too big for type float")));
+            RAISE_EXC(&B_float_int_too_large_error);
         double pow = 1.0;  
         double res = 0.0;
         for (int i = 0; i<(labs(aval.size)); i++) {
@@ -49,9 +56,9 @@ double B_floatG_new(B_atom a) {
         if (c==((B_str)a)->nbytes)
             return x;
         else
-            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("float_fromatom(): invalid str literal for type float")));
+            RAISE_EXC(&B_float_invalid_literal_error);
     }
-    $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("float(): unsupported atom type")));
+    RAISE_EXC(&B_float_unsupported_atom_error);
     return 0.0;
 
 }
@@ -129,7 +136,7 @@ B_float B_RealFloatD_floatD___pow__(B_RealFloatD_float wit,  B_float a, B_float 
     if ( b->val < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %f ",b->val);
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return toB_float(exp(b->val * log(a->val)));
 }

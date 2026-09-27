@@ -8,6 +8,18 @@ import file
 import json
 import re
 
+_invalid_name_error = ValueError("Invalid build spec JSON, name should be a string")
+_invalid_description_error = ValueError("Invalid build spec JSON, description should be a string")
+_invalid_dependencies_error = ValueError("Invalid build spec JSON, dependencies should be a dict")
+_invalid_zig_dependencies_error = ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
+_invalid_build_options_error = ValueError("Invalid build spec JSON, build_options should be a dict of strings")
+_invalid_fingerprint_error = ValueError("Invalid build spec JSON, fingerprint should be a string like 0xdeadbeef...")
+_invalid_key_error = ValueError("Invalid build spec JSON, non-string key found in top level dict")
+_missing_name_error = ValueError("Invalid build spec JSON, name is required")
+_missing_fingerprint_error = ValueError("Invalid build spec JSON, fingerprint is required")
+_invalid_spec_error = ValueError("Invalid build spec JSON, top level should be a dict")
+
+
 class BuildSpecError(ValueError):
     pass
 
@@ -77,14 +89,14 @@ class BuildSpec(object):
                             name = value
                             has_name = True
                         else:
-                            raise ValueError("Invalid build spec JSON, name should be a string")
+                            raise _invalid_name_error
                     elif key == "description":
                         if value is None:
                             description = None
                         elif isinstance(value, str):
                             description = value
                         else:
-                            raise ValueError("Invalid build spec JSON, description should be a string")
+                            raise _invalid_description_error
                     elif key == "dependencies":
                         if value is None:
                             new_dependencies = {}
@@ -95,9 +107,9 @@ class BuildSpec(object):
                                     dep = PkgDependency.from_json(dep_name, dep_attrs)
                                     new_dependencies[dep_name] = dep
                                 else:
-                                    raise ValueError("Invalid build spec JSON, dependencies should be a dict")
+                                    raise _invalid_dependencies_error
                         else:
-                            raise ValueError("Invalid build spec JSON, dependencies should be a dict")
+                            raise _invalid_dependencies_error
                     elif key == "zig_dependencies":
                         if value is None:
                             new_zig_dependencies = {}
@@ -108,9 +120,9 @@ class BuildSpec(object):
                                     dep = ZigDependency.from_json(dep_name, dep_attrs)
                                     new_zig_dependencies[dep_name] = dep
                                 else:
-                                    raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
+                                    raise _invalid_zig_dependencies_error
                         else:
-                            raise ValueError("Invalid build spec JSON, zig_dependencies should be a dict")
+                            raise _invalid_zig_dependencies_error
                     elif key == "build_options":
                         if isinstance(value, dict):
                             options: dict[str, ?value] = value
@@ -118,9 +130,9 @@ class BuildSpec(object):
                                 if isinstance(option_name, str) and isinstance(option_value, str):
                                     new_build_options[option_name] = option_value
                                 else:
-                                    raise ValueError("Invalid build spec JSON, build_options should be a dict of strings")
+                                    raise _invalid_build_options_error
                         else:
-                            raise ValueError("Invalid build spec JSON, build_options should be a dict of strings")
+                            raise _invalid_build_options_error
                     elif key == "fingerprint":
                         if value is None:
                             has_fingerprint = False
@@ -128,18 +140,18 @@ class BuildSpec(object):
                             fingerprint = value
                             has_fingerprint = True
                         else:
-                            raise ValueError("Invalid build spec JSON, fingerprint should be a string like 0xdeadbeef...")
+                            raise _invalid_fingerprint_error
                     else:
                         raise ValueError(f"Invalid build spec JSON, unknown key '{key}'")
                 else:
-                    raise ValueError("Invalid build spec JSON, non-string key found in top level dict")
+                    raise _invalid_key_error
 
             if not has_name:
-                raise ValueError("Invalid build spec JSON, name is required")
+                raise _missing_name_error
             if not has_fingerprint:
-                raise ValueError("Invalid build spec JSON, fingerprint is required")
+                raise _missing_fingerprint_error
             return BuildSpec(name, fingerprint, description, new_dependencies, new_zig_dependencies, new_build_options)
-        raise ValueError("Invalid build spec JSON, top level should be a dict")
+        raise _invalid_spec_error
 
     def to_json(self) -> str:
         res_deps = {}

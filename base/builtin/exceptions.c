@@ -34,11 +34,10 @@ $SEQ $SEQD___deserialize__ ($SEQ self, $Serial$state state) {
     self->error_message = $step_deserialize(state);
     return self;
 }
+static struct $SEQ $SEQ_exception = { .$class = &$SEQG_methods };
+
 $SEQ $SEQG_new() {
-    $SEQ $tmp = acton_malloc(sizeof(struct $SEQ));
-    $tmp->$class = &$SEQG_methods;
-    $SEQG_methods.__init__($tmp);
-    return $tmp;
+    return &$SEQ_exception;
 }
 struct $SEQG_class $SEQG_methods = {
     .$GCINFO            = "$SEQ",
@@ -64,11 +63,10 @@ $BRK $BRKD___deserialize__ ($BRK self, $Serial$state state) {
     self->error_message = NULL;
     return self;
 }
+static struct $BRK $BRK_exception = { .$class = &$BRKG_methods };
+
 $BRK $BRKG_new() {
-    $BRK $tmp = acton_malloc(sizeof(struct $BRK));
-    $tmp->$class = &$BRKG_methods;
-    $BRKG_methods.__init__($tmp);
-    return $tmp;
+    return &$BRK_exception;
 }
 struct $BRKG_class $BRKG_methods = {
     .$GCINFO            = "$BRK",
@@ -94,11 +92,10 @@ $CNT $CNTD___deserialize__ ($CNT self, $Serial$state state) {
     self->error_message = $step_deserialize(state);
     return self;
 }
+static struct $CNT $CNT_exception = { .$class = &$CNTG_methods };
+
 $CNT $CNTG_new() {
-    $CNT $tmp = acton_malloc(sizeof(struct $CNT));
-    $tmp->$class = &$CNTG_methods;
-    $CNTG_methods.__init__($tmp);
-    return $tmp;
+    return &$CNT_exception;
 }
 struct $CNTG_class $CNTG_methods = {
     .$GCINFO            = "$CNT",
@@ -152,6 +149,6 @@ struct $RETG_class $RETG_methods = {
 
 
 $WORD $raiseValueError(B_str msg) {
-    $RAISE((B_BaseException)$NEW(B_ValueError,msg));
+    RAISE(B_ValueError, msg);
     return ($WORD)0;
 }

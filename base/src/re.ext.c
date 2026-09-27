@@ -2,6 +2,13 @@
 
 #include <pcre2.h>
 
+static struct B_ValueError reQ_negative_start_error =
+    STATIC_EXCEPTION(B_ValueError, "PCRE2 matching failed: negative start_pos");
+static struct B_ValueError reQ_start_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "start position is greater than string length");
+static struct B_RuntimeError reQ_small_ovector_error =
+    STATIC_EXCEPTION(B_RuntimeError, "ovector was not big enough for all captured substrings");
+
 static void *pcre2_malloc(size_t size, void *data) {
     (void)data;
     return acton_malloc(size);
@@ -37,10 +44,10 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
     // Validate start_pos
     long start_offset = arg_start_pos;
     if (start_offset < 0) {
-        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("PCRE2 matching failed: negative start_pos"))));
+        RAISE_EXC(&reQ_negative_start_error);
     }
     if (start_offset > arg_text->nchars) {
-        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("start position is greater than string length"))));
+        RAISE_EXC(&reQ_start_too_large_error);
     }
     // start_pos is a code point index; PCRE2 takes a byte offset
     start_offset = $byte_no(arg_text, start_offset);
@@ -61,7 +68,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
         pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
         char errmsg[1024] = "regex compilation failed at offset ";
         snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
-        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
 
     pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
@@ -85,7 +92,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
             // Some other error
             char errmsg[256];
             snprintf(errmsg, sizeof(errmsg), "PCRE2 matching error: %d", rc);
-            $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCStringCopy(errmsg))));
+            RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
         }
     }
 
@@ -93,7 +100,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
     if (rc == 0) {
         pcre2_match_data_free(match_data);
         pcre2_code_free(re);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCString("ovector was not big enough for all captured substrings"))));
+        RAISE_EXC(&reQ_small_ovector_error);
     }
 
     // Extract all unnamed groups

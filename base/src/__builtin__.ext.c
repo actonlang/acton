@@ -1,5 +1,10 @@
 #include "rts/rts.c"
 
+static struct B_ValueError B_Env_nul_name_error =
+    STATIC_EXCEPTION(B_ValueError, "environment variable name contains a NUL byte");
+static struct B_ValueError B_Env_nul_value_error =
+    STATIC_EXCEPTION(B_ValueError, "environment variable value contains a NUL byte");
+
 void B___ext_init__() {
 }
 
@@ -16,9 +21,9 @@ B_str B_type(B_value a) {
 // Environment variable names and values are C strings, so they cannot hold
 // a NUL byte. Reject one rather than cut the name or value short at it, and
 // return a NUL-terminated copy to pass to libuv.
-static const char *env_cstring(B_bytes b, const char *what) {
+static const char *env_cstring(B_bytes b, B_ValueError nul_error) {
     if (memchr(b->str, 0, b->nbytes))
-        $RAISE((B_BaseException)B_ValueErrorG_new($FORMAT("environment variable %s contains a NUL byte", what)));
+        RAISE_EXC(nul_error);
     char *res = acton_malloc_atomic(b->nbytes + 1);
     memcpy(res, b->str, b->nbytes);
     res[b->nbytes] = '\0';
@@ -33,7 +38,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     char smallval[256];
     char *value = smallval;
 
-    const char* env_var = env_cstring(name, "name");
+    const char* env_var = env_cstring(name, &B_Env_nul_name_error);
 
     // First, query the required buffer size by passing NULL as the buffer
     int r = uv_os_getenv(env_var, value, &len);
@@ -46,26 +51,26 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
         r = uv_os_getenv(env_var, value, &len);
     }
     if (r < 0) {
-        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to read the environment variable %s: %s", env_var, uv_strerror(r))));
+        RAISE(B_RuntimeError, $FORMAT("Failed to read the environment variable %s: %s", env_var, uv_strerror(r)));
     }
     return $R_CONT(C_cont, actBytesFromCStringCopy(value));
 }
 
 $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {
-    const char* env_var = env_cstring(name, "name");
-    const char* env_val = env_cstring(value, "value");
+    const char* env_var = env_cstring(name, &B_Env_nul_name_error);
+    const char* env_val = env_cstring(value, &B_Env_nul_value_error);
     int r = uv_os_setenv(env_var, env_val);
     if (r < 0) {
-        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to set the environment variable %s: %s", env_var, uv_strerror(r))));
+        RAISE(B_RuntimeError, $FORMAT("Failed to set the environment variable %s: %s", env_var, uv_strerror(r)));
     }
     return $R_CONT(C_cont, B_None);
 }
 
 $R B_EnvD_unsetenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
-    const char* env_var = env_cstring(name, "name");
+    const char* env_var = env_cstring(name, &B_Env_nul_name_error);
     int r = uv_os_unsetenv(env_var);
     if (r < 0) {
-        $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to unset the environment variable %s: %s", env_var, uv_strerror(r))));
+        RAISE(B_RuntimeError, $FORMAT("Failed to unset the environment variable %s: %s", env_var, uv_strerror(r)));
     }
     return $R_CONT(C_cont, B_None);
 }

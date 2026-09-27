@@ -2,6 +2,15 @@
 
 #include "rts/perf.h"
 
+static struct B_ValueError testingQ_loop_claim_error =
+    STATIC_EXCEPTION(B_ValueError, "Use t.loop() once per test invocation");
+static struct B_ValueError testingQ_loop_advance_error =
+    STATIC_EXCEPTION(B_ValueError, "Cannot advance a closed or concurrent t.loop()");
+static struct B_ValueError testingQ_loop_counters_error =
+    STATIC_EXCEPTION(B_ValueError, "Runtime counters decreased during t.loop()");
+static struct B_ValueError testingQ_loop_completed_error =
+    STATIC_EXCEPTION(B_ValueError, "t.loop() completed while being advanced");
+
 enum {
     TESTING_LOOP_CLAIMED = 1,
     TESTING_LOOP_STARTED = 2,
@@ -13,13 +22,13 @@ enum {
 
 void testingQ___ext_init__() {}
 
-static void testing_loop_invalid(testingQ_PerfLoop self, const char *message) {
+static void testing_loop_invalid(testingQ_PerfLoop self, B_ValueError error) {
     uint64_t state = __atomic_load_n(&self->_state, __ATOMIC_ACQUIRE);
     while (!(state & TESTING_LOOP_CLOSED) &&
            !__atomic_compare_exchange_n(&self->_state, &state,
                                         state | TESTING_LOOP_INVALID, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {}
-    $RAISE((B_BaseException)B_ValueErrorG_new(actStrFromCStringCopy(message)));
+    RAISE_EXC(error);
 }
 
 testingQ_PerfLoop testingQ_PerfLoopD_claim(testingQ_PerfLoop self) {
@@ -27,7 +36,7 @@ testingQ_PerfLoop testingQ_PerfLoopD_claim(testingQ_PerfLoop self) {
     if (!__atomic_compare_exchange_n(&self->_state, &state,
                                      TESTING_LOOP_CLAIMED, false,
                                      __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
-        testing_loop_invalid(self, "Use t.loop() once per test invocation");
+        testing_loop_invalid(self, &testingQ_loop_claim_error);
     return self;
 }
 
@@ -122,7 +131,7 @@ bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
     for (;;) {
         if (!(state & TESTING_LOOP_CLAIMED) ||
             (state & (TESTING_LOOP_CLOSED | TESTING_LOOP_INVALID | TESTING_LOOP_BUSY))) {
-            testing_loop_invalid(self, "Cannot advance a closed or concurrent t.loop()");
+            testing_loop_invalid(self, &testingQ_loop_advance_error);
             return false;
         }
         if (state & TESTING_LOOP_EXHAUSTED) {
@@ -148,13 +157,13 @@ bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
     B_int scale = NULL;
     if ($PUSH()) {
         if (!counters_valid)
-            testing_loop_invalid(self, "Runtime counters decreased during t.loop()");
+            testing_loop_invalid(self, &testingQ_loop_counters_error);
         if (completed)
             testing_loop_batch(self, completed);
         scale = testingQ_PerfLoopD__advance(self, (int64_t)completed);
         uint64_t current = __atomic_load_n(&self->_state, __ATOMIC_ACQUIRE);
         if (current & (TESTING_LOOP_CLOSED | TESTING_LOOP_INVALID))
-            testing_loop_invalid(self, "t.loop() completed while being advanced");
+            testing_loop_invalid(self, &testingQ_loop_completed_error);
         if (scale) {
             self->_yield_scale = scale;
             self->_batch_left = self->_batch_size - 1;
@@ -168,7 +177,7 @@ bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
         B_BaseException exception = $POP();
         __atomic_fetch_or(&self->_state, TESTING_LOOP_INVALID, __ATOMIC_RELAXED);
         __atomic_fetch_and(&self->_state, ~((uint64_t)TESTING_LOOP_BUSY), __ATOMIC_RELEASE);
-        $RAISE(exception);
+        RAISE_EXC(exception);
         return false;
     }
     __atomic_fetch_and(&self->_state, ~((uint64_t)TESTING_LOOP_BUSY), __ATOMIC_RELEASE);

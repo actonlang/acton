@@ -13,6 +13,9 @@
  */
 
 
+static struct B_ValueError B_slice_zero_step_error =
+    STATIC_EXCEPTION(B_ValueError, "step size 0 in slice");
+
 /* Normalize slice notation, so that
    - if step == 0, VALUEERROR is raised
 
@@ -31,7 +34,7 @@ void normalize_slice(B_slice slc, int64_t len, int64_t *slen, int64_t *start, in
     else
         *step = *slc->step;
     if (*step == 0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("step size 0 in slice")));
+        RAISE_EXC(&B_slice_zero_step_error);
     }
     if (slc->start == NULL)
         *start = *step > 0 ? 0 : len-1;

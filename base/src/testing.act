@@ -8,6 +8,21 @@ import math
 import term
 import time
 
+_invalid_test_type_error = ValueError("Test: Invalid test type")
+_invalid_test_json_error = ValueError("Test: Invalid JSON")
+_invalid_result_json_error = ValueError("Invalid TestResult JSON")
+_invalid_result_counters_error = ValueError("Invalid TestResult counters")
+_invalid_counter_metadata_error = ValueError("Invalid performance counter metadata")
+_invalid_info_json_error = ValueError("Invalid TestInfo JSON")
+_invalid_performance_options_error = ValueError("Performance time must be positive and scale must be non-negative")
+_invalid_scaling_options_error = ValueError("--scaling requires performance mode and a positive --scale")
+_incomplete_loop_error = ValueError("Benchmark loop must run to exhaustion")
+_missing_loop_error = ValueError("Scaling measurements require t.loop()")
+_inconsistent_loop_error = ValueError("Call t.loop() consistently in every invocation")
+_preparation_timeout_error = ValueError("Performance time budget exhausted during preparation; increase --time")
+_test_error = AssertionError("Test error")
+
+
 # -- assert ---------------------------------------------------------------------
 
 def opt_str[T](s: ?T) -> str:
@@ -311,7 +326,7 @@ def assertNotIn(a, b, msg: ?str, print_vals: bool=True):
 
 def error(msg: ?str):
     """Raise a generic test error"""
-    raise AssertionError(msg if msg is not None else "Test error")
+    raise AssertionError(msg) if msg is not None else _test_error
 
 # -------------------------------------------------------------------------------
 
@@ -560,7 +575,7 @@ class Test(object):
         elif isinstance(self, EnvTest):
             self.run_test(report_result, env, log_handler, tags, loop)
         else:
-            raise ValueError("Test: Invalid test type")
+            raise _invalid_test_type_error
 
     def to_json(self):
         return {
@@ -576,7 +591,7 @@ class Test(object):
         desc = data["desc"]
         if isinstance(module, str) and isinstance(name, str) and isinstance(desc, str):
             return Test(name, desc, module)
-        raise ValueError("Test: Invalid JSON")
+        raise _invalid_test_json_error
 
 def safe_hash(h: int) -> int: # TODO: Remove when https://github.com/actonlang/acton/issues/1348 is fixed
     limit = 2**63-1
@@ -784,7 +799,7 @@ class TestResult(object):
                 return None
             if isinstance(v, str):
                 return v
-            raise ValueError("Invalid TestResult JSON")
+            raise _invalid_result_json_error
 
         success = data["success"]
         skipped = False
@@ -812,10 +827,10 @@ class TestResult(object):
                     elif isinstance(key, str) and isinstance(val, int):
                         parsed[key] = float(val)
                     else:
-                        raise ValueError("Invalid TestResult counters")
+                        raise _invalid_result_counters_error
                 counters = parsed
             else:
-                raise ValueError("Invalid TestResult counters")
+                raise _invalid_result_counters_error
         if (isinstance(success, bool)
             and isinstance(skipped, bool)
             and isinstance(duration, float)
@@ -825,7 +840,7 @@ class TestResult(object):
             and isinstance(loop_iterations, int) and loop_iterations > 0
             ):
             return TestResult(success, exception, output, duration, mem_usage_delta, non_gc_mem_usage_delta, skipped, skip_reason, gc_duration, counters, loop_iterations)
-        raise ValueError("Invalid TestResult JSON")
+        raise _invalid_result_json_error
 
 
 class TestInfo(object):
@@ -1169,9 +1184,9 @@ class TestInfo(object):
                     if isinstance(key, str) and isinstance(val, str):
                         counter_info[key] = val
                     else:
-                        raise ValueError("Invalid performance counter metadata")
+                        raise _invalid_counter_metadata_error
             else:
-                raise ValueError("Invalid performance counter metadata")
+                raise _invalid_counter_metadata_error
         results: list[TestResult] = []
         # We don't support results in the JSON, since we don't want it for
         # performance reasons but for very generic JSON serialization support it
@@ -1214,7 +1229,7 @@ class TestInfo(object):
                             results,
                             counter_info)
         else:
-            raise ValueError("Invalid TestInfo JSON")
+            raise _invalid_info_json_error
 
 class TestRunnerConfig(object):
     perf_mode: bool
@@ -1262,9 +1277,9 @@ class TestRunnerConfig(object):
         self.scale = args.get_int("scale")
         self.scaling = args.get_bool("scaling")
         if perf_mode and (self.time_ms <= 0 or self.scale < 0):
-            raise ValueError("Performance time must be positive and scale must be non-negative")
+            raise _invalid_performance_options_error
         if self.scaling and (not perf_mode or self.scale <= 0):
-            raise ValueError("--scaling requires performance mode and a positive --scale")
+            raise _invalid_scaling_options_error
 
 class PerfRun(object):
     """Collect timed invocations, or one fixed-work sample after one warmup."""
@@ -1617,10 +1632,10 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
         loop_status = loop.status()
         if success == True and exception is None and not skipped and loop_status in [1, 3]:
             success = False
-            exception = ValueError("Benchmark loop must run to exhaustion")
+            exception = _incomplete_loop_error
         if config.scaling and success == True and exception is None and not skipped and loop_status == 0:
             success = False
-            exception = ValueError("Scaling measurements require t.loop()")
+            exception = _missing_loop_error
         if perf_run is not None:
             if invocation == 1:
                 perf_run.loop = loop_status != 0
@@ -1628,7 +1643,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                     perf_run.scale = 1
             elif success == True and exception is None and not skipped and (loop_status != 0) != perf_run.loop:
                 success = False
-                exception = ValueError("Call t.loop() consistently in every invocation")
+                exception = _inconsistent_loop_error
             if success == True and exception is None and not skipped and loop_status == 2 and loop.iterations == 0:
                 _finish_budget()
                 return
@@ -1647,7 +1662,7 @@ actor TestExecutor(syscap, config, t: Test, report_complete, report_progress, en
                     return
                 perf_run.preparation_exhausted = True
                 success = False
-                exception = ValueError("Performance time budget exhausted during preparation; increase --time")
+                exception = _preparation_timeout_error
                 complete = True
 
         if perf_run is not None and (complete or skipped):

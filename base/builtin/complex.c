@@ -12,6 +12,11 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_NotImplementedError B_complex_fromatom_not_implemented_error =
+    STATIC_EXCEPTION(B_NotImplementedError, "__fromatom__ not implemented for complex");
+static struct B_ZeroDivisionError B_complex_truediv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "complex truediv: divisor is zero");
+
 B_complex toB_complex(complex double c) {
     B_complex res = acton_malloc(sizeof(struct B_complex));
     res->$class = &B_complexG_methods;
@@ -83,7 +88,7 @@ B_complex B_NumberD_complexD___mul__ (B_NumberD_complex wit, B_complex a, B_comp
 }
 
 B_complex B_NumberD_complexD___fromatom__(B_NumberD_complex wit, B_atom a) {
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,actStrFromCString("__fromatom__ not implemented for complex")));
+    RAISE_EXC(&B_complex_fromatom_not_implemented_error);
     return B_None;
 }
 
@@ -119,7 +124,7 @@ B_complex B_NumberD_complexD_conjugate (B_NumberD_complex wit, B_complex c) {
 
 B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_complex b) {
     if (b->val == 0.0) {
-        RAISE(B_ZeroDivisionError, actStrFromCString("complex truediv: divisor is zero"));
+        RAISE_EXC(&B_complex_truediv_zero_error);
     }
     return toB_complex(a->val/b->val);
 }

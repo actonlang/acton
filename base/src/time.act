@@ -34,6 +34,9 @@ Information about the clock source is kept and used as part of various
 operations to indicate precision and error in resulting values.
 """
 
+_incomparable_clock_error = Exception("Monotonic clock not comparable")
+
+
 # TODO: localization?
 MONTHS = [
     "January",
@@ -730,7 +733,7 @@ class PrecisionStopwatch(object):
         """
         n = monotonic()
         if not n.comparable(self.start):
-            raise Exception("Monotonic clock not comparable")
+            raise _incomparable_clock_error
         return n.since(self.start)
 
     def reset(self):

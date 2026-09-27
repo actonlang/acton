@@ -12,6 +12,15 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_ZeroDivisionError B_u1_zero_division_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "division by zero");
+struct B_ZeroDivisionError B_u1_truediv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u1 truediv: division by zero");
+struct B_ZeroDivisionError B_u1_floordiv_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u1 floordiv: division by zero");
+struct B_ZeroDivisionError B_u1_mod_zero_error =
+    STATIC_EXCEPTION(B_ZeroDivisionError, "u1 mod: division by zero");
+
 // Auxiliary //////////////////////////////////////////////////////////////////////////////
 
 #define U1_NORM(a)        ((uint8_t)((a) & 1))
@@ -25,9 +34,9 @@
 #define U1_XOR(a,b)       U1_NORM((a) ^ (b))
 #define U1_LSHIFT(a,b)    U1_NORM((a) << (b))
 #define U1_RSHIFT(a,b)    U1_NORM((a) >> (b))
-#define U1_DIV(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); (double)(a)/(double)_u1_b; })
-#define U1_FLOORDIV(a,b)  ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); U1_NORM((a) / _u1_b); })
-#define U1_MOD(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); U1_NORM((a) % _u1_b); })
+#define U1_DIV(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) RAISE_EXC(&B_u1_zero_division_error); (double)(a)/(double)_u1_b; })
+#define U1_FLOORDIV(a,b)  ({ uint8_t _u1_b = (b); if (_u1_b == 0) RAISE_EXC(&B_u1_zero_division_error); U1_NORM((a) / _u1_b); })
+#define U1_MOD(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) RAISE_EXC(&B_u1_zero_division_error); U1_NORM((a) % _u1_b); })
 
 // only called with e>=0.
 uint8_t u1_pow(uint8_t a, uint8_t e) {
@@ -47,7 +56,7 @@ uint8_t B_u1G_new(B_atom a, B_int base) {  // base is optional
     if (sz  > 1 || sz < 0 || (sz==1 && n > 1)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
+        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
     }
     return (uint8_t)(n*sz);
 }

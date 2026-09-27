@@ -3,6 +3,11 @@
 #include "../rts/log.h"
 #include <snappy-c.h>
 
+static struct B_ValueError snappyQ_invalid_input_error =
+    STATIC_EXCEPTION(B_ValueError, "Invalid input");
+static struct B_ValueError snappyQ_small_buffer_error =
+    STATIC_EXCEPTION(B_ValueError, "Buffer too small");
+
 void snappyQ___ext_init__() {
     // NOP
 }
@@ -26,8 +31,9 @@ B_bytes snappyQ_compress (B_bytes data) {
         ret = actBytesFromCStringLengthCopy(compressed, (int)compressed_len);
     }
     else {
-        char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
+        RAISE_EXC(SNAPPY_INVALID_INPUT == status
+            ? &snappyQ_invalid_input_error
+            : &snappyQ_small_buffer_error);
     }
 
     return ret;
@@ -47,8 +53,9 @@ B_bytes snappyQ_decompress (B_bytes data) {
     status = snappy_uncompressed_length(input, input_len, &uncompressed_len);
 
     if (SNAPPY_OK != status) {
-	char *errmsg = (SNAPPY_INVALID_INPUT == status) ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
+        RAISE_EXC(SNAPPY_INVALID_INPUT == status
+            ? &snappyQ_invalid_input_error
+            : &snappyQ_small_buffer_error);
     }
 
     uncompressed = acton_malloc(uncompressed_len);
@@ -58,8 +65,9 @@ B_bytes snappyQ_decompress (B_bytes data) {
 	ret = actBytesFromCStringLengthCopy(uncompressed, (int)uncompressed_len);
     }
     else {
-	char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
+        RAISE_EXC(SNAPPY_INVALID_INPUT == status
+            ? &snappyQ_invalid_input_error
+            : &snappyQ_small_buffer_error);
     }
 
     return ret;

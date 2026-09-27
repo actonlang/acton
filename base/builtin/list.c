@@ -12,6 +12,19 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_MemoryError B_list_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
+static struct B_ValueError B_list_negative_start_error =
+    STATIC_EXCEPTION(B_ValueError, "start position must be >= 0");
+static struct B_ValueError B_list_start_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "start position must not exceed list length");
+static struct B_ValueError B_list_stop_before_start_error =
+    STATIC_EXCEPTION(B_ValueError, "stop position must be higher than start position");
+static struct B_ValueError B_list_invalid_slice_error =
+    STATIC_EXCEPTION(B_ValueError, "setslice: illegal slice");
+static struct B_ValueError B_list_invalid_iterator_source_error =
+    STATIC_EXCEPTION(B_ValueError, "list iterator source is not a list");
+
 // Generic list implementation /////////////////////////////////////////////////////////////////////
 
 // For now, expansion doubles capacity.
@@ -25,7 +38,7 @@ static void B_list_base_expand(B_list_base lst, int n) {
         ? acton_malloc(newcapacity * sizeof($WORD))
         : acton_realloc(lst->data, newcapacity * sizeof($WORD));
     if (newptr == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
+        RAISE_EXC(&B_list_allocation_failed_error);
     lst->data = newptr;
     lst->capacity = newcapacity;
 }
@@ -48,10 +61,10 @@ static B_list_base B_list_base_new(int capacity, $SuperG_class cls) {
     }
     B_list_base lst = acton_malloc(sizeof(struct B_list_base));
     if (lst == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
+        RAISE_EXC(&B_list_allocation_failed_error);
     lst->data = capacity > 0 ? acton_malloc(capacity * sizeof($WORD)) : NULL;
     if (capacity > 0 && lst->data == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
+        RAISE_EXC(&B_list_allocation_failed_error);
     lst->length = 0;
     lst->capacity = capacity;
     lst->$class = cls;
@@ -159,7 +172,7 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
     long ix = i ? fromB_int(i) : len - 1;
     long ix0 = ix < 0 ? len + ix : ix;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("pop: index outside list")));
+        RAISE(B_IndexError, ix0, actStrFromCString("pop: index outside list"));
     $WORD res = lst->data[ix0];
     memmove(lst->data + ix0, lst->data + ix0 + 1, (len - ix0 - 1) * sizeof($WORD));
     lst->data[len - 1] = NULL;
@@ -171,14 +184,14 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
 static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, B_int start, B_int stop) {
     int strt = start ? fromB_int(start) : 0;
     if (strt < 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("start position must be >= 0")));
+        RAISE_EXC(&B_list_negative_start_error);
     if (strt > self->length)
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("start position must not exceed list length")));
+        RAISE_EXC(&B_list_start_too_large_error);
     int stp = self->length;
     if (stop) {
         stp = fromB_int(stop);
         if (stp <= strt)
-            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("stop position must be higher than start position")));
+            RAISE_EXC(&B_list_stop_before_start_error);
     }
     if (stp > self->length)
         stp = self->length;
@@ -186,7 +199,7 @@ static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, B_int 
         if (eqwit->$class->__eq__(eqwit, val, self->data[i]))
             return i;
     }
-    $RAISE((B_BaseException)$NEW(B_KeyError, val, actStrFromCString("element is not in list")));
+    RAISE(B_KeyError, val, actStrFromCString("element is not in list"));
     return 0;
 }
 
@@ -249,7 +262,7 @@ static $WORD B_list_base_getitem(B_list_base lst, int64_t n) {
     int len = lst->length;
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("getitem: index outside list")));
+        RAISE(B_IndexError, ix0, actStrFromCString("getitem: index outside list"));
     return lst->data[ix0];
 }
 
@@ -257,7 +270,7 @@ static B_NoneType B_list_base_setitem(B_list_base lst, int64_t n, $WORD val) {
     int len = lst->length;
     int64_t ix0 = n < 0 ? len + n : n;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("setitem: index outside list")));
+        RAISE(B_IndexError, ix0, actStrFromCString("setitem: index outside list"));
     lst->data[ix0] = val;
     return B_None;
 }
@@ -293,7 +306,7 @@ static B_NoneType B_list_base_setslice(B_list_base lst, B_Iterable wit, B_slice 
     int64_t start, stop, step, slen;
     normalize_slice(slc, lst->length, &slen, &start, &stop, &step);
     if (step != 1 && other->length != slen)
-        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("setslice: illegal slice")));
+        RAISE_EXC(&B_list_invalid_slice_error);
 
     int copy = other->length <= slen ? other->length : slen;
     int pos = start;
@@ -471,7 +484,7 @@ static B_list_base B_list_base_from_iter_src($WORD src) {
     $SuperG_class cls = (($Super)src)->$class;
     if (cls == ($SuperG_class)&B_listG_methods || cls == ($SuperG_class)&B_ilistG_methods)
         return (B_list_base)src;
-    $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("list iterator source is not a list")));
+    RAISE_EXC(&B_list_invalid_iterator_source_error);
     return NULL;
 }
 

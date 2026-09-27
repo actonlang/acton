@@ -221,6 +221,11 @@ class PrintUsage(ArgumentError):
     pass
 
 
+_short_option_length_error = ArgumentError("Short option must be exactly one character")
+_short_option_character_error = ArgumentError("Short option must be alphanumeric")
+_multiple_positional_error = ArgumentError("Only one positional argument with multiple values allowed")
+
+
 class Args(object):
     cmd_parser: ?Parser
     options: dict[str, (type: str, value: value)]
@@ -299,9 +304,9 @@ class Parser(object):
     def add_bool(self, name: str, help: str, short: ?str=None):
         if short is not None:
             if len(short) != 1:
-                raise ArgumentError("Short option must be exactly one character")
+                raise _short_option_length_error
             if not short.isalnum():
-                raise ArgumentError("Short option must be alphanumeric")
+                raise _short_option_character_error
             if short in self.short_opts:
                 raise ArgumentError(f"Short option '{short}' already exists")
             self.short_opts[short] = name
@@ -316,9 +321,9 @@ class Parser(object):
 
         if short is not None:
             if len(short) != 1:
-                raise ArgumentError("Short option must be exactly one character")
+                raise _short_option_length_error
             if not short.isalnum():
-                raise ArgumentError("Short option must be alphanumeric")
+                raise _short_option_character_error
             if short in self.short_opts:
                 raise ArgumentError(f"Short option '{short}' already exists")
             self.short_opts[short] = name
@@ -329,7 +334,7 @@ class Parser(object):
         if nargs == "+" or nargs == "*":
             for arg in self.args:
                 if arg.nargs == "+" or arg.nargs == "*":
-                    raise ArgumentError("Only one positional argument with multiple values allowed")
+                    raise _multiple_positional_error
         self.args.append((name=name, help=help, required=required, nargs=nargs, left=1))
 
     def add_cmd(self, name: str, help: str="", fn: proc(Args) -> None):

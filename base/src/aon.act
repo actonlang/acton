@@ -60,6 +60,10 @@ and `json.encode(aon.decode(aon_text))` converts AON to JSON.
 """
 
 
+_invalid_indent_error = ValueError("AON indentation must be positive")
+_nonfinite_float_error = ValueError("AON cannot encode non-finite floats")
+
+
 def _is_identifier_start(char: str) -> bool:
     return char != "" and char in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_"
 
@@ -482,7 +486,7 @@ class _Encoder(object):
 
     def __init__(self, indent: int):
         if indent <= 0:
-            raise ValueError("AON indentation must be positive")
+            raise _invalid_indent_error
         self.indent = indent
 
     def _padding(self, level: int) -> str:
@@ -523,7 +527,7 @@ class _Encoder(object):
             return str(val)
         if isinstance(val, float):
             if val != val or val == float("inf") or val == float("-inf"):
-                raise ValueError("AON cannot encode non-finite floats")
+                raise _nonfinite_float_error
             text = "%.17g" % val
             if "." not in text and "e" not in text and "E" not in text:
                 text += ".0"

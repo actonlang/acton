@@ -1,0 +1,44 @@
+import testing
+
+
+# Catch-frame allocation remains part of these measurements. The fixed
+# exceptions and their messages are shared; the formatted diagnostic carries
+# the invalid input and therefore still needs a separate instance.
+def _test_fixed_builtin_exception(t: testing.SyncT):
+    text = "abc"
+    missing = "z"
+    caught = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        try:
+            text.index(missing)
+        except ValueError:
+            caught += 1
+    testing.assertEqual(caught, repeats)
+
+
+def _test_fixed_acton_exception(t: testing.SyncT):
+    empty: list[int] = []
+    caught = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        try:
+            min(empty)
+        except ValueError:
+            caught += 1
+    testing.assertEqual(caught, repeats)
+
+
+def _test_formatted_exception(t: testing.SyncT):
+    invalid = "invalid"
+    caught = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        try:
+            int(invalid)
+        except ValueError:
+            caught += 1
+    testing.assertEqual(caught, repeats)
