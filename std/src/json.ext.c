@@ -109,7 +109,10 @@ void stdQ_jsonQ_encode_dict(yyjson_mut_doc *doc, yyjson_mut_val *node, B_dict da
                     // maybe? like we really shouldn't accept user-defined types
                     // here, just throw an exception? or when we have unions, just
                     // accept union of the types we support
-                    RAISE(B_ValueError, $FORMAT("stdQ_jsonQ_encode_dict: for key %s unknown type: %s", name->str, v->$class->$GCINFO));
+                    B_str message = B_TimesD_strD___add__(B_TimesD_strG_witness,
+                        actStrFromCString("stdQ_jsonQ_encode_dict: for key "), name);
+                    RAISE(B_ValueError, B_TimesD_strD___add__(B_TimesD_strG_witness,
+                        message, $FORMAT(" unknown type: %s", v->$class->$GCINFO)));
             }
         } else {
             yyjson_mut_obj_add(node, key, yyjson_mut_null(doc));

@@ -38,6 +38,12 @@ message alone does not make an exception shareable. The AON parser, for example,
 adds its current source, line, and column even to fixed messages. User exception
 constructors and deserialization still create separate values.
 
+Use the byte length when formatting an Acton `str`, `bytes`, or `bytearray` in
+C. `%.*s` bounds the read but still stops at NUL; use Acton string concatenation
+when embedded NUL must be preserved. Only true C strings may rely on a NUL
+terminator. Keep existing exception types, constructors, and diagnostic fields
+when optimizing their allocation.
+
 Catch frames may still allocate when entering a `try` block. Sharing exceptions
 removes their construction cost; it does not remove all allocation from error
 handling. The internal `$SEQ`, `$BRK`, and `$CNT` control-flow exceptions are also

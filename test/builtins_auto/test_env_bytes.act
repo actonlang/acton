@@ -2,6 +2,9 @@
 # the Env methods must reject a NUL byte instead of cutting the name or value
 # short at it.
 
+def borrowed_name() -> bytes:
+    NotImplemented
+
 actor main(env):
     nul = bytes([0])
     name = b"ACTON_TEST_ENV_BYTES"
@@ -28,6 +31,13 @@ actor main(env):
             failed.append("unsetenvb accepted a NUL byte in the name")
         except ValueError:
             pass
+
+        try:
+            await async env.setenvb(borrowed_name(), b"value")
+            failed.append("setenvb accepted an invalid name")
+        except RuntimeError as error:
+            if not error.error_message.startswith("Failed to set the environment variable =BAD: "):
+                failed.append("setenvb formatted bytes outside the name: {error}")
 
         await async env.setenvb(name, b"value")
         v = env.getenvb(name)
