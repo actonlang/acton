@@ -156,6 +156,14 @@ primAnnot           = gPrim "annot"
 
 primRaiseValueError = gPrim "raiseValueError"
 primUGetItem        = gPrim "listD_U__getitem__"
+primUListSetItem    = gPrim "listD_U__setitem__"
+primUListDelItem    = gPrim "listD_U__delitem__"
+primUIListGetItem   = gPrim "ilistD_U__getitem__"
+primUStrGetItem     = gPrim "strD_U__getitem__"
+primUBytesGetItem   = gPrim "bytesD_U__getitem__"
+primUBytearrayGetItem = gPrim "bytearrayD_U__getitem__"
+primUBytearraySetItem = gPrim "bytearrayD_U__setitem__"
+primUBytearrayDelItem = gPrim "bytearrayD_U__delitem__"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -251,6 +259,14 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primAnnot,         NDef scAnnot NoDec Nothing),
                             (noq primRaiseValueError,NDef scRaiseValueError NoDec Nothing), 
                             (noq primUGetItem,      NDef scUGetItem NoDec Nothing),
+                            (noq primUListSetItem,  NDef scUListSetItem NoDec Nothing),
+                            (noq primUListDelItem,  NDef scUListDelItem NoDec Nothing),
+                            (noq primUIListGetItem, NDef scUIListGetItem NoDec Nothing),
+                            (noq primUStrGetItem,   NDef scUStrGetItem NoDec Nothing),
+                            (noq primUBytesGetItem, NDef scUBytesGetItem NoDec Nothing),
+                            (noq primUBytearrayGetItem, NDef scUBytearrayGetItem NoDec Nothing),
+                            (noq primUBytearraySetItem, NDef scUBytearraySetItem NoDec Nothing),
+                            (noq primUBytearrayDelItem, NDef scUBytearrayDelItem NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -595,6 +611,28 @@ scAnnot             = tSchema [qbind a, qbind b] tAnnot
 scUGetItem          = tSchema [qbind a] tUGetItem
   where tUGetItem   = tFun fxPure (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
         a           = TV KType $ name "A"
+
+scUListSetItem      = tSchema [qbind a] tUListSetItem
+  where tUListSetItem = tFun fxMut (posRow (tList (tVar a)) (posRow tInt (posRow (tVar a) posNil))) kwdNil tNone
+        a             = TV KType $ name "A"
+
+scUListDelItem      = tSchema [qbind a] tUListDelItem
+  where tUListDelItem = tFun fxMut (posRow (tList (tVar a)) (posRow tInt posNil)) kwdNil tNone
+        a             = TV KType $ name "A"
+
+scUIListGetItem     = tSchema [qbind a] tUIListGetItem
+  where tUIListGetItem = tFun fxPure (posRow (tIList (tVar a)) (posRow tInt posNil)) kwdNil (tVar a)
+        a              = TV KType $ name "A"
+
+scUStrGetItem       = monotype $ tFun fxPure (posRow tStr (posRow tInt posNil)) kwdNil tStr
+
+scUBytesGetItem     = monotype $ tFun fxPure (posRow tBytes (posRow tInt posNil)) kwdNil tInt
+
+scUBytearrayGetItem = monotype $ tFun fxPure (posRow tBytearray (posRow tInt posNil)) kwdNil tInt
+
+scUBytearraySetItem = monotype $ tFun fxMut (posRow tBytearray (posRow tInt (posRow tInt posNil))) kwdNil tNone
+
+scUBytearrayDelItem = monotype $ tFun fxMut (posRow tBytearray (posRow tInt posNil)) kwdNil tNone
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)

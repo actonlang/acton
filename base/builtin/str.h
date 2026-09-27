@@ -149,3 +149,10 @@ B_IteratorD_bytes B_IteratorD_bytesG_new(B_bytes);
 B_str B_strD_join_par(char lpar,B_list elems, char rpar);
 
 B_str $default__str__(B_value);
+
+// Raw indexing workers used when the compiler resolves a builtin witness.
+B_str $strD_U__getitem__(B_str s, int64_t i);
+int64_t $bytesD_U__getitem__(B_bytes str, int64_t i);
+int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t i);
+B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t i, int64_t val);
+B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t i);

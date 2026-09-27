@@ -16,6 +16,44 @@ void $default__init__($WORD s) {
     return;
 }
 
+static void $raise_signed_int_range(int64_t value, const char *type_name) {
+    char errmsg[128];
+    snprintf(errmsg, sizeof(errmsg), "%s(): value %lld out of range for type %s",
+             type_name, (long long)value, type_name);
+    $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+}
+
+static void $raise_unsigned_int_range(uint64_t value, const char *type_name) {
+    char errmsg[128];
+    snprintf(errmsg, sizeof(errmsg), "%s(): value %llu out of range for type %s",
+             type_name, (unsigned long long)value, type_name);
+    $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+}
+
+int64_t $checked_int_from_i64(int64_t value, int64_t min, int64_t max, const char *type_name) {
+    if (value < min || value > max)
+        $raise_signed_int_range(value, type_name);
+    return value;
+}
+
+uint64_t $checked_uint_from_i64(int64_t value, uint64_t max, const char *type_name) {
+    if (value < 0 || (uint64_t)value > max)
+        $raise_signed_int_range(value, type_name);
+    return (uint64_t)value;
+}
+
+int64_t $checked_int_from_u64(uint64_t value, int64_t max, const char *type_name) {
+    if (value > (uint64_t)max)
+        $raise_unsigned_int_range(value, type_name);
+    return (int64_t)value;
+}
+
+uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_name) {
+    if (value > max)
+        $raise_unsigned_int_range(value, type_name);
+    return value;
+}
+
 /*
 void B_printobj(char *mess,$WORD obj) {
     B_value obj1 = (B_value)obj;

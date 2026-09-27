@@ -82,4 +82,6 @@ B_list B_listD_copy(B_list lst);
 B_ilist B_ilistD_new(int capacity);
 
 $WORD $listD_U__getitem__(B_list lst, int64_t n);
-B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val);
+B_NoneType $listD_U__setitem__(B_list lst, int64_t n, $WORD val);
+B_NoneType $listD_U__delitem__(B_list lst, int64_t n);
+$WORD $ilistD_U__getitem__(B_ilist lst, int64_t n);

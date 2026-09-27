@@ -1,2 +1,7 @@
 def replace(xs: list[int], index: int):
     xs[index] = 0
+
+# Keep coverage of direct calls through an inherited static-witness path for a
+# method which has no raw builtin specialization.
+def replace_slice(xs: list[int], values: list[int]):
+    xs[0:1] = values

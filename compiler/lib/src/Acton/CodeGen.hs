@@ -1397,10 +1397,12 @@ boxedExpr env (Paren _ e)           = boxedExpr env e
 boxedExpr env Box{}                 = True
 boxedExpr env (Call _ (TApp _ (Var _ n) _) _ KwdNil)
   | n == primCAST                   = True
-  | n == primUGetItem               = True
+  | n `elem` [primUGetItem, primUIListGetItem]
+                                    = True
 boxedExpr env (Call _ (Var _ n) _ KwdNil)
   | n == primUNext                  = False
-  | n == primUGetItem               = True
+  | n `elem` [primUGetItem, primUIListGetItem]
+                                    = True
 boxedExpr env c@(Call _ f _ KwdNil)
   | rawClassConstructor env c f     = False
 boxedExpr env (Call _ f _ KwdNil)   = callReturnsBoxed env f
@@ -1780,6 +1782,103 @@ classCast env ts x q n              = parens . (parens (gen env (classCallableTy
 genNew env n p                      = newcon' env n <> parens (genUCallPosArgs env r p)
   where TFun _ _ r _ _              = sctype $ fst $ schemaOf env (Var NoLoc n)
 
+-- Builtin fixed-width numeric constructors can consume their argument in its
+-- raw representation.  This avoids boxing followed by atom inspection; an
+-- integer narrowing conversion still goes through a raw checked helper.
+genRawNumericConstructor env dst (PosArg e PosNil)
+  | Just (src, e') <- rawNumericSource env e,
+    dst == tFloat,
+    src == tFloat || src `elem` fixedIntegralTypes
+                                    = Just $ genRawNumericCast env src tFloat e'
+genRawNumericConstructor env dst (PosArg e (PosArg (None _) PosNil))
+  | Just (src, e') <- rawNumericSource env e,
+    dst `elem` fixedIntegralTypes,
+    src `elem` fixedIntegralTypes   = Just $ genRawNumericCast env src dst e'
+genRawNumericConstructor _ _ _      = Nothing
+
+-- Upcasting a concrete constructor argument to atom is represented by the
+-- internal $CAST primitive.  Recover its static source type so the conversion
+-- can bypass both the pointer cast and the Box inserted for the atom ABI.
+rawNumericSource env (Call _ (TApp _ (Var _ n) [src, dst]) (PosArg e PosNil) KwdNil)
+  | n == primCAST,
+    boxedRepType dst == tAtom       = Just (boxedRepType src, e)
+rawNumericSource env e              = Just (boxedRepType $ typeOf env e, e)
+
+fixedIntegralTypes                  = [tInt, tI32, tI16, tI8, tU64, tU32, tU16, tU8, tU1]
+
+-- The Bool in the metadata is True for a signed representation.
+fixedIntegralInfo t
+  | t == tInt                       = Just (True, 64)
+  | t == tI32                       = Just (True, 32)
+  | t == tI16                       = Just (True, 16)
+  | t == tI8                        = Just (True, 8)
+  | t == tU64                       = Just (False, 64)
+  | t == tU32                       = Just (False, 32)
+  | t == tU16                       = Just (False, 16)
+  | t == tU8                        = Just (False, 8)
+  | t == tU1                        = Just (False, 1)
+  | otherwise                      = Nothing
+
+genRawNumericCast env src dst e
+  | src == dst                      = raw
+  | dst == tFloat                   = castRawResult dst raw
+  | Just (srcSigned, srcBits) <- fixedIntegralInfo src,
+    Just (dstSigned, dstBits) <- fixedIntegralInfo dst,
+    safeIntegralCast srcSigned srcBits dstSigned dstBits
+                                    = castRawResult dst raw
+  | Just (srcSigned, _) <- fixedIntegralInfo src,
+    Just (dstSigned, _) <- fixedIntegralInfo dst
+                                    = castRawResult dst $ checkedIntegralCast srcSigned dstSigned dst raw
+  | otherwise                       = error ("Internal error: unsupported raw numeric cast from " ++ show src ++ " to " ++ show dst)
+  where raw                         = genRawExprAs env src e
+
+safeIntegralCast srcSigned srcBits dstSigned dstBits
+  | srcSigned == dstSigned          = srcBits <= dstBits
+  | not srcSigned && dstSigned      = srcBits < dstBits
+  | otherwise                       = False
+
+checkedIntegralCast True True dst e = ccall "$checked_int_from_i64" [e, signedMin dst, signedMax dst, typeName dst]
+checkedIntegralCast True False dst e= ccall "$checked_uint_from_i64" [e, unsignedMax dst, typeName dst]
+checkedIntegralCast False True dst e= ccall "$checked_int_from_u64" [e, signedMax dst, typeName dst]
+checkedIntegralCast False False dst e
+                                    = ccall "$checked_uint_from_u64" [e, unsignedMax dst, typeName dst]
+
+ccall n es                         = text n <> parens (hsep $ punctuate comma es)
+
+signedMin t
+  | t == tInt                       = text "INT64_MIN"
+  | t == tI32                       = text "INT32_MIN"
+  | t == tI16                       = text "INT16_MIN"
+  | t == tI8                        = text "INT8_MIN"
+  | otherwise                      = error ("Internal error: no signed minimum for " ++ show t)
+
+signedMax t
+  | t == tInt                       = text "INT64_MAX"
+  | t == tI32                       = text "INT32_MAX"
+  | t == tI16                       = text "INT16_MAX"
+  | t == tI8                        = text "INT8_MAX"
+  | otherwise                      = error ("Internal error: no signed maximum for " ++ show t)
+
+unsignedMax t
+  | t == tU64                       = text "UINT64_MAX"
+  | t == tU32                       = text "UINT32_MAX"
+  | t == tU16                       = text "UINT16_MAX"
+  | t == tU8                        = text "UINT8_MAX"
+  | t == tU1                        = text "1"
+  | otherwise                      = error ("Internal error: no unsigned maximum for " ++ show t)
+
+typeName t
+  | t == tInt                       = doubleQuotes $ text "int"
+  | t == tI32                       = doubleQuotes $ text "i32"
+  | t == tI16                       = doubleQuotes $ text "i16"
+  | t == tI8                        = doubleQuotes $ text "i8"
+  | t == tU64                       = doubleQuotes $ text "u64"
+  | t == tU32                       = doubleQuotes $ text "u32"
+  | t == tU16                       = doubleQuotes $ text "u16"
+  | t == tU8                        = doubleQuotes $ text "u8"
+  | t == tU1                        = doubleQuotes $ text "u1"
+  | otherwise                      = error ("Internal error: no numeric type name for " ++ show t)
+
 declCon env n q b
   | null abstr || hasNotImpl b      = (gen env tRes <+> newcon env n <> parens (gen env pars) <+> char '{') $+$
                                       nest 4 (gen env tObj <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
@@ -1933,6 +2032,10 @@ instance Gen Expr where
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
       | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
+    gen env c@(Call _ f p KwdNil)
+      | callIsClass env f,
+        Just d <- genRawNumericConstructor env (boxedRepType $ typeOf env c) p
+                                    = d
     gen env c@(Call _ e p _)        = genCall env [] e p
     gen env (Async _ e)             = gen env e
     gen env (TApp _ e ts)           = genInst env ts e
@@ -2001,6 +2104,10 @@ instance Gen Expr where
     gen env (Box t e)
       | boxedExpr env e             = gen env e
       | otherwise                   = genBoxed env t (gen env e)
+    gen env (UnBox t (Call _ f p KwdNil))
+        | callIsClass env f,
+          Just d <- genRawNumericConstructor env (boxedRepType t) p
+                                    = d
     gen env (UnBox _ e@(Call _ (Var _ f) p KwdNil))
         | f == primISNOTNONE        = genCall env [] (Var NoLoc primISNOTNONE0) p
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p

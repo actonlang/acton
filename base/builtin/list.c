@@ -535,14 +535,22 @@ $WORD $listD_U__getitem__(B_list lst, int64_t n) {
     return B_list_base_getitem((B_list_base)lst, n);
 }
 
-B_NoneType listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
+B_NoneType $listD_U__setitem__(B_list lst, int64_t n, $WORD val) {
     return B_list_base_setitem((B_list_base)lst, n, val);
+}
+
+B_NoneType $listD_U__delitem__(B_list lst, int64_t n) {
+    return B_list_base_delitem((B_list_base)lst, n);
+}
+
+$WORD $ilistD_U__getitem__(B_ilist lst, int64_t n) {
+    return B_list_base_getitem((B_list_base)lst, n);
 }
 
 // Sequence[list] wrappers /////////////////////////////////////////////////////////////////////////
 
 $WORD B_SequenceD_listD___getitem__(B_SequenceD_list wit, B_list lst, B_int n) {
-    return B_list_base_getitem((B_list_base)lst, n->val);
+    return $listD_U__getitem__(lst, n->val);
 }
 
 B_list B_SequenceD_listD___getslice__(B_SequenceD_list wit, B_list lst, B_slice slc) {
@@ -591,12 +599,12 @@ $WORD B_IndexedD_SliceableD_SequenceD_listD___getitem__(B_IndexedD_SliceableD_Se
 
 B_NoneType B_IndexedD_SliceableD_SequenceD_listD___setitem__(B_IndexedD_SliceableD_SequenceD_list wit,
                                                              B_list lst, B_int n, $WORD val) {
-    return B_list_base_setitem((B_list_base)lst, n->val, val);
+    return $listD_U__setitem__(lst, n->val, val);
 }
 
 B_NoneType B_IndexedD_SliceableD_SequenceD_listD___delitem__(B_IndexedD_SliceableD_SequenceD_list wit,
                                                              B_list lst, B_int n) {
-    return B_list_base_delitem((B_list_base)lst, n->val);
+    return $listD_U__delitem__(lst, n->val);
 }
 
 B_Iterator B_CollectionD_SequenceD_listD___iter__(B_CollectionD_SequenceD_list wit, B_list lst) {
@@ -644,7 +652,7 @@ bool B_OrdD_listD___lt__(B_OrdD_list wit, B_list a, B_list b) {
 // ISequence[ilist] wrappers ///////////////////////////////////////////////////////////////////////
 
 $WORD B_ISequenceD_ilistD___getitem__(B_ISequenceD_ilist wit, B_ilist lst, B_int n) {
-    return B_list_base_getitem((B_list_base)lst, n->val);
+    return $ilistD_U__getitem__(lst, n->val);
 }
 
 B_ilist B_ISequenceD_ilistD___getslice__(B_ISequenceD_ilist wit, B_ilist lst, B_slice slc) {

@@ -1,0 +1,30 @@
+def list_get(xs: list[int], i: int) -> int:
+    return xs[i]
+
+def list_set(xs: list[int], i: int, v: int) -> None:
+    xs[i] = v
+
+def list_del(xs: list[int], i: int) -> None:
+    del xs[i]
+
+def ilist_get(xs: ilist[int], i: int) -> int:
+    return xs[i]
+
+def str_get(xs: str, i: int) -> str:
+    return xs[i]
+
+def bytes_get(xs: bytes, i: int) -> int:
+    return xs[i]
+
+def bytearray_get(xs: bytearray, i: int) -> int:
+    return xs[i]
+
+def bytearray_set(xs: bytearray, i: int, v: int) -> None:
+    xs[i] = v
+
+def bytearray_del(xs: bytearray, i: int) -> None:
+    del xs[i]
+
+# Other IIndexed implementations must retain the ordinary boxed protocol ABI.
+def dict_get(xs: dict[int, int], i: int) -> int:
+    return xs[i]
