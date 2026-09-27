@@ -20,6 +20,7 @@ pub fn build(b: *std.Build) void {
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
+    const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -47,6 +48,7 @@ pub fn build(b: *std.Build) void {
         .enable_end_padding = !gc_no_end_padding,
         .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
         .disable_realloc_free = gc_realloc_no_free,
+        .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");

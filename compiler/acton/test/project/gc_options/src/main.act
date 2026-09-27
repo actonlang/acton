@@ -28,6 +28,7 @@ actor main(env):
     print("end_padding=" + str(info.end_padding))
     print("small_object_size=" + str(small_object_size()))
     print("thread_local_size_limit=" + str(info.thread_local_size_limit))
+    print("no_thread_local_warmup=" + str(info.no_thread_local_warmup))
     print("realloc_no_free=" + str(info.realloc_no_free))
     print("realloc_frees_moved=" + str(realloc_frees_moved()))
     print("mark_range_stealing=" + str(info.mark_range_stealing))

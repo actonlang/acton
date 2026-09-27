@@ -59,6 +59,7 @@ be turned off, as its section below describes:
 |---|---|---|
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
+| A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 
 ## GC mark layout
 
@@ -383,6 +384,37 @@ larger (by about 3 KB at 2048 and 64 KB at 32768), and each thread can hold
 partly used blocks of more sizes. This is a build setting shared by the
 application and its dependencies, including database support.
 
+## GC thread-local warm-up
+
+In BDWGC, a new thread does not use its own free list of a size until it has
+allocated about a heap block of objects of that size: until then, each of its
+allocations of that size takes the allocator lock. This keeps a thread that
+allocates only a few objects of a size from holding a list of them, but every
+new thread takes the lock once per object for each size it uses at first, and
+threads that start together contend for it. In a 16-thread service with a
+collector tuned to take the lock less often, and with the old copies of
+[moved objects](#gc-objects-moved-by-realloc) left to the collector, these
+allocations were a quarter of the lock acquisitions of one phase of its work.
+
+By default, Acton skips this warm-up: a thread takes its own free list of a
+size at its first allocation of that size, which takes the lock once. The cost
+is memory: each thread can hold up to a heap block of free objects of every
+size it has allocated at least once, separately for objects with and without
+pointers. With the default blocks and [size limit](#gc-thread-local-allocation-size)
+that is at most 200 KiB per thread, and more with larger blocks or a higher
+limit. The warm-up can be turned back on:
+
+```python
+build_options = {
+    "gc_no_thread_local_warmup": "false",
+}
+```
+
+The `GC_NO_THREAD_LOCAL_WARMUP` environment variable overrides the build
+setting when the program starts: `0` turns the warm-up back on and `1` skips
+it, without rebuilding. On a target without threads there are no thread-local
+free lists, the default is `"false"`, and `"true"` fails the build.
+
 ## GC objects moved by realloc
 
 When a list or a bytearray outgrows its storage, Acton's runtime doubles the
@@ -449,15 +481,15 @@ backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
-`thread_local_size_limit`, `realloc_no_free`, available `markers` (including
-the initiating thread), `mark_range_stealing`, `initial_mark_stack_size`,
-`pause_target_ms`, `free_space_divisor`, `full_frequency`,
-`heap_growth_divisor`, `alloc_budget_percent`, `heap_size`, `free_bytes` and
-`unmapped_bytes`. The pause target is `None` for ordinary and unlimited
-generational collection, and is not a guaranteed maximum pause. Available
-markers need not participate in every incremental marking attempt. Settings
-that an environment variable can override are reported as in effect, after
-the override.
+`thread_local_size_limit`, `no_thread_local_warmup`, `realloc_no_free`,
+available `markers` (including the initiating thread), `mark_range_stealing`,
+`initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
+`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
+`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
+unlimited generational collection, and is not a guaranteed maximum pause.
+Available markers need not participate in every incremental marking attempt.
+Settings that an environment variable can override are reported as in effect,
+after the override.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
