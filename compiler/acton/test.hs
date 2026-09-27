@@ -2604,18 +2604,18 @@ gcCollectorOptionTests = testGroup "GC collector options"
     defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "384"),
-                ("mark_range_stealing", "False"),
+                ("mark_range_stealing", "True"),
                 ("initial_mark_stack_size", "4096")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
-             ("gc_mark_range_stealing", "true"),
+             ("gc_mark_range_stealing", "false"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
-                    ("mark_range_stealing", "True"),
+                    ("mark_range_stealing", "False"),
                     ("initial_mark_stack_size", "65536")]
     -- The default initial mark stack has as many entries as a block has
     -- bytes.

@@ -50,6 +50,15 @@ mostly use GC allocation and are useful controls. Measure throughput, latency
 and process RSS; the performance runner's allocated-byte count covers GC
 allocation, not all memory obtained through C `malloc`.
 
+## GC defaults
+
+Acton turns on these collector behaviours, which BDWGC leaves off. Each can
+be turned off, as its section below describes:
+
+| Behaviour | Turn off in `build_options` | Turn off when starting the program |
+|---|---|---|
+| [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
+
 ## GC mark layout
 
 Applications can opt into a different BDWGC mark representation:
@@ -268,23 +277,35 @@ and shares work through a global one.
 
 ### Range stealing
 
-By default a marker scans the global mark stack for a few entries at a time,
-without a lock. The markers rescan entries that others have already taken,
-and more than one marker can take the same entry and scan its object. This is
-slow when the stack holds many small entries, as in generational collection,
-where the markers start from the objects on dirty pages. With range stealing,
-a marker instead claims a range of entries, sized to share the stack among the
-markers, with one atomic compare-and-swap, so that each entry is taken by one
-marker:
+With range stealing, a marker takes work from the global mark stack by
+claiming a range of entries, sized to share the stack among the markers, with
+one atomic compare-and-swap, so that each entry is taken by one marker. It is
+on by default on targets with threads and can be turned off:
 
 ```python
 build_options = {
-    "gc_mark_range_stealing": "true",
+    "gc_mark_range_stealing": "false",
 }
 ```
 
-Full collections were neither faster nor slower with it in measurements. The
-default is `"false"`. It requires a target with threads.
+Without it, a marker scans the global mark stack for a few entries at a time,
+without a lock. The markers rescan entries that others have already taken,
+and more than one marker can take the same entry and scan its object. This is
+slow when the stack holds many small entries, as in generational collection,
+where the markers start from the objects on dirty pages. Acton's collector
+marks generational collections with all its markers, where upstream BDWGC
+marks them on one thread. In measurements on a 32-thread Linux machine,
+without range stealing these collections took 1.25 times the wall time and
+2.5 times the CPU time of marking on one thread with 4 markers, and 1.9 to
+2.4 times the wall time and 18 to 27 times the CPU time with 16 markers; the
+longest pause was 2.6 to 6.6 times as long. With range stealing they took
+0.83 to 0.93 times the wall time of marking on one thread, and the longest
+pause was 0.5 to 0.8 times as long. Full collections were neither faster nor
+slower with it.
+
+No environment variable turns it off: the setting changes how the collector
+is compiled. On a target without threads the collector has no parallel
+markers, the default is `"false"`, and `"true"` fails the build.
 
 ### Initial size
 
