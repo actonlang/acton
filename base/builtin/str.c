@@ -4000,11 +4000,13 @@ B_str B_ascii(B_value v) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
+    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int newbytes = 2+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+newbytes,s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    // Every byte from 127 up is escaped, so the result is ASCII and has as
+    // many chars as bytes
+    NEW_UNFILLED_STR(res,s->nbytes+newbytes,s->nbytes+newbytes);
+    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[0] = '\'';
         res->str[res->nbytes-1] = '\'';

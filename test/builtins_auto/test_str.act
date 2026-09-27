@@ -77,6 +77,16 @@ def test_str_empty_substring():
             and "é€".replace("", "-") == "-é-€-" and len("é€".replace("", "-")) == 5
             and "é€".replace("", "-", 2) == "-é-€" and "abc".replace("", "-") == "-a-b-c-")
 
+def test_ascii_quotes_and_length():
+    # The quote character used as delimiter is escaped, and the ASCII result
+    # has as many chars as bytes
+    both = ascii("'" + "\"")
+    e = ascii("é€")
+    print("ascii: {both} {e} {len(e)}")
+    return (both == "'\\'\"'" and ascii("it's") == "\"it's\""
+            and ascii('say "hi"') == "'say \"hi\"'"
+            and e.isascii() and len(e) == len(e.encode()))
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -391,6 +401,7 @@ tests = {
     "test_str_slice_large": test_str_slice_large,
     "test_str_split_sep": test_str_split_sep,
     "test_str_empty_substring": test_str_empty_substring,
+    "test_ascii_quotes_and_length": test_ascii_quotes_and_length,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
