@@ -19,6 +19,7 @@ pub fn build(b: *std.Build) void {
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
+    const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -45,6 +46,7 @@ pub fn build(b: *std.Build) void {
         .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_end_padding = !gc_no_end_padding,
         .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
+        .disable_realloc_free = gc_realloc_no_free,
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");

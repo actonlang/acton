@@ -2574,7 +2574,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
         writeOptions tuned
         expectSuccess "build tuned collector" =<< build []
         assertReports "tuned collector" tunedReports []
-        assertReports "environment overrides tuned settings" overridden overrides
+        assertReports "environment overrides tuned settings"
+          tunedOverridden tunedOverrides
         forM_ others $ \(selected, reports) -> do
           writeOptions selected
           expectSuccess ("build collector with " ++ show selected) =<< build []
@@ -2604,6 +2605,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
     defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "384"),
+                ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
                 ("initial_mark_stack_size", "4096")]
     -- Build.act settings and the fields they should report.
@@ -2611,10 +2613,13 @@ gcCollectorOptionTests = testGroup "GC collector options"
              ("gc_mark_range_stealing", "false"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
-             ("gc_thread_local_size_limit", "2048")]
+             ("gc_thread_local_size_limit", "2048"),
+             ("gc_realloc_no_free", "false")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
+                    ("realloc_no_free", "False"),
+                    ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
                     ("initial_mark_stack_size", "65536")]
     -- The default initial mark stack has as many entries as a block has
@@ -2627,8 +2632,16 @@ gcCollectorOptionTests = testGroup "GC collector options"
               -- the global free lists, which the collector sets up on demand.
               ([("gc_thread_local_size_limit", "16")],
                [("thread_local_size_limit", "16")])]
-    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50")]
-    overridden = [("alloc_budget_percent", "50")]
+    -- The environment turns the modes that are on by default off in the
+    -- default build, and on in the tuned build, which turned them off.
+    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0")]
+    overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
+                  ("realloc_frees_moved", "True")]
+    tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
+                      ("GC_REALLOC_NO_FREE", "1")]
+    tunedOverridden = [("alloc_budget_percent", "50"),
+                       ("realloc_no_free", "True"),
+                       ("realloc_frees_moved", "False")]
     -- Invalid settings and the option the diagnostic should name.
     invalid =
       [ ([(key, value)], key)
@@ -2645,7 +2658,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_no_end_padding", "maybe"),
                         ("gc_thread_local_size_limit", "100"),
                         ("gc_thread_local_size_limit", "4096"),
-                        ("gc_thread_local_size_limit", "invalid")]
+                        ("gc_thread_local_size_limit", "invalid"),
+                        ("gc_realloc_no_free", "maybe")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")

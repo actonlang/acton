@@ -58,6 +58,7 @@ be turned off, as its section below describes:
 | Behaviour | Turn off in `build_options` | Turn off when starting the program |
 |---|---|---|
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
+| [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 
 ## GC mark layout
 
@@ -382,6 +383,51 @@ larger (by about 3 KB at 2048 and 64 KB at 32768), and each thread can hold
 partly used blocks of more sizes. This is a build setting shared by the
 application and its dependencies, including database support.
 
+## GC objects moved by realloc
+
+When a list or a bytearray outgrows its storage, Acton's runtime doubles the
+capacity with `GC_realloc`. If the storage cannot grow in place, `GC_realloc`
+allocates a new object, copies the contents and, in BDWGC, frees the old copy
+with `GC_free`, which takes the collector's allocator lock. The new object
+usually comes from the thread's own free lists without the lock, so threads
+that grow lists take the lock for nearly every move only to free the old
+copy. In a 16-thread service whose collector was tuned to take the lock less
+often, these frees were 66% and 93% of the lock acquisitions in two phases of
+its work. Leaving the old copies to the collector cut the acquisitions 3 and
+15 times, with the same number of collections and the same peak memory.
+
+By default, Acton leaves a small old copy to the collector, which reclaims it
+like any other unreachable object. Old copies larger than half a heap block
+(2 KiB with the default blocks) are still freed at once: such a copy occupies
+whole heap blocks, which freeing returns to the heap right away, at the cost of
+one acquisition of the allocator lock. The behaviour can be turned off, so that
+every old copy is freed:
+
+```python
+build_options = {
+    "gc_realloc_no_free": "false",
+}
+```
+
+The `GC_REALLOC_NO_FREE` environment variable overrides the build setting
+when the program starts: `0` turns the behaviour off and `1` turns it on,
+without rebuilding.
+
+The cost is memory reuse: an old copy's memory is not reused before the next
+collection, and it counts toward the allocation that starts a collection. A
+program that grows many small lists can therefore collect more often. An
+Acton program on macOS (arm64) that keeps 4096 lists of up to 256 integers and
+keeps replacing them with new lists built by `append` collected 19% more often
+on one thread and used 11% more CPU time in 2% more wall time. With 32768
+lists, or with lists of up to 4096 integers, it collected 3% to 5% more often
+and used 3% to 8% more CPU time. With four actors building lists in parallel,
+it collected 13% more often but took 14% less wall time and 7% less CPU time:
+with fewer frees taking the allocator lock, its system time fell from 3.9 to
+2.2 seconds. In a C benchmark whose allocations are almost all such arrays,
+one thread collected up to 2.1 times as often and took up to 1.4 times the
+wall time. Measure a program that grows many small lists on one thread both
+ways.
+
 ## Inspecting the collector
 
 An application can inspect its current collector configuration:
@@ -403,13 +449,15 @@ backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
-`thread_local_size_limit`, available `markers` (including the initiating
-thread), `mark_range_stealing`, `initial_mark_stack_size`, `pause_target_ms`,
-`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
-`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
-pause target is `None` for ordinary and unlimited generational collection, and
-is not a guaranteed maximum pause. Available markers need not participate in
-every incremental marking attempt.
+`thread_local_size_limit`, `realloc_no_free`, available `markers` (including
+the initiating thread), `mark_range_stealing`, `initial_mark_stack_size`,
+`pause_target_ms`, `free_space_divisor`, `full_frequency`,
+`heap_growth_divisor`, `alloc_budget_percent`, `heap_size`, `free_bytes` and
+`unmapped_bytes`. The pause target is `None` for ordinary and unlimited
+generational collection, and is not a guaranteed maximum pause. Available
+markers need not participate in every incremental marking attempt. Settings
+that an environment variable can override are reported as in effect, after
+the override.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory

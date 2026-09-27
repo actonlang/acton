@@ -2871,6 +2871,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_initial_mark_stack_size = gc_initial_mark_stack_size,"
                    , "        .gc_no_end_padding = gc_no_end_padding,"
                    , "        .gc_thread_local_size_limit = gc_thread_local_size_limit,"
+                   , "        .gc_realloc_no_free = gc_realloc_no_free,"
                    , "        .gc_disable_thp = gc_disable_thp,"
                    ]
                    ++ moduleOpts

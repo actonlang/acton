@@ -36,6 +36,7 @@ actor main(env):
         assert info.block_size == before.block_size
         assert info.end_padding == before.end_padding
         assert info.thread_local_size_limit == before.thread_local_size_limit
+        assert info.realloc_no_free == before.realloc_no_free
         assert info.mark_range_stealing == before.mark_range_stealing
         assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
