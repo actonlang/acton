@@ -28,6 +28,9 @@ def check_invalid_int_str(s: str):
     expect_value_error(lambda: u64(s))
     expect_value_error(lambda: bigint(s))
 
+def check_invalid_float_str(s: str):
+    expect_value_error(lambda: float(s))
+
 actor main(env):
     try:
         check_unsupported(OtherAtom())
@@ -37,6 +40,9 @@ actor main(env):
         check_invalid_int_str("12" + chr(0) + "34")
         check_invalid_int_str("12" + chr(0))
         check_invalid_int_str("")
+        check_invalid_float_str("")
+        check_invalid_float_str("abc")
+        check_invalid_float_str("1.5" + chr(0) + "5")
         assert int("123") == 123
         assert int("10", 2) == 2
         assert bigint("123") == bigint(123)
