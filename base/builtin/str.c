@@ -1062,6 +1062,11 @@ int64_t B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
+    if (sub->nbytes == 0) {
+        // The empty string occurs before every character and at the end
+        int64_t n = fromB_int(en) - fromB_int(st);
+        return n < 0 ? 0 : n + 1;
+    }
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int64_t res = 0;
@@ -1399,7 +1404,9 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     int plen = s->nbytes;
     int n;
     for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
+        // An empty old string occurs before every character: step over one
+        // character, not one byte
+        n = i>0 && old->nbytes==0 ? byte_length2(*p) : bmh(p,pold,plen,old->nbytes);
         if (n>0) {
             memcpy(q,p,n);
             p+=n; q+=n;

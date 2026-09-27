@@ -69,6 +69,14 @@ def test_str_split_sep():
             and [len(x) for x in "é€,𝄞a,".split(",")] == [2, 2, 0]
             and len(parts) == 20001 and parts[0] == "ab" and parts[20000] == "")
 
+def test_str_empty_substring():
+    # The empty string occurs before every character and at the end
+    print("str count and replace of the empty string: {"é€".count("")} {"é€".replace("", "-")}")
+    return ("é€".count("") == 3 and "abc".count("") == 4 and "abc".count("", 1, 2) == 2
+            and "abc".count("", 2, 1) == 0 and "abc".count("", 3) == 1 and "abc".count("", 4) == 0
+            and "é€".replace("", "-") == "-é-€-" and len("é€".replace("", "-")) == 5
+            and "é€".replace("", "-", 2) == "-é-€" and "abc".replace("", "-") == "-a-b-c-")
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -382,6 +390,7 @@ tests = {
     "test_str_slice_steps": test_str_slice_steps,
     "test_str_slice_large": test_str_slice_large,
     "test_str_split_sep": test_str_split_sep,
+    "test_str_empty_substring": test_str_empty_substring,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
