@@ -27,6 +27,41 @@ def test_bytes_find():
             b.find(b"world", 0, 7) == -1 and
             b.find(b"crap") == -1)
 
+def test_bytes_str_quotes():
+    # Single quotes unless the data has a single quote and no double quote,
+    # and only the quote character used as delimiter is escaped
+    both = str(bytes([39, 34]))
+    print("str(bytes([39, 34])): {both}")
+    return (str(b"it's") == "b\"it's\""
+            and str(b'say "hi"') == "b'say \"hi\"'"
+            and both == "b'\\'\"'")
+
+def test_bytes_split_sep():
+    parts = (b"ab," * 20000).split(b",")
+    print("bytes split with a separator: {len(parts)} parts")
+    return (b"a,b,c".split(b",", 0) == [b"a,b,c"]
+            and b"a,b,c".split(b",", 1) == [b"a", b"b,c"]
+            and b"a,b,c".split(b",", -1) == [b"a", b"b", b"c"]
+            and b"a,,b,".split(b",") == [b"a", b"", b"b", b""]
+            and b"".split(b",") == [b""]
+            and b"abc".split(b"xyz") == [b"abc"]
+            and b"a::b::".split(b"::", 5) == [b"a", b"b", b""]
+            and len(parts) == 20001 and parts[0] == b"ab" and parts[20000] == b"")
+
+def test_bytes_contains_range():
+    # No byte equals an int outside 0..255
+    b = bytes([255, 0, 65])
+    print("bytes membership of ints outside 0..255")
+    return (255 in b and 0 in b and 65 in b and not (511 in b)
+            and not (-1 in b) and not (256 in b) and 321 not in b)
+
+def test_bytes_istitle():
+    # Title case needs at least one cased letter
+    print("bytes istitle")
+    return (b"Hello World".istitle() and b"A1 B2".istitle() and b"A".istitle()
+            and not b"123".istitle() and not b" ".istitle() and not b"hello".istitle()
+            and not b"HEllo".istitle() and not b"".istitle())
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -331,6 +366,10 @@ tests = {
     "test_bytes_basic_indexing": test_bytes_basic_indexing,
     "test_bytes_basic_slicing": test_bytes_basic_slicing,
     "test_bytes_find": test_bytes_find,
+    "test_bytes_str_quotes": test_bytes_str_quotes,
+    "test_bytes_split_sep": test_bytes_split_sep,
+    "test_bytes_contains_range": test_bytes_contains_range,
+    "test_bytes_istitle": test_bytes_istitle,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,
