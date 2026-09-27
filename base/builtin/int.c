@@ -31,7 +31,7 @@ int64_t B_intG_new(B_atom a, B_int base) {  // base is optional
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return n*sz;
 }
@@ -107,7 +107,7 @@ B_int B_IntegralD_intD___pow__(B_IntegralD_int wit,  B_int a, B_int b) {
     if ( bval < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %ld ",(long)bval);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return toB_int(int_pow(aval,bval));
 }
@@ -190,7 +190,7 @@ B_tuple B_IntegralD_intD___divmod__(B_IntegralD_int wit, B_int a, B_int b) {
 
 B_int B_IntegralD_intD___floordiv__(B_IntegralD_int wit, B_int a, B_int b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_int(a->val / b->val);
 }
 
@@ -237,7 +237,7 @@ B_int B_MinusD_IntegralD_intD___sub__(B_MinusD_IntegralD_int wit,  B_int a, B_in
  
 B_float B_DivD_intD___truediv__ (B_DivD_int wit, B_int a, B_int b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_float((double)a->val/(double)b->val);
 }
 

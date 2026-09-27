@@ -13,6 +13,6 @@ int64_t B_intG_new(B_atom a, B_int base);
 // only called with e>=0.
 long int_pow(long a, long e); // used also for ndarrays
 
-#define int_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int truediv: division by zero"))); (double)a/(double)b;} )
-#define int_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int floordiv: division by zero")));  a/b;} )
-#define int_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str("int mod: division by zero"))); a%b;} )
+#define int_DIV(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("int truediv: division by zero"))); (double)a/(double)b;} )
+#define int_FLOORDIV(a,b)  ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("int floordiv: division by zero")));  a/b;} )
+#define int_MOD(a,b)       ( {if (b==0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCString("int mod: division by zero"))); a%b;} )

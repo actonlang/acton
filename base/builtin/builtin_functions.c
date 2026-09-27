@@ -23,7 +23,7 @@ static $WORD mkstr($WORD w) {
  
 B_str __str__(B_value x) {
     if (x == B_None)
-        return to$str("None");
+        return actStrFromCString("None");
     else
         return x->$class->__str__(x);
 }
@@ -33,10 +33,10 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
     if (stderr_arg && stderr_arg->val) {
         outfd = stderr;
     }
-    B_str sep = to$str(" ");
+    B_str sep = actStrFromCString(" ");
     if (sep_arg)
         sep = sep_arg;
-    B_str end = to$str("\n");
+    B_str end = actStrFromCString("\n");
     if (end_arg)
         end = end_arg;
 

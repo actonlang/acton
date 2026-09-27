@@ -20,6 +20,6 @@ $WORD scalar_hash_paddingQ_with_padding($WORD value, uint8_t padding) {
     COPY_PADDED(B_u16)
     COPY_PADDED(B_u32)
 #undef COPY_PADDED
-    $RAISE((B_BaseException)$NEW(B_ValueError, to$str("Unexpected scalar type")));
+    $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("Unexpected scalar type")));
     return NULL;
 }

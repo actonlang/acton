@@ -37,10 +37,10 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
     // Validate start_pos
     long start_offset = arg_start_pos;
     if (start_offset < 0) {
-        $RAISE(((B_BaseException)B_ValueErrorG_new(to_str_noc("PCRE2 matching failed: negative start_pos"))));
+        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("PCRE2 matching failed: negative start_pos"))));
     }
     if (start_offset > arg_text->nchars) {
-        $RAISE(((B_BaseException)B_ValueErrorG_new(to_str_noc("start position is greater than string length"))));
+        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("start position is greater than string length"))));
     }
     // start_pos is a code point index; PCRE2 takes a byte offset
     start_offset = $byte_no(arg_text, start_offset);
@@ -61,7 +61,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
         pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
         char errmsg[1024] = "regex compilation failed at offset ";
         snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
-        $RAISE(((B_BaseException)B_ValueErrorG_new(to$str(errmsg))));
+        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCStringCopy(errmsg))));
     }
 
     pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
@@ -85,7 +85,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
             // Some other error
             char errmsg[256];
             snprintf(errmsg, sizeof(errmsg), "PCRE2 matching error: %d", rc);
-            $RAISE(((B_BaseException)B_RuntimeErrorG_new(to$str(errmsg))));
+            $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCStringCopy(errmsg))));
         }
     }
 
@@ -93,7 +93,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
     if (rc == 0) {
         pcre2_match_data_free(match_data);
         pcre2_code_free(re);
-        $RAISE(((B_BaseException)B_RuntimeErrorG_new(to_str_noc("ovector was not big enough for all captured substrings"))));
+        $RAISE(((B_BaseException)B_RuntimeErrorG_new(actStrFromCString("ovector was not big enough for all captured substrings"))));
     }
 
     // Extract all unnamed groups
@@ -108,7 +108,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
             char *substring = acton_malloc_atomic(substring_length + 1);
             memcpy(substring, text + ss_start, substring_length);
             substring[substring_length] = '\0';
-            swit->$class->append(swit, groups, to_str_noc(substring));
+            swit->$class->append(swit, groups, actStrFromCString(substring));
         }
     }
 
@@ -134,13 +134,13 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
             PCRE2_SIZE ss_start = ovector[2*n];
             PCRE2_SIZE ss_end = ovector[2*n+1];
             if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
-                B_dictD_setitem(named_groups, hwit, to_str_noc(group_name), B_None);
+                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), B_None);
             } else {
                 size_t substring_length = ss_end - ss_start;
                 char *substring = acton_malloc_atomic(substring_length + 1);
                 memcpy(substring, text + ss_start, substring_length);
                 substring[substring_length] = '\0';
-                B_dictD_setitem(named_groups, hwit, to_str_noc(group_name), to_str_noc(substring));
+                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), actStrFromCString(substring));
             }
 
             tabptr += name_entry_size;

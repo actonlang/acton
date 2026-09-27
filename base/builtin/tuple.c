@@ -34,7 +34,7 @@ B_str B_tupleD___str__(B_tuple self) {
     for (int i=0; i< self->size; i++) {
         B_value elem = (B_value)self->components[i];
         if (elem == NULL) {
-            wit->$class->append(wit,s2,to$str("None"));
+            wit->$class->append(wit,s2,actStrFromCString("None"));
         } else {
             wit->$class->append(wit,s2,elem->$class->__repr__(elem));
         }

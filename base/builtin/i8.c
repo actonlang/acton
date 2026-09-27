@@ -31,7 +31,7 @@ int8_t B_i8G_new(B_atom a, B_int base) {
     if (labs(sz) > 1 || (sz==1 && n > 0x7ful) || (sz == -1 && n > 0x80ul)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i8(): value %s out of range for type i8",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return (int8_t)(n*sz);
 }
@@ -104,7 +104,7 @@ B_i8 B_IntegralD_i8D___pow__(B_IntegralD_i8 wit,  B_i8 a, B_i8 b) {
     if ( bval < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__: negative exponent %d ",bval);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return toB_i8(i8_pow(aval,bval));
 }
@@ -187,7 +187,7 @@ B_tuple B_IntegralD_i8D___divmod__(B_IntegralD_i8 wit, B_i8 a, B_i8 b) {
 
 B_i8 B_IntegralD_i8D___floordiv__(B_IntegralD_i8 wit, B_i8 a, B_i8 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_i8(a->val / b->val);
 }
 
@@ -234,7 +234,7 @@ B_i8 B_MinusD_IntegralD_i8D___sub__(B_MinusD_IntegralD_i8 wit,  B_i8 a, B_i8 b) 
  
 B_float B_DivD_i8D___truediv__ (B_DivD_i8 wit, B_i8 a, B_i8 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_float((double)a->val/(double)b->val);
 }
 

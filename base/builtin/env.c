@@ -79,7 +79,7 @@ void read_stdin(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     } else if (nread > 0) {
         if (stream->data) {
             $action cb = stream->data;
-            cb->$class->__asyn__(cb, to$bytesD_len(buf->base, nread));
+            cb->$class->__asyn__(cb, actBytesFromCStringLengthCopy(buf->base, nread));
         }
     }
 }

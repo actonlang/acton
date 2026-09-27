@@ -348,94 +348,10 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
 // Conversion to and from C strings
 
-B_str to$str(char *str) {
-    B_str res;
-    int nbytes = 0;
-    int nchars = 0;
-    bool isascii = true;
-    unsigned char *p = (unsigned char*)str;
-    while (*p != 0) {
-        if (*p >= 0x80) {
-            isascii = false;
-            break;
-        }
-        p++;
-    }
-    if (isascii) {
-        nbytes = p - (unsigned char*)str;
-        if (nbytes == 0)
-            return null_str;
-        if (nbytes == 1 && str[0] > 0 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
-            return &ascii_char_strs[(unsigned char)str[0]];
-        NEW_UNFILLED_STR(res, nbytes, nbytes);
-        memcpy(res->str, str, nbytes);
-        return res;
-    }
-    p = (unsigned char*)str;
-    int cp, cpnbytes;
-    while(1) {
-        if (*p == '\0') {
-            NEW_UNFILLED_STR(res,nchars, nbytes);
-            memcpy(res->str,str,nbytes);
-            return res;
-        }
-        cpnbytes = utf8proc_iterate(p,-1,&cp);
-        if (cpnbytes < 0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to$str: Unicode decode error")));
-            return NULL;
-        }
-        nbytes += cpnbytes;
-        nchars++;
-        p += cpnbytes;
-    }
-}
-
-// No-copy version
-B_str to_str_noc(char *str) {
-    B_str res = acton_malloc(sizeof(struct B_str));
-    res->$class = &B_strG_methods;
-    res->nbytes = strlen(str);
-    res->nchars = res->nbytes;
-    res->str = (unsigned char*)str;
-
-    bool isascii = true;
-    unsigned char *p = (unsigned char*)str;
-    while (*p != 0) {
-        if (*p >= 0x80) {
-            isascii = false;
-            break;
-        }
-        p++;
-    }
-    p = (unsigned char*)str;
-    int cp, cpnbytes;
-    if (!isascii) {
-        res->nchars = 0;
-        while (1) {
-            if (*p == '\0')
-                break;
-            cpnbytes = utf8proc_iterate(p, -1, &cp);
-            if (cpnbytes < 0) {
-                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("to_str_noc: Unicode decode error")));
-                return NULL;
-            }
-            p += cpnbytes;
-            res->nchars++;
-        }
-    }
-    return res;
-}
-
-// Decode byte buffers by length. NUL is a Unicode character, not a terminator.
-B_str to_str_len(const char *str, int nbytes) {
-    const unsigned char *data = (const unsigned char *)str;
-    if (nbytes == 0)
-        return null_str;
-    if (nbytes == 1 && data[0] < ASCII_CHAR_TABLE_SIZE)
-        return &ascii_char_strs[data[0]];
-
-    const unsigned char *p = data;
-    const unsigned char *end = data + nbytes;
+// Count Unicode characters within the supplied byte range, including NUL.
+static int str_count_chars(const char *str, int nbytes, const char *error) {
+    const unsigned char *p = (const unsigned char *)str;
+    const unsigned char *end = p + nbytes;
     int nchars = nbytes;
     while (p < end) {
         if (*p < 0x80) {
@@ -444,16 +360,70 @@ B_str to_str_len(const char *str, int nbytes) {
             int cp;
             int size = utf8proc_iterate(p, end - p, &cp);
             if (size < 0) {
-                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("Unicode decode error")));
-                return NULL;
+                $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString(error)));
+                return 0;
             }
             p += size;
             nchars -= size - 1;
         }
     }
+    return nchars;
+}
+
+static B_str str_from_c(const char *str, int nbytes, bool copy, const char *error) {
+    if (nbytes == 0)
+        return null_str;
+    if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
+        return &ascii_char_strs[(unsigned char)str[0]];
+
+    int nchars = str_count_chars(str, nbytes, error);
     B_str res;
-    NEW_UNFILLED_STR(res,nchars,nbytes);
-    memcpy(res->str,data,nbytes);
+    if (copy) {
+        NEW_UNFILLED_STR(res,nchars,nbytes);
+        memcpy(res->str,str,nbytes);
+    } else {
+        res = acton_malloc(sizeof(struct B_str));
+        res->$class = &B_strG_methods;
+        res->nbytes = nbytes;
+        res->nchars = nchars;
+        res->str = (unsigned char *)str;
+    }
+    return res;
+}
+
+B_str actStrFromCString(const char *str) {
+    return actStrFromCStringLength(str, strlen(str));
+}
+
+B_str actStrFromCStringCopy(const char *str) {
+    return actStrFromCStringLengthCopy(str, strlen(str));
+}
+
+B_str actStrFromCStringLength(const char *str, int nbytes) {
+    return str_from_c(str, nbytes, false, "Unicode decode error");
+}
+
+B_str actStrFromCStringLengthCopy(const char *str, int nbytes) {
+    return str_from_c(str, nbytes, true, "Unicode decode error");
+}
+
+// Keep the old ownership contracts and diagnostics during migration.
+B_str to$str(char *str) {
+    return str_from_c(str, strlen(str), true, "to$str: Unicode decode error");
+}
+
+B_str to_str_len(const char *str, int nbytes) {
+    return actStrFromCStringLengthCopy(str, nbytes);
+}
+
+B_str to_str_noc(char *str) {
+    int nbytes = strlen(str);
+    int nchars = str_count_chars(str, nbytes, "to_str_noc: Unicode decode error");
+    B_str res = acton_malloc(sizeof(struct B_str));
+    res->$class = &B_strG_methods;
+    res->nbytes = nbytes;
+    res->nchars = nchars;
+    res->str = (unsigned char *)str;
     return res;
 }
 
@@ -565,7 +535,7 @@ static int get_index(int i, int nchars) {
         if (i >= -nchars)
             return nchars+i;
     }
-    $RAISE((B_BaseException)$NEW(B_IndexError, i, to$str("index outside str")));
+    $RAISE((B_BaseException)$NEW(B_IndexError, i, actStrFromCString("index outside str")));
     return 0;
 }
 
@@ -736,14 +706,14 @@ static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, 
         if (c == '\t') {
             int64_t n = tabsize - col % tabsize;
             if (n > INT_MAX - len)
-                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("expandtabs: result too long")));
+                $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("expandtabs: result too long")));
             if (out)
                 memset(out + len, ' ', n);
             len += n;
             col += n;
         } else {
             if (len == INT_MAX)
-                $RAISE((B_BaseException)$NEW(B_ValueError,to$str("expandtabs: result too long")));
+                $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("expandtabs: result too long")));
             if (out)
                 out[len] = c;
             len++;
@@ -970,7 +940,7 @@ B_str B_strD_center(B_str s, int64_t width, B_str fill) {
     if (!fill)
         fill = space_str;
     if (fill->nchars != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill string not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("center: fill string not single char")));
     }
     if (wval <= s->nchars) {
         return s;
@@ -1084,7 +1054,7 @@ int64_t B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
 int64_t B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
    int64_t n = B_strD_find(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("index: substring not found")));
     }
     return n;
 }
@@ -1280,7 +1250,7 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
 B_str B_strD_ljust(B_str s, int64_t width, B_str fill) {
     if (!fill) fill = space_str;
     if (fill->nchars != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ljust: fill str not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("ljust: fill str not single char")));
     }
     int wval = width;
     if (wval <= s->nchars) {
@@ -1394,7 +1364,7 @@ int64_t B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
 int64_t B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
     int64_t n = B_strD_rfind(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rindex: substring not found")));
     };
     return n;
 }
@@ -1402,7 +1372,7 @@ int64_t B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
 B_str B_strD_rjust(B_str s, int64_t width, B_str fill) {
     if (!fill) fill = space_str;
     if (fill->nchars != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rjust: fill string not single char")));
     }
     int wval = width;
     if (wval <= s->nchars) {
@@ -1496,7 +1466,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
         return res;
     } else { // separator given
         if (sep->nchars==0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split: separator is empty string")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("split: separator is empty string")));
         }
         if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
             wit->$class->append(wit,res,null_str);
@@ -1900,7 +1870,7 @@ static void expand_bytearray(B_bytearray b,int n) {
         ? acton_malloc_atomic(newcapacity+1)
         : acton_realloc(b->str,newcapacity+1);
     if (newstr == NULL) {
-        $RAISE((B_BaseException)$NEW(B_MemoryError,to$str("memory allocation failed")));
+        $RAISE((B_BaseException)$NEW(B_MemoryError,actStrFromCString("memory allocation failed")));
     }
     b->str = newstr;
     b->capacity = newcapacity;
@@ -1999,7 +1969,7 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
 B_bytearray B_bytearrayD_center(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill) fill = space_bytearray;
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytearray not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("center: fill bytearray not single char")));
     }
     int wval = width;
     if (wval <= s->nbytes) {
@@ -2042,7 +2012,7 @@ int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int en
 }
 
 B_str B_bytearrayD_decode(B_bytearray s) {
-    return to_str_len((const char *)s->str, s->nbytes);
+    return actStrFromCStringLengthCopy((const char *)s->str, s->nbytes);
 }
 
 bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
@@ -2080,7 +2050,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
     // Each byte is represented by 2 hex chars
     int strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: hex string must have even length")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: hex string must have even length")));
     }
 
     int bytelen = strlen / 2;
@@ -2101,7 +2071,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
         else if (high >= 'A' && high <= 'F')
             high_val = high - 'A' + 10;
         else {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: invalid hex character")));
         }
 
         // Handle low nibble
@@ -2112,7 +2082,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
         else if (low >= 'A' && low <= 'F')
             low_val = low - 'A' + 10;
         else {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: invalid hex character")));
         }
 
         // Combine into byte
@@ -2152,7 +2122,7 @@ B_str B_bytearrayD_hex(B_bytearray s) {
 int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     int64_t n = B_bytearrayD_find(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("index: substring not found")));
     }
     return n;
 }
@@ -2292,7 +2262,7 @@ B_bytearray B_bytearrayD_ljust(B_bytearray s, int64_t width, B_bytearray fill) {
         fill = space_bytearray;
     int wval = width;
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytearray ljust: fill array not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("bytearray ljust: fill array not single char")));
     }
     if (wval <= s->nbytes) {
         return B_bytearrayD_copy(s);
@@ -2405,7 +2375,7 @@ int64_t B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int en
 int64_t B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
     int64_t n = B_bytearrayD_rfind(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytearray: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rindex for bytearray: substring not found")));
     };
     return n;
 }
@@ -2415,7 +2385,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
         fill = space_bytearray;
     int wval = width;
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rjust: fill string not single char")));
     }
     if (wval <= s->nbytes) {
         return B_bytearrayD_copy(s);
@@ -2518,7 +2488,7 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
         return res;
     } else { // separator given
         if (sep->nbytes==0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytearray: separator is empty string")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("split for bytearray: separator is empty string")));
         }
         // Search for each separator from the end of the previous one and
         // copy every piece once
@@ -2728,16 +2698,16 @@ bool B_ContainerD_bytearrayD___containsnot__(B_ContainerD_bytearray wit, B_bytea
 int64_t $bytearrayD_U__getitem__(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("getitem: index outside bytearray")));
     return (int64_t)self->str[ix0];
 }
 
 B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t ix, int64_t val) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     if (ix0<0 || ix0 >= self->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("setitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("setitem: index outside bytearray")));
     if (val<0 || val>255)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setitem for bytearray: value outside [0..255]")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("setitem for bytearray: value outside [0..255]")));
     self->str[ix0] = (unsigned char)val;
     return B_None;
 }
@@ -2746,7 +2716,7 @@ B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
     int len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("delitem: index outside bytearray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("delitem: index outside bytearray")));
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
     self->nbytes--;
     return B_None;
@@ -2832,7 +2802,7 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (step != 1 && olen != slen) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("setslice for bytearray: illegal slice")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("setslice for bytearray: illegal slice")));
     }
     int copy = olen <= slen ? olen : slen;
     int t = start;
@@ -2974,50 +2944,44 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
 
 // Conversion to and from C strings
 
-B_bytes to$bytes(char *str) {
-    B_bytes res;
-    int len = strlen(str);
-    NEW_UNFILLED_BYTES(res,len);
-    memcpy(res->str,str,len);
-    return res;
+B_bytes actBytesFromCStringCopy(const char *str) {
+    return actBytesFromCStringLengthCopy(str, strlen(str));
 }
 
-B_bytes to$bytesD_len(char *str, int len) {
+B_bytes actBytesFromCStringLengthCopy(const char *str, int len) {
     B_bytes res;
-    NEW_UNFILLED_BYTES(res, len);
-    memcpy(res->str, str, len);
-    return res;
-}
-
-B_bytes actBytesFromCString(char *str) {
-    B_bytes res;
-    int len = strlen(str);
     NEW_UNFILLED_BYTES(res,len);
     memcpy(res->str,str,len);
     return res;
 }
 
 B_bytes actBytesFromCStringNoCopy(char *str) {
-    B_bytes res = acton_malloc(sizeof(struct B_bytes));
-    res->$class = &B_bytesG_methods;
-    res->nbytes = strlen(str);
-    res->str =  (unsigned char*)str;
-    return res;
-}
-
-B_bytes actBytesFromCStringLength(char *str, int len) {
-    B_bytes res;
-    NEW_UNFILLED_BYTES(res, len);
-    memcpy(res->str, str, len);
-    return res;
+    return actBytesFromCStringLengthNoCopy(str, strlen(str));
 }
 
 B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = length;
-    res->str =  (unsigned char*)str;
+    res->str = (unsigned char *)str;
     return res;
+}
+
+// These existing names continue to copy until downstream callers migrate.
+B_bytes actBytesFromCString(char *str) {
+    return actBytesFromCStringCopy(str);
+}
+
+B_bytes actBytesFromCStringLength(char *str, int len) {
+    return actBytesFromCStringLengthCopy(str, len);
+}
+
+B_bytes to$bytes(char *str) {
+    return actBytesFromCStringCopy(str);
+}
+
+B_bytes to$bytesD_len(char *str, int len) {
+    return actBytesFromCStringLengthCopy(str, len);
 }
 
 char *fromB_bytes(B_bytes b) {
@@ -3056,7 +3020,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
         if (0<=n && n <= 255)
             self->str[i] = n;
         else
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes constructor: element outside [0..255]")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("bytes constructor: element outside [0..255]")));
     }
     return B_None;
 }
@@ -3125,9 +3089,9 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
 
 B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
     int wval = width;
-    if (!fill) fill = to$bytes(" ");
+    if (!fill) fill = actBytesFromCStringCopy(" ");
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("center: fill bytes not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("center: fill bytes not single char")));
     }
     if (wval <= s->nbytes) {
         return s;
@@ -3168,7 +3132,7 @@ int64_t B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
 }
 
 B_str B_bytesD_decode(B_bytes s) {
-    return to_str_len((const char *)s->str, s->nbytes);
+    return actStrFromCStringLengthCopy((const char *)s->str, s->nbytes);
 }
 
 bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
@@ -3211,7 +3175,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
     // Each byte is represented by 2 hex chars
     int strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: hex string must have even length")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: hex string must have even length")));
     }
 
     int bytelen = strlen / 2;
@@ -3232,7 +3196,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
         else if (high >= 'A' && high <= 'F')
             high_val = high - 'A' + 10;
         else {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: invalid hex character")));
         }
 
         // Handle low nibble
@@ -3243,7 +3207,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
         else if (low >= 'A' && low <= 'F')
             low_val = low - 'A' + 10;
         else {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("from_hex: invalid hex character")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("from_hex: invalid hex character")));
         }
 
         // Combine into byte
@@ -3260,7 +3224,7 @@ B_str B_bytesD_hex(B_bytes s) {
 int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
     int64_t n = B_bytesD_find(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("index: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("index: substring not found")));
     }
     return n;
 }
@@ -3399,7 +3363,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
         fill = space_bytes;
     int wval = width;
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("bytes ljust: fill array not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("bytes ljust: fill array not single char")));
     }
     if (wval <= s->nbytes) {
         return B_bytesD_copy(s);
@@ -3448,7 +3412,7 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
 B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
     int64_t n = B_bytesD_find(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,s,to$bytes(""),to$bytes(""));
+        return $NEWTUPLE(3,s,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""));
     } else {
         int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
@@ -3537,7 +3501,7 @@ int64_t B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
 int64_t B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
     int64_t n = B_bytesD_rfind(s,sub,start,end);
     if (n<0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rindex for bytes: substring not found")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rindex for bytes: substring not found")));
     };
     return n;
 }
@@ -3546,7 +3510,7 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
     if (!fill)
         fill = space_bytes;
     if (fill->nbytes != 1) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("rjust: fill string not single char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("rjust: fill string not single char")));
     }
     int wval = width;
     if (wval <= s->nbytes) {
@@ -3566,7 +3530,7 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
     int64_t n = B_bytesD_rfind(s,sep,NULL,NULL);
     if (n<0) {
-        return $NEWTUPLE(3,to$bytes(""),to$bytes(""),s);
+        return $NEWTUPLE(3,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""),s);
     } else {
         int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
         B_bytes ls;
@@ -3650,7 +3614,7 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
         return res;
     } else { // separator given
         if (sep->nbytes==0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str("split for bytes: separator is empty string")));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("split for bytes: separator is empty string")));
         }
         // Search for each separator from the end of the previous one and
         // copy every piece once
@@ -3852,7 +3816,7 @@ B_Iterator B_ContainerD_bytesD___iter__ (B_ContainerD_bytes wit, B_bytes str) {
 }
 
 B_bytes B_ContainerD_bytesD___fromiter__ (B_ContainerD_bytes wit, B_Iterable wit2, $WORD iter) {
-    return B_bytesD_join(to$bytes(""),wit2,iter);
+    return B_bytesD_join(actBytesFromCStringCopy(""),wit2,iter);
 }
 
 int64_t B_ContainerD_bytesD___len__ (B_ContainerD_bytes wit, B_bytes str) {
@@ -3881,7 +3845,7 @@ bool B_ContainerD_bytesD___containsnot__ (B_ContainerD_bytes wit, B_bytes str, B
 int64_t $bytesD_U__getitem__(B_bytes str, int64_t ix) {
     int64_t ix0 = ix < 0 ? str->nbytes + ix : ix;
     if (ix0<0 || ix0 >= str->nbytes)
-        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, to$str("getitem: index outside bytesarray")));
+        $RAISE((B_BaseException)$NEW(B_IndexError, ix0, actStrFromCString("getitem: index outside bytesarray")));
     return (int64_t)str->str[ix0];
 }
 
@@ -3915,13 +3879,13 @@ B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes s, B_bytes t) {
 }
 
 B_bytes B_TimesD_bytesD___zero__ (B_TimesD_bytes wit) {
-    return to$bytes("");
+    return actBytesFromCStringCopy("");
 }
 
 B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
     int64_t nval = n->val;
     if (nval <= 0)
-        return to$bytes("");
+        return actBytesFromCStringCopy("");
     else {
         B_bytes res;
         NEW_UNFILLED_BYTES(res, a->nbytes * nval);
@@ -4003,13 +3967,13 @@ B_str B_bin(B_Integral wit, $WORD n) {
 B_str B_chr(B_Integral wit, $WORD n) {
     int64_t v = wit->$class->__int__(wit,n);
     if (v >=  0x110000)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("chr: argument is not a valid Unicode code point")));
     if (v >= 0 && v < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[v];
     unsigned char code[4];
     int nbytes = utf8proc_encode_char((int)v,(unsigned char*)&code);
     if (nbytes==0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("chr: argument is not a valid Unicode code point")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("chr: argument is not a valid Unicode code point")));
     B_str res;
     NEW_UNFILLED_STR(res,1,nbytes);
     for (int i=0; i<nbytes; i++)
@@ -4053,11 +4017,11 @@ B_str B_hex(B_Integral wit, $WORD n) {
 
 int64_t B_ord(B_str c) {
     if(c->nchars != 1)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("ord: argument is not a single Unicode char")));
     int cp;
     int cpnbytes = utf8proc_iterate(c->str,-1,&cp);
     if (cpnbytes < 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("ord: argument is not a single Unicode char")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("ord: argument is not a single Unicode char")));
     return (int64_t)cp;
 }
 
@@ -4114,17 +4078,17 @@ B_str $FORMAT(const char *format, ...) {
 
     if (size < 0) {
         va_end(args);
-        RAISE(B_ValueError, to_str_noc("Invalid format string"));
+        RAISE(B_ValueError, actStrFromCString("Invalid format string"));
     }
 
     char *buffer = (char *)acton_malloc_atomic(size + 1);
     if (buffer == NULL) {
         va_end(args);
-        RAISE(B_MemoryError, to_str_noc("Failed to allocate memory for formatted string"));
+        RAISE(B_MemoryError, actStrFromCString("Failed to allocate memory for formatted string"));
     }
 
     vsnprintf(buffer, size + 1, format, args);
     va_end(args);
 
-    return to_str_noc(buffer);
+    return actStrFromCString(buffer);
 }

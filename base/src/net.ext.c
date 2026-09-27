@@ -71,7 +71,7 @@ static B_NoneType net_lookup_address(B_str name,
     struct dns_cb_data *cb_data = (struct dns_cb_data *)GC_malloc_uncollectable(sizeof(struct dns_cb_data));
     if (cb_data == NULL) {
         $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
+        f->$class->__asyn__(f, name, actStrFromCString("Unable to run DNS query: out of memory"));
         return B_None;
     }
     cb_data->hostname = (char *)fromB_str(name);
@@ -85,7 +85,7 @@ static B_NoneType net_lookup_address(B_str name,
     if (req == NULL) {
         GC_free(cb_data);
         $action2 f = ($action2)on_error;
-        f->$class->__asyn__(f, name, to$str("Unable to run DNS query: out of memory"));
+        f->$class->__asyn__(f, name, actStrFromCString("Unable to run DNS query: out of memory"));
         return B_None;
     }
     req->data = cb_data;
@@ -96,7 +96,7 @@ static B_NoneType net_lookup_address(B_str name,
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)cb_data->on_error;
-        f->$class->__asyn__(f, name, to$str(errmsg));
+        f->$class->__asyn__(f, name, actStrFromCStringCopy(errmsg));
         GC_free(cb_data);
         free(req);
         return B_None;
@@ -113,7 +113,7 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action2 f = ($action2)cb_data->on_error;
-        f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
+        f->$class->__asyn__(f, actStrFromCStringCopy(cb_data->hostname), actStrFromCStringCopy(errmsg));
 
         uv_freeaddrinfo(dns_res);
         GC_free(cb_data);
@@ -125,7 +125,7 @@ static void _lookup_a__on_resolve (uv_getaddrinfo_t *req, int status, struct add
     char addr[17] = {'\0'};
     for (rp = dns_res; rp != NULL; rp = rp->ai_next) {
         uv_ip4_name((struct sockaddr_in*) rp->ai_addr, addr, 16);
-        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
+        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, actStrFromCStringCopy(addr));
     }
 
     $action f = ($action)cb_data->on_resolve;
@@ -148,7 +148,7 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
         char errmsg[1024] = "DNS lookup error: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         $action2 f = ($action2)cb_data->on_error;
-        f->$class->__asyn__(f, to$str(cb_data->hostname), to$str(errmsg));
+        f->$class->__asyn__(f, actStrFromCStringCopy(cb_data->hostname), actStrFromCStringCopy(errmsg));
 
         uv_freeaddrinfo(dns_res);
         GC_free(cb_data);
@@ -160,7 +160,7 @@ static void _lookup_aaaa__on_resolve (uv_getaddrinfo_t *req, int status, struct 
     char addr[40] = {'\0'};
     for (rp = dns_res; rp != NULL; rp = rp->ai_next) {
         uv_ip6_name((struct sockaddr_in6*)rp->ai_addr, addr, 39);
-        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, to$str(addr));
+        B_SequenceD_listG_witness->$class->append(B_SequenceD_listG_witness, $res, actStrFromCStringCopy(addr));
     }
 
     $action f = ($action)cb_data->on_resolve;
@@ -293,11 +293,11 @@ static void udp_send_cb(uv_udp_send_t *req, int status) {
         if (state->listener) {
             netQ_UDPListener self = (netQ_UDPListener)state->actor;
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         } else {
             netQ_UDPConnection self = (netQ_UDPConnection)state->actor;
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
     }
     udp_send_req_state_free(state);
@@ -320,11 +320,11 @@ static void udp_connection_on_receive(uv_udp_t *handle, ssize_t nread, const uv_
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
             log_warn(errmsg);
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
             return;
         }
-        B_bytes data = to$bytesD_len(buf->base, nread);
-        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, to$str(addrbuf), toB_int(port));
+        B_bytes data = actBytesFromCStringLengthCopy(buf->base, nread);
+        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, actStrFromCStringCopy(addrbuf), toB_int(port));
         self->_bytes_in += nread;
         self->_datagrams_in += 1;
     } else if (nread < 0) {
@@ -332,7 +332,7 @@ static void udp_connection_on_receive(uv_udp_t *handle, ssize_t nread, const uv_
         uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
     }
 }
 
@@ -352,11 +352,11 @@ static void udp_listener_on_receive(uv_udp_t *handle, ssize_t nread, const uv_bu
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
             log_warn(errmsg);
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
             return;
         }
-        B_bytes data = to$bytesD_len(buf->base, nread);
-        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, to$str(addrbuf), toB_int(port));
+        B_bytes data = actBytesFromCStringLengthCopy(buf->base, nread);
+        udp_call_receive(($WORD)self->on_receive, ($WORD)self, data, actStrFromCStringCopy(addrbuf), toB_int(port));
         self->_bytes_in += nread;
         self->_datagrams_in += 1;
     } else if (nread < 0) {
@@ -364,7 +364,7 @@ static void udp_listener_on_receive(uv_udp_t *handle, ssize_t nread, const uv_bu
         uv_strerror_r((int)nread, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
     }
 }
 
@@ -446,7 +446,7 @@ $R netQ_UDPConnectionD__connect4G_local (netQ_UDPConnection self, $Cont c$cont, 
         char errmsg[1024] = "Error in UDP setup over IPv4: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_udp_error(self, (int64_t)r, to$str(errmsg));
+        self->$class->_on_udp_error(self, (int64_t)r, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -458,7 +458,7 @@ $R netQ_UDPConnectionD__connect6G_local (netQ_UDPConnection self, $Cont c$cont, 
         char errmsg[1024] = "Error in UDP setup over IPv6: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_udp_error(self, (int64_t)r, to$str(errmsg));
+        self->$class->_on_udp_error(self, (int64_t)r, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -475,7 +475,7 @@ $R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_by
         free(req);
         udp_send_req_state_free(state);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str("Failed to allocate UDP send request"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate UDP send request"));
         return $R_CONT(c$cont, B_None);
     }
     req->data = state;
@@ -486,7 +486,7 @@ $R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_by
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         udp_send_req_state_free(state);
         free(req);
         return $R_CONT(c$cont, B_None);
@@ -506,14 +506,14 @@ B_NoneType netQ_UDPConnectionD___resume__ (netQ_UDPConnection self) {
     self->_sock = -1LL;
     self->_state = self->STATE_CLOSED;
     $action2 f = ($action2)self->on_error;
-    f->$class->__asyn__(f, self, to$str("resume"));
+    f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
 }
 
 $R netQ_UDPConnectionD_local_addressG_local (netQ_UDPConnection self, $Cont c$cont) {
     uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
     if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, to$str(""));
+        return $R_CONT(c$cont, actStrFromCString(""));
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
@@ -524,7 +524,7 @@ $R netQ_UDPConnectionD_local_addressG_local (netQ_UDPConnection self, $Cont c$co
             addr[0] = '\0';
         }
     }
-    return $R_CONT(c$cont, to$str(addr));
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
 $R netQ_UDPConnectionD_local_portG_local (netQ_UDPConnection self, $Cont c$cont) {
@@ -552,7 +552,7 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -574,7 +574,7 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -586,7 +586,7 @@ $R netQ_UDPListenerD__initG_local (netQ_UDPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -609,7 +609,7 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -619,7 +619,7 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         free(req);
         udp_send_req_state_free(state);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str("Failed to allocate UDP send request"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate UDP send request"));
         return $R_CONT(c$cont, B_None);
     }
     req->data = state;
@@ -630,7 +630,7 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         udp_send_req_state_free(state);
         free(req);
         return $R_CONT(c$cont, B_None);
@@ -648,14 +648,14 @@ $R netQ_UDPListenerD_closeG_local (netQ_UDPListener self, $Cont c$cont) {
 B_NoneType netQ_UDPListenerD___resume__ (netQ_UDPListener self) {
     self->_sock = -1LL;
     $action2 f = ($action2)self->on_listen;
-    f->$class->__asyn__(f, self, to$str("resume"));
+    f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
 }
 
 $R netQ_UDPListenerD_local_addressG_local (netQ_UDPListener self, $Cont c$cont) {
     uv_udp_t *udp = (uv_udp_t *)(intptr_t)self->_sock;
     if ((intptr_t)udp == -1) {
-        return $R_CONT(c$cont, to$str(""));
+        return $R_CONT(c$cont, actStrFromCString(""));
     }
     struct sockaddr_storage sockname;
     int namelen = sizeof(sockname);
@@ -666,7 +666,7 @@ $R netQ_UDPListenerD_local_addressG_local (netQ_UDPListener self, $Cont c$cont) 
             addr[0] = '\0';
         }
     }
-    return $R_CONT(c$cont, to$str(addr));
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
 $R netQ_UDPListenerD_local_portG_local (netQ_UDPListener self, $Cont c$cont) {
@@ -702,7 +702,7 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
         if (stream->data) {
             netQ_TCPConnection self = stream->data;
             $action2 f = ($action2)self->on_receive;
-            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
             self->_bytes_in += nread;
         }
     }
@@ -721,7 +721,7 @@ void on_connect4(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv4: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_tcp_error(self, 4LL, (int64_t)status, to$str(errmsg));
+        self->$class->_on_tcp_error(self, 4LL, (int64_t)status, actStrFromCStringCopy(errmsg));
         return;
     }
     self->$class->_on_connect4(self);
@@ -734,7 +734,7 @@ void on_connect6(uv_connect_t *connect_req, int status) {
         char errmsg[1024] = "Error in TCP connect over IPv6: ";
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        self->$class->_on_tcp_error(self, 6LL, (int64_t)status, to$str(errmsg));
+        self->$class->_on_tcp_error(self, 6LL, (int64_t)status, actStrFromCStringCopy(errmsg));
         return;
     }
     self->$class->_on_connect6(self);
@@ -783,7 +783,7 @@ $R netQ_TCPConnectionD__read_startG_local (netQ_TCPConnection self, $Cont c$cont
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -804,7 +804,7 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
     }
     self->_bytes_out += data->nbytes;
     return $R_CONT(c$cont, B_None);
@@ -815,7 +815,7 @@ B_NoneType netQ_TCPConnectionD___resume__ (netQ_TCPConnection self) {
     self->_sock4 = -1LL;
     self->_sock6 = -1LL;
     $action2 f = ($action2)self->on_error;
-    f->$class->__asyn__(f, self, to$str("resume"));
+    f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
 }
 
@@ -899,7 +899,7 @@ $R netQ_TCPConnectionD_local_addressG_local (netQ_TCPConnection self, $Cont c$co
     } else {
         log_error("Failed to get sock name from handle %lld", (long long)self->_sock);
     }
-    return $R_CONT(c$cont, to$str(addr));
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
 $R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$cont) {
@@ -917,7 +917,7 @@ $R netQ_TCPConnectionD_remote_addressG_local (netQ_TCPConnection self, $Cont c$c
     } else {
         log_error("Failed to get peer name from handle %lld", (long long)self->_sock);
     }
-    return $R_CONT(c$cont, to$str(addr));
+    return $R_CONT(c$cont, actStrFromCStringCopy(addr));
 }
 
 
@@ -929,7 +929,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
@@ -942,7 +942,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return;
     }
@@ -978,7 +978,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
@@ -993,7 +993,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
@@ -1004,7 +1004,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         // NOTE: free() here if do manual memory management in I/O one day
         return $R_CONT(c$cont, B_None);
     }
@@ -1017,7 +1017,7 @@ $R netQ_TCPListenerD__initG_local (netQ_TCPListener self, $Cont c$cont) {
 B_NoneType netQ_TCPListenerD___resume__ (netQ_TCPListener self) {
     self->_stream = -1LL;
     $action2 f = ($action2)self->on_listen;
-    f->$class->__asyn__(f, self, to$str("resume"));
+    f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
 }
 
@@ -1051,7 +1051,7 @@ void netQ_TCPListenConnection__on_receive(uv_stream_t *stream, ssize_t nread, co
         if (stream->data) {
             netQ_TCPListenConnection self = stream->data;
             $action2 f = ($action2)self->on_receive;
-            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
         }
     }
 
@@ -1069,7 +1069,7 @@ $R netQ_TCPListenConnectionD__read_startG_local (netQ_TCPListenConnection self, 
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -1090,7 +1090,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -1427,7 +1427,7 @@ static void tls_listener_on_connect(uv_connect_t *creq, int status) {
         log_warn(errmsg);
         if (listener->on_listen != NULL) {
             $action2 f = ($action2)listener->on_listen;
-            f->$class->__asyn__(f, listener, to$str(errmsg));
+            f->$class->__asyn__(f, listener, actStrFromCStringCopy(errmsg));
         }
         tls_listener_close_stream(stream);
         tls_listener_server_state_release(listener_state);
@@ -1465,7 +1465,7 @@ static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv
     if (nread > 0) {
         if (stream->data && self->on_receive != NULL) {
             $action2 f = ($action2)self->on_receive;
-            B_bytes data = to$bytesD_len(buf->base, nread);
+            B_bytes data = actBytesFromCStringLengthCopy(buf->base, nread);
             f->$class->__asyn__(f, self, data);
         }
     } else if (nread == UV_EOF) {
@@ -1484,7 +1484,7 @@ static void tls_listener_on_receive(uv_stream_t *stream, ssize_t nread, const uv
         tls_listener_close_stream((tlsuv_stream_t *)stream);
         if (self->on_error != NULL) {
             $action2 on_error = ($action2)self->on_error;
-            on_error->$class->__asyn__(on_error, self, to$str(errmsg));
+            on_error->$class->__asyn__(on_error, self, actStrFromCStringCopy(errmsg));
         }
     }
 }
@@ -1505,7 +1505,7 @@ static void tls_listener_write_cb(uv_write_t *wreq, int status) {
         netQ_TLSListenConnection self = state != NULL ? state->actor : NULL;
         if (self != NULL && self->on_error != NULL) {
             $action2 on_error = ($action2)self->on_error;
-            on_error->$class->__asyn__(on_error, self, to$str(errmsg));
+            on_error->$class->__asyn__(on_error, self, actStrFromCStringCopy(errmsg));
         }
         tls_listener_close_stream((tlsuv_stream_t *)wreq->handle);
     }
@@ -1526,7 +1526,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         // No release here: this callback borrows the server handle's own
         // reference (server->data); only the retain below, taken for an
@@ -1540,7 +1540,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (client == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS client handle"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS client handle"));
         }
         tls_listener_server_state_release(listener_state);
         return;
@@ -1553,7 +1553,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn("%s", errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         free(client);
         tls_listener_server_state_release(listener_state);
@@ -1567,7 +1567,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         uv_close((uv_handle_t *)client, uv_handle_free_on_close);
         tls_listener_server_state_release(listener_state);
@@ -1582,7 +1582,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         uv_close((uv_handle_t *)client, uv_handle_free_on_close);
         tls_listener_server_state_release(listener_state);
@@ -1599,7 +1599,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         uv_close((uv_handle_t *)client, uv_handle_free_on_close);
         tls_listener_server_state_release(listener_state);
@@ -1614,7 +1614,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         tls_listener_server_state_release(listener_state);
         return;
@@ -1629,7 +1629,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         tls_listener_server_state_release(listener_state);
         return;
@@ -1641,7 +1641,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (owner == NULL || (intptr_t)owner == -1 || owner->tls == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("TLS listener resources unavailable"));
+            f->$class->__asyn__(f, self, actStrFromCString("TLS listener resources unavailable"));
         }
         close_uv_socket(sock);
         tls_listener_server_state_release(listener_state);
@@ -1653,7 +1653,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (stream == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener stream"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener stream"));
         }
         tls_listener_owner_release(owner);
         close_uv_socket(sock);
@@ -1664,7 +1664,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (state == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener stream state"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener stream state"));
         }
         tls_listener_owner_release(owner);
         free(stream);
@@ -1679,7 +1679,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn("%s", errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         free(state);
         tls_listener_owner_release(owner);
@@ -1696,7 +1696,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (conn == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener connect state"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener connect state"));
         }
         stream->data = NULL;
         free(state);
@@ -1714,7 +1714,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
     if (connect_req == NULL) {
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS handshake request"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS handshake request"));
         }
         free(conn);
         stream->data = NULL;
@@ -1734,7 +1734,7 @@ static void on_new_tls_connection(uv_stream_t *server, int status) {
         log_warn(errmsg);
         if (self->on_listen != NULL) {
             $action2 f = ($action2)self->on_listen;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         // tlsuv only adopts the fd once its poll watcher is initialized; on
         // failure the dup'd socket is still ours to close.
@@ -1760,7 +1760,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     struct sockaddr_in6 addr6;
     if (tls == NULL) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("Failed to initialize TLS context"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to initialize TLS context"));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -1789,7 +1789,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     rc = tls->set_own_cert(tls, key, cert);
     if (rc != 0) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("Failed to set TLS certificate"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to set TLS certificate"));
         tls_listener_release_resources(tls, key, cert);
         return $R_CONT(c$cont, B_None);
     }
@@ -1797,7 +1797,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     owner = tls_listener_owner_new(tls, key, cert);
     if (owner == NULL) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener owner"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener owner"));
         tls_listener_release_resources(tls, key, cert);
         return $R_CONT(c$cont, B_None);
     }
@@ -1805,7 +1805,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     struct tls_listener_server_state *server_state = tls_listener_server_state_new(self);
     if (server_state == NULL) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener server state"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener server state"));
         tls_listener_owner_release(owner);
         return $R_CONT(c$cont, B_None);
     }
@@ -1813,7 +1813,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
     server = (uv_tcp_t *)malloc(sizeof(uv_tcp_t));
     if (server == NULL) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listener server handle"));
+        f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listener server handle"));
         free(server_state);
         tls_listener_owner_release(owner);
         return $R_CONT(c$cont, B_None);
@@ -1825,7 +1825,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn("%s", errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         free(server_state);
         free(server);
         tls_listener_owner_release(owner);
@@ -1850,7 +1850,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         uv_close((uv_handle_t *)server, tls_listener_server_on_close);
         tls_listener_owner_release(owner);
         return $R_CONT(c$cont, B_None);
@@ -1866,7 +1866,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         uv_close((uv_handle_t *)server, tls_listener_server_on_close);
         tls_listener_owner_release(owner);
         return $R_CONT(c$cont, B_None);
@@ -1878,7 +1878,7 @@ $R netQ_TLSListenerD__initG_local (netQ_TLSListener self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         uv_close((uv_handle_t *)server, tls_listener_server_on_close);
         tls_listener_owner_release(owner);
         return $R_CONT(c$cont, B_None);
@@ -1911,7 +1911,7 @@ B_NoneType netQ_TLSListenerD___resume__ (netQ_TLSListener self) {
     // on_listen is NULL once close()/__cleanup__ has run.
     if (self->on_listen != NULL) {
         $action2 f = ($action2)self->on_listen;
-        f->$class->__asyn__(f, self, to$str("resume"));
+        f->$class->__asyn__(f, self, actStrFromCString("resume"));
     }
     return B_None;
 }
@@ -1949,7 +1949,7 @@ $R netQ_TLSListenConnectionD__read_startG_local (netQ_TLSListenConnection self, 
         log_warn(errmsg);
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -1966,7 +1966,7 @@ $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont 
     if (wreq == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listen write request"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listen write request"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -1975,7 +1975,7 @@ $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont 
     if (write_state == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS listen write buffer"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listen write buffer"));
         }
         free(wreq);
         return $R_CONT(c$cont, B_None);
@@ -1990,7 +1990,7 @@ $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont 
         log_warn(errmsg);
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         tls_write_req_state_free(write_state);
         free(wreq);
@@ -2102,7 +2102,7 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
     if (nread > 0) {
         if (stream->data && self->on_receive != NULL) {
             $action2 f = ($action2)self->on_receive;
-            B_bytes data = to$bytesD_len(buf->base, nread);
+            B_bytes data = actBytesFromCStringLengthCopy(buf->base, nread);
             f->$class->__asyn__(f, self, data);
             self->_bytes_in += nread;
         }
@@ -2120,7 +2120,7 @@ void tls_on_receive(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf) {
         log_debug("%s", errmsg);
         tls_close((tlsuv_stream_t *)stream);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)nread, to$str(errmsg));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)nread, actStrFromCStringCopy(errmsg));
         }
     }
 }
@@ -2140,7 +2140,7 @@ void tls_write_cb(uv_write_t *wreq, int status) {
         netQ_TLSConnection self = state != NULL ? state->actor : NULL;
         if (self != NULL && self->on_error != NULL) {
             $action2 on_error = ($action2)self->on_error;
-            on_error->$class->__asyn__(on_error, self, to$str(errmsg));
+            on_error->$class->__asyn__(on_error, self, actStrFromCStringCopy(errmsg));
         }
         tls_close((tlsuv_stream_t *)wreq->handle);
     }
@@ -2176,7 +2176,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
     if (state == NULL || !state->connected) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str("TLS connection not established"));
+            f->$class->__asyn__(f, self, actStrFromCString("TLS connection not established"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2185,7 +2185,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
     if (wreq == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS write request"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write request"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2194,7 +2194,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
     if (write_state == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str("Failed to allocate TLS write buffer"));
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write buffer"));
         }
         free(wreq);
         return $R_CONT(c$cont, B_None);
@@ -2209,7 +2209,7 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
         log_debug(errmsg);
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, to$str(errmsg));
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         }
         tls_write_req_state_free(write_state);
         free(wreq);
@@ -2234,7 +2234,7 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
         log_debug(errmsg);
         tls_close((tlsuv_stream_t *)creq->handle);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)status, to$str(errmsg));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)status, actStrFromCStringCopy(errmsg));
         }
         free(creq);
         return;
@@ -2248,7 +2248,7 @@ static void tls_on_connect(uv_connect_t *creq, int status) {
         log_debug(errmsg);
         tls_close(stream);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)r, to$str(errmsg));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)r, actStrFromCStringCopy(errmsg));
         }
         free(creq);
         return;
@@ -2290,7 +2290,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     uv_connect_t* connect_req = (uv_connect_t*)calloc(1, sizeof(uv_connect_t));
     if (connect_req == NULL) {
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, to$str("Failed to allocate TLS connect request"));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS connect request"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2300,7 +2300,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
     if (stream == NULL) {
         free(connect_req);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, to$str("Failed to allocate TLS stream"));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS stream"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2309,7 +2309,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
         free(stream);
         free(connect_req);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, -1LL, to$str("Failed to allocate TLS client state"));
+            self->$class->_on_tls_error(self, -1LL, -1LL, actStrFromCString("Failed to allocate TLS client state"));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2323,7 +2323,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
         free(stream);
         free(connect_req);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)r, to$str(errmsg));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)r, actStrFromCStringCopy(errmsg));
         }
         return $R_CONT(c$cont, B_None);
     }
@@ -2345,7 +2345,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
             free(stream);
             free(connect_req);
             if (self->on_error != NULL) {
-                self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, to$str("Failed to allocate TLS ALPN protocol list"));
+                self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS ALPN protocol list"));
             }
             return $R_CONT(c$cont, B_None);
         }
@@ -2361,7 +2361,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
                 free(stream);
                 free(connect_req);
                 if (self->on_error != NULL) {
-                    self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, to$str("Failed to allocate TLS ALPN protocol"));
+                    self->$class->_on_tls_error(self, -1LL, (int64_t)UV_ENOMEM, actStrFromCString("Failed to allocate TLS ALPN protocol"));
                 }
                 return $R_CONT(c$cont, B_None);
             }
@@ -2389,7 +2389,7 @@ $R netQ_TLSConnectionD__connect_tlsG_local (netQ_TLSConnection self, $Cont c$con
         tlsuv_stream_close(stream, tls_on_close);
         free(connect_req);
         if (self->on_error != NULL) {
-            self->$class->_on_tls_error(self, -1LL, (int64_t)r, to$str(errmsg));
+            self->$class->_on_tls_error(self, -1LL, (int64_t)r, actStrFromCStringCopy(errmsg));
         }
         return $R_CONT(c$cont, B_None);
     }

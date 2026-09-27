@@ -6,7 +6,7 @@ const B_BaseException = opaque {};
 const B_ValueError = opaque {};
 const B_MemoryError = opaque {};
 
-extern fn to_str_noc(str: [*:0]u8) B_str;
+extern fn actStrFromCString(str: [*:0]const u8) B_str;
 extern fn B_ValueErrorG_new(B_str) ?*B_ValueError;
 extern fn B_MemoryErrorG_new(B_str) ?*B_MemoryError;
 extern fn @"$RAISE"(?*B_BaseException) void;
@@ -61,13 +61,13 @@ pub const str = extern struct {
 };
 
 // This is the equivalent of the expanded macro in C:
-//   $NEW(B_ValueError,to$str(message))
+//   $NEW(B_ValueError,actStrFromCString(message))
 pub fn new_ValueError(message: [:0]const u8) ?*B_ValueError {
-    return B_ValueErrorG_new(to_str_noc(@constCast(message.ptr)));
+    return B_ValueErrorG_new(actStrFromCString(message.ptr));
 }
 
 // This is the equivalent of the function call in C:
-//   $RAISE((B_BaseException)$NEW(B_ValueError,to$str(message)))
+//   $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString(message)))
 pub fn raise_ValueError(message: [:0]const u8) void {
     const error_ptr = new_ValueError(message);
     // @ptrCast is used to cast the pointer to the correct type expected by the C function
@@ -77,13 +77,13 @@ pub fn raise_ValueError(message: [:0]const u8) void {
 }
 
 // This is the equivalent of the expanded macro in C:
-//  $NEW(B_MemoryError,to$str(message))
+//  $NEW(B_MemoryError,actStrFromCString(message))
 pub fn new_MemoryError(message: [:0]const u8) ?*B_MemoryError {
-    return B_MemoryErrorG_new(to_str_noc(@constCast(message.ptr)));
+    return B_MemoryErrorG_new(actStrFromCString(message.ptr));
 }
 
 // This is the equivalent of the function call in C:
-//   $RAISE((B_BaseException)$NEW(B_MemoryError,to$str(message)))
+//   $RAISE((B_BaseException)$NEW(B_MemoryError,actStrFromCString(message)))
 pub fn raise_MemoryError(message: [:0]const u8) void {
     const error_ptr = new_MemoryError(message);
     // @ptrCast is used to cast the pointer to the correct type expected by the C function

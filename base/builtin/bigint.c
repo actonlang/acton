@@ -46,7 +46,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         } else {
             char errmsg[1024];
             snprintf(errmsg, sizeof(errmsg), "integer type constructor: base argument is only allowed when converting from a str");
-            $RAISE($NEW(B_BaseException,to$str(errmsg)));
+            $RAISE($NEW(B_BaseException,actStrFromCStringCopy(errmsg)));
         }
     }
     if ($ISINSTANCE0(a,B_bigint)) return (B_bigint)a;
@@ -138,7 +138,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         set_str(&res->val, ((B_str)a)->str, base);
         return res;
     }
-    $RAISE((B_BaseException)$NEW(B_ValueError,to$str("integer type constructor: unsupported atom type")));
+    $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("integer type constructor: unsupported atom type")));
     return NULL;
 }
 
@@ -174,11 +174,11 @@ bool B_bigintD___bool__(B_bigint n) {
 }
 
 B_str B_bigintD___str__(B_bigint n) {
-    return to_str_noc(get_str(&n->val));
+    return actStrFromCString(get_str(&n->val));
 }
 
 B_str B_bigintD___repr__(B_bigint n) {
-    return to_str_noc(get_str(&n->val));
+    return actStrFromCString(get_str(&n->val));
 }
 
 /*
@@ -206,7 +206,7 @@ B_bigint B_IntegralD_bigintD___zero__(B_IntegralD_bigint wit) {
 }
 
 B_complex B_IntegralD_bigintD___complex__(B_IntegralD_bigint wit, B_bigint a) {
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError, to$str("Number.__complex__ not implemented for int")));
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError, actStrFromCString("Number.__complex__ not implemented for int")));
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
@@ -225,12 +225,12 @@ B_bigint B_IntegralD_bigintD___pow__(B_IntegralD_bigint wit, B_bigint a, B_bigin
     if (zz_cmpi(val_b,0) < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__(): negative exponent: %s", get_str(val_b));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     if (zz_cmpi(val_b,LONG_MAX) > 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int.__pow__(): exponent out of range (>LONG_MAX):  %s", get_str(val_b));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     B_bigint res = malloc_bigint();
     if (val_b->size == 0)
@@ -251,12 +251,12 @@ B_bigint B_IntegralD_bigintD___pos__(B_IntegralD_bigint wit,  B_bigint a) {
 }
 
 $WORD B_IntegralD_bigintD_real(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__real__ not implemented for int")));
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,actStrFromCString("Number.__real__ not implemented for int")));
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
 $WORD B_IntegralD_bigintD_imag(B_IntegralD_bigint wit, B_bigint a, B_Real wit2) {
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("Number.__imag__ not implemented for int")));
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,actStrFromCString("Number.__imag__ not implemented for int")));
     return NULL; // This is just to silence compiler warning, above RAISE will longjmp from here anyway
 }
 
@@ -322,7 +322,7 @@ int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__int__: value %s out of range for type int",get_str(&n->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return k*sz;
 }
@@ -333,7 +333,7 @@ int64_t B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__index__: value %s out of range for type int",get_str(&n->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return k*sz;
 }
@@ -342,7 +342,7 @@ B_tuple B_IntegralD_bigintD___divmod__(B_IntegralD_bigint wit, B_bigint a, B_big
     if (b->val.size == 0){
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "integer divmod: divisor is zero");
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCStringCopy(errmsg)));
     }
     B_bigint q = malloc_bigint();
     B_bigint r = malloc_bigint();
@@ -354,7 +354,7 @@ B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_
     if (b->val.size == 0){
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "integer floordiv: divisor is zero");
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError,actStrFromCStringCopy(errmsg)));
     }
      B_bigint res = malloc_bigint();
     zz_div(&res->val,&a->val,&b->val);
@@ -375,7 +375,7 @@ B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int
     if (bval<0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__lshift__: negative shift count: %ld", bval);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     long shw = bval/64;
     long shb = bval%64;
@@ -406,7 +406,7 @@ B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int
     if (bval<0)  {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__rshift__: negative shift count: %ld", bval);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     B_bigint res = malloc_bigint();
     zz_ptr rval = &res->val;
@@ -605,7 +605,7 @@ B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit,  B_bi
 
 B_float B_DivD_bigintD___truediv__ (B_DivD_bigint wit, B_bigint a, B_bigint b) {
     if (zz_equal(&b->val, &toB_bigint(0)->val))
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     zz_ptr aval = &a->val;
     zz_ptr bval = &b->val;
     B_bigint ared = malloc_bigint();
@@ -853,7 +853,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
         if (baseval < 2 || baseval > 36) {
             char errmsg[1024];
             snprintf(errmsg, sizeof(errmsg), "integer type constructor: base parameter %ld is out of range (must be between 2 and 36, inclusive)", baseval);
-            $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+            $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
         } else
             basefrompar = (unsigned char)baseval;
     }
@@ -865,7 +865,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
     else if (basefromstr != basefrompar) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "integer type constructor: base specified in str (%d) is in conflict with base in parameter base (%d)", basefromstr, basefrompar);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     } else
         base = basefromstr; // which is equal to basefrompar
     while (digvalue[nstr[pre]] < base) {
@@ -875,7 +875,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
     if (len == 0 || nstr[pre] != 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "integer type constructor: string \"%s\" cannot be interpreted as an int in base %d", nstr,base);
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     nstr += pre_len;
     

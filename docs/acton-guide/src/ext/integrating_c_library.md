@@ -197,7 +197,7 @@ B_bytes zlibQ_compress(B_bytes data) {
     memset(&stream, 0, sizeof(stream));
     ret = deflateInit(&stream, Z_DEFAULT_COMPRESSION);
     if (ret != Z_OK) {
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("Unable to compress data, init error: %d", ret)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, $FORMAT("Unable to compress data, init error: %d", ret)));
     }
 
     // Set the input data
@@ -313,3 +313,32 @@ user@host:~/acton-zlib$
 ```
 
 And with that, we're done! A simple wrapper around zlib, which is also available [on GitHub](https://github.com/actonlang/acton-zlib) if you want to study it further.
+
+## Converting C strings to Acton strings
+
+The string constructors validate UTF-8 and count Unicode characters. Use an
+explicit byte length when the input can contain NUL characters:
+
+| Function | Input | Storage |
+| --- | --- | --- |
+| `actStrFromCString(s)` | NUL-terminated UTF-8 | Shared |
+| `actStrFromCStringCopy(s)` | NUL-terminated UTF-8 | Copied |
+| `actStrFromCStringLength(s, n)` | `n` UTF-8 bytes, followed by a NUL terminator | Shared |
+| `actStrFromCStringLengthCopy(s, n)` | `n` UTF-8 bytes; no terminator required | Copied |
+
+Shared input must remain immutable and alive for as long as the returned string
+exists. String literals and completed buffers allocated with
+`acton_malloc_atomic()` are suitable. Use `Copy` for stack buffers, buffers that
+will be modified or freed, and memory owned by a C library that may release it.
+The length excludes the final terminator; NUL bytes within that length remain
+part of the Acton string. Empty strings and one-byte ASCII strings may reuse
+immutable singleton values.
+
+For bytes, `actBytesFromCStringCopy(s)` and
+`actBytesFromCStringLengthCopy(s, n)` explicitly copy the input. Existing
+`actBytesFromCString` and `actBytesFromCStringLength` still copy during the API
+migration; their `NoCopy` variants share the input. The old string names
+`to$str`, `to_str_len`, and `to_str_noc` also retain their original behaviour.
+Use the explicit `Copy` names wherever independent storage is required, so a
+future change to the bytes defaults does not change the caller's ownership
+contract.

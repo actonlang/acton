@@ -19,7 +19,7 @@ static void testing_loop_invalid(testingQ_PerfLoop self, const char *message) {
            !__atomic_compare_exchange_n(&self->_state, &state,
                                         state | TESTING_LOOP_INVALID, false,
                                         __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {}
-    $RAISE((B_BaseException)B_ValueErrorG_new(to$str((char *)message)));
+    $RAISE((B_BaseException)B_ValueErrorG_new(actStrFromCStringCopy(message)));
 }
 
 testingQ_PerfLoop testingQ_PerfLoopD_claim(testingQ_PerfLoop self) {

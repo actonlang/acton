@@ -194,7 +194,7 @@ static B_value stdQ_jsonQ_decode_integer(yyjson_val *val) {
         const char *raw = yyjson_get_raw(val);
         for (size_t i = 0; i < len; i++) {
             if (raw[i] == '.' || raw[i] == 'e' || raw[i] == 'E')
-                $RAISE((B_BaseException)B_ValueErrorG_new(to$str("JSON floating-point number is out of range")));
+                $RAISE((B_BaseException)B_ValueErrorG_new(actStrFromCString("JSON floating-point number is out of range")));
         }
         char *number = acton_malloc_atomic(len + 1);
         memcpy(number, raw, len);
@@ -219,7 +219,7 @@ B_dict stdQ_jsonQ_decode_obj(yyjson_val *obj) {
     yyjson_val *key, *val;
     while ((key = yyjson_obj_iter_next(&iter))) {
         val = yyjson_obj_iter_get_val(key);
-        B_str name = to_str_len(yyjson_get_str(key), yyjson_get_len(key));
+        B_str name = actStrFromCStringLengthCopy(yyjson_get_str(key), yyjson_get_len(key));
 
         switch (yyjson_get_type(val)) {
             case YYJSON_TYPE_NONE:;
@@ -245,7 +245,7 @@ B_dict stdQ_jsonQ_decode_obj(yyjson_val *obj) {
                 }
                 break;
             case YYJSON_TYPE_STR:;
-                B_dictD_setitem(res, wit, name, to_str_len(yyjson_get_str(val), yyjson_get_len(val)));
+                B_dictD_setitem(res, wit, name, actStrFromCStringLengthCopy(yyjson_get_str(val), yyjson_get_len(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = stdQ_jsonQ_decode_arr(val);
@@ -294,7 +294,7 @@ B_list stdQ_jsonQ_decode_arr(yyjson_val *arr) {
                 }
                 break;
             case YYJSON_TYPE_STR:;
-                wit->$class->append(wit, res, to_str_len(yyjson_get_str(val), yyjson_get_len(val)));
+                wit->$class->append(wit, res, actStrFromCStringLengthCopy(yyjson_get_str(val), yyjson_get_len(val)));
                 break;
             case YYJSON_TYPE_ARR:;
                 B_list l = stdQ_jsonQ_decode_arr(val);
@@ -324,13 +324,13 @@ B_dict stdQ_jsonQ__decode (B_str data) {
         yyjson_val *obj = yyjson_doc_get_root(doc);
         if (yyjson_get_type(obj) != YYJSON_TYPE_OBJ) {
             yyjson_doc_free(doc);
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("JSON root is not an object")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("JSON root is not an object")));
         }
         res = stdQ_jsonQ_decode_obj(obj);
     } else {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
     }
 
     yyjson_doc_free(doc);
@@ -344,13 +344,13 @@ B_list stdQ_jsonQ__decode_list (B_str data) {
     if (!doc) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "JSON parsing error: %s (%u) at position %ld", err.msg, err.code, err.pos);
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
     }
 
     yyjson_val *root = yyjson_doc_get_root(doc);
     if (yyjson_get_type(root) != YYJSON_TYPE_ARR) {
         yyjson_doc_free(doc);
-        $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("JSON root is not an array"))));
+        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("JSON root is not an array"))));
     }
 
     B_list res = stdQ_jsonQ_decode_arr(root);
@@ -373,7 +373,7 @@ B_str stdQ_jsonQ__encode (B_dict data, bool pretty, bool bigint_as_string) {
 
     char *json = yyjson_mut_write_opts(doc, flags, &stdQ_jsonQ_acton_alc, NULL, &err);
     //yyjson_doc_free(doc);
-    return to$str(json);
+    return actStrFromCString(json);
 }
 
 B_str stdQ_jsonQ__encode_list (B_list data, bool pretty, bool bigint_as_string) {
@@ -391,5 +391,5 @@ B_str stdQ_jsonQ__encode_list (B_list data, bool pretty, bool bigint_as_string) 
 
     char *json = yyjson_mut_write_opts(doc, flags, &stdQ_jsonQ_acton_alc, NULL, &err);
     //yyjson_doc_free(doc);
-    return to$str(json);
+    return actStrFromCString(json);
 }

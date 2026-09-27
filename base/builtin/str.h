@@ -7,16 +7,24 @@ struct B_str {
     unsigned char *str;      // str is UTF-8 encoded.
 };
 
-// Constructor; str must be a null-terminated, correctly UTF-8-encoded string.
-// The constructor checks this and returns a B_str value.
-B_str to$str(char *str);  //Dare not remove this
+// Decode UTF-8, raising ValueError for invalid input. The Length variants
+// preserve embedded NUL and take a byte count, excluding the final terminator.
+// Without Copy, the input must remain immutable and alive for the result's
+// lifetime: use static storage or retained Acton GC storage, never a stack
+// buffer or memory that will be freed. Length also requires str[nbytes] == 0.
+// Copy accepts temporary buffers; LengthCopy does not require a terminator.
+// Empty strings and one-byte ASCII strings may reuse immutable singletons.
+B_str actStrFromCString(const char *str);
+B_str actStrFromCStringCopy(const char *str);
+B_str actStrFromCStringLength(const char *str, int nbytes);
+B_str actStrFromCStringLengthCopy(const char *str, int nbytes);
 
-// Decode a UTF-8 byte buffer of known length, preserving embedded NUL.
-B_str to_str_len(const char *str, int nbytes);
-
+// Compatibility names. Preserve their original copying behaviour until
+// downstream callers have migrated to the explicit APIs above.
+B_str to$str(char *str);                         // Copies.
+B_str to_str_len(const char *str, int nbytes);   // Copies; preserves embedded NUL.
+B_str to_str_noc(char *str);                     // Wraps the input without copying.
 B_str toB_str(char *str);
-
-B_str to_str_noc(char *str);
 
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
@@ -107,12 +115,20 @@ struct B_bytes {
     unsigned char *str;
 };
 
-B_bytes to$bytes(char *str);
-B_bytes to$bytesD_len(char *str, int len);
+// Copy into independent storage. LengthCopy preserves embedded NUL and does
+// not require a terminator; the count excludes any final terminator.
+B_bytes actBytesFromCStringCopy(const char *str);
+B_bytes actBytesFromCStringLengthCopy(const char *str, int len);
+
+// Existing APIs retain their behaviour during the downstream migration:
+// the unadorned names still copy. NoCopy requires immutable storage that
+// remains alive for the result's lifetime.
 B_bytes actBytesFromCString(char *str);
 B_bytes actBytesFromCStringNoCopy(char *str);
 B_bytes actBytesFromCStringLength(char *str, int len);
 B_bytes actBytesFromCStringLengthNoCopy(char *str, int length);
+B_bytes to$bytes(char *str);
+B_bytes to$bytesD_len(char *str, int len);
 char *fromB_bytes(B_bytes b);
 
 

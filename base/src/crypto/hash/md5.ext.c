@@ -13,7 +13,7 @@ B_NoneType cryptoQ_hashQ_md5Q_HasherD_update (cryptoQ_hashQ_md5Q_Hasher self, B_
     return B_None;
 }
 B_bytes cryptoQ_hashQ_md5Q_HasherD_finalize (cryptoQ_hashQ_md5Q_Hasher self) {
-    B_bytes output = to$bytes("1234567890abcdef");
+    B_bytes output = actBytesFromCStringCopy("1234567890abcdef");
     zig_crypto_hash_md5_finalize((void *)(uintptr_t)self->_hasher, output);
     return output;
 }

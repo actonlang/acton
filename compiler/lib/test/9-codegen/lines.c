@@ -9,7 +9,7 @@ $R linesQ_L_1C_1cont (linesQ_Apa self, $Cont C_cont, B_NoneType C_2res) {
     #line 18 "test/src/lines.act"
     ((linesQ_Apa)(self))->z = 1LL;
     #line 19 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Apa")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("Apa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
 B_NoneType linesQ_L_2ContD___init__ (linesQ_L_2Cont L_self, linesQ_Apa self, $Cont C_cont) {
@@ -430,38 +430,38 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
     #line 38 "test/src/lines.act"
     ((linesQ_main)(self))->r = C_10res;
     #line 39 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), toB_int(((int64_t)((linesQ_main)(self))->r))), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("r ="), toB_int(((int64_t)((linesQ_main)(self))->r))), B_None, B_None, B_None, B_None);
     #line 40 "test/src/lines.act"
     ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(((linesQ_main)(self))->a))->$class->compute)(((linesQ_main)(self))->a, (($action)linesQ_L_19actionG_new(self)));
     #line 41 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("main")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("main")), B_None, B_None, B_None, B_None);
     #line 44 "test/src/lines.act"
     ((linesQ_main)(self))->v = 0LL;
     #line 45 "test/src/lines.act"
     if (((int64_t)((linesQ_main)(self))->v) == 0LL) {
         #line 46 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("if branch")), B_None, B_None, B_None, B_None);
+        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("if branch")), B_None, B_None, B_None, B_None);
         #line 47 "test/src/lines.act"
         if (((int64_t)((linesQ_main)(self))->v) < 1LL) {
             #line 48 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("nested if")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("nested if")), B_None, B_None, B_None, B_None);
         }
         else if (((int64_t)((linesQ_main)(self))->v) == -1LL) {
             #line 50 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("nested elif")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("nested elif")), B_None, B_None, B_None, B_None);
         }
         else {
             #line 52 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("nested else")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("nested else")), B_None, B_None, B_None, B_None);
         }
     }
     else if (((int64_t)((linesQ_main)(self))->v) == 1LL) {
         #line 54 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("outer elif")), B_None, B_None, B_None, B_None);
+        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("outer elif")), B_None, B_None, B_None, B_None);
     }
     else {
         #line 56 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("outer else")), B_None, B_None, B_None, B_None);
+        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("outer else")), B_None, B_None, B_None, B_None);
     }
     #line 59 "test/src/lines.act"
     ((linesQ_main)(self))->i = 0LL;
@@ -471,7 +471,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         }
         else {
             #line 70 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("while else")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("while else")), B_None, B_None, B_None, B_None);
             break;
         }
         #line 61 "test/src/lines.act"
@@ -479,19 +479,19 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         #line 62 "test/src/lines.act"
         if (((int64_t)((linesQ_main)(self))->i) == 1LL) {
             #line 63 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("continue path")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("continue path")), B_None, B_None, B_None, B_None);
             #line 64 "test/src/lines.act"
             continue;
         }
         #line 65 "test/src/lines.act"
         if (((int64_t)((linesQ_main)(self))->i) == 2LL) {
             #line 66 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("break path")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("break path")), B_None, B_None, B_None, B_None);
             #line 67 "test/src/lines.act"
             break;
         }
         #line 68 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("loop body"), toB_int(((int64_t)((linesQ_main)(self))->i))), B_None, B_None, B_None, B_None);
+        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("loop body"), toB_int(((int64_t)((linesQ_main)(self))->i))), B_None, B_None, B_None, B_None);
     }
     B_Iterator N_3iter = B_CollectionD_SequenceD_listD___iter__((B_CollectionD_SequenceD_list)B_SequenceD_listG_witness->W_Collection, B_mk_list(3, toB_int(1LL) , toB_int(2LL) , toB_int(3LL)));
     #line 73 "test/src/lines.act"
@@ -508,7 +508,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
                 continue;
             }
             #line 76 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("for j"), j), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("for j"), j), B_None, B_None, B_None, B_None);
         }
         else {
             break;
@@ -520,11 +520,11 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
             #line 80 "test/src/lines.act"
             if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
                 #line 81 "test/src/lines.act"
-                $RAISE(((B_BaseException)B_ValueErrorG_new(to$str("boom"))));
+                $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("boom"))));
                 __builtin_unreachable();
             }
             #line 82 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("unreached")), B_None, B_None, B_None, B_None);
+            ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("unreached")), B_None, B_None, B_None, B_None);
             $DROP();
         }
         else {
@@ -533,7 +533,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
             if ($ISINSTANCE0(N_7x, B_ValueError)) {
                 e = ((B_ValueError)N_7x);
                 #line 84 "test/src/lines.act"
-                ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("caught"), to$str("ValueError")), B_None, B_None, B_None, B_None);
+                ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("caught"), actStrFromCString("ValueError")), B_None, B_None, B_None, B_None);
             }
             else {
                 $RAISE(N_7x);
@@ -546,7 +546,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
     else {
         N_8xx = $POP();
         #line 86 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("finally")), B_None, B_None, B_None, B_None);
+        ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("finally")), B_None, B_None, B_None, B_None);
         if ($ISINSTANCE0(N_8xx, $SEQ)) {
         }
         else {
@@ -597,7 +597,7 @@ $R linesQ_L_12C_7cont (linesQ_main self, $Cont C_cont, linesQ_Bepa C_8res) {
     #line 34 "test/src/lines.act"
     ((linesQ_main)(self))->b = C_8res;
     #line 35 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("-----")), B_None, B_None, B_None, B_None);
     #line 36 "test/src/lines.act"
     ((B_Msg (*) ($WORD, $action))((linesQ_Apa)(((linesQ_main)(self))->a))->$class->setup)(((linesQ_main)(self))->a, (($action)linesQ_L_14actionG_new(((linesQ_main)(self))->a)));
     #line 37 "test/src/lines.act"
@@ -984,7 +984,7 @@ $R linesQ_ApaD___init__ (linesQ_Apa self, $Cont C_cont) {
 #line 3 "test/src/lines.act"
 $R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
     #line 4 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("setup")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("setup")), B_None, B_None, B_None, B_None);
     #line 5 "test/src/lines.act"
     ((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(0LL));
     return $R_CONT(C_cont, B_None);
@@ -992,13 +992,13 @@ $R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
 #line 7 "test/src/lines.act"
 $R linesQ_ApaD_computeG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
     #line 8 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("compute")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("compute")), B_None, B_None, B_None, B_None);
     return $AWAIT((($Cont)linesQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
 }
 #line 12 "test/src/lines.act"
 $R linesQ_ApaD_noticeG_local (linesQ_Apa self, $Cont C_cont, int64_t i) {
     #line 13 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("notice")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("notice")), B_None, B_None, B_None, B_None);
     int64_t N_1tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_1tmp));
 }
@@ -1051,13 +1051,13 @@ $R linesQ_ApaG_new($Cont G_1) {
 struct linesQ_ApaG_class linesQ_ApaG_methods;
 $R linesQ_BepaD___init__ (linesQ_Bepa self, $Cont C_cont) {
     #line 25 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Bepa")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("Bepa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
 #line 22 "test/src/lines.act"
 $R linesQ_BepaD_callbackG_local (linesQ_Bepa self, $Cont C_cont, int64_t i) {
     #line 23 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("callback"), toB_int(i)), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("callback"), toB_int(i)), B_None, B_None, B_None, B_None);
     int64_t N_2tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_2tmp));
 }
@@ -1097,7 +1097,7 @@ $R linesQ_mainD___init__ (linesQ_main self, $Cont C_cont, B_Env env) {
 #line 28 "test/src/lines.act"
 $R linesQ_mainD_myprocG_local (linesQ_main self, $Cont C_cont, int64_t i) {
     #line 29 "test/src/lines.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("myproc"), toB_int(i)), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("myproc"), toB_int(i)), B_None, B_None, B_None, B_None);
     #line 30 "test/src/lines.act"
     if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_331))->$class->__eq__)(linesQ_W_Apa_331, toB_int(i), toB_int(2LL))) {
         #line 31 "test/src/lines.act"
