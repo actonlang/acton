@@ -1842,21 +1842,33 @@ B_str B_ISliceableD_strD___getslice__ (B_ISliceableD_str wit, B_str s, B_slice s
         return null_str;
     }
     //slice notation have been eliminated and default values applied.
-    unsigned char buffer[4*slen]; // very conservative buffer size.
-    unsigned char *p = buffer;
     unsigned char *t = skip_chars(s->str,start,isascii);
+    B_str res;
+    if (step == 1) {
+        // A contiguous run of characters, copied in one go
+        unsigned char *e = skip_chars(t,slen,isascii);
+        NEW_UNFILLED_STR(res,slen,e-t);
+        memcpy(res->str,t,e-t);
+        return res;
+    }
+    // The first pass computes the length of the result in bytes and the
+    // second one copies the characters. Neither steps beyond the last
+    // character of the slice.
+    unsigned char *u = t;
+    for (int i=0; i<slen; i++) {
+        nbytes += byte_length2(*u);
+        if (i < slen-1)
+            u = skip_chars(u,step,isascii);
+    }
+    NEW_UNFILLED_STR(res,slen,nbytes);
+    unsigned char *p = res->str;
     for (int i=0; i<slen; i++) {
         int bytes = byte_length2(*t);
-        for (int k=0; k<bytes;k++) {
-            p[nbytes] = *t;
-            t++; nbytes++;
-        }
-        t = skip_chars(t,step-1,isascii);
+        memcpy(p,t,bytes);
+        p += bytes;
+        if (i < slen-1)
+            t = skip_chars(t,step,isascii);
     }
-    B_str res;
-    NEW_UNFILLED_STR(res,slen,nbytes);
-    if (nbytes > 0)
-        memcpy(res->str,buffer,nbytes);
     return res;
 }
 

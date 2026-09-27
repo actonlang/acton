@@ -42,6 +42,20 @@ def test_str_upper_large():
     print("str upper of 30000000 chars: {len(u)}")
     return len(u) == 30000000 and u.count("A") == 30000000
 
+def test_str_slice_steps():
+    s = "aéb€c𝄞d"
+    print("str slices with steps: {s[::2]} {s[::-1]} {s[::-2]} {s[5:0:-2]} {s[1:6:2]}")
+    return (s[::2] == "abcd" and s[::-1] == "d𝄞c€béa" and s[::-2] == "dcba"
+            and s[5:0:-2] == "𝄞€é" and s[1:6:2] == "é€𝄞" and s[1:3] == "éb"
+            and s[3:] == "€c𝄞d" and s[:0] == "" and s[6:0:-3] == "d€")
+
+def test_str_slice_large():
+    # A slice is built on the heap, not in a stack array of four bytes per
+    # character
+    r = ("a" * 30000000)[1:]
+    print("str slice of 30000000 chars: {len(r)}")
+    return len(r) == 29999999 and r.count("a") == 29999999
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -352,6 +366,8 @@ tests = {
     "test_str_expandtabs_large": test_str_expandtabs_large,
     "test_str_case_utf8_length": test_str_case_utf8_length,
     "test_str_upper_large": test_str_upper_large,
+    "test_str_slice_steps": test_str_slice_steps,
+    "test_str_slice_large": test_str_slice_large,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
