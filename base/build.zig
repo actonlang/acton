@@ -70,6 +70,10 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    // Must match the collector options in backend/build.zig, so that both
+    // resolve to the same libgc. The collector has parallel markers and
+    // thread-local allocation wherever it has threads.
+    const gc_enable_threads = !target.result.cpu.arch.isWasm();
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
@@ -81,7 +85,7 @@ pub fn build(b: *std.Build) void {
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
-    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack") orelse false;
+    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse gc_enable_threads;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (0 keeps the default)") orelse 0;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
@@ -134,9 +138,6 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         }
     }
-    // Must match the collector options in backend/build.zig, so that both
-    // resolve to the same libgc.
-    const gc_enable_threads = !target.result.cpu.arch.isWasm();
     if (gc_mark_range_stealing and !gc_enable_threads) {
         std.log.err("gc_mark_range_stealing requires a target with threads", .{});
         std.process.exit(1);
