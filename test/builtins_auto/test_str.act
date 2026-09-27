@@ -87,6 +87,19 @@ def test_ascii_quotes_and_length():
             and ascii('say "hi"') == "'say \"hi\"'"
             and e.isascii() and len(e) == len(e.encode()))
 
+def test_chr_surrogates():
+    # Surrogates have no UTF-8 encoding, so chr rejects them like other
+    # invalid code points
+    rejected = 0
+    for cp in [0xd800, 0xdbff, 0xdc00, 0xdfff, 0x110000, -1]:
+        try:
+            c = chr(cp)
+        except ValueError:
+            rejected += 1
+    print("chr rejected {rejected} of 6 invalid code points")
+    return (rejected == 6 and chr(0xd7ff).encode() == b"\xed\x9f\xbf"
+            and chr(0xe000).encode() == b"\xee\x80\x80" and ord(chr(0x10ffff)) == 0x10ffff)
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -402,6 +415,7 @@ tests = {
     "test_str_split_sep": test_str_split_sep,
     "test_str_empty_substring": test_str_empty_substring,
     "test_ascii_quotes_and_length": test_ascii_quotes_and_length,
+    "test_chr_surrogates": test_chr_surrogates,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

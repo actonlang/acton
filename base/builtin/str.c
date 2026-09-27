@@ -4058,7 +4058,8 @@ B_str B_bin(B_Integral wit, $WORD n) {
 
 B_str B_chr(B_Integral wit, $WORD n) {
     int64_t v = wit->$class->__int__(wit,n);
-    if (v >=  0x110000)
+    // Surrogates are not characters and have no UTF-8 encoding
+    if (v >=  0x110000 || (v >= 0xd800 && v <= 0xdfff))
         RAISE_EXC(&B_str_invalid_code_point_error);
     if (v >= 0 && v < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[v];
