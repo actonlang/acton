@@ -23,7 +23,7 @@ static $WORD mkstr($WORD w) {
  
 B_str __str__(B_value x) {
     if (x == B_None)
-        return actStrFromCString("None");
+        return B_None_str;
     else
         return x->$class->__str__(x);
 }

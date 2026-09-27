@@ -1177,7 +1177,7 @@ def print(*args, sep: str=" ", end: str="\n", err: bool=False, flush: bool=False
 def repr(x: ?value):
     if x is not None:
         return x.__repr__()
-    return "None"
+    return str(None)
 
 def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()

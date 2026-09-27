@@ -15,7 +15,7 @@ B_str B_BaseExceptionD__name (B_BaseException self) {
 B_str B_type(B_value a) {
     if (a)
         return actStrFromCString(unmangle_name(a->$class->$GCINFO));
-    return actStrFromCString("None");
+    return B_None_str;
 }
 
 // Environment variable names and values are C strings, so they cannot hold

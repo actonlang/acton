@@ -281,7 +281,7 @@ static B_str B_dict_base_str(B_dict_base self) {
             B_value key = (B_value)entry->key;
             B_value value = (B_value)entry->value;
             B_str keystr = key->$class->__repr__(key);
-            B_str valuestr = value ? value->$class->__repr__(value) : actStrFromCString("None");
+            B_str valuestr = value ? value->$class->__repr__(value) : B_None_str;
             B_str elem = acton_malloc(sizeof(struct B_str));
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;

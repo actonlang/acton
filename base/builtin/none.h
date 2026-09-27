@@ -16,3 +16,6 @@ struct B_NoneType {
 
 extern struct B_NoneTypeG_class B_NoneTypeG_methods;
 B_NoneType B_NoneTypeG_new();
+
+// Shared immutable string representation of None.
+extern B_str const B_None_str;
