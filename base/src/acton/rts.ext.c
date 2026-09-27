@@ -58,6 +58,7 @@ struct acton_gc_info {
     int full_frequency;
     GC_word heap_growth_divisor;
     GC_word alloc_budget_percent;
+    int realloc_no_free;
 };
 
 static void *GC_CALLBACK read_gc_info(void *data) {
@@ -80,6 +81,7 @@ static void *GC_CALLBACK read_gc_info(void *data) {
     info->full_frequency = GC_get_full_freq();
     info->heap_growth_divisor = GC_get_heap_growth_divisor();
     info->alloc_budget_percent = GC_get_alloc_budget_percent();
+    info->realloc_no_free = GC_get_realloc_no_free();
     return NULL;
 }
 
@@ -123,13 +125,14 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(19,
+    return $NEWTUPLE(20,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(acton_gc_get_block_size()),
         toB_bool(acton_gc_get_end_padding()),
         toB_u64(acton_gc_get_thread_local_size_limit()),
+        toB_bool(info.realloc_no_free),
         toB_u64(info.stats.markers_m1 + 1),
         toB_bool(acton_gc_get_mark_range_stealing()),
         toB_u64(acton_gc_get_initial_mark_stack_size()), pause_target,
