@@ -15,6 +15,9 @@
         .libgc = .{
             .path = "../deps/libgc/",
         },
+        .mimalloc = .{
+            .path = "../deps/mimalloc/",
+        },
         .libmbedtls = .{
             .path = "../deps/mbedtls/",
         },

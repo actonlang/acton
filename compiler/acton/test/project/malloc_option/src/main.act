@@ -1,0 +1,14 @@
+import shared
+import testing
+
+def check() -> int:
+    NotImplemented
+
+def _test_allocator(t: testing.SyncT):
+    assert shared.marker() == 1
+    assert check() == 0
+
+actor main(env):
+    assert shared.marker() == 1
+    assert check() == 0
+    env.exit(0)

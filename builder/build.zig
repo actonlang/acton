@@ -51,6 +51,7 @@ pub fn build(b: *std.Build) void {
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
+    const malloc = b.option(enum { libc, mimalloc }, "malloc", "Allocator for C malloc/free: libc, mimalloc") orelse .libc;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
@@ -81,6 +82,11 @@ pub fn build(b: *std.Build) void {
     });
 
     // Dependencies from Build.act
+
+    const mimalloc = if (malloc == .mimalloc) actonbase_dep.builder.dependency("mimalloc", .{
+        .target = target,
+        .optimize = optimize,
+    }).artifact("mimalloc") else null;
 
     var c_files = ArrayList([]const u8).empty;
     var root_c_files = ArrayList(*FilePath).empty;
@@ -406,6 +412,7 @@ pub fn build(b: *std.Build) void {
                 }),
             });
             if (enable_lto) executable.lto = .thin;
+            if (mimalloc) |allocator| executable.root_module.addObject(allocator);
             // Build relative path for the executable source file
             const exe_rel_path = b.allocator.alloc(u8, 9 + entry.file_path.len) catch @panic("OOM");
             @memcpy(exe_rel_path[0..9], "out/types");

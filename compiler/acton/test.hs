@@ -4,7 +4,7 @@ import Control.Monad
 import Data.Char (isAlphaNum, isSpace, toLower)
 import Data.List
 import Data.List.Split
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, maybeToList)
 import Data.Ord
 import Data.Time.Clock.POSIX
 import qualified Data.Aeson as Ae
@@ -1699,6 +1699,7 @@ parseFlagTests =
 actonProjTests =
   testGroup "compiler project tests"
   [ dependencyDeclarationTests
+  , mallocBuildOptionTests
   , gcBuildOptionTests
   , gcThpBuildOptionTests
   , gcTuningBuildOptionTests
@@ -2145,6 +2146,47 @@ actonProjTests =
         testBuild "" ExitSuccess False proj
         assertBool "bar root stub should be removed after source deletion" . not =<< doesFileExist barRoot
         assertBool "bar binary should be removed after source deletion" . not =<< doesFileExist barBin
+  ]
+
+mallocBuildOptionTests = testGroup "C allocator build option"
+  [ testCase "executables and shared libraries use the selected heap" $
+      withSystemTempDirectory "acton-malloc-option" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        environment <- getEnvironment
+        createDirectoryIfMissing True (proj </> "src")
+        forM_ ["main.act", "main.ext.c", "shared.act", "shared.ext.c"] $ \file ->
+          copyFile ("test/project/malloc_option/src" </> file) (proj </> "src" </> file)
+        let fingerprint = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "malloc_option") 1)
+            writeOptions option = writeFile (proj </> "Build.act") $ unlines $
+              [ "name = \"malloc_option\""
+              , "fingerprint = " ++ fingerprint
+              , "libraries = {\"shared\": (modules=[\"shared\"], linkage=\"dynamic\")}"
+              ] ++ ["build_options = {\"malloc\": " ++ show value ++ "}" | value <- maybeToList option]
+            runEnv option = ("ACTON_TEST_MIMALLOC", if option == Just "mimalloc" then "1" else "0")
+                          : filter ((/= "ACTON_TEST_MIMALLOC") . fst) environment
+            run option exe args = readCreateProcessWithExitCode
+              (proc exe args) { cwd = Just proj, env = Just (runEnv option) } ""
+            expectSuccess label (code, out, err) =
+              assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+        -- Retain all generated outputs while changing allocator and build mode.
+        forM_ [(Just "libc", []), (Just "mimalloc", []),
+               (Just "mimalloc", ["--release=fast"]), (Nothing, ["--release=fast"])] $ \(option, flags) -> do
+          writeOptions option
+          expectSuccess "build selected allocator" =<< run option acton (["build", "--color", "never"] ++ flags)
+          expectSuccess "application allocator ownership" =<< run option (proj </> "out/bin/main") ["--rts-wthreads", "2"]
+          expectSuccess "test executable allocator ownership" =<< run option acton (["test", "--no-cache", "--color", "never"] ++ flags)
+        writeOptions (Just "unknown")
+        (code, out, err) <- run Nothing acton ["build", "--color", "never"]
+        assertBool ("invalid allocator should fail\n" ++ out ++ err) (code /= ExitSuccess)
+        assertBool ("diagnostic should identify malloc\n" ++ out ++ err) ("malloc" `isInfixOf` (out ++ err))
+        writeOptions (Just "mimalloc")
+        (targetCode, targetOut, targetErr) <- run Nothing acton
+          ["build", "--color", "never", "--target", "x86_64-windows-gnu", "--no-threads"]
+        assertBool ("unsupported target should fail\n" ++ targetOut ++ targetErr) (targetCode /= ExitSuccess)
+        assertBool ("diagnostic should identify supported targets\n" ++ targetOut ++ targetErr)
+          ("malloc=mimalloc requires a Linux or macOS target" `isInfixOf` (targetOut ++ targetErr))
+  | System.Info.os `elem` ["linux", "darwin"]
   ]
 
 gcBuildOptionTests = testGroup "GC metadata build options"
