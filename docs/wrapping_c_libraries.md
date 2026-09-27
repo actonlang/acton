@@ -56,7 +56,7 @@ And it should print `3.14`! We can now go ahead and modify `stdlib/src/time.ext.
 $float time$$foo () {
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-        $RAISE((($BaseException)$RuntimeError$new(to$str("Unable to get time"))));
+        $RAISE((($BaseException)$RuntimeError$new(actStrFromCString("Unable to get time"))));
     }
     return to$float(ts.tv_sec + 0.000000001*ts.tv_nsec);
 }

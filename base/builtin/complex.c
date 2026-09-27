@@ -83,7 +83,7 @@ B_complex B_NumberD_complexD___mul__ (B_NumberD_complex wit, B_complex a, B_comp
 }
 
 B_complex B_NumberD_complexD___fromatom__(B_NumberD_complex wit, B_atom a) {
-    $RAISE((B_BaseException)$NEW(B_NotImplementedError,to$str("__fromatom__ not implemented for complex")));
+    $RAISE((B_BaseException)$NEW(B_NotImplementedError,actStrFromCString("__fromatom__ not implemented for complex")));
     return B_None;
 }
 
@@ -119,7 +119,7 @@ B_complex B_NumberD_complexD_conjugate (B_NumberD_complex wit, B_complex c) {
 
 B_complex B_DivD_complexD___truediv__ (B_DivD_complex wit, B_complex a, B_complex b) {
     if (b->val == 0.0) {
-        RAISE(B_ZeroDivisionError, to_str_noc("complex truediv: divisor is zero"));
+        RAISE(B_ZeroDivisionError, actStrFromCString("complex truediv: divisor is zero"));
     }
     return toB_complex(a->val/b->val);
 }

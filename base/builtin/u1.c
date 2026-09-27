@@ -25,9 +25,9 @@
 #define U1_XOR(a,b)       U1_NORM((a) ^ (b))
 #define U1_LSHIFT(a,b)    U1_NORM((a) << (b))
 #define U1_RSHIFT(a,b)    U1_NORM((a) >> (b))
-#define U1_DIV(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); (double)(a)/(double)_u1_b; })
-#define U1_FLOORDIV(a,b)  ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); U1_NORM((a) / _u1_b); })
-#define U1_MOD(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero"))); U1_NORM((a) % _u1_b); })
+#define U1_DIV(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); (double)(a)/(double)_u1_b; })
+#define U1_FLOORDIV(a,b)  ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); U1_NORM((a) / _u1_b); })
+#define U1_MOD(a,b)       ({ uint8_t _u1_b = (b); if (_u1_b == 0) $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero"))); U1_NORM((a) % _u1_b); })
 
 // only called with e>=0.
 uint8_t u1_pow(uint8_t a, uint8_t e) {
@@ -47,7 +47,7 @@ uint8_t B_u1G_new(B_atom a, B_int base) {  // base is optional
     if (sz  > 1 || sz < 0 || (sz==1 && n > 1)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u1(): value %s out of range for type u1",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return (uint8_t)(n*sz);
 }

@@ -4,13 +4,13 @@ void B___ext_init__() {
 }
 
 B_str B_BaseExceptionD__name (B_BaseException self) {
-    return to$str(unmangle_name(self->$class->$GCINFO));
+    return actStrFromCString(unmangle_name(self->$class->$GCINFO));
 }
 
 B_str B_type(B_value a) {
     if (a)
-        return to$str(unmangle_name(a->$class->$GCINFO));
-    return to$str("None");
+        return actStrFromCString(unmangle_name(a->$class->$GCINFO));
+    return actStrFromCString("None");
 }
 
 // Environment variable names and values are C strings, so they cannot hold
@@ -48,7 +48,7 @@ $R B_EnvD_getenvbG_local (B_Env self, $Cont C_cont, B_bytes name) {
     if (r < 0) {
         $RAISE((B_BaseException)B_RuntimeErrorG_new($FORMAT("Failed to read the environment variable %s: %s", env_var, uv_strerror(r))));
     }
-    return $R_CONT(C_cont, to$bytes(value));
+    return $R_CONT(C_cont, actBytesFromCStringCopy(value));
 }
 
 $R B_EnvD_setenvbG_local (B_Env self, $Cont C_cont, B_bytes name, B_bytes value) {

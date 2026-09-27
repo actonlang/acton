@@ -112,7 +112,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
             backend = gc_backends[i].name;
         if (info.supported_backends & gc_backends[i].flag)
             sequence->$class->append(sequence, supported,
-                                    to$str((char *)gc_backends[i].name));
+                                    actStrFromCString(gc_backends[i].name));
     }
     B_float pause_target = (B_float)B_None;
     if (info.incremental && info.time_limit.tv_ms != GC_TIME_UNLIMITED)
@@ -120,8 +120,8 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
     return $NEWTUPLE(12,
-        to$str((char *)mode), to$str(ACTON_GC_DIRTY_TRACKING_BACKEND),
-        to$str((char *)backend), supported,
+        actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
+        actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(info.stats.markers_m1 + 1), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
@@ -183,21 +183,21 @@ B_tuple actonQ_rtsQ_perf_snapshot (B_SysCap cap) {
 B_dict actonQ_rtsQ_perf_info (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_strG_witness;
     B_dict info = $NEW(B_dict, wit, NULL, NULL);
-    B_dictD_setitem(info, wit, to$str("version"), to$str("1"));
-    B_dictD_setitem(info, wit, to$str("backend"), to$str((char *)rts_perf_backend()));
-    B_dictD_setitem(info, wit, to$str("scope"), to$str((char *)rts_perf_scope()));
-    B_dictD_setitem(info, wit, to$str("status"), to$str((char *)rts_perf_status()));
+    B_dictD_setitem(info, wit, actStrFromCString("version"), actStrFromCString("1"));
+    B_dictD_setitem(info, wit, actStrFromCString("backend"), actStrFromCString(rts_perf_backend()));
+    B_dictD_setitem(info, wit, actStrFromCString("scope"), actStrFromCString(rts_perf_scope()));
+    B_dictD_setitem(info, wit, actStrFromCString("status"), actStrFromCString(rts_perf_status()));
     uv_utsname_t system;
     if (uv_os_uname(&system) == 0) {
-        B_dictD_setitem(info, wit, to$str("os"), to$str(system.sysname));
-        B_dictD_setitem(info, wit, to$str("release"), to$str(system.release));
-        B_dictD_setitem(info, wit, to$str("arch"), to$str(system.machine));
+        B_dictD_setitem(info, wit, actStrFromCString("os"), actStrFromCStringCopy(system.sysname));
+        B_dictD_setitem(info, wit, actStrFromCString("release"), actStrFromCStringCopy(system.release));
+        B_dictD_setitem(info, wit, actStrFromCString("arch"), actStrFromCStringCopy(system.machine));
     }
     uv_cpu_info_t *cpus;
     int count;
     if (uv_cpu_info(&cpus, &count) == 0) {
         if (count > 0)
-            B_dictD_setitem(info, wit, to$str("cpu"), to$str(cpus[0].model));
+            B_dictD_setitem(info, wit, actStrFromCString("cpu"), actStrFromCStringCopy(cpus[0].model));
         uv_free_cpu_info(cpus, count);
     }
     return info;
@@ -241,12 +241,12 @@ void actonQ_rtsQ_io_handles_walk_cb (uv_handle_t *handle, void *arg) {
     if (uv_handle_get_type(handle) == UV_TCP) {
         $Actor hactor = handle->data;
         val = (B_tuple)$NEWTUPLE(2,
-                                to$str((char *)uv_handle_type_name(uv_handle_get_type(handle))),
+                                actStrFromCString(uv_handle_type_name(uv_handle_get_type(handle))),
                                 toB_u64((unsigned long)hactor)
                                 );
     } else {
         val = (B_tuple)$NEWTUPLE(2,
-                                to$str((char *)uv_handle_type_name(uv_handle_get_type(handle))),
+                                actStrFromCString(uv_handle_type_name(uv_handle_get_type(handle))),
                                 toB_u64(0) // TODO: should be None type instead, right?
                                 );
     }
@@ -271,7 +271,7 @@ B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
     for (int i = 0; i <= num_wthreads; i++) {
         B_tuple stats = $NEWTUPLE(28,
-                            to$str("TODO"), // state
+                            actStrFromCString("TODO"), // state
                             toB_u64(wt_stats[i].sleeps),
                             toB_u64(wt_stats[i].conts_count),
                             toB_u64(wt_stats[i].conts_sum),

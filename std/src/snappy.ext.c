@@ -23,11 +23,11 @@ B_bytes stdQ_snappyQ_compress (B_bytes data) {
     status = snappy_compress(input, input_len, compressed, &compressed_len);
 
     if (SNAPPY_OK == status) {
-        ret = to$bytesD_len(compressed, (int)compressed_len);
+        ret = actBytesFromCStringLengthCopy(compressed, (int)compressed_len);
     }
     else {
         char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
     }
 
     return ret;
@@ -48,18 +48,18 @@ B_bytes stdQ_snappyQ_decompress (B_bytes data) {
 
     if (SNAPPY_OK != status) {
 	char *errmsg = (SNAPPY_INVALID_INPUT == status) ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
     }
 
     uncompressed = acton_malloc(uncompressed_len);
     snappy_uncompress(input, input_len, uncompressed, &uncompressed_len);
 
     if (SNAPPY_OK == status) {
-	ret = to$bytesD_len(uncompressed, (int)uncompressed_len);
+	ret = actBytesFromCStringLengthCopy(uncompressed, (int)uncompressed_len);
     }
     else {
 	char *errmsg = SNAPPY_INVALID_INPUT == status ? "Invalid input" : "Buffer too small";
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCStringCopy(errmsg)));
     }
 
     return ret;

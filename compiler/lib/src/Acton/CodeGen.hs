@@ -465,9 +465,9 @@ primToU64                           = name "toB_u64"
 primToBigInt                        = name "toB_bigint"
 primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
-primToStr                           = name "to$str"
+primToStr                           = name "actStrFromCString"
 primToBytearray                     = name "to$bytearray"
-primToBytes                         = Derived (name "to$bytes") (name "len")
+primToBytes                         = name "actBytesFromCStringLengthCopy"
 
 tmpV                                = primKW "tmp"
 

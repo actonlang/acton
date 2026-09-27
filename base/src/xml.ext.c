@@ -122,7 +122,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr, B_str *error) {
     *p = '\0';
 
     *cur_ptr = stop;
-    return to_str_noc(combined);
+    return actStrFromCString(combined);
 }
 
 // Convert a libxml2 element node into an Acton xml.Node.
@@ -144,15 +144,15 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
     xmlNsPtr nsDef = node->nsDef;
     while (nsDef) {
         B_str prefix = NULL;
-        if (nsDef->prefix) prefix = to$str((char *)nsDef->prefix);
-        B_str href = to$str((char *)nsDef->href);
+        if (nsDef->prefix) prefix = actStrFromCStringCopy((const char *)nsDef->prefix);
+        B_str href = actStrFromCStringCopy((const char *)nsDef->href);
         wit->$class->append(wit,nsdefs, $NEWTUPLE(2, prefix, href));
         nsDef=nsDef->next;
     }
 
     B_str prefix = NULL;
     if (node->ns && node->ns->prefix)
-        prefix = to$str((char *)node->ns->prefix);
+        prefix = actStrFromCStringCopy((const char *)node->ns->prefix);
 
     B_list attributes = B_listG_new(NULL, NULL);
     xmlAttrPtr attr = node->properties;
@@ -168,10 +168,10 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
             attr_name = $FORMAT("%s:%s", attr->ns->prefix, attr->name);
         } else {
             // Use name as-is (either unprefixed or undefined prefix already in name)
-            attr_name = to$str((char *)attr->name);
+            attr_name = actStrFromCStringCopy((const char *)attr->name);
         }
         xmlChar *value = xmlGetProp(node, attr->name);
-        B_str value_str = to$str((char *)value);
+        B_str value_str = actStrFromCStringCopy((const char *)value);
         xmlFree(value);
         wit->$class->append(wit,attributes, $NEWTUPLE(2, attr_name, value_str));
         attr = attr->next;
@@ -200,7 +200,7 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
         wit->$class->append(wit, children, child);
     }
 
-    return (xmlQ_Node)$NEW(xmlQ_Node, to$str((char *)node->name), nsdefs, prefix, attributes, children, text, NULL);
+    return (xmlQ_Node)$NEW(xmlQ_Node, actStrFromCStringCopy((const char *)node->name), nsdefs, prefix, attributes, children, text, NULL);
 }
 
 xmlQ_Node xmlQ_decode(B_str data) {
@@ -211,7 +211,7 @@ xmlQ_Node xmlQ_decode(B_str data) {
     // error record, so parsing writes no state shared between threads.
     xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
     if (!ctxt)
-        RAISE(xmlQ_XmlParseError, to$str("XML parse error"), NULL, NULL);
+        RAISE(xmlQ_XmlParseError, actStrFromCString("XML parse error"), NULL, NULL);
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
     xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
     // Parse the str's bytes where they are instead of copying them: str
@@ -250,13 +250,13 @@ xmlQ_Node xmlQ_decode(B_str data) {
                 char msg_clean[len + 1];
                 strncpy(msg_clean, err->message, len);
                 msg_clean[len] = '\0';
-                errmsg = to$str(msg_clean);
+                errmsg = actStrFromCStringCopy(msg_clean);
             } else {
                 // Use original message as-is
-                errmsg = to$str(err->message);
+                errmsg = actStrFromCStringCopy(err->message);
             }
         } else {
-            errmsg = to$str("XML parse error");
+            errmsg = actStrFromCString("XML parse error");
         }
         xmlFreeParserCtxt(ctxt);
         RAISE(xmlQ_XmlParseError, errmsg, line, column);
@@ -265,7 +265,7 @@ xmlQ_Node xmlQ_decode(B_str data) {
     xmlNodePtr root = xmlDocGetRootElement(doc);
     if (!root) {
         xmlFreeDoc(doc);
-        RAISE(xmlQ_XmlParseError, to$str("Document has no root element"), NULL, NULL);
+        RAISE(xmlQ_XmlParseError, actStrFromCString("Document has no root element"), NULL, NULL);
     }
     // libxml2 allocates with malloc/free, so the document must be freed
     // whatever the outcome. The conversion therefore returns its error instead
@@ -294,7 +294,7 @@ B_str xmlQ_node2str(xmlQ_Node node, bool pretty, int depth) {
 
     // Encode the child nodes to a single string (pretty-printed)
     bool has_children = node->children->length > 0;
-    B_str nul = to$str("");
+    B_str nul = actStrFromCString("");
     B_str children_str;
 
     if (has_children) {
@@ -307,7 +307,7 @@ B_str xmlQ_node2str(xmlQ_Node node, bool pretty, int depth) {
 
         if (pretty) {
             // Join with newlines
-            B_str separator = to$str("\n");
+            B_str separator = actStrFromCString("\n");
             children_str = separator->$class->join(separator, B_SequenceD_listG_witness->W_Collection, children);
         } else {
             // Join with empty string

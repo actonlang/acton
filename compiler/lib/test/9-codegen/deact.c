@@ -3,7 +3,7 @@
 #include "out/types/deact.h"
 $R deactQ_L_1C_1cont ($Cont C_cont, B_NoneType C_2res) {
     #line 15 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Apa")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("Apa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
 B_NoneType deactQ_L_2ContD___init__ (deactQ_L_2Cont L_self, $Cont C_cont) {
@@ -386,11 +386,11 @@ $R deactQ_L_17C_9cont (deactQ_main self, $Cont C_cont, int64_t C_10res) {
     #line 34 "test/src/deact.act"
     ((deactQ_main)(self))->r = C_10res;
     #line 35 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("r ="), toB_int(((int64_t)((deactQ_main)(self))->r))), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("r ="), toB_int(((int64_t)((deactQ_main)(self))->r))), B_None, B_None, B_None, B_None);
     #line 36 "test/src/deact.act"
     ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_19actionG_new(self)));
     #line 37 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("main")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("main")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
 B_NoneType deactQ_L_20ContD___init__ (deactQ_L_20Cont L_self, deactQ_main self, $Cont C_cont) {
@@ -432,7 +432,7 @@ $R deactQ_L_12C_7cont (deactQ_main self, $Cont C_cont, deactQ_Bepa C_8res) {
     #line 30 "test/src/deact.act"
     ((deactQ_main)(self))->b = C_8res;
     #line 31 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("-----")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("-----")), B_None, B_None, B_None, B_None);
     #line 32 "test/src/deact.act"
     ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->setup)(((deactQ_main)(self))->a, (($action)deactQ_L_14actionG_new(((deactQ_main)(self))->a)));
     #line 33 "test/src/deact.act"
@@ -779,7 +779,7 @@ $R deactQ_ApaD___init__ (deactQ_Apa self, $Cont C_cont) {
 #line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
     #line 3 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("setup")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("setup")), B_None, B_None, B_None, B_None);
     #line 4 "test/src/deact.act"
     ((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(0LL));
     return $R_CONT(C_cont, B_None);
@@ -787,13 +787,13 @@ $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
 #line 5 "test/src/deact.act"
 $R deactQ_ApaD_computeG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
     #line 6 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("compute")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("compute")), B_None, B_None, B_None, B_None);
     return $AWAIT((($Cont)deactQ_L_6ContG_new(cb, C_cont)), ((B_Msg)((B_Msg (*) ($WORD, B_int))(($action)(cb))->$class->__asyn__)(cb, toB_int(1LL))));
 }
 #line 10 "test/src/deact.act"
 $R deactQ_ApaD_noticeG_local (deactQ_Apa self, $Cont C_cont, int64_t i) {
     #line 11 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("notice")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("notice")), B_None, B_None, B_None, B_None);
     int64_t N_1tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_1tmp));
 }
@@ -834,13 +834,13 @@ $R deactQ_ApaG_new($Cont G_1) {
 struct deactQ_ApaG_class deactQ_ApaG_methods;
 $R deactQ_BepaD___init__ (deactQ_Bepa self, $Cont C_cont) {
     #line 21 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Bepa")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("Bepa")), B_None, B_None, B_None, B_None);
     return $R_CONT(C_cont, B_None);
 }
 #line 18 "test/src/deact.act"
 $R deactQ_BepaD_callbackG_local (deactQ_Bepa self, $Cont C_cont, int64_t i) {
     #line 19 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("callback"), toB_int(i)), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("callback"), toB_int(i)), B_None, B_None, B_None, B_None);
     int64_t N_2tmp = (((int64_t)(i + 1LL)));
     return $R_CONT(C_cont, toB_int(N_2tmp));
 }
@@ -880,7 +880,7 @@ $R deactQ_mainD___init__ (deactQ_main self, $Cont C_cont, B_Env env) {
 #line 24 "test/src/deact.act"
 $R deactQ_mainD_myprocG_local (deactQ_main self, $Cont C_cont, int64_t i) {
     #line 25 "test/src/deact.act"
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, to$str("myproc"), toB_int(i)), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(2, actStrFromCString("myproc"), toB_int(i)), B_None, B_None, B_None, B_None);
     #line 26 "test/src/deact.act"
     if (i == 2LL) {
         #line 27 "test/src/deact.act"

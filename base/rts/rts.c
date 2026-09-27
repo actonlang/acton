@@ -1604,7 +1604,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
     B_list args = B_listG_new(NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     for (int i=0; i< argc; i++)
-        wit->$class->append(wit,args,to$str(argv[i]));
+        wit->$class->append(wit,args,actStrFromCStringCopy(argv[i]));
 
     env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
     env_actor->nr_wthreads = num_wthreads;

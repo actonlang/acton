@@ -52,7 +52,7 @@ void read_stderr(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         }
     } else if (nread > 0) {
         if (stream->data) {
-            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
         }
     }
 }
@@ -72,7 +72,7 @@ void read_stdout(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
         }
     } else if (nread > 0) {
         if (stream->data) {
-            f->$class->__asyn__(f, self, to$bytesD_len(buf->base, nread));
+            f->$class->__asyn__(f, self, actBytesFromCStringLengthCopy(buf->base, nread));
         }
     }
 }
@@ -88,7 +88,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         char errmsg[1024] = "Failed to spawn process '<empty command>': empty command";
         log_warn("%s", errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
 
@@ -184,7 +184,7 @@ $R processQ_ProcessD__create_processG_local(processQ_Process self, $Cont c$cont)
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
         log_warn("%s", errmsg);
         $action2 f = ($action2)self->on_error;
-        f->$class->__asyn__(f, self, to$str(errmsg));
+        f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
         return $R_CONT(c$cont, B_None);
     }
     // TODO: do we need to do some magic to read any data produced before this
@@ -278,7 +278,7 @@ B_str processQ__get_env_path() {
         return (B_str)B_None;
     }
 
-    B_str result = to$str(path_buf);
+    B_str result = actStrFromCStringCopy(path_buf);
     acton_free(path_buf);
     return result;
 }

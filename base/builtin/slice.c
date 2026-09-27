@@ -31,7 +31,7 @@ void normalize_slice(B_slice slc, int64_t len, int64_t *slen, int64_t *start, in
     else
         *step = *slc->step;
     if (*step == 0) {
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str("step size 0 in slice")));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCString("step size 0 in slice")));
     }
     if (slc->start == NULL)
         *start = *step > 0 ? 0 : len-1;

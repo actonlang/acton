@@ -65,7 +65,7 @@ B_str racy_ffiQ_U_2racy_format(int64_t U_3n) {
     struct timespec ts = {0, 200000};  // 200 us
     nanosleep(&ts, NULL);
 
-    return to$str(shared_fmt_buf);
+    return actStrFromCStringCopy(shared_fmt_buf);
 }
 
 // Subtle publication race:

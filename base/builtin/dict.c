@@ -227,7 +227,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
                                    B_Iterable wit, $WORD iterable) {
     B_dict_base dict = acton_malloc(sizeof(struct B_dict_base));
     if (dict == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, to$str("memory allocation failed")));
+        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
     dict->$class = cls;
     dict->numelements = 0;
     dict->table = NULL;
@@ -276,7 +276,7 @@ static B_str B_dict_base_str(B_dict_base self) {
             B_value key = (B_value)entry->key;
             B_value value = (B_value)entry->value;
             B_str keystr = key->$class->__repr__(key);
-            B_str valuestr = value ? value->$class->__repr__(value) : to$str("None");
+            B_str valuestr = value ? value->$class->__repr__(value) : actStrFromCString("None");
             B_str elem = acton_malloc(sizeof(struct B_str));
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;
@@ -547,7 +547,7 @@ static B_dict_base B_dict_base_from_iter_src($WORD src) {
     $SuperG_class cls = (($Super)src)->$class;
     if (cls == ($SuperG_class)&B_dictG_methods || cls == ($SuperG_class)&B_idictG_methods)
         return (B_dict_base)src;
-    $RAISE((B_BaseException)$NEW(B_ValueError, to$str("dict iterator source is not a dict")));
+    $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("dict iterator source is not a dict")));
     return NULL;
 }
 
@@ -655,14 +655,14 @@ static $WORD B_dict_base_get(B_dict_base dict, B_Hashable hashwit, $WORD key, $W
 
 static $WORD B_dict_base_getitem(B_dict_base dict, B_Hashable hashwit, $WORD key) {
     if (dict->numelements == 0)
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("getitem: empty dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, actStrFromCString("getitem: empty dictionary")));
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
         hash = B_hash(hashwit, key);
     $WORD res;
     int ix = $lookdict(dict, hashwit, hash, key, &res);
     if (ix < 0)
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, to$str("getitem: key not in dictionary")));
+        $RAISE((B_BaseException)$NEW(B_KeyError, key, actStrFromCString("getitem: key not in dictionary")));
     return res;
 }
 

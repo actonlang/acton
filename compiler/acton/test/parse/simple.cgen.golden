@@ -2,7 +2,7 @@
 #include "rts/common.h"
 #include "out/types/simple.h"
 B_NoneType simpleQ_main () {
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, to$str("Hello parse!")), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCString("Hello parse!")), B_None, B_None, B_None, B_None);
     return B_None;
 }
 int simpleQ_done$ = 0;

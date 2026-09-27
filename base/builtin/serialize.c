@@ -90,11 +90,11 @@ void $step_serialize($WORD self, $Serial$state state) {
         if (class_id == UNASSIGNED)
             // An unregistered class would serialize without a header row, silently
             // misaligning the blob and corrupting deserialization. Fail loudly.
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: class not registered")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("serialize: class not registered")));
         if (class_id > ITEM_ID) { // not one of the Acton builtin datatypes, which have hand-crafted serializations
             if (!state->globmap && issubtype(class_id, ACTOR_ID))
                 // This also catches Msg or Cont because they reference the target actor transitively
-                $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: cannot serialize actors")));
+                $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("serialize: cannot serialize actors")));
             if (state->globmap) {
                 long key = (long)state->globmap(self);
                 if (key < 0) {
@@ -296,7 +296,7 @@ static B_bytes $rows_to_bytes($ROW row) {
     for ($ROW r = row; r; r = r->next)
         size += 2 * sizeof(int) + (long)r->blob_size * sizeof($WORD);
     if (size > INT_MAX)
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("serialize: object graph too large")));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("serialize: object graph too large")));
     B_bytes res;
     NEW_UNFILLED_BYTES(res, (int)size);
     unsigned char *p = res->str;
@@ -315,16 +315,16 @@ static $ROW $bytes_to_rows(B_bytes data) {
     struct $ROWLISTHEADER header = {NULL, NULL};
     while (remaining > 0) {
         if (remaining < (long)(2 * sizeof(int)))
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: truncated row header")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("deserialize: truncated row header")));
         int class_id, blob_size;
         memcpy(&class_id, p, sizeof(int));  p += sizeof(int);
         memcpy(&blob_size, p, sizeof(int)); p += sizeof(int);
         remaining -= 2 * sizeof(int);
         if (blob_size < 0)
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: invalid blob size")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("deserialize: invalid blob size")));
         long blob_bytes = (long)blob_size * sizeof($WORD);
         if (remaining < blob_bytes)
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: truncated row data")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("deserialize: truncated row data")));
         $ROW r = acton_malloc(2 * sizeof(int) + ((long)blob_size + 1) * sizeof($WORD));
         r->next = NULL;
         r->class_id = class_id;
@@ -335,7 +335,7 @@ static $ROW $bytes_to_rows(B_bytes data) {
         $enqueue2(&header, r);
     }
     if (!header.fst)
-        $RAISE((B_BaseException)$NEW(B_ValueError, to$str("deserialize: empty input")));
+        $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("deserialize: empty input")));
     return header.fst;
 }
 

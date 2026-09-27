@@ -29,7 +29,7 @@ B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step
     if (step) {
         stp = step->val;
         if (stp == 0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError, to$str("range() step size must not be zero")));
+            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("range() step size must not be zero")));
         } else {
             ustep = stp;
         }

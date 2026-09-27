@@ -32,7 +32,7 @@ uint64_t B_u64G_new(B_atom a, B_int base) {  // base is optional
     if (sz > 1 || sz < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u64(): value %s out of range for type u64",get_str(&b->val));
-        $RAISE((B_BaseException)$NEW(B_ValueError,to$str(errmsg)));
+        $RAISE((B_BaseException)$NEW(B_ValueError,actStrFromCStringCopy(errmsg)));
     }
     return n*sz;
 }
@@ -180,7 +180,7 @@ B_tuple B_IntegralD_u64D___divmod__(B_IntegralD_u64 wit, B_u64 a, B_u64 b) {
 
 B_u64 B_IntegralD_u64D___floordiv__(B_IntegralD_u64 wit, B_u64 a, B_u64 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_u64(a->val / b->val);
 }
 
@@ -227,7 +227,7 @@ B_u64 B_MinusD_IntegralD_u64D___sub__(B_MinusD_IntegralD_u64 wit,  B_u64 a, B_u6
  
 B_float B_DivD_u64D___truediv__ (B_DivD_u64 wit, B_u64 a, B_u64 b) {
     if (b->val == 0)
-        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, to$str("division by zero")));
+        $RAISE((B_BaseException)$NEW(B_ZeroDivisionError, actStrFromCString("division by zero")));
     return toB_float((double)a->val/(double)b->val);
 }
 
