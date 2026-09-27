@@ -22,11 +22,21 @@ def check_unsupported(a: atom):
     expect_value_error(lambda: bigint(a))
     expect_value_error(lambda: float(a))
 
+def check_invalid_int_str(s: str):
+    expect_value_error(lambda: int(s))
+    expect_value_error(lambda: i32(s))
+    expect_value_error(lambda: u64(s))
+    expect_value_error(lambda: bigint(s))
+
 actor main(env):
     try:
         check_unsupported(OtherAtom())
         check_unsupported(b"1")
         check_unsupported(complex(1))
+        # The digits must run to the end of the str, a NUL does not end them
+        check_invalid_int_str("12" + chr(0) + "34")
+        check_invalid_int_str("12" + chr(0))
+        check_invalid_int_str("")
         assert int("123") == 123
         assert int("10", 2) == 2
         assert bigint("123") == bigint(123)

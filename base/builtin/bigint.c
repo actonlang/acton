@@ -34,7 +34,7 @@ static struct B_ZeroDivisionError B_bigint_zero_division_error =
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-int set_str(zz_ptr a, unsigned char *str, B_int intbase);
+int set_str(zz_ptr a, unsigned char *str, int nbytes, B_int intbase);
 
 B_bigint malloc_bigint() {
     B_bigint res = acton_malloc(sizeof(struct B_bigint));
@@ -58,7 +58,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         if ($ISINSTANCE0(a,B_str)) {
             B_bigint res = malloc_bigint();
             res->$class = &B_bigintG_methods;
-            set_str(&res->val, ((B_str)a)->str, base);
+            set_str(&res->val, ((B_str)a)->str, ((B_str)a)->nbytes, base);
             return res;
         } else {
             RAISE_EXC(&B_bigint_base_requires_str_error);
@@ -150,7 +150,7 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
     if ($ISINSTANCE0(a,B_str)) {
         B_bigint res = malloc_bigint();
         res->$class = &B_bigintG_methods;
-        set_str(&res->val, ((B_str)a)->str, base);
+        set_str(&res->val, ((B_str)a)->str, ((B_str)a)->nbytes, base);
         return res;
     }
     RAISE_EXC(&B_bigint_unsupported_atom_error);
@@ -699,7 +699,7 @@ B_bigint toB_bigint(long n) {
 B_bigint toB_bigint2(char *str) {
     B_bigint res = malloc_bigint();
     res->$class = &B_bigintG_methods;
-    set_str(&res->val, (unsigned char *)str, NULL);
+    set_str(&res->val, (unsigned char *)str, strlen(str), NULL);
     return res;
 }
 
@@ -832,7 +832,9 @@ int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
 }
 
 
-int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
+// nbytes is the length of nstr. A str can contain NUL, so the digits must
+// run to the end of the data, not just to a NUL.
+int set_str(zz_ptr a, unsigned char *nstr, int nbytes, B_int intbase) {
     int pre = 0;
     int sgn = 1;
     while(isspace(nstr[pre])) pre++;   // should leading spaces be allowed?
@@ -883,7 +885,7 @@ int set_str(zz_ptr a, unsigned char *nstr, B_int intbase) {
         len++;
         pre++;
     }
-    if (len == 0 || nstr[pre] != 0) {
+    if (len == 0 || pre != nbytes) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "integer type constructor: string \"%s\" cannot be interpreted as an int in base %d", nstr,base);
         RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
