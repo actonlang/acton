@@ -99,7 +99,7 @@ static B_str B_list_base_str(B_list_base self) {
     B_list parts = B_listD_new(self->length);
     for (int i = 0; i < self->length; i++) {
         B_value elem = (B_value)self->data[i];
-        parts->data[parts->length++] = elem == B_None ? actStrFromCString("None") : elem->$class->__repr__(elem);
+        parts->data[parts->length++] = elem == B_None ? B_None_str : elem->$class->__repr__(elem);
     }
     return B_strD_join_par('[', parts, ']');
 }

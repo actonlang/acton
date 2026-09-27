@@ -12,7 +12,8 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
+static struct B_str true_str = {&B_strG_methods, 4, 4, (unsigned char *)"True"};
+static struct B_str false_str = {&B_strG_methods, 5, 5, (unsigned char *)"False"};
 
 // Serialization ///////////////////////////////////////////////////////////////////////
 
@@ -27,16 +28,13 @@ bool B_boolD___bool__(B_bool self) {
 
 B_str B_boolD___str__(B_bool self) {
     if (self->val)
-        return actStrFromCString("True");
+        return &true_str;
     else
-        return actStrFromCString("False");
+        return &false_str;
 }
 
 B_str B_boolD___repr__(B_bool self) {
-    if (self->val)
-        return actStrFromCString("True");
-    else
-        return actStrFromCString("False");
+    return B_boolD___str__(self);
 }
 
 void B_boolD___serialize__(B_bool self, $Serial$state state) {

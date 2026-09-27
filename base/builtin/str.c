@@ -862,18 +862,17 @@ void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, in
 // General methods //////////////////////////////////////////////////////////////
 
 B_str B_strG_new(B_value s) {
-    return $NEW(B_str, s);
+    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
+    if (res->$class == &B_strG_methods)
+        return res;
+    B_str self = acton_malloc(sizeof(struct B_str));
+    *self = *res;
+    self->$class = &B_strG_methods;
+    return self;
 }
 
 B_NoneType B_strD___init__(B_str self, B_value s) {
-    // If s is None (C NULL) we use the "None" string.
-    if (s == NULL) {
-        self->nchars = 4;
-        self->nbytes = 4;
-        self->str = (unsigned char *)"None";
-        return B_None;
-    }
-    B_str res = s->$class->__str__(s);
+    B_str res = s == B_None ? B_None_str : s->$class->__str__(s);
     self->nchars = res->nchars;
     self->nbytes = res->nbytes;
     self->str = res->str;

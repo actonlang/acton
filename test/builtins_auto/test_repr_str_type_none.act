@@ -12,7 +12,7 @@ def test_type():
     return type(None) == "None"
 
 tests = {
-    "test_repr": test_type,
+    "test_repr": test_repr,
     "test_str": test_str,
     "test_type": test_type,
     }
