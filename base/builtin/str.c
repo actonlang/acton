@@ -784,6 +784,43 @@ static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, 
     return len;
 }
 
+// Tab expansion for str, the same as for bytes except that columns count
+// characters: a character takes one column whatever its UTF-8 length.
+// Returns the length of the result in bytes, sets *nchars to its length in
+// characters and, unless out is NULL, writes the result to out.
+static int64_t expandtabs_str(unsigned char *in, int nbytes, int64_t tabsize, unsigned char *out, int *nchars) {
+    int64_t len = 0;
+    int64_t chars = 0;
+    int64_t col = 0;
+    unsigned char *p = in;
+    unsigned char *end = in + nbytes;
+    while (p < end) {
+        if (*p == '\t') {
+            int64_t n = tabsize - col % tabsize;
+            if (n > INT_MAX - len)
+                RAISE_EXC(&B_str_expandtabs_too_long_error);
+            if (out)
+                memset(out + len, ' ', n);
+            len += n;
+            chars += n;
+            col += n;
+            p++;
+        } else {
+            int n = byte_length2(*p);
+            if (n > INT_MAX - len)
+                RAISE_EXC(&B_str_expandtabs_too_long_error);
+            if (out)
+                memcpy(out + len, p, n);
+            len += n;
+            chars++;
+            col = *p == '\n' || *p == '\r' ? 0 : col + 1;
+            p += n;
+        }
+    }
+    *nchars = chars;
+    return len;
+}
+
 void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
@@ -1067,35 +1104,13 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
     if (s->nchars == 0) {
         return null_str;
     }
-    int tabsz = tabsize?fromB_int(tabsize):8;
-    int pos = 0;
-    int expanded = 0;
+    int64_t tabsz = tabsize ? fromB_int(tabsize) : 8;
     tabsz = tabsz <= 0 ? 1 : tabsz;
-    unsigned char buffer[tabsz * s->nchars];
-    unsigned char *p = s->str;
-    unsigned char *q = buffer;
-    for (int i=0; i<s->nchars; i++) {
-        if (*p == '\t') {
-            int n = tabsz - pos % tabsz;
-            for (int j=0; j < n; j++) {
-                *q++ = ' ';
-            }
-            p++;
-            expanded += n-1;
-            pos+=n;
-        } else if (*p=='\n' || *p == '\r') {
-            *q++ = *p++;
-            pos = 0;
-        } else {
-            for (int j=0; j< byte_length2(*p); j++) {
-                *q++ = *p++;
-                pos++;
-            }
-        }
-    }
+    int nchars;
+    int nbytes = expandtabs_str(s->str, s->nbytes, tabsz, NULL, &nchars);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+expanded,s->nbytes+expanded);
-    memcpy(res->str,buffer,s->nbytes+expanded);
+    NEW_UNFILLED_STR(res,nchars,nbytes);
+    expandtabs_str(s->str, s->nbytes, tabsz, res->str, &nchars);
     return res;
 }
 

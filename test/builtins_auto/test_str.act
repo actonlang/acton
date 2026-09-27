@@ -10,6 +10,25 @@ def test_str_find():
             s.find("world", 0, 7) == -1 and
             s.find("crap") == -1)
 
+def test_str_expandtabs_chars():
+    # Columns count characters, whatever their UTF-8 length
+    print("str expandtabs: {repr("é\tx".expandtabs(4))} {repr("€\tx".expandtabs(4))}")
+    return ("é\tx".expandtabs(4) == "é   x"
+            and "€\tx".expandtabs(4) == "€   x"
+            and "𝄞\tx".expandtabs(4) == "𝄞   x"
+            and "ab\tc\nd\te".expandtabs(4) == "ab  c\nd   e"
+            and "a\tb".expandtabs() == "a       b"
+            and "\t".expandtabs(0) == " "
+            and len("é\t".expandtabs(8)) == 8)
+
+def test_str_expandtabs_large():
+    # The result is built on the heap, not in a stack buffer sized by the
+    # input and the tab size
+    wide = ("x" * 100).expandtabs(1000000)
+    many = ("é" * 5000 + "\t").expandtabs(1)
+    print("str expandtabs of large inputs: {len(wide)} {len(many)}")
+    return wide == "x" * 100 and many == "é" * 5000 + " "
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -316,6 +335,8 @@ def test_decode_invalid_utf8_mid():
 
 tests = {
     "test_str_find": test_str_find,
+    "test_str_expandtabs_chars": test_str_expandtabs_chars,
+    "test_str_expandtabs_large": test_str_expandtabs_large,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
