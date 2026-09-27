@@ -79,7 +79,7 @@ $R fileQ_FSD_copyfileG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst)
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, B_None);
@@ -94,7 +94,7 @@ $R fileQ_FSD_cwdG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting cwd: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(C_cont, actStrFromCStringCopy(cwd));
 }
@@ -108,7 +108,7 @@ $R fileQ_FSD_exepathG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting exepath: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(C_cont, actStrFromCStringCopy(exepath));
 }
@@ -122,7 +122,7 @@ $R fileQ_FSD_homedirG_local (fileQ_FS self, $Cont C_cont) {
         char errmsg[1024] = "Error getting homedir: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     return $R_CONT(C_cont, actStrFromCStringCopy(homedir));
 }
@@ -136,7 +136,7 @@ $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, B_None);
@@ -161,7 +161,7 @@ $R fileQ_FSD_mktmpdirG_local (fileQ_FS self, $Cont C_cont, B_str prefix) {
             char errmsg[1024] = "Error getting temporary directory: ";
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
             log_warn(errmsg);
-            $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+            RAISE(B_OSError, actStrFromCStringCopy(errmsg));
         }
         break;
     }
@@ -177,7 +177,7 @@ $R fileQ_FSD_mktmpdirG_local (fileQ_FS self, $Cont C_cont, B_str prefix) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
 
     // libuv stores the resolved path in req->path, not in the template buffer.
@@ -198,7 +198,7 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_dirent_t ent;
     while (uv_fs_scandir_next(req, &ent) != UV_EOF) {
@@ -217,7 +217,7 @@ $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg)));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
@@ -251,7 +251,7 @@ $R fileQ_FSD_rmdirG_local (fileQ_FS self, $Cont C_cont, B_str dirname) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, B_None);
@@ -266,7 +266,7 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, B_None);
@@ -278,13 +278,13 @@ $R fileQ_FSD_renameG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
     int r = uv_fs_rename(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
-        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(src)));
+        RAISE(B_FileNotFoundError, src);
     } else if (r < 0) {
         char errmsg[1024] = "Error renaming file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(C_cont, B_None);
@@ -296,13 +296,13 @@ $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     int r = uv_fs_stat(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
-        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(filename)));
+        RAISE(B_FileNotFoundError, filename);
     } else if (r < 0) {
         char errmsg[1024] = "Error getting file stat: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_stat_t *stat = (uv_stat_t *)req->ptr;
     fileQ_FileStat res = fileQ_FileStatG_new(filename,
@@ -343,7 +343,7 @@ $R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
             char errmsg[1024] = "Error getting temporary directory: ";
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
             log_warn(errmsg);
-            $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+            RAISE(B_OSError, actStrFromCStringCopy(errmsg));
         }
         return $R_CONT(C_cont, actStrFromCString(buffer));
     }
@@ -355,13 +355,13 @@ $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
-        $RAISE(((B_BaseException)B_FileNotFoundErrorG_new(self->filename)));
+        RAISE(B_FileNotFoundError, self->filename);
     } else if (r < 0) {
         char errmsg[1024] = "Error opening file for reading: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
 
     }
     self->_fd = r;
@@ -378,7 +378,7 @@ $R fileQ_ReadFileD__lock_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
         char errmsg[1024] = "Error locking file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
 #endif
     return $R_CONT(c$cont, B_None);
@@ -392,7 +392,7 @@ $R fileQ_ReadFileD_closeG_local (fileQ_ReadFile self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
@@ -417,7 +417,7 @@ $R fileQ_ReadFileD_readG_local (fileQ_ReadFile self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     B_bytes nullb = actBytesFromCStringCopy("");
@@ -436,7 +436,7 @@ $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
 
     }
     self->_fd = r;
@@ -453,7 +453,7 @@ $R fileQ_WriteFileD__lock_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
         char errmsg[1024] = "Error locking file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
 #endif
     return $R_CONT(c$cont, B_None);
@@ -468,7 +468,7 @@ $R fileQ_WriteFileD_closeG_local (fileQ_WriteFile self, $Cont c$cont) {
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
         uv_fs_req_cleanup(req);
         log_warn(errmsg);
-        $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+        RAISE(B_OSError, actStrFromCStringCopy(errmsg));
     }
     uv_fs_req_cleanup(req);
     return $R_CONT(c$cont, B_None);
@@ -490,7 +490,7 @@ $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes da
             char errmsg[1024] = "Error writing to file: ";
             uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
             log_warn(errmsg);
-            $RAISE(((B_BaseException)B_OSErrorG_new(actStrFromCStringCopy(errmsg))));
+            RAISE(B_OSError, actStrFromCStringCopy(errmsg));
         }
         p += r;
         left -= (size_t)r;

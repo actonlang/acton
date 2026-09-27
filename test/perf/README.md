@@ -71,6 +71,21 @@ exhaustion bugs fixed in #3104. Before that fix, `StopIteration` escapes the
 operation and the completion checks fail. Report a failed baseline rather than
 treating the failure time as an operation latency or speedup.
 
+## Exceptions
+
+`exceptions` measures a fixed builtin error, a fixed Acton error, and a formatted
+error that carries its input. Each loop body raises and catches one exception;
+inputs are prepared before the loop. These are fixed workloads, so use scale 1:
+
+```sh
+acton test list --module exceptions
+acton test perf --module exceptions --scale 1 --time 3s
+```
+
+Compare allocated bytes per operation as well as time. Catch frames and work
+before the error can still allocate even when the exception and message are
+shared. Allocation counts measure heap traffic, not retained memory or RSS.
+
 ## String operations
 
 `string_operations` covers decoding, comparison, prefix and suffix checks,

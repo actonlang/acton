@@ -83,6 +83,8 @@ vvvvvvvvvv vvvvvvvvvvvvvvvvvv vv vvvvv
 import file
 import time
 
+_not_implemented_error = NotImplementedError("")
+
 # Log levels
 UNSET, OFF, EMERGENCY, ALERT, CRITICAL, ERR, WARNING, INFO, NOTICE, DEBUG, VERBOSE, TRACE, ALL : int
 UNSET     = -2
@@ -149,7 +151,7 @@ class Formatter:
         pass
 
     def format(self, m: Message) -> ?str:
-        raise NotImplementedError("")
+        raise _not_implemented_error
 
 
 class DefaultFormatter(Formatter):
@@ -181,7 +183,7 @@ class Sink(object):
         self.formatter = formatter
 
     proc def handle(self, m: Message):
-        raise NotImplementedError("")
+        raise _not_implemented_error
 
 
 class StdoutSink(Sink):

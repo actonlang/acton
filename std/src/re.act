@@ -28,6 +28,9 @@
 #        return self.re_text
 
 
+_empty_pattern_error = ValueError("empty pattern")
+
+
 class Match:
     def __init__(self, pattern: str, string: str, start_pos: int, end_pos: int, group: list[?str], named_group: dict[str, ?str]) -> None:
         self.pattern = pattern
@@ -78,7 +81,7 @@ def matches(pattern: str, string: str) -> list[Match]:
 
 def split(pattern: str, subject: str, max_split: int=0) -> list[str]:
     if pattern == "":
-        raise ValueError("empty pattern")
+        raise _empty_pattern_error
 
     result = []
     splits_done = 0

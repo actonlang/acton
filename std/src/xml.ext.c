@@ -2,6 +2,11 @@
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 
+static struct stdQ_xmlQ_XmlParseError stdQ_xmlQ_no_root_error =
+    STATIC_EXCEPTION(stdQ_xmlQ_XmlParseError, "Document has no root element");
+static struct stdQ_xmlQ_XmlParseError stdQ_xmlQ_parse_error =
+    STATIC_EXCEPTION(stdQ_xmlQ_XmlParseError, "XML parse error");
+
 // TODO: The macro below is from builtin/str.c. We should not duplicate it...
 #define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
     assert(nbtes >= nchrs);                     \
@@ -211,7 +216,7 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
     // error record, so parsing writes no state shared between threads.
     xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
     if (!ctxt)
-        RAISE(stdQ_xmlQ_XmlParseError, actStrFromCString("XML parse error"), NULL, NULL);
+        RAISE_EXC(&stdQ_xmlQ_parse_error);
     // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
     xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
     // Parse the str's bytes where they are instead of copying them: str
@@ -256,7 +261,8 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
                 errmsg = actStrFromCStringCopy(err->message);
             }
         } else {
-            errmsg = actStrFromCString("XML parse error");
+            xmlFreeParserCtxt(ctxt);
+            RAISE_EXC(&stdQ_xmlQ_parse_error);
         }
         xmlFreeParserCtxt(ctxt);
         RAISE(stdQ_xmlQ_XmlParseError, errmsg, line, column);
@@ -265,7 +271,7 @@ stdQ_xmlQ_Node stdQ_xmlQ_decode(B_str data) {
     xmlNodePtr root = xmlDocGetRootElement(doc);
     if (!root) {
         xmlFreeDoc(doc);
-        RAISE(stdQ_xmlQ_XmlParseError, actStrFromCString("Document has no root element"), NULL, NULL);
+        RAISE_EXC(&stdQ_xmlQ_no_root_error);
     }
     // libxml2 allocates with malloc/free, so the document must be freed
     // whatever the outcome. The conversion therefore returns its error instead

@@ -1,5 +1,18 @@
 import json
 import testing
+import std.json as std_json
+
+def _test_json_error_key():
+    key = "before" + chr(0) + "after"
+    for encode, prefix in [(lambda: json.encode({key: ValueError("unsupported")}), "jsonQ"),
+                           (lambda: std_json.encode({key: ValueError("unsupported")}), "stdQ_jsonQ")]:
+        try:
+            encode()
+        except ValueError as error:
+            expected = prefix + "_encode_dict: for key " + key + " unknown type: B_ValueError"
+            testing.assertEqual(error.error_message, expected)
+        else:
+            testing.error("Expected ValueError for an unsupported JSON value")
 
 def _test_json():
     test_json = [

@@ -1,5 +1,8 @@
 #include <stdlib.h>
 
+static struct B_ValueError stdQ_randomQ_invalid_range_error =
+    STATIC_EXCEPTION(B_ValueError, "min value must be smaller than max");
+
 void stdQ_randomQ___ext_init__() {
     // seed the random number generator with nanoseconds since the epoch and our
     // PID
@@ -22,7 +25,7 @@ void stdQ_randomQ___ext_init__() {
 long stdQ_randomQ_randlong (long min, long max) {
     // ensure we have a valid range where min is smaller than max
     if (min > max) {
-        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCString("min value must be smaller than max"))));
+        RAISE_EXC(&stdQ_randomQ_invalid_range_error);
     }
     // upper end of the range we want when "based to 0"
     long range = max - min;

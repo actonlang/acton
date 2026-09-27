@@ -12,6 +12,9 @@
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+static struct B_ValueError B_range_zero_step_error =
+    STATIC_EXCEPTION(B_ValueError, "range() step size must not be zero");
+
 B_range B_rangeG_new(int64_t start, B_int stop, B_int step) {
     return $NEW(B_range, start, stop, step);
 }
@@ -29,7 +32,7 @@ B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step
     if (step) {
         stp = step->val;
         if (stp == 0) {
-            $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("range() step size must not be zero")));
+            RAISE_EXC(&B_range_zero_step_error);
         } else {
             ustep = stp;
         }

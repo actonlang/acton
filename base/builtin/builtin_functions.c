@@ -510,9 +510,14 @@ $WORD B_round (B_Real W_395, $WORD x, B_int n) {
 }
 */
 
+static struct B_AssertionError B_assert_error =
+    STATIC_EXCEPTION(B_AssertionError, "");
+
 $WORD $ASSERT(bool test, B_str msg) {
     if (!test) {
-        $RAISE((B_BaseException)$NEW(B_AssertionError,msg));
+        if (msg)
+            RAISE(B_AssertionError, msg);
+        RAISE_EXC(&B_assert_error);
         return NULL; // to avoid compiler warning
     }
     return B_None;

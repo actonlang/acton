@@ -14,6 +14,18 @@ void $DROP();
 B_BaseException $POP();
 #define $PUSH()             (!setjmp($PUSH_BUF()->buf))
 
+// File-scope initializer for an exception with a fixed ASCII string literal.
+// The exception and its string have static storage; raising only updates the catch
+// frame, so they can be shared by all workers. Any other fields must also have
+// fixed values; omitted pointer fields are None. Keep per-call payloads in
+// separately constructed exceptions.
+#define STATIC_EXCEPTION($T, msg) { \
+    .$class = &$T ## G_methods, \
+    .error_message = &(struct B_str){ \
+        &B_strG_methods, sizeof(msg) - 1, sizeof(msg) - 1, (unsigned char *)(msg) \
+    } \
+}
+
  
 /*
   Exceptions hierarchy in Python 3.8 according to

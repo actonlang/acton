@@ -1,4 +1,10 @@
 
+_invalid_utf8_error = ValueError("Invalid UTF-8 in percent-escaped text")
+_invalid_separator_error = ValueError("Invalid separator after scheme")
+_invalid_scheme_error = ValueError("Invalid scheme")
+_missing_scheme_error = ValueError("Invalid URI, unable to parse scheme")
+
+
 _UNRESERVED = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
 _HEX_DIGITS = "0123456789ABCDEF"
 
@@ -46,7 +52,7 @@ def unquote(text: str) -> str:
     try:
         return result.decode()
     except ValueError:
-        raise ValueError("Invalid UTF-8 in percent-escaped text")
+        raise _invalid_utf8_error
 
 
 def _append_bytes(result: bytearray, data: bytes) -> None:
@@ -177,11 +183,11 @@ def parse_schema(uri: str) -> (?str, str):
         scheme = split_result[0]
         remainder = split_result[1]
         if not remainder.startswith("//"):
-            raise ValueError("Invalid separator after scheme")
+            raise _invalid_separator_error
         if not is_valid_scheme(scheme):
-            raise ValueError("Invalid scheme")
+            raise _invalid_scheme_error
         return scheme, remainder[2:]
-    raise ValueError("Invalid URI, unable to parse scheme")
+    raise _missing_scheme_error
 
 
 def parse_authority(uri: str) -> (?str, ?str, ?int, str):

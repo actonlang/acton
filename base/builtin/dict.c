@@ -11,6 +11,11 @@
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+static struct B_MemoryError B_dict_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
+static struct B_ValueError B_dict_invalid_iterator_source_error =
+    STATIC_EXCEPTION(B_ValueError, "dict iterator source is not a dict");
+
 // types //////////////////////////////////////////////////////////////////////////////////////
 
 typedef struct $entry_struct {
@@ -227,7 +232,7 @@ static B_dict_base B_dict_base_new($SuperG_class cls, B_Hashable hashwit,
                                    B_Iterable wit, $WORD iterable) {
     B_dict_base dict = acton_malloc(sizeof(struct B_dict_base));
     if (dict == NULL)
-        $RAISE((B_BaseException)$NEW(B_MemoryError, actStrFromCString("memory allocation failed")));
+        RAISE_EXC(&B_dict_allocation_failed_error);
     dict->$class = cls;
     dict->numelements = 0;
     dict->table = NULL;
@@ -547,7 +552,7 @@ static B_dict_base B_dict_base_from_iter_src($WORD src) {
     $SuperG_class cls = (($Super)src)->$class;
     if (cls == ($SuperG_class)&B_dictG_methods || cls == ($SuperG_class)&B_idictG_methods)
         return (B_dict_base)src;
-    $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("dict iterator source is not a dict")));
+    RAISE_EXC(&B_dict_invalid_iterator_source_error);
     return NULL;
 }
 
@@ -655,14 +660,14 @@ static $WORD B_dict_base_get(B_dict_base dict, B_Hashable hashwit, $WORD key, $W
 
 static $WORD B_dict_base_getitem(B_dict_base dict, B_Hashable hashwit, $WORD key) {
     if (dict->numelements == 0)
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, actStrFromCString("getitem: empty dictionary")));
+        RAISE(B_KeyError, key, actStrFromCString("getitem: empty dictionary"));
     uint64_t hash = 0;
     if (dict->table->tb_size > INIT_SIZE)
         hash = B_hash(hashwit, key);
     $WORD res;
     int ix = $lookdict(dict, hashwit, hash, key, &res);
     if (ix < 0)
-        $RAISE((B_BaseException)$NEW(B_KeyError, key, actStrFromCString("getitem: key not in dictionary")));
+        RAISE(B_KeyError, key, actStrFromCString("getitem: key not in dictionary"));
     return res;
 }
 
