@@ -205,6 +205,14 @@ rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs
                                            _                  -> Nothing
 
 rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
+-- Reject unrelated methods before inspecting the receiver type.  Besides
+-- avoiding needless QuickType work, this is important for chained calls such
+-- as bytes.from_hex(...).hex(): a probe for hex must not try to instantiate
+-- the polymorphic bytes constructor merely to discover that hex has no raw
+-- indexing worker.
+rawBuiltinMethod _ attr _
+  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW]
+                                    = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
                                         (TCon _ (TC q [t]), n, [_, _])
@@ -741,7 +749,11 @@ instance Boxing Expr where
     -- so they retain the raw element ABI. Their MutIndexed witnesses serve
     -- polymorphic code without promising deletion.
     boxing env (Call _ (Dot _ recv attr) p KwdNil)
-      | Just _ <- rawBuiltinMethod env attr (recv : posargs p)
+      -- A class receiver denotes a static/class method, not a container value.
+      -- In particular, asking QuickType for the value type of polymorphic
+      -- constructors such as bytes while considering bytes.from_hex fails.
+      | not (callIsClass env recv),
+        Just _ <- rawBuiltinMethod env attr (recv : posargs p)
                                     = do (ws,p1) <- boxing env (PosArg recv p)
                                          case rawBuiltinMethodCall env attr p1 of
                                            Just c  -> return (ws,c)
