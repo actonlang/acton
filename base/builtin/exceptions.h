@@ -22,7 +22,7 @@ B_BaseException $POP();
 #define STATIC_EXCEPTION($T, msg) { \
     .$class = &$T ## G_methods, \
     .error_message = &(struct B_str){ \
-        &B_strG_methods, sizeof(msg) - 1, sizeof(msg) - 1, (unsigned char *)(msg) \
+        &B_strG_methods, sizeof("" msg) - 1, sizeof("" msg) - 1, (unsigned char *)("" msg) \
     } \
 }
 
