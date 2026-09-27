@@ -59,6 +59,7 @@ struct acton_gc_info {
     GC_word heap_growth_divisor;
     GC_word alloc_budget_percent;
     int realloc_no_free;
+    int no_thread_local_warmup;
 };
 
 static void *GC_CALLBACK read_gc_info(void *data) {
@@ -82,6 +83,7 @@ static void *GC_CALLBACK read_gc_info(void *data) {
     info->heap_growth_divisor = GC_get_heap_growth_divisor();
     info->alloc_budget_percent = GC_get_alloc_budget_percent();
     info->realloc_no_free = GC_get_realloc_no_free();
+    info->no_thread_local_warmup = GC_get_no_thread_local_warmup();
     return NULL;
 }
 
@@ -120,18 +122,22 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
             sequence->$class->append(sequence, supported,
                                     actStrFromCString(gc_backends[i].name));
     }
+    // The warm-up setting has no effect without thread-local allocation,
+    // which a zero limit tells.
+    unsigned thread_local_size_limit = acton_gc_get_thread_local_size_limit();
     B_float pause_target = (B_float)B_None;
     if (info.incremental && info.time_limit.tv_ms != GC_TIME_UNLIMITED)
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(20,
+    return $NEWTUPLE(21,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
         toB_u64(acton_gc_get_block_size()),
         toB_bool(acton_gc_get_end_padding()),
-        toB_u64(acton_gc_get_thread_local_size_limit()),
+        toB_u64(thread_local_size_limit),
+        toB_bool(thread_local_size_limit != 0 && info.no_thread_local_warmup),
         toB_bool(info.realloc_no_free),
         toB_u64(info.stats.markers_m1 + 1),
         toB_bool(acton_gc_get_mark_range_stealing()),

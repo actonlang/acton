@@ -64,6 +64,7 @@ pub fn build(b: *std.Build) void {
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
+    const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
     const acton_libraries = b.option([]const u8, "acton_libraries", "") orelse "";
     const acton_modules = b.option([]const u8, "acton_modules", "") orelse {
@@ -94,6 +95,7 @@ pub fn build(b: *std.Build) void {
         .gc_no_end_padding = gc_no_end_padding,
         .gc_thread_local_size_limit = gc_thread_local_size_limit,
         .gc_realloc_no_free = gc_realloc_no_free,
+        .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
         .gc_disable_thp = gc_disable_thp,
     });
 
@@ -399,6 +401,7 @@ pub fn build(b: *std.Build) void {
             .gc_no_end_padding = gc_no_end_padding,
             .gc_thread_local_size_limit = gc_thread_local_size_limit,
             .gc_realloc_no_free = gc_realloc_no_free,
+            .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
         }) else null;
 
         for (root_c_files.items) |entry| {

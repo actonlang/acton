@@ -2605,6 +2605,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
     defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "384"),
+                ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
                 ("initial_mark_stack_size", "4096")]
@@ -2614,10 +2615,12 @@ gcCollectorOptionTests = testGroup "GC collector options"
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048"),
-             ("gc_realloc_no_free", "false")]
+             ("gc_realloc_no_free", "false"),
+             ("gc_no_thread_local_warmup", "false")]
     tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
+                    ("no_thread_local_warmup", "False"),
                     ("realloc_no_free", "False"),
                     ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
@@ -2634,14 +2637,18 @@ gcCollectorOptionTests = testGroup "GC collector options"
                [("thread_local_size_limit", "16")])]
     -- The environment turns the modes that are on by default off in the
     -- default build, and on in the tuned build, which turned them off.
-    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0")]
+    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
+                 ("GC_NO_THREAD_LOCAL_WARMUP", "0")]
     overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
-                  ("realloc_frees_moved", "True")]
+                  ("realloc_frees_moved", "True"),
+                  ("no_thread_local_warmup", "False")]
     tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
-                      ("GC_REALLOC_NO_FREE", "1")]
+                      ("GC_REALLOC_NO_FREE", "1"),
+                      ("GC_NO_THREAD_LOCAL_WARMUP", "1")]
     tunedOverridden = [("alloc_budget_percent", "50"),
                        ("realloc_no_free", "True"),
-                       ("realloc_frees_moved", "False")]
+                       ("realloc_frees_moved", "False"),
+                       ("no_thread_local_warmup", "True")]
     -- Invalid settings and the option the diagnostic should name.
     invalid =
       [ ([(key, value)], key)
@@ -2659,7 +2666,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_thread_local_size_limit", "100"),
                         ("gc_thread_local_size_limit", "4096"),
                         ("gc_thread_local_size_limit", "invalid"),
-                        ("gc_realloc_no_free", "maybe")]
+                        ("gc_realloc_no_free", "maybe"),
+                        ("gc_no_thread_local_warmup", "maybe")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")
