@@ -131,6 +131,19 @@ B_NoneType B_arrayD___setitem__(B_array self, int64_t index, $WORD value) {
     return $arrayD_U__setitem_float(self, index, ((B_float)value)->val);
 }
 
+// Protocol adapters retain boxed values at the polymorphic boundary; concrete
+// array indexing is lowered to the raw workers above by the compiler.
+$WORD B_MutIndexedD_arrayD___getitem__(B_MutIndexedD_array wit, B_array self,
+                                      B_int index) {
+    return B_arrayD___getitem__(self, index->val);
+}
+
+B_NoneType B_MutIndexedD_arrayD___setitem__(B_MutIndexedD_array wit,
+                                            B_array self, B_int index,
+                                            $WORD value) {
+    return B_arrayD___setitem__(self, index->val, value);
+}
+
 void B_arrayD___serialize__(B_array self, $Serial$state state) {
     if (self->length > INT_MAX - 2)
         $RAISE((B_BaseException)$NEW(B_ValueError,

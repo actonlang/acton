@@ -858,7 +858,7 @@ instance InfEnv Stmt where
               | otherwise               = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Proto (locinfo l 41) env w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
+                                             return ( Proto (locinfo l 41) env w t0 (pMutIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
                                              t' <- newUnivar env
                                              w <- newWitness
@@ -905,7 +905,7 @@ instance InfEnv Stmt where
               | otherwise               = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Proto (locinfo l 47) env w t0 (pIndexed ti t) :
+                                             return ( Proto (locinfo l 47) env w t0 (pMutIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
             aug t0 t x f e (TgSlice sl) = do tryUnify env (locinfo l 1115) t0 t
                                              (cs,sl) <- inferSlice env sl
@@ -927,9 +927,9 @@ mkvar t e                               = do x <- newTmp
 
 data Tg                                 = TgVar Name | TgIndex Expr | TgSlice Sliz | TgDot Name
 
--- Fixed-size arrays do not implement the resizable Indexed protocol, since
--- that would also promise __delitem__. Index reads and writes therefore
--- resolve directly to their concrete class methods.
+-- Resolve concrete fixed-size arrays directly so their reads and writes use
+-- the raw element ABI. They also implement MutIndexed for polymorphic code,
+-- but never the deletion-capable Indexed protocol.
 directIndexElementType env t            = case unalias env t of
                                              TCon _ (TC q [et]) | q == qnArray     -> Just et
                                              TCon _ (TC q [])   | q == qnBitarray  -> Just tBool
