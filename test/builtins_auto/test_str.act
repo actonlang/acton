@@ -29,6 +29,19 @@ def test_str_expandtabs_large():
     print("str expandtabs of large inputs: {len(wide)} {len(many)}")
     return wide == "x" * 100 and many == "é" * 5000 + " "
 
+def test_str_case_utf8_length():
+    # Case mapping can change the UTF-8 length of a character
+    print("str case mapping with length changes: {"ɐı".upper()} {"ɐBC".capitalize()}")
+    return ("ɐı".upper() == "ⱯI" and "ⱯI".lower() == "ɐi"
+            and "ɐBC".capitalize() == "Ɐbc" and "hELLO wORLD".capitalize() == "Hello world")
+
+def test_str_upper_large():
+    # upper builds its result on the heap, not in a stack array of four bytes
+    # per character
+    u = ("a" * 30000000).upper()
+    print("str upper of 30000000 chars: {len(u)}")
+    return len(u) == 30000000 and u.count("A") == 30000000
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -337,6 +350,8 @@ tests = {
     "test_str_find": test_str_find,
     "test_str_expandtabs_chars": test_str_expandtabs_chars,
     "test_str_expandtabs_large": test_str_expandtabs_large,
+    "test_str_case_utf8_length": test_str_case_utf8_length,
+    "test_str_upper_large": test_str_upper_large,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

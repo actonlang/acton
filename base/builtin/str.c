@@ -518,28 +518,30 @@ static int byte_length2(unsigned char c) {
 
 typedef int (*transform)(int codepoint);
 
-// Mapping a codepoint transform over an entire string
-// For the moment only used for str_upper and str_lower;
-// maybe not worthwhile to keep.
-static B_str str_transform(B_str s, transform f) {
+// Mapping codepoint transforms over an entire string: first for the first
+// character and rest for the others. Used by upper, lower and capitalize.
+// A transform can change the UTF-8 length of a character, so the first pass
+// computes the length of the result and the second one writes it.
+static B_str str_transform(B_str s, transform first, transform rest) {
     if (s->nchars == 0) {
         return null_str;
     }
-    int cp, cpu, cplen, cpulen;
+    unsigned char tmp[4];
+    int cp;
+    int64_t nbytes = 0;
     unsigned char *p = s->str;
-    unsigned char buffer[4*s->nchars];
-    unsigned char *up = buffer;
     for (int i=0; i < s->nchars; i++) {
-        cplen = utf8proc_iterate(p,-1,&cp);
-        cpu = f(cp);
-        cpulen = utf8proc_encode_char(cpu,up);
-        p+=cplen;
-        up += cpulen;
+        p += utf8proc_iterate(p,-1,&cp);
+        nbytes += utf8proc_encode_char(i==0 ? first(cp) : rest(cp),tmp);
     }
-    int nbytes = (int)(up-buffer);
     B_str res;
     NEW_UNFILLED_STR(res,s->nchars,nbytes);
-    memcpy(res->str,buffer,nbytes);
+    p = s->str;
+    unsigned char *up = res->str;
+    for (int i=0; i < s->nchars; i++) {
+        p += utf8proc_iterate(p,-1,&cp);
+        up += utf8proc_encode_char(i==0 ? first(cp) : rest(cp),up);
+    }
     return res;
 }
 
@@ -1011,25 +1013,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
 // str-specific methods ////////////////////////////////////////////////////////
 
 B_str B_strD_capitalize(B_str s) {
-    if (s->nchars==0) {
-        return null_str;
-    }
-    int cp, cpu, cplen, cpulen;
-    unsigned char *p = s->str;
-    unsigned char buffer[4*s->nchars];
-    unsigned char *up = buffer;
-    for (int i=0; i < s->nchars; i++) {
-        cplen = utf8proc_iterate(p,-1,&cp);
-        cpu = i==0? utf8proc_totitle(cp) : utf8proc_tolower(cp);
-        cpulen = utf8proc_encode_char(cpu,up);
-        p+=cplen;
-        up += cpulen;
-    }
-    long nbytes = (long)(up-buffer);
-    B_str res;
-    NEW_UNFILLED_STR(res,s->nchars,nbytes);
-    memcpy(res->str,buffer,nbytes);
-    return res;
+    return str_transform(s,utf8proc_totitle,utf8proc_tolower);
 }
 
 B_str B_strD_center(B_str s, int64_t width, B_str fill) {
@@ -1345,7 +1329,7 @@ B_str B_strD_ljust(B_str s, int64_t width, B_str fill) {
 }
 
 B_str B_strD_lower(B_str s) {
-    return str_transform(s,utf8proc_tolower);
+    return str_transform(s,utf8proc_tolower,utf8proc_tolower);
 }
 
 
@@ -1642,7 +1626,7 @@ B_str B_strD_strip(B_str s, B_str cs) {
 }
 
 B_str B_strD_upper(B_str s) {
-    return str_transform(s,utf8proc_toupper);
+    return str_transform(s,utf8proc_toupper,utf8proc_toupper);
 }
 
 B_str B_strD_zfill(B_str s, int64_t width) {
