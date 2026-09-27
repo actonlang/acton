@@ -737,10 +737,9 @@ instance Boxing Expr where
                                          (ws2,p1) <- boxing env p
                                          return (HashSet.union ws1 ws2, eCallP f1 (fixargs env p1 r))
         where  TFun _ _ r _ _       = rtypeOfFun env f
-    -- Fixed-size arrays resolve indexing directly to class methods (they
-    -- intentionally do not implement Indexed, whose contract also includes
-    -- deletion). Give those direct calls the same raw-worker lowering used for
-    -- statically resolved builtin protocol calls above.
+    -- Concrete fixed-size arrays resolve indexing directly to class methods
+    -- so they retain the raw element ABI. Their MutIndexed witnesses serve
+    -- polymorphic code without promising deletion.
     boxing env (Call _ (Dot _ recv attr) p KwdNil)
       | Just _ <- rawBuiltinMethod env attr (recv : posargs p)
                                     = do (ws,p1) <- boxing env (PosArg recv p)

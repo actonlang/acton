@@ -852,8 +852,10 @@ extension complex (Hashable):
 protocol IIndexed[A (Eq),B]:
     __getitem__  : (A) -> B
 
-protocol Indexed[A (Eq),B] (IIndexed[A,B]):
+protocol MutIndexed[A (Eq),B] (IIndexed[A,B]):
     __setitem__  : mut(A,B) -> None
+
+protocol Indexed[A (Eq),B] (MutIndexed[A,B]):
     __delitem__  : mut(A) -> None
 
 protocol ISliceable[A] (IIndexed[int,A]):
@@ -876,6 +878,8 @@ protocol Container[A(Eq)] (Collection[A]):
 
 #   IIndexed               Iterable       Plus
 #     |      \                |            |
+#     |       MutIndexed      |            |
+#     |           |           |            |
 #     |        Indexed        |            |
 #     |           |           |            |
 #   ISliceable    |        Collection     Times
@@ -904,9 +908,9 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
 #    |
 #   Container       IIndexed
 #    |                |     \
-#    |                |      Indexed
+#    |                |     MutIndexed
 #   IMapping <---------        |
-#    |                         |
+#    |                         Indexed
 #    |                         |
 #   Mapping <-------------------
 
@@ -953,6 +957,12 @@ protocol Set[A (Eq)] (ISet[A]):
 
 
 ## Collection protocol extensions ########################################
+
+extension array[A(ArrayElement)] (MutIndexed[int,A]):
+    NotImplemented
+
+extension bitarray (MutIndexed[int,bool]):
+    NotImplemented
 
 extension list[A] (Sequence[A]):
     NotImplemented

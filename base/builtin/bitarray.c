@@ -94,6 +94,19 @@ B_NoneType B_bitarrayD___setitem__(B_bitarray self, int64_t index, bool value) {
     return $bitarrayD_U__setitem__(self, index, value);
 }
 
+// MutIndexed uses the ordinary boxed protocol ABI. Direct bitarray indexing
+// continues to use the raw bool workers above.
+B_bool B_MutIndexedD_bitarrayD___getitem__(B_MutIndexedD_bitarray wit,
+                                           B_bitarray self, B_int index) {
+    return toB_bool($bitarrayD_U__getitem__(self, index->val));
+}
+
+B_NoneType B_MutIndexedD_bitarrayD___setitem__(B_MutIndexedD_bitarray wit,
+                                               B_bitarray self, B_int index,
+                                               B_bool value) {
+    return $bitarrayD_U__setitem__(self, index->val, value->val);
+}
+
 void B_bitarrayD___serialize__(B_bitarray self, $Serial$state state) {
     uint64_t word_count = B_bitarray_word_count(self->length);
     if (word_count > INT_MAX - 1)
