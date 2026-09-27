@@ -516,6 +516,14 @@ static int byte_length2(unsigned char c) {
         return 4;
 }
 
+// #chars in a byte range of valid UTF-8: the bytes that start a char
+static int count_chars(unsigned char *p, int nbytes) {
+    int n = 0;
+    for (int i = 0; i < nbytes; i++)
+        n += (p[i] & 0xc0) != 0x80;
+    return n;
+}
+
 typedef int (*transform)(int codepoint);
 
 // Mapping codepoint transforms over an entire string: first for the first
@@ -1527,21 +1535,27 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
         if (sep->nchars==0) {
             RAISE_EXC(&B_str_empty_separator_error);
         }
-        if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_str);
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int isascii = s->nchars == s->nbytes;
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            int nchars = isascii ? n : count_chars(p,n);
+            B_str word;
+            NEW_UNFILLED_STR(word,nchars,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_str ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nchars>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_strD_partition(rs,sep);
-            ssep = (B_str)t->components[1];
-            rs =  (B_str)t->components[2];
-            wit->$class->append(wit,res,(B_str)t->components[0]);
-        }
-        if (ssep->nchars>0)
-            wit->$class->append(wit,res,rs);
+        int nchars = isascii ? rest : count_chars(p,rest);
+        B_str word;
+        NEW_UNFILLED_STR(word,nchars,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }

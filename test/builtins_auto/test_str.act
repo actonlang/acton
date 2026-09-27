@@ -56,6 +56,19 @@ def test_str_slice_large():
     print("str slice of 30000000 chars: {len(r)}")
     return len(r) == 29999999 and r.count("a") == 29999999
 
+def test_str_split_sep():
+    parts = ("ab," * 20000).split(",")
+    print("str split with a separator: {len(parts)} parts")
+    return ("a,b,c".split(",", 0) == ["a,b,c"]
+            and "a,b,c".split(",", 1) == ["a", "b,c"]
+            and "a,b,c".split(",", -1) == ["a", "b", "c"]
+            and "a,,b,".split(",") == ["a", "", "b", ""]
+            and "".split(",") == [""]
+            and "abc".split("xyz") == ["abc"]
+            and "é€::𝄞::".split("::", 5) == ["é€", "𝄞", ""]
+            and [len(x) for x in "é€,𝄞a,".split(",")] == [2, 2, 0]
+            and len(parts) == 20001 and parts[0] == "ab" and parts[20000] == "")
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -368,6 +381,7 @@ tests = {
     "test_str_upper_large": test_str_upper_large,
     "test_str_slice_steps": test_str_slice_steps,
     "test_str_slice_large": test_str_slice_large,
+    "test_str_split_sep": test_str_split_sep,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
