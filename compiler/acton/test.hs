@@ -2608,7 +2608,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
-                ("initial_mark_stack_size", "4096")]
+                ("initial_mark_stack_size", "1048576")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
              ("gc_mark_range_stealing", "false"),
@@ -2625,9 +2625,10 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
                     ("initial_mark_stack_size", "65536")]
-    -- The default initial mark stack has as many entries as a block has
-    -- bytes.
+    -- With 0, the initial mark stack has the collector's default size: as
+    -- many entries as a block has bytes.
     others = [([("gc_block_size", "65536"),
+                ("gc_initial_mark_stack_size", "0"),
                 ("gc_thread_local_size_limit", "32768")],
                [("block_size", "65536"), ("initial_mark_stack_size", "65536"),
                 ("thread_local_size_limit", "32768")]),
