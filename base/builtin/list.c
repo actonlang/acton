@@ -340,6 +340,12 @@ static B_NoneType B_list_base_delslice(B_list_base lst, B_slice slc) {
     normalize_slice(slc, lst->length, &slen, &start, &stop, &step);
     if (slen == 0)
         return B_None;
+    if (step < 0) {
+        // The loop below needs a positive step: delete the same elements,
+        // taking them in increasing order
+        start += (slen - 1) * step;
+        step = -step;
+    }
     $WORD *p = lst->data + start;
     for (int64_t i = 0; i < slen - 1; i++) {
         memmove(p, p + i + 1, (step - 1) * sizeof($WORD));
