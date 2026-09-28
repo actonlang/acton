@@ -1,3 +1,5 @@
+#include <limits.h>
+
 double stdQ_mathQ_sqrt(double x) {
   return sqrt(x);
 }
@@ -42,6 +44,12 @@ double stdQ_mathQ_acosh(double x) {
 }
 double stdQ_mathQ_atanh(double x) {
   return atanh(x);
+}
+double stdQ_mathQ_ldexp(double x, int64_t exp) {
+  // The C int bounds exceed the range of finite nonzero double results.
+  if (exp > INT_MAX) return ldexp(x, INT_MAX);
+  if (exp < INT_MIN) return ldexp(x, INT_MIN);
+  return ldexp(x, (int)exp);
 }
 
 void stdQ_mathQ___ext_init__() {

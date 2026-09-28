@@ -30,11 +30,6 @@ The module currently exposes:
 - `asin`, `acos`, `atan`
 - `sinh`, `cosh`, `tanh`
 - `asinh`, `acosh`, `atanh`
+- `ldexp(x, exp)`, which returns `x * 2**exp`
 
-These functions take and return `float`.
-
-<div class="advanced-content">
-<p>The module defines a <code>RealFuns</code> protocol and implements it
-for <code>float</code>. The exported module functions delegate through
-that protocol.</p>
-</div>
+All functions return `float`. `ldexp` also takes an `int` exponent.

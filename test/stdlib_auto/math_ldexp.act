@@ -1,0 +1,29 @@
+import math
+import std.math as std_math
+
+actor main(env):
+    large_positive = 2147483648
+    large_negative = -2147483649
+    infinity = float("inf")
+    nan = float("nan")
+
+    assert math.ldexp(0.75, 2) == 3.0
+    assert math.ldexp(1.0, -1074) > 0.0
+    assert math.ldexp(1.0, -1075) == 0.0
+    assert math.ldexp(1.0, large_positive) == infinity
+    assert math.ldexp(1.0, large_negative) == 0.0
+    assert math.ldexp(0.0, large_positive) == 0.0
+    assert 1.0 / math.ldexp(-0.0, large_negative) < 0.0
+    assert math.ldexp(infinity, large_negative) == infinity
+    assert math.ldexp(nan, large_positive) != math.ldexp(nan, large_positive)
+
+    assert std_math.ldexp(0.75, 2) == 3.0
+    assert std_math.ldexp(1.0, -1074) > 0.0
+    assert std_math.ldexp(1.0, -1075) == 0.0
+    assert std_math.ldexp(1.0, large_positive) == infinity
+    assert std_math.ldexp(1.0, large_negative) == 0.0
+    assert std_math.ldexp(0.0, large_positive) == 0.0
+    assert 1.0 / std_math.ldexp(-0.0, large_negative) < 0.0
+    assert std_math.ldexp(infinity, large_negative) == infinity
+    assert std_math.ldexp(nan, large_positive) != std_math.ldexp(nan, large_positive)
+    env.exit(0)
