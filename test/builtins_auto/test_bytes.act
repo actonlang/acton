@@ -76,6 +76,18 @@ def test_bytes_negative_bounds():
             and s.find(b"c", -2) == 5 and s.find(b"c", -4, -1) == 2 and s.rfind(b"a", -6, -3) == 0
             and s.startswith(b"ca", -4) and s.endswith(b"ab", 0, -1) and not s.endswith(b"c", 0, -1))
 
+def test_bytes_replace_too_long():
+    # A result longer than a bytes can hold raises ValueError: here 65536
+    # bytes each become 65536 bytes, 4 GiB in all
+    s = b"a" * 65536
+    try:
+        r = s.replace(b"a", b"b" * 65536)
+        print("bytes replace gave {len(r)} bytes")
+        return False
+    except ValueError:
+        print("bytes replace with a 4 GiB result raised ValueError")
+        return True
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -406,6 +418,7 @@ tests = {
     "test_bytes_istitle": test_bytes_istitle,
     "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
     "test_bytes_negative_bounds": test_bytes_negative_bounds,
+    "test_bytes_replace_too_long": test_bytes_replace_too_long,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,

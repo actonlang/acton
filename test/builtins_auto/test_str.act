@@ -119,6 +119,18 @@ def test_str_negative_bounds():
             and "é€𝄞".find("𝄞", -1) == 2 and "é€𝄞".count("", -2) == 3
             and s.find("a", 4294967296) == -1)
 
+def test_str_replace_too_long():
+    # A result longer than a str can hold raises ValueError: here 65536 chars
+    # each become 65536 chars, 4 GiB in all
+    s = "a" * 65536
+    try:
+        r = s.replace("a", "b" * 65536)
+        print("str replace gave {len(r)} chars")
+        return False
+    except ValueError:
+        print("str replace with a 4 GiB result raised ValueError")
+        return True
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -437,6 +449,7 @@ tests = {
     "test_chr_surrogates": test_chr_surrogates,
     "test_str_replace_negative_count": test_str_replace_negative_count,
     "test_str_negative_bounds": test_str_negative_bounds,
+    "test_str_replace_too_long": test_str_replace_too_long,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

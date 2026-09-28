@@ -37,6 +37,8 @@ static struct B_ValueError B_str_substring_not_found_error =
     STATIC_EXCEPTION(B_ValueError, "index: substring not found");
 static struct B_ValueError B_str_expandtabs_too_long_error =
     STATIC_EXCEPTION(B_ValueError, "expandtabs: result too long");
+static struct B_ValueError B_str_too_long_error =
+    STATIC_EXCEPTION(B_ValueError, "result too long");
 static struct B_ValueError B_str_invalid_ljust_fill_error =
     STATIC_EXCEPTION(B_ValueError, "ljust: fill str not single char");
 static struct B_ValueError B_str_rsubstring_not_found_error =
@@ -1388,38 +1390,42 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // A negative count, like no count, replaces every occurrence
-    if (count==NULL || fromB_int(count) < 0)
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int c = B_strD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_strD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return s;
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
-    int nchars = s->nchars+c0*(new->nchars-old->nchars);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length fields of a str
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    NEW_UNFILLED_STR(res,nchars,nbytes);
+    NEW_UNFILLED_STR(res, nchars, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
         // An empty old string occurs before every character: step over one
         // character, not one byte
-        n = i>0 && old->nbytes==0 ? byte_length2(*p) : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+        n = i > 0 && old->nbytes == 0 ? byte_length2(*p) : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
@@ -2423,35 +2429,39 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
     // A negative count, like no count, replaces every occurrence
-    if (count==NULL || fromB_int(count) < 0)
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int64_t c = B_bytearrayD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_bytearrayD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return B_bytearrayD_copy(s);
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length field of a bytearray
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,nbytes);
+    NEW_UNFILLED_BYTEARRAY(res, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
+        n = i > 0 && old->nbytes == 0 ? 1 : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
@@ -3547,35 +3557,39 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
 }
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     // A negative count, like no count, replaces every occurrence
-    if (count==NULL || fromB_int(count) < 0)
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int64_t c = B_bytesD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_bytesD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return B_bytesD_copy(s);
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length field of a bytes
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,nbytes);
+    NEW_UNFILLED_BYTES(res, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
+        n = i > 0 && old->nbytes == 0 ? 1 : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
