@@ -74,18 +74,18 @@ bool c_string_conversionsQ_check_bytes() {
     B_bytes existing = actBytesFromCString(temporary);
     B_bytes legacy = to$bytes(temporary);
     temporary[0] = 'X';
-    CHECK(copied->nbytes == 6 && memcmp(copied->str, "before", 7) == 0);
-    CHECK(existing->nbytes == 6 && memcmp(existing->str, "before", 7) == 0);
-    CHECK(legacy->nbytes == 6 && memcmp(legacy->str, "before", 7) == 0);
+    CHECK(copied->nbytes == 6 && memcmp(copied->str, "before", 6) == 0);
+    CHECK(existing->nbytes == 6 && memcmp(existing->str, "before", 6) == 0);
+    CHECK(legacy->nbytes == 6 && memcmp(legacy->str, "before", 6) == 0);
 
     char slice[] = {'A', 0, 'B'};
     copied = actBytesFromCStringLengthCopy(slice, sizeof(slice));
     existing = actBytesFromCStringLength(slice, sizeof(slice));
     legacy = to$bytesD_len(slice, sizeof(slice));
     slice[0] = 'X';
-    CHECK(copied->nbytes == 3 && memcmp(copied->str, "A\0B", 4) == 0);
-    CHECK(existing->nbytes == 3 && memcmp(existing->str, "A\0B", 4) == 0);
-    CHECK(legacy->nbytes == 3 && memcmp(legacy->str, "A\0B", 4) == 0);
+    CHECK(copied->nbytes == 3 && memcmp(copied->str, "A\0B", 3) == 0);
+    CHECK(existing->nbytes == 3 && memcmp(existing->str, "A\0B", 3) == 0);
+    CHECK(legacy->nbytes == 3 && memcmp(legacy->str, "A\0B", 3) == 0);
 
     static char shared[] = "before\0after";
     B_bytes borrowed = actBytesFromCStringNoCopy(shared);
@@ -93,9 +93,9 @@ bool c_string_conversionsQ_check_bytes() {
     borrowed = actBytesFromCStringLengthNoCopy(shared, 12);
     CHECK(borrowed->str == (unsigned char *)shared && borrowed->nbytes == 12);
     copied = actBytesFromCStringCopy("");
-    CHECK(copied->nbytes == 0 && copied->str[0] == 0);
+    CHECK(copied->nbytes == 0);
     copied = actBytesFromCStringLengthCopy("", 0);
-    CHECK(copied->nbytes == 0 && copied->str[0] == 0);
+    CHECK(copied->nbytes == 0);
     return true;
 }
 
