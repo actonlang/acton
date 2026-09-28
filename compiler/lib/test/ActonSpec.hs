@@ -2172,13 +2172,21 @@ main = do
         , "itemG_next_iter->$class->__next__(itemG_next_iter, &item.val)"
         , "if ((item.just&&same))"
         , "(item.just ? (B_maybe)B_justG_new(item.val) : (B_maybe)B_nothingG_new())"
-        , "B_range it = B_rangeG_new"
+        , "B_range it = $rangeD_U_new(0LL, stop, 1LL);"
         , "identity_iterator_int((B_Iterator)it)"
         , "$MaybeI64 item;"
         , "$rangeD_U__next_i64(itemG_next_iter, &item.val)"
         , "B_justG_new(toB_int(item.val))"
+        , "B_range heap2 = $rangeD_U_new(start, stop, 1LL);"
+        , "B_range heap3 = $rangeD_U_new(start, stop, step);"
+        , "struct B_range N_4iterG_range_storage;"
+        , "$rangeD_U_init(N_4iter, 0LL, stop, 1LL);"
+        , "$rangeD_U_init(N_8iter, start, stop, 1LL);"
+        , "$rangeD_U_init(N_12iter, start, stop, step);"
         ]
-      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)"]
+      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)", "B_rangeG_new"]
+      testCodeGenContains env0 "range_cps" ["$rangeD_U_new(0LL, 3LL, 1LL)"]
+      testCodeGenDoesNotContain env0 "range_cps" ["struct B_range"]
       testCodeGenContains env0 "static_witness_path"
         [ "$listD_U__setitem__(xs, index, toB_int(0LL))"
         , "B_SequenceD_listG_witness->W_Sliceable"

@@ -1,0 +1,16 @@
+# A range iterator in a CPS function survives in heap continuations.  It must
+# retain heap storage even though Normalizer gave it a private for-loop name.
+actor Counter():
+    def tick() -> int:
+        return 1
+
+actor main(env):
+    counter = Counter()
+
+    def run():
+        total = 0
+        for value in range(3):
+            total += await async counter.tick()
+        env.exit(0 if total == 3 else 1)
+
+    run()

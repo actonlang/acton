@@ -1019,6 +1019,57 @@ isRangeFunction env f
   | Var _ n <- stripTApp f          = unalias env n == qnRange
 isRangeFunction _ _                 = False
 
+-- A range call reaches CodeGen with all three positional arguments present;
+-- omitted optional arguments are represented by None.  Canonicalize the
+-- statically known cases to the raw start/stop/step triple used by the C
+-- runtime.  Calls with a genuinely optional value retain the general ABI.
+data RawRangeArgs                   = RawRangeArgs (Maybe Expr) Expr (Maybe Expr)
+
+rawRangeArgs env (Call _ f (PosArg first (PosArg stop (PosArg step PosNil))) KwdNil)
+  | isRangeFunction env f,
+    rawIntArg env first,
+    missingRangeArg stop || rawIntArg env stop,
+    missingRangeArg step || rawIntArg env step
+                                    = if missingRangeArg stop
+                                      then Just (RawRangeArgs Nothing first (presentRangeArg step))
+                                      else Just (RawRangeArgs (Just first) stop (presentRangeArg step))
+rawRangeArgs _ _                    = Nothing
+
+missingRangeArg (None _)            = True
+missingRangeArg (Paren _ e)         = missingRangeArg e
+missingRangeArg (Box _ e)           = missingRangeArg e
+missingRangeArg _                   = False
+
+presentRangeArg e
+  | missingRangeArg e               = Nothing
+  | otherwise                       = Just e
+
+rawIntArg env e                     = boxedRepType (typeOf env e) == tInt
+
+genRawRangeArgs env (RawRangeArgs start stop step)
+                                    = genArg "0LL" start <> comma <+>
+                                      genRawExprAs env tInt stop <> comma <+>
+                                      genArg "1LL" step
+  where genArg d                    = maybe (text d) (genRawExprAs env tInt)
+
+genRawRangeNew env args             = text "$rangeD_U_new" <> parens (genRawRangeArgs env args)
+
+isNormalizedForIterator (Internal NormPass "iter" _) = True
+isNormalizedForIterator _          = False
+
+rangeStorageName n                  = Derived n (globalName "range_storage")
+
+-- A direct for-loop range cannot escape: Normalizer creates this private
+-- iterator solely for the loop.  CPS functions are excluded because their
+-- iterator may be stored in a continuation after the C frame returns.  Store
+-- a synchronous loop's B_range object in the C frame and point the iterator
+-- local at it.
+genStackRange env n args            = text "struct B_range" <+> storage <> semi $+$
+                                      gen env tRange <+> iter <+> equals <+> char '&' <> storage <> semi $+$
+                                      text "$rangeD_U_init" <> parens (iter <> comma <+> genRawRangeArgs env args) <> semi
+  where storage                     = gen env (rangeStorageName n)
+        iter                        = gen env n
+
 isIteratorIterCall env f
   | Var _ n <- stripTApp f          = let q = unalias env n
                                       in q == gBuiltin (name "iter") ||
@@ -1158,6 +1209,13 @@ genStmt env (Decl _ ds)             = (empty, [])
 genStmt env s
   | Just (n, it, ml) <- nextMaybeLocal env s
                                     = (genNextMaybeLocal env n it ml, [])
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | not (n `HashSet.member` localDefined env),
+    ret env /= tR,
+    isNormalizedForIterator n,
+    Just r <- rangeIterSource env t e,
+    Just args <- rawRangeArgs env r
+                                    = (genStackRange env n args, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env),
     Just r <- rangeIterSource env t e
@@ -2032,6 +2090,9 @@ instance Gen Expr where
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
       | mk == primMkDict            = text "B_mk_dict" <> parens (pretty (length es) <> comma <+> gen env w <>  hsep [comma <+> gen env e | e <- es])
+    gen env c@Call{}
+      | Just args <- rawRangeArgs env c
+                                    = genRawRangeNew env args
     gen env c@(Call _ f p KwdNil)
       | callIsClass env f,
         Just d <- genRawNumericConstructor env (boxedRepType $ typeOf env c) p

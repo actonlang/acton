@@ -53,3 +53,18 @@ def escaped_range(stop: int) -> ?int:
 def materialized_range(stop: int) -> maybe[int]:
     item = next(iter(range(stop)))
     return identity_maybe_int(item)
+
+# Definite range arguments use the raw runtime constructor.  The three loops
+# also exercise stack storage for Normalizer's private for-loop iterators.
+def raw_ranges(start: int, stop: int, step: int) -> int:
+    total = 0
+    heap1 = range(stop)
+    heap2 = range(start, stop)
+    heap3 = range(start, stop, step)
+    for i in range(stop):
+        total += i
+    for i in range(start, stop):
+        total += i
+    for i in range(start, stop, step):
+        total += i
+    return total

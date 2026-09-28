@@ -19,9 +19,28 @@ B_range B_rangeG_new(int64_t start, B_int stop, B_int step) {
     return $NEW(B_range, start, stop, step);
 }
 
+void $rangeD_U_init(B_range self, int64_t start, int64_t stop, int64_t step) {
+    if (step == 0) {
+        RAISE_EXC(&B_range_zero_step_error);
+    }
+
+    self->$class = &B_rangeG_methods;
+    self->step = step;
+    int64_t distance = stop - start;
+    self->nxt = start - step; // __next__ will add step
+    self->remaining = step > 0
+        ? (distance > 0 ? distance / step + (distance % step != 0) : 0)
+        : (distance < 0 ? distance / step + (distance % step != 0) : 0);
+}
+
+B_range $rangeD_U_new(int64_t start, int64_t stop, int64_t step) {
+    B_range self = acton_malloc(sizeof(struct B_range));
+    $rangeD_U_init(self, start, stop, step);
+    return self;
+}
 
 B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step) {
-    int64_t ustart, ustop, ustep, stp;
+    int64_t ustart, ustop, ustep;
     if (stop) {
         ustart = start;
         ustop = stop->val;
@@ -30,19 +49,11 @@ B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step
         ustop = start;
     }
     if (step) {
-        stp = step->val;
-        if (stp == 0) {
-            RAISE_EXC(&B_range_zero_step_error);
-        } else {
-            ustep = stp;
-        }
+        ustep = step->val;
     } else {
         ustep = 1;
     }
-    stp = self->step = ustep;
-    int64_t r = ustop - ustart;
-    self->nxt = ustart - stp; //__next__ will add stp
-    self->remaining = stp > 0 ? (r > 0 ? r/stp + (r%stp != 0) : 0): ( r < 0 ? r/stp + (r%stp != 0) : 0);
+    $rangeD_U_init(self, ustart, ustop, ustep);
     return B_None;
 }
 
@@ -86,4 +97,3 @@ B_range B_rangeD___deserialize__(B_range self, $Serial$state state) {
     res->remaining = fromB_int((B_int)$step_deserialize(state));
     return res;
 }
-
