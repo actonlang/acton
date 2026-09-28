@@ -3161,7 +3161,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     self->nbytes = len;
     self->str = acton_malloc_atomic(len);
     for (int i=0; i< len; i++) {
-        int n = fromB_int((B_int)lst->data[i]);
+        int64_t n = fromB_int((B_int)lst->data[i]);
         if (0<=n && n <= 255)
             self->str[i] = n;
         else

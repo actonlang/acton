@@ -55,6 +55,22 @@ def test_bytes_contains_range():
     return (255 in b and 0 in b and 65 in b and not (511 in b)
             and not (-1 in b) and not (256 in b) and 321 not in b)
 
+def bytes_value_error(vals: list[int]) -> bool:
+    try:
+        b = bytes(vals)
+        print("bytes({vals}) gave {b} instead of ValueError")
+        return False
+    except ValueError:
+        return True
+
+def test_bytes_values_out_of_range():
+    # A value outside 0..255 raises ValueError, also one that is 65 in its
+    # low 32 bits
+    print("bytes of ints outside 0..255")
+    return (bytes_value_error([256]) and bytes_value_error([-1])
+            and bytes_value_error([2**32 + 65]) and bytes_value_error([-2**32 + 65])
+            and bytes([0, 65, 255]) == b"\x00A\xff")
+
 def test_bytes_istitle():
     # Title case needs at least one cased letter
     print("bytes istitle")
@@ -435,6 +451,7 @@ tests = {
     "test_bytes_str_quotes": test_bytes_str_quotes,
     "test_bytes_split_sep": test_bytes_split_sep,
     "test_bytes_contains_range": test_bytes_contains_range,
+    "test_bytes_values_out_of_range": test_bytes_values_out_of_range,
     "test_bytes_istitle": test_bytes_istitle,
     "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
     "test_bytes_negative_bounds": test_bytes_negative_bounds,
