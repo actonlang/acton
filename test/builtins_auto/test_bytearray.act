@@ -159,18 +159,6 @@ def test_bytearray_negative_bounds():
             and bytearray(b"ab").endswith(bytearray(b"b"), -1)
             and not bytearray(b"ab").endswith(bytearray(b"ab"), -1))
 
-def test_bytearray_replace_too_long():
-    # A result longer than a bytearray can hold raises ValueError: here 65536
-    # bytes each become 65536 bytes, 4 GiB in all
-    s = bytearray(b"a" * 65536)
-    try:
-        r = s.replace(bytearray(b"a"), bytearray(b"b" * 65536))
-        print("bytearray replace gave {len(r)} bytes")
-        return False
-    except ValueError:
-        print("bytearray replace with a 4 GiB result raised ValueError")
-        return True
-
 def bytearray_too_long(f: () -> bytearray) -> bool:
     try:
         r = f()
@@ -180,17 +168,33 @@ def bytearray_too_long(f: () -> bytearray) -> bool:
         return True
 
 def test_bytearray_sizes_too_long():
-    # A result longer than a bytearray can hold raises ValueError, instead of
-    # the width or count being cut to an int or the size wrapping around
-    huge = 2**32 + 5
+    # A result longer than 2**60 - 1 bytes, the longest a bytearray can be,
+    # raises ValueError instead of its size wrapping around
     ab = bytearray(b"ab")
-    big = bytearray(b"x" * 1048576)
-    print("bytearray results longer than a bytearray can hold")
-    return (bytearray_too_long(lambda: ab.center(huge)) and bytearray_too_long(lambda: ab.ljust(huge))
-            and bytearray_too_long(lambda: ab.rjust(huge)) and bytearray_too_long(lambda: ab.zfill(huge))
-            and bytearray_too_long(lambda: ab * (2**32 + 1)) and bytearray_too_long(lambda: ab * 2**31)
-            and bytearray_too_long(lambda: bytearray(b"").join([big] * 4096))
+    print("bytearray results longer than 2**60 - 1 bytes")
+    return (bytearray_too_long(lambda: bytearray(b"a") * 2**60) and bytearray_too_long(lambda: ab * 2**62)
+            and bytearray_too_long(lambda: ab.center(2**60)) and bytearray_too_long(lambda: ab.ljust(2**60))
+            and bytearray_too_long(lambda: ab.rjust(2**60)) and bytearray_too_long(lambda: ab.zfill(2**60))
+            and bytearray_too_long(lambda: bytearray(b"\t").expandtabs(2**60))
             and bytearray(b"") * 10**18 == bytearray(b"") and ab * 3 == bytearray(b"ababab"))
+
+def bytearray_out_of_memory(f: () -> bytearray) -> bool:
+    try:
+        r = f()
+        print("got a bytearray of {len(r)} bytes instead of MemoryError")
+        return False
+    except MemoryError:
+        return True
+
+def test_bytearray_sizes_out_of_memory():
+    # A result of 2**60 - 1 bytes fits a bytearray but not in memory, and
+    # raises MemoryError
+    ab = bytearray(b"ab")
+    print("bytearray results of 2**60 - 1 bytes")
+    return (bytearray_out_of_memory(lambda: bytearray(b"a") * (2**60 - 1)) and bytearray_out_of_memory(lambda: ab.center(2**60 - 1))
+            and bytearray_out_of_memory(lambda: ab.ljust(2**60 - 1)) and bytearray_out_of_memory(lambda: ab.rjust(2**60 - 1))
+            and bytearray_out_of_memory(lambda: ab.zfill(2**60 - 1))
+            and bytearray_out_of_memory(lambda: bytearray(b"\t").expandtabs(2**60 - 1)))
 
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
@@ -570,8 +574,8 @@ tests = {
     "test_bytearray_istitle": test_bytearray_istitle,
     "test_bytearray_replace_negative_count": test_bytearray_replace_negative_count,
     "test_bytearray_negative_bounds": test_bytearray_negative_bounds,
-    "test_bytearray_replace_too_long": test_bytearray_replace_too_long,
     "test_bytearray_sizes_too_long": test_bytearray_sizes_too_long,
+    "test_bytearray_sizes_out_of_memory": test_bytearray_sizes_out_of_memory,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

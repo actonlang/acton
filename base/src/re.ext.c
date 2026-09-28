@@ -42,7 +42,7 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
     // TODO: use u64 instead of int to eradicate possibility of < 0
 
     // Validate start_pos
-    long start_offset = arg_start_pos;
+    int64_t start_offset = arg_start_pos;
     if (start_offset < 0) {
         RAISE_EXC(&reQ_negative_start_error);
     }

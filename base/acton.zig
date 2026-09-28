@@ -16,7 +16,7 @@ extern fn acton_malloc_atomic(size: usize) ?*anyopaque;
 // B_bytes
 pub const bytes = extern struct {
     class: usize,
-    nbytes: i32,              // length of str in bytes
+    nbytes: i64,              // length of str in bytes
     str: [*]const u8            // nbytes bytes, not NUL-terminated
 };
 
@@ -53,8 +53,8 @@ pub const none = extern struct {
 // B_str
 pub const str = extern struct {
     class: usize,
-    nbytes: i32,              // length of str in bytes
-    nchars: i32,              // length of str in Unicode chars
+    nbytes: i64,              // length of str in bytes
+    nchars: i64,              // length of str in Unicode chars
     str: [*:0]const u8            // str is UTF-8 encoded.
 };
 
@@ -94,9 +94,9 @@ test "str struct" {
     // Check that our struct is the same size as the C struct, by using @typeInfo
     // B_str is a pointer to a C struct, so we need to "dereference" the pointer
     // type to get to the struct type, then check the size of the nbytes field
-    try expect(@sizeOf(@FieldType(str, "nbytes")) == 4);
-    try expect(@sizeOf(@FieldType(str, "nchars")) == 4);
-    try expect(@sizeOf(str) == 24); // 8 + 4 + 4 + 8
+    try expect(@sizeOf(@FieldType(str, "nbytes")) == 8);
+    try expect(@sizeOf(@FieldType(str, "nchars")) == 8);
+    try expect(@sizeOf(str) == 32); // 8 + 8 + 8 + 8
 //    std.debug.print("size of str: {d}\n", .{ @sizeOf(str) });
 //    std.debug.print("size of B_str: {d}\n", .{ @sizeOf(B_str) });
 //    std.debug.print("size of imported c_acton.B_str: {d}\n", .{ @sizeOf(c_acton.B_str.*) });

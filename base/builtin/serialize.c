@@ -20,6 +20,8 @@ static struct B_ValueError B_serialize_actor_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: cannot serialize actors");
 static struct B_ValueError B_serialize_graph_too_large_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: object graph too large");
+static struct B_ValueError B_serialize_object_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "serialize: object too large");
 static struct B_ValueError B_serialize_truncated_header_error =
     STATIC_EXCEPTION(B_ValueError, "deserialize: truncated row header");
 static struct B_ValueError B_serialize_invalid_blob_size_error =
@@ -89,11 +91,14 @@ struct B_HashableD_WORD *B_HashableD_WORDG_witness = &B_HashableD_WORD_instance;
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
-$ROW $add_header(int class_id, int blob_size, $Serial$state state) {
+$ROW $add_header(int class_id, int64_t blob_size, $Serial$state state) {
+    // A row keeps the size of its blob as an int
+    if (blob_size > INT_MAX)
+        RAISE_EXC(&B_serialize_object_too_large_error);
     $ROW res = acton_malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
     res->class_id = class_id;
     state->row_no++;
-    res->blob_size = blob_size;
+    res->blob_size = (int)blob_size;
     res->next = NULL;
     $enqueue(state,res);
     return res;
@@ -307,18 +312,18 @@ $Serializable $deserialize_file(char *file) {
 // blob_size words of blob data. The in-memory `next` pointer is never written.
 
 static B_bytes $rows_to_bytes($ROW row) {
-    long size = 0;
+    int64_t size = 0;
     for ($ROW r = row; r; r = r->next)
-        size += 2 * sizeof(int) + (long)r->blob_size * sizeof($WORD);
-    if (size > INT_MAX)
+        size += 2 * (int64_t)sizeof(int) + r->blob_size * (int64_t)sizeof($WORD);
+    if (size > MAX_STR_LEN)
         RAISE_EXC(&B_serialize_graph_too_large_error);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res, (int)size);
+    NEW_UNFILLED_BYTES(res, size);
     unsigned char *p = res->str;
     for ($ROW r = row; r; r = r->next) {
         memcpy(p, &r->class_id, sizeof(int));  p += sizeof(int);
         memcpy(p, &r->blob_size, sizeof(int)); p += sizeof(int);
-        long blob_bytes = (long)r->blob_size * sizeof($WORD);
+        int64_t blob_bytes = r->blob_size * (int64_t)sizeof($WORD);
         memcpy(p, r->blob, blob_bytes);        p += blob_bytes;
     }
     return res;
@@ -326,10 +331,10 @@ static B_bytes $rows_to_bytes($ROW row) {
 
 static $ROW $bytes_to_rows(B_bytes data) {
     unsigned char *p = data->str;
-    long remaining = data->nbytes;
+    int64_t remaining = data->nbytes;
     struct $ROWLISTHEADER header = {NULL, NULL};
     while (remaining > 0) {
-        if (remaining < (long)(2 * sizeof(int)))
+        if (remaining < 2 * (int64_t)sizeof(int))
             RAISE_EXC(&B_serialize_truncated_header_error);
         int class_id, blob_size;
         memcpy(&class_id, p, sizeof(int));  p += sizeof(int);
@@ -337,10 +342,10 @@ static $ROW $bytes_to_rows(B_bytes data) {
         remaining -= 2 * sizeof(int);
         if (blob_size < 0)
             RAISE_EXC(&B_serialize_invalid_blob_size_error);
-        long blob_bytes = (long)blob_size * sizeof($WORD);
+        int64_t blob_bytes = blob_size * (int64_t)sizeof($WORD);
         if (remaining < blob_bytes)
             RAISE_EXC(&B_serialize_truncated_data_error);
-        $ROW r = acton_malloc(2 * sizeof(int) + ((long)blob_size + 1) * sizeof($WORD));
+        $ROW r = acton_malloc(2 * sizeof(int) + ((size_t)blob_size + 1) * sizeof($WORD));
         r->next = NULL;
         r->class_id = class_id;
         r->blob_size = blob_size;
