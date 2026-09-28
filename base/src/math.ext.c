@@ -1,3 +1,5 @@
+#include <limits.h>
+
 double mathQ_sqrt(double x) {
   return sqrt(x);
 }
@@ -44,10 +46,9 @@ double mathQ_atanh(double x) {
   return atanh(x);
 }
 double mathQ_ldexp(double x, int64_t exp) {
-  if (exp > (int64_t)INT_MAX || exp < (int64_t)INT_MIN) {
-    $RAISE(((B_BaseException)B_ValueErrorG_new($FORMAT("Exponent out of valid range for ldexp: %lld", (long long)exp))));
-  }
-
+  // The C int bounds exceed the range of finite nonzero double results.
+  if (exp > INT_MAX) return ldexp(x, INT_MAX);
+  if (exp < INT_MIN) return ldexp(x, INT_MIN);
   return ldexp(x, (int)exp);
 }
 
