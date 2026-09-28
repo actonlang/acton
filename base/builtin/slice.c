@@ -36,19 +36,23 @@ void normalize_slice(B_slice slc, int64_t len, int64_t *slen, int64_t *start, in
     if (*step == 0) {
         RAISE_EXC(&B_slice_zero_step_error);
     }
+    // An index below -len points before the first element. With a backward
+    // step that position is -1: as a start it gives an empty slice, and as a
+    // stop the slice runs through the first element. With a forward step it
+    // is 0.
     if (slc->start == NULL)
         *start = *step > 0 ? 0 : len-1;
     else {
         *start = *slc->start;
-        *start = *start >=0 ? (*start < len  ? *start : len-1 + (*step > 0))
-            : (*start > -len ? len+*start : 0);
+        *start = *start >= 0 ? (*start < len ? *start : len - 1 + (*step > 0))
+            : (*start >= -len ? len + *start : (*step < 0 ? -1 : 0));
     }
     if (slc->stop == NULL)
         *stop = *step > 0 ? len : -1;
     else {
         *stop = *slc->stop;
-        *stop = *stop >= 0 ? (*stop < len  ? *stop : len-1 + (*step > 0)) 
-            : (*stop > -len ? len+*stop : 0);
+        *stop = *stop >= 0 ? (*stop < len ? *stop : len - 1 + (*step > 0))
+            : (*stop >= -len ? len + *stop : (*step < 0 ? -1 : 0));
     }
   
     if ((*step > 0 && *start >= *stop) || (*step < 0 && *start <= *stop))
