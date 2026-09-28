@@ -155,7 +155,9 @@ def test_bytearray_negative_bounds():
     print("bytearray with negative bounds: {bytearray(b"abc").count(e, -1)} {s.find(bytearray(b"c"), -2)}")
     return (bytearray(b"abc").count(e, -1) == 2 and bytearray(b"abc").count(e, 0, -1) == 3
             and s.find(bytearray(b"c"), -2) == 5 and s.rfind(bytearray(b"a"), -6, -3) == 0
-            and s.startswith(bytearray(b"ca"), -4) and s.endswith(bytearray(b"ab"), 0, -1))
+            and s.startswith(bytearray(b"ca"), -4) and s.endswith(bytearray(b"ab"), 0, -1)
+            and bytearray(b"ab").endswith(bytearray(b"b"), -1)
+            and not bytearray(b"ab").endswith(bytearray(b"ab"), -1))
 
 def test_bytearray_replace_too_long():
     # A result longer than a bytearray can hold raises ValueError: here 65536

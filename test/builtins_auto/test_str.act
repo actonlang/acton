@@ -117,7 +117,8 @@ def test_str_negative_bounds():
             and s.count("abc", -3) == 1 and s.index("b", -5) == 1
             and s.startswith("ca", -4) and s.endswith("ab", 0, -1) and not s.endswith("c", 0, -1)
             and "é€𝄞".find("𝄞", -1) == 2 and "é€𝄞".count("", -2) == 3
-            and s.find("a", 4294967296) == -1)
+            and s.find("a", 4294967296) == -1
+            and "ab".endswith("b", -1) and "aé".endswith("é", -1) and not "ab".endswith("ab", -1))
 
 def test_str_replace_too_long():
     # A result longer than a str can hold raises ValueError: here 65536 chars
