@@ -526,7 +526,7 @@ static int count_chars(unsigned char *p, int nbytes) {
     return n;
 }
 
-typedef int (*transform)(int codepoint);
+typedef utf8proc_int32_t (*transform)(utf8proc_int32_t codepoint);
 
 // Mapping codepoint transforms over an entire string: first for the first
 // character and rest for the others. Used by upper, lower and capitalize.
@@ -537,20 +537,23 @@ static B_str str_transform(B_str s, transform first, transform rest) {
         return null_str;
     }
     unsigned char tmp[4];
-    int cp;
+    utf8proc_int32_t cp;
     int64_t nbytes = 0;
     unsigned char *p = s->str;
-    for (int i=0; i < s->nchars; i++) {
-        p += utf8proc_iterate(p,-1,&cp);
-        nbytes += utf8proc_encode_char(i==0 ? first(cp) : rest(cp),tmp);
+    for (int64_t i = 0; i < s->nchars; i++) {
+        p += utf8proc_iterate(p, -1, &cp);
+        nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
     }
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars,nbytes);
+    NEW_UNFILLED_STR(res, s->nchars, nbytes);
     p = s->str;
     unsigned char *up = res->str;
-    for (int i=0; i < s->nchars; i++) {
-        p += utf8proc_iterate(p,-1,&cp);
-        up += utf8proc_encode_char(i==0 ? first(cp) : rest(cp),up);
+    for (int64_t i = 0; i < s->nchars; i++) {
+        p += utf8proc_iterate(p, -1, &cp);
+        up += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), up);
     }
     return res;
 }
@@ -973,7 +976,10 @@ B_str B_strD___repr__(B_str s) {
         }
     }
 
-    int newbytes = quote_bytes + bs.escaped + 3*bs.non_printable + bs.braces + escape_triple_bytes;
+    int64_t newbytes = (int64_t)quote_bytes + bs.escaped + 3 * (int64_t)bs.non_printable + bs.braces + escape_triple_bytes;
+    // The length fields of a str are ints
+    if (s->nbytes + newbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
 
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
@@ -2007,11 +2013,13 @@ bool B_bytearrayD___bool__(B_bytearray s) {
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
-    int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 14 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    int nbytes = s->nbytes+newbytes;
-    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[11] = '\'';
@@ -2195,11 +2203,14 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
 
 // Shared by bytes.hex and bytearray.hex. The result is built by length; the
 // hex digits are ASCII, so it has as many chars as bytes.
-static B_str hex_from_bytes(unsigned char *data, int nbytes) {
+static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     if (nbytes == 0)
         return null_str;
-    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
-    int len = nbytes * 2;
+    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
+    // which for 1 GiB of data no longer fits the int length fields of a str
+    int64_t len = nbytes * 2;
+    if (len > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
     NEW_UNFILLED_STR(res, len, len);
 
@@ -2207,7 +2218,7 @@ static B_str hex_from_bytes(unsigned char *data, int nbytes) {
     const char hex_digits[] = "0123456789abcdef";
 
     // Convert each byte to two hex digits
-    for (int i = 0; i < nbytes; i++) {
+    for (int64_t i = 0; i < nbytes; i++) {
         unsigned char byte = data[i];
         res->str[i*2] = hex_digits[byte >> 4];     // High nibble
         res->str[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
@@ -3135,11 +3146,13 @@ bool B_bytesD___bool__(B_bytes s) {
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
-    int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 3 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    int nbytes = s->nbytes+newbytes;
-    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[1] = '\'';
@@ -4018,13 +4031,16 @@ B_str B_ascii(B_value v) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
-    int newbytes = 2+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 2 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
     // Every byte from 127 up is escaped, so the result is ASCII and has as
     // many chars as bytes
-    NEW_UNFILLED_STR(res,s->nbytes+newbytes,s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
+    escape_str(res->str + 1, s->str, res->nbytes - 1, s->nbytes, 255, use_single_quotes, !use_single_quotes, false, false);
     if (use_single_quotes) {
         res->str[0] = '\'';
         res->str[res->nbytes-1] = '\'';
