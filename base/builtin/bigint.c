@@ -15,8 +15,8 @@
 #define GC_THREADS 1
 #include "gc.h"
 
-static struct B_BaseException B_bigint_base_requires_str_error =
-    STATIC_EXCEPTION(B_BaseException, "integer type constructor: base argument is only allowed when converting from a str");
+static struct B_ValueError B_bigint_base_requires_str_error =
+    STATIC_EXCEPTION(B_ValueError, "integer type constructor: base argument is only allowed when converting from a str");
 static struct B_ValueError B_bigint_unsupported_atom_error =
     STATIC_EXCEPTION(B_ValueError, "integer type constructor: unsupported atom type");
 static struct B_NotImplementedError B_bigint_complex_not_implemented_error =

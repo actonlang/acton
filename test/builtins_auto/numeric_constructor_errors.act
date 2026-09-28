@@ -7,6 +7,8 @@ def expect_value_error[A](convert: () -> A):
         convert()
     except ValueError:
         return
+    except:
+        raise AssertionError("Expected ValueError for an unsupported numeric conversion, got another exception")
     raise AssertionError("Expected ValueError for an unsupported numeric conversion")
 
 def check_unsupported(a: atom):
@@ -31,6 +33,18 @@ def check_invalid_int_str(s: str):
 def check_invalid_float_str(s: str):
     expect_value_error(lambda: float(s))
 
+def check_base_requires_str(a: atom):
+    expect_value_error(lambda: int(a, 16))
+    expect_value_error(lambda: i32(a, 16))
+    expect_value_error(lambda: i16(a, 16))
+    expect_value_error(lambda: i8(a, 16))
+    expect_value_error(lambda: u64(a, 16))
+    expect_value_error(lambda: u32(a, 16))
+    expect_value_error(lambda: u16(a, 16))
+    expect_value_error(lambda: u8(a, 16))
+    expect_value_error(lambda: u1(a, 16))
+    expect_value_error(lambda: bigint(a, 16))
+
 actor main(env):
     try:
         check_unsupported(OtherAtom())
@@ -43,6 +57,10 @@ actor main(env):
         check_invalid_float_str("")
         check_invalid_float_str("abc")
         check_invalid_float_str("1.5" + chr(0) + "5")
+        check_base_requires_str(5.0)
+        check_base_requires_str(5)
+        expect_value_error(lambda: int(5.0, 16))
+        expect_value_error(lambda: u8(5, 16))
         assert int("123") == 123
         assert int("10", 2) == 2
         assert bigint("123") == bigint(123)
