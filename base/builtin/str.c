@@ -613,30 +613,31 @@ static int get_index(int i, int nchars) {
 
 // Eliminates slice notation in find, index, count and other methods
 // with optional start and end and adds defaults for omitted parameters.
+// As for slice indices, a negative index counts from the end, so -1 is the
+// last position, and indices outside the string are clamped to it. Returns
+// -1 if start is beyond the end.
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = acton_malloc(sizeof(struct B_int));
         *start = toB_int(0);
     } else {
-        int st = fromB_int(*start);
+        int64_t st = fromB_int(*start);
         if (st > nchars) {
             return -1;
         }
         if (st < 0)
-            st += nchars+1;
+            st += nchars;
         st = st < 0 ? 0 : st;
         *start = toB_int(st);
     }
     if (*end==NULL) {
-        *end = acton_malloc(sizeof(struct B_int));
         *end = toB_int(nchars);
     } else {
-        int en = fromB_int(*end);
+        int64_t en = fromB_int(*end);
         if (en > nchars)
             en = nchars;
         else if (en < 0)
-            en += nchars+1;
+            en += nchars;
         en = en < 0 ? 0 : en;
 
         *end = toB_int(en);

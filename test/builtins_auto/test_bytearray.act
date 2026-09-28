@@ -148,6 +148,15 @@ def test_bytearray_replace_negative_count():
             and b == bytearray(b"axyzc")
             and bytearray(b"aXbXc").replace(bytearray(b"X"), bytearray(b""), -2) == bytearray(b"abc"))
 
+def test_bytearray_negative_bounds():
+    # A negative start or end counts from the end, as in a slice
+    s = bytearray(b"abcabc")
+    e = bytearray(b"")
+    print("bytearray with negative bounds: {bytearray(b"abc").count(e, -1)} {s.find(bytearray(b"c"), -2)}")
+    return (bytearray(b"abc").count(e, -1) == 2 and bytearray(b"abc").count(e, 0, -1) == 3
+            and s.find(bytearray(b"c"), -2) == 5 and s.rfind(bytearray(b"a"), -6, -3) == 0
+            and s.startswith(bytearray(b"ca"), -4) and s.endswith(bytearray(b"ab"), 0, -1))
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -525,6 +534,7 @@ tests = {
     "test_bytearray_byte_range": test_bytearray_byte_range,
     "test_bytearray_istitle": test_bytearray_istitle,
     "test_bytearray_replace_negative_count": test_bytearray_replace_negative_count,
+    "test_bytearray_negative_bounds": test_bytearray_negative_bounds,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

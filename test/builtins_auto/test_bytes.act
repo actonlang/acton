@@ -68,6 +68,14 @@ def test_bytes_replace_negative_count():
     return (b"".replace(b"", b"x", -1) == b"x" and b"abc".replace(b"b", b"xyz", -1) == b"axyzc"
             and b"aXbXc".replace(b"X", b"", -2) == b"abc" and b"abc".replace(b"", b"-", -1) == b"-a-b-c-")
 
+def test_bytes_negative_bounds():
+    # A negative start or end counts from the end, as in a slice
+    s = b"abcabc"
+    print("bytes with negative bounds: {b"abc".count(b"", -1)} {b"abc".count(b"", 0, -1)} {s.find(b"c", -2)}")
+    return (b"abc".count(b"", -1) == 2 and b"abc".count(b"", 0, -1) == 3
+            and s.find(b"c", -2) == 5 and s.find(b"c", -4, -1) == 2 and s.rfind(b"a", -6, -3) == 0
+            and s.startswith(b"ca", -4) and s.endswith(b"ab", 0, -1) and not s.endswith(b"c", 0, -1))
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -397,6 +405,7 @@ tests = {
     "test_bytes_contains_range": test_bytes_contains_range,
     "test_bytes_istitle": test_bytes_istitle,
     "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
+    "test_bytes_negative_bounds": test_bytes_negative_bounds,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,

@@ -107,6 +107,18 @@ def test_str_replace_negative_count():
             and "aXbXc".replace("X", "", -2) == "abc" and "abc".replace("", "-", -1) == "-a-b-c-"
             and "abab".replace("ab", "c", -5) == "cc")
 
+def test_str_negative_bounds():
+    # A negative start or end counts from the end, as in a slice
+    s = "abcabc"
+    print("str with negative bounds: {"abc".count("", -1)} {"abc".count("", 0, -1)} {s.find("c", -2)}")
+    return ("abc".count("", -1) == 2 and "abc".count("", 0, -1) == 3
+            and "abc".count("", -10) == 4 and "abc".count("", -1, -2) == 0
+            and s.find("c", -2) == 5 and s.find("c", -4, -1) == 2 and s.rfind("a", -6, -3) == 0
+            and s.count("abc", -3) == 1 and s.index("b", -5) == 1
+            and s.startswith("ca", -4) and s.endswith("ab", 0, -1) and not s.endswith("c", 0, -1)
+            and "é€𝄞".find("𝄞", -1) == 2 and "é€𝄞".count("", -2) == 3
+            and s.find("a", 4294967296) == -1)
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -424,6 +436,7 @@ tests = {
     "test_ascii_quotes_and_length": test_ascii_quotes_and_length,
     "test_chr_surrogates": test_chr_surrogates,
     "test_str_replace_negative_count": test_str_replace_negative_count,
+    "test_str_negative_bounds": test_str_negative_bounds,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
