@@ -219,13 +219,13 @@ B_bytes zlibQ_compress(B_bytes data) {
     // Clean up
     deflateEnd(&stream);
 
-    return actBytesFromCStringNoCopy(output_buffer);
+    return actBytesFromCStringLength((char *)output_buffer, stream.total_out);
 }
 ```
 
 Memory management is always top of mind when writing C, as it the case here. We can allocate memory via the Acton GC-heap malloc or just plain `malloc()` (the non-GC heap, to be explicit). Since `zlibQ_compress` is pure, we have no state leaking out of the function other than via its return value. All return values must be allocated on the Acton GC heap, so we know we must use `acton_malloc` for any value that we return. Any other local variables within the function can use classic malloc, as long as we make sure to explicitly free it up. For class or actor methods, any allocation for class or actor attributes must be performed using the Acton GC malloc, since there is no destructor or similar where a free can be inserted, so using classic malloc would be bound to leak. Also note that in this particular case, we know that the returned bytes value itself is not going to contain any pointers, so by using `acton_malloc_atomic` we can get a chunk of memory that will not be internally scanned by the GC, which saves a bit of time and thus improves GC performance. If we allocate structs that do carry pointers, they must use the normal `acton_malloc()`.
 
-`actBytesFromCStringNoCopy(output_buffer)` takes the `buffer` (already allocated via `acton_malloc_atomic()`) and wraps it up as a boxed value of the type `B_bytes` that we return.
+`actBytesFromCStringLength((char *)output_buffer, stream.total_out)` wraps the buffer (already allocated via `acton_malloc_atomic()`) as a `B_bytes` value without copying it. The explicit length preserves NUL bytes in the compressed data.
 
 Also note how we convert Zlib errors to Acton exceptions where necessary.
 
@@ -293,7 +293,7 @@ B_bytes zlibQ_decompress(B_bytes data) {
     // Clean up
     inflateEnd(&stream);
 
-    return actBytesFromCStringNoCopy(output_buffer);
+    return actBytesFromCStringLength((char *)output_buffer, stream.total_out);
 }
 ```
 
@@ -334,11 +334,25 @@ The length excludes the final terminator; NUL bytes within that length remain
 part of the Acton string. Empty strings and one-byte ASCII strings may reuse
 immutable singleton values.
 
-For bytes, `actBytesFromCStringCopy(s)` and
-`actBytesFromCStringLengthCopy(s, n)` explicitly copy the input. Existing
-`actBytesFromCString` and `actBytesFromCStringLength` still copy during the API
-migration; their `NoCopy` variants share the input. The old string names
-`to$str`, `to_str_len`, and `to_str_noc` also retain their original behaviour.
-Use the explicit `Copy` names wherever independent storage is required, so a
-future change to the bytes defaults does not change the caller's ownership
-contract.
+Bytes follow the same ownership rule: `actBytesFromCString(s)` and
+`actBytesFromCStringLength(s, n)` share immutable input, while
+`actBytesFromCStringCopy(s)` and `actBytesFromCStringLengthCopy(s, n)` copy it.
+Both bytes length variants accept `n` bytes without a terminator and preserve
+embedded NUL. Use them for binary data. The resulting bytes value is not
+NUL-terminated.
+
+The old conversion names have been removed. To preserve a caller's ownership
+contract when migrating:
+
+| Old function | Replacement |
+| --- | --- |
+| `to$str(s)` | `actStrFromCStringCopy(s)` |
+| `to_str_len(s, n)` | `actStrFromCStringLengthCopy(s, n)` |
+| `to_str_noc(s)` | `actStrFromCString(s)` |
+| `to$bytes(s)` | `actBytesFromCStringCopy(s)` |
+| `to$bytesD_len(s, n)` | `actBytesFromCStringLengthCopy(s, n)` |
+| `actBytesFromCStringNoCopy(s)` | `actBytesFromCString(s)` |
+| `actBytesFromCStringLengthNoCopy(s, n)` | `actBytesFromCStringLength(s, n)` |
+
+Existing calls to `actBytesFromCString` and `actBytesFromCStringLength` must
+switch to the corresponding `Copy` variant if they rely on independent storage.

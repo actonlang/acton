@@ -467,7 +467,7 @@ primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "actStrFromCString"
 primToBytearray                     = name "to$bytearray"
-primToBytes                         = name "actBytesFromCStringLengthNoCopy"
+primToBytes                         = name "actBytesFromCStringLength"
 
 tmpV                                = primKW "tmp"
 

@@ -14,22 +14,17 @@ def check():
     # Every entry point validates UTF-8, including truncated codepoints.
     for wire in [b"\xff", b"\xc3", b"\xf0\x9f", b"\xc0\x80",
                  b"\xed\xa0\x80", b"\xf4\x90\x80\x80"]:
-        for mode in range(7):
+        for mode in range(4):
             rejected = False
             try:
                 from_c(wire, mode)
             except ValueError as e:
-                expected = "Unicode decode error"
-                if mode == 4:
-                    expected = "to$str: Unicode decode error"
-                elif mode == 5:
-                    expected = "to_str_noc: Unicode decode error"
-                assert e.error_message == expected
+                assert e.error_message == "Unicode decode error"
                 rejected = True
             assert rejected
 
     # Explicit lengths preserve NUL and validate the bytes after it.
-    for mode in [2, 3, 6]:
+    for mode in [2, 3]:
         text = from_c(b"A\xc3\xa5\x00B", mode)
         assert len(text) == 4
         assert text.encode() == b"A\xc3\xa5\x00B"
@@ -41,7 +36,7 @@ def check():
         assert rejected
 
     # C-string entry points stop at the first NUL.
-    for mode in [0, 1, 4, 5]:
+    for mode in [0, 1]:
         assert from_c(b"before\x00\xff", mode) == "before"
 
 actor main(env):
