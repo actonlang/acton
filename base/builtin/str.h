@@ -1,5 +1,10 @@
 struct B_strG_class;
 
+// The longest str, bytes or bytearray, in bytes. It is far more than any
+// machine has memory for, and small enough that up to 8 lengths of at most
+// this much add up without overflowing an int64_t.
+#define MAX_STR_LEN (INT64_MAX / 8)
+
 struct B_str {
     struct B_strG_class *$class;
     int64_t nbytes;          // length of str in bytes

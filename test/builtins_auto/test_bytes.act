@@ -93,18 +93,6 @@ def test_bytes_negative_bounds():
             and s.startswith(b"ca", -4) and s.endswith(b"ab", 0, -1) and not s.endswith(b"c", 0, -1)
             and b"ab".endswith(b"b", -1) and b"ab".endswith(b"ab", -2) and not b"ab".endswith(b"ab", -1))
 
-def test_bytes_replace_too_long():
-    # A result longer than a bytes can hold raises ValueError: here 65536
-    # bytes each become 65536 bytes, 4 GiB in all
-    s = b"a" * 65536
-    try:
-        r = s.replace(b"a", b"b" * 65536)
-        print("bytes replace gave {len(r)} bytes")
-        return False
-    except ValueError:
-        print("bytes replace with a 4 GiB result raised ValueError")
-        return True
-
 def bytes_too_long(f: () -> bytes) -> bool:
     try:
         r = f()
@@ -114,15 +102,30 @@ def bytes_too_long(f: () -> bytes) -> bool:
         return True
 
 def test_bytes_sizes_too_long():
-    # A result longer than a bytes can hold raises ValueError, instead of the
-    # width or count being cut to an int or the size wrapping around
-    huge = 2**32 + 5
-    big = b"x" * 1048576
-    print("bytes results longer than a bytes can hold")
-    return (bytes_too_long(lambda: b"ab".center(huge)) and bytes_too_long(lambda: b"ab".ljust(huge))
-            and bytes_too_long(lambda: b"ab".rjust(huge)) and bytes_too_long(lambda: b"ab".zfill(huge))
-            and bytes_too_long(lambda: b"ab" * 2**31) and bytes_too_long(lambda: b"".join([big] * 4096))
+    # A result longer than 2**60 - 1 bytes, the longest a bytes can be, raises
+    # ValueError instead of its size wrapping around
+    print("bytes results longer than 2**60 - 1 bytes")
+    return (bytes_too_long(lambda: b"a" * 2**60) and bytes_too_long(lambda: b"ab" * 2**62)
+            and bytes_too_long(lambda: b"ab".center(2**60)) and bytes_too_long(lambda: b"ab".ljust(2**60))
+            and bytes_too_long(lambda: b"ab".rjust(2**60)) and bytes_too_long(lambda: b"ab".zfill(2**60))
+            and bytes_too_long(lambda: b"\t".expandtabs(2**60))
             and b"" * 10**18 == b"" and b"ab" * 3 == b"ababab")
+
+def bytes_out_of_memory(f: () -> bytes) -> bool:
+    try:
+        r = f()
+        print("got bytes of {len(r)} bytes instead of MemoryError")
+        return False
+    except MemoryError:
+        return True
+
+def test_bytes_sizes_out_of_memory():
+    # A result of 2**60 - 1 bytes fits a bytes but not in memory, and raises
+    # MemoryError
+    print("bytes results of 2**60 - 1 bytes")
+    return (bytes_out_of_memory(lambda: b"a" * (2**60 - 1)) and bytes_out_of_memory(lambda: b"ab".center(2**60 - 1))
+            and bytes_out_of_memory(lambda: b"ab".ljust(2**60 - 1)) and bytes_out_of_memory(lambda: b"ab".rjust(2**60 - 1))
+            and bytes_out_of_memory(lambda: b"ab".zfill(2**60 - 1)) and bytes_out_of_memory(lambda: b"\t".expandtabs(2**60 - 1)))
 
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
@@ -455,8 +458,8 @@ tests = {
     "test_bytes_istitle": test_bytes_istitle,
     "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
     "test_bytes_negative_bounds": test_bytes_negative_bounds,
-    "test_bytes_replace_too_long": test_bytes_replace_too_long,
     "test_bytes_sizes_too_long": test_bytes_sizes_too_long,
+    "test_bytes_sizes_out_of_memory": test_bytes_sizes_out_of_memory,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,

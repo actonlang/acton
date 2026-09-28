@@ -120,18 +120,6 @@ def test_str_negative_bounds():
             and s.find("a", 4294967296) == -1
             and "ab".endswith("b", -1) and "aé".endswith("é", -1) and not "ab".endswith("ab", -1))
 
-def test_str_replace_too_long():
-    # A result longer than a str can hold raises ValueError: here 65536 chars
-    # each become 65536 chars, 4 GiB in all
-    s = "a" * 65536
-    try:
-        r = s.replace("a", "b" * 65536)
-        print("str replace gave {len(r)} chars")
-        return False
-    except ValueError:
-        print("str replace with a 4 GiB result raised ValueError")
-        return True
-
 def str_too_long(f: () -> str) -> bool:
     try:
         r = f()
@@ -141,15 +129,30 @@ def str_too_long(f: () -> str) -> bool:
         return True
 
 def test_str_sizes_too_long():
-    # A result longer than a str can hold raises ValueError, instead of the
-    # width or count being cut to an int or the size wrapping around
-    huge = 2**32 + 5
-    big = "x" * 1048576
-    print("str results longer than a str can hold")
-    return (str_too_long(lambda: "ab".center(huge)) and str_too_long(lambda: "ab".ljust(huge))
-            and str_too_long(lambda: "ab".rjust(huge)) and str_too_long(lambda: "ab".zfill(huge))
-            and str_too_long(lambda: "ab" * 2**31) and str_too_long(lambda: "".join([big] * 4096))
+    # A result longer than 2**60 - 1 bytes, the longest a str can be, raises
+    # ValueError instead of its size wrapping around
+    print("str results longer than 2**60 - 1 bytes")
+    return (str_too_long(lambda: "a" * 2**60) and str_too_long(lambda: "ab" * 2**62)
+            and str_too_long(lambda: "ab".center(2**60)) and str_too_long(lambda: "ab".ljust(2**60, "€"))
+            and str_too_long(lambda: "ab".rjust(2**60, "é")) and str_too_long(lambda: "é".zfill(2**60 - 1))
+            and str_too_long(lambda: "\t".expandtabs(2**60))
             and "" * 10**18 == "" and "ab" * 3 == "ababab" and "ab".center(6, "é") == "ééabéé")
+
+def str_out_of_memory(f: () -> str) -> bool:
+    try:
+        r = f()
+        print("got a str of {len(r)} chars instead of MemoryError")
+        return False
+    except MemoryError:
+        return True
+
+def test_str_sizes_out_of_memory():
+    # A result of 2**60 - 1 bytes fits a str but not in memory, and raises
+    # MemoryError
+    print("str results of 2**60 - 1 bytes")
+    return (str_out_of_memory(lambda: "a" * (2**60 - 1)) and str_out_of_memory(lambda: "ab".center(2**60 - 1))
+            and str_out_of_memory(lambda: "ab".ljust(2**60 - 1)) and str_out_of_memory(lambda: "ab".rjust(2**60 - 1))
+            and str_out_of_memory(lambda: "ab".zfill(2**60 - 1)) and str_out_of_memory(lambda: "\t".expandtabs(2**60 - 1)))
 
 def test_empty_str_capitalize():
     result = "".capitalize()
@@ -469,8 +472,8 @@ tests = {
     "test_chr_surrogates": test_chr_surrogates,
     "test_str_replace_negative_count": test_str_replace_negative_count,
     "test_str_negative_bounds": test_str_negative_bounds,
-    "test_str_replace_too_long": test_str_replace_too_long,
     "test_str_sizes_too_long": test_str_sizes_too_long,
+    "test_str_sizes_out_of_memory": test_str_sizes_out_of_memory,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

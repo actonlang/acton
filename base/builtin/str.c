@@ -385,13 +385,22 @@ static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6
 
 static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
+// Allocate the data of a str, bytes or bytearray. Its length can be up to
+// MAX_STR_LEN, far more than there is memory for.
+static unsigned char *alloc_data(size_t nbytes) {
+    unsigned char *p = acton_malloc_atomic(nbytes);
+    if (p == NULL && nbytes > 0)
+        RAISE_EXC(&B_str_allocation_failed_error);
+    return p;
+}
+
 #define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
     assert((nbtes) >= (nchrs));                 \
     nm = acton_malloc(sizeof(struct B_str));    \
     (nm)->$class = &B_strG_methods;             \
     (nm)->nchars = (nchrs);                     \
     (nm)->nbytes = (nbtes);                     \
-    (nm)->str = acton_malloc_atomic((nbtes) + 1); \
+    (nm)->str = alloc_data((size_t)(nbtes) + 1); \
     (nm)->str[(nbtes)] = 0
 
 // bytes and bytearray data is nbytes long and not NUL-terminated; NUL is an
@@ -401,18 +410,21 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
     (nm)->$class = &B_bytearrayG_methods;       \
     (nm)->nbytes = (nbtes);                     \
     (nm)->capacity = (nbtes);                   \
-    (nm)->str = acton_malloc_atomic(nbtes)
+    (nm)->str = alloc_data(nbtes)
 
 #define NEW_UNFILLED_BYTES(nm, nbtes)           \
     nm = acton_malloc(sizeof(struct B_bytes));  \
     (nm)->$class = &B_bytesG_methods;           \
     (nm)->nbytes = (nbtes);                     \
-    (nm)->str = acton_malloc_atomic(nbtes)
+    (nm)->str = alloc_data(nbtes)
 
 // The length of a result is computed in 64 bits and checked with this before
-// allocating it. Results are limited to INT_MAX bytes.
+// allocating it. The terms added up are lengths, which are at most
+// MAX_STR_LEN, and counts and widths checked on their own first, multiplied by
+// at most 4, so the sum can't overflow. A count times a length can, and is
+// checked by division instead.
 static void check_result_len(int64_t nbytes) {
-    if (nbytes > INT_MAX)
+    if (nbytes > MAX_STR_LEN)
         RAISE_EXC(&B_str_too_long_error);
 }
 
@@ -787,14 +799,14 @@ static int64_t expandtabs_bytes(unsigned char *in, int64_t nbytes, int64_t tabsi
         unsigned char c = in[i];
         if (c == '\t') {
             int64_t n = tabsize - col % tabsize;
-            if (n > INT_MAX - len)
+            if (n > MAX_STR_LEN - len)
                 RAISE_EXC(&B_str_expandtabs_too_long_error);
             if (out)
                 memset(out + len, ' ', n);
             len += n;
             col += n;
         } else {
-            if (len == INT_MAX)
+            if (len == MAX_STR_LEN)
                 RAISE_EXC(&B_str_expandtabs_too_long_error);
             if (out)
                 out[len] = c;
@@ -818,7 +830,7 @@ static int64_t expandtabs_str(unsigned char *in, int64_t nbytes, int64_t tabsize
     while (p < end) {
         if (*p == '\t') {
             int64_t n = tabsize - col % tabsize;
-            if (n > INT_MAX - len)
+            if (n > MAX_STR_LEN - len)
                 RAISE_EXC(&B_str_expandtabs_too_long_error);
             if (out)
                 memset(out + len, ' ', n);
@@ -828,7 +840,7 @@ static int64_t expandtabs_str(unsigned char *in, int64_t nbytes, int64_t tabsize
             p++;
         } else {
             int n = byte_length2(*p);
-            if (n > INT_MAX - len)
+            if (n > MAX_STR_LEN - len)
                 RAISE_EXC(&B_str_expandtabs_too_long_error);
             if (out)
                 memcpy(out + len, p, n);
@@ -1003,7 +1015,7 @@ B_str B_strD___repr__(B_str s) {
 }
 
 void B_strD___serialize__(B_str str,$Serial$state state) {
-    int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
+    int64_t nWords = str->nbytes/sizeof($WORD) + 1;     // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,2+nWords,state);
     int64_t nbytes = str->nbytes;                      // We could pack nbytes and nchars in one $WORD,
     memcpy(row->blob,&nbytes,sizeof($WORD));            // but we should think of a better, general approach.
@@ -1024,7 +1036,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     int64_t nchars;
     memcpy(&nchars,this->blob+1,sizeof($WORD));
     res->nchars = nchars;
-    res->str = acton_malloc_atomic(nbytes+1);
+    res->str = alloc_data(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
 }
@@ -1306,17 +1318,12 @@ B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_str nxt;
     int64_t len = lst->length;
-    // The total is checked as it grows, and each part fits an int, so the
-    // sum can't overflow before it is checked
+    // The total is checked as it grows by a part and a separator, so it
+    // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
         nxt = (B_str)lst->data[i];
-        totchars += nxt->nchars;
-        totbytes += nxt->nbytes;
-        check_result_len(totbytes);
-    }
-    if (len > 1) {
-        totchars += (len - 1) * s->nchars;
-        totbytes += (len - 1) * s->nbytes;
+        totchars += nxt->nchars + (i > 0 ? s->nchars : 0);
+        totbytes += nxt->nbytes + (i > 0 ? s->nbytes : 0);
         check_result_len(totbytes);
     }
     B_str res;
@@ -1415,11 +1422,14 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     if (c0 == 0) {
         return s;
     }
-    // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the limit on lengths
-    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    // The result can be far longer than the input. The count times the
+    // growth of each replacement could overflow, so the count is checked
+    // against how many replacements fit instead.
+    int64_t growth = new->nbytes - old->nbytes;
+    if (growth > 0 && c0 > (MAX_STR_LEN - s->nbytes) / growth)
+        RAISE_EXC(&B_str_too_long_error);
+    int64_t nbytes = s->nbytes + c0 * growth;
     int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
-    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nchars, nbytes);
     unsigned char *p = s->str;
@@ -1777,10 +1787,11 @@ B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
     int64_t nval = n->val;
     if (nval <= 0 || a->nbytes == 0)
         return null_str;
-    // The count is checked on its own first, so the product can't overflow
-    check_result_len(nval);
+    // The count times the length could overflow, so the count is checked
+    // against how many copies fit instead
+    if (nval > MAX_STR_LEN / a->nbytes)
+        RAISE_EXC(&B_str_too_long_error);
     int64_t nbytes = a->nbytes * nval;
-    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, a->nchars * nval, nbytes);
     for (int64_t i = 0; i < nval; i++)
@@ -1997,8 +2008,8 @@ static void expand_bytearray(B_bytearray b, int64_t n) {
     while (newcapacity < needed)
         newcapacity <<= 1;
     // Doubling can pass the limit on lengths
-    if (newcapacity > INT_MAX)
-        newcapacity = INT_MAX;
+    if (newcapacity > MAX_STR_LEN)
+        newcapacity = MAX_STR_LEN;
     unsigned char *newstr = b->str == NULL
         ? acton_malloc_atomic(newcapacity)
         : acton_realloc(b->str, newcapacity);
@@ -2028,7 +2039,7 @@ B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
     int64_t len = b->nbytes;
     self->nbytes = len;
     self->capacity = len;
-    self->str = acton_malloc_atomic(len);
+    self->str = alloc_data(len);
     memcpy(self->str,b->str,len);
     return B_None;
 }
@@ -2063,7 +2074,7 @@ B_str B_bytearrayD___repr__(B_bytearray s) {
 }
 
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
-    int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
+    int64_t nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD); // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
     int64_t nbytes = str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
@@ -2081,7 +2092,7 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     res->$class = &B_bytearrayG_methods;
     res->nbytes = nbytes;
     res->capacity = nbytes;
-    res->str = acton_malloc_atomic(nbytes);
+    res->str = alloc_data(nbytes);
     memcpy(res->str,this->blob+1,nbytes);
     return res;
 }
@@ -2188,7 +2199,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
     }
 
     int64_t bytelen = strlen / 2;
-    char *result = acton_malloc_atomic(bytelen);
+    char *result = (char *)alloc_data(bytelen);
 
     for (int64_t i = 0; i < strlen; i += 2) {
         char high = s->str[i];
@@ -2231,8 +2242,7 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
 static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     if (nbytes == 0)
         return null_str;
-    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
-    // which for 1 GiB of data passes the limit on lengths
+    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
     int64_t len = nbytes * 2;
     check_result_len(len);
     B_str res;
@@ -2368,15 +2378,11 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_bytearray nxt;
     int64_t len = lst->length;
-    // The total is checked as it grows, and each part fits an int, so the
-    // sum can't overflow before it is checked
+    // The total is checked as it grows by a part and a separator, so it
+    // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
         nxt = (B_bytearray)lst->data[i];
-        totbytes += nxt->nbytes;
-        check_result_len(totbytes);
-    }
-    if (len > 1) {
-        totbytes += (len - 1) * s->nbytes;
+        totbytes += nxt->nbytes + (i > 0 ? s->nbytes : 0);
         check_result_len(totbytes);
     }
     B_bytearray res;
@@ -2475,10 +2481,13 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
     if (c0 == 0) {
         return B_bytearrayD_copy(s);
     }
-    // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the limit on lengths
-    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    check_result_len(nbytes);
+    // The result can be far longer than the input. The count times the
+    // growth of each replacement could overflow, so the count is checked
+    // against how many replacements fit instead.
+    int64_t growth = new->nbytes - old->nbytes;
+    if (growth > 0 && c0 > (MAX_STR_LEN - s->nbytes) / growth)
+        RAISE_EXC(&B_str_too_long_error);
+    int64_t nbytes = s->nbytes + c0 * growth;
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, nbytes);
     unsigned char *p = s->str;
@@ -3070,10 +3079,11 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
     int64_t nval = n->val;
     if (nval <= 0 || a->nbytes == 0)
         return toB_bytearray("");
-    // The count is checked on its own first, so the product can't overflow
-    check_result_len(nval);
+    // The count times the length could overflow, so the count is checked
+    // against how many copies fit instead
+    if (nval > MAX_STR_LEN / a->nbytes)
+        RAISE_EXC(&B_str_too_long_error);
     int64_t nbytes = a->nbytes * nval;
-    check_result_len(nbytes);
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, nbytes);
     for (int64_t i = 0; i < nval; i++)
@@ -3159,7 +3169,7 @@ B_NoneType B_bytesD___init__(B_bytes self, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
     int len = lst->length;
     self->nbytes = len;
-    self->str = acton_malloc_atomic(len);
+    self->str = alloc_data(len);
     for (int i=0; i< len; i++) {
         int64_t n = fromB_int((B_int)lst->data[i]);
         if (0<=n && n <= 255)
@@ -3199,7 +3209,7 @@ B_str B_bytesD___repr__(B_bytes s) {
 }
 
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
-    int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
+    int64_t nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD); // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTES_ID,1+nWords,state);
     int64_t nbytes = str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
@@ -3215,7 +3225,7 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
     res->nbytes = nbytes;
-    res->str = acton_malloc_atomic(nbytes);
+    res->str = alloc_data(nbytes);
     memcpy(res->str,this->blob+1,nbytes);
     return res;
 }
@@ -3324,7 +3334,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
     }
 
     int64_t bytelen = strlen / 2;
-    char *result = acton_malloc_atomic(bytelen);
+    char *result = (char *)alloc_data(bytelen);
 
     for (int64_t i = 0; i < strlen; i += 2) {
         char high = s->str[i];
@@ -3478,15 +3488,11 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_bytes nxt;
     int64_t len = lst->length;
-    // The total is checked as it grows, and each part fits an int, so the
-    // sum can't overflow before it is checked
+    // The total is checked as it grows by a part and a separator, so it
+    // can't overflow before it is checked
     for (int64_t i = 0; i < len; i++) {
         nxt = (B_bytes)lst->data[i];
-        totbytes += nxt->nbytes;
-        check_result_len(totbytes);
-    }
-    if (len > 1) {
-        totbytes += (len - 1) * s->nbytes;
+        totbytes += nxt->nbytes + (i > 0 ? s->nbytes : 0);
         check_result_len(totbytes);
     }
     B_bytes res;
@@ -3610,10 +3616,13 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     if (c0 == 0) {
         return B_bytesD_copy(s);
     }
-    // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the limit on lengths
-    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    check_result_len(nbytes);
+    // The result can be far longer than the input. The count times the
+    // growth of each replacement could overflow, so the count is checked
+    // against how many replacements fit instead.
+    int64_t growth = new->nbytes - old->nbytes;
+    if (growth > 0 && c0 > (MAX_STR_LEN - s->nbytes) / growth)
+        RAISE_EXC(&B_str_too_long_error);
+    int64_t nbytes = s->nbytes + c0 * growth;
     B_bytes res;
     NEW_UNFILLED_BYTES(res, nbytes);
     unsigned char *p = s->str;
@@ -4041,10 +4050,11 @@ B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
     int64_t nval = n->val;
     if (nval <= 0 || a->nbytes == 0)
         return actBytesFromCStringCopy("");
-    // The count is checked on its own first, so the product can't overflow
-    check_result_len(nval);
+    // The count times the length could overflow, so the count is checked
+    // against how many copies fit instead
+    if (nval > MAX_STR_LEN / a->nbytes)
+        RAISE_EXC(&B_str_too_long_error);
     int64_t nbytes = a->nbytes * nval;
-    check_result_len(nbytes);
     B_bytes res;
     NEW_UNFILLED_BYTES(res, nbytes);
     for (int64_t i = 0; i < nval; i++)
@@ -4194,8 +4204,8 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
     int64_t totchars = 2;  //parens
     int64_t totbytes = 2;
     B_str nxt;
-    // The total is checked as it grows, and each part fits an int, so the
-    // sum can't overflow before it is checked
+    // The total is checked as it grows, so it can't overflow before it is
+    // checked
     for (int64_t i = 0; i < len; i++) {
         nxt = (B_str)elems->data[i];
         totchars += nxt->nchars;

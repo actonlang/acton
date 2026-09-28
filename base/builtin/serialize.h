@@ -39,7 +39,7 @@ $WORD $step_deserialize($Serial$state state);
 void $val_serialize(int class_id, $WORD val, $Serial$state state);
 $WORD $val_deserialize($Serial$state state);
 
-$ROW $add_header(int class_id, int blob_size, $Serial$state state);
+$ROW $add_header(int class_id, int64_t blob_size, $Serial$state state);
 
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 

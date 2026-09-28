@@ -20,6 +20,8 @@ static struct B_ValueError B_serialize_actor_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: cannot serialize actors");
 static struct B_ValueError B_serialize_graph_too_large_error =
     STATIC_EXCEPTION(B_ValueError, "serialize: object graph too large");
+static struct B_ValueError B_serialize_object_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "serialize: object too large");
 static struct B_ValueError B_serialize_truncated_header_error =
     STATIC_EXCEPTION(B_ValueError, "deserialize: truncated row header");
 static struct B_ValueError B_serialize_invalid_blob_size_error =
@@ -89,11 +91,14 @@ struct B_HashableD_WORD *B_HashableD_WORDG_witness = &B_HashableD_WORD_instance;
 
 // small-step functions for (de)serializing the next object /////////////////////////////////////////////////
 
-$ROW $add_header(int class_id, int blob_size, $Serial$state state) {
+$ROW $add_header(int class_id, int64_t blob_size, $Serial$state state) {
+    // A row keeps the size of its blob as an int
+    if (blob_size > INT_MAX)
+        RAISE_EXC(&B_serialize_object_too_large_error);
     $ROW res = acton_malloc(2 * sizeof(int) + (1+blob_size)*sizeof($WORD));
     res->class_id = class_id;
     state->row_no++;
-    res->blob_size = blob_size;
+    res->blob_size = (int)blob_size;
     res->next = NULL;
     $enqueue(state,res);
     return res;
@@ -310,10 +315,10 @@ static B_bytes $rows_to_bytes($ROW row) {
     int64_t size = 0;
     for ($ROW r = row; r; r = r->next)
         size += 2 * (int64_t)sizeof(int) + r->blob_size * (int64_t)sizeof($WORD);
-    if (size > INT_MAX)
+    if (size > MAX_STR_LEN)
         RAISE_EXC(&B_serialize_graph_too_large_error);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res, (int)size);
+    NEW_UNFILLED_BYTES(res, size);
     unsigned char *p = res->str;
     for ($ROW r = row; r; r = r->next) {
         memcpy(p, &r->class_id, sizeof(int));  p += sizeof(int);
