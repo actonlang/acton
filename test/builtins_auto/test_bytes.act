@@ -89,6 +89,25 @@ def test_bytes_replace_too_long():
         print("bytes replace with a 4 GiB result raised ValueError")
         return True
 
+def bytes_too_long(f: () -> bytes) -> bool:
+    try:
+        r = f()
+        print("got bytes of {len(r)} bytes instead of ValueError")
+        return False
+    except ValueError:
+        return True
+
+def test_bytes_sizes_too_long():
+    # A result longer than a bytes can hold raises ValueError, instead of the
+    # width or count being cut to an int or the size wrapping around
+    huge = 2**32 + 5
+    big = b"x" * 1048576
+    print("bytes results longer than a bytes can hold")
+    return (bytes_too_long(lambda: b"ab".center(huge)) and bytes_too_long(lambda: b"ab".ljust(huge))
+            and bytes_too_long(lambda: b"ab".rjust(huge)) and bytes_too_long(lambda: b"ab".zfill(huge))
+            and bytes_too_long(lambda: b"ab" * 2**31) and bytes_too_long(lambda: b"".join([big] * 4096))
+            and b"" * 10**18 == b"" and b"ab" * 3 == b"ababab")
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -420,6 +439,7 @@ tests = {
     "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
     "test_bytes_negative_bounds": test_bytes_negative_bounds,
     "test_bytes_replace_too_long": test_bytes_replace_too_long,
+    "test_bytes_sizes_too_long": test_bytes_sizes_too_long,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,

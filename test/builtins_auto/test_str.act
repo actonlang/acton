@@ -132,6 +132,25 @@ def test_str_replace_too_long():
         print("str replace with a 4 GiB result raised ValueError")
         return True
 
+def str_too_long(f: () -> str) -> bool:
+    try:
+        r = f()
+        print("got a str of {len(r)} chars instead of ValueError")
+        return False
+    except ValueError:
+        return True
+
+def test_str_sizes_too_long():
+    # A result longer than a str can hold raises ValueError, instead of the
+    # width or count being cut to an int or the size wrapping around
+    huge = 2**32 + 5
+    big = "x" * 1048576
+    print("str results longer than a str can hold")
+    return (str_too_long(lambda: "ab".center(huge)) and str_too_long(lambda: "ab".ljust(huge))
+            and str_too_long(lambda: "ab".rjust(huge)) and str_too_long(lambda: "ab".zfill(huge))
+            and str_too_long(lambda: "ab" * 2**31) and str_too_long(lambda: "".join([big] * 4096))
+            and "" * 10**18 == "" and "ab" * 3 == "ababab" and "ab".center(6, "é") == "ééabéé")
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -451,6 +470,7 @@ tests = {
     "test_str_replace_negative_count": test_str_replace_negative_count,
     "test_str_negative_bounds": test_str_negative_bounds,
     "test_str_replace_too_long": test_str_replace_too_long,
+    "test_str_sizes_too_long": test_str_sizes_too_long,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

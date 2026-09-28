@@ -385,29 +385,36 @@ static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6
 
 static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
-#define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    assert(nbtes >= nchrs);                     \
-    nm = acton_malloc(sizeof(struct B_str));           \
-    (nm)->$class = &B_strG_methods;               \
-    (nm)->nchars = nchrs;                       \
-    (nm)->nbytes = nbtes;                       \
-    (nm)->str = acton_malloc_atomic(nbtes + 1);       \
-    (nm)->str[nbtes] = 0
+#define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
+    assert((nbtes) >= (nchrs));                 \
+    nm = acton_malloc(sizeof(struct B_str));    \
+    (nm)->$class = &B_strG_methods;             \
+    (nm)->nchars = (nchrs);                     \
+    (nm)->nbytes = (nbtes);                     \
+    (nm)->str = acton_malloc_atomic((nbtes) + 1); \
+    (nm)->str[(nbtes)] = 0
 
 // bytes and bytearray data is nbytes long and not NUL-terminated; NUL is an
 // ordinary byte.
-#define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
-    nm = acton_malloc(sizeof(struct B_bytearray));     \
-    (nm)->$class = &B_bytearrayG_methods;         \
-    (nm)->nbytes = nbtes;                       \
-    (nm)->capacity = nbtes;                     \
+#define NEW_UNFILLED_BYTEARRAY(nm, nbtes)       \
+    nm = acton_malloc(sizeof(struct B_bytearray)); \
+    (nm)->$class = &B_bytearrayG_methods;       \
+    (nm)->nbytes = (nbtes);                     \
+    (nm)->capacity = (nbtes);                   \
     (nm)->str = acton_malloc_atomic(nbtes)
 
-#define NEW_UNFILLED_BYTES(nm,nbtes)            \
-    nm = acton_malloc(sizeof(struct B_bytes));         \
-    (nm)->$class = &B_bytesG_methods;             \
-    (nm)->nbytes = nbtes;                       \
+#define NEW_UNFILLED_BYTES(nm, nbtes)           \
+    nm = acton_malloc(sizeof(struct B_bytes));  \
+    (nm)->$class = &B_bytesG_methods;           \
+    (nm)->nbytes = (nbtes);                     \
     (nm)->str = acton_malloc_atomic(nbtes)
+
+// The length fields of str, bytes and bytearray are ints. The length of a
+// result is computed in 64 bits and checked with this before allocating it.
+static void check_result_len(int64_t nbytes) {
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
+}
 
 // Conversion to and from C strings
 
@@ -544,9 +551,7 @@ static B_str str_transform(B_str s, transform first, transform rest) {
         p += utf8proc_iterate(p, -1, &cp);
         nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
     }
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars, nbytes);
     p = s->str;
@@ -977,9 +982,7 @@ B_str B_strD___repr__(B_str s) {
     }
 
     int64_t newbytes = (int64_t)quote_bytes + bs.escaped + 3 * (int64_t)bs.non_printable + bs.braces + escape_triple_bytes;
-    // The length fields of a str are ints
-    if (s->nbytes + newbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(s->nbytes + newbytes);
 
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
@@ -1034,34 +1037,36 @@ B_str B_strD_capitalize(B_str s) {
 }
 
 B_str B_strD_center(B_str s, int64_t width, B_str fill) {
-    int wval = width;
     if (!fill)
         fill = space_str;
     if (fill->nchars != 1) {
         RAISE_EXC(&B_str_invalid_center_fill_error);
     }
-    if (wval <= s->nchars) {
+    if (width <= s->nchars) {
         return s;
     }
-    int pad = (wval-s->nchars);
-    int padleft = pad/2; // Below we make use of the fact padright >= padleft.
-    int padright = pad-padleft;
-    int fillbytes = fill->nbytes;
-    int sbytes = s->nbytes;
+    int64_t pad = width - s->nchars;
+    int64_t padleft = pad / 2; // Below we make use of the fact padright >= padleft.
+    int64_t padright = pad - padleft;
+    int64_t fillbytes = fill->nbytes;
+    int64_t sbytes = s->nbytes;
+    // pad is checked on its own first, so pad * fillbytes can't overflow
+    check_result_len(pad);
+    check_result_len(sbytes + pad * fillbytes);
     B_str res;
-    NEW_UNFILLED_STR(res, wval,sbytes+pad*fillbytes);
+    NEW_UNFILLED_STR(res, width, sbytes + pad * fillbytes);
     unsigned char *c = fill->str;
     unsigned char *p = res->str;
-    p += padleft*fillbytes+sbytes;
-    for (int i = 0; i<padright; i++) {
-        for (int j = 0; j < fillbytes; j++)
+    p += padleft * fillbytes + sbytes;
+    for (int64_t i = 0; i < padright; i++) {
+        for (int64_t j = 0; j < fillbytes; j++)
             p[j] = c[j];
         p += fillbytes;
     }
-    p -= padright*fillbytes;
-    memcpy(res->str,p,padleft*fillbytes);
+    p -= padright * fillbytes;
+    memcpy(res->str, p, padleft * fillbytes);
     p -= sbytes;
-    memcpy(p,s->str,sbytes);
+    memcpy(p, s->str, sbytes);
     return res;
 }
 
@@ -1295,33 +1300,37 @@ bool B_strD_isupper(B_str s) {
 }
 
 B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
-    int totchars = 0;
-    int totbytes = 0;
+    int64_t totchars = 0;
+    int64_t totbytes = 0;
     B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
+    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_str nxt;
-    int len = lst->length;
-    for (int i=0; i<len; i++) {
+    int64_t len = lst->length;
+    // The total is checked as it grows, and each part fits an int, so the
+    // sum can't overflow before it is checked
+    for (int64_t i = 0; i < len; i++) {
         nxt = (B_str)lst->data[i];
         totchars += nxt->nchars;
         totbytes += nxt->nbytes;
+        check_result_len(totbytes);
     }
     if (len > 1) {
-        totchars += (len-1) * s->nchars;
-        totbytes += (len-1) * s->nbytes;
+        totchars += (len - 1) * s->nchars;
+        totbytes += (len - 1) * s->nbytes;
+        check_result_len(totbytes);
     }
     B_str res;
-    NEW_UNFILLED_STR(res,totchars,totbytes);
+    NEW_UNFILLED_STR(res, totchars, totbytes);
     if (len > 0) {
         nxt = (B_str)lst->data[0];
         unsigned char *p = res->str;
-        memcpy(p,nxt->str,nxt->nbytes);
+        memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int i=1; i<len; i++) {
+        for (int64_t i = 1; i < len; i++) {
             nxt = (B_str)lst->data[i];
-            memcpy(p,s->str,s->nbytes);
+            memcpy(p, s->str, s->nbytes);
             p += s->nbytes;
-            memcpy(p,nxt->str,nxt->nbytes);
+            memcpy(p, nxt->str, nxt->nbytes);
             p += nxt->nbytes;
         }
     }
@@ -1333,20 +1342,23 @@ B_str B_strD_ljust(B_str s, int64_t width, B_str fill) {
     if (fill->nchars != 1) {
         RAISE_EXC(&B_str_invalid_ljust_fill_error);
     }
-    int wval = width;
-    if (wval <= s->nchars) {
+    if (width <= s->nchars) {
         return s;
     }
-    int pad = (wval-s->nchars);
+    int64_t pad = width - s->nchars;
+    // pad is checked on its own first, so pad * fill->nbytes can't overflow
+    check_result_len(pad);
+    int64_t nbytes = s->nbytes + pad * fill->nbytes;
+    check_result_len(nbytes);
     B_str res;
-    NEW_UNFILLED_STR(res,wval, s->nbytes+pad*fill->nbytes);
+    NEW_UNFILLED_STR(res, width, nbytes);
     unsigned char *c = fill->str;
     unsigned char *p = res->str + s->nbytes;
-    for (int i = 0; i<pad; i++) {
-        for (int j = 0; j < fill->nbytes; j++)
+    for (int64_t i = 0; i < pad; i++) {
+        for (int64_t j = 0; j < fill->nbytes; j++)
             *p++ = c[j];
     }
-    memcpy(res->str,s->str,s->nbytes);
+    memcpy(res->str, s->str, s->nbytes);
     return res;
 }
 
@@ -1407,8 +1419,7 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // in 64 bits and checked against the int length fields of a str
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
     int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nchars, nbytes);
     unsigned char *p = s->str;
@@ -1462,20 +1473,23 @@ B_str B_strD_rjust(B_str s, int64_t width, B_str fill) {
     if (fill->nchars != 1) {
         RAISE_EXC(&B_str_invalid_rjust_fill_error);
     }
-    int wval = width;
-    if (wval <= s->nchars) {
+    if (width <= s->nchars) {
         return s;
     }
-    int pad = (wval-s->nchars);
+    int64_t pad = width - s->nchars;
+    // pad is checked on its own first, so pad * fill->nbytes can't overflow
+    check_result_len(pad);
+    int64_t nbytes = s->nbytes + pad * fill->nbytes;
+    check_result_len(nbytes);
     B_str res;
-    NEW_UNFILLED_STR(res,wval,s->nbytes+pad*fill->nbytes);
+    NEW_UNFILLED_STR(res, width, nbytes);
     unsigned char *c = fill->str;
     unsigned char *p = res->str;
-    for (int i = 0; i<pad; i++) {
-        for (int j = 0; j < fill->nbytes; j++)
+    for (int64_t i = 0; i < pad; i++) {
+        for (int64_t j = 0; j < fill->nbytes; j++)
             *p++ = c[j];
     }
-    memcpy(p,s->str,s->nbytes);
+    memcpy(p, s->str, s->nbytes);
     return res;
 }
 
@@ -1665,22 +1679,24 @@ B_str B_strD_upper(B_str s) {
 }
 
 B_str B_strD_zfill(B_str s, int64_t width) {
-    int wval = width;
-    int fill = wval - s->nchars;
-    if (fill < 0)
+    if (width < s->nchars)
         return s;
+    int64_t fill = width - s->nchars;
+    // fill is checked on its own first, so the sum can't overflow
+    check_result_len(fill);
+    check_result_len(s->nbytes + fill);
     B_str res;
-    NEW_UNFILLED_STR(res,wval,s->nbytes+fill);
+    NEW_UNFILLED_STR(res, width, s->nbytes + fill);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
-    int hassign = (*p=='+' | *p=='-');
+    int64_t hassign = s->nbytes > 0 && (*p == '+' || *p == '-');
     if (hassign) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++)
+    for (int64_t i = 0; i < fill; i++)
         *q++ = '0';
-    memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+    memcpy(res->str + hassign + fill, s->str + hassign, s->nbytes - hassign);
     return res;
 }
 
@@ -1742,10 +1758,12 @@ B_NoneType B_HashableD_strD_hash(B_HashableD_str wit, B_str a, B_hasher h) {
 // B_Times /////////////////////////////////////////////////////////////////////////////////////////////
 
 B_str B_TimesD_strD___add__ (B_TimesD_str wit, B_str s, B_str t) {
+    int64_t nbytes = (int64_t)s->nbytes + t->nbytes;
+    check_result_len(nbytes);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars + t->nchars,s->nbytes + t->nbytes);
-    memcpy(res->str,s->str,s->nbytes);
-    memcpy(res->str+s->nbytes,t->str,t->nbytes);
+    NEW_UNFILLED_STR(res, (int64_t)s->nchars + t->nchars, nbytes);
+    memcpy(res->str, s->str, s->nbytes);
+    memcpy(res->str + s->nbytes, t->str, t->nbytes);
     return res;
 }
 
@@ -1755,15 +1773,17 @@ B_str B_TimesD_strD___zero__ (B_TimesD_str wit) {
 
 B_str B_TimesD_strD___mul__ (B_TimesD_str wit, B_str a, B_int n) {
     int64_t nval = n->val;
-    if (nval <= 0)
+    if (nval <= 0 || a->nbytes == 0)
         return null_str;
-    else {
-        B_str res;
-        NEW_UNFILLED_STR(res,a->nchars * nval, a->nbytes * nval);
-        for (int i=0; i<nval; i++)
-            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
-        return res;
-    }
+    // The count is checked on its own first, so the product can't overflow
+    check_result_len(nval);
+    int64_t nbytes = a->nbytes * nval;
+    check_result_len(nbytes);
+    B_str res;
+    NEW_UNFILLED_STR(res, a->nchars * nval, nbytes);
+    for (int64_t i = 0; i < nval; i++)
+        memcpy(res->str + i * a->nbytes, a->str, a->nbytes);
+    return res;
 }
 
 // Collection ///////////////////////////////////////////////////////////////////////////////////////
@@ -1966,15 +1986,20 @@ unsigned char *fromB_bytearray(B_bytearray b) {
 
 // Auxiliaries
 
-static void expand_bytearray(B_bytearray b,int n) {
-    if (b->capacity >= b->nbytes + n)
+static void expand_bytearray(B_bytearray b, int64_t n) {
+    int64_t needed = (int64_t)b->nbytes + n;
+    if (b->capacity >= needed)
         return;
-    int newcapacity = b->capacity==0 ? 1 : b->capacity;
-    while (newcapacity < b->nbytes+n)
+    check_result_len(needed);
+    int64_t newcapacity = b->capacity == 0 ? 1 : b->capacity;
+    while (newcapacity < needed)
         newcapacity <<= 1;
-    unsigned char *newstr = b->str==NULL
+    // Doubling can pass the limit of the int capacity field
+    if (newcapacity > INT_MAX)
+        newcapacity = INT_MAX;
+    unsigned char *newstr = b->str == NULL
         ? acton_malloc_atomic(newcapacity)
-        : acton_realloc(b->str,newcapacity);
+        : acton_realloc(b->str, newcapacity);
     if (newstr == NULL) {
         RAISE_EXC(&B_str_allocation_failed_error);
     }
@@ -2015,9 +2040,7 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 14 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
@@ -2080,25 +2103,25 @@ B_bytearray B_bytearrayD_center(B_bytearray s, int64_t width, B_bytearray fill) 
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_bytearray_center_fill_error);
     }
-    int wval = width;
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return B_bytearrayD_copy(s);
     }
-    int pad = (wval-s->nbytes);
-    int padleft = pad/2;
-    int padright = pad-padleft;
-    int sbytes = s->nbytes;
+    check_result_len(width);
+    int64_t pad = width - s->nbytes;
+    int64_t padleft = pad / 2;
+    int64_t padright = pad - padleft;
+    int64_t sbytes = s->nbytes;
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res, wval);
+    NEW_UNFILLED_BYTEARRAY(res, width);
     unsigned char c = fill->str[0];
     unsigned char *p = res->str;
-    p += padleft+sbytes;
-    for (int i = 0; i<padright; i++) {
+    p += padleft + sbytes;
+    for (int64_t i = 0; i < padright; i++) {
         p[i] = c;
     }
-    memcpy(res->str,p,padleft);
+    memcpy(res->str, p, padleft);
     p -= sbytes;
-    memcpy(p,s->str,sbytes);
+    memcpy(p, s->str, sbytes);
     return res;
 }
 
@@ -2209,8 +2232,7 @@ static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
     // which for 1 GiB of data no longer fits the int length fields of a str
     int64_t len = nbytes * 2;
-    if (len > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(len);
     B_str res;
     NEW_UNFILLED_STR(res, len, len);
 
@@ -2339,30 +2361,34 @@ bool B_bytearrayD_isupper(B_bytearray s) {
 }
 
 B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
-    int totbytes = 0;
+    int64_t totbytes = 0;
     B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
+    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_bytearray nxt;
-    int len = lst->length;
-    for (int i=0; i<len; i++) {
+    int64_t len = lst->length;
+    // The total is checked as it grows, and each part fits an int, so the
+    // sum can't overflow before it is checked
+    for (int64_t i = 0; i < len; i++) {
         nxt = (B_bytearray)lst->data[i];
         totbytes += nxt->nbytes;
+        check_result_len(totbytes);
     }
     if (len > 1) {
-        totbytes += (len-1) * s->nbytes;
+        totbytes += (len - 1) * s->nbytes;
+        check_result_len(totbytes);
     }
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,totbytes);
+    NEW_UNFILLED_BYTEARRAY(res, totbytes);
     if (len > 0) {
         nxt = (B_bytearray)lst->data[0];
         unsigned char *p = res->str;
-        memcpy(p,nxt->str,nxt->nbytes);
+        memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int i=1; i<len; i++) {
+        for (int64_t i = 1; i < len; i++) {
             nxt = (B_bytearray)lst->data[i];
-            memcpy(p,s->str,s->nbytes);
+            memcpy(p, s->str, s->nbytes);
             p += s->nbytes;
-            memcpy(p,nxt->str,nxt->nbytes);
+            memcpy(p, nxt->str, nxt->nbytes);
             p += nxt->nbytes;
         }
     }
@@ -2372,18 +2398,18 @@ B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
 B_bytearray B_bytearrayD_ljust(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill)
         fill = space_bytearray;
-    int wval = width;
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_bytearray_ljust_fill_error);
     }
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return B_bytearrayD_copy(s);
     }
+    check_result_len(width);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,wval);
-    memcpy(res->str,s->str,s->nbytes);
+    NEW_UNFILLED_BYTEARRAY(res, width);
+    memcpy(res->str, s->str, s->nbytes);
     unsigned char c = fill->str[0];
-    for (int i = s->nbytes; i<wval; i++) {
+    for (int64_t i = s->nbytes; i < width; i++) {
         res->str[i] = c;
     }
     return res;
@@ -2450,8 +2476,7 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
     // The result can be far longer than the input, so its size is computed
     // in 64 bits and checked against the int length field of a bytearray
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, nbytes);
     unsigned char *p = s->str;
@@ -2500,21 +2525,21 @@ int64_t B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int e
 B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
     if (!fill)
         fill = space_bytearray;
-    int wval = width;
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_rjust_fill_error);
     }
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return B_bytearrayD_copy(s);
     }
-    int pad = (wval-s->nbytes);
+    check_result_len(width);
+    int64_t pad = width - s->nbytes;
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,wval);
+    NEW_UNFILLED_BYTEARRAY(res, width);
     unsigned char c = fill->str[0];
-    for (int i = 0; i<pad; i++) {
+    for (int64_t i = 0; i < pad; i++) {
         res->str[i] = c;
     }
-    memcpy(&res->str[pad],s->str,s->nbytes);
+    memcpy(&res->str[pad], s->str, s->nbytes);
     return res;
 }
 
@@ -2692,22 +2717,22 @@ B_bytearray B_bytearrayD_upper(B_bytearray s) {
 }
 
 B_bytearray B_bytearrayD_zfill(B_bytearray s, int64_t width) {
-    int wval = width;
-    int fill = wval - s->nbytes;
-    if (fill < 0)
+    if (width < s->nbytes)
         return B_bytearrayD_copy(s);
+    check_result_len(width);
+    int64_t fill = width - s->nbytes;
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,wval);
+    NEW_UNFILLED_BYTEARRAY(res, width);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
-    int hassign = s->nbytes > 0 && (*p=='+' || *p=='-');
+    int64_t hassign = s->nbytes > 0 && (*p == '+' || *p == '-');
     if (hassign) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++)
+    for (int64_t i = 0; i < fill; i++)
         *q++ = '0';
-    memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+    memcpy(res->str + hassign + fill, s->str + hassign, s->nbytes - hassign);
     return res;
 }
 
@@ -3026,10 +3051,12 @@ int64_t B_CollectionD_SequenceD_bytearrayD___len__ (B_CollectionD_SequenceD_byte
 // Times
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___add__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
+    int64_t nbytes = (int64_t)a->nbytes + b->nbytes;
+    check_result_len(nbytes);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,a->nbytes+b->nbytes);
-    memcpy(res->str,a->str,a->nbytes);
-    memcpy(res->str+a->nbytes,b->str,b->nbytes);
+    NEW_UNFILLED_BYTEARRAY(res, nbytes);
+    memcpy(res->str, a->str, a->nbytes);
+    memcpy(res->str + a->nbytes, b->str, b->nbytes);
     return res;
 }
 
@@ -3038,16 +3065,18 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___zero__ (B_TimesD_SequenceD_bytearray
 }
 
 B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
-    int nval = n->val;
-    if (nval <= 0)
+    int64_t nval = n->val;
+    if (nval <= 0 || a->nbytes == 0)
         return toB_bytearray("");
-    else {
-        B_bytearray res;
-        NEW_UNFILLED_BYTEARRAY(res, a->nbytes * nval);
-        for (int i=0; i<nval; i++)
-            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
-        return res;
-    }
+    // The count is checked on its own first, so the product can't overflow
+    check_result_len(nval);
+    int64_t nbytes = a->nbytes * nval;
+    check_result_len(nbytes);
+    B_bytearray res;
+    NEW_UNFILLED_BYTEARRAY(res, nbytes);
+    for (int64_t i = 0; i < nval; i++)
+        memcpy(res->str + i * a->nbytes, a->str, a->nbytes);
+    return res;
 }
 
 // End of bytearray implementation ////////////////////////////////////////////////
@@ -3148,9 +3177,7 @@ B_str B_bytesD___str__(B_bytes s) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 3 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
@@ -3204,29 +3231,29 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
 }
 
 B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
-    int wval = width;
     if (!fill) fill = actBytesFromCStringCopy(" ");
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_bytes_center_fill_error);
     }
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return s;
     }
-    int pad = (wval-s->nbytes);
-    int padleft = pad/2;
-    int padright = pad-padleft;
-    int sbytes = s->nbytes;
+    check_result_len(width);
+    int64_t pad = width - s->nbytes;
+    int64_t padleft = pad / 2;
+    int64_t padright = pad - padleft;
+    int64_t sbytes = s->nbytes;
     B_bytes res;
-    NEW_UNFILLED_BYTES(res, wval);
+    NEW_UNFILLED_BYTES(res, width);
     unsigned char c = fill->str[0];
     unsigned char *p = res->str;
-    p += padleft+sbytes;
-    for (int i = 0; i<padright; i++) {
+    p += padleft + sbytes;
+    for (int64_t i = 0; i < padright; i++) {
         p[i] = c;
     }
-    memcpy(res->str,p,padleft);
+    memcpy(res->str, p, padleft);
     p -= sbytes;
-    memcpy(p,s->str,sbytes);
+    memcpy(p, s->str, sbytes);
     return res;
 }
 
@@ -3444,30 +3471,34 @@ bool B_bytesD_isupper(B_bytes s) {
 }
 
 B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
-    int totbytes = 0;
+    int64_t totbytes = 0;
     B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2,wit,iter);
+    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
     B_bytes nxt;
-    int len = lst->length;
-    for (int i=0; i<len; i++) {
+    int64_t len = lst->length;
+    // The total is checked as it grows, and each part fits an int, so the
+    // sum can't overflow before it is checked
+    for (int64_t i = 0; i < len; i++) {
         nxt = (B_bytes)lst->data[i];
         totbytes += nxt->nbytes;
+        check_result_len(totbytes);
     }
     if (len > 1) {
-        totbytes += (len-1) * s->nbytes;
+        totbytes += (len - 1) * s->nbytes;
+        check_result_len(totbytes);
     }
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,totbytes);
+    NEW_UNFILLED_BYTES(res, totbytes);
     if (len > 0) {
         nxt = (B_bytes)lst->data[0];
         unsigned char *p = res->str;
-        memcpy(p,nxt->str,nxt->nbytes);
+        memcpy(p, nxt->str, nxt->nbytes);
         p += nxt->nbytes;
-        for (int i=1; i<len; i++) {
+        for (int64_t i = 1; i < len; i++) {
             nxt = (B_bytes)lst->data[i];
-            memcpy(p,s->str,s->nbytes);
+            memcpy(p, s->str, s->nbytes);
             p += s->nbytes;
-            memcpy(p,nxt->str,nxt->nbytes);
+            memcpy(p, nxt->str, nxt->nbytes);
             p += nxt->nbytes;
         }
     }
@@ -3477,18 +3508,18 @@ B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
 B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
     if (!fill)
         fill = space_bytes;
-    int wval = width;
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_bytes_ljust_fill_error);
     }
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return B_bytesD_copy(s);
     }
+    check_result_len(width);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,wval);
-    memcpy(res->str,s->str,s->nbytes);
+    NEW_UNFILLED_BYTES(res, width);
+    memcpy(res->str, s->str, s->nbytes);
     unsigned char c = fill->str[0];
-    for (int i = s->nbytes; i<wval; i++) {
+    for (int64_t i = s->nbytes; i < width; i++) {
         res->str[i] = c;
     }
     return res;
@@ -3580,8 +3611,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     // The result can be far longer than the input, so its size is computed
     // in 64 bits and checked against the int length field of a bytes
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_bytes res;
     NEW_UNFILLED_BYTES(res, nbytes);
     unsigned char *p = s->str;
@@ -3633,18 +3663,18 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
     if (fill->nbytes != 1) {
         RAISE_EXC(&B_str_invalid_rjust_fill_error);
     }
-    int wval = width;
-    if (wval <= s->nbytes) {
+    if (width <= s->nbytes) {
         return B_bytesD_copy(s);
     }
-    int pad = (wval-s->nbytes);
+    check_result_len(width);
+    int64_t pad = width - s->nbytes;
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,wval);
+    NEW_UNFILLED_BYTES(res, width);
     unsigned char c = fill->str[0];
-    for (int i = 0; i<pad; i++) {
+    for (int64_t i = 0; i < pad; i++) {
         res->str[i] = c;
     }
-    memcpy(&res->str[pad],s->str,s->nbytes);
+    memcpy(&res->str[pad], s->str, s->nbytes);
     return res;
 }
 
@@ -3823,22 +3853,22 @@ B_bytes B_bytesD_upper(B_bytes s) {
 }
 
 B_bytes B_bytesD_zfill(B_bytes s, int64_t width) {
-    int wval = width;
-    int fill = wval - s->nbytes;
-    if (fill < 0)
+    if (width < s->nbytes)
         return B_bytesD_copy(s);
+    check_result_len(width);
+    int64_t fill = width - s->nbytes;
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,wval);
+    NEW_UNFILLED_BYTES(res, width);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
-    int hassign = s->nbytes > 0 && (*p=='+' || *p=='-');
+    int64_t hassign = s->nbytes > 0 && (*p == '+' || *p == '-');
     if (hassign) {
         *q = *p;
         q++;
     }
-    for (int i=0; i < fill; i++)
+    for (int64_t i = 0; i < fill; i++)
         *q++ = '0';
-    memcpy(res->str+hassign+fill,s->str+hassign,s->nbytes-hassign);
+    memcpy(res->str + hassign + fill, s->str + hassign, s->nbytes - hassign);
     return res;
 }
 
@@ -3992,10 +4022,12 @@ B_bytes B_ISliceableD_bytesD___getslice__ (B_ISliceableD_bytes wit, B_bytes str,
 
 
 B_bytes B_TimesD_bytesD___add__ (B_TimesD_bytes wit, B_bytes s, B_bytes t) {
+    int64_t nbytes = (int64_t)s->nbytes + t->nbytes;
+    check_result_len(nbytes);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,s->nbytes + t->nbytes);
-    memcpy(res->str,s->str,s->nbytes);
-    memcpy(res->str+s->nbytes,t->str,t->nbytes);
+    NEW_UNFILLED_BYTES(res, nbytes);
+    memcpy(res->str, s->str, s->nbytes);
+    memcpy(res->str + s->nbytes, t->str, t->nbytes);
     return res;
 }
 
@@ -4005,15 +4037,17 @@ B_bytes B_TimesD_bytesD___zero__ (B_TimesD_bytes wit) {
 
 B_bytes B_TimesD_bytesD___mul__ (B_TimesD_bytes wit, B_bytes a, B_int n) {
     int64_t nval = n->val;
-    if (nval <= 0)
+    if (nval <= 0 || a->nbytes == 0)
         return actBytesFromCStringCopy("");
-    else {
-        B_bytes res;
-        NEW_UNFILLED_BYTES(res, a->nbytes * nval);
-        for (int i=0; i<nval; i++)
-            memcpy(res->str + i*a->nbytes,a->str,a->nbytes);
-        return res;
-    }
+    // The count is checked on its own first, so the product can't overflow
+    check_result_len(nval);
+    int64_t nbytes = a->nbytes * nval;
+    check_result_len(nbytes);
+    B_bytes res;
+    NEW_UNFILLED_BYTES(res, nbytes);
+    for (int64_t i = 0; i < nval; i++)
+        memcpy(res->str + i * a->nbytes, a->str, a->nbytes);
+    return res;
 }
 
 // Hashable
@@ -4033,9 +4067,7 @@ B_str B_ascii(B_value v) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 2 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     // Every byte from 127 up is escaped, so the result is ASCII and has as
     // many chars as bytes
@@ -4156,21 +4188,25 @@ int64_t B_ord(B_str c) {
 
 B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
     char *s = ", ";
-    int len = elems->length;
-    int totchars = 2;  //parens
-    int totbytes = 2;
+    int64_t len = elems->length;
+    int64_t totchars = 2;  //parens
+    int64_t totbytes = 2;
     B_str nxt;
-    for (int i=0; i<len; i++) {
+    // The total is checked as it grows, and each part fits an int, so the
+    // sum can't overflow before it is checked
+    for (int64_t i = 0; i < len; i++) {
         nxt = (B_str)elems->data[i];
         totchars += nxt->nchars;
         totbytes += nxt->nbytes;
+        check_result_len(totbytes);
     }
     if (len > 1) {
-        totchars += (len-1) * 2; // 2 is length of ", "
-        totbytes += (len-1) * 2;
+        totchars += (len - 1) * 2; // 2 is length of ", "
+        totbytes += (len - 1) * 2;
+        check_result_len(totbytes);
     }
     B_str res;
-    NEW_UNFILLED_STR(res,totchars,totbytes);
+    NEW_UNFILLED_STR(res, totchars, totbytes);
     res->str[0] = lpar;
     res->str[totbytes-1] = rpar;
     if (len > 0) {
