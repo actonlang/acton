@@ -1986,15 +1986,20 @@ unsigned char *fromB_bytearray(B_bytearray b) {
 
 // Auxiliaries
 
-static void expand_bytearray(B_bytearray b,int n) {
-    if (b->capacity >= b->nbytes + n)
+static void expand_bytearray(B_bytearray b, int64_t n) {
+    int64_t needed = (int64_t)b->nbytes + n;
+    if (b->capacity >= needed)
         return;
-    int newcapacity = b->capacity==0 ? 1 : b->capacity;
-    while (newcapacity < b->nbytes+n)
+    check_result_len(needed);
+    int64_t newcapacity = b->capacity == 0 ? 1 : b->capacity;
+    while (newcapacity < needed)
         newcapacity <<= 1;
-    unsigned char *newstr = b->str==NULL
+    // Doubling can pass the limit of the int capacity field
+    if (newcapacity > INT_MAX)
+        newcapacity = INT_MAX;
+    unsigned char *newstr = b->str == NULL
         ? acton_malloc_atomic(newcapacity)
-        : acton_realloc(b->str,newcapacity);
+        : acton_realloc(b->str, newcapacity);
     if (newstr == NULL) {
         RAISE_EXC(&B_str_allocation_failed_error);
     }
