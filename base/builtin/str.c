@@ -409,6 +409,13 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
     (nm)->nbytes = (nbtes);                     \
     (nm)->str = acton_malloc_atomic(nbtes)
 
+// The length fields of str, bytes and bytearray are ints. The length of a
+// result is computed in 64 bits and checked with this before allocating it.
+static void check_result_len(int64_t nbytes) {
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
+}
+
 // Conversion to and from C strings
 
 // Count Unicode characters within the supplied byte range, including NUL.
@@ -544,9 +551,7 @@ static B_str str_transform(B_str s, transform first, transform rest) {
         p += utf8proc_iterate(p, -1, &cp);
         nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
     }
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars, nbytes);
     p = s->str;
@@ -977,9 +982,7 @@ B_str B_strD___repr__(B_str s) {
     }
 
     int64_t newbytes = (int64_t)quote_bytes + bs.escaped + 3 * (int64_t)bs.non_printable + bs.braces + escape_triple_bytes;
-    // The length fields of a str are ints
-    if (s->nbytes + newbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(s->nbytes + newbytes);
 
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
@@ -1407,8 +1410,7 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // in 64 bits and checked against the int length fields of a str
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
     int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nchars, nbytes);
     unsigned char *p = s->str;
@@ -2015,9 +2017,7 @@ B_str B_bytearrayD___str__(B_bytearray s) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 14 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
@@ -2209,8 +2209,7 @@ static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
     // which for 1 GiB of data no longer fits the int length fields of a str
     int64_t len = nbytes * 2;
-    if (len > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(len);
     B_str res;
     NEW_UNFILLED_STR(res, len, len);
 
@@ -2450,8 +2449,7 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
     // The result can be far longer than the input, so its size is computed
     // in 64 bits and checked against the int length field of a bytearray
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, nbytes);
     unsigned char *p = s->str;
@@ -3148,9 +3146,7 @@ B_str B_bytesD___str__(B_bytes s) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 3 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
@@ -3580,8 +3576,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     // The result can be far longer than the input, so its size is computed
     // in 64 bits and checked against the int length field of a bytes
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_bytes res;
     NEW_UNFILLED_BYTES(res, nbytes);
     unsigned char *p = s->str;
@@ -4033,9 +4028,7 @@ B_str B_ascii(B_value v) {
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
     int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
     int64_t nbytes = (int64_t)s->nbytes + 2 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
-    // The length fields of a str are ints
-    if (nbytes > INT_MAX)
-        RAISE_EXC(&B_str_too_long_error);
+    check_result_len(nbytes);
     B_str res;
     // Every byte from 127 up is escaped, so the result is ASCII and has as
     // many chars as bytes
