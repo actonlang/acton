@@ -4,8 +4,8 @@ const acton = @import("acton.zig");
 const gc = @import("rts/gc.zig");
 
 // Both base64 functions build their result with acton.new_bytes so that it
-// looks exactly like bytes built by the C runtime: NUL-terminated payload,
-// and a real (non-dangling) buffer even when the output is empty.
+// looks exactly like bytes built by the C runtime, with a real (non-dangling)
+// buffer even when the output is empty.
 export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const encoder = std.base64.standard.Encoder;
     // For possible Unicode input, bytes and chars may not be 1:1
@@ -19,7 +19,7 @@ export fn base64Q_encode(data: *acton.bytes) callconv(.c) *acton.bytes {
 
 export fn base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
     const decoder = std.base64.standard.Decoder;
-    // Convert null-terminated string to slice for decoder
+    // Slice the input by its length for the decoder
     const data_len: usize = @intCast(data.nbytes);
     const data_slice = data.str[0..data_len];
     // And then compute the exact number of bytes we need to decode, without padding

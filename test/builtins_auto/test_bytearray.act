@@ -461,6 +461,41 @@ def test_bytearray_hex_exact_length():
                 return False
     return True
 
+def test_bytearray_mutate_nul():
+    # Growing and shrinking a bytearray keeps exactly its bytes, NUL included
+    ba = bytearray(bytes([0, 1]))
+    ba.insert(1, 0)
+    ba.append(0)
+    ba.insert(0, 2)
+    del ba[1:3]
+    ba.append(3)
+    print("bytearray insert, append and del with NUL bytes: {ba}")
+    return ba == bytearray(bytes([2, 1, 0, 3])) and len(ba) == 4
+
+def test_bytearray_splitlines_trailing_cr():
+    result = bytearray(b"a\rb\r").splitlines(True)
+    print("bytearray(b'a\\rb\\r').splitlines(True): {result}")
+    return result == [bytearray(b"a\r"), bytearray(b"b\r")]
+
+def test_bytearray_serialize():
+    # Serialization stores exactly nbytes bytes, also for lengths that fill
+    # whole words and for data with NUL bytes
+    for n in [0, 1, 7, 8, 9, 15, 16, 17, 64]:
+        ba = bytearray(bytes([i % 3 for i in range(n)]))
+        restored = deserialize(serialize(ba))
+        if isinstance(restored, bytearray):
+            if restored != ba:
+                print("bytearray of {n} bytes changed by serialization: {restored}")
+                return False
+            restored.append(7)
+            if len(restored) != n + 1 or restored[n] != 7:
+                print("deserialized bytearray of {n} bytes cannot grow")
+                return False
+        else:
+            print("bytearray of {n} bytes did not deserialize as a bytearray")
+            return False
+    return True
+
 def test_bytearray_from_hex():
     result = bytearray.from_hex("deadbeef").hex()
     print("bytearray.from_hex('deadbeef').hex(): {result}")
@@ -527,6 +562,9 @@ tests = {
     "test_bytearray_endswith_nul": test_bytearray_endswith_nul,
     "test_bytearray_hex": test_bytearray_hex,
     "test_bytearray_hex_exact_length": test_bytearray_hex_exact_length,
+    "test_bytearray_mutate_nul": test_bytearray_mutate_nul,
+    "test_bytearray_splitlines_trailing_cr": test_bytearray_splitlines_trailing_cr,
+    "test_bytearray_serialize": test_bytearray_serialize,
     "test_bytearray_from_hex": test_bytearray_from_hex,
     "test_bytearray_lower_upper": test_bytearray_lower_upper,
     "test_bytearray_capitalize": test_bytearray_capitalize,
