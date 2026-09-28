@@ -307,9 +307,9 @@ $Serializable $deserialize_file(char *file) {
 // blob_size words of blob data. The in-memory `next` pointer is never written.
 
 static B_bytes $rows_to_bytes($ROW row) {
-    long size = 0;
+    int64_t size = 0;
     for ($ROW r = row; r; r = r->next)
-        size += 2 * sizeof(int) + (long)r->blob_size * sizeof($WORD);
+        size += 2 * (int64_t)sizeof(int) + r->blob_size * (int64_t)sizeof($WORD);
     if (size > INT_MAX)
         RAISE_EXC(&B_serialize_graph_too_large_error);
     B_bytes res;
@@ -318,7 +318,7 @@ static B_bytes $rows_to_bytes($ROW row) {
     for ($ROW r = row; r; r = r->next) {
         memcpy(p, &r->class_id, sizeof(int));  p += sizeof(int);
         memcpy(p, &r->blob_size, sizeof(int)); p += sizeof(int);
-        long blob_bytes = (long)r->blob_size * sizeof($WORD);
+        int64_t blob_bytes = r->blob_size * (int64_t)sizeof($WORD);
         memcpy(p, r->blob, blob_bytes);        p += blob_bytes;
     }
     return res;
@@ -326,10 +326,10 @@ static B_bytes $rows_to_bytes($ROW row) {
 
 static $ROW $bytes_to_rows(B_bytes data) {
     unsigned char *p = data->str;
-    long remaining = data->nbytes;
+    int64_t remaining = data->nbytes;
     struct $ROWLISTHEADER header = {NULL, NULL};
     while (remaining > 0) {
-        if (remaining < (long)(2 * sizeof(int)))
+        if (remaining < 2 * (int64_t)sizeof(int))
             RAISE_EXC(&B_serialize_truncated_header_error);
         int class_id, blob_size;
         memcpy(&class_id, p, sizeof(int));  p += sizeof(int);
@@ -337,10 +337,10 @@ static $ROW $bytes_to_rows(B_bytes data) {
         remaining -= 2 * sizeof(int);
         if (blob_size < 0)
             RAISE_EXC(&B_serialize_invalid_blob_size_error);
-        long blob_bytes = (long)blob_size * sizeof($WORD);
+        int64_t blob_bytes = blob_size * (int64_t)sizeof($WORD);
         if (remaining < blob_bytes)
             RAISE_EXC(&B_serialize_truncated_data_error);
-        $ROW r = acton_malloc(2 * sizeof(int) + ((long)blob_size + 1) * sizeof($WORD));
+        $ROW r = acton_malloc(2 * sizeof(int) + ((size_t)blob_size + 1) * sizeof($WORD));
         r->next = NULL;
         r->class_id = class_id;
         r->blob_size = blob_size;

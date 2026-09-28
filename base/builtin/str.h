@@ -2,8 +2,8 @@ struct B_strG_class;
 
 struct B_str {
     struct B_strG_class *$class;
-    int nbytes;              // length of str in bytes
-    int nchars;              // length of str in Unicode chars
+    int64_t nbytes;          // length of str in bytes
+    int64_t nchars;          // length of str in Unicode chars
     unsigned char *str;      // str is UTF-8 encoded.
 };
 
@@ -16,13 +16,13 @@ struct B_str {
 // Empty strings and one-byte ASCII strings may reuse immutable singletons.
 B_str actStrFromCString(const char *str);
 B_str actStrFromCStringCopy(const char *str);
-B_str actStrFromCStringLength(const char *str, int nbytes);
-B_str actStrFromCStringLengthCopy(const char *str, int nbytes);
+B_str actStrFromCStringLength(const char *str, int64_t nbytes);
+B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes);
 
 // Compatibility names. Preserve their original copying behaviour until
 // downstream callers have migrated to the explicit APIs above.
 B_str to$str(char *str);                         // Copies.
-B_str to_str_len(const char *str, int nbytes);   // Copies; preserves embedded NUL.
+B_str to_str_len(const char *str, int64_t nbytes);   // Copies; preserves embedded NUL.
 B_str to_str_noc(char *str);                     // Wraps the input without copying.
 B_str toB_str(char *str);
 
@@ -33,11 +33,11 @@ B_str $FORMAT(const char *format, ...);
 
 // Find byte position in text from char position.
 // Assume i is a valid char index in text
-int $byte_no(B_str text, int i);
+int64_t $byte_no(B_str text, int64_t i);
 
 // Find char position in text from byte position.
 // Assume that i is first byte of a char in text.
-int $char_no(B_str text, int i);
+int64_t $char_no(B_str text, int64_t i);
 
 // Iterators over str's ///////////////////////////////////////////////////////
 
@@ -59,7 +59,7 @@ struct B_IteratorD_strG_class {
 struct B_IteratorD_str {
     struct B_IteratorD_strG_class *$class;
     B_str src;
-    int nxt;
+    int64_t nxt;
 };
 
 extern struct  B_IteratorD_strG_class  B_IteratorD_strG_methods;
@@ -71,9 +71,9 @@ B_IteratorD_str B_IteratorD_strG_new(B_str);
 
 struct B_bytearray {
     struct B_bytearrayG_class *$class;
-    int nbytes;
+    int64_t nbytes;
     unsigned char *str;      // nbytes bytes, not NUL-terminated
-    int capacity;
+    int64_t capacity;
 };
 
  
@@ -100,7 +100,7 @@ struct B_IteratorD_bytearrayG_class {
 struct B_IteratorD_bytearray {
     struct B_IteratorD_bytearrayG_class *$class;
     B_bytearray src;
-    int nxt;
+    int64_t nxt;
 };
 
 extern struct  B_IteratorD_bytearrayG_class  B_IteratorD_bytearrayG_methods;
@@ -111,24 +111,24 @@ B_IteratorD_bytearray B_IteratorD_bytearrayG_new(B_bytearray);
 
 struct B_bytes {
     struct B_bytesG_class *$class;
-    int nbytes;
+    int64_t nbytes;
     unsigned char *str;      // nbytes bytes, not NUL-terminated
 };
 
 // Copy into independent storage. LengthCopy preserves embedded NUL and does
 // not require a terminator; the count excludes any final terminator.
 B_bytes actBytesFromCStringCopy(const char *str);
-B_bytes actBytesFromCStringLengthCopy(const char *str, int len);
+B_bytes actBytesFromCStringLengthCopy(const char *str, int64_t len);
 
 // Existing APIs retain their behaviour during the downstream migration:
 // the unadorned names still copy. NoCopy requires immutable storage that
 // remains alive for the result's lifetime.
 B_bytes actBytesFromCString(char *str);
 B_bytes actBytesFromCStringNoCopy(char *str);
-B_bytes actBytesFromCStringLength(char *str, int len);
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int length);
+B_bytes actBytesFromCStringLength(char *str, int64_t len);
+B_bytes actBytesFromCStringLengthNoCopy(char *str, int64_t length);
 B_bytes to$bytes(char *str);
-B_bytes to$bytesD_len(char *str, int len);
+B_bytes to$bytesD_len(char *str, int64_t len);
 char *fromB_bytes(B_bytes b);
 
 
@@ -153,7 +153,7 @@ struct B_IteratorD_bytesG_class {
 struct B_IteratorD_bytes {
     struct B_IteratorD_bytesG_class *$class;
     B_bytes src;
-    int nxt;
+    int64_t nxt;
 };
 
 extern struct  B_IteratorD_bytesG_class  B_IteratorD_bytesG_methods;

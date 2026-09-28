@@ -409,8 +409,8 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
     (nm)->nbytes = (nbtes);                     \
     (nm)->str = acton_malloc_atomic(nbtes)
 
-// The length fields of str, bytes and bytearray are ints. The length of a
-// result is computed in 64 bits and checked with this before allocating it.
+// The length of a result is computed in 64 bits and checked with this before
+// allocating it. Results are limited to INT_MAX bytes.
 static void check_result_len(int64_t nbytes) {
     if (nbytes > INT_MAX)
         RAISE_EXC(&B_str_too_long_error);
@@ -419,10 +419,10 @@ static void check_result_len(int64_t nbytes) {
 // Conversion to and from C strings
 
 // Count Unicode characters within the supplied byte range, including NUL.
-static int str_count_chars(const char *str, int nbytes, B_ValueError error) {
+static int64_t str_count_chars(const char *str, int64_t nbytes, B_ValueError error) {
     const unsigned char *p = (const unsigned char *)str;
     const unsigned char *end = p + nbytes;
-    int nchars = nbytes;
+    int64_t nchars = nbytes;
     while (p < end) {
         if (*p < 0x80) {
             p++;
@@ -440,17 +440,17 @@ static int str_count_chars(const char *str, int nbytes, B_ValueError error) {
     return nchars;
 }
 
-static B_str str_from_c(const char *str, int nbytes, bool copy, B_ValueError error) {
+static B_str str_from_c(const char *str, int64_t nbytes, bool copy, B_ValueError error) {
     if (nbytes == 0)
         return null_str;
     if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[(unsigned char)str[0]];
 
-    int nchars = str_count_chars(str, nbytes, error);
+    int64_t nchars = str_count_chars(str, nbytes, error);
     B_str res;
     if (copy) {
-        NEW_UNFILLED_STR(res,nchars,nbytes);
-        memcpy(res->str,str,nbytes);
+        NEW_UNFILLED_STR(res, nchars, nbytes);
+        memcpy(res->str, str, nbytes);
     } else {
         res = acton_malloc(sizeof(struct B_str));
         res->$class = &B_strG_methods;
@@ -469,11 +469,11 @@ B_str actStrFromCStringCopy(const char *str) {
     return actStrFromCStringLengthCopy(str, strlen(str));
 }
 
-B_str actStrFromCStringLength(const char *str, int nbytes) {
+B_str actStrFromCStringLength(const char *str, int64_t nbytes) {
     return str_from_c(str, nbytes, false, &B_str_invalid_utf8_error);
 }
 
-B_str actStrFromCStringLengthCopy(const char *str, int nbytes) {
+B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes) {
     return str_from_c(str, nbytes, true, &B_str_invalid_utf8_error);
 }
 
@@ -482,13 +482,13 @@ B_str to$str(char *str) {
     return str_from_c(str, strlen(str), true, &B_str_invalid_utf8_copy_error);
 }
 
-B_str to_str_len(const char *str, int nbytes) {
+B_str to_str_len(const char *str, int64_t nbytes) {
     return actStrFromCStringLengthCopy(str, nbytes);
 }
 
 B_str to_str_noc(char *str) {
-    int nbytes = strlen(str);
-    int nchars = str_count_chars(str, nbytes, &B_str_invalid_utf8_nocopy_error);
+    int64_t nbytes = strlen(str);
+    int64_t nchars = str_count_chars(str, nbytes, &B_str_invalid_utf8_nocopy_error);
     B_str res = acton_malloc(sizeof(struct B_str));
     res->$class = &B_strG_methods;
     res->nbytes = nbytes;
@@ -526,9 +526,9 @@ static int byte_length2(unsigned char c) {
 }
 
 // #chars in a byte range of valid UTF-8: the bytes that start a char
-static int count_chars(unsigned char *p, int nbytes) {
-    int n = 0;
-    for (int i = 0; i < nbytes; i++)
+static int64_t count_chars(unsigned char *p, int64_t nbytes) {
+    int64_t n = 0;
+    for (int64_t i = 0; i < nbytes; i++)
         n += (p[i] & 0xc0) != 0x80;
     return n;
 }
@@ -565,11 +565,11 @@ static B_str str_transform(B_str s, transform first, transform rest) {
 
 // Find char position in text from byte position.
 // Assume that i is first byte of a char in text.
-int $char_no(B_str text,int i) {
+int64_t $char_no(B_str text, int64_t i) {
     if (text->nbytes == text->nchars) // ASCII string
         return i;
-    int res = 0;
-    int k=0;
+    int64_t res = 0;
+    int64_t k=0;
     unsigned char *t = text->str;
     while (k<i) {
         k += byte_length2(t[k]);
@@ -578,15 +578,15 @@ int $char_no(B_str text,int i) {
     return res;
 }
 
-static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
+static unsigned char *skip_chars(unsigned char* start, int64_t n, int isascii) {
     unsigned char *res = start;
     if (isascii)
         return start+n;
     if (n >= 0) {
-        for (int i=0; i<n; i++)
+        for (int64_t i=0; i<n; i++)
             res += byte_length2(*res);
     } else {
-        for (int i= 0; i<-n; i++) {
+        for (int64_t i= 0; i<-n; i++) {
             res--;
             while (*res >> 6 == 2) res--;
         }
@@ -597,18 +597,18 @@ static unsigned char *skip_chars(unsigned char* start, int n, int isascii) {
 
 // Find byte position in text from char position.
 // Assume i is a valid char index in text
-int $byte_no(B_str text, int i) {
+int64_t $byte_no(B_str text, int64_t i) {
     if (text->nbytes == text->nchars) // ASCII string
         return i;
-    int res = 0;
+    int64_t res = 0;
     unsigned char *t = text->str;
-    for (int k=0; k<i; k++)
+    for (int64_t k=0; k<i; k++)
         res += byte_length2(t[res]);
     return res;
 }
 
 // Handles negative indices in getitem etc (slice notation)
-static int get_index(int i, int nchars) {
+static int64_t get_index(int64_t i, int64_t nchars) {
     if (i >= 0) {
         if (i<nchars)
             return i;
@@ -627,7 +627,7 @@ static int get_index(int i, int nchars) {
 // last position, and indices outside the string are clamped to it. Returns
 // -1 if start is beyond the end.
 
-static int fix_start_end(int nchars, B_int *start, B_int *end) {
+static int fix_start_end(int64_t nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
         *start = toB_int(0);
     } else {
@@ -663,13 +663,13 @@ static B_str mk_char(unsigned char *p) {
 
     B_str res;
     NEW_UNFILLED_STR(res,1,byte_length2(*p));
-    for (int i=0; i<res->nbytes; i++)
+    for (int64_t i=0; i<res->nbytes; i++)
         res->str[i] = p[i];
     return res;
 }
 
-int equal_bytes(unsigned char *p, unsigned char *q, int len) {
-    int i;
+int equal_bytes(unsigned char *p, unsigned char *q, int64_t len) {
+    int64_t i;
     for (i=0; i<len; i++) {
         if (p[i] != q[i]) break;
     }
@@ -697,14 +697,14 @@ static int islinebreak_codepoint(int codepoint) {
 // Returns byte position in text where first occurrence of pattern starts,
 // or -1 if it does not occur.
 // Start search from the left end of text.
-int bmh( unsigned char *text, unsigned char *pattern, int tbytes, int pbytes) {
+int64_t bmh( unsigned char *text, unsigned char *pattern, int64_t tbytes, int64_t pbytes) {
     if (pbytes>tbytes) return -1;
-    int skip[256];
+    int64_t skip[256];
     for (int i=0; i<256; i++) skip[i] = pbytes;
-    for (int i=0; i<pbytes-1; i++)
+    for (int64_t i=0; i<pbytes-1; i++)
         skip[(int)pattern[i]] = pbytes-i-1;
-    int k = pbytes-1;
-    int i, j;
+    int64_t k = pbytes-1;
+    int64_t i, j;
     while (k<tbytes) {
         j = pbytes-1;
         i = k;
@@ -718,14 +718,14 @@ int bmh( unsigned char *text, unsigned char *pattern, int tbytes, int pbytes) {
 }
 
 // Start search from the right end of text.
-static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pbytes) {
+static int64_t rbmh( unsigned char *text, unsigned char *pattern, int64_t tbytes, int64_t pbytes) {
     if (pbytes>tbytes) return -1;
-    int skip[256];
+    int64_t skip[256];
     for (int i=0; i<256; i++) skip[i] = pbytes;
-    for (int i=pbytes-1; i>0; i--)
+    for (int64_t i=pbytes-1; i>0; i--)
         skip[(int)pattern[i]] = i;
-    int k = tbytes - pbytes;
-    int i, j;
+    int64_t k = tbytes - pbytes;
+    int64_t i, j;
     while (k >= 0) {
         j = 0;
         i = k;
@@ -739,14 +739,14 @@ static int rbmh( unsigned char *text, unsigned char *pattern, int tbytes, int pb
 }
 
 struct byte_counts {
-    int printable, squotes, dquotes, escaped, non_printable, non_ascii, braces;
+    int64_t printable, squotes, dquotes, escaped, non_printable, non_ascii, braces;
 };
 
 
-struct byte_counts byte_count(unsigned char *s, int len) {
+struct byte_counts byte_count(unsigned char *s, int64_t len) {
    struct byte_counts res = {0,0,0,0,0,0,0};
     unsigned char c;
-    for (int i=0; i<len; i++) {
+    for (int64_t i=0; i<len; i++) {
         c = s[i];
         if (c=='\\' || c=='\n' || c=='\t' || c=='\r')
             res.escaped++;
@@ -780,10 +780,10 @@ static unsigned char ascii_tolower(unsigned char c) {
 // and carriage return takes one column; newline and carriage return reset
 // the column. Returns the length of the result and, unless out is NULL,
 // writes the result to out.
-static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, unsigned char *out) {
+static int64_t expandtabs_bytes(unsigned char *in, int64_t nbytes, int64_t tabsize, unsigned char *out) {
     int64_t len = 0;
     int64_t col = 0;
-    for (int i = 0; i < nbytes; i++) {
+    for (int64_t i = 0; i < nbytes; i++) {
         unsigned char c = in[i];
         if (c == '\t') {
             int64_t n = tabsize - col % tabsize;
@@ -809,7 +809,7 @@ static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, 
 // characters: a character takes one column whatever its UTF-8 length.
 // Returns the length of the result in bytes, sets *nchars to its length in
 // characters and, unless out is NULL, writes the result to out.
-static int64_t expandtabs_str(unsigned char *in, int nbytes, int64_t tabsize, unsigned char *out, int *nchars) {
+static int64_t expandtabs_str(unsigned char *in, int64_t nbytes, int64_t tabsize, unsigned char *out, int64_t *nchars) {
     int64_t len = 0;
     int64_t chars = 0;
     int64_t col = 0;
@@ -842,10 +842,10 @@ static int64_t expandtabs_str(unsigned char *in, int nbytes, int64_t tabsize, un
     return len;
 }
 
-void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
+void escape_str(unsigned char *out, unsigned char *in, int64_t outlen, int64_t inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
-    for (int i=0; i<inlen; i++) {
+    for (int64_t i=0; i<inlen; i++) {
         unsigned char c = in[i];
 
         // Handle """ sequences if requested
@@ -969,11 +969,11 @@ B_str B_strD___repr__(B_str s) {
     int quote_bytes = quotes_per_side * 2;
 
     // Count how many """ sequences need escaping (only relevant if using """ delimiters)
-    int escape_triple_bytes = 0;
+    int64_t escape_triple_bytes = 0;
     if (use_triple_quotes) {
         unsigned char *p = s->str;
-        int remaining = s->nbytes;
-        int pos;
+        int64_t remaining = s->nbytes;
+        int64_t pos;
         while ((pos = bmh(p, (unsigned char*)"\"\"\"", remaining, 3)) >= 0) {
             escape_triple_bytes += 3;  // Each quote needs a backslash: """ -> \"\"\"
             p += pos + 3;
@@ -1005,9 +1005,9 @@ B_str B_strD___repr__(B_str s) {
 void B_strD___serialize__(B_str str,$Serial$state state) {
     int nWords = str->nbytes/sizeof($WORD) + 1;         // # $WORDS needed to store str->str, including terminating 0.
     $ROW row = $add_header(STR_ID,2+nWords,state);
-    long nbytes = (int)str->nbytes;                    // We could pack nbytes and nchars in one $WORD,
+    int64_t nbytes = str->nbytes;                      // We could pack nbytes and nchars in one $WORD,
     memcpy(row->blob,&nbytes,sizeof($WORD));            // but we should think of a better, general approach.
-    long nchars = (int)str->nchars;
+    int64_t nchars = str->nchars;
     memcpy(row->blob+1,&nchars,sizeof($WORD));
     memcpy(row->blob+2,str->str,nbytes+1);
 }
@@ -1017,13 +1017,13 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
     state->row =this->next;
     state->row_no++;
     B_str res = acton_malloc(sizeof(struct B_str));
-    long nbytes;
+    int64_t nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_strG_methods;
-    res->nbytes = (int)nbytes;
-    long nchars;
+    res->nbytes = nbytes;
+    int64_t nchars;
     memcpy(&nchars,this->blob+1,sizeof($WORD));
-    res->nchars = (int)nchars;
+    res->nchars = nchars;
     res->str = acton_malloc_atomic(nbytes+1);
     memcpy(res->str,this->blob+2,nbytes+1);
     return res;
@@ -1084,7 +1084,7 @@ int64_t B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int64_t res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
@@ -1117,8 +1117,8 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
     }
     int64_t tabsz = tabsize ? fromB_int(tabsize) : 8;
     tabsz = tabsz <= 0 ? 1 : tabsz;
-    int nchars;
-    int nbytes = expandtabs_str(s->str, s->nbytes, tabsz, NULL, &nchars);
+    int64_t nchars;
+    int64_t nbytes = expandtabs_str(s->str, s->nbytes, tabsz, NULL, &nchars);
     B_str res;
     NEW_UNFILLED_STR(res,nchars,nbytes);
     expandtabs_str(s->str, s->nbytes, tabsz, res->str, &nchars);
@@ -1132,7 +1132,7 @@ int64_t B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
     if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return $char_no(s,n+p-s->str);
 }
@@ -1151,7 +1151,7 @@ bool B_strD_isalnum(B_str s) {
     int nbytes;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if ((cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO) && cat != UTF8PROC_CATEGORY_ND)
@@ -1167,7 +1167,7 @@ bool B_strD_isalpha(B_str s) {
     int nbytes;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat <  UTF8PROC_CATEGORY_LU || cat >  UTF8PROC_CATEGORY_LO)
@@ -1179,7 +1179,7 @@ bool B_strD_isalpha(B_str s) {
 
 bool B_strD_isascii(B_str s) {
     unsigned char *p = s->str;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         if (*p > 127)
             return false;
         p++;
@@ -1193,7 +1193,7 @@ bool B_strD_isdecimal(B_str s) {
     int nbytes;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat != UTF8PROC_CATEGORY_ND)
@@ -1210,7 +1210,7 @@ bool B_strD_islower(B_str s) {
     bool has_cased = false;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LT|| cat == UTF8PROC_CATEGORY_LU)
@@ -1228,7 +1228,7 @@ bool B_strD_isprintable(B_str s) {
     int nbytes;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat >= UTF8PROC_CATEGORY_ZS && codepoint != 0x20)
@@ -1244,7 +1244,7 @@ bool B_strD_isspace(B_str s) {
     int nbytes;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         if (!isspace_codepoint(codepoint))
             return false;
@@ -1261,7 +1261,7 @@ bool B_strD_istitle(B_str s) {
     bool incasedrun = false;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LT ) {
@@ -1287,7 +1287,7 @@ bool B_strD_isupper(B_str s) {
     int hascased = false;
     if (s->nchars == 0)
         return false;
-    for (int i=0; i < s->nchars; i++) {
+    for (int64_t i=0; i < s->nchars; i++) {
         nbytes = utf8proc_iterate(p,-1,&codepoint);
         utf8proc_category_t cat = utf8proc_category(codepoint);
         if (cat == UTF8PROC_CATEGORY_LL)
@@ -1371,7 +1371,7 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
     if (s->nchars == 0) return s;
     if (cs==NULL) cs = whitespace_str;
     unsigned char *p = s->str;
-    int i, k;
+    int64_t i, k;
     for (i = 0; i < s->nchars; i++) {
         unsigned char *q = cs->str;
         for (k = 0; k < cs->nchars; k++) {
@@ -1394,12 +1394,12 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
     if (n<0) {
         return $NEWTUPLE(3,s,null_str,null_str);
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = bmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
         B_str rs;
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return $NEWTUPLE(3,ls,sep,rs);
@@ -1409,14 +1409,14 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
-        count = toB_int(INT_MAX);
+        count = toB_int(INT64_MAX);
     int64_t c = B_strD_count(s, old, NULL, NULL);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return s;
     }
     // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the int length fields of a str
+    // in 64 bits and checked against the limit on lengths
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
     int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
     check_result_len(nbytes);
@@ -1454,7 +1454,7 @@ int64_t B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
     if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return $char_no(s,n+p-s->str);
 }
@@ -1498,11 +1498,11 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
     if (n<0) {
         return $NEWTUPLE(3,null_str,null_str,s);
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = rbmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_str ls;
         NEW_UNFILLED_STR(ls,n,nb);
         memcpy(ls->str,s->str,nb);
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         B_str rs;
         NEW_UNFILLED_STR(rs,s->nchars-n-sep->nchars,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
@@ -1514,11 +1514,12 @@ B_tuple B_strD_rpartition(B_str s, B_str sep) {
 B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX);
-    int remaining = s->nchars;
+    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT64_MAX);
+    int64_t remaining = s->nchars;
     if (sep == NULL) {
         unsigned char *p = s->str;
-        int nbytes, codepoint, wordlength;
+        int nbytes, codepoint;
+        int64_t wordlength;
         if (remaining==0) {
             return res;
         }
@@ -1575,10 +1576,10 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
         int isascii = s->nchars == s->nbytes;
         int64_t maxs = fromB_int(maxsplit);
         unsigned char *p = s->str;
-        int rest = s->nbytes;
-        int n;
+        int64_t rest = s->nbytes;
+        int64_t n;
         while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
-            int nchars = isascii ? n : count_chars(p,n);
+            int64_t nchars = isascii ? n : count_chars(p, n);
             B_str word;
             NEW_UNFILLED_STR(word,nchars,n);
             memcpy(word->str,p,n);
@@ -1586,7 +1587,7 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
             p += n + sep->nbytes;
             rest -= n + sep->nbytes;
         }
-        int nchars = isascii ? rest : count_chars(p,rest);
+        int64_t nchars = isascii ? rest : count_chars(p, rest);
         B_str word;
         NEW_UNFILLED_STR(word,nchars,rest);
         memcpy(word->str,p,rest);
@@ -1602,7 +1603,8 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
     B_list res = $NEW(B_list,NULL,NULL);
     unsigned char *p = s->str;
     unsigned char *q = p;
-    int nbytes, codepoint, linelength;
+    int nbytes, codepoint;
+    int64_t linelength;
     if (s->nbytes==0) {
         return res;
     }
@@ -1617,7 +1619,7 @@ B_list B_strD_splitlines(B_str s, B_bool keepends) {
             // all the codepoints we count as linebreaks are ascii bytes, i.e. nbytes = 1.
             B_str line;
             int winend = *p=='\r' && *(p+1)=='\n';
-            int size = p-q + (keepends->val ? 1 + winend : 0);
+            int64_t size = p-q + (keepends->val ? 1 + winend : 0);
             NEW_UNFILLED_STR(line,linelength + (keepends->val ? 1 + winend : 0),size);
             memcpy(line->str,q,size);
             p += 1 + winend;
@@ -1639,7 +1641,7 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
     if (s->nchars == 0) return s;
     if (cs==NULL) cs = whitespace_str;
     unsigned char *end = s->str + s->nbytes;   // exclusive end of the result
-    int i, k;
+    int64_t i, k;
     for (i = 0; i < s->nchars; i++) {
         unsigned char *p = skip_chars(end,-1,0); // last char before end
         unsigned char *q = cs->str;
@@ -1718,9 +1720,9 @@ B_str B_strD_zfill(B_str s, int64_t width) {
 // Thus they do not in general reflect locale-dependent order conventions.
 
 static int str_compare(B_str a, B_str b) {
-    int size = a->nbytes < b->nbytes ? a->nbytes : b->nbytes;
+    int64_t size = a->nbytes < b->nbytes ? a->nbytes : b->nbytes;
     int order = memcmp(a->str, b->str, size);
-    return order != 0 ? order : a->nbytes - b->nbytes;
+    return order != 0 ? order : (a->nbytes > b->nbytes) - (a->nbytes < b->nbytes);
 }
 
 bool B_OrdD_strD___eq__ (B_OrdD_str wit, B_str a, B_str b) {
@@ -1876,7 +1878,7 @@ B_Iterator B_ContainerD_strD___iter__ (B_ContainerD_str wit, B_str s) {
 
 B_str $strD_U__getitem__(B_str s, int64_t i) {
     unsigned char *p = s->str;
-    int ix = get_index(i,s->nchars);
+    int64_t ix = get_index(i, s->nchars);
     p = skip_chars(p,ix,s->nchars == s->nbytes);
     return mk_char(p);
 }
@@ -1889,8 +1891,8 @@ B_str B_ISliceableD_strD___getitem__ (B_ISliceableD_str wit, B_str s, B_int i) {
 
 B_str B_ISliceableD_strD___getslice__ (B_ISliceableD_str wit, B_str s, B_slice slc) {
     int isascii = s->nchars == s->nbytes;
-    int nchars = s->nchars;
-    int nbytes = 0;
+    int64_t nchars = s->nchars;
+    int64_t nbytes = 0;
     int64_t start, stop, step, slen;
     normalize_slice(slc, nchars, &slen, &start, &stop, &step);
     if (slen == 0) {
@@ -1910,14 +1912,14 @@ B_str B_ISliceableD_strD___getslice__ (B_ISliceableD_str wit, B_str s, B_slice s
     // second one copies the characters. Neither steps beyond the last
     // character of the slice.
     unsigned char *u = t;
-    for (int i=0; i<slen; i++) {
+    for (int64_t i=0; i<slen; i++) {
         nbytes += byte_length2(*u);
         if (i < slen-1)
             u = skip_chars(u,step,isascii);
     }
     NEW_UNFILLED_STR(res,slen,nbytes);
     unsigned char *p = res->str;
-    for (int i=0; i<slen; i++) {
+    for (int64_t i=0; i<slen; i++) {
         int bytes = byte_length2(*t);
         memcpy(p,t,bytes);
         p += bytes;
@@ -1935,14 +1937,14 @@ B_str B_ISliceableD_strD___getslice__ (B_ISliceableD_str wit, B_str s, B_slice s
 
 B_bytearray toB_bytearray(char *str) {
     B_bytearray res;
-    int len = strlen(str);
+    int64_t len = strlen(str);
     NEW_UNFILLED_BYTEARRAY(res,len);
     memcpy(res->str,str,len);
     return res;
 }
 
 
-B_bytearray to$bytearrayD_len(char *str, int len) {
+B_bytearray to$bytearrayD_len(char *str, int64_t len) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, len);
     memcpy(res->str, str, len);
@@ -1951,7 +1953,7 @@ B_bytearray to$bytearrayD_len(char *str, int len) {
 
 B_bytearray actBytearrayFromCString(char *str) {
     B_bytearray res;
-    int len = strlen(str);
+    int64_t len = strlen(str);
     NEW_UNFILLED_BYTEARRAY(res,len);
     memcpy(res->str,str,len);
     return res;
@@ -1965,14 +1967,14 @@ B_bytearray actBytearrayFromCStringNoCopy(char *str) {
     return res;
 }
 
-B_bytearray actBytearrayFromCStringLength(char *str, int len) {
+B_bytearray actBytearrayFromCStringLength(char *str, int64_t len) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res, len);
     memcpy(res->str, str, len);
     return res;
 }
 
-B_bytearray actBytearrayFromCStringLengthNoCopy(char *str, int length) {
+B_bytearray actBytearrayFromCStringLengthNoCopy(char *str, int64_t length) {
     B_bytearray res = acton_malloc(sizeof(struct B_bytearray));
     res->$class = &B_bytearrayG_methods;
     res->nbytes = length;
@@ -1994,7 +1996,7 @@ static void expand_bytearray(B_bytearray b, int64_t n) {
     int64_t newcapacity = b->capacity == 0 ? 1 : b->capacity;
     while (newcapacity < needed)
         newcapacity <<= 1;
-    // Doubling can pass the limit of the int capacity field
+    // Doubling can pass the limit on lengths
     if (newcapacity > INT_MAX)
         newcapacity = INT_MAX;
     unsigned char *newstr = b->str == NULL
@@ -2023,7 +2025,7 @@ B_bytearray B_bytearrayG_new(B_bytes b) {
 }
 
 B_NoneType B_bytearrayD___init__(B_bytearray self, B_bytes b) {
-    int len = b->nbytes;
+    int64_t len = b->nbytes;
     self->nbytes = len;
     self->capacity = len;
     self->str = acton_malloc_atomic(len);
@@ -2063,7 +2065,7 @@ B_str B_bytearrayD___repr__(B_bytearray s) {
 void B_bytearrayD___serialize__(B_bytearray str,$Serial$state state) {
     int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTEARRAY_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;
+    int64_t nbytes = str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
     memcpy(row->blob+1,str->str,nbytes);
 }
@@ -2074,11 +2076,11 @@ B_bytearray B_bytearrayD___deserialize__(B_bytearray res, $Serial$state state) {
     state->row_no++;
     if(!res)
         res = acton_malloc(sizeof(struct B_bytearray));
-    long nbytes;
+    int64_t nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytearrayG_methods;
-    res->nbytes = (long)nbytes;
-    res->capacity = (long)nbytes;
+    res->nbytes = nbytes;
+    res->capacity = nbytes;
     res->str = acton_malloc_atomic(nbytes);
     memcpy(res->str,this->blob+1,nbytes);
     return res;
@@ -2093,7 +2095,7 @@ B_bytearray B_bytearrayD_capitalize(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
     res->str[0] = ascii_toupper(s->str[0]);
-    for (int i=1; i<s->nbytes; i++)
+    for (int64_t i=1; i<s->nbytes; i++)
         res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
@@ -2129,12 +2131,12 @@ int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int en
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
-    int stval = fromB_int(st);
-    int enval = fromB_int(en);
+    int64_t stval = fromB_int(st);
+    int64_t enval = fromB_int(en);
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[enval-stval];
     int64_t res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
@@ -2151,8 +2153,8 @@ bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int en
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    int stval = fromB_int(st);
-    int enval = fromB_int(en);
+    int64_t stval = fromB_int(st);
+    int64_t enval = fromB_int(en);
     if (enval-stval < sub->nbytes) return false;
     return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
@@ -2160,7 +2162,7 @@ bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int en
 B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
     int64_t tabsize = tabsz ? fromB_int(tabsz) : 8;
     tabsize = tabsize <= 0 ? 1 : tabsize;
-    int len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
+    int64_t len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,len);
     expandtabs_bytes(s->str, s->nbytes, tabsize, res->str);
@@ -2173,22 +2175,22 @@ int64_t B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
 
 B_bytearray B_bytearrayD_from_hex(B_str s) {
     // Each byte is represented by 2 hex chars
-    int strlen = s->nbytes;  // Changed from len to nbytes
+    int64_t strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
         RAISE_EXC(&B_str_odd_hex_length_error);
     }
 
-    int bytelen = strlen / 2;
+    int64_t bytelen = strlen / 2;
     char *result = acton_malloc_atomic(bytelen);
 
-    for (int i = 0; i < strlen; i += 2) {
+    for (int64_t i = 0; i < strlen; i += 2) {
         char high = s->str[i];
         char low = s->str[i + 1];
 
@@ -2230,7 +2232,7 @@ static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     if (nbytes == 0)
         return null_str;
     // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
-    // which for 1 GiB of data no longer fits the int length fields of a str
+    // which for 1 GiB of data passes the limit on lengths
     int64_t len = nbytes * 2;
     check_result_len(len);
     B_str res;
@@ -2264,7 +2266,7 @@ int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int en
 bool B_bytearrayD_isalnum(B_bytearray s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
             return false;
@@ -2275,7 +2277,7 @@ bool B_bytearrayD_isalnum(B_bytearray s) {
 bool B_bytearrayD_isalpha(B_bytearray s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
             return false;
@@ -2284,7 +2286,7 @@ bool B_bytearrayD_isalpha(B_bytearray s) {
 }
 
 bool B_bytearrayD_isascii(B_bytearray s) {
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
             return false;
@@ -2295,7 +2297,7 @@ bool B_bytearrayD_isascii(B_bytearray s) {
 bool B_bytearrayD_isdigit(B_bytearray s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
             return false;
@@ -2306,7 +2308,7 @@ bool B_bytearrayD_isdigit(B_bytearray s) {
 
 bool B_bytearrayD_islower(B_bytearray s) {
     bool has_lower = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
             return false;
@@ -2319,7 +2321,7 @@ bool B_bytearrayD_islower(B_bytearray s) {
 bool B_bytearrayD_isspace(B_bytearray s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
             return false;
@@ -2332,7 +2334,7 @@ bool B_bytearrayD_istitle(B_bytearray s) {
         return false;
     bool incasedrun = false;
     bool cased = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
@@ -2350,7 +2352,7 @@ bool B_bytearrayD_istitle(B_bytearray s) {
 
 bool B_bytearrayD_isupper(B_bytearray s) {
     bool has_upper = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
             return false;
@@ -2418,7 +2420,7 @@ B_bytearray B_bytearrayD_ljust(B_bytearray s, int64_t width, B_bytearray fill) {
 B_bytearray B_bytearrayD_lower(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
-    for (int i=0; i< s->nbytes; i++)
+    for (int64_t i=0; i< s->nbytes; i++)
         res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
@@ -2426,11 +2428,11 @@ B_bytearray B_bytearrayD_lower(B_bytearray s) {
 B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
         cs = whitespace_bytearray;
-    int nstrip = 0;
-    for (int i=0; i<s->nbytes; i++) {
+    int64_t nstrip = 0;
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         int found = 0;
-        for (int j=0; j<cs->nbytes; j++)
+        for (int64_t j=0; j<cs->nbytes; j++)
             if (c == cs->str[j]) {
                 found = 1;
                 break;
@@ -2451,12 +2453,12 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
     if (n<0) {
         return $NEWTUPLE(3,B_bytearrayD_copy(s),toB_bytearray(""),toB_bytearray(""));
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = bmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_bytearray ls;
         NEW_UNFILLED_BYTEARRAY(ls,nb);
         memcpy(ls->str,s->str,nb);
         B_bytearray rs;
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return $NEWTUPLE(3,ls,B_bytearrayD_copy(sep),rs);
@@ -2467,14 +2469,14 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
-        count = toB_int(INT_MAX);
+        count = toB_int(INT64_MAX);
     int64_t c = B_bytearrayD_count(s, old, NULL, NULL);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return B_bytearrayD_copy(s);
     }
     // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the int length field of a bytearray
+    // in 64 bits and checked against the limit on lengths
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
     check_result_len(nbytes);
     B_bytearray res;
@@ -2508,7 +2510,7 @@ int64_t B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int en
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
@@ -2548,11 +2550,11 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
     if (n<0) {
         return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),B_bytearrayD_copy(s));
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = rbmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_bytearray ls;
         NEW_UNFILLED_BYTEARRAY(ls,nb);
         memcpy(ls->str,s->str,nb);
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         B_bytearray rs;
         NEW_UNFILLED_BYTEARRAY(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
@@ -2563,11 +2565,11 @@ B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
 B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
     if (!cs)
         cs = whitespace_bytearray;
-    int nstrip = 0;
-    for (int i=s->nbytes-1; i>=0; i--) {
+    int64_t nstrip = 0;
+    for (int64_t i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
         int found = 0;
-        for (int j=0; j<cs->nbytes; j++)
+        for (int64_t j=0; j<cs->nbytes; j++)
             if (c == cs->str[j]) {
                 found = 1;
                 break;
@@ -2585,7 +2587,7 @@ B_bytearray B_bytearrayD_rstrip(B_bytearray s, B_bytearray cs) {
 B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX);
+    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT64_MAX);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -2636,8 +2638,8 @@ B_list B_bytearrayD_split(B_bytearray s, B_bytearray sep, B_int maxsplit) {
         // copy every piece once
         int64_t maxs = fromB_int(maxsplit);
         unsigned char *p = s->str;
-        int rest = s->nbytes;
-        int n;
+        int64_t rest = s->nbytes;
+        int64_t n;
         while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
             B_bytearray word;
             NEW_UNFILLED_BYTEARRAY(word,n);
@@ -2671,7 +2673,7 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
         } else {
             B_bytearray line;
             winend = *p=='\r' && p+1 < s->str + s->nbytes && *(p+1)=='\n';
-            int size = p-q + (keepends->val ? 1 + winend : 0);
+            int64_t size = p-q + (keepends->val ? 1 + winend : 0);
             NEW_UNFILLED_BYTEARRAY(line,size);
             memcpy(line->str,q,size);
             p+= 1 + winend;
@@ -2695,7 +2697,7 @@ bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int 
     unsigned char *p = s->str + fromB_int(st);
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
+    for (int64_t i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
             return false;
         }
@@ -2711,7 +2713,7 @@ B_bytearray B_bytearrayD_strip(B_bytearray s, B_bytearray cs) {
 B_bytearray B_bytearrayD_upper(B_bytearray s) {
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,s->nbytes);
-    for (int i=0; i< s->nbytes; i++)
+    for (int64_t i=0; i< s->nbytes; i++)
         res->str[i] = ascii_toupper(s->str[i]);
     return res;
 }
@@ -2751,7 +2753,7 @@ bool B_OrdD_bytearrayD___ne__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray 
 }
 
 bool B_OrdD_bytearrayD___lt__ (B_OrdD_bytearray wit, B_bytearray a, B_bytearray b) {
-    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int64_t minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
     int c = memcmp(a->str,b->str,minl);
     return c<0 || (c==0 && a->nbytes<b->nbytes);
 }
@@ -2822,7 +2824,7 @@ bool B_ContainerD_bytearrayD___contains__(B_ContainerD_bytearray wit, B_bytearra
     if (n->val < 0 || n->val > 255)
         return false;
     bool res = false;
-    for (int i=0; i < self->nbytes; i++) {
+    for (int64_t i=0; i < self->nbytes; i++) {
         if (self->str[i] == (unsigned char)n->val) {
             res = true;
             break;
@@ -2856,7 +2858,7 @@ B_NoneType $bytearrayD_U__setitem__(B_bytearray self, int64_t ix, int64_t val) {
 
 B_NoneType $bytearrayD_U__delitem__(B_bytearray self, int64_t ix) {
     int64_t ix0 = ix < 0 ? self->nbytes + ix : ix;
-    int len = self->nbytes;
+    int64_t len = self->nbytes;
     if (ix0 < 0 || ix0 >= len)
         RAISE(B_IndexError, ix0, actStrFromCString("delitem: index outside bytearray"));
     memmove(self->str + ix0,self->str + (ix0 + 1),len-(ix0+1));
@@ -2879,10 +2881,10 @@ B_NoneType B_SequenceD_bytearrayD___delitem__ (B_SequenceD_bytearray wit, B_byte
 B_NoneType B_SequenceD_bytearrayD_insert(B_SequenceD_bytearray wit, B_bytearray self, int64_t n, B_int elem) {
     if (elem->val < 0 || elem->val > 255)
         RAISE_EXC(&B_str_invalid_bytearray_insert_error);
-    long ix = n;
-    int len = self->nbytes;
+    int64_t ix = n;
+    int64_t len = self->nbytes;
     expand_bytearray(self,1);
-    int ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
+    int64_t ix0 = ix < 0 ? (len+ix < 0 ? 0 : len+ix) : (ix < len ? ix : len);
     memmove(self->str + (ix0 + 1),
             self->str + ix0 ,
             len - ix0);
@@ -2900,8 +2902,8 @@ B_NoneType B_SequenceD_bytearrayD_append(B_SequenceD_bytearray wit, B_bytearray 
 }
 
 B_NoneType B_SequenceD_bytearrayD_reverse(B_SequenceD_bytearray wit, B_bytearray self) {
-    int len = self->nbytes;
-    for (int i = 0; i < len/2; i++) {
+    int64_t len = self->nbytes;
+    for (int64_t i = 0; i < len/2; i++) {
         unsigned char tmp = self->str[i];
         self->str[i] = self->str[len-1-i];
         self->str[len-1-i] = tmp;
@@ -2916,13 +2918,13 @@ B_Iterator B_SequenceD_bytearrayD___reversed__(B_SequenceD_bytearray wit, B_byte
 }
 
 B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_bytearray self, B_slice slc) {
-    int len = self->nbytes;
+    int64_t len = self->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     B_bytearray res;
     NEW_UNFILLED_BYTEARRAY(res,slen);
-    long t = start;
-    for (int i=0; i<slen; i++) {
+    int64_t t = start;
+    for (int64_t i=0; i<slen; i++) {
         B_int w = B_SequenceD_bytearrayD___getitem__(wit, self, toB_int(t));
         B_SequenceD_bytearrayD___setitem__(wit, res , toB_int(i), w);
         t += step;
@@ -2932,22 +2934,22 @@ B_bytearray B_SequenceD_bytearrayD___getslice__ (B_SequenceD_bytearray wit, B_by
 
 B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_Iterable wit2, B_slice slc, $WORD iter) {
     B_Iterator it = wit2->$class->__iter__(wit2,iter);
-    int len = self->nbytes;
+    int64_t len = self->nbytes;
     B_bytearray other;
     NEW_UNFILLED_BYTEARRAY(other,0);
     $WORD next;
     while (it->$class->__next__(it, &next)) {
         B_SequenceD_bytearrayD_append(wit, other, next);
     }
-    int olen = other->nbytes;
+    int64_t olen = other->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (step != 1 && olen != slen) {
         RAISE_EXC(&B_str_invalid_bytearray_slice_error);
     }
-    int copy = olen <= slen ? olen : slen;
-    int t = start;
-    for (int i= 0; i<copy; i++) {
+    int64_t copy = olen <= slen ? olen : slen;
+    int64_t t = start;
+    for (int64_t i= 0; i<copy; i++) {
         self->str[t] = other->str[i];
         t += step;
     }
@@ -2962,12 +2964,12 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
         return B_None;
     } else {
         expand_bytearray(self,olen-slen);
-        int rest = len - (start+copy);
-        int incr = olen - slen;
+        int64_t rest = len - (start+copy);
+        int64_t incr = olen - slen;
         memmove(self->str + start + copy + incr,
                 self->str + start + copy,
                 rest);
-        for (int i = copy; i < olen; i++)
+        for (int64_t i = copy; i < olen; i++)
             self->str[start+i] = other->str[i];
         self->nbytes += incr;
     }
@@ -2975,7 +2977,7 @@ B_NoneType B_SequenceD_bytearrayD___setslice__ (B_SequenceD_bytearray wit,  B_by
 }
 
 B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_bytearray self, B_slice slc) {
-    int len = self->nbytes;
+    int64_t len = self->nbytes;
     int64_t start, stop, step, slen;
     normalize_slice(slc, len, &slen, &start, &stop, &step);
     if (slen==0) return B_None;
@@ -2986,7 +2988,7 @@ B_NoneType B_SequenceD_bytearrayD___delslice__ (B_SequenceD_bytearray wit,  B_by
         step = -step;
     }
     unsigned char *p = self->str + start;
-    for (int i=0; i<slen-1; i++) {
+    for (int64_t i=0; i<slen-1; i++) {
         memmove(p,p+i+1,step-1);
         p+=step-1;
     }
@@ -3092,7 +3094,7 @@ B_bytes actBytesFromCStringCopy(const char *str) {
     return actBytesFromCStringLengthCopy(str, strlen(str));
 }
 
-B_bytes actBytesFromCStringLengthCopy(const char *str, int len) {
+B_bytes actBytesFromCStringLengthCopy(const char *str, int64_t len) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,len);
     memcpy(res->str,str,len);
@@ -3103,7 +3105,7 @@ B_bytes actBytesFromCStringNoCopy(char *str) {
     return actBytesFromCStringLengthNoCopy(str, strlen(str));
 }
 
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
+B_bytes actBytesFromCStringLengthNoCopy(char *str, int64_t length) {
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
     res->$class = &B_bytesG_methods;
     res->nbytes = length;
@@ -3116,7 +3118,7 @@ B_bytes actBytesFromCString(char *str) {
     return actBytesFromCStringCopy(str);
 }
 
-B_bytes actBytesFromCStringLength(char *str, int len) {
+B_bytes actBytesFromCStringLength(char *str, int64_t len) {
     return actBytesFromCStringLengthCopy(str, len);
 }
 
@@ -3124,7 +3126,7 @@ B_bytes to$bytes(char *str) {
     return actBytesFromCStringCopy(str);
 }
 
-B_bytes to$bytesD_len(char *str, int len) {
+B_bytes to$bytesD_len(char *str, int64_t len) {
     return actBytesFromCStringLengthCopy(str, len);
 }
 
@@ -3199,7 +3201,7 @@ B_str B_bytesD___repr__(B_bytes s) {
 void B_bytesD___serialize__(B_bytes str,$Serial$state state) {
     int nWords = (str->nbytes + sizeof($WORD) - 1)/sizeof($WORD);     // # $WORDS needed to store str->str
     $ROW row = $add_header(BYTES_ID,1+nWords,state);
-    long nbytes = (long)str->nbytes;
+    int64_t nbytes = str->nbytes;
     memcpy(row->blob,&nbytes,sizeof($WORD));
     memcpy(row->blob+1,str->str,nbytes);
 }
@@ -3209,10 +3211,10 @@ B_bytes B_bytesD___deserialize__(B_bytes self, $Serial$state state) {
     state->row =this->next;
     state->row_no++;
     B_bytes res = acton_malloc(sizeof(struct B_bytes));
-    long nbytes;
+    int64_t nbytes;
     memcpy(&nbytes,this->blob,sizeof($WORD));
     res->$class = &B_bytesG_methods;
-    res->nbytes = (long)nbytes;
+    res->nbytes = nbytes;
     res->str = acton_malloc_atomic(nbytes);
     memcpy(res->str,this->blob+1,nbytes);
     return res;
@@ -3225,7 +3227,7 @@ B_bytes B_bytesD_capitalize(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
     res->str[0] = ascii_toupper(s->str[0]);
-    for (int i = 1; i < s->nbytes; i++)
+    for (int64_t i = 1; i < s->nbytes; i++)
         res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
@@ -3261,11 +3263,11 @@ int64_t B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
-    int stval = fromB_int(st);
+    int64_t stval = fromB_int(st);
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[fromB_int(en)-stval];
     int64_t res = 0;
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     while (n>=0) {
         res++;
         p += n + (sub->nbytes>0 ? sub->nbytes : 1);
@@ -3282,8 +3284,8 @@ bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    int stval = fromB_int(st);
-    int enval = fromB_int(en);
+    int64_t stval = fromB_int(st);
+    int64_t enval = fromB_int(en);
     if (enval-stval < sub->nbytes) return false;
     return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
@@ -3294,7 +3296,7 @@ B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
     }
     int64_t tabsize = tabsz ? fromB_int(tabsz) : 8;
     tabsize = tabsize <= 0 ? 1 : tabsize;
-    int len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
+    int64_t len = expandtabs_bytes(s->str, s->nbytes, tabsize, NULL);
     B_bytes res;
     NEW_UNFILLED_BYTES(res,len);
     expandtabs_bytes(s->str, s->nbytes, tabsize, res->str);
@@ -3307,7 +3309,7 @@ int64_t B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
-    int n = bmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
@@ -3316,15 +3318,15 @@ B_bytes B_bytesD_from_hex(B_str s) {
     if (s->nbytes == 0)
         return null_bytes;
     // Each byte is represented by 2 hex chars
-    int strlen = s->nbytes;  // Changed from len to nbytes
+    int64_t strlen = s->nbytes;  // Changed from len to nbytes
     if (strlen % 2 != 0) {
         RAISE_EXC(&B_str_odd_hex_length_error);
     }
 
-    int bytelen = strlen / 2;
+    int64_t bytelen = strlen / 2;
     char *result = acton_malloc_atomic(bytelen);
 
-    for (int i = 0; i < strlen; i += 2) {
+    for (int64_t i = 0; i < strlen; i += 2) {
         char high = s->str[i];
         char low = s->str[i + 1];
 
@@ -3375,7 +3377,7 @@ int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
 bool B_bytesD_isalnum(B_bytes s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < '0' || c > 'z' || (c > '9' && c < 'A') || (c > 'Z' && c < 'a'))
             return false;
@@ -3386,7 +3388,7 @@ bool B_bytesD_isalnum(B_bytes s) {
 bool B_bytesD_isalpha(B_bytes s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
             return false;
@@ -3395,7 +3397,7 @@ bool B_bytesD_isalpha(B_bytes s) {
 }
 
 bool B_bytesD_isascii(B_bytes s) {
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c > 0x7f)
             return false;
@@ -3406,7 +3408,7 @@ bool B_bytesD_isascii(B_bytes s) {
 bool B_bytesD_isdigit(B_bytes s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c<'0' || c > '9')
             return false;
@@ -3416,7 +3418,7 @@ bool B_bytesD_isdigit(B_bytes s) {
 
 bool B_bytesD_islower(B_bytes s) {
     bool has_lower = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'A' && c <= 'Z')
             return false;
@@ -3429,7 +3431,7 @@ bool B_bytesD_islower(B_bytes s) {
 bool B_bytesD_isspace(B_bytes s) {
     if (s->nbytes==0)
         return false;
-    for (int i=0; i<s->nbytes; i++) {
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c !=' ' && c != '\t' && c != '\n' && c != '\r' && c != '\x0b' && c != '\f')
             return false;
@@ -3442,7 +3444,7 @@ bool B_bytesD_istitle(B_bytes s) {
         return false;
     bool incasedrun = false;
     bool cased = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >='A' && c <= 'Z') {
             if (incasedrun)
@@ -3460,7 +3462,7 @@ bool B_bytesD_istitle(B_bytes s) {
 
 bool B_bytesD_isupper(B_bytes s) {
     bool has_upper = false;
-    for (int i=0; i < s->nbytes; i++) {
+    for (int64_t i=0; i < s->nbytes; i++) {
         unsigned char c = s->str[i];
         if (c >= 'a' && c <= 'z')
             return false;
@@ -3528,7 +3530,7 @@ B_bytes B_bytesD_ljust(B_bytes s, int64_t width, B_bytes fill) {
 B_bytes B_bytesD_lower(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int i=0; i< s->nbytes; i++)
+    for (int64_t i=0; i< s->nbytes; i++)
         res->str[i] = ascii_tolower(s->str[i]);
     return res;
 }
@@ -3536,11 +3538,11 @@ B_bytes B_bytesD_lower(B_bytes s) {
 B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
     if (!cs)
         cs = whitespace_bytes;
-    int nstrip = 0;
-    for (int i=0; i<s->nbytes; i++) {
+    int64_t nstrip = 0;
+    for (int64_t i=0; i<s->nbytes; i++) {
         unsigned char c = s->str[i];
         int found = 0;
-        for (int j=0; j<cs->nbytes; j++)
+        for (int64_t j=0; j<cs->nbytes; j++)
             if (c == cs->str[j]) {
                 found = 1;
                 break;
@@ -3561,12 +3563,12 @@ B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
     if (n<0) {
         return $NEWTUPLE(3,s,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""));
     } else {
-        int nb = bmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = bmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_bytes ls;
         NEW_UNFILLED_BYTES(ls,nb);
         memcpy(ls->str,s->str,nb);
         B_bytes rs;
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         NEW_UNFILLED_BYTES(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
         return $NEWTUPLE(3,ls,sep,rs);
@@ -3575,26 +3577,26 @@ B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
 
 
 B_bytes B_bytesD_removeprefix(B_bytes s, B_bytes prefix) {
-    int bytes_to_remove;
+    int64_t bytes_to_remove;
     if (prefix->nbytes > s->nbytes || memcmp(s->str,prefix->str,prefix->nbytes))
         bytes_to_remove = 0;
     else
         bytes_to_remove = prefix->nbytes;
     B_bytes res;
-    int resbytes = s->nbytes - bytes_to_remove;
+    int64_t resbytes = s->nbytes - bytes_to_remove;
     NEW_UNFILLED_BYTES(res,resbytes);
     memcpy(res->str,s->str+bytes_to_remove,resbytes);
     return res;
 }
 
 B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
-    int bytes_to_remove;
+    int64_t bytes_to_remove;
     if (suffix->nbytes > s->nbytes || memcmp(s->str+s->nbytes-suffix->nbytes,suffix->str,suffix->nbytes))
         bytes_to_remove = 0;
     else
         bytes_to_remove = suffix->nbytes;
     B_bytes res;
-    int resbytes = s->nbytes - bytes_to_remove;
+    int64_t resbytes = s->nbytes - bytes_to_remove;
     NEW_UNFILLED_BYTES(res,resbytes);
     memcpy(res->str,s->str,resbytes);
     return res;
@@ -3602,14 +3604,14 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
-        count = toB_int(INT_MAX);
+        count = toB_int(INT64_MAX);
     int64_t c = B_bytesD_count(s, old, NULL, NULL);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return B_bytesD_copy(s);
     }
     // The result can be far longer than the input, so its size is computed
-    // in 64 bits and checked against the int length field of a bytes
+    // in 64 bits and checked against the limit on lengths
     int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
     check_result_len(nbytes);
     B_bytes res;
@@ -3643,7 +3645,7 @@ int64_t B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
     unsigned char *p = &s->str[fromB_int(st)];
     unsigned char *q = &s->str[fromB_int(en)];
-    int n = rbmh(p,sub->str,q-p,sub->nbytes);
+    int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
@@ -3683,11 +3685,11 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
     if (n<0) {
         return $NEWTUPLE(3,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""),s);
     } else {
-        int nb = rbmh(s->str,sep->str,s->nbytes,sep->nbytes);
+        int64_t nb = rbmh(s->str, sep->str, s->nbytes, sep->nbytes);
         B_bytes ls;
         NEW_UNFILLED_BYTES(ls,nb);
         memcpy(ls->str,s->str,nb);
-        int nbr = s->nbytes - sep->nbytes - nb;
+        int64_t nbr = s->nbytes - sep->nbytes - nb;
         B_bytes rs;
         NEW_UNFILLED_BYTES(rs,nbr);
         memcpy(rs->str,s->str+nb+sep->nbytes,nbr);
@@ -3698,11 +3700,11 @@ B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
 B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
     if (!cs)
         cs = whitespace_bytes;
-    int nstrip = 0;
-    for (int i=s->nbytes-1; i>=0; i--) {
+    int64_t nstrip = 0;
+    for (int64_t i=s->nbytes-1; i>=0; i--) {
         unsigned char c = s->str[i];
         int found = 0;
-        for (int j=0; j<cs->nbytes; j++)
+        for (int64_t j=0; j<cs->nbytes; j++)
             if (c == cs->str[j]) {
                 found = 1;
                 break;
@@ -3720,7 +3722,7 @@ B_bytes B_bytesD_rstrip(B_bytes s, B_bytes cs) {
 B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
     B_list res = $NEW(B_list,NULL,NULL);
     B_SequenceD_list wit = B_SequenceD_listG_witness;
-    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT_MAX);
+    if (maxsplit == NULL || fromB_int(maxsplit) < 0) maxsplit = toB_int(INT64_MAX);
     if (sep == NULL) {
         unsigned char *p = s->str;
         if (s->nbytes==0) {
@@ -3771,8 +3773,8 @@ B_list B_bytesD_split(B_bytes s, B_bytes sep, B_int maxsplit) {
         // copy every piece once
         int64_t maxs = fromB_int(maxsplit);
         unsigned char *p = s->str;
-        int rest = s->nbytes;
-        int n;
+        int64_t rest = s->nbytes;
+        int64_t n;
         while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
             B_bytes word;
             NEW_UNFILLED_BYTES(word,n);
@@ -3806,7 +3808,7 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
         } else {
             B_bytes line;
             winend = *p=='\r' && p+1 < s->str + s->nbytes && *(p+1)=='\n';
-            int size = p-q + (keepends->val ? 1 + winend : 0);
+            int64_t size = p-q + (keepends->val ? 1 + winend : 0);
             NEW_UNFILLED_BYTES(line,size);
             memcpy(line->str,q,size);
             p+= 1 + winend;
@@ -3830,7 +3832,7 @@ bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
     unsigned char *p = s->str + fromB_int(st);
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
-    for (int i=0; i<sub->nbytes; i++) {
+    for (int64_t i=0; i<sub->nbytes; i++) {
         if (p >= s->str + fromB_int(en) || *p++ != *q++) {
             return false;
         }
@@ -3846,7 +3848,7 @@ B_bytes B_bytesD_strip(B_bytes s, B_bytes cs) {
 B_bytes B_bytesD_upper(B_bytes s) {
     B_bytes res;
     NEW_UNFILLED_BYTES(res,s->nbytes);
-    for (int i=0; i< s->nbytes; i++)
+    for (int64_t i=0; i< s->nbytes; i++)
         res->str[i] = ascii_toupper(s->str[i]);
 
     return res;
@@ -3882,7 +3884,7 @@ bool B_OrdD_bytesD___eq__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
         return true;
     if (a->nbytes != b->nbytes)
         return false;
-    for (int i=0; i < a->nbytes; i++)
+    for (int64_t i=0; i < a->nbytes; i++)
         if (a->str[i] != b->str[i])
             return false;
     return true;
@@ -3893,8 +3895,8 @@ bool B_OrdD_bytesD___ne__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
 }
 
 bool B_OrdD_bytesD___lt__ (B_OrdD_bytes wit, B_bytes a, B_bytes b) {
-    int minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
-    int i=0;
+    int64_t minl = a->nbytes<b->nbytes ? a->nbytes : b->nbytes;
+    int64_t i=0;
     while (i<minl && a->str[i]==b->str[i]) i++;
     if (i==a->nbytes)
         return i<b->nbytes;
@@ -3978,7 +3980,7 @@ bool B_ContainerD_bytesD___contains__ (B_ContainerD_bytes wit, B_bytes str, B_in
     if (n->val < 0 || n->val > 255)
         return false;
     bool res = false;
-    for (int i=0; i < str->nbytes; i++) {
+    for (int64_t i=0; i < str->nbytes; i++) {
         if (str->str[i] == (unsigned char)n->val) {
             res = true;
             break;
@@ -4010,8 +4012,8 @@ B_bytes B_ISliceableD_bytesD___getslice__ (B_ISliceableD_bytes wit, B_bytes str,
     //slice notation has been eliminated and default values applied
     B_bytes res;
     NEW_UNFILLED_BYTES(res,slen);
-    int t = start;
-    for (int i=0; i<slen; i++) {
+    int64_t t = start;
+    for (int64_t i=0; i<slen; i++) {
         res->str[i] = str->str[t];
         t += step;
     }
@@ -4214,7 +4216,7 @@ B_str B_strD_join_par(char lpar, B_list elems, char rpar) {
         nxt = elems->data[0];
         memcpy(p,nxt->str,nxt->nbytes);
         p += nxt->nbytes;
-        for (int i=1; i<len; i++) {
+        for (int64_t i=1; i<len; i++) {
             nxt = (B_str)elems->data[i];
             memcpy(p,s,2);
             p += 2;

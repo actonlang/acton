@@ -21,15 +21,15 @@ static struct stdQ_xmlQ_XmlParseError stdQ_xmlQ_parse_error =
 // Returns the number of extra bytes needed to replace the special character
 // with encoded entity (not total bytes)
 //
-static int count_xml_escape_extra(B_str str, int escape_quotes) {
-    int extra = 0;
+static int64_t count_xml_escape_extra(B_str str, int escape_quotes) {
+    int64_t extra = 0;
     // Note: It's safe to iterate byte-by-byte even for UTF-8 strings because we
     // only check for ASCII characters (&, <, "). The codepoints for ASCII
     // characters are backwards compatible (0x00-0x7F -> 00000000-01111111).
     // Continuation bytes (2nd, ...) in multi-byte UTF-8 characters always have
     // the same pattern 10xxxxxx (0x80-0xBF) so no UTF-8 continuation byte can
     // be mistaken for an ASCII character.
-    for (int i = 0; i < str->nbytes; i++) {
+    for (int64_t i = 0; i < str->nbytes; i++) {
         switch (str->str[i]) {
             case '&': extra += 4; break;  // &amp; = 5 bytes instead of 1
             case '<': extra += 3; break;  // &lt; = 4 bytes instead of 1
@@ -44,7 +44,7 @@ static int count_xml_escape_extra(B_str str, int escape_quotes) {
 // Helper function to copy string with XML escaping
 // Returns pointer to position after copied data
 static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int escape_quotes) {
-    for (int i = 0; i < src->nbytes; i++) {
+    for (int64_t i = 0; i < src->nbytes; i++) {
         // Note: It's safe to iterate byte-for-byte here because we're only
         // inserting ASCII and copying (maybe UTF-8 multi-byte) characters as
         // individual bytes, iterating over the total byte length of B_str
@@ -324,13 +324,13 @@ B_str stdQ_xmlQ_node2str(stdQ_xmlQ_Node node, bool pretty, int depth) {
     }
 
     // Calculate extra bytes needed for escaping text and tail
-    int text_extra = node->text ? count_xml_escape_extra(node->text, 0) : 0;
-    int tail_extra = node->tail ? count_xml_escape_extra(node->tail, 0) : 0;
+    int64_t text_extra = node->text ? count_xml_escape_extra(node->text, 0) : 0;
+    int64_t tail_extra = node->tail ? count_xml_escape_extra(node->tail, 0) : 0;
 
     int indent_size = pretty ? depth * 2 : 0;
 
     // Calculate total size
-    int res_bytes = indent_size +
+    int64_t res_bytes = indent_size +
                     (is_empty ? 1 : 2) * (node->tag->nbytes + (node->prefix ? node->prefix->nbytes + 1 : 0)) +
                     nsdefs->nbytes + attrs->nbytes +
                     (is_empty ? 0 : (node->text ? node->text->nbytes + text_extra : 0)) +
@@ -340,7 +340,7 @@ B_str stdQ_xmlQ_node2str(stdQ_xmlQ_Node node, bool pretty, int depth) {
                     (node->tail ? node->tail->nbytes + tail_extra : 0) +
                     (is_empty ? 3 : 5); // self-closing tag - 3 bytes (< / >); open+close tag - 5 bytes (< > < / >)
 
-    int res_chars = indent_size +
+    int64_t res_chars = indent_size +
                     (is_empty ? 1 : 2) * (node->tag->nchars + (node->prefix ? node->prefix->nchars + 1 : 0)) +
                     nsdefs->nchars + attrs->nchars +
                     (is_empty ? 0 : (node->text ? node->text->nchars + text_extra : 0)) +
@@ -425,15 +425,15 @@ B_str stdQ_xmlQ_node2str(stdQ_xmlQ_Node node, bool pretty, int depth) {
 }
 
 static B_str stdQ_xmlQ_encode_nsdefs(B_list nsdefs) {
-    int res_bytes = 0;
-    int res_chars = 0;
+    int64_t res_bytes = 0;
+    int64_t res_chars = 0;
     for (int i=0; i<nsdefs->length;i++) {
         B_tuple nsdef = nsdefs->data[i];
         B_str prefix = (B_str)nsdef->components[0];
         B_str href = (B_str)nsdef->components[1];
 
         // Count extra bytes needed for escaping href
-        int href_extra = count_xml_escape_extra(href, 1);
+        int64_t href_extra = count_xml_escape_extra(href, 1);
 
         res_bytes += (prefix ? prefix->nbytes+1 : 0) + href->nbytes + href_extra + 9; // 9 = len(" xmlns" + "=" + '"' + '"')
         res_chars += (prefix ? prefix->nchars+1 : 0) + href->nchars + href_extra + 9;
@@ -462,15 +462,15 @@ static B_str stdQ_xmlQ_encode_nsdefs(B_list nsdefs) {
 
 
 static B_str stdQ_xmlQ_encode_attrs(B_list attrs) {
-    int res_bytes = 0;
-    int res_chars = 0;
+    int64_t res_bytes = 0;
+    int64_t res_chars = 0;
     for (int i=0; i < attrs->length; i++) {
         B_tuple attr = attrs->data[i];
         B_str key = (B_str)attr->components[0];
         B_str value = (B_str)attr->components[1];
 
         // Count extra bytes needed for escaping
-        int extra_bytes = count_xml_escape_extra(value, 1);
+        int64_t extra_bytes = count_xml_escape_extra(value, 1);
 
         res_bytes += key->nbytes + value->nbytes + extra_bytes + 4; // 4 = len(" " + "=" + "'" + "'")
         res_chars += key->nchars + value->nchars + extra_bytes + 4;

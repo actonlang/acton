@@ -43,14 +43,14 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
     // Write to temporary buffer first, making us much less prone to interleaved
     // output from multiple threads. It costs a malloc and some copies but print
     // should not be used in performance critical code.
-    int tlen = 0;
+    int64_t tlen = 0;
     for (int i=0; i<t->size; i++) {
         B_value elem = (B_value)t->components[i];
         tlen += __str__(elem)->nbytes + sep->nbytes;
     }
     tlen += end->nbytes;
     char *s = acton_malloc(tlen+1);
-    int pos = 0;
+    int64_t pos = 0;
     for (int i=0; i<t->size; i++) {
         if (i > 0) {
             memcpy(s+pos, sep->str, sep->nbytes);

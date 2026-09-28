@@ -34,7 +34,7 @@ static struct B_ZeroDivisionError B_bigint_zero_division_error =
 
 // General methods ///////////////////////////////////////////////////////////////////////
 
-int set_str(zz_ptr a, unsigned char *str, int nbytes, B_int intbase);
+int64_t set_str(zz_ptr a, unsigned char *str, int64_t nbytes, B_int intbase);
 
 B_bigint malloc_bigint() {
     B_bigint res = acton_malloc(sizeof(struct B_bigint));
@@ -805,7 +805,7 @@ char * get_str(zz_ptr nval) {
 }
 
 
-int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
+int64_t set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int64_t parts) {
     // assert(parts > 0);
     if (parts == 1) {
         unsigned long val = 0;
@@ -815,14 +815,14 @@ int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
         zz_seti(a, val);
         return POWINWORD[base];
     } else {
-        int hi = parts/2;
-        int lo = parts - hi;
+        int64_t hi = parts/2;
+        int64_t lo = parts - hi;
         zz_ptr hires = acton_malloc(sizeof(zz_struct));
         zz_ptr lores = acton_malloc(sizeof(zz_struct));
         zz_init(hires);
         zz_init(lores);
-        int hidigs = set_str0(hires, nstr, base, hi);
-        int lodigs = set_str0(lores, &nstr[hi * POWINWORD[base]], base, lo);
+        int64_t hidigs = set_str0(hires, nstr, base, hi);
+        int64_t lodigs = set_str0(lores, &nstr[hi * POWINWORD[base]], base, lo);
         zz_seti(a, base);
         zz_powi(a, a, POWINWORD[base] * lo);
         zz_mul(a, a, hires);
@@ -834,8 +834,8 @@ int set_str0(zz_ptr a, unsigned char *nstr, unsigned char base, int parts) {
 
 // nbytes is the length of nstr. A str can contain NUL, so the digits must
 // run to the end of the data, not just to a NUL.
-int set_str(zz_ptr a, unsigned char *nstr, int nbytes, B_int intbase) {
-    int pre = 0;
+int64_t set_str(zz_ptr a, unsigned char *nstr, int64_t nbytes, B_int intbase) {
+    int64_t pre = 0;
     int sgn = 1;
     while(isspace(nstr[pre])) pre++;   // should leading spaces be allowed?
     if(nstr[pre]=='+')
@@ -844,8 +844,8 @@ int set_str(zz_ptr a, unsigned char *nstr, int nbytes, B_int intbase) {
         sgn = -1;
         pre++;
     }
-    int len = 0;
-    int pre_len = pre;
+    int64_t len = 0;
+    int64_t pre_len = pre;
     unsigned char basefromstr = 0;
     if (nstr[pre]=='0') {
         pre++; 
@@ -892,16 +892,16 @@ int set_str(zz_ptr a, unsigned char *nstr, int nbytes, B_int intbase) {
     }
     nstr += pre_len;
     
-    int parts = len / POWINWORD[base];
-    int offset =  len % POWINWORD[base];
+    int64_t parts = len / POWINWORD[base];
+    int64_t offset =  len % POWINWORD[base];
     
     if (offset == 0) {
         return set_str0(a, nstr, base, parts);
         a->size *= sgn;
     } else {
         unsigned long headval = 0;
-        int partdigits = 0;
-        int i = 0;
+        int64_t partdigits = 0;
+        int64_t i = 0;
         while (i < offset)
             headval = headval * base + digvalue[nstr[i++]];
         if (parts > 0) {
