@@ -62,6 +62,12 @@ def test_bytes_istitle():
             and not b"123".istitle() and not b" ".istitle() and not b"hello".istitle()
             and not b"HEllo".istitle() and not b"".istitle())
 
+def test_bytes_replace_negative_count():
+    # A negative count replaces every occurrence, like no count
+    print("bytes replace with negative counts: {b"".replace(b"", b"x", -1)} {b"abc".replace(b"b", b"xyz", -1)}")
+    return (b"".replace(b"", b"x", -1) == b"x" and b"abc".replace(b"b", b"xyz", -1) == b"axyzc"
+            and b"aXbXc".replace(b"X", b"", -2) == b"abc" and b"abc".replace(b"", b"-", -1) == b"-a-b-c-")
+
 def test_empty_bytes_capitalize():
     result = b"".capitalize()
     print("empty bytes.capitalize(): {result}")
@@ -390,6 +396,7 @@ tests = {
     "test_bytes_split_sep": test_bytes_split_sep,
     "test_bytes_contains_range": test_bytes_contains_range,
     "test_bytes_istitle": test_bytes_istitle,
+    "test_bytes_replace_negative_count": test_bytes_replace_negative_count,
     "test_empty_bytes_capitalize": test_empty_bytes_capitalize,
     "test_empty_bytes_center": test_empty_bytes_center,
     "test_empty_bytes_count": test_empty_bytes_count,

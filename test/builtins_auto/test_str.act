@@ -100,6 +100,13 @@ def test_chr_surrogates():
     return (rejected == 6 and chr(0xd7ff).encode() == b"\xed\x9f\xbf"
             and chr(0xe000).encode() == b"\xee\x80\x80" and ord(chr(0x10ffff)) == 0x10ffff)
 
+def test_str_replace_negative_count():
+    # A negative count replaces every occurrence, like no count
+    print("str replace with negative counts: {repr("".replace("", "x", -1))} {"abc".replace("b", "xyz", -1)}")
+    return ("".replace("", "x", -1) == "x" and "abc".replace("b", "xyz", -1) == "axyzc"
+            and "aXbXc".replace("X", "", -2) == "abc" and "abc".replace("", "-", -1) == "-a-b-c-"
+            and "abab".replace("ab", "c", -5) == "cc")
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -416,6 +423,7 @@ tests = {
     "test_str_empty_substring": test_str_empty_substring,
     "test_ascii_quotes_and_length": test_ascii_quotes_and_length,
     "test_chr_surrogates": test_chr_surrogates,
+    "test_str_replace_negative_count": test_str_replace_negative_count,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,

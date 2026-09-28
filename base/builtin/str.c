@@ -1386,7 +1386,8 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 }
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count==NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
     int c = B_strD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
@@ -2420,7 +2421,8 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 
 
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count==NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
     int64_t c = B_bytearrayD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
@@ -3543,7 +3545,8 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
     return res;
 }
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count==NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
     int64_t c = B_bytesD_count(s,old,NULL,NULL);
     int c0 = fromB_int(count) < c ? fromB_int(count) : c;
