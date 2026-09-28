@@ -1,0 +1,2 @@
+def marker() -> int:
+    NotImplemented

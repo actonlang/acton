@@ -245,6 +245,35 @@ small can cause allocation failure. Keep the environment with your results:
 the comparison JSON does not record GC environment variables. Repeat the
 comparison in fresh processes to check that results remain consistent.
 
+## Comparing C allocators
+
+Keep benchmark sources identical and change only the root `Build.act`:
+
+```python
+build_options = {"malloc": "mimalloc"}
+```
+
+Omit this option or use `"libc"` for the baseline. Linux and macOS are supported.
+As with the GC options above, `acton test perf --compare git:REF` compares each
+revision's root build options using the same compiler, and recordings retain
+the chosen options. Run existing GC-heavy modules as controls: a replacement
+for C malloc need not speed up Acton list, string or JSON allocation.
+
+Useful application experiments include parsing and releasing representative
+XML documents, repeated TLS handshakes, and steady HTTP traffic with realistic
+connection reuse and concurrency. Check completed work and output correctness
+in both builds. For servers, measure throughput and median/p95/p99 request
+latency at the same offered load, plus CPU time and peak/steady process RSS.
+Include a long run to observe memory retained after bursts or connections close.
+GC heap and GC allocated-byte measurements do not account for the C heap.
+
+Build both variants before timing, use the same release mode, worker count,
+GC environment and fixtures, and alternate libc/mimalloc runs on a quiet
+machine. Warm up each process and repeat several fresh-process pairs; report
+the spread as well as the central result. Keep allocator diagnostics disabled
+during timing. A short malloc/free microbenchmark can confirm allocator cost,
+but only the application's measured result establishes an application speedup.
+
 ## Tuple hashing
 
 `tuple_hashing` covers the hash path: single values, two- and three-component

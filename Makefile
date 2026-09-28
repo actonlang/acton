@@ -245,6 +245,7 @@ DEPS += dist/deps/mbedtls
 DEPS += dist/deps/libargp
 DEPS += dist/deps/libbsdnt
 DEPS += dist/deps/libgc
+DEPS += dist/deps/mimalloc
 DEPS += dist/deps/libnetstring
 DEPS += dist/deps/pcre2
 DEPS += dist/deps/libprotobuf_c
@@ -377,6 +378,20 @@ dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/docs" "$@/tools"
+	touch "$(TD)/$@"
+
+# /deps/mimalloc --------------------------------------------
+MIMALLOC_VERSION=3.5.3
+MIMALLOC_BUILD_ZIG=deps/mimalloc/build.zig
+deps-download/mimalloc-v$(MIMALLOC_VERSION).tar.gz:
+	mkdir -p deps-download
+	$(CURL) -o $@ https://github.com/microsoft/mimalloc/archive/refs/tags/v$(MIMALLOC_VERSION).tar.gz
+
+dist/deps/mimalloc: deps-download/mimalloc-v$(MIMALLOC_VERSION).tar.gz $(MIMALLOC_BUILD_ZIG)
+	rm -rf "$@"
+	mkdir -p "$@"
+	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<" "mimalloc-$(MIMALLOC_VERSION)/include" "mimalloc-$(MIMALLOC_VERSION)/src" "mimalloc-$(MIMALLOC_VERSION)/LICENSE"
+	cp "$(TD)/$(MIMALLOC_BUILD_ZIG)" "$@/build.zig"
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------

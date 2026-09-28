@@ -17,6 +17,39 @@ threading remain controlled by their existing command-line flags. Their Zig
 option names (`target`, `cpu`, `ofmt`, `dynamic-linker`, `optimize`, `db`, `no_threads`,
 `cpedantic` and names beginning with `acton_`) are reserved and cannot appear in `build_options`.
 
+## C allocator
+
+Applications on Linux and macOS can replace ordinary C allocation with mimalloc:
+
+```python
+build_options = {
+    "malloc": "mimalloc",
+}
+```
+
+The default is `"libc"`. Removing the option or selecting `"libc"` restores the
+system allocator on the next build. Unsupported targets and unknown values
+fail the build. The choice applies to application and test executables.
+
+This replaces the C `malloc`/`calloc`/`realloc`/`free` family, including calls
+from native dependencies. It does not replace Boehm GC or change Acton object
+lifetimes. In particular, libuv's explicitly configured GC allocations stay
+scanned and uncollectable, because they retain references to Acton actors.
+Libraries with their own allocation hooks continue to use those hooks.
+
+Acton links one mimalloc object into each final executable, so applications
+do not need an additional shared allocator library at deployment. The selected
+allocator is active from process startup and cannot be changed mid-run.
+`MIMALLOC_VERBOSE=1` prints mimalloc's startup diagnostics when launching a
+mimalloc executable; leave it unset during timing runs.
+
+Compare identical application workloads with each setting, keeping compiler,
+optimization, worker count and GC settings fixed. XML parsing and TLS connection
+churn exercise ordinary C allocation. Acton collections and JSON conversions
+mostly use GC allocation and are useful controls. Measure throughput, latency
+and process RSS; the performance runner's allocated-byte count covers GC
+allocation, not all memory obtained through C `malloc`.
+
 ## GC mark layout
 
 Applications can opt into a different BDWGC mark representation:
