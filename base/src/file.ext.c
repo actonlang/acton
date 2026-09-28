@@ -483,7 +483,7 @@ $R fileQ_WriteFileD_writeG_local (fileQ_WriteFile self, $Cont c$cont, B_bytes da
     // the previous one ended. A write can write less than asked for, so write
     // until all data is written.
     while (left > 0) {
-        uv_buf_t buf = uv_buf_init(p, left);
+        uv_buf_t buf = uv_buf_init(p, (unsigned int)(left < IO_MAX_BUF_LEN ? left : IO_MAX_BUF_LEN));
         int r = uv_fs_write(get_uv_loop(), req, (uv_file)self->_fd, &buf, 1, -1, NULL);
         uv_fs_req_cleanup(req);
         if (r < 0) {
