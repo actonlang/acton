@@ -37,6 +37,8 @@ static struct B_ValueError B_str_substring_not_found_error =
     STATIC_EXCEPTION(B_ValueError, "index: substring not found");
 static struct B_ValueError B_str_expandtabs_too_long_error =
     STATIC_EXCEPTION(B_ValueError, "expandtabs: result too long");
+static struct B_ValueError B_str_too_long_error =
+    STATIC_EXCEPTION(B_ValueError, "result too long");
 static struct B_ValueError B_str_invalid_ljust_fill_error =
     STATIC_EXCEPTION(B_ValueError, "ljust: fill str not single char");
 static struct B_ValueError B_str_rsubstring_not_found_error =
@@ -516,30 +518,43 @@ static int byte_length2(unsigned char c) {
         return 4;
 }
 
-typedef int (*transform)(int codepoint);
+// #chars in a byte range of valid UTF-8: the bytes that start a char
+static int count_chars(unsigned char *p, int nbytes) {
+    int n = 0;
+    for (int i = 0; i < nbytes; i++)
+        n += (p[i] & 0xc0) != 0x80;
+    return n;
+}
 
-// Mapping a codepoint transform over an entire string
-// For the moment only used for str_upper and str_lower;
-// maybe not worthwhile to keep.
-static B_str str_transform(B_str s, transform f) {
+typedef utf8proc_int32_t (*transform)(utf8proc_int32_t codepoint);
+
+// Mapping codepoint transforms over an entire string: first for the first
+// character and rest for the others. Used by upper, lower and capitalize.
+// A transform can change the UTF-8 length of a character, so the first pass
+// computes the length of the result and the second one writes it.
+static B_str str_transform(B_str s, transform first, transform rest) {
     if (s->nchars == 0) {
         return null_str;
     }
-    int cp, cpu, cplen, cpulen;
+    unsigned char tmp[4];
+    utf8proc_int32_t cp;
+    int64_t nbytes = 0;
     unsigned char *p = s->str;
-    unsigned char buffer[4*s->nchars];
-    unsigned char *up = buffer;
-    for (int i=0; i < s->nchars; i++) {
-        cplen = utf8proc_iterate(p,-1,&cp);
-        cpu = f(cp);
-        cpulen = utf8proc_encode_char(cpu,up);
-        p+=cplen;
-        up += cpulen;
+    for (int64_t i = 0; i < s->nchars; i++) {
+        p += utf8proc_iterate(p, -1, &cp);
+        nbytes += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), tmp);
     }
-    int nbytes = (int)(up-buffer);
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars,nbytes);
-    memcpy(res->str,buffer,nbytes);
+    NEW_UNFILLED_STR(res, s->nchars, nbytes);
+    p = s->str;
+    unsigned char *up = res->str;
+    for (int64_t i = 0; i < s->nchars; i++) {
+        p += utf8proc_iterate(p, -1, &cp);
+        up += utf8proc_encode_char(i == 0 ? first(cp) : rest(cp), up);
+    }
     return res;
 }
 
@@ -603,30 +618,31 @@ static int get_index(int i, int nchars) {
 
 // Eliminates slice notation in find, index, count and other methods
 // with optional start and end and adds defaults for omitted parameters.
+// As for slice indices, a negative index counts from the end, so -1 is the
+// last position, and indices outside the string are clamped to it. Returns
+// -1 if start is beyond the end.
 
 static int fix_start_end(int nchars, B_int *start, B_int *end) {
     if (*start==NULL) {
-        *start = acton_malloc(sizeof(struct B_int));
         *start = toB_int(0);
     } else {
-        int st = fromB_int(*start);
+        int64_t st = fromB_int(*start);
         if (st > nchars) {
             return -1;
         }
         if (st < 0)
-            st += nchars+1;
+            st += nchars;
         st = st < 0 ? 0 : st;
         *start = toB_int(st);
     }
     if (*end==NULL) {
-        *end = acton_malloc(sizeof(struct B_int));
         *end = toB_int(nchars);
     } else {
-        int en = fromB_int(*end);
+        int64_t en = fromB_int(*end);
         if (en > nchars)
             en = nchars;
         else if (en < 0)
-            en += nchars+1;
+            en += nchars;
         en = en < 0 ? 0 : en;
 
         *end = toB_int(en);
@@ -784,6 +800,43 @@ static int64_t expandtabs_bytes(unsigned char *in, int nbytes, int64_t tabsize, 
     return len;
 }
 
+// Tab expansion for str, the same as for bytes except that columns count
+// characters: a character takes one column whatever its UTF-8 length.
+// Returns the length of the result in bytes, sets *nchars to its length in
+// characters and, unless out is NULL, writes the result to out.
+static int64_t expandtabs_str(unsigned char *in, int nbytes, int64_t tabsize, unsigned char *out, int *nchars) {
+    int64_t len = 0;
+    int64_t chars = 0;
+    int64_t col = 0;
+    unsigned char *p = in;
+    unsigned char *end = in + nbytes;
+    while (p < end) {
+        if (*p == '\t') {
+            int64_t n = tabsize - col % tabsize;
+            if (n > INT_MAX - len)
+                RAISE_EXC(&B_str_expandtabs_too_long_error);
+            if (out)
+                memset(out + len, ' ', n);
+            len += n;
+            chars += n;
+            col += n;
+            p++;
+        } else {
+            int n = byte_length2(*p);
+            if (n > INT_MAX - len)
+                RAISE_EXC(&B_str_expandtabs_too_long_error);
+            if (out)
+                memcpy(out + len, p, n);
+            len += n;
+            chars++;
+            col = *p == '\n' || *p == '\r' ? 0 : col + 1;
+            p += n;
+        }
+    }
+    *nchars = chars;
+    return len;
+}
+
 void escape_str(unsigned char *out, unsigned char *in, int outlen, int inlen, int max_esc, bool esc_squote, bool esc_dquote, bool esc_braces, bool esc_triple_dquote) {
     unsigned char *hexdigits = (unsigned char *)"0123456789abcdef";
     unsigned char *p = out;
@@ -923,7 +976,10 @@ B_str B_strD___repr__(B_str s) {
         }
     }
 
-    int newbytes = quote_bytes + bs.escaped + 3*bs.non_printable + bs.braces + escape_triple_bytes;
+    int64_t newbytes = (int64_t)quote_bytes + bs.escaped + 3 * (int64_t)bs.non_printable + bs.braces + escape_triple_bytes;
+    // The length fields of a str are ints
+    if (s->nbytes + newbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
 
     B_str res;
     NEW_UNFILLED_STR(res, s->nchars + newbytes, s->nbytes + newbytes);
@@ -974,25 +1030,7 @@ B_str B_strD___deserialize__(B_str self, $Serial$state state) {
 // str-specific methods ////////////////////////////////////////////////////////
 
 B_str B_strD_capitalize(B_str s) {
-    if (s->nchars==0) {
-        return null_str;
-    }
-    int cp, cpu, cplen, cpulen;
-    unsigned char *p = s->str;
-    unsigned char buffer[4*s->nchars];
-    unsigned char *up = buffer;
-    for (int i=0; i < s->nchars; i++) {
-        cplen = utf8proc_iterate(p,-1,&cp);
-        cpu = i==0? utf8proc_totitle(cp) : utf8proc_tolower(cp);
-        cpulen = utf8proc_encode_char(cpu,up);
-        p+=cplen;
-        up += cpulen;
-    }
-    long nbytes = (long)(up-buffer);
-    B_str res;
-    NEW_UNFILLED_STR(res,s->nchars,nbytes);
-    memcpy(res->str,buffer,nbytes);
-    return res;
+    return str_transform(s,utf8proc_totitle,utf8proc_tolower);
 }
 
 B_str B_strD_center(B_str s, int64_t width, B_str fill) {
@@ -1033,6 +1071,11 @@ int64_t B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
     B_int st = start;
     B_int en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
+    if (sub->nbytes == 0) {
+        // The empty string occurs before every character and at the end
+        int64_t n = fromB_int(en) - fromB_int(st);
+        return n < 0 ? 0 : n + 1;
+    }
     unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
     unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
     int64_t res = 0;
@@ -1067,35 +1110,13 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
     if (s->nchars == 0) {
         return null_str;
     }
-    int tabsz = tabsize?fromB_int(tabsize):8;
-    int pos = 0;
-    int expanded = 0;
+    int64_t tabsz = tabsize ? fromB_int(tabsize) : 8;
     tabsz = tabsz <= 0 ? 1 : tabsz;
-    unsigned char buffer[tabsz * s->nchars];
-    unsigned char *p = s->str;
-    unsigned char *q = buffer;
-    for (int i=0; i<s->nchars; i++) {
-        if (*p == '\t') {
-            int n = tabsz - pos % tabsz;
-            for (int j=0; j < n; j++) {
-                *q++ = ' ';
-            }
-            p++;
-            expanded += n-1;
-            pos+=n;
-        } else if (*p=='\n' || *p == '\r') {
-            *q++ = *p++;
-            pos = 0;
-        } else {
-            for (int j=0; j< byte_length2(*p); j++) {
-                *q++ = *p++;
-                pos++;
-            }
-        }
-    }
+    int nchars;
+    int nbytes = expandtabs_str(s->str, s->nbytes, tabsz, NULL, &nchars);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+expanded,s->nbytes+expanded);
-    memcpy(res->str,buffer,s->nbytes+expanded);
+    NEW_UNFILLED_STR(res,nchars,nbytes);
+    expandtabs_str(s->str, s->nbytes, tabsz, res->str, &nchars);
     return res;
 }
 
@@ -1330,7 +1351,7 @@ B_str B_strD_ljust(B_str s, int64_t width, B_str fill) {
 }
 
 B_str B_strD_lower(B_str s) {
-    return str_transform(s,utf8proc_tolower);
+    return str_transform(s,utf8proc_tolower,utf8proc_tolower);
 }
 
 
@@ -1374,36 +1395,43 @@ B_tuple B_strD_partition(B_str s, B_str sep) {
 }
 
 B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int c = B_strD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_strD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return s;
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
-    int nchars = s->nchars+c0*(new->nchars-old->nchars);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length fields of a str
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    int64_t nchars = s->nchars + c0 * (new->nchars - old->nchars);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    NEW_UNFILLED_STR(res,nchars,nbytes);
+    NEW_UNFILLED_STR(res, nchars, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
+        // An empty old string occurs before every character: step over one
+        // character, not one byte
+        n = i > 0 && old->nbytes == 0 ? byte_length2(*p) : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
@@ -1528,21 +1556,27 @@ B_list B_strD_split(B_str s, B_str sep, B_int maxsplit) {
         if (sep->nchars==0) {
             RAISE_EXC(&B_str_empty_separator_error);
         }
-        if (remaining==0) { // for some unfathomable reason, this is the behaviour of the Python method
-            wit->$class->append(wit,res,null_str);
-            return res;
+        // Search for each separator from the end of the previous one and
+        // copy every piece once
+        int isascii = s->nchars == s->nbytes;
+        int64_t maxs = fromB_int(maxsplit);
+        unsigned char *p = s->str;
+        int rest = s->nbytes;
+        int n;
+        while (res->length < maxs && (n = bmh(p,sep->str,rest,sep->nbytes)) >= 0) {
+            int nchars = isascii ? n : count_chars(p,n);
+            B_str word;
+            NEW_UNFILLED_STR(word,nchars,n);
+            memcpy(word->str,p,n);
+            wit->$class->append(wit,res,word);
+            p += n + sep->nbytes;
+            rest -= n + sep->nbytes;
         }
-        B_str ls, rs, ssep;
-        rs = s;
-        // Note: This builds many intermediate rs strings...
-        while (rs->nchars>0 && res->length < fromB_int(maxsplit)) {
-            B_tuple t = B_strD_partition(rs,sep);
-            ssep = (B_str)t->components[1];
-            rs =  (B_str)t->components[2];
-            wit->$class->append(wit,res,(B_str)t->components[0]);
-        }
-        if (ssep->nchars>0)
-            wit->$class->append(wit,res,rs);
+        int nchars = isascii ? rest : count_chars(p,rest);
+        B_str word;
+        NEW_UNFILLED_STR(word,nchars,rest);
+        memcpy(word->str,p,rest);
+        wit->$class->append(wit,res,word);
         return res;
     }
 }
@@ -1627,7 +1661,7 @@ B_str B_strD_strip(B_str s, B_str cs) {
 }
 
 B_str B_strD_upper(B_str s) {
-    return str_transform(s,utf8proc_toupper);
+    return str_transform(s,utf8proc_toupper,utf8proc_toupper);
 }
 
 B_str B_strD_zfill(B_str s, int64_t width) {
@@ -1843,21 +1877,33 @@ B_str B_ISliceableD_strD___getslice__ (B_ISliceableD_str wit, B_str s, B_slice s
         return null_str;
     }
     //slice notation have been eliminated and default values applied.
-    unsigned char buffer[4*slen]; // very conservative buffer size.
-    unsigned char *p = buffer;
     unsigned char *t = skip_chars(s->str,start,isascii);
+    B_str res;
+    if (step == 1) {
+        // A contiguous run of characters, copied in one go
+        unsigned char *e = skip_chars(t,slen,isascii);
+        NEW_UNFILLED_STR(res,slen,e-t);
+        memcpy(res->str,t,e-t);
+        return res;
+    }
+    // The first pass computes the length of the result in bytes and the
+    // second one copies the characters. Neither steps beyond the last
+    // character of the slice.
+    unsigned char *u = t;
+    for (int i=0; i<slen; i++) {
+        nbytes += byte_length2(*u);
+        if (i < slen-1)
+            u = skip_chars(u,step,isascii);
+    }
+    NEW_UNFILLED_STR(res,slen,nbytes);
+    unsigned char *p = res->str;
     for (int i=0; i<slen; i++) {
         int bytes = byte_length2(*t);
-        for (int k=0; k<bytes;k++) {
-            p[nbytes] = *t;
-            t++; nbytes++;
-        }
-        t = skip_chars(t,step-1,isascii);
+        memcpy(p,t,bytes);
+        p += bytes;
+        if (i < slen-1)
+            t = skip_chars(t,step,isascii);
     }
-    B_str res;
-    NEW_UNFILLED_STR(res,slen,nbytes);
-    if (nbytes > 0)
-        memcpy(res->str,buffer,nbytes);
     return res;
 }
 
@@ -1967,11 +2013,13 @@ bool B_bytearrayD___bool__(B_bytearray s) {
 B_str B_bytearrayD___str__(B_bytearray s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
-    int newbytes = 14+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 14 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    int nbytes = s->nbytes+newbytes;
-    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+12,s->str,res->nbytes-12,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[11] = '\'';
@@ -2155,11 +2203,14 @@ B_bytearray B_bytearrayD_from_hex(B_str s) {
 
 // Shared by bytes.hex and bytearray.hex. The result is built by length; the
 // hex digits are ASCII, so it has as many chars as bytes.
-static B_str hex_from_bytes(unsigned char *data, int nbytes) {
+static B_str hex_from_bytes(unsigned char *data, int64_t nbytes) {
     if (nbytes == 0)
         return null_str;
-    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes
-    int len = nbytes * 2;
+    // Each byte becomes 2 hex chars, so output length is 2 * number of bytes,
+    // which for 1 GiB of data no longer fits the int length fields of a str
+    int64_t len = nbytes * 2;
+    if (len > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
     NEW_UNFILLED_STR(res, len, len);
 
@@ -2167,7 +2218,7 @@ static B_str hex_from_bytes(unsigned char *data, int nbytes) {
     const char hex_digits[] = "0123456789abcdef";
 
     // Convert each byte to two hex digits
-    for (int i = 0; i < nbytes; i++) {
+    for (int64_t i = 0; i < nbytes; i++) {
         unsigned char byte = data[i];
         res->str[i*2] = hex_digits[byte >> 4];     // High nibble
         res->str[i*2 + 1] = hex_digits[byte & 0xf]; // Low nibble
@@ -2388,35 +2439,40 @@ B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
 
 
 B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int64_t c = B_bytearrayD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_bytearrayD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return B_bytearrayD_copy(s);
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length field of a bytearray
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_bytearray res;
-    NEW_UNFILLED_BYTEARRAY(res,nbytes);
+    NEW_UNFILLED_BYTEARRAY(res, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
+        n = i > 0 && old->nbytes == 0 ? 1 : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
@@ -3090,11 +3146,13 @@ bool B_bytesD___bool__(B_bytes s) {
 B_str B_bytesD___str__(B_bytes s) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
-    int newbytes = 3+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 3 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    int nbytes = s->nbytes+newbytes;
-    NEW_UNFILLED_STR(res,nbytes,nbytes);
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
     escape_str(res->str+2,s->str,res->nbytes-2,s->nbytes,255,use_single_quotes,!use_single_quotes,false,false);
     if (use_single_quotes) {
         res->str[1] = '\'';
@@ -3511,35 +3569,40 @@ B_bytes B_bytesD_removesuffix(B_bytes s, B_bytes suffix) {
     return res;
 }
 B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
-    if (count==NULL)
+    // A negative count, like no count, replaces every occurrence
+    if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT_MAX);
-    int64_t c = B_bytesD_count(s,old,NULL,NULL);
-    int c0 = fromB_int(count) < c ? fromB_int(count) : c;
-    if (c0==0){
+    int64_t c = B_bytesD_count(s, old, NULL, NULL);
+    int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
+    if (c0 == 0) {
         return B_bytesD_copy(s);
     }
-    int nbytes = s->nbytes + c0*(new->nbytes-old->nbytes);
+    // The result can be far longer than the input, so its size is computed
+    // in 64 bits and checked against the int length field of a bytes
+    int64_t nbytes = s->nbytes + c0 * (new->nbytes - old->nbytes);
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_bytes res;
-    NEW_UNFILLED_BYTES(res,nbytes);
+    NEW_UNFILLED_BYTES(res, nbytes);
     unsigned char *p = s->str;
     unsigned char *q = res->str;
     unsigned char *pold = old->str;
     unsigned char *pnew = new->str;
-    int plen = s->nbytes;
-    int n;
-    for (int i=0; i<c0; i++) {
-        n = i>0 && old->nbytes==0 ? 1 : bmh(p,pold,plen,old->nbytes);
-        if (n>0) {
-            memcpy(q,p,n);
-            p+=n; q+=n;
+    int64_t plen = s->nbytes;
+    int64_t n;
+    for (int64_t i = 0; i < c0; i++) {
+        n = i > 0 && old->nbytes == 0 ? 1 : bmh(p, pold, plen, old->nbytes);
+        if (n > 0) {
+            memcpy(q, p, n);
+            p += n; q += n;
         }
-        memcpy(q,pnew,new->nbytes);
+        memcpy(q, pnew, new->nbytes);
         p += old->nbytes;
         q += new->nbytes;
-        plen -= n+old->nbytes;
+        plen -= n + old->nbytes;
     }
-    if (plen>0)
-        memcpy(q,p,plen);
+    if (plen > 0)
+        memcpy(q, p, plen);
     return res;
 }
 
@@ -3968,11 +4031,16 @@ B_str B_ascii(B_value v) {
     struct byte_counts bs = byte_count(s->str, s->nbytes);
     //    printf("%d %d %d %d %d %d\n",bs.escaped,bs.squotes,bs.dquotes,bs.printable,bs.non_printable,bs.non_ascii);
     bool use_single_quotes = !(bs.dquotes==0 && bs.squotes>0);
-    int escaped_quotes = use_single_quotes ? bs.dquotes : bs.squotes;
-    int newbytes = 2+bs.escaped+3*bs.non_printable+escaped_quotes+3*bs.non_ascii;
+    int64_t escaped_quotes = use_single_quotes ? bs.squotes : bs.dquotes;
+    int64_t nbytes = (int64_t)s->nbytes + 2 + bs.escaped + 3 * (int64_t)bs.non_printable + escaped_quotes + 3 * (int64_t)bs.non_ascii;
+    // The length fields of a str are ints
+    if (nbytes > INT_MAX)
+        RAISE_EXC(&B_str_too_long_error);
     B_str res;
-    NEW_UNFILLED_STR(res,s->nchars+newbytes,s->nbytes+newbytes);
-    escape_str(res->str+1,s->str,res->nbytes-1,s->nbytes,255,!use_single_quotes,use_single_quotes,false,false);
+    // Every byte from 127 up is escaped, so the result is ASCII and has as
+    // many chars as bytes
+    NEW_UNFILLED_STR(res, nbytes, nbytes);
+    escape_str(res->str + 1, s->str, res->nbytes - 1, s->nbytes, 255, use_single_quotes, !use_single_quotes, false, false);
     if (use_single_quotes) {
         res->str[0] = '\'';
         res->str[res->nbytes-1] = '\'';
@@ -4024,7 +4092,8 @@ B_str B_bin(B_Integral wit, $WORD n) {
 
 B_str B_chr(B_Integral wit, $WORD n) {
     int64_t v = wit->$class->__int__(wit,n);
-    if (v >=  0x110000)
+    // Surrogates are not characters and have no UTF-8 encoding
+    if (v >=  0x110000 || (v >= 0xd800 && v <= 0xdfff))
         RAISE_EXC(&B_str_invalid_code_point_error);
     if (v >= 0 && v < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[v];

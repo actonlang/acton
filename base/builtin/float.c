@@ -51,9 +51,8 @@ double B_floatG_new(B_atom a) {
     if ($ISINSTANCE0(a,B_bool)) return (double)((B_bool)a)->val;
     if ($ISINSTANCE0(a,B_str)) {
         double x;
-        int c;
-        sscanf((char *)((B_str)a)->str,"%lf%n",&x,&c);
-        if (c==((B_str)a)->nbytes)
+        int c = -1;  // sscanf only sets c if it converted a number
+        if (sscanf((char *)((B_str)a)->str,"%lf%n",&x,&c) == 1 && c==((B_str)a)->nbytes)
             return x;
         else
             RAISE_EXC(&B_float_invalid_literal_error);

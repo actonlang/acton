@@ -140,6 +140,37 @@ def test_bytearray_istitle():
             and not bytearray(b" ").istitle() and not bytearray(b"hello").istitle()
             and not bytearray(b"HEllo").istitle() and not bytearray(b"").istitle())
 
+def test_bytearray_replace_negative_count():
+    # A negative count replaces every occurrence, like no count
+    b = bytearray(b"abc").replace(bytearray(b"b"), bytearray(b"xyz"), -1)
+    print("bytearray replace with a negative count: {b}")
+    return (bytearray(b"").replace(bytearray(b""), bytearray(b"x"), -1) == bytearray(b"x")
+            and b == bytearray(b"axyzc")
+            and bytearray(b"aXbXc").replace(bytearray(b"X"), bytearray(b""), -2) == bytearray(b"abc"))
+
+def test_bytearray_negative_bounds():
+    # A negative start or end counts from the end, as in a slice
+    s = bytearray(b"abcabc")
+    e = bytearray(b"")
+    print("bytearray with negative bounds: {bytearray(b"abc").count(e, -1)} {s.find(bytearray(b"c"), -2)}")
+    return (bytearray(b"abc").count(e, -1) == 2 and bytearray(b"abc").count(e, 0, -1) == 3
+            and s.find(bytearray(b"c"), -2) == 5 and s.rfind(bytearray(b"a"), -6, -3) == 0
+            and s.startswith(bytearray(b"ca"), -4) and s.endswith(bytearray(b"ab"), 0, -1)
+            and bytearray(b"ab").endswith(bytearray(b"b"), -1)
+            and not bytearray(b"ab").endswith(bytearray(b"ab"), -1))
+
+def test_bytearray_replace_too_long():
+    # A result longer than a bytearray can hold raises ValueError: here 65536
+    # bytes each become 65536 bytes, 4 GiB in all
+    s = bytearray(b"a" * 65536)
+    try:
+        r = s.replace(bytearray(b"a"), bytearray(b"b" * 65536))
+        print("bytearray replace gave {len(r)} bytes")
+        return False
+    except ValueError:
+        print("bytearray replace with a 4 GiB result raised ValueError")
+        return True
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -516,6 +547,9 @@ tests = {
     "test_bytearray_del_slice_steps": test_bytearray_del_slice_steps,
     "test_bytearray_byte_range": test_bytearray_byte_range,
     "test_bytearray_istitle": test_bytearray_istitle,
+    "test_bytearray_replace_negative_count": test_bytearray_replace_negative_count,
+    "test_bytearray_negative_bounds": test_bytearray_negative_bounds,
+    "test_bytearray_replace_too_long": test_bytearray_replace_too_long,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,

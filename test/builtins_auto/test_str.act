@@ -10,6 +10,128 @@ def test_str_find():
             s.find("world", 0, 7) == -1 and
             s.find("crap") == -1)
 
+def test_str_expandtabs_chars():
+    # Columns count characters, whatever their UTF-8 length
+    print("str expandtabs: {repr("é\tx".expandtabs(4))} {repr("€\tx".expandtabs(4))}")
+    return ("é\tx".expandtabs(4) == "é   x"
+            and "€\tx".expandtabs(4) == "€   x"
+            and "𝄞\tx".expandtabs(4) == "𝄞   x"
+            and "ab\tc\nd\te".expandtabs(4) == "ab  c\nd   e"
+            and "a\tb".expandtabs() == "a       b"
+            and "\t".expandtabs(0) == " "
+            and len("é\t".expandtabs(8)) == 8)
+
+def test_str_expandtabs_large():
+    # The result is built on the heap, not in a stack buffer sized by the
+    # input and the tab size
+    wide = ("x" * 100).expandtabs(1000000)
+    many = ("é" * 5000 + "\t").expandtabs(1)
+    print("str expandtabs of large inputs: {len(wide)} {len(many)}")
+    return wide == "x" * 100 and many == "é" * 5000 + " "
+
+def test_str_case_utf8_length():
+    # Case mapping can change the UTF-8 length of a character
+    print("str case mapping with length changes: {"ɐı".upper()} {"ɐBC".capitalize()}")
+    return ("ɐı".upper() == "ⱯI" and "ⱯI".lower() == "ɐi"
+            and "ɐBC".capitalize() == "Ɐbc" and "hELLO wORLD".capitalize() == "Hello world")
+
+def test_str_upper_large():
+    # upper builds its result on the heap, not in a stack array of four bytes
+    # per character
+    u = ("a" * 30000000).upper()
+    print("str upper of 30000000 chars: {len(u)}")
+    return len(u) == 30000000 and u.count("A") == 30000000
+
+def test_str_slice_steps():
+    s = "aéb€c𝄞d"
+    print("str slices with steps: {s[::2]} {s[::-1]} {s[::-2]} {s[5:0:-2]} {s[1:6:2]}")
+    return (s[::2] == "abcd" and s[::-1] == "d𝄞c€béa" and s[::-2] == "dcba"
+            and s[5:0:-2] == "𝄞€é" and s[1:6:2] == "é€𝄞" and s[1:3] == "éb"
+            and s[3:] == "€c𝄞d" and s[:0] == "" and s[6:0:-3] == "d€")
+
+def test_str_slice_large():
+    # A slice is built on the heap, not in a stack array of four bytes per
+    # character
+    r = ("a" * 30000000)[1:]
+    print("str slice of 30000000 chars: {len(r)}")
+    return len(r) == 29999999 and r.count("a") == 29999999
+
+def test_str_split_sep():
+    parts = ("ab," * 20000).split(",")
+    print("str split with a separator: {len(parts)} parts")
+    return ("a,b,c".split(",", 0) == ["a,b,c"]
+            and "a,b,c".split(",", 1) == ["a", "b,c"]
+            and "a,b,c".split(",", -1) == ["a", "b", "c"]
+            and "a,,b,".split(",") == ["a", "", "b", ""]
+            and "".split(",") == [""]
+            and "abc".split("xyz") == ["abc"]
+            and "é€::𝄞::".split("::", 5) == ["é€", "𝄞", ""]
+            and [len(x) for x in "é€,𝄞a,".split(",")] == [2, 2, 0]
+            and len(parts) == 20001 and parts[0] == "ab" and parts[20000] == "")
+
+def test_str_empty_substring():
+    # The empty string occurs before every character and at the end
+    print("str count and replace of the empty string: {"é€".count("")} {"é€".replace("", "-")}")
+    return ("é€".count("") == 3 and "abc".count("") == 4 and "abc".count("", 1, 2) == 2
+            and "abc".count("", 2, 1) == 0 and "abc".count("", 3) == 1 and "abc".count("", 4) == 0
+            and "é€".replace("", "-") == "-é-€-" and len("é€".replace("", "-")) == 5
+            and "é€".replace("", "-", 2) == "-é-€" and "abc".replace("", "-") == "-a-b-c-")
+
+def test_ascii_quotes_and_length():
+    # The quote character used as delimiter is escaped, and the ASCII result
+    # has as many chars as bytes
+    both = ascii("'" + "\"")
+    e = ascii("é€")
+    print("ascii: {both} {e} {len(e)}")
+    return (both == "'\\'\"'" and ascii("it's") == "\"it's\""
+            and ascii('say "hi"') == "'say \"hi\"'"
+            and e.isascii() and len(e) == len(e.encode()))
+
+def test_chr_surrogates():
+    # Surrogates have no UTF-8 encoding, so chr rejects them like other
+    # invalid code points
+    rejected = 0
+    for cp in [0xd800, 0xdbff, 0xdc00, 0xdfff, 0x110000, -1]:
+        try:
+            c = chr(cp)
+        except ValueError:
+            rejected += 1
+    print("chr rejected {rejected} of 6 invalid code points")
+    return (rejected == 6 and chr(0xd7ff).encode() == b"\xed\x9f\xbf"
+            and chr(0xe000).encode() == b"\xee\x80\x80" and ord(chr(0x10ffff)) == 0x10ffff)
+
+def test_str_replace_negative_count():
+    # A negative count replaces every occurrence, like no count
+    print("str replace with negative counts: {repr("".replace("", "x", -1))} {"abc".replace("b", "xyz", -1)}")
+    return ("".replace("", "x", -1) == "x" and "abc".replace("b", "xyz", -1) == "axyzc"
+            and "aXbXc".replace("X", "", -2) == "abc" and "abc".replace("", "-", -1) == "-a-b-c-"
+            and "abab".replace("ab", "c", -5) == "cc")
+
+def test_str_negative_bounds():
+    # A negative start or end counts from the end, as in a slice
+    s = "abcabc"
+    print("str with negative bounds: {"abc".count("", -1)} {"abc".count("", 0, -1)} {s.find("c", -2)}")
+    return ("abc".count("", -1) == 2 and "abc".count("", 0, -1) == 3
+            and "abc".count("", -10) == 4 and "abc".count("", -1, -2) == 0
+            and s.find("c", -2) == 5 and s.find("c", -4, -1) == 2 and s.rfind("a", -6, -3) == 0
+            and s.count("abc", -3) == 1 and s.index("b", -5) == 1
+            and s.startswith("ca", -4) and s.endswith("ab", 0, -1) and not s.endswith("c", 0, -1)
+            and "é€𝄞".find("𝄞", -1) == 2 and "é€𝄞".count("", -2) == 3
+            and s.find("a", 4294967296) == -1
+            and "ab".endswith("b", -1) and "aé".endswith("é", -1) and not "ab".endswith("ab", -1))
+
+def test_str_replace_too_long():
+    # A result longer than a str can hold raises ValueError: here 65536 chars
+    # each become 65536 chars, 4 GiB in all
+    s = "a" * 65536
+    try:
+        r = s.replace("a", "b" * 65536)
+        print("str replace gave {len(r)} chars")
+        return False
+    except ValueError:
+        print("str replace with a 4 GiB result raised ValueError")
+        return True
+
 def test_empty_str_capitalize():
     result = "".capitalize()
     print("empty str.capitalize(): '{result}'")
@@ -316,6 +438,19 @@ def test_decode_invalid_utf8_mid():
 
 tests = {
     "test_str_find": test_str_find,
+    "test_str_expandtabs_chars": test_str_expandtabs_chars,
+    "test_str_expandtabs_large": test_str_expandtabs_large,
+    "test_str_case_utf8_length": test_str_case_utf8_length,
+    "test_str_upper_large": test_str_upper_large,
+    "test_str_slice_steps": test_str_slice_steps,
+    "test_str_slice_large": test_str_slice_large,
+    "test_str_split_sep": test_str_split_sep,
+    "test_str_empty_substring": test_str_empty_substring,
+    "test_ascii_quotes_and_length": test_ascii_quotes_and_length,
+    "test_chr_surrogates": test_chr_surrogates,
+    "test_str_replace_negative_count": test_str_replace_negative_count,
+    "test_str_negative_bounds": test_str_negative_bounds,
+    "test_str_replace_too_long": test_str_replace_too_long,
     "test_empty_str_capitalize": test_empty_str_capitalize,
     "test_empty_str_center": test_empty_str_center,
     "test_empty_str_count": test_empty_str_count,
