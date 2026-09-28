@@ -25,10 +25,6 @@
 
 #include "utf8proc.h"
 
-static struct B_ValueError B_str_invalid_utf8_copy_error =
-    STATIC_EXCEPTION(B_ValueError, "to$str: Unicode decode error");
-static struct B_ValueError B_str_invalid_utf8_nocopy_error =
-    STATIC_EXCEPTION(B_ValueError, "to_str_noc: Unicode decode error");
 static struct B_ValueError B_str_invalid_utf8_error =
     STATIC_EXCEPTION(B_ValueError, "Unicode decode error");
 static struct B_ValueError B_str_invalid_center_fill_error =
@@ -412,7 +408,7 @@ static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 // Conversion to and from C strings
 
 // Count Unicode characters within the supplied byte range, including NUL.
-static int str_count_chars(const char *str, int nbytes, B_ValueError error) {
+static int str_count_chars(const char *str, int nbytes) {
     const unsigned char *p = (const unsigned char *)str;
     const unsigned char *end = p + nbytes;
     int nchars = nbytes;
@@ -423,7 +419,7 @@ static int str_count_chars(const char *str, int nbytes, B_ValueError error) {
             int cp;
             int size = utf8proc_iterate(p, end - p, &cp);
             if (size < 0) {
-                RAISE_EXC(error);
+                RAISE_EXC(&B_str_invalid_utf8_error);
                 return 0;
             }
             p += size;
@@ -433,13 +429,13 @@ static int str_count_chars(const char *str, int nbytes, B_ValueError error) {
     return nchars;
 }
 
-static B_str str_from_c(const char *str, int nbytes, bool copy, B_ValueError error) {
+static B_str str_from_c(const char *str, int nbytes, bool copy) {
     if (nbytes == 0)
         return null_str;
     if (nbytes == 1 && (unsigned char)str[0] < ASCII_CHAR_TABLE_SIZE)
         return &ascii_char_strs[(unsigned char)str[0]];
 
-    int nchars = str_count_chars(str, nbytes, error);
+    int nchars = str_count_chars(str, nbytes);
     B_str res;
     if (copy) {
         NEW_UNFILLED_STR(res,nchars,nbytes);
@@ -463,31 +459,11 @@ B_str actStrFromCStringCopy(const char *str) {
 }
 
 B_str actStrFromCStringLength(const char *str, int nbytes) {
-    return str_from_c(str, nbytes, false, &B_str_invalid_utf8_error);
+    return str_from_c(str, nbytes, false);
 }
 
 B_str actStrFromCStringLengthCopy(const char *str, int nbytes) {
-    return str_from_c(str, nbytes, true, &B_str_invalid_utf8_error);
-}
-
-// Keep the old ownership contracts and diagnostics during migration.
-B_str to$str(char *str) {
-    return str_from_c(str, strlen(str), true, &B_str_invalid_utf8_copy_error);
-}
-
-B_str to_str_len(const char *str, int nbytes) {
-    return actStrFromCStringLengthCopy(str, nbytes);
-}
-
-B_str to_str_noc(char *str) {
-    int nbytes = strlen(str);
-    int nchars = str_count_chars(str, nbytes, &B_str_invalid_utf8_nocopy_error);
-    B_str res = acton_malloc(sizeof(struct B_str));
-    res->$class = &B_strG_methods;
-    res->nbytes = nbytes;
-    res->nchars = nchars;
-    res->str = (unsigned char *)str;
-    return res;
+    return str_from_c(str, nbytes, true);
 }
 
 unsigned char *fromB_str(B_str str) {
@@ -3059,8 +3035,20 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
 
 // Conversion to and from C strings
 
+B_bytes actBytesFromCString(const char *str) {
+    return actBytesFromCStringLength(str, strlen(str));
+}
+
 B_bytes actBytesFromCStringCopy(const char *str) {
     return actBytesFromCStringLengthCopy(str, strlen(str));
+}
+
+B_bytes actBytesFromCStringLength(const char *str, int len) {
+    B_bytes res = acton_malloc(sizeof(struct B_bytes));
+    res->$class = &B_bytesG_methods;
+    res->nbytes = len;
+    res->str = (unsigned char *)str;
+    return res;
 }
 
 B_bytes actBytesFromCStringLengthCopy(const char *str, int len) {
@@ -3068,35 +3056,6 @@ B_bytes actBytesFromCStringLengthCopy(const char *str, int len) {
     NEW_UNFILLED_BYTES(res,len);
     memcpy(res->str,str,len);
     return res;
-}
-
-B_bytes actBytesFromCStringNoCopy(char *str) {
-    return actBytesFromCStringLengthNoCopy(str, strlen(str));
-}
-
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int length) {
-    B_bytes res = acton_malloc(sizeof(struct B_bytes));
-    res->$class = &B_bytesG_methods;
-    res->nbytes = length;
-    res->str = (unsigned char *)str;
-    return res;
-}
-
-// These existing names continue to copy until downstream callers migrate.
-B_bytes actBytesFromCString(char *str) {
-    return actBytesFromCStringCopy(str);
-}
-
-B_bytes actBytesFromCStringLength(char *str, int len) {
-    return actBytesFromCStringLengthCopy(str, len);
-}
-
-B_bytes to$bytes(char *str) {
-    return actBytesFromCStringCopy(str);
-}
-
-B_bytes to$bytesD_len(char *str, int len) {
-    return actBytesFromCStringLengthCopy(str, len);
 }
 
 char *fromB_bytes(B_bytes b) {
@@ -3330,7 +3289,7 @@ B_bytes B_bytesD_from_hex(B_str s) {
         result[i/2] = (high_val << 4) | low_val;
     }
 
-    return actBytesFromCStringLengthNoCopy(result, bytelen);
+    return actBytesFromCStringLength(result, bytelen);
 }
 
 B_str B_bytesD_hex(B_bytes s) {

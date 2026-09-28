@@ -19,13 +19,6 @@ B_str actStrFromCStringCopy(const char *str);
 B_str actStrFromCStringLength(const char *str, int nbytes);
 B_str actStrFromCStringLengthCopy(const char *str, int nbytes);
 
-// Compatibility names. Preserve their original copying behaviour until
-// downstream callers have migrated to the explicit APIs above.
-B_str to$str(char *str);                         // Copies.
-B_str to_str_len(const char *str, int nbytes);   // Copies; preserves embedded NUL.
-B_str to_str_noc(char *str);                     // Wraps the input without copying.
-B_str toB_str(char *str);
-
 // Destructor; recover the internal string.
 unsigned char *fromB_str(B_str str);
 
@@ -115,20 +108,16 @@ struct B_bytes {
     unsigned char *str;      // nbytes bytes, not NUL-terminated
 };
 
-// Copy into independent storage. LengthCopy preserves embedded NUL and does
-// not require a terminator; the count excludes any final terminator.
+// Without Copy, the input must remain immutable and alive for the result's
+// lifetime: use static storage or retained Acton GC storage, never a stack
+// buffer or memory that will be freed. Copy accepts temporary buffers.
+// The Length variants preserve embedded NUL and do not require a terminator;
+// the count excludes any final terminator. Bytes are not NUL-terminated.
+B_bytes actBytesFromCString(const char *str);
 B_bytes actBytesFromCStringCopy(const char *str);
+B_bytes actBytesFromCStringLength(const char *str, int len);
 B_bytes actBytesFromCStringLengthCopy(const char *str, int len);
 
-// Existing APIs retain their behaviour during the downstream migration:
-// the unadorned names still copy. NoCopy requires immutable storage that
-// remains alive for the result's lifetime.
-B_bytes actBytesFromCString(char *str);
-B_bytes actBytesFromCStringNoCopy(char *str);
-B_bytes actBytesFromCStringLength(char *str, int len);
-B_bytes actBytesFromCStringLengthNoCopy(char *str, int length);
-B_bytes to$bytes(char *str);
-B_bytes to$bytesD_len(char *str, int len);
 char *fromB_bytes(B_bytes b);
 
 
