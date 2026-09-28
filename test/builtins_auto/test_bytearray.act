@@ -171,6 +171,27 @@ def test_bytearray_replace_too_long():
         print("bytearray replace with a 4 GiB result raised ValueError")
         return True
 
+def bytearray_too_long(f: () -> bytearray) -> bool:
+    try:
+        r = f()
+        print("got a bytearray of {len(r)} bytes instead of ValueError")
+        return False
+    except ValueError:
+        return True
+
+def test_bytearray_sizes_too_long():
+    # A result longer than a bytearray can hold raises ValueError, instead of
+    # the width or count being cut to an int or the size wrapping around
+    huge = 2**32 + 5
+    ab = bytearray(b"ab")
+    big = bytearray(b"x" * 1048576)
+    print("bytearray results longer than a bytearray can hold")
+    return (bytearray_too_long(lambda: ab.center(huge)) and bytearray_too_long(lambda: ab.ljust(huge))
+            and bytearray_too_long(lambda: ab.rjust(huge)) and bytearray_too_long(lambda: ab.zfill(huge))
+            and bytearray_too_long(lambda: ab * (2**32 + 1)) and bytearray_too_long(lambda: ab * 2**31)
+            and bytearray_too_long(lambda: bytearray(b"").join([big] * 4096))
+            and bytearray(b"") * 10**18 == bytearray(b"") and ab * 3 == bytearray(b"ababab"))
+
 def test_empty_bytearray_capitalize():
     result = bytearray(b"").capitalize()
     print("empty bytearray.capitalize(): {result}")
@@ -550,6 +571,7 @@ tests = {
     "test_bytearray_replace_negative_count": test_bytearray_replace_negative_count,
     "test_bytearray_negative_bounds": test_bytearray_negative_bounds,
     "test_bytearray_replace_too_long": test_bytearray_replace_too_long,
+    "test_bytearray_sizes_too_long": test_bytearray_sizes_too_long,
     "test_empty_bytearray_capitalize": test_empty_bytearray_capitalize,
     "test_empty_bytearray_center": test_empty_bytearray_center,
     "test_empty_bytearray_count": test_empty_bytearray_count,
