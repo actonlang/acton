@@ -24,6 +24,11 @@
   are being redesigned. [#3084]
 
 ### Compiler & Build
+- Compile conversions between statically known fixed-width numeric types
+  without boxing, while retaining range checks for narrowing conversions, and
+  keep builtin sequence indices unboxed across lookup and mutable operations
+  where supported. The reported `nsieve 12` benchmark fell from 4.2 seconds to
+  1.9 seconds. [#3177]
 - Generate allocation-free code for explicit `next()` and `__next__()` calls
   even when producing and consuming the result are separated or the result is
   tested inside a larger condition, while preserving ordinary `maybe` values
@@ -43,6 +48,9 @@
 - Stop passing project-only module selection options to distribution packages
   such as `std`, eliminating spurious Zig `invalid option` messages in verbose
   build output and manually run build commands. [#3168]
+- Allow Zig to use the active macOS SDK again with current macOS 26 Command
+  Line Tools instead of forcing its bundled headers through an obsolete
+  compatibility workaround. [#3029]
 - Preserve unchanged generated root stubs and Zig build files when their
   contents match, avoiding timestamp-only rewrites that invalidate otherwise
   reusable warm-build output. [#3099]
@@ -86,6 +94,34 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Make concurrent `xml.decode()` calls safe when parsing malformed documents
+  and reduce parser pressure on the GC by keeping libxml2 allocations outside
+  the GC heap, using per-parse error state, and parsing input in place. Each
+  failed call now reports its own error and position instead of risking a
+  double-free crash; the bundled libxml2 is updated to 2.15.4. [#3170] [#3175]
+- Fix correctness and crash bugs across `bytes` and `bytearray`: ASCII-only
+  case conversion and classification, representation quoting, tab expansion,
+  suffix bounds, NUL-aware comparisons, separator splitting, partition
+  results, stepped slice deletion, membership, and mutation range checks.
+  Separator splitting no longer crashes with `maxsplit=0` or repeatedly copies
+  the remaining input, and derived bytearrays no longer alias their inputs.
+  `bytearray.hex()` now returns exactly two characters per byte, and environment
+  byte APIs reject embedded NULs instead of truncating names or values. [#3171]
+  [#3173] [#3174]
+- Reuse fixed exceptions and their messages across builtin and standard-library
+  failures, and reuse immutable builtin strings for `None`, `True`, `False`,
+  and exact `str` values. Fixed-error benchmarks allocate 15-19% fewer bytes
+  and run 5-7% faster while preserving exception types and diagnostics. [#3182]
+  [#3183] [#3184]
+- Add explicit C extension APIs for shared versus copied `str` and `bytes`
+  storage, including length-taking variants that preserve embedded NULs and
+  validate UTF-8. Existing conversion names retain their behavior during the
+  migration. [#3179]
+- Enable mprotect dirty-page tracking for incremental and generational GC on
+  arm64 macOS by building the bundled collector with its maintained build
+  configuration. Runtime input buffers now stay outside protected GC pages, so
+  process, TCP, and UDP reads remain reliable when this mode is enabled;
+  x86_64 macOS retains the previous fallback. [#3172]
 - Hash values from their existing byte representation instead of allocating a
   `bytes` wrapper, and hash tuple components with one hasher while preserving
   component boundaries. This removes per-value and per-component allocations,
@@ -4977,6 +5013,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3024]: https://github.com/actonlang/acton/pull/3024
 [#3026]: https://github.com/actonlang/acton/pull/3026
 [#3027]: https://github.com/actonlang/acton/pull/3027
+[#3029]: https://github.com/actonlang/acton/pull/3029
 [#3030]: https://github.com/actonlang/acton/pull/3030
 [#3031]: https://github.com/actonlang/acton/pull/3031
 [#3034]: https://github.com/actonlang/acton/pull/3034
@@ -5069,6 +5106,17 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3166]: https://github.com/actonlang/acton/pull/3166
 [#3167]: https://github.com/actonlang/acton/pull/3167
 [#3168]: https://github.com/actonlang/acton/pull/3168
+[#3170]: https://github.com/actonlang/acton/pull/3170
+[#3171]: https://github.com/actonlang/acton/pull/3171
+[#3172]: https://github.com/actonlang/acton/pull/3172
+[#3173]: https://github.com/actonlang/acton/pull/3173
+[#3174]: https://github.com/actonlang/acton/pull/3174
+[#3175]: https://github.com/actonlang/acton/pull/3175
+[#3177]: https://github.com/actonlang/acton/pull/3177
+[#3179]: https://github.com/actonlang/acton/pull/3179
+[#3182]: https://github.com/actonlang/acton/pull/3182
+[#3183]: https://github.com/actonlang/acton/pull/3183
+[#3184]: https://github.com/actonlang/acton/pull/3184
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
