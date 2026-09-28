@@ -385,28 +385,28 @@ static struct B_bytearray whitespace_bytearray_struct = {&B_bytearrayG_methods,6
 
 static B_bytearray whitespace_bytearray = &whitespace_bytearray_struct;
 
-#define NEW_UNFILLED_STR(nm,nchrs,nbtes)        \
-    assert(nbtes >= nchrs);                     \
-    nm = acton_malloc(sizeof(struct B_str));           \
-    (nm)->$class = &B_strG_methods;               \
-    (nm)->nchars = nchrs;                       \
-    (nm)->nbytes = nbtes;                       \
-    (nm)->str = acton_malloc_atomic(nbtes + 1);       \
-    (nm)->str[nbtes] = 0
+#define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
+    assert((nbtes) >= (nchrs));                 \
+    nm = acton_malloc(sizeof(struct B_str));    \
+    (nm)->$class = &B_strG_methods;             \
+    (nm)->nchars = (nchrs);                     \
+    (nm)->nbytes = (nbtes);                     \
+    (nm)->str = acton_malloc_atomic((nbtes) + 1); \
+    (nm)->str[(nbtes)] = 0
 
 // bytes and bytearray data is nbytes long and not NUL-terminated; NUL is an
 // ordinary byte.
-#define NEW_UNFILLED_BYTEARRAY(nm,nbtes)        \
-    nm = acton_malloc(sizeof(struct B_bytearray));     \
-    (nm)->$class = &B_bytearrayG_methods;         \
-    (nm)->nbytes = nbtes;                       \
-    (nm)->capacity = nbtes;                     \
+#define NEW_UNFILLED_BYTEARRAY(nm, nbtes)       \
+    nm = acton_malloc(sizeof(struct B_bytearray)); \
+    (nm)->$class = &B_bytearrayG_methods;       \
+    (nm)->nbytes = (nbtes);                     \
+    (nm)->capacity = (nbtes);                   \
     (nm)->str = acton_malloc_atomic(nbtes)
 
-#define NEW_UNFILLED_BYTES(nm,nbtes)            \
-    nm = acton_malloc(sizeof(struct B_bytes));         \
-    (nm)->$class = &B_bytesG_methods;             \
-    (nm)->nbytes = nbtes;                       \
+#define NEW_UNFILLED_BYTES(nm, nbtes)           \
+    nm = acton_malloc(sizeof(struct B_bytes));  \
+    (nm)->$class = &B_bytesG_methods;           \
+    (nm)->nbytes = (nbtes);                     \
     (nm)->str = acton_malloc_atomic(nbtes)
 
 // Conversion to and from C strings
