@@ -71,6 +71,10 @@
   its build, invalidate cached tests when changed, and are recorded with
   performance results. Explicit Linux backends fail instead of silently
   falling back when unavailable. [#3140] [#3146]
+- Allow Linux and macOS applications to select mimalloc for ordinary C and
+  native-library allocation with `build_options = {"malloc": "mimalloc"}`.
+  The system allocator remains the default, and the option does not replace
+  Boehm GC or change Acton object lifetimes. [#3188]
 - Allow Linux applications to set `gc_disable_thp` in `Build.act` to keep GC
   memory on ordinary pages, including newly allocated and reused heap memory.
   The updated bundled collector applies the setting without changing the
@@ -94,6 +98,19 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Use 64-bit lengths for `str`, `bytes`, and `bytearray`, allowing their core
+  operations to produce values larger than 2 GiB. Large widths, counts, and
+  totals are checked without integer overflow; values beyond the supported
+  limit raise `ValueError`, failed allocations raise `MemoryError`, and
+  bytearrays can grow beyond 1 GiB without looping. `bytes()` also rejects
+  integers outside 0 through 255 before narrowing them. [#3191] [#3193]
+- Fix correctness and crash bugs in `str` and shared sequence operations,
+  including Unicode-aware tab expansion, empty-substring counting and
+  replacement, separator splitting, negative search and slice bounds,
+  negative replacement counts, quote escaping, large case conversions and
+  slices, and negative-step list slice deletion. Numeric constructors now
+  consume the whole input and consistently raise `ValueError` for invalid
+  arguments, while `chr()` rejects surrogate code points. [#3185] [#3186]
 - Make concurrent `xml.decode()` calls safe when parsing malformed documents
   and reduce parser pressure on the GC by keeping libxml2 allocations outside
   the GC heap, using per-parse error state, and parsing input in place. Each
@@ -130,6 +147,8 @@
 - Add `acton.rts.get_gc_info()` for inspecting the collector's mode, configured
   and active dirty-tracking backends, marking and collection policy, and
   current heap, free, and unmapped byte counts. [#3146]
+- Add `math.ldexp(x, exp)` and `std.math.ldexp(x, exp)` for computing
+  `x * 2**exp` across the full Acton `int` exponent range. [#3190]
 - Update the bundled collector so unlimited generational collection can use
   parallel marking, idle `userfaultfd` monitoring sleeps, write protection
   handles Linux memory-mapping boundaries, and custom stop callbacks remain
@@ -250,6 +269,10 @@
   discovery and execution of tests that used the legacy callback form. [#3111]
 
 ### Compatibility Notes
+- The buffers backing `bytes` and `bytearray` now contain exactly `nbytes`
+  bytes, with no trailing NUL. C extensions must use the length, and code that
+  needs a C string must reject embedded NULs and make a terminated copy.
+  Serialized values remain compatible. [#3180]
 - Generic code that only reads indexed, sliced, sequential, or mapping values
   should use `IIndexed`, `ISliceable`, `ISequence`, or `IMapping`. `str` and
   `bytes` implement `ISliceable`, `ilist` implements `ISequence`, and `idict`
@@ -5114,9 +5137,16 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3175]: https://github.com/actonlang/acton/pull/3175
 [#3177]: https://github.com/actonlang/acton/pull/3177
 [#3179]: https://github.com/actonlang/acton/pull/3179
+[#3180]: https://github.com/actonlang/acton/pull/3180
 [#3182]: https://github.com/actonlang/acton/pull/3182
 [#3183]: https://github.com/actonlang/acton/pull/3183
 [#3184]: https://github.com/actonlang/acton/pull/3184
+[#3185]: https://github.com/actonlang/acton/pull/3185
+[#3186]: https://github.com/actonlang/acton/pull/3186
+[#3188]: https://github.com/actonlang/acton/pull/3188
+[#3190]: https://github.com/actonlang/acton/pull/3190
+[#3191]: https://github.com/actonlang/acton/pull/3191
+[#3193]: https://github.com/actonlang/acton/pull/3193
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
