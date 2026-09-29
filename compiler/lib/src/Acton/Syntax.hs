@@ -20,7 +20,12 @@ import Data.Persist (Persist)
 import qualified Data.Set
 import qualified Data.HashMap.Strict as M
 import qualified Data.Hashable
+import qualified Data.ByteString as BS
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import Data.Char
+import Data.Word (Word8)
+import Numeric (readHex, readOct)
 import GHC.Generics (Generic)
 import Control.DeepSeq
 import Prelude hiding((<>))
@@ -835,6 +840,40 @@ binop e1 op e2                      = BinOp l0 e1 op e2
 cmp e1 op e2                        = CompOp l0 e1 [OpArg op e2]
 
 mkStringLit s                       = Strings l0 ['\'' : s ++ "\'"]
+
+-- | The bytes denoted by one fragment of a string or bytes literal, as the
+-- parser keeps it in sval (escapes still written out). \xHH and octal escapes
+-- denote single bytes; \u and \U escapes and all other characters denote their
+-- UTF-8 encoding. Nothing if an escape is malformed or not a Unicode scalar value.
+literalBytes :: String -> Maybe [Word8]
+literalBytes = decode
+  where
+    decode [] = Just []
+    decode ('\\':'x':rest) = number 2 readHex (Just . pure . fromIntegral) rest
+    decode ('\\':'u':rest) = number 4 readHex unicode rest
+    decode ('\\':'U':rest) = number 8 readHex unicode rest
+    decode ('\\':c:rest)
+      | isOctDigit c = number (length (takeWhile isOctDigit (take 3 (c:rest)))) readOct
+          (Just . pure . fromIntegral) (c:rest)
+      | Just value <- lookup c (zip "abfnrtv\\\"'" "\a\b\f\n\r\t\v\\\"'") =
+          (fromIntegral (ord value) :) <$> decode rest
+    decode ('\\':_) = Nothing
+    decode (c:rest) = (utf8 c ++) <$> decode rest
+    number count reader encode rest = do
+      let (digits, after) = splitAt count rest
+      case reader digits of
+        [(value, "")] | length digits == count -> do
+          bytes <- encode value
+          (bytes ++) <$> decode after
+        _ -> Nothing
+    unicode value
+      | isScalarValue value = Just (utf8 (chr value))
+      | otherwise = Nothing
+    utf8 = BS.unpack . TE.encodeUtf8 . T.singleton
+
+-- | Whether a code point may appear in a str: Unicode minus the UTF-16 surrogates.
+isScalarValue :: Int -> Bool
+isScalarValue value                 = value <= 0x10ffff && not (value >= 0xd800 && value <= 0xdfff)
 
 isIdent s@(c:cs)                    = isAlpha c && all isAlphaNum cs && not (isKeyword s)
   where isAlpha c                   = c `elem` ['a'..'z'] || c `elem` ['A'..'Z'] || c == '_'

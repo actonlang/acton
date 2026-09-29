@@ -23,12 +23,12 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as BS
 import qualified Data.Map as Map
 import Data.Map (Map)
-import Data.Char (chr, ord, isAlpha, isAlphaNum, isAscii, isSpace, isOctDigit)
+import Data.Char (ord, isAlpha, isAlphaNum, isAscii, isSpace)
 import Data.Maybe (catMaybes, fromMaybe, isNothing, mapMaybe)
 import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import Numeric (readHex, readOct, showHex)
+import Numeric (showHex)
 import qualified Control.Exception as E
 import System.IO.Unsafe (unsafePerformIO)
 import qualified System.FilePath.Posix as Posix
@@ -864,31 +864,8 @@ exprToBuildOptions _ = Left InvalidBuildOptions
 -- fragment before joining it; unlike dependency options these are not C/Zig code.
 buildOptionLiteral :: S.Expr -> Maybe String
 buildOptionLiteral (S.Strings _ parts) = do
-  bytes <- BS.pack . concat <$> traverse decode parts
+  bytes <- BS.pack . concat <$> traverse S.literalBytes parts
   either (const Nothing) (Just . T.unpack) (TE.decodeUtf8' bytes)
-  where
-    decode [] = Just []
-    decode ('\\':'x':rest) = number 2 readHex (Just . pure . fromIntegral) rest
-    decode ('\\':'u':rest) = number 4 readHex unicode rest
-    decode ('\\':'U':rest) = number 8 readHex unicode rest
-    decode ('\\':c:rest)
-      | isOctDigit c = number (length (takeWhile isOctDigit (take 3 (c:rest)))) readOct
-          (Just . pure . fromIntegral) (c:rest)
-      | Just value <- lookup c (zip "abfnrtv\\\"'" "\a\b\f\n\r\t\v\\\"'") =
-          (fromIntegral (ord value) :) <$> decode rest
-    decode ('\\':_) = Nothing
-    decode (c:rest) = (utf8 c ++) <$> decode rest
-    number count reader encode rest = do
-      let (digits, after) = splitAt count rest
-      case reader digits of
-        [(value, "")] | length digits == count -> do
-          bytes <- encode value
-          (bytes ++) <$> decode after
-        _ -> Nothing
-    unicode value
-      | value <= 0x10ffff && not (value >= 0xd800 && value <= 0xdfff) = Just (utf8 (chr value))
-      | otherwise = Nothing
-    utf8 = BS.unpack . TE.encodeUtf8 . T.singleton
 buildOptionLiteral _ = Nothing
 
 -- Haskell's numeric character escapes are decimal; Acton uses octal/hex.

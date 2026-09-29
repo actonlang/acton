@@ -1,0 +1,10 @@
+ERROR: [error Syntax error]: Invalid universal character name
+     ╭──▶ test@1:4-1:8
+     │
+   1 │ "\ud800"
+     •    ┬─── 
+     •    ╰╸ Invalid universal character name
+     •
+     │ Note: U+D800 is not a valid Unicode character
+     │ Note: Valid code points are U+0000 to U+10FFFF, excluding the surrogates U+D800 to U+DFFF
+─────╯

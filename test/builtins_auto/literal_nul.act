@@ -1,0 +1,50 @@
+# str and bytes literals keep an embedded NUL and everything after it. The
+# expected values are built with chr() and bytes([...]), which do not go through
+# the code generated for literals.
+
+def check_str():
+    nul = chr(0)
+    assert len("\x00") == 1 and "\x00" == nul
+    assert len("a\x00b") == 3 and "a\x00b" == "a" + nul + "b"
+    assert len("\x00\x00\x00") == 3 and "\x00\x00\x00" == nul + nul + nul
+    assert "a\x00b".encode() == bytes([97, 0, 98])
+    for s in ["\0", "\00", "\000", "\x00", "\u0000", "\U00000000"]:
+        assert s == nul
+
+    # An octal escape takes at most three digits and \x exactly two, also when
+    # adjacent literals are joined.
+    assert "\0001" == nul + "1"
+    assert "\08" == nul + "8"
+    assert "\x001" == nul + "1"
+    assert "\0" "1" == nul + "1"
+    assert "\x00" "1" "x" == nul + "1x"
+    assert "\x41" "b" == "Ab"
+    x = 7
+    assert "\x41b{x}" == "Ab7"
+
+    assert len("é\x00ü") == 3 and "é\x00ü" == "é" + nul + "ü"
+    assert "é\x00ü".encode() == bytes([195, 169, 0, 195, 188])
+    assert "é\x00\U0001F600" == "é" + nul + "😀"
+    assert """a\x00
+b""" == "a" + nul + "\nb"
+    assert r"a\x00" == "a" + "\\" + "x00"
+
+def check_bytes():
+    assert len(b"\x00") == 1 and b"\x00" == bytes([0])
+    assert len(b"a\x00b") == 3 and b"a\x00b" == bytes([97, 0, 98])
+    for b in [b"\0", b"\00", b"\000", b"\x00"]:
+        assert b == bytes([0])
+    assert b"\0001" == bytes([0, 49])
+    assert b"\08" == bytes([0, 56])
+    assert b"\101\0" == bytes([65, 0])
+    assert b"\0" b"1" == bytes([0, 49])
+    assert b"\x00".decode() == chr(0)
+
+actor main(env):
+    try:
+        check_str()
+        check_bytes()
+    except AssertionError:
+        print("literal with NUL produced the wrong value")
+        await async env.exit(1)
+    await async env.exit(0)
