@@ -471,6 +471,7 @@ primToStr                           = name "actStrFromCString"
 primToStrLen                        = name "actStrFromCStringLength"
 primToBytearray                     = name "to$bytearray"
 primToBytes                         = name "actBytesFromCStringLengthNoCopy"
+primFORMATLen                       = gPrim "FORMAT_len"
 
 tmpV                                = primKW "tmp"
 
@@ -1299,7 +1300,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "rsa"          = comma <+> expr <> format s p
-          where expr                = parens (parens (gen env tStr) <> gen env e) <> text "->str"
+          where expr                = parens (parens (gen env tStr) <> gen env e)
         conv ('%':s) p              = format s p
 
 -- Helpers for choosing the C representation at call boundaries.
@@ -1662,8 +1663,9 @@ genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
-  | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
-  where -- unbox (TNil _ _) p          = empty
+  | n == primFORMAT                 = gen env primFORMATLen <> parens (cLiteral fmt <> comma <+> pretty (length fmt) <> castLit env s (flatten tup))
+  where fmt                         = literalTokenBytes (sval (formatLit s))
+        -- unbox (TNil _ _) p          = empty
         -- unbox (TRow _  _ _ t r) (PosArg e p)
         --  | t == tStr               = comma <+> expr <> text "->str" <> unbox r p
         --  | otherwise               = comma <+> expr <> text "->val" <> unbox r p
@@ -2217,8 +2219,6 @@ binPretty op                        = pretty op
 
 augPretty EuDivA                    = text "/="
 augPretty op                        = pretty op
-
-genStr env s                        = cLiteral (literalTokenBytes (sval s))
 
 -- After the Normalizer, each sval fragment is a C string literal token: the
 -- parser's escaped text in double quotes (formatLit may join several tokens
