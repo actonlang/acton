@@ -1,0 +1,100 @@
+import time
+
+# Workers must be woken whenever an actor becomes runnable while they sleep.
+# The driver runs a chain of steps started by timers, with idle gaps of
+# varying length between them, so workers are awake, going to sleep or
+# asleep when the next step arrives. Each step makes a synchronous call and
+# fans out to a set of leaf actors. A lost wakeup shows as a step that
+# starts late: the actor stays queued until some unrelated event wakes a
+# worker. The watchdog reports progress without ever waiting for the driver.
+
+STEPS = 2000
+LEAVES = 32
+MAX_LATE_NS = 250000000
+GAPS = [0.0, 0.0001, 0.0005, 0.002]
+
+def now_ns() -> int:
+    s, ns = time.get_monotonic()
+    return s * 1000000000 + ns
+
+
+actor Echo():
+    def ping(x: int) -> int:
+        return x + 1
+
+
+actor Leaf():
+    def work(n: int, reply: action(int) -> None):
+        reply(n)
+
+
+actor Watchdog(env: Env):
+    var seen = 0
+    var last = -1
+    var stalled = 0
+
+    def progress(n: int):
+        seen = n
+
+    def check():
+        if seen == last:
+            stalled += 1
+            if stalled >= 4:
+                print("no progress for 2 s at step", seen)
+                env.exit(1)
+        else:
+            stalled = 0
+        last = seen
+        after now 0.5: check()
+
+    after now 0.5: check()
+
+
+actor Driver(env: Env, wd: Watchdog):
+    echo = Echo()
+    var leaves: list[Leaf] = []
+    var step = 0
+    var replies = 0
+    var due = 0
+    var max_late = 0
+
+    def next_step():
+        gap = GAPS[step % len(GAPS)]
+        due = now_ns() + int(gap * 1e9)
+        after now gap: run_step()
+
+    def run_step():
+        late = now_ns() - due
+        if late > max_late:
+            max_late = late
+        if late > MAX_LATE_NS:
+            print("step", step, "started", late // 1000000, "ms late")
+            env.exit(1)
+            return
+        x = echo.ping(step)
+        if x != step + 1:
+            print("wrong reply", x)
+            env.exit(1)
+            return
+        replies = 0
+        for l in leaves:
+            l.work(step, on_reply)
+
+    def on_reply(n: int):
+        replies += 1
+        if replies == LEAVES:
+            step += 1
+            wd.progress(step)
+            if step == STEPS:
+                print("done, max lateness", max_late // 1000000, "ms")
+                env.exit(0)
+            else:
+                next_step()
+
+    for i in range(LEAVES):
+        leaves.append(Leaf())
+    next_step()
+
+
+actor main(env):
+    Driver(env, Watchdog(env))

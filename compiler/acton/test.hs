@@ -2744,6 +2744,11 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/print_nul.act"
           assertEqual "print NUL retCode" ExitSuccess returnCode
           assertEqual "print NUL output" "a\0b\nc\0d\0\0\n" cmdOut
+  ,   testCase "wake workers for timers, calls and bursts" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/wake_stress.act"
+          forM_ ["1", "2", "8"] $ \n -> do
+              (returnCode, cmdOut, cmdErr) <- runThing ("--rts-wthreads " ++ n) "../../test/rts/wake_stress.act"
+              assertEqual ("wake_stress with " ++ n ++ " worker threads: " ++ cmdOut ++ cmdErr) ExitSuccess returnCode
   ]
 
 stdlibTests =
