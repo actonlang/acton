@@ -363,20 +363,18 @@ witsByTNameX x tn               = Data.Foldable.toList (Map.findWithDefault Seq.
 -- are presented as-is and kept lazy -- re-deduping the ever-growing local bucket
 -- with uniqueWits is the O(n^2) cost that previously stalled large modules. Only
 -- the small imported set, possibly read via aliased and unaliased queries, needs
--- deduping. Imported witnesses take the leading (closed) position the preloaded
--- environment used to give them, so enumeration order matches the in-memory case.
+-- deduping. Imported witnesses come first, module by module in the order of
+-- importedModuleInfos (__builtin__ first) and in definition order within each
+-- module. This is the order the preloaded environment used to give them. The
+-- solver tries protocol candidates in this order, so an extension in an imported
+-- module must not come before the __builtin__ witnesses.
 witsByPName                     :: Env -> QName -> [Witness]
-witsByPName env pn              = importedUnique env imported ++ witsByPNameX (envX env) pn
+witsByPName env pn              = uniqueWits env imported ++ witsByPNameX (envX env) pn
   where imported                = concat [ moduleWitnessesByProto mi qn | mi <- importedModuleInfos env, qn <- queryQNames env pn ]
 
 witsByTName                     :: Env -> QName -> [Witness]
-witsByTName env tn              = importedUnique env imported ++ witsByTNameX (envX env) tn
+witsByTName env tn              = uniqueWits env imported ++ witsByTNameX (envX env) tn
   where imported                = concat [ moduleWitnessesByType mi qn | mi <- importedModuleInfos env, qn <- queryQNames env tn ]
-
--- Deduplicate the imported witnesses, preserving the leading position the legacy
--- (newest-first, reversed) enumeration gave them.
-importedUnique                  :: Env -> [Witness] -> [Witness]
-importedUnique env              = reverse . uniqueWits env
 
 -- Witnesses read from interfaces may name the same protocol or type in
 -- aliased and unaliased form, so queries try both forms.

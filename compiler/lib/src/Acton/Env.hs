@@ -280,8 +280,10 @@ moduleQNameKeys _ qn        = [qn]
 sameWitness w w'            = tcname (proto w) == tcname (proto w') && wtype w == wtype w'
 
 extWitnesses                :: (Name->QName) -> (Witness->Bool) -> TEnv -> [Witness]
-extWitnesses mkQ skip exts  = fst (foldl' add ([], Map.empty) wits)
+extWitnesses mkQ skip exts  = reverse $ fst (foldl' add ([], Map.empty) wits)
   where wits                = [ WClass q (tCon c) p (mkQ n) ws (length opts) | (n, NExt q c ps _ opts _) <- exts, (ws,p) <- ps ]
+        -- The result keeps the definition order of `exts`: the solver tries
+        -- protocol candidates in the order that witness queries give them.
         -- `skip` handles duplicates already visible outside this batch. For
         -- duplicates generated within this call, scan only the (proto name,
         -- type name) bucket; `sameWitness` cannot match outside that bucket.
