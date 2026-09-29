@@ -29,7 +29,9 @@ libuv poke; sending it to the owner's own loop is harmless because async
 callbacks are not run inline and wake notifications may be coalesced.
 
 Workers run `maybe_sync_pause()` at the top of `wt_work_cb()` before dequeuing
-the next actor continuation. A non-owner
+the next actor continuation. Without a pause request the check is a single
+load of the request flag, which has a cache line of its own; the pause mutex
+is only taken while a pause is requested. A non-owner
 worker that sees an active pause marks itself parked exactly once, increments
 `sync_pause_parked_count`, signals the condition variable, and waits until the
 owner releases the pause. The owner waits until `sync_pause_parked_count`

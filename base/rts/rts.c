@@ -265,7 +265,12 @@ void set_actor_affinity(int wthread_id) { }
 #ifdef ACTON_THREADS
 static pthread_mutex_t sync_pause_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t sync_pause_cond = PTHREAD_COND_INITIALIZER;
-static int sync_pause_requested = 0;
+// Every worker reads the request flag before each continuation, and it is
+// written only when a pause starts or ends. It has a cache line of its own
+// so that the check stays a load from the reader's own cache.
+static struct {
+    _Atomic int requested;
+} __attribute__((aligned(128))) sync_pause_flag;
 static int sync_pause_owner = -1;
 static int sync_pause_parked_count = 0;
 static int sync_pause_workers_are_started = 0;
@@ -304,7 +309,7 @@ int acton_sync_pause_begin(void) {
     int owner = (int)wctx->id;
 
     pthread_mutex_lock(&sync_pause_lock);
-    if (!sync_pause_workers_are_started || sync_pause_requested) {
+    if (!sync_pause_workers_are_started || sync_pause_flag.requested) {
         pthread_mutex_unlock(&sync_pause_lock);
         return -1;
     }
@@ -313,7 +318,7 @@ int acton_sync_pause_begin(void) {
         return -1;
     }
 
-    sync_pause_requested = 1;
+    sync_pause_flag.requested = 1;
     sync_pause_owner = owner;
     sync_pause_parked_count = 0;
     sync_pause_clear_parked();
@@ -323,7 +328,7 @@ int acton_sync_pause_begin(void) {
         sync_pause_wait();
     }
     if (rts_exit) {
-        sync_pause_requested = 0;
+        sync_pause_flag.requested = 0;
         sync_pause_owner = -1;
         sync_pause_parked_count = 0;
         pthread_cond_broadcast(&sync_pause_cond);
@@ -343,12 +348,12 @@ void acton_sync_pause_end(void) {
     int owner = (int)wctx->id;
 
     pthread_mutex_lock(&sync_pause_lock);
-    if (!sync_pause_requested || sync_pause_owner != owner) {
+    if (!sync_pause_flag.requested || sync_pause_owner != owner) {
         pthread_mutex_unlock(&sync_pause_lock);
         return;
     }
 
-    sync_pause_requested = 0;
+    sync_pause_flag.requested = 0;
     sync_pause_owner = -1;
     sync_pause_parked_count = 0;
     pthread_cond_broadcast(&sync_pause_cond);
@@ -358,6 +363,11 @@ void acton_sync_pause_end(void) {
 // Called from the worker loop between actor continuations. If a sync pause is
 // active, non-owner workers park here while the owner runs the synchronized op.
 static void maybe_sync_pause(void) {
+    // Without a pause request this is one load. A worker that reads the
+    // flag just before a pause starts sees it at its next check; the pause
+    // owner waits until every worker has parked.
+    if (!atomic_load_explicit(&sync_pause_flag.requested, memory_order_relaxed))
+        return;
     WorkerCtx wctx = GET_WCTX();
     if (wctx == NULL || wctx->id < 0 || wctx->id >= MAX_WTHREADS) {
         return;
@@ -365,7 +375,7 @@ static void maybe_sync_pause(void) {
     int id = (int)wctx->id;
 
     pthread_mutex_lock(&sync_pause_lock);
-    while (sync_pause_requested && id != sync_pause_owner && !rts_exit) {
+    while (sync_pause_flag.requested && id != sync_pause_owner && !rts_exit) {
         if (!sync_pause_parked[id]) {
             sync_pause_parked[id] = 1;
             sync_pause_parked_count++;
@@ -1742,8 +1752,16 @@ void wt_work_cb(uv_check_t *ev) {
             return;
         }
         volatile $Actor current = DEQ_ready(wctx->id);
-        if (!current)
-            return;
+        if (!current) {
+            // An enqueuer wakes only workers it sees idle, and we marked
+            // ourselves idle after our last continuation. A full fence
+            // before looking once more means that either the enqueuer sees
+            // us idle or we see its actor.
+            atomic_thread_fence(memory_order_seq_cst);
+            current = DEQ_ready(wctx->id);
+            if (!current)
+                return;
+        }
 
         wake_wt(SHARED_RQ);
 
