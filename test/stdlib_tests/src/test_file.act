@@ -46,6 +46,77 @@ actor _test_file_walk(t: testing.EnvT):
     except Exception as exc:
         t.error(exc)
 
+actor _test_path_with_nul(t: testing.EnvT):
+    """A path with a NUL in it raises ValueError instead of naming the file
+    before the NUL"""
+    try:
+        fc = file.FileCap(t.env.cap)
+        fs = file.FS(fc)
+        tmpdir = fs.mktmpdir()
+        name = file.join_path([tmpdir, "a"])
+        wf = file.WriteFile(file.WriteFileCap(fc), name)
+        await async wf.write(b"data")
+        await async wf.close()
+        nul_name = name + chr(0) + "b"
+
+        raised = 0
+        try:
+            await async fs.stat(nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.lstat(nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.remove(nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.rename(nul_name, name + ".moved")
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.copyfile(name, nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.mkdir(nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.rmdir(tmpdir + chr(0))
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.listdir(tmpdir + chr(0))
+        except ValueError:
+            raised += 1
+        try:
+            await async fs.mktmpdir("x" + chr(0))
+        except ValueError:
+            raised += 1
+        try:
+            file.ReadFile(file.ReadFileCap(fc), nul_name)
+        except ValueError:
+            raised += 1
+        try:
+            file.WriteFile(file.WriteFileCap(fc), nul_name)
+        except ValueError:
+            raised += 1
+        testing.assertEqual(11, raised)
+        # The file named by the part before the NUL is untouched
+        testing.assertEqual(["a"], fs.listdir(tmpdir))
+        rf = file.ReadFile(file.ReadFileCap(fc), name)
+        testing.assertEqual(b"data", rf.read())
+        rf.close()
+        await async fs.rmtree(tmpdir)
+        t.success()
+    except AssertionError as exc:
+        t.failure(exc)
+    except Exception as exc:
+        t.error(exc)
+
 actor _test_fs_write_read_file(t: testing.EnvT):
     try:
         fc = file.FileCap(t.env.cap)

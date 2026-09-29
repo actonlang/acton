@@ -24,6 +24,11 @@ B_str actStrFromCStringCopy(const char *str);
 B_str actStrFromCStringLength(const char *str, int64_t nbytes);
 B_str actStrFromCStringLengthCopy(const char *str, int64_t nbytes);
 
+// A NUL-terminated copy of s, for a C API that takes a C string. Such an API
+// takes a NUL as the end of the string, so if s contains one this raises
+// nul_error instead.
+const char *actStrToCString(B_str s, B_ValueError nul_error);
+
 // Compatibility names. Preserve their original copying behaviour until
 // downstream callers have migrated to the explicit APIs above.
 B_str to$str(char *str);                         // Copies.
