@@ -93,8 +93,12 @@
 #define IDICT_ID 72
 #define ARRAY_ID 73
 #define BITARRAY_ID 74
+#define BITSET_ID 75
+#define BITARRAYITERATOR_ID 76
+#define BITSETITERATOR_ID 77
+#define ARRAYITERATOR_ID 78
 
-#define PREASSIGNED 75
+#define PREASSIGNED 79
 
 
 /*

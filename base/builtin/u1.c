@@ -71,7 +71,7 @@ void B_u1D___serialize__(B_u1 n, $Serial$state state) {
 }
 
 B_u1 B_u1D___deserialize__(B_u1 n, $Serial$state state) {
-    return toB_u1((uint8_t)$val_deserialize(state));
+    return toB_u1((uint8_t)(uintptr_t)$val_deserialize(state));
 }
 
 bool B_u1D___bool__(B_u1 n) {

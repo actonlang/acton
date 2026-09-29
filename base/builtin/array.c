@@ -144,6 +144,87 @@ B_NoneType B_MutIndexedD_arrayD___setitem__(B_MutIndexedD_array wit,
     return B_arrayD___setitem__(self, index->val, value);
 }
 
+// Container[A] ////////////////////////////////////////////////////////////////////////////////////
+
+static bool B_IteratorD_arrayD_next(B_IteratorD_array self, $WORD *out) {
+    if (self->next >= self->src->length)
+        return false;
+    *out = B_arrayD___getitem__(self->src, self->next++);
+    return true;
+}
+
+B_IteratorD_array B_IteratorD_arrayG_new(B_array src) {
+    return $NEW(B_IteratorD_array, src);
+}
+
+void B_IteratorD_arrayD_init(B_IteratorD_array self, B_array src) {
+    self->src = src;
+    self->next = 0;
+}
+
+bool B_IteratorD_arrayD_bool(B_IteratorD_array self) {
+    return true;
+}
+
+B_str B_IteratorD_arrayD_str(B_IteratorD_array self) {
+    return $FORMAT("<array iterator object at %p>", self);
+}
+
+void B_IteratorD_arrayD_serialize(B_IteratorD_array self, $Serial$state state) {
+    $step_serialize(self->src, state);
+    $step_serialize(toB_int(self->next), state);
+}
+
+B_IteratorD_array B_IteratorD_arrayD_deserialize(B_IteratorD_array self,
+                                                  $Serial$state state) {
+    if (!self)
+        self = $DNEW(B_IteratorD_array, state);
+    self->src = (B_array)$step_deserialize(state);
+    self->next = fromB_int((B_int)$step_deserialize(state));
+    return self;
+}
+
+struct B_IteratorD_arrayG_class B_IteratorD_arrayG_methods = {
+    "B_IteratorD_array", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
+    B_IteratorD_arrayD_init, B_IteratorD_arrayD_serialize,
+    B_IteratorD_arrayD_deserialize, B_IteratorD_arrayD_bool,
+    B_IteratorD_arrayD_str, B_IteratorD_arrayD_str,
+    B_IteratorD_arrayD_next
+};
+
+B_Iterator B_ContainerD_arrayD___iter__(B_ContainerD_array wit, B_array self) {
+    return (B_Iterator)B_IteratorD_arrayG_new(self);
+}
+
+B_array B_ContainerD_arrayD___fromiter__(B_ContainerD_array wit,
+                                         B_Iterable iter_wit, $WORD iterable) {
+    B_list values = B_listG_new(iter_wit, iterable);
+    B_array result = B_arrayG_new(wit->W_ArrayElementD_AD_ContainerD_array,
+                                  values->length, B_None);
+    for (int64_t i = 0; i < values->length; i++)
+        B_arrayD___setitem__(result, i, values->data[i]);
+    return result;
+}
+
+int64_t B_ContainerD_arrayD___len__(B_ContainerD_array wit, B_array self) {
+    return self->length;
+}
+
+bool B_ContainerD_arrayD___contains__(B_ContainerD_array wit, B_array self,
+                                      $WORD value) {
+    B_Eq eq_wit = wit->W_EqD_AD_ContainerD_array;
+    for (int64_t i = 0; i < self->length; i++) {
+        if (eq_wit->$class->__eq__(eq_wit, B_arrayD___getitem__(self, i), value))
+            return true;
+    }
+    return false;
+}
+
+bool B_ContainerD_arrayD___containsnot__(B_ContainerD_array wit, B_array self,
+                                         $WORD value) {
+    return !B_ContainerD_arrayD___contains__(wit, self, value);
+}
+
 void B_arrayD___serialize__(B_array self, $Serial$state state) {
     if (self->length > INT_MAX - 2)
         $RAISE((B_BaseException)$NEW(B_ValueError,

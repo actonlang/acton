@@ -2039,7 +2039,8 @@ const char* stats_to_json () {
         return NULL;
     }
 #else
-    localtime_r(&ts.tv_sec, &tm);
+    time_t seconds = (time_t)ts.tv_sec;
+    localtime_r(&seconds, &tm);
 #endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
@@ -2116,7 +2117,8 @@ const char* db_membership_to_json () {
         return NULL;
     }
     struct tm tm;
-    localtime_r(&ts.tv_sec, &tm);
+    time_t seconds = (time_t)ts.tv_sec;
+    localtime_r(&seconds, &tm);
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);
     sprintf(dt + 20, "%03hu%s", (unsigned short)(ts.tv_nsec / 1000000), dt + 23);
@@ -2178,7 +2180,8 @@ const char* actors_to_json () {
         return NULL;
     }
 #else
-    localtime_r(&ts.tv_sec, &tm);
+    time_t seconds = (time_t)ts.tv_sec;
+    localtime_r(&seconds, &tm);
 #endif
     char dt[32];    // = "YYYY-MM-ddTHH:mm:ss.SSS+0000";
     strftime(dt, 32, "%Y-%m-%dT%H:%M:%S.000%z", &tm);

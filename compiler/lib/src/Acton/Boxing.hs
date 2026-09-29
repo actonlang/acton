@@ -118,6 +118,11 @@ staticWitnessOf env (Call _ f p KwdNil)
             n2 == nDict             = builtinStaticKey env qn
           | n1 == nSetP,
             n2 == nSetT             = builtinStaticKey env qn
+        specialStaticKey env (Derived n1 n2) [TCon _ (TC qn [])]
+          | n1 == nMutIndexed,
+            n2 == nArray            = builtinArrayStaticKey env qn
+          | n1 == nContainer,
+            n2 == nArray            = builtinArrayStaticKey env qn
         specialStaticKey _ _ _      = Nothing
 
         builtinStaticKey env qn     = case unalias env qn of
@@ -126,6 +131,13 @@ staticWitnessOf env (Call _ f p KwdNil)
                                             key `elem` [nInt, nU64, nStr, nBytes]
                                               -> Just key
                                         _ -> Nothing
+
+        builtinArrayStaticKey env qn = case unalias env qn of
+                                         GName m key
+                                           | m == mBuiltin,
+                                             key `elem` [nInt, nFloat]
+                                               -> Just key
+                                         _ -> Nothing
 staticWitnessOf _ _                 = Nothing
 
 -- Follow a super-witness path to the witness class whose method table is used.

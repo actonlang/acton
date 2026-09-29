@@ -28,6 +28,8 @@ actor main(env):
         generic_set(ints, 1, 17)
         check(ints[0] == -7 and ints[3] == 42, "int array mutation failed")
         check(generic_get(ints, 1) == 17, "generic int array access failed")
+        check(list(ints) == [-7, 17, 0, 42], "int array iteration failed")
+        check(17 in ints and 99 not in ints, "int array membership failed")
         check(repr(ints) == "[|-7, 17, 0, 42|]", "wrong int array repr")
 
         filled_ints: array[int] = array(4, -9)
@@ -41,6 +43,7 @@ actor main(env):
         check(floats[1] == 3.25, "float array mutation failed")
         generic_set(floats, 2, -1.5)
         check(generic_get(floats, 2) == -1.5, "generic float array access failed")
+        check(3.25 in floats and 2.0 not in floats, "float array membership failed")
 
         filled_floats: array[float] = array(3, 1.25)
         check(filled_floats[0] == 1.25 and filled_floats[2] == 1.25,

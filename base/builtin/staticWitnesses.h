@@ -1,5 +1,11 @@
 extern B_HashableD_bytes B_HashableD_bytesG_witness;
+extern B_MutIndexedD_array B_MutIndexedD_arrayD_intG_witness;
+extern B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_witness;
+extern B_ContainerD_array B_ContainerD_arrayD_intG_witness;
+extern B_ContainerD_array B_ContainerD_arrayD_floatG_witness;
 extern B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_witness;
+extern B_ContainerD_bitarray B_ContainerD_bitarrayG_witness;
+extern B_SetD_bitset B_SetD_bitsetG_witness;
 extern B_TimesD_bytes B_TimesD_bytesG_witness;
 extern B_ContainerD_bytes B_ContainerD_bytesG_witness;
 extern B_ISliceableD_bytes B_ISliceableD_bytesG_witness;

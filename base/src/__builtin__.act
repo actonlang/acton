@@ -583,23 +583,27 @@ protocol ArrayElement:
 class array[A(ArrayElement)] (object):
     def __init__(self, length: int, initial: ?A=None) -> None:
         NotImplemented
-    def __len__(self) -> int:
-        NotImplemented
-    def __getitem__(self, index: int) -> A:
-        NotImplemented
-    def __setitem__(self, index: int, value: A) -> None:
-        NotImplemented
 
 # Fixed-size packed storage for Boolean values.  Unlike sequence indexing,
 # negative indices are deliberately rejected rather than counted from the end.
 class bitarray (object):
     def __init__(self, length: int, initial: bool=False) -> None:
         NotImplemented
-    def __len__(self) -> int:
+
+# A fixed-universe set of non-negative integers backed by packed bits.
+# Capacity constrains mutation but is not part of extensional set equality.
+class bitset (object):
+    def __init__(self, capacity: int, iterable: ?Iterable[int]=None) -> None:
         NotImplemented
-    def __getitem__(self, index: int) -> bool:
+    def capacity(self) -> int:
         NotImplemented
-    def __setitem__(self, index: int, value: bool) -> None:
+    def union(self, other: bitset) -> bitset:
+        NotImplemented
+    def intersection(self, other: bitset) -> bitset:
+        NotImplemented
+    def difference(self, other: bitset) -> bitset:
+        NotImplemented
+    def symmetric_difference(self, other: bitset) -> bitset:
         NotImplemented
     
 class complex (atom):
@@ -961,7 +965,16 @@ protocol Set[A (Eq)] (ISet[A]):
 extension array[A(ArrayElement)] (MutIndexed[int,A]):
     NotImplemented
 
+extension array[A(ArrayElement,Eq)] (Container[A]):
+    NotImplemented
+
 extension bitarray (MutIndexed[int,bool]):
+    NotImplemented
+
+extension bitarray (Container[bool]):
+    NotImplemented
+
+extension bitset (Set[int]):
     NotImplemented
 
 extension list[A] (Sequence[A]):

@@ -107,6 +107,7 @@ typedef struct $Catcher *$Catcher;
 #include "bool.h"
 #include "array.h"
 #include "bitarray.h"
+#include "bitset.h"
 #include "list.h"
 #include "dict.h"
 #include "str.h"

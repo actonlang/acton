@@ -18,6 +18,7 @@ static void B_bitarray_init_storage(B_bitarray self, int64_t length, bool initia
                                      to$str("bitarray is too large")));
 
     self->length = length;
+    self->count = initial ? length : 0;
     if (word_count == 0) {
         self->data = NULL;
         return;
@@ -71,10 +72,13 @@ B_NoneType $bitarrayD_U__setitem__(B_bitarray self, int64_t index, bool value) {
     index = B_bitarray_checked_index(self, index);
     uint64_t *word = &self->data[(uint64_t)index >> 6];
     uint64_t mask = UINT64_C(1) << ((uint64_t)index & 63);
+    bool old = (*word & mask) != 0;
     if (value)
         *word |= mask;
     else
         *word &= ~mask;
+    if (old != value)
+        self->count += value ? 1 : -1;
     return B_None;
 }
 
@@ -105,6 +109,85 @@ B_NoneType B_MutIndexedD_bitarrayD___setitem__(B_MutIndexedD_bitarray wit,
                                                B_bitarray self, B_int index,
                                                B_bool value) {
     return $bitarrayD_U__setitem__(self, index->val, value->val);
+}
+
+// Container[bool] /////////////////////////////////////////////////////////////////////////////////
+
+static bool B_IteratorD_bitarrayD_next(B_IteratorD_bitarray self, $WORD *out) {
+    if (self->next >= self->src->length)
+        return false;
+    *out = (B_value)toB_bool($bitarrayD_U__getitem__(self->src, self->next++));
+    return true;
+}
+
+B_IteratorD_bitarray B_IteratorD_bitarrayG_new(B_bitarray src) {
+    return $NEW(B_IteratorD_bitarray, src);
+}
+
+void B_IteratorD_bitarrayD_init(B_IteratorD_bitarray self, B_bitarray src) {
+    self->src = src;
+    self->next = 0;
+}
+
+bool B_IteratorD_bitarrayD_bool(B_IteratorD_bitarray self) {
+    return true;
+}
+
+B_str B_IteratorD_bitarrayD_str(B_IteratorD_bitarray self) {
+    return $FORMAT("<bitarray iterator object at %p>", self);
+}
+
+void B_IteratorD_bitarrayD_serialize(B_IteratorD_bitarray self, $Serial$state state) {
+    $step_serialize(self->src, state);
+    $step_serialize(toB_int(self->next), state);
+}
+
+B_IteratorD_bitarray B_IteratorD_bitarrayD_deserialize(B_IteratorD_bitarray self,
+                                                        $Serial$state state) {
+    if (!self)
+        self = $DNEW(B_IteratorD_bitarray, state);
+    self->src = (B_bitarray)$step_deserialize(state);
+    self->next = fromB_int((B_int)$step_deserialize(state));
+    return self;
+}
+
+struct B_IteratorD_bitarrayG_class B_IteratorD_bitarrayG_methods = {
+    "B_IteratorD_bitarray", UNASSIGNED, ($SuperG_class)&B_IteratorG_methods,
+    B_IteratorD_bitarrayD_init, B_IteratorD_bitarrayD_serialize,
+    B_IteratorD_bitarrayD_deserialize, B_IteratorD_bitarrayD_bool,
+    B_IteratorD_bitarrayD_str, B_IteratorD_bitarrayD_str,
+    B_IteratorD_bitarrayD_next
+};
+
+B_Iterator B_ContainerD_bitarrayD___iter__(B_ContainerD_bitarray wit,
+                                            B_bitarray self) {
+    return (B_Iterator)B_IteratorD_bitarrayG_new(self);
+}
+
+B_bitarray B_ContainerD_bitarrayD___fromiter__(B_ContainerD_bitarray wit,
+                                               B_Iterable iter_wit, $WORD iterable) {
+    B_list values = B_listG_new(iter_wit, iterable);
+    B_bitarray result = B_bitarrayG_new(values->length, B_False);
+    for (int64_t i = 0; i < values->length; i++) {
+        if (((B_bool)values->data[i])->val)
+            $bitarrayD_U__setitem__(result, i, true);
+    }
+    return result;
+}
+
+int64_t B_ContainerD_bitarrayD___len__(B_ContainerD_bitarray wit,
+                                       B_bitarray self) {
+    return self->length;
+}
+
+bool B_ContainerD_bitarrayD___contains__(B_ContainerD_bitarray wit,
+                                         B_bitarray self, B_bool value) {
+    return value->val ? self->count > 0 : self->count < self->length;
+}
+
+bool B_ContainerD_bitarrayD___containsnot__(B_ContainerD_bitarray wit,
+                                            B_bitarray self, B_bool value) {
+    return !B_ContainerD_bitarrayD___contains__(wit, self, value);
 }
 
 void B_bitarrayD___serialize__(B_bitarray self, $Serial$state state) {
@@ -152,6 +235,9 @@ B_bitarray B_bitarrayD___deserialize__(B_bitarray self, $Serial$state state) {
     if (word_count > 0) {
         memcpy(self->data, &row->blob[1], (size_t)word_count * sizeof(uint64_t));
         self->data[word_count - 1] &= B_bitarray_tail_mask(length);
+        self->count = 0;
+        for (uint64_t i = 0; i < word_count; i++)
+            self->count += __builtin_popcountll(self->data[i]);
     }
     return self;
 }

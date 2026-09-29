@@ -40,6 +40,7 @@
 #include "complex.c"
 #include "array.c"
 #include "bitarray.c"
+#include "bitset.c"
 #include "Iterator.c"
 #include "slice.c"
 //#include "hash.c"

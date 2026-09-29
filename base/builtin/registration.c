@@ -55,6 +55,7 @@ void $register_builtin() {
   $register_force(ILIST_ID,&B_ilistG_methods);
   $register_force(ARRAY_ID,&B_arrayG_methods);
   $register_force(BITARRAY_ID,&B_bitarrayG_methods);
+  $register_force(BITSET_ID,&B_bitsetG_methods);
   $register_force(DICT_ID,&B_dictG_methods);
   $register_force(IDICT_ID,&B_idictG_methods);
   $register_force(SET_ID,&B_setG_methods);
@@ -69,6 +70,9 @@ void $register_builtin() {
   $register_force(VALUESITERATOR_ID,&B_IteratorD_dict_valuesG_methods);
   $register_force(ITEMSITERATOR_ID,&B_IteratorD_dict_itemsG_methods);
   $register_force(SETITERATOR_ID,&B_IteratorD_setG_methods);
+  $register_force(BITARRAYITERATOR_ID,&B_IteratorD_bitarrayG_methods);
+  $register_force(BITSETITERATOR_ID,&B_IteratorD_bitsetG_methods);
+  $register_force(ARRAYITERATOR_ID,&B_IteratorD_arrayG_methods);
   // $register_force(RANGEITERATOR_ID,&B_IteratorD_rangeG_methods);
   // $register_force(ENUMERATEITERATOR_ID,&B_IteratorD_enumerateG_methods);
   // $register_force(FILTERITERATOR_ID,&B_IteratorD_filterG_methods);
