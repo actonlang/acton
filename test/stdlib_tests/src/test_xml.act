@@ -139,15 +139,18 @@ actor _XmlErrorDecoder(doc: str, expected: str, n: int, done: action(int) -> Non
 
 actor _test_xml_concurrent_parse_errors(t: testing.AsyncT):
     """Actors decoding invalid documents at the same time each get their own error"""
+    # Each document is decoded as many times as its count. The 41 KB one takes
+    # as long to decode as a hundred of the others, so it is decoded fewer times
+    # to keep the test within its time limit on slow machines.
     cases = [
-        ("<a>garbage", "Premature end of data in tag a line 1 @1:11"),
-        ("<a>\n  <b>\n  </c>\n</a>", "Opening and ending tag mismatch: b line 2 and c @3:7"),
-        ("<a>\n<b x=1/>\n</a>", "Couldn't find end of Start Tag b line 2 @2:6"),
-        ('<r>\n\n\n<e k="1" k="2"/></r>', "Attribute k redefined @4:15"),
-        ("<a/>junk", "Extra content at the end of the document @1:5"),
-        ("   ", "Start tag expected, '<' not found @1:4"),
-        (_item_list(1000)[:-7], "Premature end of data in tag list line 1 @1:41787"),
-        ("", "Document is empty @1:1"),
+        ("<a>garbage", "Premature end of data in tag a line 1 @1:11", 300),
+        ("<a>\n  <b>\n  </c>\n</a>", "Opening and ending tag mismatch: b line 2 and c @3:7", 300),
+        ("<a>\n<b x=1/>\n</a>", "Couldn't find end of Start Tag b line 2 @2:6", 300),
+        ('<r>\n\n\n<e k="1" k="2"/></r>', "Attribute k redefined @4:15", 300),
+        ("<a/>junk", "Extra content at the end of the document @1:5", 300),
+        ("   ", "Start tag expected, '<' not found @1:4", 300),
+        (_item_list(1000)[:-7], "Premature end of data in tag list line 1 @1:41787", 30),
+        ("", "Document is empty @1:1", 300),
     ]
     var pending = len(cases)
     var wrong = 0
@@ -162,7 +165,7 @@ actor _test_xml_concurrent_parse_errors(t: testing.AsyncT):
                 t.failure(AssertionError(str(wrong) + " decodes raised the wrong error"))
 
     for c in cases:
-        d = _XmlErrorDecoder(c.0, c.1, 300, done)
+        d = _XmlErrorDecoder(c.0, c.1, c.2, done)
         d.run()
 
 def _test_xml_unsupported_node():
