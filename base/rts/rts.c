@@ -467,7 +467,7 @@ void B_MsgD___init__(B_Msg m, $Actor to, $Cont cont, time_t baseline, $WORD valu
     m->$waiting = NULL;
     m->$baseline = baseline;
     m->value = value;
-    atomic_flag_clear(&m->$wait_lock);
+    atomic_store(&m->$wait_lock, 0);
     m->$globkey = get_next_key();
 }
 */
@@ -481,7 +481,7 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$waiting = NULL;
     m->$baseline = baseline;
     m->value = value;
-    atomic_flag_clear(&m->$wait_lock);
+    atomic_store(&m->$wait_lock, 0);
     m->$globkey = get_next_key();
     return m;
 }
@@ -524,7 +524,7 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state);
     res->value = $step_deserialize(state);
-    atomic_flag_clear(&res->$wait_lock);
+    atomic_store(&res->$wait_lock, 0);
     return res;
 }
 
@@ -537,7 +537,7 @@ void $ActorD___init__($Actor a) {
     a->$waitsfor = NULL;
     a->$consume_hd = 0;
     a->$catcher = NULL;
-    atomic_flag_clear(&a->B_Msg_lock);
+    atomic_store(&a->B_Msg_lock, 0);
     a->$globkey = get_next_key();
     a->$affinity = SHARED_RQ;
     rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
@@ -580,7 +580,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$waitsfor = $step_deserialize(state);
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
-    atomic_flag_clear(&res->B_Msg_lock);
+    atomic_store(&res->B_Msg_lock, 0);
     if (res->$affinity > 0)
         res->$affinity = SHARED_RQ;
     return res;

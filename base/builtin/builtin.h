@@ -89,7 +89,7 @@ struct $Catcher;
 typedef struct $Actor *$Actor;
 typedef struct $Catcher *$Catcher;
 
-#define $Lock                   volatile atomic_flag
+#define $Lock                   volatile atomic_uchar
 
 ///////////////////////////////////////////////////////////
 

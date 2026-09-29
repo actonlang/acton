@@ -1,13 +1,49 @@
 #include "rts.h"
 #include "q.h"
 
+// Spin-wait hint, used between reads of a lock that is taken. It does not
+// give the thread up to the OS; it only holds this hardware thread back for
+// a moment.
+//
+// x86: pause tells the core that this thread is in a spin-wait loop. The
+// core stops issuing the thread's instructions for a short time (from about
+// ten to over a hundred cycles, depending on the CPU). With hyper-threading
+// (SMT), the other hardware thread on the same core gets the core's shared
+// execution units meanwhile, and without it the core saves power. pause
+// also keeps the core from speculating far ahead through the loop's reads,
+// so leaving the loop when the lock changes does not cost a pipeline flush.
+//
+// arm64: the corresponding hint, yield, does nothing on most cores, which
+// have no SMT (Apple's among them), so a loop of yields spins at full speed.
+// isb flushes the core's pipeline, so the instructions after it are fetched
+// anew; that takes a short, roughly fixed time, which makes it a delay.
+static inline void cpu_relax(void) {
+#if defined(__x86_64__) || defined(__i386__)
+    __builtin_ia32_pause();
+#elif defined(__aarch64__)
+    __asm__ __volatile__("isb" ::: "memory");
+#endif
+}
+
+// Test-and-test-and-set. While the lock is taken, waiters only read it, so
+// each keeps a shared copy of its cache line instead of taking the line
+// from the holder and from each other, and a waiter tries to take the lock
+// only when it looks free. The pause between reads doubles up to a limit,
+// so the waiters do not all retry the moment the lock is released. Taking
+// and releasing the lock are full barriers; the wake logic relies on that.
 static inline void spinlock_lock($Lock *f) {
-    while (atomic_flag_test_and_set(f) == true) {
-        // spin until we could set the flag
+    unsigned int backoff = 1;
+    while (atomic_exchange(f, 1)) {
+        do {
+            for (unsigned int i = 0; i < backoff; i++)
+                cpu_relax();
+            if (backoff < 64)
+                backoff <<= 1;
+        } while (atomic_load_explicit(f, memory_order_relaxed));
     }
 }
 static inline void spinlock_unlock($Lock *f) {
-    atomic_flag_clear(f);
+    atomic_store(f, 0);
 }
 
 #if defined MPMC && MPMC == 3
