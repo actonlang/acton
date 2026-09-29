@@ -1,0 +1,6 @@
+# print writes a NUL in its arguments, separator and end like any other char
+actor main(env):
+    nul = chr(0)
+    print("a" + nul + "b")
+    print("c", "d" + nul, sep=nul, end=nul + "\n")
+    env.exit(0)
