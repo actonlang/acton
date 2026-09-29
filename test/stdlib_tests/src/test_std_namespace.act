@@ -84,6 +84,7 @@ def _test_std_namespace_parsers_and_random():
 
     m = re.match("foo([0-9]+)", "foo123")
     testing.assertNotNone(m, "std.re.match returned None")
+    testing.assertNotNone(re.match("a.b", "a" + chr(0) + "b"), "std.re.match stopped at a NUL")
 
     n = random.randint(1, 4)
     testing.assertTrue(1 <= n and n < 4, "std.random.randint outside expected range")

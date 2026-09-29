@@ -38,7 +38,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
 
     PCRE2_SPTR pattern = (PCRE2_SPTR)fromB_str(arg_pattern);
     PCRE2_SPTR text = (PCRE2_SPTR)fromB_str(arg_text);
-    size_t text_length = strlen((char *)text);
+    size_t text_length = arg_text->nbytes;
     // TODO: use u64 instead of int to eradicate possibility of < 0
 
     // Validate start_pos
@@ -56,7 +56,7 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
     PCRE2_SIZE erroroffset;
     pcre2_code *re = pcre2_compile(
         pattern,
-        PCRE2_ZERO_TERMINATED,
+        arg_pattern->nbytes,
         PCRE2_UTF,
         &errornumber,
         &erroroffset,
@@ -111,11 +111,8 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
         if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
             swit->$class->append(swit, groups, B_None);
         } else {
-            size_t substring_length = ss_end - ss_start;
-            char *substring = acton_malloc_atomic(substring_length + 1);
-            memcpy(substring, text + ss_start, substring_length);
-            substring[substring_length] = '\0';
-            swit->$class->append(swit, groups, actStrFromCString(substring));
+            B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
+            swit->$class->append(swit, groups, substring);
         }
     }
 
@@ -143,11 +140,8 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
             if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
                 B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), B_None);
             } else {
-                size_t substring_length = ss_end - ss_start;
-                char *substring = acton_malloc_atomic(substring_length + 1);
-                memcpy(substring, text + ss_start, substring_length);
-                substring[substring_length] = '\0';
-                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), actStrFromCString(substring));
+                B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
+                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), substring);
             }
 
             tabptr += name_entry_size;

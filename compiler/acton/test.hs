@@ -2739,6 +2739,12 @@ rtsTests =
           (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads" "../../test/rts/argv7.act"
           assertEqual "RTS wthreads error retCode" (ExitFailure 1) returnCode
           assertEqual "RTS wthreads error cmdErr" "ERROR: --rts-wthreads requires an argument.\n" cmdErr
+
+  ,   testCase "print writes NUL" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/print_nul.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "" "../../test/rts/print_nul.act"
+          assertEqual "print NUL retCode" ExitSuccess returnCode
+          assertEqual "print NUL output" "a\0b\nc\0d\0\0\n" cmdOut
   ]
 
 stdlibTests =

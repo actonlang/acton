@@ -42,28 +42,28 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
 
     // Write to temporary buffer first, making us much less prone to interleaved
     // output from multiple threads. It costs a malloc and some copies but print
-    // should not be used in performance critical code.
-    int64_t tlen = 0;
+    // should not be used in performance critical code. Each element's str is
+    // taken once, since taking it again can give a different str, and the
+    // buffer is written by length, since a str can contain NUL.
+    B_str *strs = acton_malloc(t->size * sizeof(B_str));
+    int64_t tlen = end->nbytes;
     for (int i=0; i<t->size; i++) {
-        B_value elem = (B_value)t->components[i];
-        tlen += __str__(elem)->nbytes + sep->nbytes;
+        strs[i] = __str__((B_value)t->components[i]);
+        tlen += strs[i]->nbytes + (i > 0 ? sep->nbytes : 0);
     }
-    tlen += end->nbytes;
-    char *s = acton_malloc(tlen+1);
+    char *s = acton_malloc_atomic(tlen);
     int64_t pos = 0;
     for (int i=0; i<t->size; i++) {
         if (i > 0) {
             memcpy(s+pos, sep->str, sep->nbytes);
             pos += sep->nbytes;
         }
-        B_value elem = (B_value)t->components[i];
-        memcpy(s+pos, __str__(elem)->str, __str__(elem)->nbytes);
-        pos += __str__(elem)->nbytes;
+        memcpy(s+pos, strs[i]->str, strs[i]->nbytes);
+        pos += strs[i]->nbytes;
     }
     memcpy(s+pos, end->str, end->nbytes);
     pos += end->nbytes;
-    s[pos] = '\0';
-    fputs(s, outfd);
+    fwrite(s, 1, pos, outfd);
 
     if (flush_arg && flush_arg->val)
         fflush(outfd);
