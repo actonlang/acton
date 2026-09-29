@@ -1735,7 +1735,8 @@ main = do
 
           -- Octal escapes
           testParseOutput "\"\\123\"" "\"\\\\123\""  -- 3-digit octal
-          testParseOutput "\"\\7\"" "\"\\\\7\""  -- 1-digit octal
+          testParseOutput "\"\\7\"" "\"\\\\007\""  -- 1-digit octal, padded to 3 digits
+          testParseOutput "\"\\0\" \"1\"" "\"\\\\0001\""  -- adjacent literals: 1 stays outside the escape
 
           -- Mixed with interpolation
           testParseOutput "f\"Hello \\n{name}\\t!\"" "\"Hello \\\\n%s\\\\t!\" % str(name)"
@@ -1864,6 +1865,8 @@ main = do
           testParseError "unicode_long_no_digits" "\"\\U\""
           testParseError "unicode_long_invalid_char" "\"\\U1234567G\""
           testParseError "unicode_long_in_fstring" "f\"Hello \\U1234567\""
+          testParseError "unicode_short_surrogate" "\"\\ud800\""
+          testParseError "unicode_long_out_of_range" "\"\\U00110000\""
 
         describe "Octal escape errors" $ do
           testParseError "octal_out_of_range" "\"\\777\""

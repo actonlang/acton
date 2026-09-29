@@ -34,6 +34,8 @@ import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
 import System.FilePath.Posix
 import Numeric
+import Data.Char (isSpace)
+import Data.Word (Word8)
 -- For fast SrcLoc offset->line lookup when emitting #line
 import qualified Data.IntMap.Strict as IM
 
@@ -466,8 +468,10 @@ primToBigInt                        = name "toB_bigint"
 primToBigInt2                       = name "toB_bigint2"
 primToFloat                         = name "to$float"
 primToStr                           = name "actStrFromCString"
+primToStrLen                        = name "actStrFromCStringLength"
 primToBytearray                     = name "to$bytearray"
 primToBytes                         = name "actBytesFromCStringLengthNoCopy"
+primFORMATLen                       = gPrim "FORMAT_len"
 
 tmpV                                = primKW "tmp"
 
@@ -1354,7 +1358,7 @@ castLit env (Strings l ss) p        = format (concat ss) p
           where expr                = parens (parens (gen env tFloat) <> gen env e) <> text "->val"
         conv (t:s) (PosArg e p)
           | t `elem` "rsa"          = comma <+> expr <> format s p
-          where expr                = parens (parens (gen env tStr) <> gen env e) <> text "->str"
+          where expr                = parens (parens (gen env tStr) <> gen env e)
         conv ('%':s) p              = format s p
 
 -- Helpers for choosing the C representation at call boundaries.
@@ -1717,8 +1721,9 @@ genCall env [] (TApp _ e ts) p      = genCall env ts e p
 genCall env [_,t] (Var _ n) (PosArg e PosNil)
   | n == primCAST                   = parens (parens (gen env t) <> gen env e)
 genCall env [row] (Var _ n) (PosArg s@Strings{} (PosArg tup PosNil))
-  | n == primFORMAT                 = gen env n <> parens (genStr env (formatLit s) <> castLit env s (flatten tup))
-  where -- unbox (TNil _ _) p          = empty
+  | n == primFORMAT                 = gen env primFORMATLen <> parens (cLiteral fmt <> comma <+> pretty (length fmt) <> castLit env s (flatten tup))
+  where fmt                         = literalTokenBytes (sval (formatLit s))
+        -- unbox (TNil _ _) p          = empty
         -- unbox (TRow _  _ _ t r) (PosArg e p)
         --  | t == tStr               = comma <+> expr <> text "->str" <> unbox r p
         --  | otherwise               = comma <+> expr <> text "->val" <> unbox r p
@@ -2082,10 +2087,10 @@ instance Gen Expr where
     gen env (Bool _ True)           = gen env qnTrue
     gen env (Bool _ False)          = gen env qnFalse
     gen env (None _)                = gen env qnNone
-    gen env e@Strings{}             = gen env primToStr <> parens(hsep (map pretty (sval e)))
-    gen env e@BStrings{}            = gen env primToBytes <> parens( hsep (map pretty es) <> comma <+>text(show blen))
-      where es                      = sval e
-            blen                    = sum [ length (read s :: String) | s <- es ]  -- decode each fragment separately; hexSplitString may split one literal into several
+    gen env e@Strings{}             = gen env primToStrLen <> parens (cLiteral bs <> comma <+> pretty (length bs))
+      where bs                      = literalTokenBytes (sval e)
+    gen env e@BStrings{}            = gen env primToBytes <> parens (cLiteral bs <> comma <+> pretty (length bs))
+      where bs                      = literalTokenBytes (sval e)
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Set _ es) PosNil)) KwdNil)
       | mk == primMkSet             = text "B_mk_set" <> parens (pretty (length es) <> comma <+> gen env w <> hsep [comma <+> gen env e | e <- es])
     gen env (Call l  (TApp _ e@(Var _ mk) _) p@(PosArg w (PosArg (Dict _ es) PosNil)) KwdNil)
@@ -2276,7 +2281,37 @@ binPretty op                        = pretty op
 augPretty EuDivA                    = text "/="
 augPretty op                        = pretty op
 
-genStr env s                        = text $ head $ sval s
+-- After the Normalizer, each sval fragment is a C string literal token: the
+-- parser's escaped text in double quotes (formatLit may join several tokens
+-- into one string). Decode each token separately, so an escape can never run
+-- on into the next token.
+literalTokenBytes                   :: [String] -> [Word8]
+literalTokenBytes                   = concatMap tokens
+  where tokens s                    = case dropWhile isSpace s of
+                                        '"' : r -> let (t, r') = token r in bytes t ++ tokens r'
+                                        []      -> []
+                                        r       -> error ("literalTokenBytes: not a C string literal: " ++ show r)
+        token ('\\':c:r)            = let (t, r') = token r in ('\\':c:t, r')
+        token ('"':r)               = ([], r)
+        token (c:r)                 = let (t, r') = token r in (c:t, r')
+        token []                    = ([], [])
+        bytes t                     = fromMaybe (error ("literalTokenBytes: malformed escape in " ++ show t)) (literalBytes t)
+
+-- A C string literal holding exactly the given bytes. Bytes outside printable
+-- ASCII are written as three-digit octal escapes: unlike \x, which takes every
+-- hex digit that follows, these cannot absorb the next character. To keep NUL
+-- bytes, the caller must pass the length along; strlen stops at the first NUL.
+cLiteral                            :: [Word8] -> Doc
+cLiteral bs                         = doubleQuotes (text (concatMap esc bs))
+  where esc b
+          | b == 0x22               = "\\\""
+          | b == 0x5c               = "\\\\"
+          | b == 0x0a               = "\\n"
+          | b == 0x0d               = "\\r"
+          | b == 0x09               = "\\t"
+          | b >= 0x20 && b < 0x7f   = [toEnum (fromIntegral b)]
+          | otherwise               = '\\' : pad (showOct b "")
+        pad ds                      = replicate (3 - length ds) '0' ++ ds
 
 genBool env (Paren _ e)             = genBool env e
 genBool env e

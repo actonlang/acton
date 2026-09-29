@@ -86,6 +86,9 @@ customParseErrorToDiagnostic OctalEscapeOutOfRange              = ("Octal escape
                                                                   [Note "Octal values must be between \\000 and \\377"])
 customParseErrorToDiagnostic (IncompleteUnicodeEscape exp found) = ("Incomplete universal character name",
                                                                    [Note $ "Expected " ++ show exp ++ " hex digits, found " ++ show found])
+customParseErrorToDiagnostic (InvalidUnicodeEscape cp)          = ("Invalid universal character name",
+                                                                  [Note $ cp ++ " is not a valid Unicode character",
+                                                                   Note "Valid code points are U+0000 to U+10FFFF, excluding the surrogates U+D800 to U+DFFF"])
 customParseErrorToDiagnostic NonAsciiInBytesLiteral             = ("Only ASCII characters allowed in bytes literal",
                                                                   [Hint "Use escape sequences for non-ASCII values"])
 customParseErrorToDiagnostic UnknownEscapeSequence              = ("Unknown escape sequence",

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <ctype.h>
+#include <wchar.h>
 
 #include <strings.h>
 
@@ -4266,4 +4267,196 @@ B_str $FORMAT(const char *format, ...) {
     va_end(args);
 
     return actStrFromCString(buffer);
+}
+
+// Output buffer for $FORMAT_len, grown as needed.
+struct format_buf {
+    char *data;
+    int64_t len;
+    int64_t cap;
+};
+
+// Make room for n more bytes and the terminator of the result. The result is
+// checked as it grows, by lengths and widths of at most MAX_STR_LEN, so the
+// sum can't overflow before it is checked.
+static void format_reserve(struct format_buf *b, int64_t n) {
+    check_result_len(b->len + n);
+    if (b->len + n < b->cap)
+        return;
+    int64_t cap = b->cap * 2;
+    if (cap < b->len + n + 1)
+        cap = b->len + n + 1;
+    char *data = acton_realloc(b->data, cap);
+    if (data == NULL)
+        RAISE_EXC(&B_str_allocation_failed_error);
+    b->data = data;
+    b->cap = cap;
+}
+
+static void format_append(struct format_buf *b, const char *s, int64_t n) {
+    format_reserve(b, n);
+    memcpy(b->data + b->len, s, n);
+    b->len += n;
+}
+
+static void format_pad(struct format_buf *b, int64_t n) {
+    if (n <= 0)
+        return;
+    format_reserve(b, n);
+    memset(b->data + b->len, ' ', n);
+    b->len += n;
+}
+
+// Append s, cut to prec characters and padded with spaces to width characters
+// (a negative width or prec means none was given).
+static void format_str(struct format_buf *b, B_str s, bool left, int width, int prec) {
+    int64_t nchars = s->nchars;
+    int64_t nbytes = s->nbytes;
+    if (prec >= 0 && prec < nchars) {
+        nbytes = skip_chars(s->str, prec, s->nchars == s->nbytes) - s->str;
+        nchars = prec;
+    }
+    if (!left)
+        format_pad(b, width - nchars);
+    format_append(b, (const char *)s->str, nbytes);
+    if (left)
+        format_pad(b, width - nchars);
+}
+
+// Append one numeric conversion, which spec (like "%-8.3f") describes completely.
+static void format_printf(struct format_buf *b, const char *spec, ...) {
+    va_list args, args_copy;
+    va_start(args, spec);
+    va_copy(args_copy, args);
+    int n = vsnprintf(NULL, 0, spec, args_copy);
+    va_end(args_copy);
+    if (n < 0) {
+        va_end(args);
+        RAISE_EXC(&B_str_invalid_format_error);
+    }
+    format_reserve(b, n);
+    vsnprintf(b->data + b->len, n + 1, spec, args);
+    va_end(args);
+    b->len += n;
+}
+
+// Read the decimal number at *p, if any, and step past it; -1 if there is none.
+static int format_count(const char **p, const char *end) {
+    int64_t n = -1;
+    while (*p < end && **p >= '0' && **p <= '9') {
+        n = (n < 0 ? 0 : n) * 10 + (**p - '0');
+        if (n > INT_MAX)
+            RAISE_EXC(&B_str_invalid_format_error);
+        (*p)++;
+    }
+    return n;
+}
+
+static bool format_is(const char *set, char c) {
+    return c != '\0' && strchr(set, c) != NULL;
+}
+
+// The formatting behind Acton's % operator and interpolated strings. Unlike
+// $FORMAT, the format is nbytes long rather than NUL-terminated, and a %s, %r
+// or %a argument is a B_str rather than a char *, so NUL bytes are kept in both.
+// Width and precision of those conversions count characters; %r and %a insert
+// repr() and ascii() of the string. Each other conversion is handed to
+// snprintf on its own, with the length modifier the compiler has added (%ld).
+B_str $FORMAT_len(const char *format, int64_t nbytes, ...) {
+    va_list args;
+    va_start(args, nbytes);
+    struct format_buf b = {(char *)alloc_data(nbytes + 16), 0, nbytes + 16};
+    const char *p = format;
+    const char *end = format + nbytes;
+    while (p < end) {
+        const char *pct = memchr(p, '%', end - p);
+        if (pct == NULL) {
+            format_append(&b, p, end - p);
+            break;
+        }
+        format_append(&b, p, pct - p);
+        p = pct + 1;
+
+        // The spec handed to snprintf, with any * width or precision filled in.
+        char spec[64];
+        int k = 0;
+        spec[k++] = '%';
+        bool left = false;
+        while (p < end && format_is("#0- +", *p)) {
+            left |= *p == '-';
+            if (k < 16)
+                spec[k++] = *p;
+            p++;
+        }
+        int width;
+        if (p < end && *p == '*') {
+            width = va_arg(args, int);
+            p++;
+            if (width < 0) {
+                if (width == INT_MIN)
+                    RAISE_EXC(&B_str_invalid_format_error);
+                width = -width;
+                left = true;
+                spec[k++] = '-';
+            }
+        } else
+            width = format_count(&p, end);
+        int prec = -1;
+        if (p < end && *p == '.') {
+            p++;
+            if (p < end && *p == '*') {
+                prec = va_arg(args, int);
+                p++;
+            } else {
+                prec = format_count(&p, end);
+                if (prec < 0)
+                    prec = 0;
+            }
+        }
+        const char *lenmod = p;
+        while (p < end && format_is("hlL", *p))
+            p++;
+        int nlenmod = p - lenmod < 3 ? p - lenmod : 3;
+        if (p == end) {
+            va_end(args);
+            RAISE_EXC(&B_str_invalid_format_error);
+        }
+        char conv = *p++;
+
+        if (conv == '%') {
+            format_append(&b, "%", 1);
+        } else if (format_is("sra", conv)) {
+            B_str s = va_arg(args, B_str);
+            if (conv == 'r')
+                s = B_strD___repr__(s);
+            else if (conv == 'a')
+                s = B_ascii((B_value)s);
+            format_str(&b, s, left, width, prec);
+        } else {
+            if (width >= 0)
+                k += snprintf(spec + k, sizeof spec - k, "%d", width);
+            if (prec >= 0)
+                k += snprintf(spec + k, sizeof spec - k, ".%d", prec);
+            // The compiler passes every integer as an int64_t, which is a
+            // long long on some platforms, so it is printed with ll
+            bool integer = format_is("diouxX", conv);
+            memcpy(spec + k, integer ? "ll" : lenmod, integer ? 2 : nlenmod);
+            k += integer ? 2 : nlenmod;
+            spec[k++] = conv;
+            spec[k] = '\0';
+            if (integer)
+                format_printf(&b, spec, (long long)va_arg(args, int64_t));
+            else if (conv == 'c')
+                format_printf(&b, spec, (wint_t)va_arg(args, int64_t));
+            else if (format_is("eEfFgG", conv))
+                format_printf(&b, spec, va_arg(args, double));
+            else {
+                va_end(args);
+                RAISE_EXC(&B_str_invalid_format_error);
+            }
+        }
+    }
+    va_end(args);
+    b.data[b.len] = 0;
+    return actStrFromCStringLength(b.data, b.len);
 }

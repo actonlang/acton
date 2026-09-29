@@ -77,6 +77,7 @@ data CustomParseError = TypeVariableNameError String  -- Name that looks like ty
                       | IncompleteHexEscape String  -- String is the 1 char found
                       | OctalEscapeOutOfRange
                       | IncompleteUnicodeEscape Int Int  -- expected, found
+                      | InvalidUnicodeEscape String  -- the code point, as U+XXXX
                       | NonAsciiInBytesLiteral
                       | UnknownEscapeSequence
                       -- General fallback
@@ -112,6 +113,7 @@ instance ShowErrorComponent CustomParseError where
   showErrorComponent OctalEscapeOutOfRange = "octal escape sequence out of range"
   showErrorComponent (IncompleteUnicodeEscape expected found) =
     "Incomplete universal character name (" ++ show expected ++ " hex digits needed)"
+  showErrorComponent (InvalidUnicodeEscape cp) = cp ++ " is not a valid Unicode character"
   showErrorComponent NonAsciiInBytesLiteral = "Only ASCII chars allowed in bytes literal"
   showErrorComponent UnknownEscapeSequence = "unknown escape sequence in string/bytes literal"
   -- General fallback
@@ -1002,23 +1004,25 @@ hexEscape = do
       if length cs == 2
        then return ("\\x" ++ cs)
        else parseException loc $ IncompleteHexEscape cs
+-- Kept as three digits, so that when adjacent literals are joined a digit
+-- following "\0" cannot become part of the escape.
 octEscape = do
        (loc,cs) <- withLoc (count' 1 3 octDigitChar)
        if length cs == 3 && head cs > '3'
           then  parseException loc OctalEscapeOutOfRange
-          else return ("\\" ++ cs)
-univ1Escape = do
-      char 'u'
-      (loc,cs) <- withLoc (count' 0 4 hexDigitChar)
-      if length cs < 4
-        then parseException loc $ IncompleteUnicodeEscape 4 (length cs)
-        else return ("\\u" ++ cs)
-univ2Escape = do
-      char 'U'
-      (loc,cs) <- withLoc (count' 0 8 hexDigitChar)
-      if length cs < 8
-        then parseException loc $ IncompleteUnicodeEscape 8 (length cs)
-        else return ("\\U" ++ cs)
+          else return ("\\" ++ replicate (3 - length cs) '0' ++ cs)
+univ1Escape = univEscape 'u' 4
+univ2Escape = univEscape 'U' 8
+univEscape c n = do
+      char c
+      (loc,cs) <- withLoc (count' 0 n hexDigitChar)
+      let value = fst (head (readHex cs))
+          hex   = map toUpper (showHex value "")
+      if length cs < n
+        then parseException loc $ IncompleteUnicodeEscape n (length cs)
+        else if S.isScalarValue value
+          then return ('\\' : c : cs)
+          else parseException loc $ InvalidUnicodeEscape ("U+" ++ replicate (4 - length hex) '0' ++ hex)
 
 asciiC   = do
       (loc,c) <- withLoc anySingle

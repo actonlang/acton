@@ -36,6 +36,10 @@ unsigned char *fromB_str(B_str str);
 
 B_str $FORMAT(const char *format, ...);
 
+// Format for the % operator and interpolated strings: the format is nbytes long
+// and %s, %r and %a take a B_str, so NUL bytes survive (see str.c).
+B_str $FORMAT_len(const char *format, int64_t nbytes, ...);
+
 // Find byte position in text from char position.
 // Assume i is a valid char index in text
 int64_t $byte_no(B_str text, int64_t i);
