@@ -514,6 +514,15 @@ unsigned char *fromB_str(B_str str) {
     return str->str;
 }
 
+const char *actStrToCString(B_str s, B_ValueError nul_error) {
+    if (memchr(s->str, 0, s->nbytes))
+        RAISE_EXC(nul_error);
+    char *res = (char *)alloc_data(s->nbytes + 1);
+    memcpy(res, s->str, s->nbytes);
+    res[s->nbytes] = '\0';
+    return res;
+}
+
 // #bytes in UTF-8 to represent codepoint cp
 static int byte_length(unsigned int cp) {
     if (cp < 0x80)

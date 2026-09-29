@@ -10,6 +10,9 @@
 #include "../rts/log.h"
 #include "../out/types/file.h"
 
+static struct B_ValueError fileQ_path_nul_error =
+    STATIC_EXCEPTION(B_ValueError, "path contains a NUL byte");
+
 
 void fileQ___ext_init__() {
 
@@ -73,7 +76,7 @@ bool fileQ_FileStatD_is_socket (fileQ_FileStat self) {
 // action def copyfile(src: str, dst: str) -> None:
 $R fileQ_FSD_copyfileG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_copyfile(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), 0, NULL);
+    int r = uv_fs_copyfile(get_uv_loop(), req, actStrToCString(src, &fileQ_path_nul_error), actStrToCString(dst, &fileQ_path_nul_error), 0, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error copying file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -130,7 +133,7 @@ $R fileQ_FSD_homedirG_local (fileQ_FS self, $Cont C_cont) {
 // action def mkdir(filename: str):
 $R fileQ_FSD_mkdirG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_mkdir(get_uv_loop(), req, (char *)fromB_str(filename), 0777, NULL);
+    int r = uv_fs_mkdir(get_uv_loop(), req, actStrToCString(filename, &fileQ_path_nul_error), 0777, NULL);
     if (r < 0 && r != UV_EEXIST) {
         char errmsg[1024] = "Error creating directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -166,7 +169,7 @@ $R fileQ_FSD_mktmpdirG_local (fileQ_FS self, $Cont C_cont, B_str prefix) {
         break;
     }
 
-    const char *cprefix = prefix == B_None ? "" : (const char *)fromB_str(prefix);
+    const char *cprefix = prefix == B_None ? "" : actStrToCString(prefix, &fileQ_path_nul_error);
     size_t template_size = strlen(tmpdir) + 1 + strlen(cprefix) + 6 + 1;
     char *tpl = (char *)acton_malloc(template_size);
     snprintf(tpl, template_size, "%s/%sXXXXXX", tmpdir, cprefix);
@@ -192,7 +195,7 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     B_list res = B_listD_new(0);
     res->length = 0;
-    int r = uv_fs_scandir(get_uv_loop(), req, (char *)fromB_str(path), 0, NULL);
+    int r = uv_fs_scandir(get_uv_loop(), req, actStrToCString(path, &fileQ_path_nul_error), 0, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error listing directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -211,7 +214,7 @@ $R fileQ_FSD_listdirG_local (fileQ_FS self, $Cont C_cont, B_str path) {
 // action def lstat(filename: str) -> FileStat:
 $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_lstat(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
+    int r = uv_fs_lstat(get_uv_loop(), req, actStrToCString(filename, &fileQ_path_nul_error), NULL);
     if (r < 0) {
         char errmsg[1024] = "Error getting file stat: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -245,7 +248,7 @@ $R fileQ_FSD_lstatG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 // action def rmdir(dirname: str) -> None:
 $R fileQ_FSD_rmdirG_local (fileQ_FS self, $Cont C_cont, B_str dirname) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_rmdir(get_uv_loop(), req, (char *)fromB_str(dirname), NULL);
+    int r = uv_fs_rmdir(get_uv_loop(), req, actStrToCString(dirname, &fileQ_path_nul_error), NULL);
     if (r < 0 && r != UV_ENOENT) {
         char errmsg[1024] = "Error removing directory: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -260,7 +263,7 @@ $R fileQ_FSD_rmdirG_local (fileQ_FS self, $Cont C_cont, B_str dirname) {
 // action def remove(filename: str) -> None:
 $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_unlink(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
+    int r = uv_fs_unlink(get_uv_loop(), req, actStrToCString(filename, &fileQ_path_nul_error), NULL);
     if (r < 0) {
         char errmsg[1024] = "Error removing file: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -275,7 +278,7 @@ $R fileQ_FSD_removeG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
 // action def rename(src: str, dst: str) -> None:
 $R fileQ_FSD_renameG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_rename(get_uv_loop(), req, (char *)fromB_str(src), (char *)fromB_str(dst), NULL);
+    int r = uv_fs_rename(get_uv_loop(), req, actStrToCString(src, &fileQ_path_nul_error), actStrToCString(dst, &fileQ_path_nul_error), NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
         RAISE(B_FileNotFoundError, src);
@@ -293,7 +296,7 @@ $R fileQ_FSD_renameG_local (fileQ_FS self, $Cont C_cont, B_str src, B_str dst) {
 // action def stat(filename: str) -> FileStat:
 $R fileQ_FSD_statG_local (fileQ_FS self, $Cont C_cont, B_str filename) {
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_stat(get_uv_loop(), req, (char *)fromB_str(filename), NULL);
+    int r = uv_fs_stat(get_uv_loop(), req, actStrToCString(filename, &fileQ_path_nul_error), NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
         RAISE(B_FileNotFoundError, filename);
@@ -352,7 +355,7 @@ $R fileQ_FSD_tmpdirG_local (fileQ_FS self, $Cont C_cont) {
 $R fileQ_ReadFileD__open_fileG_local (fileQ_ReadFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
-    int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), UV_FS_O_RDONLY, 0, NULL);
+    int r = uv_fs_open(get_uv_loop(), req, actStrToCString(self->filename, &fileQ_path_nul_error), UV_FS_O_RDONLY, 0, NULL);
     if (r == UV_ENOENT) {
         uv_fs_req_cleanup(req);
         RAISE(B_FileNotFoundError, self->filename);
@@ -430,7 +433,7 @@ $R fileQ_WriteFileD__open_fileG_local (fileQ_WriteFile self, $Cont c$cont) {
     pin_actor_affinity();
     uv_fs_t *req = (uv_fs_t *)acton_malloc(sizeof(uv_fs_t));
     int flags = UV_FS_O_RDWR | UV_FS_O_CREAT | (self->append ? UV_FS_O_APPEND : UV_FS_O_TRUNC);
-    int r = uv_fs_open(get_uv_loop(), req, (char *)fromB_str(self->filename), flags, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);
+    int r = uv_fs_open(get_uv_loop(), req, actStrToCString(self->filename, &fileQ_path_nul_error), flags, S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH, NULL);
     if (r < 0) {
         char errmsg[1024] = "Error opening file for writing: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
