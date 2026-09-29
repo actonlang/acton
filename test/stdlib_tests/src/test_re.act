@@ -12,6 +12,21 @@ def _test_match_unicode_escapes():
     m = re.match(r"[\x{0000}-\x{10FFFF}]", "x")
     testing.assertNotNone(m, "unicode \\x{{}} regexp matching failed")
 
+def _test_match_nul():
+    """A NUL in the text or the pattern is an ordinary character
+    """
+    nul = chr(0)
+    testing.assertNotNone(re.match("a.b", "a" + nul + "b"), "NUL not matched by .")
+    testing.assertNotNone(re.match("b", "a" + nul + "b"), "text after a NUL not searched")
+    m = re.match("x" + nul + "y", "ax" + nul + "yb")
+    testing.assertNotNone(m, "NUL in the pattern not matched")
+    if m is not None:
+        testing.assertEqual(m.group[0], "x" + nul + "y", "pattern or group cut at its NUL")
+    n = re.match("(?P<n>." + nul + ".)", "ax" + nul + "yb")
+    testing.assertNotNone(n, "NUL in a named group not matched")
+    if n is not None:
+        testing.assertEqual(n.named["n"], "x" + nul + "y", "named group cut at its NUL")
+
 def _test_match_group():
     """Regexp matching with groups
     """
