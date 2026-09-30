@@ -1,0 +1,358 @@
+"""Actor scheduling patterns
+
+Each test stresses one pattern of work between actors, so that a change to
+the runtime's scheduler can be judged across patterns rather than tuned for
+one workload:
+
+- ring: one token passed around a ring of actors; every hop is a handoff to
+  an actor with an empty mailbox, and nothing runs in parallel
+- ring_tokens: 64 tokens on the same ring, so handoffs run in parallel
+- hot_server: many clients make synchronous calls to one server actor, whose
+  mailbox stays deep
+- fan_out: a burst of work items to many worker actors, each of which
+  reports its count once
+- pipeline: a burst of messages through a chain of stages
+- latency_under_load: actors that always have another message keep every
+  worker busy while a probe measures round trips through an idle actor
+- reply_behind_work: a server replies to a probe and then works on a job
+  queued behind the request, while the other workers are idle
+"""
+
+import testing
+import time
+
+RING_SIZE = 1000
+CLIENTS = 64
+WORKERS = 64
+WORK_US = 20
+STAGES = 8
+HOG_US = 100
+JOB_US = 1000
+
+
+def now_ns() -> int:
+    s, ns = time.get_monotonic()
+    return s * 1000000000 + ns
+
+def busy(us: int) -> int:
+    """Work on this thread for about us microseconds. Reading the clock
+    allocates, so it is read only every 128 passes of integer arithmetic."""
+    end = now_ns() + us * 1000
+    x = 1
+    n = 0
+    while n % 128 != 0 or now_ns() < end:
+        x = (x * 1103515245 + 12345) % 2147483648
+        n += 1
+    return x
+
+def share(total: int, parts: int, i: int) -> int:
+    """Part i of total split into parts as evenly as possible"""
+    return total // parts + (1 if i < total % parts else 0)
+
+def percentile(values: list[int], p: int) -> int:
+    if len(values) == 0:
+        return 0
+    s = sorted(values)
+    return s[(len(s) - 1) * p // 100]
+
+def ms(ns: int) -> str:
+    return "%.3f" % (float(ns) / 1e6)
+
+
+actor RingNode(done: action(int) -> None):
+    var next: ?RingNode = None
+
+    def link(n: RingNode) -> bool:
+        next = n
+        return True
+
+    def token(id: int, hops: int):
+        if hops <= 0:
+            done(id)
+            return
+        n = next
+        if n is not None:
+            n.token(id, hops - 1)
+
+
+actor RingTest(t: testing.AsyncT, tokens: int):
+    """Scale hops per body, split over the tokens"""
+    var nodes: list[RingNode] = []
+    var pending = 0
+    iterations = t.loop()
+
+    def done(id: int):
+        pending -= 1
+        if pending == 0:
+            run()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            pending = tokens
+            for i in range(tokens):
+                nodes[i * RING_SIZE // tokens].token(i, share(c.val, tokens, i))
+        else:
+            t.success()
+
+    for i in range(RING_SIZE):
+        nodes.append(RingNode(done))
+    for i in range(RING_SIZE):
+        linked = nodes[i].link(nodes[(i + 1) % RING_SIZE])
+    run()
+
+
+actor _test_ring(t: testing.AsyncT):
+    """One token around a ring of 1000 actors, scale hops per body"""
+    RingTest(t, 1)
+
+actor _test_ring_tokens(t: testing.AsyncT):
+    """64 tokens around a ring of 1000 actors, scale hops per body in total"""
+    RingTest(t, 64)
+
+
+actor Server():
+    var calls = 0
+
+    def call(x: int) -> int:
+        calls += 1
+        return x + 1
+
+
+actor Client(server: Server, done: action(int, int) -> None):
+    def run(n: int):
+        acc = 0
+        for i in range(n):
+            acc += server.call(i)
+        done(n, acc)
+
+
+actor _test_hot_server(t: testing.AsyncT):
+    """64 clients make scale synchronous calls in total to one server"""
+    server = Server()
+    var clients: list[Client] = []
+    var pending = 0
+    iterations = t.loop()
+
+    def done(n: int, acc: int):
+        # Each client adds x + 1 for x in range(n)
+        if acc != n * (n + 1) // 2:
+            t.failure(ValueError("client sum " + str(acc) + " for " + str(n) + " calls"))
+            return
+        pending -= 1
+        if pending == 0:
+            run()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            pending = CLIENTS
+            for i in range(CLIENTS):
+                clients[i].run(share(c.val, CLIENTS, i))
+        else:
+            t.success()
+
+    for i in range(CLIENTS):
+        clients.append(Client(server, done))
+    run()
+
+
+actor Worker():
+    var done = 0
+
+    def work(us: int):
+        busy(us)
+        done += 1
+
+    def finish(result: action(int) -> None):
+        result(done)
+        done = 0
+
+
+actor _test_fan_out(t: testing.AsyncT):
+    """Scale work items of about 20 us each, round robin to 64 workers"""
+    var workers: list[Worker] = []
+    var pending = 0
+    var items = 0
+    var expected = 0
+    iterations = t.loop()
+
+    def result(n: int):
+        items += n
+        pending -= 1
+        if pending == 0:
+            if items != expected:
+                t.failure(ValueError("workers did " + str(items) + " of " + str(expected) + " items"))
+                return
+            run()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            pending = WORKERS
+            items = 0
+            expected = c.val
+            for i in range(c.val):
+                workers[i % WORKERS].work(WORK_US)
+            # Each worker gets finish after its items, so it reports once
+            for w in workers:
+                w.finish(result)
+        else:
+            t.success()
+
+    for i in range(WORKERS):
+        workers.append(Worker())
+    run()
+
+
+actor Stage(next: ?Stage, sink: action(int) -> None):
+    def item(x: int):
+        n = next
+        if n is not None:
+            n.item(x + 1)
+        else:
+            sink(x)
+
+
+actor _test_pipeline(t: testing.AsyncT):
+    """Scale messages at once through a chain of 8 stages"""
+    var first: ?Stage = None
+    var pending = 0
+    var total = 0
+    iterations = t.loop()
+
+    def sink(x: int):
+        total += x
+        pending -= 1
+        if pending == 0:
+            run()
+
+    def run():
+        # Every message leaves the last stage with x = STAGES - 1
+        if total != 0:
+            t.failure(ValueError("pipeline total " + str(total)))
+            return
+        c = next(iterations)
+        s = first
+        if isinstance(c, just) and s is not None:
+            pending = c.val
+            total = -(STAGES - 1) * c.val
+            for i in range(c.val):
+                s.item(0)
+        else:
+            t.success()
+
+    var stage: ?Stage = None
+    for i in range(STAGES):
+        stage = Stage(stage, sink)
+    first = stage
+    run()
+
+
+actor Hog(us: int):
+    """Always has one more message: each turn works for us microseconds"""
+    var running = True
+    var turns = 0
+
+    def spin():
+        if running:
+            busy(us)
+            turns += 1
+            after 0: spin()
+
+    def stop() -> int:
+        running = False
+        return turns
+
+    after 0: spin()
+
+
+actor Echo():
+    def ping(t0: int, reply: action(int) -> None):
+        reply(t0)
+
+
+actor _test_latency_under_load(t: testing.EnvT):
+    """Round trips every 1 ms while twice as many busy actors as workers run"""
+    echo = Echo()
+    var hogs: list[Hog] = []
+    var rtts: list[int] = []
+    var sent = 0
+    var target = 0
+    iterations = t.loop()
+
+    def pong(t0: int):
+        rtts.append(now_ns() - t0)
+        if len(rtts) == target:
+            print("latency_under_load scale=" + str(target) + " rtt_ms p50=" + ms(percentile(rtts, 50))
+                  + " p99=" + ms(percentile(rtts, 99)) + " max=" + ms(percentile(rtts, 100)))
+            run()
+
+    def ping():
+        # No timer is left pending when the last round trip of a body is
+        # sent, so a body never starts a second chain of pings
+        if sent < target:
+            sent += 1
+            echo.ping(now_ns(), pong)
+            if sent < target:
+                after now 0.001: ping()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            rtts = []
+            sent = 0
+            target = c.val
+            ping()
+        else:
+            for h in hogs:
+                turns = h.stop()
+            t.success()
+
+    for i in range(2 * t.env.nr_wthreads):
+        hogs.append(Hog(HOG_US))
+    run()
+
+
+actor JobServer():
+    def ping(t0: int, reply: action(int) -> None):
+        reply(t0)
+
+    def job(us: int):
+        busy(us)
+
+
+actor _test_reply_behind_work(t: testing.AsyncT):
+    """Round trips every 3 ms to a server that works 1 ms after each reply"""
+    server = JobServer()
+    var rtts: list[int] = []
+    var sent = 0
+    var target = 0
+    iterations = t.loop()
+
+    def pong(t0: int):
+        rtts.append(now_ns() - t0)
+        if len(rtts) == target:
+            print("reply_behind_work scale=" + str(target) + " rtt_ms p50=" + ms(percentile(rtts, 50))
+                  + " p99=" + ms(percentile(rtts, 99)) + " max=" + ms(percentile(rtts, 100)))
+            run()
+
+    def ping():
+        if sent < target:
+            sent += 1
+            server.ping(now_ns(), pong)
+            server.job(JOB_US)
+            if sent < target:
+                after now 0.003: ping()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            rtts = []
+            sent = 0
+            target = c.val
+            ping()
+        else:
+            t.success()
+
+    run()

@@ -350,6 +350,43 @@ polls, and each message does less work (JSON instead of XML and YANG). The
 runtime's share of the CPU time is therefore larger than in a real fleet
 manager, and messages arrive at a higher rate.
 
+## Actor scheduling patterns
+
+`scheduling` has one test per pattern of work between actors, so that a
+change to the runtime's scheduler can be judged across patterns rather than
+on one workload such as `fleet`. Scale counts operations per body; divide
+CPU time per body by scale for the cost per operation. An operation is one
+message for the rings, a call and its reply for `hot_server`, a message and
+about 20 µs of work for `fan_out`, 9 deliveries for `pipeline` (8 stages and
+the sink), and a round trip for `latency_under_load` and
+`reply_behind_work`. Measure at several worker counts:
+
+```sh
+acton test perf --module scheduling --time 10s --rts-wthreads 8
+acton test perf --module scheduling --name latency_under_load --scale 1000 --time 10s --rts-wthreads 2 --show-log
+```
+
+- `ring` passes one token around a ring of 1,000 actors, scale hops per
+  body. Every hop hands over to an actor with an empty mailbox and nothing
+  runs in parallel, so more worker threads can only add overhead.
+- `ring_tokens` passes 64 tokens around the same ring, scale hops in total.
+- `hot_server` has 64 clients make scale synchronous calls in total to one
+  server actor, whose mailbox stays deep.
+- `fan_out` sends scale work items of about 20 µs each at once, round robin
+  to 64 worker actors, and each worker reports its count once.
+- `pipeline` sends scale messages at once through a chain of 8 stages.
+- `latency_under_load` keeps twice as many actors as worker threads busy:
+  each always has another 100 µs message to run. Meanwhile a probe sends a
+  round trip through an idle actor every millisecond, scale round trips per
+  body. `--show-log` prints the round-trip percentiles once per body,
+  including calibration and warmup bodies; read those rather than CPU time,
+  which only shows that every worker is busy.
+- `reply_behind_work` sends a round trip every 3 ms to a server, followed by
+  a job of 1 ms for the same server, scale round trips per body. The reply
+  makes the probe runnable while the server's worker goes on with the job;
+  unless another worker takes the probe, the round trip includes the job.
+  Read the round-trip percentiles as for `latency_under_load`.
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:
