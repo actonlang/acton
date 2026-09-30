@@ -1,3 +1,12 @@
+static struct B_ValueError B_bitarray_negative_length_error =
+    STATIC_EXCEPTION(B_ValueError, "bitarray length must be non-negative");
+static struct B_MemoryError B_bitarray_too_large_error =
+    STATIC_EXCEPTION(B_MemoryError, "bitarray is too large");
+static struct B_ValueError B_bitarray_serialization_too_large_error =
+    STATIC_EXCEPTION(B_ValueError, "bitarray is too large to serialize");
+static struct B_ValueError B_bitarray_invalid_serialized_error =
+    STATIC_EXCEPTION(B_ValueError, "invalid serialized bitarray");
+
 static uint64_t B_bitarray_word_count(int64_t length) {
     return ((uint64_t)length + 63) / 64;
 }
@@ -9,11 +18,11 @@ static uint64_t B_bitarray_tail_mask(int64_t length) {
 
 static void B_bitarray_init_storage(B_bitarray self, int64_t length, bool initial) {
     if (length < 0)
-        STATIC_EXCEPTION(B_ValueError,"bitarray length must be non-negative");
+        RAISE_EXC(&B_bitarray_negative_length_error);
 
     uint64_t word_count = B_bitarray_word_count(length);
     if (word_count > SIZE_MAX / sizeof(uint64_t))
-        STATIC_EXCEPTION(B_MemoryError,"bitarray is too large");
+        RAISE_EXC(&B_bitarray_too_large_error);
 
     self->length = length;
     self->count = initial ? length : 0;
@@ -31,7 +40,8 @@ static void B_bitarray_init_storage(B_bitarray self, int64_t length, bool initia
 
 static int64_t B_bitarray_checked_index(B_bitarray self, int64_t index) {
     if (index < 0 || index >= self->length)
-        RAISE(B_IndexError, index, "bitarray index out of range");
+        RAISE(B_IndexError, index,
+              actStrFromCString("bitarray index out of range"));
     return index;
 }
 
@@ -190,7 +200,7 @@ bool B_ContainerD_bitarrayD___containsnot__(B_ContainerD_bitarray wit,
 void B_bitarrayD___serialize__(B_bitarray self, $Serial$state state) {
     uint64_t word_count = B_bitarray_word_count(self->length);
     if (word_count > INT_MAX - 1)
-        STATIC_EXCEPTION(B_ValueError, "bitarray is too large to serialize");
+        RAISE_EXC(&B_bitarray_serialization_too_large_error);
 
     // BITARRAY_ID is above ITEM_ID, so the generic serializer has already
     // emitted the object header and installed self in its back-reference table.
@@ -212,17 +222,16 @@ B_bitarray B_bitarrayD___deserialize__(B_bitarray self, $Serial$state state) {
 
     $ROW row = state->row;
     if (!row || row->class_id != BITARRAY_ID || row->blob_size < 1)
-        RAISE(B_ValueError,row->class_id 
-                                     to$str("invalid serialized bitarray")));
+        RAISE_EXC(&B_bitarray_invalid_serialized_error);
     state->row = row->next;
     state->row_no++;
 
     int64_t length = (int64_t)(intptr_t)row->blob[0];
     if (length < 0)
-        STATIC_EXCEPTION(B_ValueError, "invalid serialized bitarray");
+        RAISE_EXC(&B_bitarray_invalid_serialized_error);
     uint64_t word_count = B_bitarray_word_count(length);
     if (word_count > INT_MAX - 1 || row->blob_size != (int)word_count + 1)
-        STATIC_EXCEPTION(B_ValueError, to$str("invalid serialized bitarray");
+        RAISE_EXC(&B_bitarray_invalid_serialized_error);
 
     self->$class = &B_bitarrayG_methods;
     B_bitarray_init_storage(self, length, false);
