@@ -35,6 +35,21 @@ finishes a whole invocation, so slow work can overrun it. A separate watchdog
 allows at least five minutes for a slow test; longer budgets extend it.
 Compilation is outside the benchmark budget.
 
+## Worker threads
+
+Each test process uses the runtime's default number of worker threads unless
+`--rts-wthreads` sets it. Measuring at several counts shows how a workload scales
+with threads:
+
+```sh
+acton test perf --name my_test --rts-wthreads 1
+acton test perf --name my_test --rts-wthreads 16
+```
+
+The worker count is part of a measurement's identity: a run is only compared
+with a baseline recorded with the same count. A `--compare git:REF` run uses the
+count for both versions.
+
 ## Comparing revisions
 
 Use `--compare git:REF` to measure the current code against a Git revision:

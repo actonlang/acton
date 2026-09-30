@@ -93,6 +93,21 @@ Test builds follow the selected source files and their imports, and ignore the p
 
 `acton test --watch` waits for successful compilation and linking before running tests. If another edit interrupts a build or test run, the next run includes tests affected by both edits. Stopping watch mode also stops its compiler and test subprocesses.
 
+## Runtime worker threads
+
+Test processes use the runtime's default number of worker threads: one per CPU
+core, and at least four. Use `--rts-wthreads` to run every test process with a
+fixed number instead, for example to check that tests pass with a single worker
+thread:
+
+```sh
+acton test --rts-wthreads 1
+```
+
+The option works the same way with `acton test perf`, `acton test scale` and
+`acton test stress`. A cached result is only reused by a run with the same
+number of worker threads.
+
 ## Capability-gated tests
 
 Some tests depend on external capabilities (for example network services, hardware, or system setup). In tests that receive a test context argument (`t`), use `t.require(...)` and pass available capabilities with `--tag`:
