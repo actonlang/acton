@@ -37,6 +37,11 @@ struct B_IteratorD_array {
 extern struct B_IteratorD_arrayG_class B_IteratorD_arrayG_methods;
 B_IteratorD_array B_IteratorD_arrayG_new(B_array src);
 
+// Raw iteration workers selected for loops over a concretely typed array.
+// The generic iterator slot below continues to box at polymorphic boundaries.
+bool $arrayD_U__next_int(B_IteratorD_array self, int64_t *out);
+bool $arrayD_U__next_float(B_IteratorD_array self, double *out);
+
 // Raw entry points selected by the compiler when the element type is known.
 // They preserve bounds checks while avoiding the boxed generic method ABI.
 int64_t $arrayD_U__getitem_int(B_array self, int64_t index);

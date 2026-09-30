@@ -146,10 +146,32 @@ B_NoneType B_MutIndexedD_arrayD___setitem__(B_MutIndexedD_array wit,
 
 // Container[A] ////////////////////////////////////////////////////////////////////////////////////
 
-static bool B_IteratorD_arrayD_next(B_IteratorD_array self, $WORD *out) {
+bool $arrayD_U__next_int(B_IteratorD_array self, int64_t *out) {
     if (self->next >= self->src->length)
         return false;
-    *out = B_arrayD___getitem__(self->src, self->next++);
+    *out = ((int64_t *)self->src->data)[self->next++];
+    return true;
+}
+
+bool $arrayD_U__next_float(B_IteratorD_array self, double *out) {
+    if (self->next >= self->src->length)
+        return false;
+    *out = ((double *)self->src->data)[self->next++];
+    return true;
+}
+
+static bool B_IteratorD_arrayD_next(B_IteratorD_array self, $WORD *out) {
+    if (self->src->kind == B_ARRAY_INT) {
+        int64_t value;
+        if (!$arrayD_U__next_int(self, &value))
+            return false;
+        *out = toB_int(value);
+    } else {
+        double value;
+        if (!$arrayD_U__next_float(self, &value))
+            return false;
+        *out = toB_float(value);
+    }
     return true;
 }
 
@@ -198,11 +220,51 @@ B_Iterator B_ContainerD_arrayD___iter__(B_ContainerD_array wit, B_array self) {
 
 B_array B_ContainerD_arrayD___fromiter__(B_ContainerD_array wit,
                                          B_Iterable iter_wit, $WORD iterable) {
-    B_list values = B_listG_new(iter_wit, iterable);
-    B_array result = B_arrayG_new(wit->W_ArrayElementD_AD_ContainerD_array,
-                                  values->length, B_None);
-    for (int64_t i = 0; i < values->length; i++)
-        B_arrayD___setitem__(result, i, values->data[i]);
+    B_array result = B_arrayG_new(wit->W_ArrayElementD_AD_ContainerD_array, 0,
+                                  B_None);
+    if (!iter_wit || !iterable)
+        return result;
+
+    // Grow the final unboxed buffer itself.  Previously this operation first
+    // retained every boxed input in a list and only then allocated the array.
+    // A producer may still yield boxed values through Iterable[A], but each is
+    // now unboxed immediately and can become garbage before the next value.
+    size_t capacity = 0;
+    B_Iterator it = iter_wit->$class->__iter__(iter_wit, iterable);
+    $WORD value;
+    while (it->$class->__next__(it, &value)) {
+        if ((uint64_t)result->length >= SIZE_MAX / sizeof(uint64_t) ||
+            result->length == INT64_MAX)
+            $RAISE((B_BaseException)$NEW(B_MemoryError,
+                                         to$str("array is too large")));
+
+        size_t needed = (size_t)result->length + 1;
+        if (needed > capacity) {
+            const size_t max_capacity = SIZE_MAX / sizeof(uint64_t);
+            size_t new_capacity = capacity == 0 ? 16 : capacity;
+            while (new_capacity < needed) {
+                if (new_capacity > max_capacity / 2) {
+                    new_capacity = max_capacity;
+                    break;
+                }
+                new_capacity *= 2;
+            }
+            size_t nbytes = new_capacity * sizeof(uint64_t);
+            result->data = result->data == NULL
+                ? acton_malloc_atomic(nbytes)
+                : acton_realloc(result->data, nbytes);
+            if (result->data == NULL)
+                $RAISE((B_BaseException)$NEW(B_MemoryError,
+                                             to$str("memory allocation failed")));
+            capacity = new_capacity;
+        }
+
+        if (result->kind == B_ARRAY_INT)
+            ((int64_t *)result->data)[result->length] = fromB_int((B_int)value);
+        else
+            ((double *)result->data)[result->length] = fromB_float((B_float)value);
+        result->length++;
+    }
     return result;
 }
 

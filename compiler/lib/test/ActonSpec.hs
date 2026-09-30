@@ -2231,12 +2231,17 @@ main = do
         , "$arrayD_U__len(xs)"
         , "$arrayD_U__getitem_float(xs, i)"
         , "$arrayD_U__setitem_float(xs, i, value)"
+        , "$arrayD_U__next_int((B_IteratorD_array)"
+        , "$arrayD_U__next_float((B_IteratorD_array)"
         ]
       testCodeGenDoesNotContain env0 "raw_array"
         [ "B_arrayD___getitem__(xs, i)"
         , "B_arrayD___setitem__(xs, i"
         , "toB_int(value)"
         , "toB_float(value)"
+        , "((B_int)value)->val"
+        , "((B_float)value)->val"
+        , "->$class->__next__("
         ]
       testCodeGenContains env0 "raw_bitarray"
         [ "B_bitarrayG_new(n, toB_bool(initial))"

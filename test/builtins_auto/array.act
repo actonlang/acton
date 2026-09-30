@@ -33,6 +33,11 @@ actor main(env):
         check(env, 17 in ints and 99 not in ints, "int array membership failed")
         check(env, repr(ints) == "[|-7, 17, 0, 42|]", "wrong int array repr")
 
+        int_sum = 0
+        for value in ints:
+            int_sum += value
+        check(env, int_sum == 52, "int array loop failed")
+
         filled_ints: array[int] = array(4, -9)
         check(env, filled_ints[0] == -9 and filled_ints[3] == -9,
               "int array fill failed")
@@ -45,6 +50,20 @@ actor main(env):
         generic_set(floats, 2, -1.5)
         check(env, generic_get(floats, 2) == -1.5, "generic float array access failed")
         check(env, 3.25 in floats and 2.0 not in floats, "float array membership failed")
+
+        float_sum = 0.0
+        for value in floats:
+            float_sum += value
+        check(env, float_sum == 1.75, "float array loop failed")
+
+        # __fromiter__ grows the unboxed destination in one pass.  Exercise
+        # both storage kinds and an iterator whose values are computed lazily.
+        generated_ints: array[int] = Collection.__fromiter__(range(5))
+        check(env, list(generated_ints) == [0, 1, 2, 3, 4],
+              "int array fromiter failed")
+        generated_floats: array[float] = Collection.__fromiter__(map(float, range(5)))
+        check(env, list(generated_floats) == [0.0, 1.0, 2.0, 3.0, 4.0],
+              "float array fromiter failed")
 
         filled_floats: array[float] = array(3, 1.25)
         check(env, filled_floats[0] == 1.25 and filled_floats[2] == 1.25,

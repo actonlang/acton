@@ -30,6 +30,11 @@ typedef struct {
     int64_t val;
 } $MaybeI64;
 
+typedef struct {
+    bool just;
+    double val;
+} $MaybeF64;
+
 struct B_NoneType;
 typedef struct B_NoneType *B_NoneType;
 

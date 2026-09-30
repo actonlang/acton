@@ -23,3 +23,15 @@ def float_get(xs: array[float], i: int) -> float:
 
 def float_set(xs: array[float], i: int, value: float) -> None:
     xs[i] = value
+
+def int_sum(xs: array[int]) -> int:
+    result = 0
+    for value in xs:
+        result += value
+    return result
+
+def float_sum(xs: array[float]) -> float:
+    result = 0.0
+    for value in xs:
+        result += value
+    return result

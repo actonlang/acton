@@ -124,6 +124,7 @@ data PayloadRep                     = PayloadWord
 -- sees these bindings as ordinary maybe[A] and Iterator[int] values.
 data LocalRep                       = MaybeLocal Type PayloadRep
                                     | RangeLocal
+                                    | ArrayIterLocal Type
 
 data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , localX :: HashSet.HashSet Name
@@ -177,6 +178,10 @@ maybeLocal env n                    = case localRep env n of
 rangeIter env n                     = case localRep env n of
                                         Just RangeLocal -> True
                                         _               -> False
+
+arrayIter env n                     = case localRep env n of
+                                        Just (ArrayIterLocal t) -> Just t
+                                        _                       -> Nothing
 
 setVolVars as env                   = modX env $ \x -> x{ volVarsX = as }
 
@@ -939,6 +944,9 @@ localRepEnvAfter env s env1
 localRepEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
   | Just _ <- rangeIterSource env t e
                                     = setLocalRep n RangeLocal env1
+localRepEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
+  | Just elemT <- arrayIterSource env t e
+                                    = setLocalRep n (ArrayIterLocal elemT) env1
 localRepEnvAfter _ s env1           = clearLocalReps (bound s) env1
 
 genMaybeOutAssignReturn env valT (Assign _ [PVar _ n _] e) (Return _ (Just (Var _ n')) : ss)
@@ -1080,6 +1088,46 @@ isIteratorIterCall env f
                                          q == gBuiltin (Derived (Derived nIterable nIterator) iterKW)
 isIteratorIterCall _ _              = False
 
+-- Array iteration has the same public, boxed Iterator[A] type as every other
+-- iterable.  Remember the concrete source only as a CodeGen fact, allowing a
+-- direct array loop to use the raw next worker without changing that protocol.
+arrayIterSource env t e
+  | Just elemT <- iteratorElementType (boxedRepType t),
+    elemT == tInt || elemT == tFloat,
+    Just _ <- arrayIterExpr env elemT e
+                                    = Just elemT
+  | otherwise                       = Nothing
+
+iteratorElementType (TCon _ (TC q [t]))
+  | q == qnIterator                 = Just t
+iteratorElementType _               = Nothing
+
+arrayIterExpr env elemT (Call _ f (PosArg _ (PosArg xs PosNil)) KwdNil)
+  | isArrayIteratorCall env f,
+    boxedRepType (typeOf env xs) == tArray elemT
+                                    = Just xs
+arrayIterExpr env elemT (Paren _ e) = arrayIterExpr env elemT e
+arrayIterExpr env elemT (Box _ e)   = arrayIterExpr env elemT e
+arrayIterExpr _ _ _                 = Nothing
+
+isArrayIteratorCall env f
+  | Var _ n <- stripTApp f          = unalias env n ==
+                                      gBuiltin (Derived (Derived nContainer nArray) iterKW)
+isArrayIteratorCall _ _             = False
+
+-- Return an array iterator whose raw element representation agrees with the
+-- value produced by next.  The normalizer always binds a for-loop iterator,
+-- while the direct-expression case also covers next(iter(xs)).
+arrayNextSource env elemT e@(Var _ (NoQ n))
+  | arrayIter env n == Just elemT   = Just e
+arrayNextSource env elemT (Paren _ e)
+                                    = arrayNextSource env elemT e
+arrayNextSource env elemT (Box _ e) = arrayNextSource env elemT e
+arrayNextSource env elemT e
+  | Just _ <- arrayIterExpr env elemT e
+                                    = Just e
+arrayNextSource _ _ _               = Nothing
+
 -- Return the physical range value underlying an iterator expression.  This
 -- covers both a previously bound range iterator and next(iter(range(...))).
 rangeNextSource env e@(Var _ (NoQ n))
@@ -1118,6 +1166,7 @@ maybeLocalType (MaybeLocal _ (PayloadRaw t))
 
 rawTypeForMaybe t
   | boxedRepType t == tInt          = text "$MaybeI64"
+  | boxedRepType t == tFloat        = text "$MaybeF64"
   | otherwise                       = error ("unsupported raw maybe payload type: " ++ prstr t)
 
 genMaybeTag env n                   = gen env (NoQ n) <> text ".just"
@@ -1163,14 +1212,19 @@ genMaybeInstance env e c
     unalias env c == qnNothing      = Just (char '!' <> parens (genMaybeTag env n))
 genMaybeInstance _ _ _              = Nothing
 
--- Decide whether a fresh assignment can use a tagged stack local, and select
--- the raw int64 payload when its producer is a range iterator.
+-- Decide whether a fresh assignment can use a tagged stack local.  Ranges and
+-- concrete arrays can place their value directly in the local's raw payload;
+-- all other iterators retain the public boxed-word ABI.
 nextMaybeLocal env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env),
     Just valT <- maybeValueType t,
     Just it <- nextIterator env e   = case if valT == tInt then rangeNextSource env it else Nothing of
                                         Just range -> Just (n, range, MaybeLocal valT (PayloadRaw tInt))
-                                        Nothing    -> Just (n, it, MaybeLocal valT PayloadWord)
+                                        Nothing
+                                          | Just _ <- arrayNextSource env valT it
+                                              -> Just (n, it, MaybeLocal valT (PayloadRaw valT))
+                                          | otherwise
+                                              -> Just (n, it, MaybeLocal valT PayloadWord)
 nextMaybeLocal _ _                  = Nothing
 
 nextIterName n                      = Derived n (globalName "next_iter")
@@ -1178,6 +1232,14 @@ nextIterName n                      = Derived n (globalName "next_iter")
 genNextBoolCallOn recv out          = recv <> text "->$class->__next__" <> parens (recv <> comma <+> char '&' <> out)
 
 genRangeNextBoolCallOn recv out     = text "$rangeD_U__next_i64" <> parens (recv <> comma <+> char '&' <> out)
+
+genArrayNextBoolCallOn env t recv out
+                                    = worker <> parens (parens (text "B_IteratorD_array") <> recv <>
+                                                       comma <+> char '&' <> out)
+  where worker
+          | boxedRepType t == tInt  = text "$arrayD_U__next_int"
+          | boxedRepType t == tFloat = text "$arrayD_U__next_float"
+          | otherwise               = error ("unsupported raw array iterator element type: " ++ prstr t)
 
 -- A range-backed iterator is stored as B_range locally.  Keep that physical
 -- representation for the specialized next call; ordinary expression uses
@@ -1195,15 +1257,21 @@ genNextMaybeLocal env n it ml@(MaybeLocal _ payloadRep)
                                       genMaybeTag env n <+> equals <+> call <> semi
   where iterName                    = nextIterName n
         iterNameDoc                 = gen env iterName
-        iterType                    = case payloadRep of
-                                        PayloadWord  -> repType env (boxedRepType (typeOf env it))
-                                        PayloadRaw{} -> gen env tRange
-        iterValue                   = case payloadRep of
-                                        PayloadWord  -> gen env it
-                                        PayloadRaw{} -> genRangePhysical env it
-        call                        = case payloadRep of
-                                        PayloadWord  -> genNextBoolCallOn iterNameDoc (genMaybePayload env n)
-                                        PayloadRaw{} -> genRangeNextBoolCallOn iterNameDoc (genMaybePayload env n)
+        rangeSource                 = case payloadRep of
+                                        PayloadRaw t | boxedRepType t == tInt -> rangeNextSource env it
+                                        _                                    -> Nothing
+        iterType                    = case (payloadRep, rangeSource) of
+                                        (PayloadWord, _) -> repType env (boxedRepType (typeOf env it))
+                                        (PayloadRaw{}, Just _) -> gen env tRange
+                                        (PayloadRaw{}, Nothing) -> repType env (boxedRepType (typeOf env it))
+        iterValue                   = case (payloadRep, rangeSource) of
+                                        (PayloadWord, _) -> gen env it
+                                        (PayloadRaw{}, Just _) -> genRangePhysical env it
+                                        (PayloadRaw{}, Nothing) -> gen env it
+        call                        = case (payloadRep, rangeSource) of
+                                        (PayloadWord, _) -> genNextBoolCallOn iterNameDoc (genMaybePayload env n)
+                                        (PayloadRaw{}, Just _) -> genRangeNextBoolCallOn iterNameDoc (genMaybePayload env n)
+                                        (PayloadRaw t, Nothing) -> genArrayNextBoolCallOn env t iterNameDoc (genMaybePayload env n)
 
 genTypeDecl env n t                 = genVolatile env n <+> storageType env t
 
