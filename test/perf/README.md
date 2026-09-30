@@ -297,6 +297,59 @@ scheduling. A composite hash that allocates per component shows up as
 allocation growing with tuple arity; hashing that copies its input shows up as
 allocation growing with `string_operations`' scale.
 
+## Fleet manager workload
+
+`fleet` measures the runtime's scheduling cost with many actors, timers,
+request and reply chains through shared actors, bursts and idle gaps. Its
+actor and message shape follows a network fleet manager that onboards
+devices and upgrades their software in campaigns; the module docstring in
+`src/fleet.act` lists the actors. The work per operation is nearly fixed,
+so CPU time per body should not grow with the number of worker threads;
+where it does, the growth is runtime overhead. Measure at several worker
+counts:
+
+```sh
+acton test perf --module fleet --name load --scale 10000 --time 30s --rts-wthreads 16
+acton test perf --module fleet --name upgrade --scale 480 --time 60s --rts-wthreads 16 --show-log
+```
+
+- `load` creates scale device handles before `t.loop()`. Each body
+  connects all of them at once: every device creates its five session
+  actors, makes two requests through its in-process connection, commits a
+  transaction to the shared store and renders its configuration three
+  times. The body ends when the last device reports back, and the previous
+  body's session actors become garbage.
+- `upgrade` creates and connects a fleet of scale times 125/6 devices
+  before `t.loop()`, 10,000 at scale 480. Each body is a campaign that upgrades
+  scale of them, half at a time. An upgrade runs seven operations over
+  about two seconds and polls the device about 57 times. After status
+  changes, the campaign waits briefly, builds a decision over all its
+  members and releases more devices; it also reads the campaign state every
+  0.1 s. Each campaign takes the next devices in the fleet.
+
+Measurements are per body: divide by scale for CPU time per device or per
+upgrade. A campaign's wall time is mostly spent waiting for timers, so read
+the CPU rows for the upgrade. `--show-log` prints one line per campaign,
+including warmup campaigns, with the polls per upgrade, the number of
+decisions and state reads, the upgrade latency and percentiles of the
+round-trip time of requests through the in-process connection, in
+milliseconds. Polls end when the device reports an operation done, so
+slower round trips mean slightly fewer polls per upgrade.
+
+Calibration does not suit `upgrade`. Its wall time is set by timers: about
+two seconds for one upgrade and about 4.3 seconds for any larger campaign.
+The scale that calibration picks therefore depends on `--time` rather than
+on the work, and a budget below about five seconds fails before any
+measurement. Choose the scale explicitly and give each campaign time to
+repeat. `utils/perf-compare` gives each process five seconds by default,
+enough for one upgrade campaign at scale 1.
+
+Time is compressed about 30 times against the upgrade the workload is
+modelled on (60 seconds with a poll every 0.73 s), with the same number of
+polls, and each message does less work (JSON instead of XML and YANG). The
+runtime's share of the CPU time is therefore larger than in a real fleet
+manager, and messages arrive at a higher rate.
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:

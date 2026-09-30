@@ -1,0 +1,621 @@
+"""Actor workload shaped like a network fleet manager
+
+Models the actor and message shape of a fleet manager that onboards many
+devices and upgrades their software in campaigns. Time is compressed so an
+upgrade takes seconds; the work per message is small next to a real
+manager's (JSON instead of XML and YANG), so the runtime's share of the CPU
+time is larger.
+
+Per device, six actors:
+- Device: the manager's device handle (onboarding, configuration renders)
+- SwDriver: the software upgrade state machine; polls while an operation runs
+- Driver: the protocol session; splits requests into chunks, reassembles
+  replies and runs callbacks
+- PipeClient and PipeServer: an in-process connection; each chunk is a
+  synchronous hand-over to the peer endpoint, as with an actor pipe
+- MockDevice: the remote device; answers requests and completes software
+  operations on timers
+
+Shared actors:
+- Log: a log handler that every request asks for its level (synchronously)
+- Store: the state layer; onboarding transactions (synchronous) and status
+  updates (fan-in), forwarded to the Fleet as a subscription
+- Fleet: onboards devices and runs campaigns: keeps half of a campaign's
+  upgrades in flight and, debounced after status changes, builds a decision
+  over all campaign members and releases more devices
+"""
+
+import json
+import testing
+import time
+
+# An upgrade takes about UPGRADE_TIME seconds and polls about 57 times, like
+# a 60 s mock upgrade polled every 0.73 s, compressed 30 times
+UPGRADE_TIME = 2.0
+POLL = UPGRADE_TIME * 0.73 / 60.0
+# Campaign decisions wait for more status changes (1.8 s of 60)
+DEBOUNCE = UPGRADE_TIME * 1.8 / 60.0
+READ_EVERY = 0.1
+CONFIG_SIZE = 8
+CHUNKS = 3
+
+
+def fleet_size(upgrades: int) -> int:
+    """Devices in the fleet for a campaign: 10,000 for 480 upgrades"""
+    return upgrades * 125 // 6
+
+def op_time(op: str) -> float:
+    # Shares of a 60 s mock upgrade: copy 19.7 s, add 3.0 s, activate
+    # (reload) 36.5 s, commit 0.76 s
+    if op == "prepare":
+        return UPGRADE_TIME * 19.7 / 60.0
+    if op == "install":
+        return UPGRADE_TIME * 3.0 / 60.0
+    if op == "activate":
+        return UPGRADE_TIME * 36.5 / 60.0
+    if op == "commit":
+        return UPGRADE_TIME * 0.76 / 60.0
+    return 0.0
+
+def poll_time(op: str) -> float:
+    # Twice the poll period during reload
+    return 2.0 * POLL if op == "activate" else POLL
+
+def now_ns() -> int:
+    s, ns = time.get_monotonic()
+    return s * 1000000000 + ns
+
+def percentile(values: list[int], p: int) -> int:
+    if len(values) == 0:
+        return 0
+    s = sorted(values)
+    i = (len(s) - 1) * p // 100
+    return s[i]
+
+def ms(ns: int) -> str:
+    return "%.3f" % (float(ns) / 1e6)
+
+def status_doc(dev: int, seq: int, op: str, op_state: str, version: str, history: list[str]) -> dict[str, ?value]:
+    doc: dict[str, ?value] = {}
+    doc["device"] = "dev-" + str(dev)
+    doc["seq"] = seq
+    doc["op"] = op
+    doc["op_state"] = op_state
+    doc["version"] = version
+    doc["uptime"] = seq * 17
+    doc["cpu"] = seq % 100
+    hist: list[?value] = []
+    for h in history:
+        entry: dict[str, ?value] = {}
+        entry["op"] = h
+        entry["result"] = "success"
+        hist.append(entry)
+    doc["history"] = hist
+    return doc
+
+def config_doc(dev: int, version: str) -> dict[str, ?value]:
+    doc: dict[str, ?value] = {}
+    doc["hostname"] = "dev-" + str(dev)
+    doc["version"] = version
+    ifaces: list[?value] = []
+    for i in range(CONFIG_SIZE):
+        iface: dict[str, ?value] = {}
+        iface["name"] = "GigabitEthernet0/" + str(i)
+        iface["description"] = "link " + str(i) + " of dev-" + str(dev)
+        iface["mtu"] = 1500 + i
+        iface["enabled"] = i % 5 != 0
+        ifaces.append(iface)
+    doc["interfaces"] = ifaces
+    return doc
+
+def request(op: str, rpc: int) -> str:
+    req: dict[str, ?value] = {}
+    req["op"] = op
+    req["rpc"] = rpc
+    req["id"] = "msg-" + str(rpc)
+    return json.encode(req)
+
+def field_str(doc: dict[str, ?value], key: str) -> str:
+    v = doc.get(key)
+    if v is not None and isinstance(v, str):
+        return v
+    return ""
+
+def split(data: str, n: int) -> list[str]:
+    parts = []
+    size = len(data)
+    for i in range(n):
+        parts.append(data[size * i // n:size * (i + 1) // n])
+    return parts
+
+
+actor Log():
+    var level = 30
+    var calls = 0
+
+    def get_level() -> int:
+        calls += 1
+        return level
+
+
+actor MockDevice(id: int, log: Log):
+    var server: ?PipeServer = None
+    var version = "17.9.1"
+    var op = ""
+    var op_state = "done"
+    var history: list[str] = []
+    var partial: dict[int, list[str]] = {}
+    var seq = 0
+
+    def attach(s: PipeServer):
+        server = s
+
+    def complete(name: str):
+        op_state = "done"
+        if name == "activate":
+            version = "17.12.4"
+        history.append(name)
+        if len(history) > 20:
+            history.pop(0)
+
+    def on_chunk(rpc: int, idx: int, total: int, data: str):
+        parts = partial.get(rpc)
+        if parts is not None:
+            parts.append(data)
+            if len(parts) == total:
+                del partial[rpc]
+                handle(rpc, "".join(parts))
+        elif total == 1:
+            handle(rpc, data)
+        else:
+            partial[rpc] = [data]
+
+    def handle(rpc: int, req: str):
+        seq += 1
+        if log.get_level() <= 10:
+            print("rpc", req)
+        r = json.decode(req)
+        name = field_str(r, "op")
+        reply = ""
+        if name == "get-config":
+            reply = json.encode(config_doc(id, version))
+        elif name == "hello":
+            caps: list[?value] = []
+            for i in range(20):
+                caps.append("urn:ietf:params:netconf:capability:" + str(i) + ":1.0")
+            hello: dict[str, ?value] = {}
+            hello["capabilities"] = caps
+            hello["session"] = id
+            reply = json.encode(hello)
+        else:
+            t = op_time(name)
+            if t > 0.0:
+                op = name
+                op_state = "running"
+                after now t: complete(name)
+            reply = json.encode(status_doc(id, seq, op, op_state, version, history))
+        s = server
+        if s is not None:
+            parts = split(reply, CHUNKS)
+            for i in range(len(parts)):
+                s.write(rpc, i, len(parts), parts[i])
+
+
+actor PipeServer(mock: MockDevice):
+    var peer: ?PipeClient = None
+
+    def attach(p: PipeClient):
+        peer = p
+
+    def deliver(rpc: int, idx: int, total: int, data: str) -> bool:
+        mock.on_chunk(rpc, idx, total, data)
+        return True
+
+    def write(rpc: int, idx: int, total: int, data: str):
+        p = peer
+        if p is not None:
+            ok = p.deliver(rpc, idx, total, data)
+
+
+actor PipeClient(server: PipeServer):
+    var driver: ?Driver = None
+
+    def attach(d: Driver):
+        driver = d
+
+    def write(rpc: int, idx: int, total: int, data: str):
+        ok = server.deliver(rpc, idx, total, data)
+
+    def deliver(rpc: int, idx: int, total: int, data: str) -> bool:
+        d = driver
+        if d is not None:
+            d.on_chunk(rpc, idx, total, data)
+        return True
+
+
+actor Driver(client: PipeClient, log: Log):
+    var next_rpc = 0
+    var pending: dict[int, action(dict[str, ?value], int) -> None] = {}
+    var started: dict[int, int] = {}
+    var partial: dict[int, list[str]] = {}
+
+    def call(op: str, cb: action(dict[str, ?value], int) -> None):
+        if log.get_level() <= 10:
+            print("call", op)
+        next_rpc += 1
+        rpc = next_rpc
+        pending[rpc] = cb
+        started[rpc] = now_ns()
+        parts = split(request(op, rpc), CHUNKS)
+        for i in range(len(parts)):
+            client.write(rpc, i, len(parts), parts[i])
+
+    def on_chunk(rpc: int, idx: int, total: int, data: str):
+        parts = partial.get(rpc)
+        if parts is not None:
+            parts.append(data)
+            if len(parts) == total:
+                del partial[rpc]
+                done(rpc, "".join(parts))
+        elif total == 1:
+            done(rpc, data)
+        else:
+            partial[rpc] = [data]
+
+    def done(rpc: int, data: str):
+        doc = json.decode(data)
+        cb = pending.pop(rpc)
+        t0 = started.pop(rpc)
+        if cb is not None and t0 is not None:
+            cb(doc, now_ns() - t0)
+
+
+actor SwDriver(drv: Driver, dev: Device):
+    var steps = ["check", "prepare", "install", "activate", "commit", "check", "resync"]
+    var step = 0
+    var polls = 0
+    var t0 = 0
+
+    def start(t: int):
+        t0 = t
+        step = 0
+        polls = 0
+        run_step()
+
+    def run_step():
+        if step == len(steps):
+            dev.on_upgraded(now_ns() - t0, polls)
+            return
+        name = steps[step]
+        if name == "resync":
+            drv.call("get-config", on_resync)
+        else:
+            drv.call(name, on_started)
+
+    def on_started(doc: dict[str, ?value], rtt: int):
+        dev.on_rtt(rtt)
+        name = steps[step]
+        if op_time(name) > 0.0:
+            after now poll_time(name): poll()
+        else:
+            step += 1
+            run_step()
+
+    def poll():
+        polls += 1
+        drv.call("status", on_status)
+
+    def on_status(doc: dict[str, ?value], rtt: int):
+        dev.on_rtt(rtt)
+        name = steps[step]
+        if field_str(doc, "op_state") == "done":
+            dev.on_sw_state(name, doc)
+            step += 1
+            run_step()
+        else:
+            after now poll_time(name): poll()
+
+    def on_resync(doc: dict[str, ?value], rtt: int):
+        dev.on_rtt(rtt)
+        dev.on_config(doc)
+        step += 1
+        run_step()
+
+
+actor Store():
+    var docs: dict[int, str] = {}
+    var states: dict[int, str] = {}
+    var sub: ?Fleet = None
+    var txns = 0
+    var updates = 0
+
+    def subscribe(f: Fleet):
+        sub = f
+
+    def transact(dev: int, doc: dict[str, ?value]) -> bool:
+        txns += 1
+        docs[dev] = json.encode(doc)
+        states[dev] = "connected"
+        return True
+
+    def update_oper(dev: int, state: str, doc: dict[str, ?value]):
+        updates += 1
+        docs[dev] = json.encode(doc)
+        states[dev] = state
+        f = sub
+        if f is not None:
+            f.on_device(dev, state)
+
+    def summary(devs: list[int]) -> str:
+        counts: dict[str, ?value] = {}
+        for d in devs:
+            st = "unknown"
+            s = states.get(d)
+            if s is not None:
+                st = s
+            c = counts.get(st)
+            if c is not None and isinstance(c, int):
+                counts[st] = c + 1
+            else:
+                counts[st] = 1
+        counts["updates"] = updates
+        return json.encode(counts)
+
+
+actor Device(id: int, store: Store, fleet: Fleet, log: Log):
+    var drv: ?Driver = None
+    var sw: ?SwDriver = None
+    var version = ""
+    var dmc = ""
+
+    def render_dmc(conf: dict[str, ?value]):
+        doc: dict[str, ?value] = {}
+        doc["device"] = "dev-" + str(id)
+        doc["config"] = conf
+        doc["version"] = version
+        for i in range(3):
+            dmc = json.encode(doc)
+
+    def connect():
+        mock = MockDevice(id, log)
+        server = PipeServer(mock)
+        client = PipeClient(server)
+        d = Driver(client, log)
+        mock.attach(server)
+        server.attach(client)
+        client.attach(d)
+        drv = d
+        sw = SwDriver(d, self)
+        d.call("hello", on_hello)
+
+    def on_hello(doc: dict[str, ?value], rtt: int):
+        d = drv
+        if d is not None:
+            d.call("get-config", on_connected)
+
+    def on_connected(doc: dict[str, ?value], rtt: int):
+        version = field_str(doc, "version")
+        ok = store.transact(id, doc)
+        render_dmc(doc)
+        fleet.loaded(id)
+
+    def set_dmc(t0: int):
+        doc: dict[str, ?value] = {}
+        doc["target"] = "17.12.4"
+        render_dmc(doc)
+        s = sw
+        if s is not None:
+            s.start(t0)
+
+    def on_sw_state(op: str, doc: dict[str, ?value]):
+        store.update_oper(id, op, doc)
+
+    def on_config(doc: dict[str, ?value]):
+        version = field_str(doc, "version")
+        render_dmc(doc)
+
+    def on_rtt(rtt: int):
+        fleet.on_rtt(rtt)
+
+    def on_upgraded(latency: int, polls: int):
+        doc: dict[str, ?value] = {}
+        doc["version"] = version
+        store.update_oper(id, "upgraded", doc)
+        fleet.upgraded(id, latency, polls)
+
+
+actor Fleet(store: Store, log: Log):
+    var devices: list[Device] = []
+    var loading = 0
+    var on_loaded: ?action(int) -> None = None
+    var generation = 0
+    var active = False
+    var members: list[int] = []
+    var member_state: dict[int, str] = {}
+    var concurrency = 1
+    var released = 0
+    var in_flight = 0
+    var upgraded_n = 0
+    var polls = 0
+    var reads = 0
+    var decisions = 0
+    var decide_pending = False
+    var decision = ""
+    var rtts: list[int] = []
+    var latencies: list[int] = []
+    var on_done: ?action(int, int, str) -> None = None
+
+    def create(n: int) -> int:
+        """Replace the fleet with n new devices, not yet connected"""
+        devices = []
+        for i in range(n):
+            devices.append(Device(i, store, self, log))
+        return len(devices)
+
+    def connect(done: action(int) -> None):
+        """Connect every device at once, each with new session actors"""
+        on_loaded = done
+        loading = len(devices)
+        for d in devices:
+            d.connect()
+
+    def loaded(dev: int):
+        loading -= 1
+        if loading == 0:
+            cb = on_loaded
+            if cb is not None:
+                on_loaded = None
+                cb(len(devices))
+
+    def campaign(first: int, n: int, done: action(int, int, str) -> None):
+        """Upgrade n devices starting at first, half of them at a time"""
+        generation += 1
+        active = True
+        members = []
+        member_state = {}
+        for i in range(n):
+            m = (first + i) % len(devices)
+            members.append(m)
+            member_state[m] = "waiting"
+        concurrency = n // 2 if n > 1 else 1
+        released = 0
+        in_flight = 0
+        upgraded_n = 0
+        polls = 0
+        reads = 0
+        decisions = 0
+        rtts = []
+        latencies = []
+        on_done = done
+        decide()
+        read_state()
+        after now READ_EVERY: read_state_every(generation)
+
+    def decide():
+        # Build the campaign decision over all members, then top up the
+        # upgrades in flight to the target concurrency
+        decide_pending = False
+        decisions += 1
+        entries: list[?value] = []
+        for m in members:
+            entry: dict[str, ?value] = {}
+            entry["device"] = "dev-" + str(m)
+            entry["state"] = member_state[m]
+            entries.append(entry)
+        plan: dict[str, ?value] = {}
+        plan["members"] = entries
+        plan["in_flight"] = in_flight
+        decision = json.encode(plan)
+        t0 = now_ns()
+        while in_flight < concurrency and released < len(members):
+            m = members[released]
+            member_state[m] = "released"
+            devices[m].set_dmc(t0)
+            released += 1
+            in_flight += 1
+
+    def on_device(dev: int, state: str):
+        if active and dev in member_state:
+            member_state[dev] = state
+            if not decide_pending and released < len(members):
+                decide_pending = True
+                after now DEBOUNCE: decide()
+
+    def read_state():
+        s = store.summary(members)
+        reads += 1
+
+    def read_state_every(gen: int):
+        if active and gen == generation:
+            read_state()
+            after READ_EVERY: read_state_every(gen)
+
+    def on_rtt(rtt: int):
+        if active:
+            rtts.append(rtt)
+
+    def upgraded(dev: int, latency: int, n_polls: int):
+        upgraded_n += 1
+        in_flight -= 1
+        polls += n_polls
+        latencies.append(latency)
+        if upgraded_n == len(members):
+            active = False
+            report = ("devices=" + str(len(devices))
+                      + " upgrades=" + str(upgraded_n)
+                      + " polls_per_upgrade=" + "%.1f" % (float(polls) / float(upgraded_n))
+                      + " decisions=" + str(decisions)
+                      + " state_reads=" + str(reads)
+                      + " upgrade_ms p50=" + ms(percentile(latencies, 50))
+                      + " p99=" + ms(percentile(latencies, 99))
+                      + " rtt_ms p50=" + ms(percentile(rtts, 50))
+                      + " p99=" + ms(percentile(rtts, 99))
+                      + " max=" + ms(percentile(rtts, 100)))
+            cb = on_done
+            if cb is not None:
+                on_done = None
+                cb(upgraded_n, polls, report)
+
+
+actor _test_load(t: testing.AsyncT):
+    """Connect scale devices at once"""
+    store = Store()
+    log = Log()
+    fleet = Fleet(store, log)
+    # Binding the result makes this a synchronous call: every device exists
+    # before the first body
+    created = fleet.create(t.scale())
+    iterations = t.loop()
+
+    def loaded(n: int):
+        if n != created:
+            t.failure(ValueError("connected " + str(n) + " of " + str(created) + " devices"))
+            return
+        run()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            fleet.connect(loaded)
+        else:
+            t.success()
+
+    run()
+
+
+actor _test_upgrade(t: testing.AsyncT):
+    """Upgrade scale devices in a fleet of fleet_size(scale) devices"""
+    store = Store()
+    log = Log()
+    fleet = Fleet(store, log)
+    size = fleet_size(t.scale())
+    created = fleet.create(size)
+    iterations = t.loop()
+    var first = 0
+    var expected = 0
+
+    def loaded(n: int):
+        if n != created:
+            t.failure(ValueError("connected " + str(n) + " of " + str(created) + " devices"))
+            return
+        run()
+
+    def upgraded(n: int, polls: int, report: str):
+        # Each upgrade polls at least once in each of its four timed operations
+        if n != expected or polls < 4 * n:
+            t.failure(ValueError("campaign of " + str(expected) + " upgrades: " + report))
+            return
+        print("upgrade scale=" + str(expected) + " " + report)
+        first = (first + n) % size
+        run()
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            expected = c.val
+            fleet.campaign(first, c.val, upgraded)
+        else:
+            t.success()
+
+    store.subscribe(fleet)
+    fleet.connect(loaded)
