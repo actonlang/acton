@@ -328,8 +328,9 @@ The benchmark project must be self-contained: files outside `Build.act` and
 Each benchmark runs in four pairs of fresh processes. Two pairs run baseline
 first and two run current first, in shuffled order. Without `--scale`, an excluded
 baseline pilot chooses the shared workload scale. Each process performs the
-normal warmup. `--time` is the budget for each process, defaulting to one second:
-roughly eight seconds per benchmark plus the pilot, builds and process startup.
+normal warmup. `--time` is the budget for each process, defaulting to five
+seconds as in `acton test perf`: roughly 40 seconds per benchmark plus the pilot,
+builds and process startup.
 Slow invocations can overrun the budget. Cached build checks still occur between
 processes; the initial builds finish before measurements begin.
 

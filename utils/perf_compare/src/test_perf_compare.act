@@ -36,7 +36,7 @@ def number(val: ?value) -> float:
 def _test_cli_defaults_and_selection():
     defaults = perf_compare.parse_args(["perf-compare"])
     assert "ref" not in defaults.options
-    assert defaults.get_str("time") == "1s"
+    assert defaults.get_str("time") == "5s"
     assert "scale" not in defaults.options
     assert "project" not in defaults.options
     args = perf_compare.parse_args([
@@ -414,12 +414,12 @@ case "$1 $2" in
             fail) printf 'fixture benchmark failed\n'; exit 17 ;;
             parse) printf 'not a JSON report\n'; exit 0 ;;
         esac
-        if [ "$*" = 'test perf --release --jobs 1 --json --time 1s --module nested.work --name _test_touch' ]; then
+        if [ "$*" = 'test perf --release --jobs 1 --json --time 5s --module nested.work --name _test_touch' ]; then
             [ "$side" = baseline ]
             cat "$PERF_FIXTURE/pilot.json"
             exit 0
         fi
-        [ "$*" = 'test perf --release --jobs 1 --json --time 1s --module nested.work --name _test_touch --scale 257' ]
+        [ "$*" = 'test perf --release --jobs 1 --json --time 5s --module nested.work --name _test_touch --scale 257' ]
         cat "$PERF_FIXTURE/$side.json"
         ;;
     *) exit 1 ;;

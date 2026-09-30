@@ -55,7 +55,7 @@ def parse_args(argv: list[str]) -> argparse.Args:
     p.add_option("module", "strlist", default=[], help="benchmark module; repeat to select several")
     p.add_option("name", "strlist", default=[], help="benchmark name or regular expression")
     p.add_option("scale", "int", help="fixed workload scale; otherwise calibrate with the baseline")
-    p.add_option("time", "str", default="1s", help="budget per process; eight processes per benchmark")
+    p.add_option("time", "str", default="5s", help="budget per process; eight processes per benchmark")
     args = p.parse(argv)
     if "scale" in args.options and args.get_int("scale") < 1:
         raise argparse.ArgumentError("--scale must be a positive integer")
