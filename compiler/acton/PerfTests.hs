@@ -10,6 +10,7 @@ import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BL8
+import Data.Either (isLeft)
 import Data.List (isInfixOf, isSuffixOf, find, elemIndices, nub)
 import Data.IORef
 import TerminalSize (termVisibleLength, termFitAnsiRight, termRenderedRows)
@@ -72,6 +73,16 @@ perfTests = testGroup "performance baselines"
         O.Success (C.CmdOpt _ (C.Test (C.TestStress stress))) ->
           assertEqual "stress test limits remain available" (9, 20, 3) (C.testMaxIter stress, C.testMaxTime stress, C.testStressWorkers stress)
         _ -> assertFailure "stress test limits failed to parse"
+  , testCase "runtime worker threads apply to every test mode" $
+      forM_ [[], ["list"], ["perf"], ["scale"], ["stress"]] $ \mode -> do
+        let workers args = case parseOptions (["test"] ++ mode ++ args) of
+              O.Success (C.CmdOpt _ (C.Test cmd)) | Just opts <- testCommandOptions cmd -> Right (C.testRtsWthreads opts)
+              O.Failure failure -> Left (fst (O.renderFailure failure "acton"))
+              _ -> Left "expected test options"
+        assertEqual (unwords ("test" : mode) ++ " leaves the worker count to the runtime") (Right Nothing) (workers [])
+        assertEqual (unwords ("test" : mode) ++ " accepts a worker count") (Right (Just 3)) (workers ["--rts-wthreads", "3"])
+        forM_ ["0", "-1", "1.5", "many"] $ \n ->
+          assertBool (unwords ("test" : mode) ++ " must reject --rts-wthreads " ++ n) (isLeft (workers ["--rts-wthreads", n]))
   , testCase "performance comparison targets and options compose" $ do
       forM_ ["git:main", "before.perf_data", "./git:main", "main"] $ \target ->
         forM_ [["--compare", target, "--name", "sample", "--scale", "50", "--time", "10s", "--record"],
@@ -760,6 +771,12 @@ perfIntegrationTests =
           , "    acton.rts.sleep(t.env.syscap, 0.02)"
           , "    t.success()"
           , ""
+          , "actor _test_workers(t: testing.EnvT):"
+          , "    expected = t.env.getenv(\"ACTON_EXPECT_WORKERS\")"
+          , "    if expected is not None:"
+          , "        assert t.env.nr_wthreads == int(expected)"
+          , "    t.success()"
+          , ""
           , "actor _test_counter_activation(t: testing.EnvT):"
           , "    assert t.scale() == 1"
           , "    assert t.env.getenv(\"ACTON_TEST_PERF\") is None"
@@ -799,6 +816,17 @@ perfIntegrationTests =
           (proc acton ["test", "--iter", "1", "--name", "counter_activation", "--no-cache"])
             { cwd = Just proj, env = Just (("ACTON_TEST_PERF", "1") : filter ((/= "ACTON_TEST_PERF") . fst) environment) } ""
         assertEqual (ordinaryOut ++ ordinaryErr) ExitSuccess ordinaryCode
+        workersInfo <- runOK ["--name", "first", "--rts-wthreads", "3", "--json"]
+          >>= singleJsonTest >>= requireObject "performance" >>= requireObject "measurements" >>= requireObject "perf_info"
+        assertEqual "perf runs use the requested worker count" (Just (Aeson.Number 3)) (KM.lookup "workers" workersInfo)
+        let runWorkers workers expected = readCreateProcessWithExitCode
+              (proc acton ["test", "--iter", "1", "--name", "workers", "--rts-wthreads", workers])
+                { cwd = Just proj, env = Just (("ACTON_EXPECT_WORKERS", expected) : filter ((/= "ACTON_EXPECT_WORKERS") . fst) environment) } ""
+        (threeCode, threeOut, threeErr) <- runWorkers "3" "3"
+        assertEqual (threeOut ++ threeErr) ExitSuccess threeCode
+        -- A cached result from three worker threads must not answer for two.
+        (twoCode, twoOut, twoErr) <- runWorkers "2" "3"
+        assertBool ("the worker count is part of the test cache key\n" ++ twoOut ++ twoErr) (twoCode /= ExitSuccess)
         _ <- runOK ["--record", "--name", "first|second"]
         saved0 <- readBaseline
         -- The old writer included null entries when a test process crashed.
@@ -1081,6 +1109,15 @@ perfIntegrationTests =
 
 parseOptions :: [String] -> O.ParserResult C.CmdLineOptions
 parseOptions = O.execParserPure C.cmdLinePrefs (O.info (C.cmdLineParser O.<**> O.helper) mempty)
+
+testCommandOptions :: C.TestCommand -> Maybe C.TestOptions
+testCommandOptions cmd = case cmd of
+    C.TestRun opts -> Just opts
+    C.TestList opts -> Just opts
+    C.TestPerf opts -> Just opts
+    C.TestScale opts -> Just opts
+    C.TestStress opts -> Just opts
+    C.TestScaleReport {} -> Nothing
 
 parsePerfOptions :: [String] -> IO C.TestOptions
 parsePerfOptions args = case parseOptions (["test", "perf"] ++ args) of

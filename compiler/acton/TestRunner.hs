@@ -1361,11 +1361,12 @@ effectiveTestTiming mode topts =
           | otherwise = modeDefaultMaxTime
     in (minTime, maxTime)
 
--- | Build test runner arguments from TestOptions limits.
+-- | Build test runner arguments from TestOptions limits. The RTS removes its
+-- own --rts-* options wherever they appear, before the test runner sees argv.
 testCmdArgs :: TestMode -> C.TestOptions -> [String]
 testCmdArgs mode topts
   | mode `elem` [TestModePerf, TestModeScale] = ["--time", show (C.testTime topts)]
-      ++ ["--scaling" | mode == TestModeScale] ++ tagArgs
+      ++ ["--scaling" | mode == TestModeScale] ++ tagArgs ++ rtsArgs
   | otherwise =
     let iter = C.testIter topts
         rawMaxIter = C.testMaxIter topts
@@ -1385,9 +1386,10 @@ testCmdArgs mode topts
                  , "--max-time", show maxTime
                  , "--min-time", show minTime
                  ]
-    in baseArgs ++ stressWorkerArgs ++ tagArgs
+    in baseArgs ++ stressWorkerArgs ++ tagArgs ++ rtsArgs
   where
     tagArgs = concatMap (\tag -> ["--tag", tag]) (C.testTags topts)
+    rtsArgs = maybe [] (\n -> ["--rts-wthreads", show n]) (C.testRtsWthreads topts)
 
 -- | Normalize test names by stripping prefixes and wrappers.
 displayTestName :: String -> String

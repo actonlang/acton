@@ -14,6 +14,7 @@ acton test stress
 - For that test, starts multiple concurrent workers of the same test in one process.
 - Worker count defaults to roughly `1.5 * nr_wthreads` so workers must share RTS worker threads.
 - Override it with `--stress-workers N` when you want a specific level of oversubscription.
+- Set the number of RTS worker threads with `--rts-wthreads N`, which also changes the default stress worker count.
 - Stress runs are always fresh (no test-result cache reuse).
 - By default, stress runs for up to 5 seconds per test (`--max-time 5000`).
 - Continuous mode is available with `--max-time 0`.
