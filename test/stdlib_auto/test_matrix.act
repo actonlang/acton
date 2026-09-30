@@ -1,0 +1,149 @@
+from matrix import matrix, vector_view
+
+
+def check(env, condition: bool, message: str) -> None:
+    if not condition:
+        print(message)
+        env.exit(1)
+
+
+def replace[C(object,MutIndexed[(int,int),int])](values: C,
+                                                  index: (int,int),
+                                                  value: int) -> int:
+    values[index] = value
+    return values[index]
+
+
+def replace_vector[C(object,MutIndexed[int,int])](values: C,
+                                                  index: int,
+                                                  value: int) -> int:
+    values[index] = value
+    return values[index]
+
+
+def expect_index_error(env, values: matrix[int], index: (int,int)) -> None:
+    try:
+        value = values[index]
+    except IndexError:
+        return
+    check(env, False, "expected IndexError")
+
+
+actor main(env):
+    try:
+        ints: matrix[int] = matrix(2, 3)
+        check(env, ints[0, 0] == 0 and ints[1, 2] == 0,
+              "int matrix is not zero initialized")
+
+        ints[0, 1] = 7
+        ints[1, 2] = 40
+        ints[1, 2] += 2
+        check(env, ints[0, 1] == 7 and ints[1, 2] == 42,
+              "matrix mutation failed")
+        check(env, ints.shape() == (2, 3) and ints.strides() == (3, 1),
+              "contiguous matrix shape or strides are wrong")
+        check(env, replace(ints, (1, 0), 17) == 17 and ints[1, 0] == 17,
+              "matrix does not implement tuple MutIndexed")
+
+        row: vector_view[int] = ints.row(1)
+        check(env, row.size() == 3 and row.stride() == 1 and row[2] == 42,
+              "matrix row view is wrong")
+        check(env, replace_vector(row, 1, 23) == 23 and ints[1, 1] == 23,
+              "matrix row view does not share storage")
+
+        column: vector_view[int] = ints.column(1)
+        check(env, column.size() == 2 and column.stride() == 3 and
+                   column[0] == 7 and column[1] == 23,
+              "matrix column view is wrong")
+        column[0] = 11
+        check(env, ints[0, 1] == 11,
+              "matrix column view does not share storage")
+
+        middle = ints.view(0, 2, 1, 3)
+        check(env, middle.shape() == (2, 2) and middle.strides() == (3, 1) and
+                   middle[0, 0] == 11 and middle[1, 1] == 42,
+              "rectangular matrix view is wrong")
+        middle[1, 0] = 29
+        check(env, ints[1, 1] == 29,
+              "rectangular matrix view does not share storage")
+
+        transposed = ints.transpose()
+        check(env, transposed.shape() == (3, 2) and
+                   transposed.strides() == (1, 3) and
+                   transposed[1, 0] == 11 and transposed[2, 1] == 42,
+              "transposed matrix view is wrong")
+        transposed[0, 1] = 31
+        check(env, ints[1, 0] == 31,
+              "transposed matrix view does not share storage")
+
+        reshaped = ints.reshape(3, 2)
+        check(env, reshaped.shape() == (3, 2) and reshaped.strides() == (2, 1) and
+                   reshaped[0, 1] == ints[0, 1] and
+                   reshaped[2, 1] == ints[1, 2],
+              "reshaped matrix view is wrong")
+        reshaped[1, 0] = 37
+        check(env, ints[0, 2] == 37,
+              "reshaped matrix view does not share storage")
+
+        try:
+            invalid_reshape = middle.reshape(4, 1)
+            check(env, False, "expected ValueError for non-contiguous reshape")
+        except ValueError:
+            pass
+
+        floats: matrix[float] = matrix(2, 2, 1.25)
+        floats[1, 0] = -3.5
+        check(env, floats[0, 0] == 1.25 and floats[1, 0] == -3.5,
+              "float matrix access failed")
+
+        expect_index_error(env, ints, (-1, 0))
+        expect_index_error(env, ints, (2, 0))
+        expect_index_error(env, ints, (0, -1))
+        expect_index_error(env, ints, (0, 3))
+
+        try:
+            invalid_row = ints.row(2)
+            check(env, False, "expected IndexError for matrix row")
+        except IndexError:
+            pass
+
+        try:
+            invalid_column = ints.column(3)
+            check(env, False, "expected IndexError for matrix column")
+        except IndexError:
+            pass
+
+        try:
+            invalid_vector_value = row[-1]
+            check(env, False, "expected IndexError for vector view")
+        except IndexError:
+            pass
+
+        try:
+            invalid_view = ints.view(0, 3, 0, 1)
+            check(env, False, "expected ValueError for matrix view bounds")
+        except ValueError:
+            pass
+
+        try:
+            invalid_size = ints.reshape(4, 2)
+            check(env, False, "expected ValueError for reshape size")
+        except ValueError:
+            pass
+
+        try:
+            bad: matrix[int] = matrix(-1, 2)
+            check(env, False, "expected ValueError for negative dimensions")
+        except ValueError:
+            pass
+
+        try:
+            huge: matrix[int] = matrix(9223372036854775807, 2)
+            check(env, False, "expected MemoryError for overflowing dimensions")
+        except MemoryError:
+            pass
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

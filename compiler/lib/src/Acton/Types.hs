@@ -884,7 +884,6 @@ instance InfEnv Stmt where
             oper _ BOrA                 = (pLogical,  iorKW)
             oper _ BXorA                = (pLogical,  ixorKW)
             oper _ BAndA                = (pLogical,  iandKW)
-            oper _ MMultA               = (pMatrix,   imatmulKW)
             rtype ShiftLA t             = tInt
             rtype ShiftRA t             = tInt
             rtype _ t                   = t
@@ -2107,7 +2106,6 @@ instance Infer Expr where
             protocol BOr                = pLogical
             protocol BXor               = pLogical
             protocol BAnd               = pLogical
-            protocol MMult              = pMatrix
             method Plus                 = addKW
             method Minus                = subKW
             method Pow                  = powKW
@@ -2118,7 +2116,6 @@ instance Infer Expr where
             method BOr                  = orKW
             method BXor                 = xorKW
             method BAnd                 = andKW
-            method MMult                = matmulKW
             rtype ShiftL t              = tInt
             rtype ShiftR t              = tInt
             rtype _ t                   = t

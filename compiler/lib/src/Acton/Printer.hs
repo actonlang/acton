@@ -242,7 +242,7 @@ put in parenthesis (for clarity) in all operator contexts, also where the parser
 prettyPrec n e@(BinOp _ e1 op e2)   = parensIf (n > prc) ps
      where prc                      = fromJust (lookup op bps)
            bps                      = [(Or,1),(And,2),(Plus,9),(Minus,9),(Mult,10),(Pow,12),(Div,10),(Mod,10),
-                                       (EuDiv,10),(BOr,5),(BXor,6),(BAnd,7),(ShiftL,8),(ShiftR,8),(MMult,10)]
+                                       (EuDiv,10),(BOr,5),(BXor,6),(BAnd,7),(ShiftL,8),(ShiftR,8)]
            ps | op == Pow           = prettyPrec (prc+1) e1 <+> pretty op <+> prettyPrec prc e2
               | otherwise           = prettyPrec prc e1 <+> pretty op <+> prettyPrec (prc+1) e2
 prettyPrec n (CompOp _ e ops)       = parensIf (n > 4) $ pretty e <+> hsep (map pretty ops)
@@ -381,7 +381,6 @@ instance Pretty Binary where
     pretty Plus                     = text "+"
     pretty Minus                    = text "-"
     pretty Mult                     = text "*"
-    pretty MMult                    = text "@"
     pretty Div                      = text "/"
     pretty Mod                      = text "%"
     pretty EuDiv                    = text "//"
@@ -404,7 +403,6 @@ instance Pretty Aug where
     pretty PlusA                    = text "+="
     pretty MinusA                   = text "-="
     pretty MultA                    = text "*="
-    pretty MMultA                   = text "@="
     pretty DivA                     = text "/="
     pretty ModA                     = text "%="
     pretty PowA                     = text "**="

@@ -217,8 +217,8 @@ data WithItem   = WithItem Expr (Maybe Pattern) deriving (Show,Eq,Read,NFData,Ge
 
 
 data Unary      = Not|UPlus|UMinus|BNot deriving (Show,Eq,Read,NFData,Generic)
-data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR|MMult deriving (Show,Read,Eq,NFData,Generic)
-data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA|MMultA deriving (Show,Eq,Read,NFData,Generic)
+data Binary     = Or|And|Plus|Minus|Mult|Pow|Div|Mod|EuDiv|BOr|BXor|BAnd|ShiftL|ShiftR deriving (Show,Read,Eq,NFData,Generic)
+data Aug        = PlusA|MinusA|MultA|PowA|DivA|ModA|EuDivA|BOrA|BXorA|BAndA|ShiftLA|ShiftRA deriving (Show,Eq,Read,NFData,Generic)
 data Comparison = Eq|NEq|LtGt|Lt|Gt|GE|LE|In|NotIn|Is|IsNot deriving (Show,Eq,Read,NFData,Generic)
 
 data Deco       = NoDec | Property | Static deriving (Eq,Show,Read,Generic,NFData)

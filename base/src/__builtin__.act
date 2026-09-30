@@ -597,15 +597,7 @@ class bitset (object):
         NotImplemented
     def capacity(self) -> int:
         NotImplemented
-    def union(self, other: bitset) -> bitset:
-        NotImplemented
-    def intersection(self, other: bitset) -> bitset:
-        NotImplemented
-    def difference(self, other: bitset) -> bitset:
-        NotImplemented
-    def symmetric_difference(self, other: bitset) -> bitset:
-        NotImplemented
-    
+
 class complex (atom):
     def __init__(self, val: Number) -> None:
         NotImplemented
@@ -951,6 +943,24 @@ protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
 protocol ISet[A (Eq)] (Container[A], Ord, Logical, Minus):
     @staticmethod
     isdisjoint  : (Self,Self) -> bool
+    @staticmethod
+    union       :  (Self,Self) -> Self
+    @staticmethod
+    intersection:  (Self,Self) -> Self
+    @staticmethod
+    difference  :  (Self,Self) -> Self
+    @staticmethod
+    symmetric_difference:  (Self,Self) -> Self
+
+    def union(a,b):
+        return a | b
+    def intersection(a,b):
+        return a & b
+    def difference(a,b):
+        return a - b
+    def symmetric_difference(a,b):
+        return a ^ b
+
 
 
 protocol Set[A (Eq)] (ISet[A]):

@@ -650,8 +650,7 @@ feedBinary op sink = feedTag (case op of
   A.BXor   -> 212
   A.BAnd   -> 213
   A.ShiftL -> 214
-  A.ShiftR -> 215
-  A.MMult  -> 216) sink
+  A.ShiftR -> 215) sink
 
 feedAug :: A.Aug -> HashFeed
 feedAug op sink = feedTag (case op of
@@ -666,8 +665,7 @@ feedAug op sink = feedTag (case op of
   A.BXorA   -> 225
   A.BAndA   -> 226
   A.ShiftLA -> 227
-  A.ShiftRA -> 228
-  A.MMultA  -> 229) sink
+  A.ShiftRA -> 228) sink
 
 feedComparison :: A.Comparison -> HashFeed
 feedComparison op sink = feedTag (case op of

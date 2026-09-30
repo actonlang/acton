@@ -746,6 +746,18 @@ instance Boxing Expr where
       boxingCompop w attr es _ rt pr rest
                                     = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
+      -- len is type-checked through Collection, so its explicit arguments at
+      -- this stage are the collection witness followed by the value.  For
+      -- concrete fixed-size arrays the witness is still semantically required
+      -- during type checking, but the call can use the same private raw worker
+      -- as other statically resolved builtin operations.
+      | unalias env f == qnLen,
+        [_, recv] <- posargs p,
+        Just _ <- rawBuiltinMethod env lenKW [recv]
+                                    = do (ws1,recv1) <- boxing env recv
+                                         case rawBuiltinMethodCall env lenKW (PosArg recv1 PosNil) of
+                                           Just c  -> return (ws1,c)
+                                           Nothing -> error "Internal error: raw builtin len lost during boxing"
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
       | otherwise                   = do (ws1,p1) <- boxing env p
@@ -1056,10 +1068,6 @@ bin2Aug kw
    | kw == iandKW                  = BAndA
 
 -- Map an augmented-assignment witness keyword to its plain binary counterpart.
--- imatmulKW is deliberately omitted: it has no unboxable operand type (matmul is
--- matrix-only), so it never reaches the only caller (which is guarded by
--- isUnboxable), and bin2Binary has no matmul case either. Keeping the range a
--- subset of bin2Binary's domain avoids a non-exhaustive crash on future changes.
 incr2bin kw
    | kw == iaddKW                  = addKW
    | kw == isubKW                  = subKW

@@ -198,22 +198,6 @@ int64_t B_bitsetD_capacity(B_bitset self) {
     return self->capacity;
 }
 
-B_bitset B_bitsetD_union(B_bitset self, B_bitset other) {
-    return B_bitset_binary(self, other, B_BITSET_UNION);
-}
-
-B_bitset B_bitsetD_intersection(B_bitset self, B_bitset other) {
-    return B_bitset_binary(self, other, B_BITSET_INTERSECTION);
-}
-
-B_bitset B_bitsetD_difference(B_bitset self, B_bitset other) {
-    return B_bitset_binary(self, other, B_BITSET_DIFFERENCE);
-}
-
-B_bitset B_bitsetD_symmetric_difference(B_bitset self, B_bitset other) {
-    return B_bitset_binary(self, other, B_BITSET_XOR);
-}
-
 // Iterators ////////////////////////////////////////////////////////////////////////////////////////
 
 static bool B_IteratorD_bitsetD_next(B_IteratorD_bitset self, $WORD *out) {
@@ -358,22 +342,22 @@ bool B_OrdD_SetD_bitsetD___lt__(B_OrdD_SetD_bitset wit,
 
 B_bitset B_LogicalD_SetD_bitsetD___and__(B_LogicalD_SetD_bitset wit,
                                          B_bitset left, B_bitset right) {
-    return B_bitsetD_intersection(left, right);
+    return B_bitset_binary(left, right, B_BITSET_INTERSECTION);
 }
 
 B_bitset B_LogicalD_SetD_bitsetD___or__(B_LogicalD_SetD_bitset wit,
                                         B_bitset left, B_bitset right) {
-    return B_bitsetD_union(left, right);
+    return B_bitset_binary(left, right, B_BITSET_UNION);
 }
 
 B_bitset B_LogicalD_SetD_bitsetD___xor__(B_LogicalD_SetD_bitset wit,
                                          B_bitset left, B_bitset right) {
-    return B_bitsetD_symmetric_difference(left, right);
+    return B_bitset_binary(left, right, B_BITSET_XOR);
 }
 
 B_bitset B_MinusD_SetD_bitsetD___sub__(B_MinusD_SetD_bitset wit,
                                        B_bitset left, B_bitset right) {
-    return B_bitsetD_difference(left, right);
+    return B_bitset_binary(left, right, B_BITSET_DIFFERENCE);
 }
 
 // Serialization ///////////////////////////////////////////////////////////////////////////////////

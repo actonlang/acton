@@ -1,13 +1,14 @@
-def check(condition: bool, message: str) -> None:
+def check(env, condition: bool, message: str) -> None:
     if not condition:
-        raise AssertionError(message)
+        print(message)
+        env.exit(1)
 
-def expect_index_error(xs: bitarray, index: int) -> None:
+def expect_index_error(env, xs: bitarray, index: int) -> None:
     try:
         value = xs[index]
     except IndexError:
         return
-    raise AssertionError("expected IndexError")
+    check(env, False, "expected IndexError")
 
 def get_bit(xs: bitarray, index: int) -> bool:
     return xs[index]
@@ -25,66 +26,66 @@ def count_true[C(object,Container[bool])](xs: C) -> int:
 actor main(env):
     try:
         empty: bitarray = bitarray(0)
-        check(len(empty) == 0 and not empty, "empty bitarray is invalid")
+        check(env, len(empty) == 0 and not empty, "empty bitarray is invalid")
 
         zeros: bitarray = bitarray(130)
-        check(len(zeros) == 130, "wrong bitarray length")
-        check(not zeros[0] and not zeros[63] and not zeros[64] and not zeros[129],
+        check(env, len(zeros) == 130, "wrong bitarray length")
+        check(env, not zeros[0] and not zeros[63] and not zeros[64] and not zeros[129],
               "bitarray is not false initialized")
 
         ones: bitarray = bitarray(130, True)
-        check(ones[0] and ones[63] and ones[64] and ones[129],
+        check(env, ones[0] and ones[63] and ones[64] and ones[129],
               "bitarray is not true initialized")
 
         ones[0] = False
         ones[63] = False
         set_bit(ones, 64, False)
         ones[129] = False
-        check(not ones[0] and not ones[63] and not get_bit(ones, 64) and not ones[129],
+        check(env, not ones[0] and not ones[63] and not get_bit(ones, 64) and not ones[129],
               "clearing bits failed")
-        check(ones[1] and ones[62] and ones[65] and ones[128],
+        check(env, ones[1] and ones[62] and ones[65] and ones[128],
               "clearing a bit damaged its neighbours")
 
         zeros[0] = True
         zeros[63] = True
         set_bit(zeros, 64, True)
         zeros[129] = True
-        check(zeros[0] and zeros[63] and get_bit(zeros, 64) and zeros[129],
+        check(env, zeros[0] and zeros[63] and get_bit(zeros, 64) and zeros[129],
               "setting bits failed")
-        check(not zeros[1] and not zeros[62] and not zeros[65] and not zeros[128],
+        check(env, not zeros[1] and not zeros[62] and not zeros[65] and not zeros[128],
               "setting a bit damaged its neighbours")
-        check(count_true(zeros) == 4, "bitarray iteration failed")
-        check(True in zeros and False in zeros,
+        check(env, count_true(zeros) == 4, "bitarray iteration failed")
+        check(env, True in zeros and False in zeros,
               "bitarray value membership failed")
 
         all_true = bitarray(4, True)
-        check(True in all_true and False not in all_true,
+        check(env, True in all_true and False not in all_true,
               "true bitarray membership failed")
         all_false = bitarray(4)
-        check(False in all_false and True not in all_false,
+        check(env, False in all_false and True not in all_false,
               "false bitarray membership failed")
 
-        expect_index_error(zeros, -1)
-        expect_index_error(zeros, 130)
+        expect_index_error(env, zeros, -1)
+        expect_index_error(env, zeros, 130)
 
         try:
             bad: bitarray = bitarray(-1)
-            raise AssertionError("expected ValueError")
+            check(env, False, "expected ValueError")
         except ValueError:
             pass
 
         payload = serialize(zeros)
         restored = deserialize(payload)
         if isinstance(restored, bitarray):
-            check(serialize(restored) == payload and count_true(restored) == 4 and
+            check(env, serialize(restored) == payload and count_true(restored) == 4 and
                   True in restored and False in restored,
                   "bitarray serialization failed")
         else:
-            raise AssertionError("bitarray deserialized with wrong type")
-        check(serialize(deserialize(serialize(ones))) == serialize(ones),
+            check(env, False, "bitarray deserialized with wrong type")
+        check(env, serialize(deserialize(serialize(ones))) == serialize(ones),
               "true-initialized bitarray serialization failed")
         shared = [zeros, zeros]
-        check(serialize(deserialize(serialize(shared))) == serialize(shared),
+        check(env, serialize(deserialize(serialize(shared))) == serialize(shared),
               "shared bitarray serialization failed")
 
         env.exit(0)

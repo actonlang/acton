@@ -60,10 +60,9 @@ irshiftKW                           = name "__irshift__"
 iorKW                               = name "__ior__"
 ixorKW                              = name "__ixor__"
 iandKW                              = name "__iand__"
-imatmulKW                           = name "__imatmul__"
 
 incrBinopKWs                        = [iaddKW, isubKW, imulKW, ipowKW, itruedivKW, imodKW, ifloordivKW,
-                                       ilshiftKW, irshiftKW, iorKW, ixorKW, iandKW, imatmulKW]
+                                       ilshiftKW, irshiftKW, iorKW, ixorKW, iandKW]
 
 augopKWs                            = incrBinopKWs
 
@@ -80,10 +79,9 @@ rshiftKW                            = name "__rshift__"
 orKW                                = name "__or__"
 xorKW                               = name "__xor__"
 andKW                               = name "__and__"
-matmulKW                            = name "__matmul__"
 
 binopKWs                            = [addKW, subKW, mulKW, powKW, truedivKW, modKW, floordivKW,
-                                       lshiftKW, rshiftKW, orKW, xorKW, andKW, matmulKW]
+                                       lshiftKW, rshiftKW, orKW, xorKW, andKW]
 
 posKW                               = name "__pos__"
 negKW                               = name "__neg__"
@@ -170,7 +168,6 @@ nRealFloat                          = name "RealFloat"
 nRational                           = name "Rational"
 nIntegral                           = name "Integral"
 nLogical                            = name "Logical"
-nMatrix                             = name "Matrix"
 nEq                                 = name "Eq"
 nOrd                                = name "Ord"
 nIdentity                           = name "Identity"
@@ -250,7 +247,6 @@ qnRealFloat                         = gBuiltin nRealFloat
 qnRational                          = gBuiltin nRational
 qnIntegral                          = gBuiltin nIntegral
 qnLogical                           = gBuiltin nLogical
-qnMatrix                            = gBuiltin nMatrix
 qnEq                                = gBuiltin nEq
 qnOrd                               = gBuiltin nOrd
 qnIdentity                          = gBuiltin nIdentity
@@ -326,7 +322,6 @@ pRealFloat                          = TC qnRealFloat []
 pRational                           = TC qnRational []
 pIntegral                           = TC qnIntegral []
 pLogical                            = TC qnLogical []
-pMatrix                             = TC qnMatrix []
 pEq                                 = TC qnEq []
 pOrd                                = TC qnOrd []
 pIdentity                           = TC qnIdentity []
