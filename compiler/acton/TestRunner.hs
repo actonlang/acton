@@ -325,6 +325,10 @@ runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo 
       forM_ baseline $ \old -> forM_ (M.elems (recordingTests old)) $ \series ->
         forM_ (seriesInfo series >>= (`perfHostReason` host)) $ \reason ->
           ioError (userError ("Cannot compare: " ++ reason))
+      forM_ baseline $ \old ->
+        forM_ (Data.List.nub [warning | series <- M.elems (recordingTests old), Just info <- [seriesInfo series]
+                                      , Just warning <- [perfMachineWarning info host]]) $ \warning ->
+          hPutStrLn stderr ("Warning: " ++ warning)
       let provenance = AesonKM.union host sourceInfo
       tests <- forM testsByModule $ \(modName, names) -> do
         hashes <- readModuleNameHashes paths modName
@@ -1672,8 +1676,8 @@ markSnapshotUpdated res = res
 
 type PerfData = M.Map String (M.Map String Aeson.Value)
 
--- Keep raw machine identifiers out of recordings. An unknown identity disables
--- comparisons; a CPU model or OS version is not a machine identifier.
+-- Keep raw machine identifiers out of recordings. A different or unknown identity
+-- makes comparisons warn; a CPU model or OS version is not a machine identifier.
 readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> M.Map String String -> IO Aeson.Object
 readPerfHostInfo opts topts buildOptions = do
     identity <- try readIdentity :: IO (Either IOException (Maybe String))

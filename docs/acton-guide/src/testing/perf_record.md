@@ -36,24 +36,29 @@ shown as `from 0`.
 
 ## Matching conditions
 
-Every comparison requires the same actual machine identity. Matching CPU models,
-architecture or OS version does not establish that two results came from the same
-machine. When identity is unavailable or different, the report shows the new
-measurement and explains why no delta is available. This applies to all metrics,
-including wall time, CPU time, allocation, hardware counts and the wall median.
-
-The test name, build settings, enabled capability tags, runtime worker count,
-scale, use of `t.loop()`, measurement version and GC policy must also match.
+A comparison requires the same test name, build settings, enabled capability
+tags, runtime worker count, scale, use of `t.loop()`, measurement version and GC
+policy. When any of these differ, the report shows the new measurement and
+explains why no delta is available. This applies to all metrics, including wall
+time, CPU time, allocation, hardware counts and the wall median.
 Source code can change: that is what the comparison is intended to measure.
 The `--time` budget and number of measured runs can differ without invalidating
 an otherwise compatible comparison.
 Hardware counts additionally require the same backend and accounting scope;
 user-only counts cannot be compared with user-plus-kernel counts.
 
+Each measurement also records a machine identity, derived from `/etc/machine-id`
+on Linux and the platform UUID on macOS. Results from different machines are
+still compared, because whether two machines are equivalent, such as two laptops
+of the same model, is for you to judge. The report then warns that the machine
+identity differs from the baseline. When neither result has a machine identity,
+as in many containers, the machines cannot be told apart and there is no
+warning. Matching CPU models, architecture or OS version do not count as the
+same machine identity.
+
 Performance mode uses optimized builds by default. Keep explicit build options
-consistent between recording and comparison. Old recordings
-without machine identity or the required measurement metadata need to be recorded
-again before any deltas are shown.
+consistent between recording and comparison. Old recordings without the required
+measurement metadata need to be recorded again before any deltas are shown.
 
 Same-machine comparisons can still be affected by other processes, thermal state
 and scheduling. Mandatory warmup does not remove those sources of variation.

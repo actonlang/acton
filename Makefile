@@ -106,7 +106,7 @@ help:
 	@echo "Available make targets:"
 	@echo "  all     - build everything"
 	@echo "  test    - run the test suite"
-	@echo "  test-performance - run live perf and scale integration tests on a quiet machine"
+	@echo "  test-performance - run only the live perf and scale integration tests"
 	@echo "  make PROFILE=1 dist/bin/acton - build profiled acton binary"
 	@echo "  rpms    - build RPM package from existing dist/"
 	@echo ""
@@ -555,7 +555,7 @@ test: dist/bin/acton
 	$(MAKE) test-rts-db
 
 test-performance: dist/bin/acton
-	cd compiler && ACTON_TEST_PERFORMANCE=1 stack test acton:test_acton --ta '-p "/live performance/" --num-threads=1'
+	cd compiler && stack test acton:test_acton --ta '-p "/live performance/"'
 
 test-builtins:
 	cd compiler && stack test acton --ta '-p "Builtins"'

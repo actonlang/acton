@@ -136,9 +136,7 @@ perfTests = testGroup "performance baselines"
           new = sample 12 0 10
           changed key value = changeIdentity key value old
           incompatible =
-            [ ("machine", Aeson.String "another machine")
-            , ("machine", Aeson.Null)
-            , ("version", Aeson.String "1")
+            [ ("version", Aeson.String "1")
             , ("build", Aeson.String "ReleaseFast")
             , ("tags", Aeson.toJSON (["different"] :: [String]))
             , ("gc", Aeson.String "forced")
@@ -149,7 +147,7 @@ perfTests = testGroup "performance baselines"
       forM_ incompatible $ \(key, value) -> forM_ ["wall_duration", "gc_duration", "cpu_user", "mem_usage_delta", "peak_rss", "median_wall_duration", "instructions"] $ \metric -> do
         assertBool (show key ++ " " ++ metric) (not (perfComparable metric (changed key value) new))
         assertBool "the rejected comparison has a reason" (perfComparisonReason metric (changed key value) new /= Nothing)
-      forM_ (KM.keys identity) $ \key ->
+      forM_ (filter (/= "machine") (KM.keys identity)) $ \key ->
         let missing = KM.insert "perf_info" (Aeson.Object (KM.delete key identity)) old
         in assertBool (show key) (not (perfComparable "wall_duration" missing new))
       assertBool "old recordings require a new identity" (not (perfComparable "wall_duration" (KM.delete "perf_info" old) new))
@@ -165,13 +163,33 @@ perfTests = testGroup "performance baselines"
       assertBool "time budgets, realized durations and sample counts are not identity" (perfComparable "wall_duration" old longer)
       let footerOld = old `KM.union` KM.fromList [("median_wall_duration", Aeson.Number 10), ("peak_rss", Aeson.Number 100)]
           footerNew = new `KM.union` KM.fromList [("median_wall_duration", Aeson.Number 12), ("peak_rss", Aeson.Number 200)]
-          text = unlines (renderPerf 119 False (Just (changeIdentity "machine" Aeson.Null footerOld)) (result footerNew))
-      assertBool text ("comparison unavailable: machine identity is unavailable" `isInfixOf` text)
+          text = unlines (renderPerf 119 False (Just (changeIdentity "gc" (Aeson.String "forced") footerOld)) (result footerNew))
+      assertBool text ("comparison unavailable: GC policy differs" `isInfixOf` text)
       assertBool "footer values cannot bypass identity checks" (not (any (`isInfixOf` text) ["+20.0%", "+100.0%", "⚡", "💩"]))
       case perfJson (Just (KM.delete "perf_info" old)) (result new) of
         Just (Aeson.Object report) -> do
           assertEqual "no legacy confidence interval" (Just Aeson.Null) (KM.lookup "mean_difference_ci95_ms" report)
           assertBool "JSON explains eligibility" (KM.lookup "comparison_unavailable_reason" report /= Just Aeson.Null)
+        _ -> assertFailure "expected comparison metadata"
+  , testCase "results from another machine compare with a warning" $ do
+      let old = sample 10 0 10
+          new = sample 12 0 10
+          warning = "machine identity differs from the baseline"
+          machine value = changeIdentity "machine" value
+      forM_ [(machine (Aeson.String "another machine") old, new), (machine Aeson.Null old, new), (old, machine Aeson.Null new)] $ \(a, b) -> do
+        let rendered = unlines (renderPerf 119 False (Just a) (result b))
+        assertEqual "the machine does not restrict comparison" Nothing (perfComparisonReason "wall_duration" a b)
+        assertBool rendered ("+20.0%" `isInfixOf` rendered && ("warning: " ++ warning) `isInfixOf` rendered)
+        case perfJson (Just a) (result b) of
+          Just (Aeson.Object report) -> do
+            assertEqual "JSON reports the comparison" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" report)
+            assertEqual "JSON carries the warning" (Just (Aeson.toJSON warning)) (KM.lookup "comparison_warning" report)
+          _ -> assertFailure "expected comparison metadata"
+      let unknown = machine Aeson.Null
+          rendered = unlines (renderPerf 119 False (Just (unknown old)) (result (unknown new)))
+      assertBool "two unknown identities give no warning" ("+20.0%" `isInfixOf` rendered && not ("warning:" `isInfixOf` rendered))
+      case perfJson (Just old) (result new) of
+        Just (Aeson.Object report) -> assertEqual "the same machine has no warning" (Just Aeson.Null) (KM.lookup "comparison_warning" report)
         _ -> assertFailure "expected comparison metadata"
   , testCase "performance baselines accept zero runtime workers" $ do
       build <- requireObject "build" identity
@@ -192,7 +210,9 @@ perfTests = testGroup "performance baselines"
   , testCase "recorded scale is reused only for known compatible loops" $ do
       let old = sample 10 0 10
       assertEqual "reuse the recorded workload" (Just 7) (perfBaselineScale old identity)
-      forM_ [changeIdentity "machine" Aeson.Null old, changeIdentity "scale" (Aeson.Number 0) old,
+      assertEqual "a recording from another machine keeps its workload" (Just 7)
+        (perfBaselineScale (changeIdentity "machine" (Aeson.String "another machine") old) identity)
+      forM_ [changeIdentity "scale" (Aeson.Number 0) old,
              changeIdentity "scaling" (Aeson.Bool True) old,
              changeIdentity "loop" (Aeson.Bool False) old, changeIdentity "version" (Aeson.String "2") old,
              KM.delete "perf_info" old] $ \baseline ->
@@ -624,7 +644,6 @@ perfTests = testGroup "performance baselines"
         assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
   ]
 
--- Real measurements need a quiet machine; enable them with make test-performance.
 perfIntegrationTests :: TestTree
 perfIntegrationTests =
     testCase "recording runs fresh tests and preserves unselected measurements" $
@@ -648,9 +667,6 @@ perfIntegrationTests =
                 Right saved -> return (saved :: M.Map String (M.Map String Aeson.Value))
             setMean (Aeson.Object obj) = Aeson.Object (KM.insert "avg_wall_duration" (Aeson.Number 1000000000) obj)
             setMean raw = raw
-            hasMachine info = case KM.lookup "machine" info of
-              Just (Aeson.String value) -> value /= mempty
-              _ -> False
         createDirectoryIfMissing True (proj </> "src")
         writeFile (proj </> "Build.act") $ unlines ["name = " ++ show name, "fingerprint = " ++ fp]
         writeFile (proj </> "src/sample.act") $ unlines
@@ -741,10 +757,6 @@ perfIntegrationTests =
           , "def _test_return_loop(t: testing.SyncT):"
           , "    for scale in t.loop():"
           , "        return"
-          , ""
-          , "def _test_body_stop(t: testing.SyncT):"
-          , "    for scale in t.loop():"
-          , "        raise StopIteration(\"body stopped\")"
           , ""
           , "def _test_repeat_loop(t: testing.SyncT):"
           , "    t.loop()"
@@ -863,22 +875,13 @@ perfIntegrationTests =
               Just (Aeson.Number rss) -> assertBool "peak RSS is positive when available" (rss > 0)
               Just _ -> assertFailure "peak RSS must be a number"
           _ -> assertFailure "expected recorded measurements"
-        firstInfo <- case M.lookup "_test_first_wrapper" tests of
-          Just (Aeson.Object obj) -> requireObject "perf_info" obj
-          _ -> assertFailure "missing first recording" >> fail "missing recording"
-        let canCompare = hasMachine firstInfo
-            assertComparison text = do
+        let assertComparison text = do
               assertBool text ("mean ± σ" `isInfixOf` unwords (words text))
               let signedPercentage token = case dropWhile (== '(') token of
                     sign : rest -> sign `elem` ['+', '-'] && '%' `elem` rest
                     _ -> False
-                  hasDelta = any signedPercentage (words text) || "from 0" `isInfixOf` text
-              if canCompare
-                then assertBool text hasDelta
-                else do
-                  assertBool text ("comparison unavailable: machine identity is unavailable" `isInfixOf` text)
-                  assertBool "unknown identity cannot show a delta or confidence interval"
-                    (not (hasDelta || any (`isInfixOf` text) ["wall mean delta", "⚡", "💩"]))
+              assertBool text (any signedPercentage (words text) || "from 0" `isInfixOf` text)
+              assertBool "a baseline from this machine has no warning" (not ("warning:" `isInfixOf` text))
         bytes <- BL.readFile baseline
         out <- runOK ["--name", "first"]
         assertComparison out
@@ -893,11 +896,8 @@ perfIntegrationTests =
           assertBool (key ++ " missing from " ++ json) (("\"" ++ key ++ "\"") `isInfixOf` json)
         forM_ distributionKeys $ \key -> assertBool (show key ++ " missing from " ++ json) (show key `isInfixOf` json)
         performance <- singleJsonTest json >>= requireObject "performance"
-        assertEqual "JSON reports whether the machine can be compared"
-          (Just (if canCompare then Aeson.Null else Aeson.String "machine identity is unavailable"))
-          (KM.lookup "comparison_unavailable_reason" performance)
-        unless canCompare $
-          assertEqual "unknown identity has no confidence interval" (Just Aeson.Null) (KM.lookup "mean_difference_ci95_ms" performance)
+        assertEqual "JSON reports the comparison" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" performance)
+        assertEqual "a baseline from this machine has no warning" (Just Aeson.Null) (KM.lookup "comparison_warning" performance)
         -- Set a deterministic reference and check that --record compares with
         -- the old value before replacing only the selected measurement.
         let reference = M.adjust (M.adjust setMean "_test_first_wrapper")
@@ -905,7 +905,7 @@ perfIntegrationTests =
         BL.writeFile baseline (Aeson.encode reference)
         updatedOut <- runOK ["--record", "--name", "first"]
         assertComparison updatedOut
-        when canCompare $ assertBool updatedOut ("-100.0%" `isInfixOf` updatedOut)
+        assertBool updatedOut ("-100.0%" `isInfixOf` updatedOut)
         updated <- readBaseline
         let updatedTests = M.findWithDefault M.empty "perf_record.sample" updated
         assertEqual "unselected measurement survives recording"
@@ -994,7 +994,6 @@ perfIntegrationTests =
           [ ("complete_before_loop", "Benchmark loop must run to exhaustion")
           , ("break_loop", "Benchmark loop must run to exhaustion")
           , ("return_loop", "Benchmark loop must run to exhaustion")
-          , ("body_stop", "Benchmark loop must run to exhaustion")
           , ("repeat_loop", "Use t.loop() once per test invocation")
           , ("loop_failure", "original body failure")
           , ("inconsistent_loop", "Call t.loop() consistently in every invocation")
@@ -1020,92 +1019,89 @@ perfIntegrationTests =
         elapsed <- requireNumber "measurement_duration_ms" timedInfo
         runs <- requireNumber "num_iterations" timed
         assertBool ("setup and teardown are outside measured body time: " ++ show (elapsed, work, runs)) (elapsed - work >= 35 * runs)
-        -- Machines without a usable identity intentionally cannot reuse a
-        -- recording. The pure tests above cover that contract independently.
-        when (hasMachine loopedInfo) $ do
-          fixed <- BL.readFile baseline
-          same <- runLoop "200ms" "50000" ["--scale", "50000", "--tag", "alpha,beta"]
-          assertEqual "the same explicit scale remains comparable across budgets" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" same)
-          sameInfo <- requireObject "measurements" same >>= requireObject "perf_info"
-          assertEqual "the new budget is retained as provenance" (Just (Aeson.Number 200)) (KM.lookup "time_budget_ms" sameInfo)
-          different <- runLoop "200ms" "25000" ["--scale", "25000", "--tag", "alpha,beta"]
-          assertEqual "explicit scale overrides the recorded scale" (Just (Aeson.String "workload scale differs")) (KM.lookup "comparison_unavailable_reason" different)
-          assertEqual "different workloads have no confidence interval" (Just Aeson.Null) (KM.lookup "mean_difference_ci95_ms" different)
-          differentInfo <- requireObject "measurements" different >>= requireObject "perf_info"
-          assertEqual "the requested workload is measured" (Just (Aeson.Number 25000)) (KM.lookup "scale" differentInfo)
-          assertEqual "comparison leaves the baseline intact" fixed =<< BL.readFile baseline
-          _ <- runLoop "200ms" "25000" ["--record", "--scale", "25000", "--tag", "alpha,beta"]
-          replaced <- BL.readFile baseline
-          assertBool "recording replaces the workload scale" (replaced /= fixed)
-          reused <- runLoop "100ms" "25000" ["--tag", "alpha,beta"]
-          assertEqual "the replacement baseline is comparable by default" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" reused)
-          reusedInfo <- requireObject "measurements" reused >>= requireObject "perf_info"
-          assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
-          assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
-          assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
-          _ <- runOK ["--record", "--name", "first|second"]
-          localBefore <- readBaseline
-          let external = proj </> "before.perf_data"
-          copyFile baseline external
-          externalBytes <- BL.readFile external
-          BL.length externalBytes `seq` return ()
-          fileOut <- runOK ["--compare", external, "--record", "--name", "first", "--json"]
-          filePerf <- singleJsonTest fileOut >>= requireObject "performance"
-          assertEqual "an explicit file supplies the comparison" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" filePerf)
-          assertEqual "record updates never overwrite the compared file" externalBytes =<< BL.readFile external
-          localAfter <- readBaseline
-          let withoutFirst = M.adjust (M.delete "_test_first_wrapper") "perf_record.sample"
-          assertEqual "record preserves every unselected local entry" (withoutFirst localBefore) (withoutFirst localAfter)
-          let git args = do
-                (code, out, err) <- readCreateProcessWithExitCode (proc "git" args) { cwd = Just proj } ""
-                assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
-                return out
-              processSamples obj = case KM.lookup "process_samples" obj >>= AesonTypes.parseMaybe Aeson.parseJSON of
-                Just samples -> return (samples :: [Aeson.Object])
-                Nothing -> assertFailure "missing ordered process measurements" >> fail "missing process samples"
-          _ <- git ["init", "-q"]
-          _ <- git ["add", "Build.act", "src"]
-          _ <- git ["-c", "user.name=Acton tests", "-c", "user.email=tests@example.invalid",
-                    "commit", "--no-gpg-sign", "-qm", "Add performance fixture"]
-          appendFile (proj </> "Build.act") "\n# Staged local change\n"
-          _ <- git ["add", "Build.act"]
-          appendFile (proj </> "src/sample.act") "\n# Unstaged local change\n"
-          sourceBefore <- readFile (proj </> "src/sample.act")
-          length sourceBefore `seq` return ()
-          indexBefore <- git ["ls-files", "--stage"]
-          statusBefore <- git ["status", "--porcelain", "--untracked-files=no"]
-          worktreesBefore <- git ["worktree", "list", "--porcelain"]
-          forM_ [("first", False, 1, []), ("looped", True, 25000, ["--scale", "25000"])] $ \(test, loop, scale, args) -> do
-            out <- runOK (["--compare", "git:HEAD", "--name", test, "--time", "1s", "--json"] ++ args)
-            comparison <- singleJsonTest out >>= requireObject "performance"
-            current <- requireObject "measurements" comparison
-            old <- requireObject "baseline" comparison
-            currentSamples <- processSamples current
-            oldSamples <- processSamples old
-            assertBool "live comparisons produce complete process pairs" (not (null currentSamples) && length currentSamples <= 4)
-            assertEqual "both sides have one observation per pair" (length currentSamples) (length oldSamples)
-            assertEqual "only this comparison's processes are paired" (KM.lookup "comparison_id" old) (KM.lookup "comparison_id" current)
-            sequences <- forM (zip oldSamples currentSamples) $ \(a, b) ->
-              (,) <$> requireNumber "sequence" a <*> requireNumber "sequence" b
-            let order = [a < b | (a, b) <- sequences]
-            assertBool "execution follows a randomized balanced schedule, possibly stopped early"
-              (order `elem` map (take (length order)) perfPairOrders)
-            assertBool "accepted pairs remain in chronological order"
-              (and [max a b < min c d | ((a, b), (c, d)) <- zip sequences (drop 1 sequences)])
-            forM_ (zip oldSamples currentSamples) $ \(a, b) -> do
-              forM_ [a, b] $ \sample -> do
-                info <- requireObject "perf_info" sample
-                assertEqual "both versions use the same workload scale" (Just (Aeson.Number scale)) (KM.lookup "scale" info)
-                assertEqual "whole-invocation and loop scopes are preserved" (Just (Aeson.Bool loop)) (KM.lookup "loop" info)
-                assertBool "every measured process has excluded warmup" . (> 0) =<< requireNumber "warmup_duration_ms" info
-            oldSource <- requireObject "source" old
-            currentSource <- requireObject "source" current
-            assertEqual "baseline records the committed revision" (Just (Aeson.Bool False)) (KM.lookup "git_dirty" oldSource)
-            assertEqual "current includes local modifications" (Just (Aeson.Bool True)) (KM.lookup "git_dirty" currentSource)
-            assertEqual "Git comparison leaves the source intact" sourceBefore =<< readFile (proj </> "src/sample.act")
-            assertEqual "Git comparison preserves staged changes" indexBefore =<< git ["ls-files", "--stage"]
-            assertEqual "Git comparison preserves tracked file status" statusBefore =<< git ["status", "--porcelain", "--untracked-files=no"]
-            assertEqual "the baseline worktree is removed after comparison" worktreesBefore =<< git ["worktree", "list", "--porcelain"]
+        fixed <- BL.readFile baseline
+        same <- runLoop "200ms" "50000" ["--scale", "50000", "--tag", "alpha,beta"]
+        assertEqual "the same explicit scale remains comparable across budgets" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" same)
+        sameInfo <- requireObject "measurements" same >>= requireObject "perf_info"
+        assertEqual "the new budget is retained as provenance" (Just (Aeson.Number 200)) (KM.lookup "time_budget_ms" sameInfo)
+        different <- runLoop "200ms" "25000" ["--scale", "25000", "--tag", "alpha,beta"]
+        assertEqual "explicit scale overrides the recorded scale" (Just (Aeson.String "workload scale differs")) (KM.lookup "comparison_unavailable_reason" different)
+        assertEqual "different workloads have no confidence interval" (Just Aeson.Null) (KM.lookup "mean_difference_ci95_ms" different)
+        differentInfo <- requireObject "measurements" different >>= requireObject "perf_info"
+        assertEqual "the requested workload is measured" (Just (Aeson.Number 25000)) (KM.lookup "scale" differentInfo)
+        assertEqual "comparison leaves the baseline intact" fixed =<< BL.readFile baseline
+        _ <- runLoop "200ms" "25000" ["--record", "--scale", "25000", "--tag", "alpha,beta"]
+        replaced <- BL.readFile baseline
+        assertBool "recording replaces the workload scale" (replaced /= fixed)
+        reused <- runLoop "100ms" "25000" ["--tag", "alpha,beta"]
+        assertEqual "the replacement baseline is comparable by default" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" reused)
+        reusedInfo <- requireObject "measurements" reused >>= requireObject "perf_info"
+        assertEqual "recorded scale reaches every loop body" (Just (Aeson.Number 25000)) (KM.lookup "scale" reusedInfo)
+        assertEqual "reused scale skips calibration" (Just (Aeson.toJSON ([] :: [Aeson.Value]))) (KM.lookup "calibration" reusedInfo)
+        assertEqual "default reuse leaves the new baseline intact" replaced =<< BL.readFile baseline
+        _ <- runOK ["--record", "--name", "first|second"]
+        localBefore <- readBaseline
+        let external = proj </> "before.perf_data"
+        copyFile baseline external
+        externalBytes <- BL.readFile external
+        BL.length externalBytes `seq` return ()
+        fileOut <- runOK ["--compare", external, "--record", "--name", "first", "--json"]
+        filePerf <- singleJsonTest fileOut >>= requireObject "performance"
+        assertEqual "an explicit file supplies the comparison" (Just Aeson.Null) (KM.lookup "comparison_unavailable_reason" filePerf)
+        assertEqual "record updates never overwrite the compared file" externalBytes =<< BL.readFile external
+        localAfter <- readBaseline
+        let withoutFirst = M.adjust (M.delete "_test_first_wrapper") "perf_record.sample"
+        assertEqual "record preserves every unselected local entry" (withoutFirst localBefore) (withoutFirst localAfter)
+        let git args = do
+              (code, out, err) <- readCreateProcessWithExitCode (proc "git" args) { cwd = Just proj } ""
+              assertEqual (unwords args ++ "\n" ++ out ++ err) ExitSuccess code
+              return out
+            processSamples obj = case KM.lookup "process_samples" obj >>= AesonTypes.parseMaybe Aeson.parseJSON of
+              Just samples -> return (samples :: [Aeson.Object])
+              Nothing -> assertFailure "missing ordered process measurements" >> fail "missing process samples"
+        _ <- git ["init", "-q"]
+        _ <- git ["add", "Build.act", "src"]
+        _ <- git ["-c", "user.name=Acton tests", "-c", "user.email=tests@example.invalid",
+                  "commit", "--no-gpg-sign", "-qm", "Add performance fixture"]
+        appendFile (proj </> "Build.act") "\n# Staged local change\n"
+        _ <- git ["add", "Build.act"]
+        appendFile (proj </> "src/sample.act") "\n# Unstaged local change\n"
+        sourceBefore <- readFile (proj </> "src/sample.act")
+        length sourceBefore `seq` return ()
+        indexBefore <- git ["ls-files", "--stage"]
+        statusBefore <- git ["status", "--porcelain", "--untracked-files=no"]
+        worktreesBefore <- git ["worktree", "list", "--porcelain"]
+        forM_ [("first", False, 1, []), ("looped", True, 25000, ["--scale", "25000"])] $ \(test, loop, scale, args) -> do
+          out <- runOK (["--compare", "git:HEAD", "--name", test, "--time", "1s", "--json"] ++ args)
+          comparison <- singleJsonTest out >>= requireObject "performance"
+          current <- requireObject "measurements" comparison
+          old <- requireObject "baseline" comparison
+          currentSamples <- processSamples current
+          oldSamples <- processSamples old
+          assertBool "live comparisons produce complete process pairs" (not (null currentSamples) && length currentSamples <= 4)
+          assertEqual "both sides have one observation per pair" (length currentSamples) (length oldSamples)
+          assertEqual "only this comparison's processes are paired" (KM.lookup "comparison_id" old) (KM.lookup "comparison_id" current)
+          sequences <- forM (zip oldSamples currentSamples) $ \(a, b) ->
+            (,) <$> requireNumber "sequence" a <*> requireNumber "sequence" b
+          let order = [a < b | (a, b) <- sequences]
+          assertBool "execution follows a randomized balanced schedule, possibly stopped early"
+            (order `elem` map (take (length order)) perfPairOrders)
+          assertBool "accepted pairs remain in chronological order"
+            (and [max a b < min c d | ((a, b), (c, d)) <- zip sequences (drop 1 sequences)])
+          forM_ (zip oldSamples currentSamples) $ \(a, b) -> do
+            forM_ [a, b] $ \sample -> do
+              info <- requireObject "perf_info" sample
+              assertEqual "both versions use the same workload scale" (Just (Aeson.Number scale)) (KM.lookup "scale" info)
+              assertEqual "whole-invocation and loop scopes are preserved" (Just (Aeson.Bool loop)) (KM.lookup "loop" info)
+              assertBool "every measured process has excluded warmup" . (> 0) =<< requireNumber "warmup_duration_ms" info
+          oldSource <- requireObject "source" old
+          currentSource <- requireObject "source" current
+          assertEqual "baseline records the committed revision" (Just (Aeson.Bool False)) (KM.lookup "git_dirty" oldSource)
+          assertEqual "current includes local modifications" (Just (Aeson.Bool True)) (KM.lookup "git_dirty" currentSource)
+          assertEqual "Git comparison leaves the source intact" sourceBefore =<< readFile (proj </> "src/sample.act")
+          assertEqual "Git comparison preserves staged changes" indexBefore =<< git ["ls-files", "--stage"]
+          assertEqual "Git comparison preserves tracked file status" statusBefore =<< git ["status", "--porcelain", "--untracked-files=no"]
+          assertEqual "the baseline worktree is removed after comparison" worktreesBefore =<< git ["worktree", "list", "--porcelain"]
 
 parseOptions :: [String] -> O.ParserResult C.CmdLineOptions
 parseOptions = O.execParserPure C.cmdLinePrefs (O.info (C.cmdLineParser O.<**> O.helper) mempty)

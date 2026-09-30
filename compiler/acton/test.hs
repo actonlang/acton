@@ -49,7 +49,6 @@ import qualified TestGolden
 -- the file with __rf.act (for Run Failure).
 
 main = do
-    environment <- getEnvironment
 #if defined(darwin_HOST_OS)
     let segfault_exitcode = (ExitFailure (-11))
 #else
@@ -92,8 +91,8 @@ main = do
       , crossCompileTests
       , pkgCliTests
       , archiveDependencyTests
-      ] ++ [ testGroup "live performance" [PerfTests.perfIntegrationTests, PerfScalingTests.scaleIntegrationTests]
-           | lookup "ACTON_TEST_PERFORMANCE" environment == Just "1" ]
+      , testGroup "live performance" [PerfTests.perfIntegrationTests, PerfScalingTests.scaleIntegrationTests]
+      ]
   where timeout :: Timeout
         timeout = mkTimeout (30*60*1000000)
         -- this normally doesn't take long on a local machine but in GitHub

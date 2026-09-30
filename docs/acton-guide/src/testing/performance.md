@@ -96,10 +96,10 @@ acton test perf --name my_test --compare before.perf_data
 ```
 
 A file comparison measures only the current version and uses the same
-compatibility checks as the ordinary `perf_data` baseline. Comparisons are valid
-only on the same machine and at the same workload scale. The `git:` prefix is
-required for revisions; other targets are file paths. Historical measurements
-cannot be interleaved with a new run.
+compatibility checks as the ordinary `perf_data` baseline. Comparisons require
+the same workload scale and warn when the baseline came from another machine.
+The `git:` prefix is required for revisions; other targets are file paths.
+Historical measurements cannot be interleaved with a new run.
 
 Without `--compare`, performance mode continues to use the project's `perf_data`
 baseline. `--record` writes current measurements there, including when an
@@ -283,10 +283,11 @@ Each option takes one target. `--compare` supplies the baseline: a recording
 filename, or an explicit `git:REF` when running a new study.
 The charts overlay at most two studies, with solid current curves and dashed
 baseline curves. Both retain their full recorded ranges and distinguish partial
-points. Comparison requires the same machine, build settings, input tags,
-measurement version, loop usage, GC policy and runtime worker count. Different
-implementation hashes are expected. Files without enough measurement identity
-can still be displayed individually.
+points. Comparison requires the same build settings, input tags, measurement
+version, loop usage, GC policy and runtime worker count, and warns when the
+recordings come from different machines. Different implementation hashes are
+expected. Files without enough measurement identity can still be displayed
+individually.
 
 A live comparison selects the recorded benchmark before compilation, then
 remeasures its completed sizes in ascending order using fresh processes and the
@@ -384,10 +385,10 @@ ceiling, although the machine's available headroom is still checked. Unavailable
 memory observations stop the study with an error. Supported platforms are Linux
 and macOS.
 
-Compare curves only on the same machine, at matching scales and with matching
-build, input and runtime settings. Cache effects, GC, input distribution and
-machine load all affect observed growth; the raw results retain timing and CPU
-counters for investigating these effects.
+Compare curves at matching scales and with matching build, input and runtime
+settings, and preferably on the same machine. Cache effects, GC, input
+distribution and machine load all affect observed growth; the raw results retain
+timing and CPU counters for investigating these effects.
 
 ## Choosing the measured work
 
@@ -564,7 +565,8 @@ contains saved reference quantities when available. `mean_difference_ci95_ms`
 contains the comparison interval's `lower` and `upper` bounds for wall time, or
 `null` when the conditions differ or the
 necessary statistics are unavailable. `comparison_unavailable_reason` explains
-missing or incompatible baselines. Failed or skipped tests have `performance: null`.
+missing or incompatible baselines, and `comparison_warning` notes a baseline
+from another machine. Failed or skipped tests have `performance: null`.
 
 CPU durations are also in milliseconds. Instruction and cycle values are counts
 per loop body or whole invocation; IPC is a unitless ratio. For example,
