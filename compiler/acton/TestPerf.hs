@@ -7,6 +7,7 @@ module TestPerf
   , perfCounterInfo
   , perfHostReason, perfSamplingReason, perfBuildOptionsReason
   , perfComparisonReason
+  , perfMachineWarning
   , perfBaselineScale
   , perfComparable
   , aggregatePerfRuns
@@ -74,8 +75,8 @@ objectField key obj = case AesonKM.lookup (AesonKey.fromString key) obj of
     Just (Aeson.Object info) -> Just info
     _ -> Nothing
 
--- Every delta needs the same workload and machine. Counter accounting scope
--- is an additional constraint for hardware measurements only.
+-- Every delta needs the same workload and measurement conditions. Counter
+-- accounting scope is an additional constraint for hardware measurements only.
 perfComparable :: String -> Aeson.Object -> Aeson.Object -> Bool
 perfComparable metric old new = not (isJust (perfComparisonReason metric old new))
 
@@ -105,6 +106,18 @@ perfSamplingReason old new
 perfHostReason :: Aeson.Object -> Aeson.Object -> Maybe String
 perfHostReason = metadataReason hostKeys
 
+-- Results from different machines stay comparable: whether their hardware
+-- matches is the user's call, so a different identity is only a warning. Two
+-- unavailable identities cannot be told apart and give no warning.
+perfMachineWarning :: Aeson.Object -> Aeson.Object -> Maybe String
+perfMachineWarning old new = do
+    guard (machine old /= machine new)
+    return "machine identity differs from the baseline"
+  where
+    machine info = case AesonKM.lookup (AesonKey.fromString "machine") info of
+      Just (Aeson.String s) | s /= mempty -> Just s
+      _ -> Nothing
+
 -- Build options may be the subject of a comparison, but each aggregate must
 -- describe one configuration. Missing options in older recordings mean defaults.
 perfBuildOptionsReason :: Aeson.Object -> Aeson.Object -> Maybe String
@@ -130,7 +143,7 @@ perfBaselineScale baseline currentInfo = do
     return value
 
 hostKeys :: [String]
-hostKeys = ["machine", "version", "build", "tags", "gc"]
+hostKeys = ["version", "build", "tags", "gc"]
 
 metadataReason :: [String] -> Aeson.Object -> Aeson.Object -> Maybe String
 metadataReason keys old new = do
@@ -159,7 +172,6 @@ metadataReason keys old new = do
             Just (Aeson.String s) -> s /= mempty
             _ -> False
     label key = case key of
-      "machine" -> "machine identity"
       "version" -> "measurement version"
       "build" -> "build mode"
       "tags" -> "input tags"
@@ -341,11 +353,16 @@ perfJson baseline res = do
         reason = case baseline of
           Nothing -> Just "no recorded baseline"
           Just old -> perfComparisonReason "wall_duration" old obj
+        warning = do
+          old <- baseline >>= perfInfo
+          new <- perfInfo obj
+          perfMachineWarning old new
     return $ Aeson.object
       [ AesonKey.fromString "measurements" Aeson..= measurements obj
       , AesonKey.fromString "baseline" Aeson..= fmap measurements baseline
       , AesonKey.fromString "mean_difference_ci95_ms" Aeson..= fmap bounds interval
       , AesonKey.fromString "comparison_unavailable_reason" Aeson..= reason
+      , AesonKey.fromString "comparison_warning" Aeson..= warning
       ]
   where
     keys = ["peak_rss", "num_iterations", "loop_iterations", "perf_info", "counter_info", "source", "comparison_id", "process_samples"] ++

@@ -1187,14 +1187,20 @@ scaleReportTests = testGroup "terminal charts"
         (code, out, err) <- compare
         assertEqual (out ++ err) ExitSuccess code
         assertBool out ("baseline" `isInfixOf` out && "current" `isInfixOf` out)
+        assertBool err (not ("Warning:" `isInfixOf` err))
         assertEqual "comparisons still show three charts" 3
           (length [() | line <- lines out, "  ◆ " `isPrefixOf` line, not ("  ◆ ┄ " `isPrefixOf` line)])
-        forM_ [("machine-b", 2, "machine identity"), ("machine-a", 3, "worker count")] $ \(machine, workers, reason) -> do
-          BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
-            [header 3, measured "machine-a" 2 1, measured machine workers 3, ending]])
-          (code, out, err) <- compare
-          assertBool (out ++ err) (code /= ExitSuccess && reason `isInfixOf` err)
-          assertBool "no invalid overlay is displayed" (not ("Scaling charts:" `isInfixOf` out))
+        BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
+          [header 3, measured "machine-a" 2 1, measured "machine-a" 3 3, ending]])
+        (code, out, err) <- compare
+        assertBool (out ++ err) (code /= ExitSuccess && "worker count" `isInfixOf` err)
+        assertBool "no invalid overlay is displayed" (not ("Scaling charts:" `isInfixOf` out))
+        BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
+          [header 3, measured "machine-b" 2 1, measured "machine-b" 2 3, ending]])
+        (code, out, err) <- compare
+        assertEqual (out ++ err) ExitSuccess code
+        assertBool "a recording from another machine is compared" ("baseline" `isInfixOf` out && "current" `isInfixOf` out)
+        assertBool err ("Warning: machine identity differs from the baseline" `isInfixOf` err)
         BL.writeFile path (BL.concat [Aeson.encode event <> "\n" | event <-
           [header 3, measured "machine-a" 2 1, configured (measured "machine-a" 2 3), ending]])
         mixed <- readScaleRecording path

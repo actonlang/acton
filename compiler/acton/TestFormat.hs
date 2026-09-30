@@ -339,6 +339,10 @@ formatTestPerfLines useColor baseline res =
              Nothing -> Just "no recorded baseline"
              Just old -> perfComparisonReason "wall_duration" old obj
            return ("  comparison unavailable: " ++ reason)
+      , do old <- baseline >>= perfInfo
+           new <- perfInfo obj
+           warning <- perfMachineWarning old new
+           return ("  warning: " ++ warning)
       , do info <- perfCounterInfo obj
            let scope = case counterText info "scope" of
                  Just "process:user" -> "user only"

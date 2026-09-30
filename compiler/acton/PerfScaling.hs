@@ -21,7 +21,7 @@ import Control.Exception
 import Control.Monad
 import Data.Char (chr, isAscii, isAlphaNum, isPrint)
 import Data.Bits (bit, (.|.))
-import Data.List (foldl', isPrefixOf, intercalate)
+import Data.List (foldl', isPrefixOf, intercalate, nub)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.IORef
 import qualified Data.IntMap.Strict as IM
@@ -601,6 +601,10 @@ printScaleRecording useColor axes path baselinePath = do
         forM_ previous $ \old -> when (hasSamples old && hasSamples new) $
           forM_ (scaleSeriesReason old new) $ \reason ->
             ioError (userError ("Cannot compare " ++ modName ++ "." ++ testName ++ ": " ++ reason))
+      forM_ (nub [warning | (new, Just previous) <- M.elems pairs, hasSamples previous && hasSamples new
+                          , Just a <- [seriesInfo previous], Just b <- [seriesInfo new]
+                          , Just warning <- [perfMachineWarning a b]]) $ \warning ->
+        hPutStrLn stderr ("Warning: " ++ warning)
       when (M.keys reports /= M.keys (recordingTests old)) $
         putStrLn "Only benchmarks present in both recordings are compared."
     putStrLn ("Recording: " ++ show path)
