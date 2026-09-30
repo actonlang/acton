@@ -3,19 +3,16 @@ static enum B_array_kind B_array_kind_from_witness(B_ArrayElement wit) {
         return B_ARRAY_INT;
     if ((void *)wit->$class == (void *)&B_ArrayElementD_floatG_methods)
         return B_ARRAY_FLOAT;
-    $RAISE((B_BaseException)$NEW(B_ValueError,
-                                 to$str("array element type must be int or float")));
+    STATIC_EXCEPTION(B_ValueError, "array element type must be int or float");
     return B_ARRAY_INT; // unreachable; keeps conservative C compilers happy
 }
 
 static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t length,
                                  $WORD initial) {
     if (length < 0)
-        $RAISE((B_BaseException)$NEW(B_ValueError,
-                                     to$str("array length must be non-negative")));
+        STATIC_EXCEPTION(B_ValueError, "array length must be non-negative");
     if ((uint64_t)length > SIZE_MAX / sizeof(uint64_t))
-        $RAISE((B_BaseException)$NEW(B_MemoryError,
-                                     to$str("array is too large")));
+        STATIC_EXCEPTION(B_MemoryError, "array is too large");
 
     self->kind = kind;
     self->length = length;
@@ -43,8 +40,7 @@ static void B_array_init_storage(B_array self, enum B_array_kind kind, int64_t l
 
 static int64_t B_array_checked_index(B_array self, int64_t index) {
     if (index < 0 || index >= self->length)
-        $RAISE((B_BaseException)$NEW(B_IndexError, index,
-                                     to$str("array index out of range")));
+        RAISE(B_IndexError, index, "array index out of range");
     return index;
 }
 
@@ -67,8 +63,7 @@ bool B_arrayD___bool__(B_array self) {
 
 B_str B_arrayD___str__(B_array self) {
     if (self->length > INT_MAX)
-        $RAISE((B_BaseException)$NEW(B_MemoryError,
-                                     to$str("array is too large to represent")));
+        STATIC_EXCEPTION(B_MemoryError, "array is too large to represent");
 
     B_list parts = B_listD_new((int)self->length);
     if (self->kind == B_ARRAY_INT) {
@@ -235,8 +230,7 @@ B_array B_ContainerD_arrayD___fromiter__(B_ContainerD_array wit,
     while (it->$class->__next__(it, &value)) {
         if ((uint64_t)result->length >= SIZE_MAX / sizeof(uint64_t) ||
             result->length == INT64_MAX)
-            $RAISE((B_BaseException)$NEW(B_MemoryError,
-                                         to$str("array is too large")));
+            STATIC_EXCEPTION(B_MemoryError, "array is too large");
 
         size_t needed = (size_t)result->length + 1;
         if (needed > capacity) {
@@ -254,8 +248,7 @@ B_array B_ContainerD_arrayD___fromiter__(B_ContainerD_array wit,
                 ? acton_malloc_atomic(nbytes)
                 : acton_realloc(result->data, nbytes);
             if (result->data == NULL)
-                $RAISE((B_BaseException)$NEW(B_MemoryError,
-                                             to$str("memory allocation failed")));
+                STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
             capacity = new_capacity;
         }
 
@@ -289,8 +282,7 @@ bool B_ContainerD_arrayD___containsnot__(B_ContainerD_array wit, B_array self,
 
 void B_arrayD___serialize__(B_array self, $Serial$state state) {
     if (self->length > INT_MAX - 2)
-        $RAISE((B_BaseException)$NEW(B_ValueError,
-                                     to$str("array is too large to serialize")));
+        $RAISE((B_BaseException)$NEW(B_ValueError, "array is too large to serialize");
 
     // ARRAY_ID is above ITEM_ID, so the generic serializer has already emitted
     // the object header and installed self in its back-reference table.  This
@@ -314,8 +306,7 @@ B_array B_arrayD___deserialize__(B_array self, $Serial$state state) {
 
     $ROW row = state->row;
     if (!row || row->class_id != ARRAY_ID || row->blob_size < 2)
-        $RAISE((B_BaseException)$NEW(B_ValueError,
-                                     to$str("invalid serialized array")));
+        STATIC_EXCEPTION(B_ValueError, "invalid serialized array");
     state->row = row->next;
     state->row_no++;
 
@@ -323,8 +314,7 @@ B_array B_arrayD___deserialize__(B_array self, $Serial$state state) {
     int64_t length = (int64_t)(intptr_t)row->blob[1];
     if ((kind != B_ARRAY_INT && kind != B_ARRAY_FLOAT) ||
         length < 0 || length > INT_MAX - 2 || row->blob_size != length + 2)
-        $RAISE((B_BaseException)$NEW(B_ValueError,
-                                     to$str("invalid serialized array")));
+        STATIC_EXCEPTION(B_ValueError "invalid serialized array");
 
     self->$class = &B_arrayG_methods;
     B_array_init_storage(self, kind, length, B_None);
