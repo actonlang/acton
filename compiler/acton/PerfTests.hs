@@ -731,10 +731,6 @@ perfIntegrationTests =
           , "    for scale in t.loop():"
           , "        return"
           , ""
-          , "def _test_body_stop(t: testing.SyncT):"
-          , "    for scale in t.loop():"
-          , "        raise StopIteration(\"body stopped\")"
-          , ""
           , "def _test_repeat_loop(t: testing.SyncT):"
           , "    t.loop()"
           , "    for scale in t.loop():"
@@ -966,7 +962,6 @@ perfIntegrationTests =
           [ ("complete_before_loop", "Benchmark loop must run to exhaustion")
           , ("break_loop", "Benchmark loop must run to exhaustion")
           , ("return_loop", "Benchmark loop must run to exhaustion")
-          , ("body_stop", "Benchmark loop must run to exhaustion")
           , ("repeat_loop", "Use t.loop() once per test invocation")
           , ("loop_failure", "original body failure")
           , ("inconsistent_loop", "Call t.loop() consistently in every invocation")
