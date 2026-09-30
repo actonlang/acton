@@ -270,6 +270,62 @@ rawBuiltinMethod env attr es@(recv:_)
                                         _   -> Nothing
 rawBuiltinMethod _ _ _             = Nothing
 
+-- A comma-separated matrix index is represented by a tuple throughout the
+-- language front end.  For a concrete numeric matrix, split that still
+-- syntactic tuple before CodeGen so the matrix module's concrete accessors can
+-- keep both coordinates and the element value unboxed.  An index already held
+-- in a tuple variable deliberately remains on the generic protocol path.
+matrixModule                       :: ModName
+matrixModule                        = ModName [name "matrix"]
+qnMatrix, qnMatrixGetInt, qnMatrixSetInt, qnMatrixGetFloat,
+  qnMatrixSetFloat                 :: QName
+qnMatrix                            = GName matrixModule (name "matrix")
+qnMatrixGetInt                      = GName matrixModule (name "get_int")
+qnMatrixSetInt                      = GName matrixModule (name "set_int")
+qnMatrixGetFloat                    = GName matrixModule (name "get_float")
+qnMatrixSetFloat                    = GName matrixModule (name "set_float")
+
+matrixCoordinates                  :: Expr -> Maybe (Expr, Expr)
+matrixCoordinates (Tuple _ (PosArg row (PosArg column PosNil)) KwdNil)
+                                    = Just (row, column)
+matrixCoordinates (Paren _ e)      = matrixCoordinates e
+matrixCoordinates (Box _ e)        = matrixCoordinates e
+matrixCoordinates (UnBox _ e)      = matrixCoordinates e
+matrixCoordinates _                = Nothing
+
+rawMatrixMethod                    :: BoxEnv -> Name -> [Expr]
+                                   -> Maybe (Expr, [Expr])
+rawMatrixMethod env attr es@(recv:_)
+                                    = case (unalias env (typeOf env recv), attr, es) of
+                                        (TCon _ (TC q [t]), n, [_, index])
+                                          | q == qnMatrix,
+                                            Just (row, column) <- matrixCoordinates index,
+                                            n == getitemKW,
+                                            Just f <- matrixGetAccessor t
+                                              -> Just (eQVar f, [recv, row, column])
+                                        (TCon _ (TC q [t]), n, [_, index, value])
+                                          | q == qnMatrix,
+                                            Just (row, column) <- matrixCoordinates index,
+                                            n == setitemKW,
+                                            Just f <- matrixSetAccessor t
+                                              -> Just (eQVar f, [recv, row, column, value])
+                                        _   -> Nothing
+  where matrixGetAccessor t
+          | t == tInt               = Just qnMatrixGetInt
+          | t == tFloat             = Just qnMatrixGetFloat
+          | otherwise               = Nothing
+        matrixSetAccessor t
+          | t == tInt               = Just qnMatrixSetInt
+          | t == tFloat             = Just qnMatrixSetFloat
+          | otherwise               = Nothing
+rawMatrixMethod _ _ _              = Nothing
+
+rawMatrixMethodCall                :: BoxEnv -> Name -> PosArg -> Maybe Expr
+rawMatrixMethodCall env attr p      = do (f, args) <- rawMatrixMethod env attr (posargs p)
+                                         case rtypeOfFun env f of
+                                           TFun _ _ pr _ rest -> Just $ tryBox rest $ eCallP f (fixargs env (posarg args) pr)
+                                           _                  -> Nothing
+
 -- Unboxing helpers -------------------------------------
 
 -- returns the uninstantiated type of method n in class c, i.e. the type of the corresponding method in oldest superclass.
@@ -705,7 +761,12 @@ instance Boxing Expr where
 --             vFree _                = False
 
       boxingDirectOrDynamic w attr p rt pr rest
-                                    = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
+        | Just _ <- rawMatrixMethod env attr (posargs p)
+                                    = do (ws,p1) <- boxing env p
+                                         case rawMatrixMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw matrix method lost during boxing"
+        | otherwise                 = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
                                         Just (sw, tc)
                                           | directMethodImpl env (tcname tc) attr,
                                             Just c <- rawBuiltinMethodCall env attr p
@@ -769,9 +830,18 @@ instance Boxing Expr where
                                          (ws2,p1) <- boxing env p
                                          return (HashSet.union ws1 ws2, eCallP f1 (fixargs env p1 r))
         where  TFun _ _ r _ _       = rtypeOfFun env f
-    -- Concrete fixed-size arrays resolve indexing directly to class methods
-    -- so they retain the raw element ABI. Their MutIndexed witnesses serve
-    -- polymorphic code without promising deletion.
+    -- Preserve the two separate coordinates while lowering a concrete matrix
+    -- comma index.  A tuple-valued index does not match this path.
+    boxing env (Call _ (Dot _ recv attr) p KwdNil)
+      | not (callIsClass env recv),
+        Just _ <- rawMatrixMethod env attr (recv : posargs p)
+                                    = do (ws,p1) <- boxing env (PosArg recv p)
+                                         case rawMatrixMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw matrix method lost during boxing"
+    -- Concrete builtin containers resolve indexing directly to raw workers
+    -- so they retain the raw element ABI. Their protocol witnesses continue
+    -- to serve polymorphic code.
     boxing env (Call _ (Dot _ recv attr) p KwdNil)
       -- A class receiver denotes a static/class method, not a container value.
       -- In particular, asking QuickType for the value type of polymorphic

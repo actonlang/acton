@@ -147,14 +147,45 @@ class matrix[A(ArrayElement)](object):
             return self._row_stride == 1
         return self._column_stride == 1 and self._row_stride == self._columns
 
-    def _linear_index(self, index: (int,int)) -> int:
-        row, column = index
+    def _linear_index2(self, row: int, column: int) -> int:
+        """Translate separate row and column coordinates to backing storage.
+
+        Keeping the coordinates separate provides an allocation-free path for
+        concrete numeric accessors.  The tuple-indexed protocol below delegates
+        here after unpacking its necessarily generic index value.
+        """
         if row < 0 or row >= self._rows:
             raise IndexError(row, "matrix row index out of range")
         if column < 0 or column >= self._columns:
             raise IndexError(column, "matrix column index out of range")
         return (self._offset + row * self._row_stride +
                 column * self._column_stride)
+
+    def _linear_index(self, index: (int,int)) -> int:
+        row, column = index
+        return self._linear_index2(row, column)
+
+
+# These concrete accessors deliberately take two coordinates rather than a
+# tuple.  Their concrete element types also let the compiler select the raw
+# array workers, keeping the complete matrix access path unboxed.  The normal
+# tuple-based indexing protocol remains available wherever generic indexing is
+# more important than this specialized representation.
+def get_int(values: matrix[int], row: int, column: int) -> int:
+    return values._data[values._linear_index2(row, column)]
+
+
+def set_int(values: matrix[int], row: int, column: int, value: int) -> None:
+    values._data[values._linear_index2(row, column)] = value
+
+
+def get_float(values: matrix[float], row: int, column: int) -> float:
+    return values._data[values._linear_index2(row, column)]
+
+
+def set_float(values: matrix[float], row: int, column: int,
+              value: float) -> None:
+    values._data[values._linear_index2(row, column)] = value
 
 
 extension matrix[A(ArrayElement)] (MutIndexed[(int,int),A]):

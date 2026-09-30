@@ -1,4 +1,4 @@
-from matrix import matrix, vector_view
+from matrix import get_float, get_int, matrix, set_float, set_int, vector_view
 
 
 def check(env, condition: bool, message: str) -> None:
@@ -44,6 +44,9 @@ actor main(env):
               "contiguous matrix shape or strides are wrong")
         check(env, replace(ints, (1, 0), 17) == 17 and ints[1, 0] == 17,
               "matrix does not implement tuple MutIndexed")
+        set_int(ints, 0, 2, 19)
+        check(env, get_int(ints, 0, 2) == 19,
+              "concrete int matrix access failed")
 
         row: vector_view[int] = ints.row(1)
         check(env, row.size() == 3 and row.stride() == 1 and row[2] == 42,
@@ -64,7 +67,7 @@ actor main(env):
                    middle[0, 0] == 11 and middle[1, 1] == 42,
               "rectangular matrix view is wrong")
         middle[1, 0] = 29
-        check(env, ints[1, 1] == 29,
+        check(env, ints[1, 1] == 29 and get_int(middle, 1, 0) == 29,
               "rectangular matrix view does not share storage")
 
         transposed = ints.transpose()
@@ -75,6 +78,9 @@ actor main(env):
         transposed[0, 1] = 31
         check(env, ints[1, 0] == 31,
               "transposed matrix view does not share storage")
+        set_int(transposed, 2, 0, 41)
+        check(env, get_int(ints, 0, 2) == 41,
+              "concrete access does not respect transposed strides")
 
         reshaped = ints.reshape(3, 2)
         check(env, reshaped.shape() == (3, 2) and reshaped.strides() == (2, 1) and
@@ -95,6 +101,15 @@ actor main(env):
         floats[1, 0] = -3.5
         check(env, floats[0, 0] == 1.25 and floats[1, 0] == -3.5,
               "float matrix access failed")
+        set_float(floats, 0, 1, 2.75)
+        check(env, get_float(floats, 0, 1) == 2.75,
+              "concrete float matrix access failed")
+
+        try:
+            invalid_fast_value = get_int(ints, 2, 0)
+            check(env, False, "expected IndexError from concrete matrix access")
+        except IndexError:
+            pass
 
         expect_index_error(env, ints, (-1, 0))
         expect_index_error(env, ints, (2, 0))

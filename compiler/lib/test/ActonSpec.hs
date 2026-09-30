@@ -2243,6 +2243,20 @@ main = do
         , "((B_float)value)->val"
         , "->$class->__next__("
         ]
+      testCodeGenContains env0 "raw_matrix"
+        [ "matrixQ_get_int(values, row, column)"
+        , "matrixQ_set_int(values, row, column, value)"
+        , "matrixQ_get_int(values, row, column) + value"
+        , "matrixQ_get_float(values, row, column)"
+        , "matrixQ_set_float(values, row, column, value)"
+        ]
+      testCodeGenDoesNotContain env0 "raw_matrix"
+        [ "$NEWTUPLE(2"
+        , "toB_int(row)"
+        , "toB_int(column)"
+        , "toB_float(value)"
+        , "matrixQ_MutIndexedD_matrixG_new"
+        ]
       testCodeGenContains env0 "raw_bitarray"
         [ "B_bitarrayG_new(n, toB_bool(initial))"
         , "B_bitarrayG_new(n, B_None)"
