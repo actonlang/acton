@@ -176,10 +176,10 @@ comparable to the earlier fixed-4,096-record version of this fixture.
 Compare the two compiler builds using the same current source snapshot.
 
 Large fixtures need time for construction, warmup and verification as well
-as measured bodies. All consume the overall budget. Increase `--time` if
-preparation leaves few or no measured bodies. "Performance time budget
-exhausted during preparation" means the process finished without a usable
-measurement. A body already in progress can finish after its time slice.
+as measured bodies. All consume the overall budget. When preparation uses it
+up, the runner still measures one invocation with one body, overrunning the
+budget, and notes the limited samples; increase `--time` for more. A body
+already in progress can finish after its time slice.
 Peak RSS includes preparation and runtime overhead, not just live payload.
 
 Read whole-body wall time, allocated bytes and total CPU together. Confirm

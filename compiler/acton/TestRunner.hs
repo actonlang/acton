@@ -347,73 +347,54 @@ perfPairOrders = [[i == a || i == b | i <- [0..3]] | a <- [0..2], b <- [a+1..3]]
 
 -- Each child contributes one observation. Budgets include its preparation,
 -- and only complete pairs enter the comparison, in pair order on both sides.
+-- The budget is a target: the first pair runs even when the pilot used it up.
 runPerfPairs :: [Bool] -> Int -> Maybe Int -> (Bool -> Maybe Int -> Int -> IO TestResult)
              -> IO (Either TestResult [(TestResult, TestResult)])
 runPerfPairs order budget requested run = do
     pilot <- case requested of
-      Just scale -> return (Right (Just scale, total, 0))
+      Just scale -> return (Right (Just scale, total))
       Nothing -> do
         res <- run True Nothing (max 1 (budget `div` 8))
         let scale = case trRaw res of
               Aeson.Object obj -> perfInfo obj >>= (`perfNumber` "scale")
               _ -> Nothing
         return $ case scale of
-          Just n | n >= 1 && n <= fromIntegral (maxBound :: Int) && (valid res || exhausted res) ->
-            Right (if loopUsed res then Just (round n) else Nothing, total - trTestDuration res, if exhausted res then 2 * trTestDuration res else 0)
+          Just n | n >= 1 && n <= fromIntegral (maxBound :: Int) && valid res ->
+            Right (if loopUsed res then Just (round n) else Nothing, total - trTestDuration res)
           _ -> Left res
     case pilot of
       Left res -> return (Left res)
-      Right (scale, oldLeft, minimumBlock) -> collect order scale oldLeft total minimumBlock []
+      Right (scale, oldLeft) -> collect order scale oldLeft total 0 []
   where
     total = fromIntegral budget
     valid res = isJust (testPerfData res)
     loopUsed res = case trRaw res of
       Aeson.Object obj -> (perfInfo obj >>= AesonKM.lookup (AesonKey.fromString "loop")) == Just (Aeson.Bool True)
       _ -> False
-    exhausted res = case trRaw res of
-      Aeson.Object obj -> case perfInfo obj of
-        Just info -> AesonKM.lookup (AesonKey.fromString "preparation_exhausted") info == Just (Aeson.Bool True)
-        _ -> False
-      _ -> False
-    sample old scale left slice = do
-      res <- run old scale slice
-      let remaining = left - trTestDuration res
-      -- A larger block reuses the selected scale; it never recalibrates.
-      if exhausted res && remaining > fromIntegral slice && remaining > trTestDuration res
-        then do
-          retry <- run old scale (max 1 (floor remaining))
-          return (retry, remaining - trTestDuration retry)
-        else return (res, remaining)
     minimumDuration res = fromMaybe (trTestDuration res) $ do
       obj <- testPerfData res
       info <- perfInfo obj
       warmup <- perfNumber info "warmup_duration_ms"
       measured <- perfNumber info "measurement_duration_ms"
       return (warmup + measured / fromIntegral (trNumIterations res))
-    finish res pairs = return (if exhausted res then Right (reverse pairs) else Left res)
     collect [] _ _ _ _ pairs = return (Right (reverse pairs))
     collect remaining@(oldFirst:rest) scale oldLeft newLeft minimumBlock pairs
-      | min oldLeft newLeft <= 0
-        || (not (null pairs) && min oldLeft newLeft < minimumBlock) = return (Right (reverse pairs))
+      | not (null pairs) && (left <= 0 || left < minimumBlock) = return (Right (reverse pairs))
       | otherwise = do
-          let left = min oldLeft newLeft
-              slice = max 1 (floor (min left (max minimumBlock (left / fromIntegral (length remaining)))))
-              firstLeft = if oldFirst then oldLeft else newLeft
-              secondLeft = if oldFirst then newLeft else oldLeft
-          (first, firstRemaining) <- sample oldFirst scale firstLeft slice
-          if not (valid first) then finish first pairs else do
-            (second, secondRemaining) <- sample (not oldFirst) scale secondLeft slice
-            if not (valid second) then finish second pairs else do
-              let (old, new, oldRemaining, newRemaining) = if oldFirst
-                    then (first, second, firstRemaining, secondRemaining)
-                    else (second, first, secondRemaining, firstRemaining)
+          let slice = max 1 (floor (min left (max minimumBlock (left / fromIntegral (length remaining)))))
+          first <- run oldFirst scale slice
+          if not (valid first) then return (Left first) else do
+            second <- run (not oldFirst) scale slice
+            if not (valid second) then return (Left second) else do
+              let (old, new) = if oldFirst then (first, second) else (second, first)
                   issue = do a <- testPerfData old
                              b <- testPerfData new
                              perfComparisonReason "wall_duration" a b
               case issue of
                 Just reason -> return (Left new { trSuccess = Nothing, trException = Just ("Cannot compare: " ++ reason) })
-                Nothing -> collect rest scale oldRemaining newRemaining
+                Nothing -> collect rest scale (oldLeft - trTestDuration old) (newLeft - trTestDuration new)
                   (max minimumBlock (max (minimumDuration old) (minimumDuration new))) ((old, new) : pairs)
+      where left = min oldLeft newLeft
 
 -- Git builds supply two runnable projects. Preparation and measurements happen
 -- here so both perf modes share the process runner, result format and baseline.
@@ -473,7 +454,7 @@ runPerfComparison color gopts topts (oldOpts, oldPaths, oldSource) (newOpts, new
               (Just old, Just new) -> Just (Right (prepared oldSpent old, prepared newSpent new))
               _ -> Nothing
       case result of
-        Nothing -> printErrorAndExit "Performance time budget exhausted before a complete pair; increase --time"
+        Nothing -> printErrorAndExit "Cannot combine the measured processes"
         Just outcome -> do
           let (baseline, res) = case outcome of
                 Left failed -> (M.empty, failed)
@@ -1040,12 +1021,7 @@ runModuleTestStreaming opts paths topts mode perfHostInfo baselineScale limits m
               case exitCode of
                 ExitSuccess -> res1
                 ExitFailure code ->
-                  res1 { trException = Just ("Test process exited with code " ++ show code)
-                       , trRaw = case trRaw res1 of
-                           Aeson.Object obj | Just info <- perfInfo obj -> Aeson.Object (AesonKM.insert
-                             (AesonKey.fromString "perf_info") (Aeson.Object (AesonKM.delete
-                               (AesonKey.fromString "preparation_exhausted") info)) obj)
-                           raw -> raw }
+                  res1 { trException = Just ("Test process exited with code " ++ show code) }
     updated <-
       if C.testSnapshotUpdate topts
         then applySnapshotUpdate paths res
