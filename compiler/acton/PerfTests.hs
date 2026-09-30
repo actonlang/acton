@@ -613,7 +613,6 @@ perfTests = testGroup "performance baselines"
         assertBool err (code /= ExitSuccess && "--record requires acton test perf" `isInfixOf` err)
   ]
 
--- Real measurements need a quiet machine; enable them with make test-performance.
 perfIntegrationTests :: TestTree
 perfIntegrationTests =
     testCase "recording runs fresh tests and preserves unselected measurements" $

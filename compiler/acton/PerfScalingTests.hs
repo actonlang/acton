@@ -652,7 +652,6 @@ withGitFixture action = withSystemTempDirectory "acton-scale-git-test" $ \tempor
 
 -- Live integration ------------------------------------------------------------
 
--- Real measurements need a quiet machine; enable them with make test-performance.
 scaleIntegrationTests :: TestTree
 scaleIntegrationTests = testGroup "scaling"
   [ scaleJournalIntegrationTest, scaleGitIntegrationTest ]

@@ -27,17 +27,13 @@ make test-backend
 
 ## Performance integration tests
 
-Live `acton test perf` and `acton test scale` integration tests are opt-in:
+The `live performance` group runs `acton test perf` and `acton test scale`
+against fixture projects and checks recording, comparison, calibration and
+loop validation end to end. It is part of `make test`. To run only this group:
 
 ```sh
 make test-performance
 ```
-
-Run these on a quiet machine with suitable hardware. The target enables
-`ACTON_TEST_PERFORMANCE=1` and runs the `live performance` group sequentially.
-Normal `make test` and `stack test` runs keep the option, statistics, recording
-report, memory-monitor and simulated-controller checks, without collecting live
-benchmark measurements.
 
 ## Snapshot / acceptance tests
 
