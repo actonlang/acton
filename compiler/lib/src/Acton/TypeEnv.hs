@@ -721,6 +721,9 @@ unify' env _ (TNil _ k1) (TNil _ k2)
 unify' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
   | k1 == k2 && n1 == n2                    = do unify env info t1 t2
                                                  unify env info r1 r2
+unify' env info (TDefRow _ k1 n1 t1 _ r1) (TDefRow _ k2 n2 t2 _ r2)
+  | k1 == k2 && n1 == n2                    = do unify env info t1 t2
+                                                 unify env info r1 r2
 unify' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = unify env info r1 r2
 
@@ -760,6 +763,8 @@ match vs (TFX _ fx1) (TFX _ fx2)
 match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
 match vs (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+  | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
+match vs (TDefRow _ k1 n1 t1 _ r1) (TDefRow _ k2 n2 t2 _ r2)
   | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
 match vs (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = match vs r1 r2
@@ -836,8 +841,14 @@ instance USubst Type where
     usubstWith s (TWild l)          = TWild l
     usubstWith s (TNil l k)         = TNil l k
     usubstWith s (TRow l k n t r)   = TRow l k n (usubstWith s t) (usubstWith s r)
+    usubstWith s (TDefRow l k n t d r)
+                                    = TDefRow l k n (usubstWith s t) (usubstWith s d) (usubstWith s r)
     usubstWith s (TStar l k r)      = TStar l k (usubstWith s r)
     usubstWith s (TFX l fx)         = TFX l fx
+
+instance USubst DefaultSpec where
+    usubstWith s (DfltExpr e v r)   = DfltExpr (usubstWith s e) (usubstWith s v) r
+    usubstWith _ DfltDynamic        = DfltDynamic
 
 instance USubst QBind where
     usubstWith s (QBind v cs)       = QBind v (usubstWith s cs)
@@ -1046,6 +1057,7 @@ instance WellFormed Type where
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
     wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env (TDefRow _ _ _ t _ r) = wf env t ++ wf env r
     wf env (TStar _ _ r)    = wf env r
     wf env _                = []
 

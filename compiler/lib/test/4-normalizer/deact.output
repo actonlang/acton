@@ -9,40 +9,40 @@ W_Apa_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 # recursive group:
 actor Apa ():
     proc def setup (cb : action(__builtin__.int) -> __builtin__.int) -> None:
-        print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
         cb(W_Apa_39.__fromatom__(0))
         return None
     proc def compute (cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
         v: __builtin__.int = cb(W_Apa_39.__fromatom__(1))
         m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
         N_tmp: __builtin__.int = W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
         return N_tmp
     proc def notice (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
         N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return N_1tmp
     setup($WRAP@[(), (__builtin__.int,), __builtin__.int](self, notice))
-    print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
 actor Bepa ():
     proc def callback (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
         N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return N_2tmp
-    print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
 actor main (env : __builtin__.Env):
     proc def myproc (i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
         if W_Apa_308.__eq__(i, W_Apa_39.__fromatom__(2)):
             env.exit(W_Apa_39.__fromatom__(0))
         return i
     a: Apa = Apa()
     b: Bepa = Bepa()
-    print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
     a.setup(a.notice)
     x: __builtin__.Msg[__builtin__.int] = (async a.compute)(b.callback)
     r: __builtin__.int = await x
-    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), None, None, None, None)
+    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", r), "\" \"", "\"\\n\"", False, False)
     a.compute($WRAP@[(), (__builtin__.int,), __builtin__.int](self, myproc))
-    print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
 # (recursive group)

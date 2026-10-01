@@ -28,9 +28,9 @@ B_str __str__(B_value x) {
         return x->$class->__str__(x);
 }
 
-B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B_bool flush_arg) {
+B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, bool stderr_arg, bool flush_arg) {
     FILE *outfd = stdout;
-    if (stderr_arg && stderr_arg->val) {
+    if (stderr_arg) {
         outfd = stderr;
     }
     B_str sep = actStrFromCString(" ");
@@ -65,7 +65,7 @@ B_NoneType B_print(B_tuple t, B_str sep_arg, B_str end_arg, B_bool stderr_arg, B
     pos += end->nbytes;
     fwrite(s, 1, pos, outfd);
 
-    if (flush_arg && flush_arg->val)
+    if (flush_arg)
         fflush(outfd);
     return B_None;
 }

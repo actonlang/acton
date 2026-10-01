@@ -1,0 +1,20 @@
+import provider
+
+actor main(env):
+    if provider.from_local() != 42:
+        print("local definition-site default failed")
+        env.exit(1)
+    if provider.from_import() != 42:
+        print("imported definition-site default failed")
+        env.exit(1)
+    if not provider.boolean_default():
+        print("unboxed boolean default failed")
+        env.exit(1)
+    if provider.from_local(7) != 7 or provider.boolean_default(False):
+        print("explicit default-parameter argument failed")
+        env.exit(1)
+    generic_value: int = provider.generic_default()
+    if generic_value != 1:
+        print("generic default witness failed")
+        env.exit(1)
+    env.exit(0)

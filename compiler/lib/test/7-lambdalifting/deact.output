@@ -8,7 +8,7 @@ W_Apa_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 
 # recursive group:
 proc def L_1C_1cont (C_cont : $Cont[None], C_2res : None) -> $R:
-    print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_2Cont ($Cont[None], __builtin__.value):
     @property
@@ -167,9 +167,9 @@ class L_19action ($action[(__builtin__.int,), __builtin__.int], $proc[(__builtin
     # (recursive group)
 proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : __builtin__.int) -> $R:
     self.r = C_10res
-    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), None, None, None, None)
+    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), "\" \"", "\"\\n\"", False, False)
     (async self.a.compute)(L_19action(self))
-    print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
     return $R_CONT@[None](C_cont, None)
 class L_20Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
@@ -186,7 +186,7 @@ class L_20Cont ($Cont[__builtin__.int], __builtin__.value):
         return L_17C_9cont(self, C_cont, G_1)
 proc def L_12C_7cont (self : main, C_cont : $Cont[None], C_8res : Bepa) -> $R:
     self.b = C_8res
-    print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
     (async self.a.setup)(L_14action(self.a))
     self.x = (async self.a.compute)(L_16action(self.b))
     return $AWAIT@[__builtin__.int](L_20Cont(self, C_cont), self.x)
@@ -328,14 +328,14 @@ class Apa ($Actor, __builtin__.value):
     proc def __init__ (self : Self, C_cont : $Cont[None]) -> $R:
         return self.setupG_local(L_2Cont(C_cont), L_4action(self))
     proc def setupG_local (self : Self, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
-        print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
         cb.__asyn__(W_Apa_39.__fromatom__(0))
         return $R_CONT@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : $Cont[__builtin__.int], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
-        print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
         return $AWAIT@[__builtin__.int](L_6Cont(cb, C_cont), cb.__asyn__(W_Apa_39.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-        print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
         N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_1tmp)
     action def setup (self : Self, cb : $action[(__builtin__.int,), __builtin__.int]) -> None:
@@ -346,10 +346,10 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNC@[__builtin__.int](self, L_9proc(self, i))
 class Bepa ($Actor, __builtin__.value):
     proc def __init__ (self : Self, C_cont : $Cont[None]) -> $R:
-        print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONT@[None](C_cont, None)
     proc def callbackG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
         N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return $R_CONT@[__builtin__.int](C_cont, N_2tmp)
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
@@ -369,7 +369,7 @@ class main ($Actor, __builtin__.value):
         self.env = env
         return ApaG_newact(L_22Cont(self, C_cont))
     proc def myprocG_local (self : Self, C_cont : $Cont[__builtin__.int], i : __builtin__.int) -> $R:
-        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
         if W_Apa_308.__eq__(i, W_Apa_39.__fromatom__(2)):
             (async self.env.exit)(W_Apa_39.__fromatom__(0))
         return $R_CONT@[__builtin__.int](C_cont, i)

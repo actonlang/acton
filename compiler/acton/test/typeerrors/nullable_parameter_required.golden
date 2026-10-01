@@ -1,0 +1,13 @@
+Building file test/typeerrors/nullable_parameter_required.act using temporary scratch directory
+   nullable_parameter_required  Parse done                                                               0.000 s
+[error]: Incompatible types
+     +--> nullable_parameter_required.act@5:12-5:26
+     |
+   1 | def accepts_none(value: ?int) -> ?int:
+     :     ^----------- 
+     :     `- accepts_none is defined here
+     :
+   5 |     return accepts_none()
+     :            ^-------------
+     :            `- keyword argument(s) 'value' is missing in call to accepts_none
+-----+

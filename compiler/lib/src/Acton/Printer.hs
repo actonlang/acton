@@ -456,6 +456,10 @@ instance Pretty QBind where
 prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
                                     = pretty t
 prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TDefRow _ PRow n t d (TNil _ PRow))
+                                    = prettyDefaultRow n t d
+prettyPosRow (TDefRow _ PRow n t d p)
+                                    = prettyDefaultRow n t d <> comma <+> prettyPosRow p
 prettyPosRow (TStar _ PRow r)
   | TVar _ v <- r                   = text "*" <> pretty v
   | TUni _ u <- r                   = text "*" <> pretty u
@@ -470,6 +474,10 @@ prettyPosRow t                      = text "??" <>  pretty t
 prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
 prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TDefRow _ KRow n t d (TNil _ KRow))
+                                    = prettyDefaultRow n t d
+prettyKwdRow (TDefRow _ KRow n t d k)
+                                    = prettyDefaultRow n t d <> comma <+> prettyKwdRow k
 prettyKwdRow (TStar _ KRow r)
   | TVar _ v <- r                   = text "**" <> pretty v
   | TUni _ u <- r                   = text "**" <> pretty u
@@ -480,6 +488,9 @@ prettyKwdRow (TUni _ u)             = text "++" <> pretty u
 prettyKwdRow (TWild _)              = text "++"
 prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "??" <>  pretty t
+
+prettyDefaultRow n t (DfltExpr e _ _) = pretty n <> colon <+> pretty t <+> equals <+> pretty e
+prettyDefaultRow n t DfltDynamic    = pretty n <> colon <+> pretty t <+> equals <+> text "_"
 
 prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
 prettyFunRow p (TNil _ KRow)        = prettyPosRow p
@@ -505,6 +516,8 @@ instance Pretty Type where
     pretty (TRow _ PRow _ t TNil{}) = parens $ pretty t <> comma
     pretty r@TRow{rkind=PRow}       = parens $ prettyPosRow r
     pretty r@TRow{rkind=KRow}       = parens $ prettyKwdRow r
+    pretty r@TDefRow{rkind=PRow}    = parens $ prettyPosRow r
+    pretty r@TDefRow{rkind=KRow}    = parens $ prettyKwdRow r
     pretty r@TStar{rkind=PRow}      = parens $ prettyPosRow r
     pretty r@TStar{rkind=KRow}      = parens $ prettyKwdRow r
     pretty r@TNil{rkind=PRow}       = parens empty

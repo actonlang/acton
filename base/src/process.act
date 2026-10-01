@@ -117,8 +117,8 @@ actor RunProcess(cap: ProcessCap,
                  cmd: list[str],
                  on_exit: action(Process, int, int, bytes, bytes) -> None,
                  on_error: action(Process, str) -> None,
-                 workdir: ?str,
-                 env: ?dict[str, str],
+                 workdir: ?str=None,
+                 env: ?dict[str, str]=None,
                  timeout: ?float=None):
     """Run a process and wait for it to finish
     """

@@ -1,0 +1,15 @@
+import origin as source
+
+local_answer = 41
+
+def from_local(x: int=local_answer + 1) -> int:
+    return x
+
+def from_import(x: int=source.answer + 2) -> int:
+    return x
+
+def boolean_default(x: bool=True) -> bool:
+    return x
+
+def generic_default[T(Number)](x: T=1) -> T:
+    return x

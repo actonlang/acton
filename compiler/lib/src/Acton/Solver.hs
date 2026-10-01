@@ -529,6 +529,7 @@ instance OptVars Type where
     optvars (TFun _ fx p k t)           = optvars [p, k, t]
     optvars (TTuple _ p k)              = optvars [p, k]
     optvars (TRow _ _ _ t r)            = optvars [t, r]
+    optvars (TDefRow _ _ _ t _ r)       = optvars [t, r]
     optvars (TStar _ _ r)               = optvars r
     optvars _                           = []
 
@@ -700,6 +701,11 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
   where select (TRow _ _ n' t r)
+          | n == n'                         = do w' <- newWitness
+                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
+                                                 reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
+          | otherwise                       = select r
+        select (TDefRow _ _ n' t _ r)
           | n == n'                         = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
@@ -953,6 +959,12 @@ castpos env info (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
                                             = do --traceM (" ## castpos A " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,ts) <- castpos env info r1 r2
                                                  return (Cast info env t1 t2 : cs, ts)
+castpos env info (TDefRow _ _ _ t1 _ r1) (TRow _ _ _ t2 r2)
+                                            = castposEntry env info t1 r1 t2 r2
+castpos env info (TRow _ _ _ t1 r1) (TDefRow _ _ _ t2 _ r2)
+                                            = castposEntry env info t1 r1 t2 r2
+castpos env info (TDefRow _ _ _ t1 _ r1) (TDefRow _ _ _ t2 _ r2)
+                                            = castposEntry env info t1 r1 t2 r2
 castpos env info (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## castpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
                                                  return ([Cast info env (tTupleP r1) (tTupleP r2)], [])
@@ -966,20 +978,28 @@ castpos env info r1                 (TStar _ _ r2)
                                             = do --traceM (" ## castpos E " ++ prstr r1 ++ " ~ " ++ prstr r2)
                                                  castpos env info r1 r2
 
-castpos env info r1@TNil{}          r@(TRow _ _ _ t2 r2)
-  | TOpt{} <- t2                            = do --traceM (" ## castpos F Opt ~ " ++ prstr t2)
-                                                 castpos env info r1 r2
-  | otherwise                               = do --traceM (" ## castpos G Nil ~ " ++ prstr r)
+castpos env info r1@TNil{}          r@TRow{}
+                                            = do --traceM (" ## castpos G Nil ~ " ++ prstr r)
                                                  posElemNotFound0 env True (Cast info env r1 r) nWild
+castpos env info r1@TNil{}          (TDefRow _ _ _ _ _ r2)
+                                            = castpos env info r1 r2
 castpos env info (TRow _ _ _ t1 r1) r2@TNil{}
                                             = do --traceM (" ## castpos H " ++ prstr t1)
                                                  (cs,ts) <- castpos env info r1 r2
                                                  return (cs, t1 : ts)
+castpos env info (TDefRow _ _ _ t1 _ r1) r2@TNil{}
+                                            = do (cs,ts) <- castpos env info r1 r2
+                                                 return (cs, t1 : ts)
+
+castposEntry env info t1 r1 t2 r2   = do
+                                             (cs,ts) <- castpos env info r1 r2
+                                             return (Cast info env t1 t2 : cs, ts)
 
 
 castkwd0                                    :: Env -> ErrInfo -> [Type] -> KwdRow -> KwdRow -> TypeM Constraints
 castkwd0 env info [] r1 r2                  = castkwd env info r1 r2
-castkwd0 env info (t1:ts) r1 (TRow _ _ n t2 r2)
+castkwd0 env info (t1:ts) r1 row
+  | Just (n,t2,_,r2) <- rowEntryView row
                                             = do --traceM (" ## castkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  cs <- castkwd0 env info ts r1 r2
                                                  return (Cast info env t1 t2 : cs)
@@ -990,12 +1010,15 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
                                                  r2 <- usubst (tUni tv)
                                                  castkwd env info r1 r2
   where unif TUni{}                         = error "INTERNAL ERROR: castkwd"
-        unif (TRow _ _ n t r)
-          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## castkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr tv)
-                                                 t2 <- newUnivar env
-                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
-                                                 unify env info (tUni tv) r2
+        unif row
+          | Just (n,t,md,r) <- rowEntryView row
+                                            = if tv `elem` ufree r
+                                                then conflictingRow tv
+                                                else do t2 <- newUnivar env
+                                                        tail <- newUnivarOfKind KRow env
+                                                        let r2 = maybe (tRow KRow n t2 tail)
+                                                                       (\d -> tDefRow KRow n t2 d tail) md
+                                                        unify env info (tUni tv) r2
         unif (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## castkwd Star - Var: " ++ prstr (tStar KRow r) ++ " = " ++ prstr tv)
@@ -1005,25 +1028,8 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
                                                  r2 <- pure $ tNil KRow
                                                  unify env info (tUni tv) r2
 
-castkwd env info r1 (TRow _ _ n2 t2 r2)     = do (t1,r1') <- pick r1
-                                                 r2 <- usubst r2
-                                                 cs <- castkwd env info r1' r2
-                                                 return (Cast info env t1 t2 : cs)
-  where pick (TUni _ tv)
-          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## castkwd Var - Row: " ++ prstr (tUni tv) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
-                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
-                                                 unify env info (tUni tv) r1
-                                                 pick r1
-        pick (TRow _ _ n t r)
-          | n == n2                         = do --traceM (" ## castkwd Row - Row: " ++ prstr (tRow KRow n t r) ++ " = " ++ prstr (tRow KRow n2 t2 r2))
-                                                 return (t, r)
-          | otherwise                       = do --traceM (" ## castkwd Row - Row: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 kwdNotFound0 env info n2
-        pick (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Row: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 kwdNotFound0 env info n2
-        pick TNil{}                         = do --traceM (" ## castkwd None - Row: " ++ prstr (tNil KRow) ++ " ≠ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 kwdNotFound0 env info n2
+castkwd env info r1 (TRow _ _ n2 t2 r2)     = castkwdRow env info r1 n2 t2 False r2
+castkwd env info r1 (TDefRow _ _ n2 t2 _ r2)= castkwdRow env info r1 n2 t2 True r2
 
 castkwd env info r1 (TStar _ _ r2)          = match r1
   where match (TUni _ tv)
@@ -1032,8 +1038,9 @@ castkwd env info r1 (TStar _ _ r2)          = match r1
                                                  r1 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify env info (tUni tv) r1
                                                  match r1
-        match (TRow _ _ n t r)              = do --traceM (" ## castkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tStar KRow r2))
-                                                 kwdUnexpected info n
+        match row
+          | Just (n,_,_,_) <- rowEntryView row
+                                            = kwdUnexpected info n
         match r1@(TStar _ _ r)
           | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## castkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " = " ++ prstr (tStar KRow r2))
                                                  unify env info r r2
@@ -1052,10 +1059,29 @@ castkwd env info r1 r2@TNil{}               = term r1
                                                  term (tNil KRow)
         term (TNil _ _)                     = do --traceM (" ## castkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " = " ++ prstr (tNil KRow))
                                                  return []
-        term (TRow _ _ n t r)               = do --traceM (" ## castkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " ≠ " ++ prstr (tNil KRow))
-                                                 kwdUnexpected info n
+        term row
+          | Just (n,_,_,_) <- rowEntryView row
+                                            = kwdUnexpected info n
         term (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tNil KRow))
                                                  noRed0 env (Cast info env r1 r2)
+
+castkwdRow env info r1 n2 t2 optional r2
+                                            = do (t1,r1') <- pick r1
+                                                 r2 <- usubst r2
+                                                 cs <- castkwd env info r1' r2
+                                                 return (Cast info env t1 t2 : cs)
+  where pick (TUni _ tv)
+          | tv `elem` ufree r2              = conflictingRow tv
+          | otherwise                       = do r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
+                                                 unify env info (tUni tv) r1
+                                                 pick r1
+        pick row
+          | Just (n,t,_,r) <- rowEntryView row
+                                            = if n == n2 then return (t,r) else kwdNotFound0 env info n2
+        pick (TStar _ _ _)                  = kwdNotFound0 env info n2
+        pick TNil{}
+          | optional                       = return (t2, r2)
+          | otherwise                      = kwdNotFound0 env info n2
 
 
 
@@ -1153,6 +1179,7 @@ sub' env info eq w t1 t2                    = do cast env info t1 t2
 
 
 rowTail (TRow _ _ _ _ r)                    = rowTail r
+rowTail (TDefRow _ _ _ _ _ r)               = rowTail r
 rowTail r                                   = r
 
 varTails                                    = all (isUnivar . rowTail)
@@ -1160,6 +1187,9 @@ varTails                                    = all (isUnivar . rowTail)
 rowShape env (TRow _ k n t r)               = do t' <- newUnivar env
                                                  r' <- rowShape env r
                                                  return (tRow k n t' r')
+rowShape env (TDefRow _ k n t d r)          = do t' <- newUnivar env
+                                                 r' <- rowShape env r
+                                                 return (tDefRow k n t' d r')
 rowShape env (TStar _ k r)                  = do r' <- rowShape env r
                                                  return (tStar k r')
 rowShape env r                              = return r
@@ -1180,10 +1210,13 @@ subpos env info f i r1             (TUni _ tv)
                                                  subpos env info f i r1 r2
 
 subpos env info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
-                                            = do --traceM (" ## subpos A " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 (cs,as,es) <- subpos env info f (i+1) r1 r2
-                                                 w <- newWitness
-                                                 return (Sub info env w t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
+                                            = subposEntry env info f i t1 r1 t2 r2
+subpos env info f i (TDefRow _ _ _ t1 _ r1) (TRow _ _ _ t2 r2)
+                                            = subposEntry env info f i t1 r1 t2 r2
+subpos env info f i (TRow _ _ _ t1 r1) (TDefRow _ _ _ t2 _ r2)
+                                            = subposEntry env info f i t1 r1 t2 r2
+subpos env info f i (TDefRow _ _ _ t1 _ r1) (TDefRow _ _ _ t2 _ r2)
+                                            = subposEntry env info f i t1 r1 t2 r2
 subpos env info f i (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## subpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
                                                  w <- newWitness
@@ -1199,23 +1232,34 @@ subpos env info f i r1                (TStar _ _ r2)
                                                  (cs,as,es) <- subpos env info f i r1 r2
                                                  return (cs, PosStar (eTupleP as), es)
 
-subpos env info f i r1@TNil{}          r@(TRow _ _ _ t2 r2)
-  | TOpt{} <- t2                            = do --traceM (" ## subpos F Opt ~ " ++ prstr t2)
-                                                 (cs,as,es) <- subpos env info f i r1 r2
-                                                 return (cs, PosArg eNone as, es)
-  | otherwise                               = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
+subpos env info f i r1@TNil{}          r@TRow{}
+                                            = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
                                                  posElemNotFound0 env True (Cast info env r1 r) nWild
+subpos env info f i r1@TNil{}          r@(TDefRow _ _ _ _ d r2)
+                                            = do (cs,as,es) <- subpos env info f i r1 r2
+                                                 case defaultExpr d of
+                                                   Just e  -> return (cs, PosArg e as, es)
+                                                   Nothing -> notYet (loc r) "Calling a first-class function with a dynamic default"
 subpos env info f i (TRow _ _ _ t1 r1) r2@TNil{}
                                             = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
                                                  (cs,as,es) <- subpos env info f (i+1) r1 r2
                                                  return (cs, as, (f i, t1) : es)
+subpos env info f i (TDefRow _ _ _ t1 _ r1) r2@TNil{}
+                                            = do (cs,as,es) <- subpos env info f (i+1) r1 r2
+                                                 return (cs, as, (f i, t1) : es)
+
+subposEntry env info f i t1 r1 t2 r2   = do
+                                             (cs,as,es) <- subpos env info f (i+1) r1 r2
+                                             w <- newWitness
+                                             return (Sub info env w t1 t2 : cs, PosArg (eCallVar w [f i]) as, es)
 
 
 -----------------------
 
 subkwd0                                     :: Env -> ErrInfo -> (Name -> Expr) -> [(Expr,Type)] -> KwdRow -> KwdRow -> TypeM (Constraints, KwdArg)
 subkwd0 env info f [] r1 r2                 = subkwd env info f [] r1 r2
-subkwd0 env info f ((e,t1):es) r1 (TRow _ _ n t2 r2)
+subkwd0 env info f ((e,t1):es) r1 row
+  | Just (n,t2,_,r2) <- rowEntryView row
                                             = do --traceM (" ## subkwd0 extra pos for " ++ prstr n ++ ": " ++ prstr t1 ++ " < " ++ prstr t2)
                                                  (cs,as) <- subkwd0 env info f es r1 r2
                                                  w <- newWitness
@@ -1227,14 +1271,17 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
                                                  r2 <- usubst (tUni tv)
                                                  subkwd env info f seen r1 r2
   where unif f seen TUni{}                  = error "INTERNAL ERROR: subkwd"
-        unif f seen (TRow _ _ n t r)
-          | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 unif f (seen\\[n]) r
-          | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## subkwd Row - Var: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
-                                                 t2 <- newUnivar env
-                                                 r2 <- tRow KRow n t2 <$> newUnivarOfKind KRow env
-                                                 unify env info (tUni tv) r2
+        unif f seen row
+          | Just (n,t,md,r) <- rowEntryView row
+                                            = if n `elem` seen
+                                                then unif f (seen\\[n]) r
+                                                else if tv `elem` ufree r
+                                                  then conflictingRow tv
+                                                  else do t2 <- newUnivar env
+                                                          tail <- newUnivarOfKind KRow env
+                                                          let r2 = maybe (tRow KRow n t2 tail)
+                                                                         (\d -> tDefRow KRow n t2 d tail) md
+                                                          unify env info (tUni tv) r2
         unif f seen (TStar _ _ r)
           | tv `elem` ufree r               = conflictingRow tv                     -- use rowTail?
           | otherwise                       = do --traceM (" ## subkwd Star - Var: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr tv)
@@ -1245,30 +1292,9 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
                                                  unify env info (tUni tv) r2
 
 subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
-                                            = do (cs1,e) <- pick f seen r1
-                                                 r1 <- usubst r1
-                                                 r2 <- usubst r2
-                                                 (cs2,as) <- subkwd env info f (n2:seen) r1 r2
-                                                 return (cs1++cs2, KwdArg n2 e as)
-  where pick f seen (TUni _ tv)
-          | tv `elem` ufree r2              = conflictingRow tv                     -- use rowTail?
-          | otherwise                       = do --traceM (" ## subkwd Var - Row: " ++ prstr (tVar tv) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
-                                                 unify env info (tUni tv) r1
-                                                 pick f seen r1
-        pick f seen (TRow _ _ n t r)
-          | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 pick f (seen\\[n]) r
-          | n /= n2                         = pick f seen r
-          | otherwise                       = do --traceM (" ## subkwd Row! - Row: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 w <- newWitness
-                                                 return ([Sub info env w t t2], eCallVar w [f n])
-        pick f seen (TStar _ _ r)           = do --traceM (" ## subkwd Star - Row: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 pick (eDot (f attrKW)) seen r
-        pick f seen (TNil _ _)
-          | TOpt{} <- t2                    = do --traceM (" ## subkwd None - Row: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tRow KRow n2 t2 r2))
-                                                 return ([], eNone)
-          | otherwise                       = kwdNotFound0 env info n2
+                                            = subkwdRow env info f seen r1 n2 t2 Nothing r2
+subkwd env info f seen r1 (TDefRow _ _ n2 t2 d r2)
+                                            = subkwdRow env info f seen r1 n2 t2 (Just d) r2
 
 subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
@@ -1278,12 +1304,12 @@ subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  r1 <- tStar KRow <$> newUnivarOfKind KRow env
                                                  unify env info (tUni tv) r1
                                                  match f seen r1
-        match f seen r1@(TRow _ _ n t r)
-          | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 match f (seen\\[n]) r
-          | otherwise                       = do --traceM (" ## subkwd Row - Star: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
-                                                 (cs,as) <- subkwd env info f seen r1 r2
-                                                 return (cs, eTupleK as)
+        match f seen r1
+          | Just (n,t,_,r) <- rowEntryView r1
+                                            = if n `elem` seen
+                                                then match f (seen\\[n]) r
+                                                else do (cs,as) <- subkwd env info f seen r1 r2
+                                                        return (cs, eTupleK as)
         match f seen r1@(TStar _ _ r)
           | TUni _ v <- r, TUni _ v2 <- r2  = do --traceM (" ## subkwd StarVar - StarVar: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tStar KRow r2))
                                                  unify env info r r2
@@ -1302,15 +1328,47 @@ subkwd env info f seen r1 TNil{}            = term f seen r1
                                                  r1 <- pure $ tNil KRow
                                                  unify env info (tUni tv) r1
                                                  term f seen (tNil KRow)
-        term f seen (TRow _ _ n t r)
-          | n `elem` seen                   = do --traceM (" ## subkwd (Row) - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
-                                                 term f (seen\\[n]) r
-          | otherwise                       = do --traceM (" ## subkwd Row - Nil: " ++ prstr (tRow KRow n t r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
-                                                 kwdUnexpected info n
+        term f seen row
+          | Just (n,t,_,r) <- rowEntryView row
+                                            = if n `elem` seen
+                                                then term f (seen\\[n]) r
+                                                else kwdUnexpected info n
         term f seen (TStar _ _ r)           = do --traceM (" ## subkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  term f seen r
         term f seen (TNil _ _)              = do --traceM (" ## subkwd Nil - Nil: " ++ prstr (tNil KRow) ++ " [" ++ prstrs seen ++ "] ≈ " ++ prstr (tNil KRow))
                                                  return ([], KwdNil)
+
+subkwdRow env info f seen r1 n2 t2 mbd r2
+                                            = do (cs1,e) <- pick f seen r1
+                                                 r1 <- usubst r1
+                                                 r2 <- usubst r2
+                                                 (cs2,as) <- subkwd env info f (n2:seen) r1 r2
+                                                 return (cs1++cs2, KwdArg n2 e as)
+  where pick f seen (TUni _ tv)
+          | tv `elem` ufree r2              = conflictingRow tv
+          | otherwise                       = do tail <- newUnivarOfKind KRow env
+                                                 let r1 = maybe (tRow KRow n2 t2 tail)
+                                                                (\d -> tDefRow KRow n2 t2 d tail) mbd
+                                                 unify env info (tUni tv) r1
+                                                 pick f seen r1
+        pick f seen row
+          | Just (n,t,_,r) <- rowEntryView row
+                                            = if n `elem` seen
+                                                then pick f (seen\\[n]) r
+                                                else if n /= n2
+                                                  then pick f seen r
+                                                  else do w <- newWitness
+                                                          return ([Sub info env w t t2], eCallVar w [f n])
+        pick f seen (TStar _ _ r)           = pick (eDot (f attrKW)) seen r
+        pick f seen (TNil _ _)
+          | Just d <- mbd                   = case defaultExpr d of
+                                                 Just e  -> return ([], e)
+                                                 Nothing -> notYet (loc n2) "Calling a first-class function with a dynamic default"
+          | otherwise                       = kwdNotFound0 env info n2
+
+rowEntryView (TRow _ _ n t r)          = Just (n,t,Nothing,r)
+rowEntryView (TDefRow _ _ n t d r)     = Just (n,t,Just d,r)
+rowEntryView _                         = Nothing
 
 
 {-
@@ -1626,6 +1684,7 @@ instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> i
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t
 instwild env _ (TCon l c)               = TCon l <$> instwildcon env c
 instwild env _ (TRow l k n t r)         = TRow l k n <$> instwild env KType t <*> instwild env k r
+instwild env _ (TDefRow l k n t d r)    = TDefRow l k n <$> instwild env KType t <*> pure d <*> instwild env k r
 instwild env _ (TStar l k r)            = TStar l k <$> instwild env k r
 instwild env k t                        = return t
 

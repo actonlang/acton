@@ -285,24 +285,24 @@ struct B_MutIndexedD_array B_MutIndexedD_arrayD_intG_instance = {
     &B_MutIndexedD_arrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
-    &B_ArrayElementD_intG_instance
+    (B_ArrayElement)&B_ArrayElementD_intG_instance
 };
 struct B_MutIndexedD_array B_MutIndexedD_arrayD_floatG_instance = {
     &B_MutIndexedD_arrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance,
-    &B_ArrayElementD_floatG_instance
+    (B_ArrayElement)&B_ArrayElementD_floatG_instance
 };
 struct B_ContainerD_array B_ContainerD_arrayD_intG_instance = {
     &B_ContainerD_arrayG_methods,
     (B_Eq)&B_OrdD_intG_instance,
-    &B_ArrayElementD_intG_instance,
+    (B_ArrayElement)&B_ArrayElementD_intG_instance,
     (B_Eq)&B_OrdD_intG_instance
 };
 struct B_ContainerD_array B_ContainerD_arrayD_floatG_instance = {
     &B_ContainerD_arrayG_methods,
     (B_Eq)&B_OrdD_floatG_instance,
-    &B_ArrayElementD_floatG_instance,
+    (B_ArrayElement)&B_ArrayElementD_floatG_instance,
     (B_Eq)&B_OrdD_floatG_instance
 };
 struct B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_instance = {

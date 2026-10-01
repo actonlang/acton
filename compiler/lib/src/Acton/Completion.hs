@@ -544,16 +544,28 @@ unsnoc [] = Nothing
 unsnoc xs = Just (init xs, last xs)
 
 signatureParameters :: S.Type -> S.Type -> [SignatureParameter]
-signatureParameters pos kw =
-  zipWith positional [1..] (positionalTypes pos) ++ keywordParameters kw
+signatureParameters pos kw = positionalParameters 1 pos ++ keywordParameters kw
   where
-    positional ix typ =
-      SignatureParameter ("arg" ++ show (ix :: Int) ++ ": " ++ displayType typ)
+    positionalParameters ix row =
+      case row of
+        S.TRow _ S.PRow _ typ rest ->
+          positional ix typ Nothing : positionalParameters (ix + 1) rest
+        S.TDefRow _ S.PRow _ typ d rest ->
+          positional ix typ (S.defaultExpr d) : positionalParameters (ix + 1) rest
+        S.TStar _ S.PRow rest ->
+          [SignatureParameter ("*args: " ++ displayType (S.tTupleP rest))]
+        _ -> []
+
+    positional ix typ def =
+      SignatureParameter ("arg" ++ show (ix :: Int) ++ ": " ++ displayType typ ++ displayDefault def)
+
+    displayDefault = maybe "" ((" = " ++) . prstr)
 
 positionalTypes :: S.Type -> [S.Type]
 positionalTypes row =
   case row of
     S.TRow _ S.PRow _ typ rest -> typ : positionalTypes rest
+    S.TDefRow _ S.PRow _ typ _ rest -> typ : positionalTypes rest
     S.TStar _ S.PRow rest -> [S.tTupleP rest]
     _ -> []
 
@@ -562,6 +574,9 @@ keywordParameters row =
   case row of
     S.TRow _ S.KRow name typ rest ->
       SignatureParameter (S.rawstr name ++ ": " ++ displayType typ) : keywordParameters rest
+    S.TDefRow _ S.KRow name typ d rest ->
+      SignatureParameter (S.rawstr name ++ ": " ++ displayType typ ++
+                          maybe "" ((" = " ++) . prstr) (S.defaultExpr d)) : keywordParameters rest
     S.TStar _ S.KRow rest ->
       [SignatureParameter ("**kwargs: " ++ displayType (S.tTupleK rest))]
     _ -> []
@@ -570,6 +585,8 @@ keywordParameterRows :: S.Type -> [KeywordParameter]
 keywordParameterRows row =
   case row of
     S.TRow _ S.KRow name typ rest ->
+      KeywordParameter (S.rawstr name) typ : keywordParameterRows rest
+    S.TDefRow _ S.KRow name typ _ rest ->
       KeywordParameter (S.rawstr name) typ : keywordParameterRows rest
     _ -> []
 
@@ -728,12 +745,18 @@ positionalType ix row =
     S.TRow _ S.PRow _ typ rest
       | ix == 0 -> Just typ
       | otherwise -> positionalType (ix - 1) rest
+    S.TDefRow _ S.PRow _ typ _ rest
+      | ix == 0 -> Just typ
+      | otherwise -> positionalType (ix - 1) rest
     _ -> Nothing
 
 keywordType :: S.Name -> S.Type -> Maybe S.Type
 keywordType name row =
   case row of
     S.TRow _ S.KRow n typ rest
+      | S.rawstr n == S.rawstr name -> Just typ
+      | otherwise -> keywordType name rest
+    S.TDefRow _ S.KRow n typ _ rest
       | S.rawstr n == S.rawstr name -> Just typ
       | otherwise -> keywordType name rest
     _ -> Nothing
