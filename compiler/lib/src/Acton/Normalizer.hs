@@ -542,7 +542,8 @@ instance Norm Expr where
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv env ts)
-    norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
+    norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env1 e
+      where env1                    = define (envOf ss) env
     norm env (Dot l (Var l' x) n)
       | NClass{} <- findQName x env = pure $ Dot l (Var l' x) n
     norm env (Dot l e n)
@@ -591,10 +592,14 @@ eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
 eta e                               = e
 
 nargs (TRow _ _ _ _ r)              = 1 + nargs r
+nargs (TDefRow _ _ _ _ _ r)         = 1 + nargs r
 nargs (TStar _ _ _)                 = 1
 nargs (TNil _ _)                    = 0
 
 narg n (TRow _ _ n' _ r)
+  | n == n'                         = 0
+  | otherwise                       = 1 + narg n r
+narg n (TDefRow _ _ n' _ _ r)
   | n == n'                         = 0
   | otherwise                       = 1 + narg n r
 narg n (TStar _ _ _)
@@ -616,12 +621,12 @@ instance Norm Handler where
       where env1                    = define (envOf ex) env
 
 instance Norm PosPar where
-    norm env (PosPar n t e p)       = PosPar n (conv env t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) p
+    norm env (PosPar n t _ p)       = PosPar n (conv env t) Nothing <$> norm (define [(n,NVar $ fromJust t)] env) p
     norm env (PosSTAR n t)          = return $ PosSTAR n (conv env t)
     norm env PosNIL                 = return PosNIL
 
 instance Norm KwdPar where
-    norm env (KwdPar n t e k)       = KwdPar n (conv env t) <$> norm env e <*> norm (define [(n,NVar $ fromJust t)] env) k
+    norm env (KwdPar n t _ k)       = KwdPar n (conv env t) Nothing <$> norm (define [(n,NVar $ fromJust t)] env) k
     norm env (KwdSTAR n t)          = return $ KwdSTAR n (conv env t)
     norm env KwdNIL                 = return KwdNIL
 
@@ -717,6 +722,7 @@ instance Conv Type where
     conv env (TTuple l p k)         = TTuple l (joinRow env p k) kwdNil
     conv env (TOpt l t)             = TOpt l (conv env t)
     conv env (TRow l k n t r)       = TRow l PRow nWild (conv env t) (conv env r)
+    conv env (TDefRow l k n t _ r)  = TRow l PRow nWild (conv env t) (conv env r)
     conv env (TStar l k r)          = TRow l PRow nWild (TTuple l (conv env r) kwdNil) posNil
     conv env (TNil l k)             = TNil l PRow
     conv env t                      = t
@@ -726,6 +732,7 @@ instance Conv TCon where
 
 -- Must mirror Syntax.tupleComponents, which the solver uses to derive tuple witnesses.
 joinRow env (TRow l k n t p) r      = TRow l PRow nWild (conv env t) (joinRow env p r)
+joinRow env (TDefRow l k n t _ p) r = TRow l PRow nWild (conv env t) (joinRow env p r)
 joinRow env (TStar l k p) r         = TRow l PRow nWild (TTuple l (conv env p) kwdNil) (conv env r)
 joinRow env (TNil _ _) r            = conv env r
 -- To be removed:

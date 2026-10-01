@@ -181,8 +181,8 @@ static $WORD B_list_base_pop(B_list_base lst, B_int i) {
     return res;
 }
 
-static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, B_int start, B_int stop) {
-    int strt = start ? fromB_int(start) : 0;
+static int64_t B_list_base_index(B_list_base self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
+    int64_t strt = start;
     if (strt < 0)
         RAISE_EXC(&B_list_negative_start_error);
     if (strt > self->length)
@@ -437,7 +437,7 @@ $WORD B_listD_pop(B_list self, B_int i) {
     return B_list_base_pop((B_list_base)self, i);
 }
 
-int64_t B_listD_index(B_list self, B_Eq eqwit, $WORD val, B_int start, B_int stop) {
+int64_t B_listD_index(B_list self, B_Eq eqwit, $WORD val, int64_t start, B_int stop) {
     return B_list_base_index((B_list_base)self, eqwit, val, start, stop);
 }
 

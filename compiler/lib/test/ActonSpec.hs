@@ -478,6 +478,25 @@ main = do
             infoB = I.NDef (S.TSchema (Loc 50 60) [] (locatedType (Loc 70 80))) S.NoDec (Just "new docs")
         publicHashFor infoA `shouldBe` publicHashFor infoB
 
+      it "includes a visible default expression in the public function type" $ do
+        let defaultType source checked =
+              S.tFun S.fxPure
+                (S.tDefRow S.PRow (S.name "x") Builtin.tInt
+                  (S.DfltExpr (S.eInt source) (S.eInt checked) Nothing) S.posNil)
+                S.kwdNil
+                Builtin.tInt
+            rendered = Pretty.print (defaultType 3 99)
+        rendered `shouldSatisfy` isInfixOf "= 3"
+        rendered `shouldSatisfy` (not . isInfixOf "99")
+
+      it "changes the public hash when a default expression changes" $ do
+        let info n =
+              let d = S.DfltExpr (S.eInt n) (S.eInt n) Nothing
+                  t = S.tFun S.fxPure (S.tDefRow S.PRow (S.name "x") Builtin.tInt d S.posNil)
+                                      S.kwdNil Builtin.tInt
+              in I.NDef (S.tSchema [] t) S.NoDec Nothing
+        publicHashFor (info 3) `shouldNotBe` publicHashFor (info 4)
+
       it "keeps source AST hashes independent of source locations" $ do
         sourceHashFor (hashDecl (Loc 1 3) (Just "doc")) `shouldBe`
           sourceHashFor (hashDecl (Loc 100 130) (Just "doc"))
@@ -2258,8 +2277,8 @@ main = do
         , "matrixQ_MutIndexedD_matrixG_new"
         ]
       testCodeGenContains env0 "raw_bitarray"
-        [ "B_bitarrayG_new(n, toB_bool(initial))"
-        , "B_bitarrayG_new(n, B_None)"
+        [ "B_bitarrayG_new(n, initial)"
+        , "B_bitarrayG_new(n, false)"
         , "$bitarrayD_U__getitem__(xs, i)"
         , "$bitarrayD_U__setitem__(xs, i, value)"
         , "$bitarrayD_U__setitem__(xs, i, (!$bitarrayD_U__getitem__(xs, i)))"

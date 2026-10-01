@@ -352,7 +352,7 @@ def parse_response(i: bytes, log: logging.Logger) -> (?Response, bytes):
     return None, i
 
 
-actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler):
+actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, log_handler: ?logging.Handler=None):
     """Server serves a single client connection"""
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(Server, Request, action(int, dict[str, str], str) -> None) -> None = None
@@ -443,7 +443,7 @@ actor Server(conn: net.TCPListenConnection, on_accept: action(Server) -> None, l
             conn.close()
 
 
-actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler):
+actor TLSServer(conn: net.TLSListenConnection, on_accept: action(TLSServer) -> None, log_handler: ?logging.Handler=None):
     """Server serves a single TLS client connection"""
     _log = logging.Logger(log_handler)
     var on_request_cb: ?action(TLSServer, Request, action(int, dict[str, str], str) -> None) -> None = None
@@ -579,7 +579,7 @@ actor TLSListener(cap: net.TCPListenCap, address: str, port: int, cert_pem: byte
 
 
 # TODO: change port to u16, when u16 has a sub-type relationship to int
-actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler):
+actor Client(cap: net.TCPConnectCap, address: str, on_connect: action(Client) -> None, on_error: action(Client, str) -> None, scheme: str="https", port: ?int=None, tls_verify: bool=True, log_handler: ?logging.Handler=None):
     """HTTP(S) Client
 
     scheme is either 'http' or 'https', the default is 'https'

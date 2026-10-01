@@ -164,11 +164,20 @@ instance ConvTWild Type where
     convTWild env (TOpt l t)        = TOpt l <$> convTWild env t
     convTWild env (TCon l c)        = TCon l <$> convTWild env c
     convTWild env (TRow l k n t r)  = TRow l k n <$> convTWild env t <*> convTWild env r
+    convTWild env (TDefRow l k n t d r)
+                                    = TDefRow l k n <$> convTWild env t <*> convTWild env d <*> convTWild env r
     convTWild env (TStar l k r)     = TStar l k <$> convTWild env r
     convTWild env t                 = return t
 
 instance ConvTWild TCon where
     convTWild env (TC n ts)         = TC n <$> mapM (convTWild env) ts
+
+instance ConvTWild DefaultSpec where
+    convTWild env (DfltExpr e v r)  = DfltExpr <$> convTWild env e <*> convTWild env v <*> pure r
+    convTWild _ DfltDynamic         = pure DfltDynamic
+
+instance ConvTWild Expr where
+    convTWild _ e                   = pure e
 
 instance ConvTWild QBinds where
     convTWild env q                 = mapM instq q
@@ -222,6 +231,8 @@ instance ConvPExist Type where
     convPExist env (TTuple l p k)   = TTuple l <$> convPExist env p <*> convPExist env k
     convPExist env (TOpt l t)       = TOpt l <$> convPExist env t
     convPExist env (TRow l k n t r) = TRow l k n <$> convPExist env t <*> convPExist env r
+    convPExist env (TDefRow l k n t d r)
+                                    = TDefRow l k n <$> convPExist env t <*> pure d <*> convPExist env r
     convPExist env (TStar l k r)    = TStar l k <$> convPExist env r
     convPExist env t                = return t
 
@@ -550,6 +561,9 @@ instance KInfer Type where
     kinfer env (TRow l k n t r)     = do t <- kexp KType env t
                                          r <- kexp k env r
                                          return (k, TRow l k n t r)
+    kinfer env (TDefRow l k n t d r)= do t <- kexp KType env t
+                                         r <- kexp k env r
+                                         return (k, TDefRow l k n t d r)
     kinfer env (TStar l k r)        = do r <- kexp k env r
                                          return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
@@ -637,8 +651,13 @@ instance KSubst Type where
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
     ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
+    ksubst g (TDefRow l k n t d r)  = TDefRow l k n <$> ksubst g t <*> ksubst g d <*> ksubst g r
     ksubst g (TStar l k r)          = TStar l k <$> ksubst g r
     ksubst g (TFX l fx)             = return $ TFX l fx
+
+instance KSubst DefaultSpec where
+    ksubst g (DfltExpr e v r)       = DfltExpr <$> ksubst g e <*> ksubst g v <*> pure r
+    ksubst _ DfltDynamic            = pure DfltDynamic
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e

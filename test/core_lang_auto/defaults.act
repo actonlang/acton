@@ -1,6 +1,11 @@
 def f(x, y='world'):
     return x + ', ' + y
 
+# A nullable parameter and a parameter with a default are independent ideas.
+# In particular, an explicitly supplied None must not request the default.
+def optional_default(x: ?int=3) -> ?int:
+    return x
+
 class Foo(object):
     def __init__(self, x, y='world'):
         self.x = x
@@ -17,26 +22,25 @@ class Bar(object):
         return x + ', ' + y
 
 actor main(env):
+    optional_alias = optional_default
+    if optional_default() != 3 or optional_default(None) is not None or optional_alias() != 3:
+        print("Nullable default argument semantics failed")
+        env.exit(1)
+
     # Test function call
     out1 = f('hello')
     out2 = f('hello', 'you')
     out3 = f('hello', y='there')
     out4 = f(x='hello', y='there')
     out5 = f(y='there', x='hello')
-    out6 = f('hello', None)
     out7 = f(x='hello')
-    out8 = f(x='hello', y=None)
-    out9 = f(y=None, x='hello')
 
 #    print(out1)
 #    print(out2)
 #    print(out3)
 #    print(out4)
 #    print(out5)
-#    print(out6)
 #    print(out7)
-#    print(out8)
-#    print(out9)
 
     if out1 != "hello, world":
         print("Bad 1:", out1)
@@ -53,17 +57,8 @@ actor main(env):
     if out5 != "hello, there":
         print("Bad 5:", out5)
         env.exit(1)
-    if out6 != "hello, world":
-        print("Bad 6:", out6)
-        env.exit(1)
     if out7 != "hello, world":
         print("Bad 7:", out7)
-        env.exit(1)
-    if out8 != "hello, world":
-        print("Bad 8:", out8)
-        env.exit(1)
-    if out9 != "hello, world":
-        print("Bad 9:", out9)
         env.exit(1)
 
     # Test class init
@@ -72,20 +67,14 @@ actor main(env):
     fout3 = str(Foo('hello', y='there'))
     fout4 = str(Foo(x='hello', y='there'))
     fout5 = str(Foo(y='there', x='hello'))
-    fout6 = str(Foo('hello', None))
     fout7 = str(Foo(x='hello'))
-    fout8 = str(Foo(x='hello', y=None))
-    fout9 = str(Foo(y=None, x='hello'))
 
 #    print(fout1)
 #    print(fout2)
 #    print(fout3)
 #    print(fout4)
 #    print(fout5)
-#    print(fout6)
 #    print(fout7)
-#    print(fout8)
-#    print(fout9)
 
     if fout1 != "hello, world":
         print("Bad 1:", fout1)
@@ -102,17 +91,8 @@ actor main(env):
     if fout5 != "hello, there":
         print("Bad 5:", fout5)
         env.exit(1)
-    if fout6 != "hello, world":
-        print("Bad 6:", fout6)
-        env.exit(1)
     if fout7 != "hello, world":
         print("Bad 7:", fout7)
-        env.exit(1)
-    if fout8 != "hello, world":
-        print("Bad 8:", fout8)
-        env.exit(1)
-    if fout9 != "hello, world":
-        print("Bad 9:", fout9)
         env.exit(1)
 
     # Test class method
@@ -122,20 +102,14 @@ actor main(env):
     gout3 = b.f('hello', y='there')
     gout4 = b.f(x='hello', y='there')
     gout5 = b.f(y='there', x='hello')
-    gout6 = b.f('hello', None)
     gout7 = b.f(x='hello')
-    gout8 = b.f(x='hello', y=None)
-    gout9 = b.f(y=None, x='hello')
 
 #    print(gout1)
 #    print(gout2)
 #    print(gout3)
 #    print(gout4)
 #    print(gout5)
-#    print(gout6)
 #    print(gout7)
-#    print(gout8)
-#    print(gout9)
 
     if gout1 != "hello, world":
         print("Bad 1:", gout1)
@@ -152,17 +126,8 @@ actor main(env):
     if gout5 != "hello, there":
         print("Bad 5:", gout5)
         env.exit(1)
-    if gout6 != "hello, world":
-        print("Bad 6:", gout6)
-        env.exit(1)
     if gout7 != "hello, world":
         print("Bad 7:", gout7)
-        env.exit(1)
-    if gout8 != "hello, world":
-        print("Bad 8:", gout8)
-        env.exit(1)
-    if gout9 != "hello, world":
-        print("Bad 9:", gout9)
         env.exit(1)
 
 

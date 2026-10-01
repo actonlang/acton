@@ -34,6 +34,7 @@ module Acton.Hashing
 import qualified Acton.Env as Env
 import qualified Acton.NameInfo as I
 import qualified Acton.Names as Names
+import qualified Acton.TypeEnv as TypeEnv
 import Acton.Prim (mPrim)
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
@@ -496,9 +497,15 @@ feedType t sink = case t of
   A.TWild _           -> feedTag 117 sink
   A.TNil _ k          -> feedTag 118 sink >> feedKind k sink
   A.TRow _ k n ty row -> feedTag 119 sink >> feedKind k sink >> feedName n sink >> feedType ty sink >> feedType row sink
+  A.TDefRow _ k n ty d row
+                      -> feedTag 123 sink >> feedKind k sink >> feedName n sink >> feedType ty sink >> feedDefaultSpec d sink >> feedType row sink
   A.TStar _ k row     -> feedTag 120 sink >> feedKind k sink >> feedType row sink
   A.TFX _ fx          -> feedTag 121 sink >> feedFX fx sink
   A.TUnboxed _ ty     -> feedTag 122 sink >> feedType ty sink
+
+feedDefaultSpec :: A.DefaultSpec -> HashFeed
+feedDefaultSpec (A.DfltExpr e v ref) sink = feedTag 124 sink >> feedExpr e sink >> feedExpr v sink >> feedMaybe feedQName ref sink
+feedDefaultSpec A.DfltDynamic sink      = feedTag 125 sink
 
 feedTSchema :: A.TSchema -> HashFeed
 feedTSchema (A.TSchema _ q t) sink = feedTag 130 sink >> feedQBinds q sink >> feedType t sink
@@ -935,9 +942,20 @@ foldDepsType add t acc = case t of
   A.TWild{}           -> acc
   A.TNil{}            -> acc
   A.TRow _ _ _ ty row -> foldDepsType add row (foldDepsType add ty acc)
+  A.TDefRow _ _ _ ty d row
+                       -> foldDepsType add row (foldDepsType add ty (foldDefaultDeps add d acc))
   A.TStar _ _ row     -> foldDepsType add row acc
   A.TFX{}             -> acc
   A.TUnboxed _ ty     -> foldDepsType add ty acc
+
+-- Defaults are copied into the caller, so their definition-site references
+-- are part of the public dependency surface even before we lower them through
+-- a provider reference.  The checked value is qualified and is therefore the
+-- authoritative expression for dependency collection.
+foldDefaultDeps add (A.DfltExpr _ value ref) acc =
+  let acc' = foldl' (flip add) acc (Names.freeQ value)
+  in maybe acc' (`add` acc') ref
+foldDefaultDeps _ A.DfltDynamic acc              = acc
 
 foldDepsTVar :: (A.QName -> acc -> acc) -> A.TVar -> acc -> acc
 foldDepsTVar _ _ acc = acc
@@ -1147,26 +1165,26 @@ implItemSplitDeps mn env localNames item =
     splitDeclDirect bound decl acc = case decl of
       A.Def _ n q ps ks _ b _ fx _ ->
         let bound' =
-              Data.Set.insert n
+              addQWitnesses q $ Data.Set.insert n
                 (assignedSuite b (boundKwdPar ks (boundPosPar ps (boundList boundQBind q bound))))
         in splitTypeDirect bound' fx (splitSuiteDirect bound' b (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc)))
       A.Actor _ n q ps ks b _ ->
         let bound' =
-              Data.Set.insert n
+              addQWitnesses q $ Data.Set.insert n
                 (Data.Set.insert Names.self
                   (assignedSuite b (boundKwdPar ks (boundPosPar ps (boundList boundQBind q bound)))))
         in splitSuiteDirect bound' b (splitKwdParDirect bound' ks (splitPosParDirect bound' ps acc))
       A.Class _ n q cs b _ ->
-        let bound' = Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
+        let bound' = addQWitnesses q $ Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') cs acc)
       A.Protocol _ n q ps b _ ->
-        let bound' = Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
+        let bound' = addQWitnesses q $ Data.Set.insert n (assignedSuite b (boundList boundQBind q bound))
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps acc)
       A.Typedef _ n q t _ ->
-        let bound' = Data.Set.insert n (boundList boundQBind q bound)
+        let bound' = addQWitnesses q $ Data.Set.insert n (boundList boundQBind q bound)
         in splitTypeDirect bound' t acc
       A.Extension _ q c ps b _ ->
-        let bound' = assignedSuite b (boundList boundQBind q bound)
+        let bound' = addQWitnesses q $ assignedSuite b (boundList boundQBind q bound)
         in splitSuiteDirect bound' b (splitListInto (splitTConDirect bound') ps (splitTConDirect bound' c acc))
 
     splitBranchDirect bound (A.Branch e ss) acc =
@@ -1294,7 +1312,12 @@ implItemSplitDeps mn env localNames item =
 
     splitTSchemaDirect bound t acc =
       case t of
-        A.TSchema _ q ty -> splitTypeDirect bound ty (splitListInto (splitQBindDirect bound) q acc)
+        A.TSchema _ q ty ->
+          let bound' = addQWitnesses q bound
+          in splitTypeDirect bound' ty (splitListInto (splitQBindDirect bound) q acc)
+
+    addQWitnesses q bound =
+      foldl' (flip Data.Set.insert) bound [ w | (w,_) <- TypeEnv.qualWits env q ]
 
     splitQBindDirect bound (A.QBind _ cs) acc =
       splitListInto (splitTConDirect bound) cs acc
@@ -1314,6 +1337,13 @@ implItemSplitDeps mn env localNames item =
       A.TWild{}          -> acc
       A.TNil{}           -> acc
       A.TRow _ _ _ ty row -> splitTypeDirect bound row (splitTypeDirect bound ty acc)
+      A.TDefRow _ _ _ ty d row ->
+        let acc1 = splitTypeDirect bound ty acc
+            acc2 = case d of
+                     A.DfltExpr e v ref -> splitMaybeInto (splitQName bound) ref
+                                            (splitExprDirect bound v (splitExprDirect bound e acc1))
+                     A.DfltDynamic    -> acc1
+        in splitTypeDirect bound row acc2
       A.TStar _ _ row    -> splitTypeDirect bound row acc
       A.TFX{}            -> acc
       A.TUnboxed _ ty    -> splitTypeDirect bound ty acc

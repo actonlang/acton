@@ -77,21 +77,27 @@ derivedHead (Derived n _)           = n
 staticWitnessName (Dot _ c a)       = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
-    | m == mBuiltin                 = (Just v, [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just v, [])
 staticWitnessName (Call _ (Var _ (QName m n)) PosNil KwdNil)
-    | m == mBuiltin                 = (Just (GName m n), [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just (GName m n), [])
 staticWitnessName (Call _ (TApp _ (Var _ (GName m n)) ts) _ KwdNil)
    | m == mBuiltin,
+     not (isInternal n),
      Just key <- specialStaticKey n ts
                                     = (Just (gBuiltin (Derived n key)),[])
 staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) ts) _ KwdNil)
    | m == mBuiltin,
+     not (isInternal n),
      Just key <- specialStaticKey n ts
                                     = (Just (gBuiltin (Derived n key)),[])
 staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
-    | m == mBuiltin                 = (Just v, [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just v, [])
 staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) _) PosNil KwdNil)
-    | m == mBuiltin                 = (Just (GName m n), [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just (GName m n), [])
 staticWitnessName _                 = (Nothing, [])
 
 specialStaticKey (Derived n1 n2) [TCon _ (TC gn1 []), _]
@@ -1460,13 +1466,13 @@ genCallArg env (TUnboxed _ t) (Box _ e)
 genCallArg env (TUnboxed _ t) e
   | rawExpr env e                   = gen env e
   | otherwise                       = gen env (B.unbox t e)
-genCallArg env _ e                  = gen env e
+genCallArg env t e                  = genExp env t e
 
 -- Render one constructor argument in the representation used by generated
 -- constructors: raw for unboxable values, normal boxed generation otherwise.
 genUCallArg env t e
   | B.isUnboxable t'                = genRawExpr env e
-  | otherwise                       = gen env e
+  | otherwise                       = genExp env t e
   where t'                          = boxedRepType t
 
 -- Generate an expression as raw C when its boxed representation is unboxable.
@@ -1881,17 +1887,15 @@ dotCast env ent ts e n
         (sc, dec)                   = findAttr' env c0 n
         t                           = vsubst fullsubst $ if ent then addSelf t1 dec else t1
         t1                          = exposeMsg' (sctype sc)
-        t' sc'                      = if ent then addSelf (t1' sc') dec else t1' sc'
-        t1' sc'                     = exposeMsg' (sctype sc')
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
-        te                          = findAttrSchemas env (tcname c0)
-        gen_t
-          | null ts                 = gen env $ if ent then addSelf rt dec else rt
-          | otherwise               = case lookup n te of
-                                        Just (NDef sc' _ _) -> gen env (B.matchTypes t (sctype sc'))
-                                        Just (NSig sc' _ _) -> gen env (B.matchTypes t (t' sc'))
-                                        Just (NVar t) -> gen env t
-                                        ni  -> error ("Internal error in CodeGen.dotCast: looking for NameInfo for " ++ show n ++ ", found "++ show ni)
+        -- rtypeOf has already matched the selected method against the oldest
+        -- slot declaration, so its TUnboxed annotations describe the actual C
+        -- ABI.  Substitute method type arguments into that representation
+        -- type without recomputing the match: recomputation can misalign
+        -- witness and defaulted rows in a generic method (list.index was the
+        -- concrete failure) and unbox the neighbouring generic argument.
+        gen_t                       = gen env $ vsubst (qbound (scbind sc) `zip` ts) $
+                                                 if ent then addSelf rt dec else rt
         rt                          = exposeMsg' (B.rtypeOf env rtc n)
 
 needsPrimCallableCast (TCon _ (TC q _)) n

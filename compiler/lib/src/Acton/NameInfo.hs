@@ -151,6 +151,8 @@ stripLocsNI ni = case ni of
       TWild _           -> TWild NoLoc
       TNil _ k          -> TNil NoLoc k
       TRow _ k n ty row -> TRow NoLoc k (stripLocsName n) (stripLocsType ty) (stripLocsType row)
+      TDefRow _ k n ty d row
+                        -> TDefRow NoLoc k (stripLocsName n) (stripLocsType ty) d (stripLocsType row)
       TStar _ k row     -> TStar NoLoc k (stripLocsType row)
       TFX _ fx          -> TFX NoLoc fx
 

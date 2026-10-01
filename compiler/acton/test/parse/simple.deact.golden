@@ -2,7 +2,7 @@
 
 == deact: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 =================================================
 

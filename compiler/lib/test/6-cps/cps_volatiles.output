@@ -46,7 +46,7 @@ class main ($Actor, __builtin__.value):
             if W_main_29.__eq__(self.v, W_main_74.__fromatom__(13)):
                 (async env.exit)(W_main_74.__fromatom__(0))
             else:
-                print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), None, None, None, None)
+                print@[(__builtin__.str, __builtin__.int)](("\"Excpected 13, got\"", self.v), "\" \"", "\"\\n\"", False, False)
                 (async env.exit)(W_main_74.__fromatom__(1))
             return $R_CONTc@[None](C_cont, None)
         return compute(C_11cont, W_main_74.__fromatom__(10))
