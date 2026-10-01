@@ -118,6 +118,11 @@ staticWitnessOf env (Call _ f p KwdNil)
             n2 == nDict             = builtinStaticKey env qn
           | n1 == nSetP,
             n2 == nSetT             = builtinStaticKey env qn
+        specialStaticKey env (Derived n1 n2) [TCon _ (TC qn [])]
+          | n1 == nMutIndexed,
+            n2 == nArray            = builtinArrayStaticKey env qn
+          | n1 == nContainer,
+            n2 == nArray            = builtinArrayStaticKey env qn
         specialStaticKey _ _ _      = Nothing
 
         builtinStaticKey env qn     = case unalias env qn of
@@ -126,6 +131,13 @@ staticWitnessOf env (Call _ f p KwdNil)
                                             key `elem` [nInt, nU64, nStr, nBytes]
                                               -> Just key
                                         _ -> Nothing
+
+        builtinArrayStaticKey env qn = case unalias env qn of
+                                         GName m key
+                                           | m == mBuiltin,
+                                             key `elem` [nInt, nFloat]
+                                               -> Just key
+                                         _ -> Nothing
 staticWitnessOf _ _                 = Nothing
 
 -- Follow a super-witness path to the witness class whose method table is used.
@@ -194,10 +206,10 @@ directMethodImpl env qn n           = case findQName qn env of
                                         Just NDef{} -> True
                                         _           -> False
 
--- Statically resolved indexing on builtin containers can use a private raw
--- worker.  The public protocol method and witness table keep their boxed ABI;
--- only the direct call selected above is replaced.  rtypeOfFun then drives the
--- usual argument/result boxing for the worker's declared representation.
+-- Statically resolved operations on selected builtin containers can use a
+-- private raw worker.  The public protocol method and witness table keep their
+-- boxed ABI; only the direct call selected above is replaced.  rtypeOfFun then
+-- drives the usual argument/result boxing for the worker's representation.
 rawBuiltinMethodCall                :: BoxEnv -> Name -> PosArg -> Maybe Expr
 rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs p)
                                          case rtypeOfFun env f of
@@ -205,6 +217,15 @@ rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs
                                            _                  -> Nothing
 
 rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
+-- Reject unrelated methods before inspecting the receiver type.  Besides
+-- avoiding needless QuickType work, this is important for chained calls such
+-- as bytes.from_hex(...).hex(): a probe for hex must not try to instantiate
+-- the polymorphic bytes constructor merely to discover that hex has no raw
+-- worker.
+rawBuiltinMethod _ attr _
+  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW,
+                    containsKW, containsnotKW, setAddKW, discardKW]
+                                    = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
                                         (TCon _ (TC q [t]), n, [_, _])
@@ -214,10 +235,31 @@ rawBuiltinMethod env attr es@(recv:_)
                                             -> Just $ tApp (eQVar primUListDelItem) [t]
                                           | q == qnIList, n == getitemKW
                                             -> Just $ tApp (eQVar primUIListGetItem) [t]
+                                          | q == qnArray, t == tInt, n == getitemKW
+                                            -> Just $ eQVar primUArrayGetInt
+                                          | q == qnArray, t == tFloat, n == getitemKW
+                                            -> Just $ eQVar primUArrayGetFloat
                                         (TCon _ (TC q [t]), n, [_, _, _])
                                           | q == qnList, n == setitemKW
                                             -> Just $ tApp (eQVar primUListSetItem) [t]
+                                          | q == qnArray, t == tInt, n == setitemKW
+                                            -> Just $ eQVar primUArraySetInt
+                                          | q == qnArray, t == tFloat, n == setitemKW
+                                            -> Just $ eQVar primUArraySetFloat
+                                        (TCon _ (TC q [t]), n, [_])
+                                          | q == qnArray, n == lenKW
+                                            -> Just $ tApp (eQVar primUArrayLen) [t]
                                         (TCon _ (TC q []), n, [_, _])
+                                          | q == qnBitarray, n == getitemKW
+                                            -> Just $ eQVar primUBitarrayGetItem
+                                          | q == qnBitset, n == containsKW
+                                            -> Just $ eQVar primUBitsetContains
+                                          | q == qnBitset, n == containsnotKW
+                                            -> Just $ eQVar primUBitsetContainsNot
+                                          | q == qnBitset, n == setAddKW
+                                            -> Just $ eQVar primUBitsetAdd
+                                          | q == qnBitset, n == discardKW
+                                            -> Just $ eQVar primUBitsetDiscard
                                           | q == qnStr, n == getitemKW
                                             -> Just $ eQVar primUStrGetItem
                                           | q == qnBytes, n == getitemKW
@@ -227,10 +269,71 @@ rawBuiltinMethod env attr es@(recv:_)
                                           | q == qnBytearray, n == delitemKW
                                             -> Just $ eQVar primUBytearrayDelItem
                                         (TCon _ (TC q []), n, [_, _, _])
+                                          | q == qnBitarray, n == setitemKW
+                                            -> Just $ eQVar primUBitarraySetItem
                                           | q == qnBytearray, n == setitemKW
                                             -> Just $ eQVar primUBytearraySetItem
+                                        (TCon _ (TC q []), n, [_])
+                                          | q == qnBitarray, n == lenKW
+                                            -> Just $ eQVar primUBitarrayLen
                                         _   -> Nothing
 rawBuiltinMethod _ _ _             = Nothing
+
+-- A comma-separated matrix index is represented by a tuple throughout the
+-- language front end.  For a concrete numeric matrix, split that still
+-- syntactic tuple before CodeGen so the matrix module's concrete accessors can
+-- keep both coordinates and the element value unboxed.  An index already held
+-- in a tuple variable deliberately remains on the generic protocol path.
+matrixModule                       :: ModName
+matrixModule                        = ModName [name "matrix"]
+qnMatrix, qnMatrixGetInt, qnMatrixSetInt, qnMatrixGetFloat,
+  qnMatrixSetFloat                 :: QName
+qnMatrix                            = GName matrixModule (name "matrix")
+qnMatrixGetInt                      = GName matrixModule (name "get_int")
+qnMatrixSetInt                      = GName matrixModule (name "set_int")
+qnMatrixGetFloat                    = GName matrixModule (name "get_float")
+qnMatrixSetFloat                    = GName matrixModule (name "set_float")
+
+matrixCoordinates                  :: Expr -> Maybe (Expr, Expr)
+matrixCoordinates (Tuple _ (PosArg row (PosArg column PosNil)) KwdNil)
+                                    = Just (row, column)
+matrixCoordinates (Paren _ e)      = matrixCoordinates e
+matrixCoordinates (Box _ e)        = matrixCoordinates e
+matrixCoordinates (UnBox _ e)      = matrixCoordinates e
+matrixCoordinates _                = Nothing
+
+rawMatrixMethod                    :: BoxEnv -> Name -> [Expr]
+                                   -> Maybe (Expr, [Expr])
+rawMatrixMethod env attr es@(recv:_)
+                                    = case (unalias env (typeOf env recv), attr, es) of
+                                        (TCon _ (TC q [t]), n, [_, index])
+                                          | q == qnMatrix,
+                                            Just (row, column) <- matrixCoordinates index,
+                                            n == getitemKW,
+                                            Just f <- matrixGetAccessor t
+                                              -> Just (eQVar f, [recv, row, column])
+                                        (TCon _ (TC q [t]), n, [_, index, value])
+                                          | q == qnMatrix,
+                                            Just (row, column) <- matrixCoordinates index,
+                                            n == setitemKW,
+                                            Just f <- matrixSetAccessor t
+                                              -> Just (eQVar f, [recv, row, column, value])
+                                        _   -> Nothing
+  where matrixGetAccessor t
+          | t == tInt               = Just qnMatrixGetInt
+          | t == tFloat             = Just qnMatrixGetFloat
+          | otherwise               = Nothing
+        matrixSetAccessor t
+          | t == tInt               = Just qnMatrixSetInt
+          | t == tFloat             = Just qnMatrixSetFloat
+          | otherwise               = Nothing
+rawMatrixMethod _ _ _              = Nothing
+
+rawMatrixMethodCall                :: BoxEnv -> Name -> PosArg -> Maybe Expr
+rawMatrixMethodCall env attr p      = do (f, args) <- rawMatrixMethod env attr (posargs p)
+                                         case rtypeOfFun env f of
+                                           TFun _ _ pr _ rest -> Just $ tryBox rest $ eCallP f (fixargs env (posarg args) pr)
+                                           _                  -> Nothing
 
 -- Unboxing helpers -------------------------------------
 
@@ -657,6 +760,7 @@ instance Boxing Expr where
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
                                            | attr == fromatomKW      -> boxingFromAtom w es ts rt pr rest
+                                           | attr `elem` augopKWs    -> boxingBinop w (incr2bin attr) es ts rt pr rest
                                            | attr `elem` binopKWs    -> boxingBinop w attr es ts rt pr rest  -- rest indicates "result type", not any form of remainder
                                            | attr `elem` unopKWs     -> boxingUnop w attr es ts rt pr rest
                                            | attr `elem` eqordKWs    -> boxingCompop w attr es ts rt pr rest
@@ -666,7 +770,12 @@ instance Boxing Expr where
 --             vFree _                = False
 
       boxingDirectOrDynamic w attr p rt pr rest
-                                    = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
+        | Just _ <- rawMatrixMethod env attr (posargs p)
+                                    = do (ws,p1) <- boxing env p
+                                         case rawMatrixMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw matrix method lost during boxing"
+        | otherwise                 = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr >>= \tc -> return (sw, tc) of
                                         Just (sw, tc)
                                           | directMethodImpl env (tcname tc) attr,
                                             Just c <- rawBuiltinMethodCall env attr p
@@ -707,6 +816,18 @@ instance Boxing Expr where
       boxingCompop w attr es _ rt pr rest
                                     = boxingDirectOrDynamic w attr (posarg es) rt pr rest
     boxing env (Call l e@(TApp _ (Var _ f) ts) p KwdNil)
+      -- len is type-checked through Collection, so its explicit arguments at
+      -- this stage are the collection witness followed by the value.  For
+      -- concrete fixed-size arrays the witness is still semantically required
+      -- during type checking, but the call can use the same private raw worker
+      -- as other statically resolved builtin operations.
+      | unalias env f == qnLen,
+        [_, recv] <- posargs p,
+        Just _ <- rawBuiltinMethod env lenKW [recv]
+                                    = do (ws1,recv1) <- boxing env recv
+                                         case rawBuiltinMethodCall env lenKW (PosArg recv1 PosNil) of
+                                           Just c  -> return (ws1,c)
+                                           Nothing -> error "Internal error: raw builtin len lost during boxing"
       | f `elem` prims              = do (ws1,p1) <- boxing env p
                                          return (ws1, Box tBool $ eCallP e' (fixargs env p1 r))
       | otherwise                   = do (ws1,p1) <- boxing env p
@@ -718,6 +839,28 @@ instance Boxing Expr where
                                          (ws2,p1) <- boxing env p
                                          return (HashSet.union ws1 ws2, eCallP f1 (fixargs env p1 r))
         where  TFun _ _ r _ _       = rtypeOfFun env f
+    -- Preserve the two separate coordinates while lowering a concrete matrix
+    -- comma index.  A tuple-valued index does not match this path.
+    boxing env (Call _ (Dot _ recv attr) p KwdNil)
+      | not (callIsClass env recv),
+        Just _ <- rawMatrixMethod env attr (recv : posargs p)
+                                    = do (ws,p1) <- boxing env (PosArg recv p)
+                                         case rawMatrixMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw matrix method lost during boxing"
+    -- Concrete builtin containers resolve selected operations directly to raw
+    -- workers so they retain the raw element ABI. Their protocol witnesses
+    -- continue to serve polymorphic code.
+    boxing env (Call _ (Dot _ recv attr) p KwdNil)
+      -- A class receiver denotes a static/class method, not a container value.
+      -- In particular, asking QuickType for the value type of polymorphic
+      -- constructors such as bytes while considering bytes.from_hex fails.
+      | not (callIsClass env recv),
+        Just _ <- rawBuiltinMethod env attr (recv : posargs p)
+                                    = do (ws,p1) <- boxing env (PosArg recv p)
+                                         case rawBuiltinMethodCall env attr p1 of
+                                           Just c  -> return (ws,c)
+                                           Nothing -> error "Internal error: raw builtin method lost during boxing"
     boxing env (Call l (Dot _ e n) PosNil KwdNil)
       | n == boolKW,
         Just rt <- unboxedRepType (typeOf env e)
@@ -1004,10 +1147,6 @@ bin2Aug kw
    | kw == iandKW                  = BAndA
 
 -- Map an augmented-assignment witness keyword to its plain binary counterpart.
--- imatmulKW is deliberately omitted: it has no unboxable operand type (matmul is
--- matrix-only), so it never reaches the only caller (which is guarded by
--- isUnboxable), and bin2Binary has no matmul case either. Keeping the range a
--- subset of bin2Binary's domain avoids a non-exhaustive crash on future changes.
 incr2bin kw
    | kw == iaddKW                  = addKW
    | kw == isubKW                  = subKW

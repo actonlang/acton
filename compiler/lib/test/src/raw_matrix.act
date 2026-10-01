@@ -1,0 +1,22 @@
+from matrix import matrix
+
+
+def int_get(values: matrix[int], row: int, column: int) -> int:
+    return values[row, column]
+
+
+def int_set(values: matrix[int], row: int, column: int, value: int) -> None:
+    values[row, column] = value
+
+
+def int_add(values: matrix[int], row: int, column: int, value: int) -> None:
+    values[row, column] += value
+
+
+def float_get(values: matrix[float], row: int, column: int) -> float:
+    return values[row, column]
+
+
+def float_set(values: matrix[float], row: int, column: int,
+              value: float) -> None:
+    values[row, column] = value

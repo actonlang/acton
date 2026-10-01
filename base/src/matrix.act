@@ -1,0 +1,196 @@
+class vector_view[A(ArrayElement)](object):
+    """A mutable one-dimensional view of numeric array storage.
+
+    A stride is the number of backing-array elements between neighbouring
+    values in the view.  Matrix rows normally have stride 1, while columns
+    normally have stride equal to the number of matrix columns.
+    """
+
+    _data: array[A]
+    _offset: int
+    _length: int
+    _stride: int
+
+    def __init__(self, data: array[A], offset: int, length: int, stride: int) -> None:
+        if offset < 0 or length < 0 or stride < 0:
+            raise ValueError("vector view parameters must be non-negative")
+
+        self._data = data
+        self._offset = offset
+        self._length = length
+        self._stride = stride
+
+    def size(self) -> int:
+        return self._length
+
+    def stride(self) -> int:
+        return self._stride
+
+    def _linear_index(self, index: int) -> int:
+        if index < 0 or index >= self._length:
+            raise IndexError(index, "vector view index out of range")
+        return self._offset + index * self._stride
+
+
+extension vector_view[A(ArrayElement)] (MutIndexed[int,A]):
+    def __getitem__(self, index: int) -> A:
+        return self._data[self._linear_index(index)]
+
+    def __setitem__(self, index: int, value: A) -> None:
+        self._data[self._linear_index(index)] = value
+
+
+class matrix[A(ArrayElement)](object):
+    """A fixed-size two-dimensional numeric array, or a view of one.
+
+    An element at ``(row, column)`` is stored at
+    ``offset + row * row_stride + column * column_stride`` in the shared flat
+    array.  Keeping this calculation explicit allows rows, columns, rectangular
+    views, and transposes to share storage without copying.
+    """
+
+    _rows: int
+    _columns: int
+    _offset: int
+    _row_stride: int
+    _column_stride: int
+    _data: array[A]
+
+    def __init__(self, rows: int, columns: int, initial: ?A = None) -> None:
+        if rows < 0 or columns < 0:
+            raise ValueError("matrix dimensions must be non-negative")
+        if rows > 0 and columns > 9223372036854775807 // rows:
+            raise MemoryError("matrix is too large")
+
+        self._rows = rows
+        self._columns = columns
+        self._offset = 0
+        self._row_stride = columns
+        self._column_stride = 1
+        self._data = array(rows * columns, initial)
+
+    def shape(self) -> (int,int):
+        return self._rows, self._columns
+
+    def strides(self) -> (int,int):
+        """Return row and column strides measured in elements, not bytes."""
+        return self._row_stride, self._column_stride
+
+    def row(self, row: int) -> vector_view[A]:
+        if row < 0 or row >= self._rows:
+            raise IndexError(row, "matrix row index out of range")
+        return vector_view(self._data,
+                           self._offset + row * self._row_stride,
+                           self._columns,
+                           self._column_stride)
+
+    def column(self, column: int) -> vector_view[A]:
+        if column < 0 or column >= self._columns:
+            raise IndexError(column, "matrix column index out of range")
+        return vector_view(self._data,
+                           self._offset + column * self._column_stride,
+                           self._rows,
+                           self._row_stride)
+
+    def view(self, row_start: int, row_stop: int,
+             column_start: int, column_stop: int) -> matrix[A]:
+        """Return a shared rectangular view using half-open bounds."""
+        if (row_start < 0 or row_start > row_stop or row_stop > self._rows or
+            column_start < 0 or column_start > column_stop or
+            column_stop > self._columns):
+            raise ValueError("matrix view bounds are invalid")
+        return self._make_view(row_stop - row_start, column_stop - column_start,
+                               self._offset + row_start * self._row_stride +
+                               column_start * self._column_stride,
+                               self._row_stride, self._column_stride)
+
+    def transpose(self) -> matrix[A]:
+        """Return a shared transposed view by exchanging dimensions and strides."""
+        return self._make_view(self._columns, self._rows, self._offset,
+                               self._column_stride, self._row_stride)
+
+    def reshape(self, rows: int, columns: int) -> matrix[A]:
+        """Return a shared row-major view with a new shape.
+
+        Reshaping does not copy.  It is therefore available only when the
+        matrix occupies one contiguous row-major segment of its backing array.
+        """
+        if rows < 0 or columns < 0:
+            raise ValueError("matrix dimensions must be non-negative")
+        if rows > 0 and columns > 9223372036854775807 // rows:
+            raise MemoryError("matrix is too large")
+        if rows * columns != self._rows * self._columns:
+            raise ValueError("cannot change the number of matrix elements")
+        if not self._is_contiguous():
+            raise ValueError("cannot reshape a non-contiguous matrix view")
+        return self._make_view(rows, columns, self._offset, columns, 1)
+
+    def _make_view(self, rows: int, columns: int, offset: int,
+                   row_stride: int, column_stride: int) -> matrix[A]:
+        # Construction through an empty matrix keeps the public constructor
+        # simple; replacing its empty backing array immediately creates a view.
+        result: matrix[A] = matrix(0, 0)
+        result._rows = rows
+        result._columns = columns
+        result._offset = offset
+        result._row_stride = row_stride
+        result._column_stride = column_stride
+        result._data = self._data
+        return result
+
+    def _is_contiguous(self) -> bool:
+        if self._rows == 0 or self._columns == 0:
+            return True
+        if self._rows == 1:
+            return self._columns == 1 or self._column_stride == 1
+        if self._columns == 1:
+            return self._row_stride == 1
+        return self._column_stride == 1 and self._row_stride == self._columns
+
+    def _linear_index2(self, row: int, column: int) -> int:
+        """Translate separate row and column coordinates to backing storage.
+
+        Keeping the coordinates separate provides an allocation-free path for
+        concrete numeric accessors.  The tuple-indexed protocol below delegates
+        here after unpacking its necessarily generic index value.
+        """
+        if row < 0 or row >= self._rows:
+            raise IndexError(row, "matrix row index out of range")
+        if column < 0 or column >= self._columns:
+            raise IndexError(column, "matrix column index out of range")
+        return (self._offset + row * self._row_stride +
+                column * self._column_stride)
+
+    def _linear_index(self, index: (int,int)) -> int:
+        row, column = index
+        return self._linear_index2(row, column)
+
+
+# These concrete accessors deliberately take two coordinates rather than a
+# tuple.  Their concrete element types also let the compiler select the raw
+# array workers, keeping the complete matrix access path unboxed.  The normal
+# tuple-based indexing protocol remains available wherever generic indexing is
+# more important than this specialized representation.
+def get_int(values: matrix[int], row: int, column: int) -> int:
+    return values._data[values._linear_index2(row, column)]
+
+
+def set_int(values: matrix[int], row: int, column: int, value: int) -> None:
+    values._data[values._linear_index2(row, column)] = value
+
+
+def get_float(values: matrix[float], row: int, column: int) -> float:
+    return values._data[values._linear_index2(row, column)]
+
+
+def set_float(values: matrix[float], row: int, column: int,
+              value: float) -> None:
+    values._data[values._linear_index2(row, column)] = value
+
+
+extension matrix[A(ArrayElement)] (MutIndexed[(int,int),A]):
+    def __getitem__(self, index: (int,int)) -> A:
+        return self._data[self._linear_index(index)]
+
+    def __setitem__(self, index: (int,int), value: A) -> None:
+        self._data[self._linear_index(index)] = value

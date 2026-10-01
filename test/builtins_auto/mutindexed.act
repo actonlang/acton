@@ -1,0 +1,51 @@
+def check(env, condition: bool, message: str) -> None:
+    if not condition:
+        print(message)
+        env.exit(1)
+
+def replace_int[C(object,MutIndexed[int,int])](xs: C, key: int, value: int) -> int:
+    xs[key] = value
+    return xs[key]
+
+def replace_bool[C(object,MutIndexed[int,bool])](xs: C, key: int, value: bool) -> bool:
+    xs[key] = value
+    return xs[key]
+
+def replace_float[C(object,MutIndexed[int,float])](xs: C, key: int, value: float) -> float:
+    xs[key] = value
+    return xs[key]
+
+def replace_str_int[C(object,MutIndexed[str,int])](xs: C, key: str, value: int) -> int:
+    xs[key] = value
+    return xs[key]
+
+actor main(env):
+    try:
+        numbers: array[int] = array(3)
+        check(env, replace_int(numbers, 1, 17) == 17 and numbers[1] == 17,
+              "array does not implement MutIndexed")
+
+        floats: array[float] = array(2)
+        check(env, replace_float(floats, 0, 2.5) == 2.5 and floats[0] == 2.5,
+              "float array does not implement MutIndexed")
+
+        bits = bitarray(3)
+        check(env, replace_bool(bits, 1, True) and bits[1],
+              "bitarray does not implement MutIndexed")
+
+        values = [1, 2, 3]
+        check(env, replace_int(values, 1, 20) == 20 and values[1] == 20,
+              "Indexed is not a subtype of MutIndexed")
+
+        octets = bytearray(b"abc")
+        check(env, replace_int(octets, 1, 90) == 90 and octets[1] == 90,
+              "bytearray does not provide MutIndexed")
+
+        mapping = {"one": 1}
+        check(env, replace_str_int(mapping, "two", 2) == 2 and mapping["two"] == 2,
+              "Mapping does not provide MutIndexed")
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

@@ -853,7 +853,7 @@ instance InfEnv Stmt where
             asgn t0 t e0 e (TgIndex ix) = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Proto (locinfo l 41) env w t0 (pIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
+                                             return ( Proto (locinfo l 41) env w t0 (pMutIndexed ti t) : cs, sExpr $ dotCall w setitemKW [e0, ix, e] )
             asgn t0 t e0 e (TgSlice sl) = do (cs,sl) <- inferSlice env sl
                                              t' <- newUnivar env
                                              w <- newWitness
@@ -884,7 +884,6 @@ instance InfEnv Stmt where
             oper _ BOrA                 = (pLogical,  iorKW)
             oper _ BXorA                = (pLogical,  ixorKW)
             oper _ BAndA                = (pLogical,  iandKW)
-            oper _ MMultA               = (pMatrix,   imatmulKW)
             rtype ShiftLA t             = tInt
             rtype ShiftRA t             = tInt
             rtype _ t                   = t
@@ -894,7 +893,7 @@ instance InfEnv Stmt where
             aug t0 t x f e (TgIndex ix) = do ti <- newUnivar env
                                              (cs,ix) <- inferSub env ti ix
                                              w <- newWitness
-                                             return ( Proto (locinfo l 47) env w t0 (pIndexed ti t) :
+                                             return ( Proto (locinfo l 47) env w t0 (pMutIndexed ti t) :
                                                       cs, sExpr $ dotCall w setitemKW [eVar x, ix, f [dotCall w getitemKW [eVar x, ix], e]])
             aug t0 t x f e (TgSlice sl) = do tryUnify env (locinfo l 1115) t0 t
                                              (cs,sl) <- inferSlice env sl
@@ -2014,11 +2013,11 @@ instance Infer Expr where
                                              fx <- currFX
                                              return (Cast (locinfo2 75 e) env fxProc fx :
                                                      cs1, t0, Await l e')
-    infer env (Index l e ix)            = do ti <- newUnivar env
+    infer env (Index l e ix)            = do (cs2,t,e') <- infer env e
+                                             ti <- newUnivar env
                                              (cs1,ix') <- inferSub env ti ix
                                              t0 <- newUnivar env
                                              w <- newWitness
-                                             (cs2,t,e') <- infer env e
                                              return (Proto (locinfo2 76 e) env w t (pIIndexed ti t0) :
                                                      cs1++cs2, t0, eCall (eDot (eVar w) getitemKW) [e', ix'])
     infer env (Slice l e sl)            = do (cs1,sl') <- inferSlice env sl
@@ -2107,7 +2106,6 @@ instance Infer Expr where
             protocol BOr                = pLogical
             protocol BXor               = pLogical
             protocol BAnd               = pLogical
-            protocol MMult              = pMatrix
             method Plus                 = addKW
             method Minus                = subKW
             method Pow                  = powKW
@@ -2118,7 +2116,6 @@ instance Infer Expr where
             method BOr                  = orKW
             method BXor                 = xorKW
             method BAnd                 = andKW
-            method MMult                = matmulKW
             rtype ShiftL t              = tInt
             rtype ShiftR t              = tInt
             rtype _ t                   = t

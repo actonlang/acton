@@ -8,30 +8,30 @@ class SavedSet:
         self.alias = values
         self.iterator = iter(values)
 
-def test_operations():
+def test_operations(env):
     a = iset([1, 2, 3, 2])
     b = iset([3, 4])
     empty: iset[int] = iset()
     if len(a) != 3 or 2 not in a or 4 in a or not a or empty:
-        raise ValueError("iset construction or membership failed")
+        env.exit(1)
     if a & b != iset([3]) or a | b != iset([1, 2, 3, 4]):
-        raise ValueError("iset intersection or union failed")
+        env.exit(1)
     if a - b != iset([1, 2]) or a ^ b != iset([1, 2, 4]):
-        raise ValueError("iset difference failed")
+        env.exit(1)
     if not empty < a or not a > empty or not a <= a or not a >= a or a < a:
-        raise ValueError("iset ordering failed")
+        env.exit(1)
     if not ISet.isdisjoint(a, empty) or ISet.isdisjoint(a, b):
-        raise ValueError("iset disjointness failed")
+        env.exit(1)
     if a != iset([1, 2, 3]) or b != iset([3, 4]):
-        raise ValueError("iset operations changed their operands")
+        env.exit(1)
     if set(a) != {1, 2, 3}:
-        raise ValueError("iset iteration failed")
+       env.exit(1)
     if str(iset([1])) != "iset({{1}})" or str(empty) != "iset({{}})":
-        raise ValueError("iset str formatting failed")
+        env.exit(1)
     if repr(iset([1])) != "iset({{1}})" or repr(empty) != "iset({{}})":
-        raise ValueError("iset repr formatting failed")
+        env.exit(1)
 
-def test_independent_storage():
+def test_independent_storage(env):
     source = set(range(100))
     frozen = iset(source)
     source.discard(50)
@@ -39,35 +39,42 @@ def test_independent_storage():
     copy = set(frozen)
     copy.discard(20)
     if len(frozen) != 100 or 50 not in frozen or 20 not in frozen or 100 in frozen:
-        raise ValueError("iset shares mutable storage with a set")
+        env.exit(1)
     remaining = frozen - iset(range(3, 100))
     if remaining != iset([0, 1, 2]) or set(remaining) != {0, 1, 2}:
-        raise ValueError("iset iteration with tombstones failed")
+        env.exit(1)
     if hash(remaining) != hash(iset([2, 1, 0])):
-        raise ValueError("iset hash depends on tombstones or table capacity")
+        env.exit(1)
 
-def test_serialization():
+def test_serialization(env):
     saved = SavedSet(iset(range(100)) - iset(range(3, 100)))
     first = next(saved.iterator)
     fst = 0
     if isinstance(first,just):
         fst = first.val
     else:
-        raise ValueError("unexpected iteration termination")
+        env.exit(1)
     payload = serialize(saved)
     restored = deserialize(payload)
     if not isinstance(restored, SavedSet):
-        raise ValueError("iset state did not deserialize")
+        env.exit(1)
     if isinstance(restored, SavedSet):
         if restored.values != saved.values or serialize(restored) != payload:
-            raise ValueError("iset serialization lost values or shared references")
+            env.exit(1)
         if iset(restored.iterator) != saved.values - iset([fst]):
-            raise ValueError("iset iterator did not resume after deserialization")
+            env.exit(1)
         if hash(restored.values) != hash(saved.values):
-            raise ValueError("iset hash changed after serialization")
+            env.exit(1)
+
+def test_union(env):
+    s = iset([3, 6, 2])
+    t = iset([2, 7, 8, 3])
+    if ISet.union(s, t) != iset({2, 3, 6, 7, 8}):
+        env.exit(1)
 
 actor main(env):
-    test_operations()
-    test_independent_storage()
-    test_serialization()
+    test_operations(env)
+    test_independent_storage(env)
+    test_serialization(env)
+    test_union(env)
     env.exit(0)

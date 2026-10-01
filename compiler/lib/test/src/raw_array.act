@@ -1,0 +1,37 @@
+def make_int_array(n: int) -> array[int]:
+    result: array[int] = array(n)
+    return result
+
+def make_filled_int_array(n: int, initial: int) -> array[int]:
+    result: array[int] = array(n, initial)
+    return result
+
+def int_get(xs: array[int], i: int) -> int:
+    return xs[i]
+
+def int_set(xs: array[int], i: int, value: int) -> None:
+    xs[i] = value
+
+def int_add(xs: array[int], i: int, value: int) -> None:
+    xs[i] += value
+
+def int_len(xs: array[int]) -> int:
+    return len(xs)
+
+def float_get(xs: array[float], i: int) -> float:
+    return xs[i]
+
+def float_set(xs: array[float], i: int, value: float) -> None:
+    xs[i] = value
+
+def int_sum(xs: array[int]) -> int:
+    result = 0
+    for value in xs:
+        result += value
+    return result
+
+def float_sum(xs: array[float]) -> float:
+    result = 0.0
+    for value in xs:
+        result += value
+    return result

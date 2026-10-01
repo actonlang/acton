@@ -1,0 +1,21 @@
+# import acton.rts
+
+def average(xs: array[float])->float:
+    s = 0
+    for x in xs:
+        s += x
+    return s/float(len(xs))
+
+actor main(env):
+#     acton.rts.start_gc_performance_measurement(env.syscap)
+    xs = array(1000000)
+    for n in range(1000000):
+        xs[n] = float(n)
+    av = average(xs)
+    if abs(av - 499999.5) > 0.001:
+        print("average of array is wrong")
+        env.exit(1)
+#     print("gc time", acton.rts.get_gc_time(env.syscap).total, "millisecs")
+#     print("Total heap memory allocated",acton.rts.get_gc_total_bytes(env.syscap),"bytes")
+    env.exit(0)
+    

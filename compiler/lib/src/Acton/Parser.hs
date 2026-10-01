@@ -1803,7 +1803,6 @@ expr_stmt = addLoc $ do
           where augops = S.PlusA   <$ symbol "+="
                      <|> S.MinusA  <$ symbol "-="
                      <|> S.MultA   <$ symbol "*="
-                     <|> S.MMultA  <$ symbol "@="
                      <|> S.DivA    <$ symbol "/="
                      <|> S.ModA    <$ symbol "%="
                      <|> S.BAndA   <$ symbol "&="
@@ -2259,7 +2258,7 @@ arithexpr :: Parser S.Expr
 arithexpr = makeExprParser factor table
 
 table :: [[Operator Parser S.Expr]]
-table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div, binary (opPref "@") S.MMult,
+table = [ [ binary (opPref "*") S.Mult, binary (opPref "/") S.Div,
             binary (opPref "//") S.EuDiv, binary (opPref "%") S.Mod]
         , [ binary (opPref "+") S.Plus, binary (opPref "-") S.Minus]
         , [ binary (opPref "<<") S.ShiftL, binary (opPref ">>") S.ShiftR]

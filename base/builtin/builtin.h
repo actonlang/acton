@@ -30,6 +30,11 @@ typedef struct {
     int64_t val;
 } $MaybeI64;
 
+typedef struct {
+    bool just;
+    double val;
+} $MaybeF64;
+
 struct B_NoneType;
 typedef struct B_NoneType *B_NoneType;
 
@@ -105,6 +110,9 @@ typedef struct $Catcher *$Catcher;
 #include "slice.h"
 #include "float.h"
 #include "bool.h"
+#include "array.h"
+#include "bitarray.h"
+#include "bitset.h"
 #include "list.h"
 #include "dict.h"
 #include "str.h"

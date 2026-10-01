@@ -164,6 +164,18 @@ primUBytesGetItem   = gPrim "bytesD_U__getitem__"
 primUBytearrayGetItem = gPrim "bytearrayD_U__getitem__"
 primUBytearraySetItem = gPrim "bytearrayD_U__setitem__"
 primUBytearrayDelItem = gPrim "bytearrayD_U__delitem__"
+primUArrayGetInt    = gPrim "arrayD_U__getitem_int"
+primUArrayGetFloat  = gPrim "arrayD_U__getitem_float"
+primUArraySetInt    = gPrim "arrayD_U__setitem_int"
+primUArraySetFloat  = gPrim "arrayD_U__setitem_float"
+primUArrayLen       = gPrim "arrayD_U__len"
+primUBitarrayGetItem = gPrim "bitarrayD_U__getitem__"
+primUBitarraySetItem = gPrim "bitarrayD_U__setitem__"
+primUBitarrayLen    = gPrim "bitarrayD_U__len"
+primUBitsetContains = gPrim "bitsetD_U__contains__"
+primUBitsetContainsNot = gPrim "bitsetD_U__containsnot__"
+primUBitsetAdd      = gPrim "bitsetD_U_add"
+primUBitsetDiscard  = gPrim "bitsetD_U_discard"
 primUNext           = gPrim "rangeD_U__next__"
 
 annot t_ann ann t e = eCall (tApp (eQVar primAnnot) [t_ann, t]) [ann, e]
@@ -267,6 +279,18 @@ primEnv             = [     (noq primASYNCf,        NDef scASYNCf NoDec Nothing)
                             (noq primUBytearrayGetItem, NDef scUBytearrayGetItem NoDec Nothing),
                             (noq primUBytearraySetItem, NDef scUBytearraySetItem NoDec Nothing),
                             (noq primUBytearrayDelItem, NDef scUBytearrayDelItem NoDec Nothing),
+                            (noq primUArrayGetInt, NDef scUArrayGetInt NoDec Nothing),
+                            (noq primUArrayGetFloat, NDef scUArrayGetFloat NoDec Nothing),
+                            (noq primUArraySetInt, NDef scUArraySetInt NoDec Nothing),
+                            (noq primUArraySetFloat, NDef scUArraySetFloat NoDec Nothing),
+                            (noq primUArrayLen, NDef scUArrayLen NoDec Nothing),
+                            (noq primUBitarrayGetItem, NDef scUBitarrayGetItem NoDec Nothing),
+                            (noq primUBitarraySetItem, NDef scUBitarraySetItem NoDec Nothing),
+                            (noq primUBitarrayLen, NDef scUBitarrayLen NoDec Nothing),
+                            (noq primUBitsetContains, NDef scUBitsetContains NoDec Nothing),
+                            (noq primUBitsetContainsNot, NDef scUBitsetContains NoDec Nothing),
+                            (noq primUBitsetAdd, NDef scUBitsetMutate NoDec Nothing),
+                            (noq primUBitsetDiscard, NDef scUBitsetMutate NoDec Nothing),
                             (noq primUNext,         NDef scUNext NoDec Nothing)
                       ]
 
@@ -633,6 +657,27 @@ scUBytearrayGetItem = monotype $ tFun fxPure (posRow tBytearray (posRow tInt pos
 scUBytearraySetItem = monotype $ tFun fxMut (posRow tBytearray (posRow tInt (posRow tInt posNil))) kwdNil tNone
 
 scUBytearrayDelItem = monotype $ tFun fxMut (posRow tBytearray (posRow tInt posNil)) kwdNil tNone
+
+scUArrayGetInt      = monotype $ tFun fxPure (posRow (tArray tInt) (posRow tInt posNil)) kwdNil tInt
+
+scUArrayGetFloat    = monotype $ tFun fxPure (posRow (tArray tFloat) (posRow tInt posNil)) kwdNil tFloat
+
+scUArraySetInt      = monotype $ tFun fxMut (posRow (tArray tInt) (posRow tInt (posRow tInt posNil))) kwdNil tNone
+
+scUArraySetFloat    = monotype $ tFun fxMut (posRow (tArray tFloat) (posRow tInt (posRow tFloat posNil))) kwdNil tNone
+
+scUArrayLen         = tSchema [qbind a] $ tFun fxPure (posRow (tArray (tVar a)) posNil) kwdNil tInt
+  where a           = TV KType $ name "A"
+
+scUBitarrayGetItem  = monotype $ tFun fxPure (posRow tBitarray (posRow tInt posNil)) kwdNil tBool
+
+scUBitarraySetItem  = monotype $ tFun fxMut (posRow tBitarray (posRow tInt (posRow tBool posNil))) kwdNil tNone
+
+scUBitarrayLen      = monotype $ tFun fxPure (posRow tBitarray posNil) kwdNil tInt
+
+scUBitsetContains   = monotype $ tFun fxPure (posRow tBitset (posRow tInt posNil)) kwdNil tBool
+
+scUBitsetMutate     = monotype $ tFun fxMut (posRow tBitset (posRow tInt posNil)) kwdNil tNone
 
 scRaiseValueError   = tSchema [qbind a] tRaiseValErr
   where tRaiseValErr= tFun fxPure (posRow tStr posNil) kwdNil (tVar a)

@@ -164,7 +164,10 @@ int log_add_fp(FILE *fp, int level) {
 
 static void init_event(log_Event *ev, void *udata) {
   if (!ev->date) {
-    uv_clock_gettime(UV_CLOCK_REALTIME, &ev->ts);
+    uv_timespec64_t ts;
+    uv_clock_gettime(UV_CLOCK_REALTIME, &ts);
+    ev->ts.tv_sec = (time_t)ts.tv_sec;
+    ev->ts.tv_nsec = (long)ts.tv_nsec;
     ev->date = localtime(&ev->ts.tv_sec);
   }
   ev->udata = udata;

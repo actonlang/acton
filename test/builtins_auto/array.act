@@ -1,0 +1,100 @@
+def check(env, condition: bool, message: str) -> None:
+    if not condition:
+        print(message)
+        env.exit(1)
+
+def expect_index_error(env, xs: array[int], index: int) -> None:
+    try:
+        value = xs[index]
+    except IndexError:
+        return
+    check(env, False, "expected IndexError")
+
+def generic_get[A(ArrayElement)](xs: array[A], index: int) -> A:
+    return xs[index]
+
+def generic_set[A(ArrayElement)](xs: array[A], index: int, value: A) -> None:
+    xs[index] = value
+
+actor main(env):
+    try:
+        ints: array[int] = array(4)
+        check(env, len(ints) == 4, "wrong int array length")
+        check(env, ints[0] == 0 and ints[3] == 0, "int array is not zero initialized")
+        check(env, str(ints) == "[|0, 0, 0, 0|]", "wrong int array string")
+
+        ints[0] = -7
+        ints[3] = 40
+        ints[3] += 2
+        generic_set(ints, 1, 17)
+        check(env, ints[0] == -7 and ints[3] == 42, "int array mutation failed")
+        check(env, generic_get(ints, 1) == 17, "generic int array access failed")
+        check(env, list(ints) == [-7, 17, 0, 42], "int array iteration failed")
+        check(env, 17 in ints and 99 not in ints, "int array membership failed")
+        check(env, repr(ints) == "[|-7, 17, 0, 42|]", "wrong int array repr")
+
+        int_sum = 0
+        for value in ints:
+            int_sum += value
+        check(env, int_sum == 52, "int array loop failed")
+
+        filled_ints: array[int] = array(4, -9)
+        check(env, filled_ints[0] == -9 and filled_ints[3] == -9,
+              "int array fill failed")
+
+        floats: array[float] = array(3)
+        check(env, len(floats) == 3, "wrong float array length")
+        check(env, floats[0] == 0.0 and floats[2] == 0.0, "float array is not zero initialized")
+        floats[1] = 3.25
+        check(env, floats[1] == 3.25, "float array mutation failed")
+        generic_set(floats, 2, -1.5)
+        check(env, generic_get(floats, 2) == -1.5, "generic float array access failed")
+        check(env, 3.25 in floats and 2.0 not in floats, "float array membership failed")
+
+        float_sum = 0.0
+        for value in floats:
+            float_sum += value
+        check(env, float_sum == 1.75, "float array loop failed")
+
+        # __fromiter__ grows the unboxed destination in one pass.  Exercise
+        # both storage kinds and an iterator whose values are computed lazily.
+        generated_ints: array[int] = Collection.__fromiter__(range(5))
+        check(env, list(generated_ints) == [0, 1, 2, 3, 4],
+              "int array fromiter failed")
+        generated_floats: array[float] = Collection.__fromiter__(map(float, range(5)))
+        check(env, list(generated_floats) == [0.0, 1.0, 2.0, 3.0, 4.0],
+              "float array fromiter failed")
+
+        filled_floats: array[float] = array(3, 1.25)
+        check(env, filled_floats[0] == 1.25 and filled_floats[2] == 1.25,
+              "float array fill failed")
+        check(env, str(filled_floats) == "[|1.25, 1.25, 1.25|]",
+              "wrong float array string")
+
+        empty: array[int] = array(0, 7)
+        check(env, str(empty) == "[||]" and repr(empty) == "[||]",
+              "wrong empty array representation")
+
+        expect_index_error(env, ints, -1)
+        expect_index_error(env, ints, 4)
+
+        try:
+            bad: array[int] = array(-1)
+            check(env, False, "expected ValueError")
+        except ValueError:
+            pass
+
+        # Both the element kind and the raw payload survive serialization.
+        payload = serialize(ints)
+        restored_payload = serialize(deserialize(payload))
+        check(env, restored_payload == payload, "array serialization failed")
+        check(env, serialize(deserialize(serialize(floats))) == serialize(floats),
+              "float array serialization failed")
+        shared = [ints, ints]
+        check(env, serialize(deserialize(serialize(shared))) == serialize(shared),
+              "shared array serialization failed")
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

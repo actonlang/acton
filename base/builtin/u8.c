@@ -56,7 +56,7 @@ void B_u8D___serialize__(B_u8 n, $Serial$state state) {
 }
 
 B_u8 B_u8D___deserialize__(B_u8 n, $Serial$state state) {
-    return toB_u8((uint8_t)$val_deserialize(state));
+    return toB_u8((uint8_t)(uintptr_t)$val_deserialize(state));
 }
 
 bool B_u8D___bool__(B_u8 n) {

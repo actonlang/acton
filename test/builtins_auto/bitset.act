@@ -1,0 +1,130 @@
+def check(env, condition: bool, message: str) -> None:
+    if not condition:
+        print(message)
+        env.exit(1)
+
+def generic_add[S(object,Set[int])](values: S, elem: int) -> int:
+    values.add(elem)
+    return len(values)
+
+def generic_contains[S(object,Set[int])](values: S, elem: int) -> bool:
+    return elem in values
+
+actor main(env):
+    try:
+        empty = bitset(0)
+        check(env, len(empty) == 0 and not empty and empty.capacity() == 0,
+              "empty bitset is invalid")
+        full = bitset.full(130)
+        check(env, len(full) == 130 and full.capacity() == 130 and
+              0 in full and 64 in full and 129 in full and 130 not in full,
+              "full bitset construction failed")
+        check(env, len(bitset.full(0)) == 0, "empty full bitset is invalid")
+
+        values: bitset = bitset(130, [1, 3, 64, 129])
+        check(env, len(values) == 4 and bool(values) and values.capacity() == 130,
+              "bitset construction failed")
+        check(env, list(values) == [1, 3, 64, 129], "bitset iteration failed")
+        check(env, generic_contains(values, 64) and not generic_contains(values, 63),
+              "bitset does not implement Set[int]")
+        check(env, -1 not in values and 130 not in values,
+              "out-of-universe membership must be false")
+        duplicates = bitset(65, [0, 64, 64])
+        check(env, len(duplicates) == 2 and str(duplicates) == "bitset(65, [0, 64])",
+              "bitset cardinality or representation failed")
+
+        check(env, generic_add(values, 5) == 5 and 5 in values,
+              "bitset add failed")
+        values.add(5)
+        check(env, len(values) == 5, "duplicate add changed cardinality")
+        values.discard(3)
+        values.discard(-1)
+        values.discard(1000)
+        check(env, len(values) == 4 and 3 not in values,
+              "bitset discard failed")
+        values.update([2, 4, 64])
+        check(env, list(values) == [1, 2, 4, 5, 64, 129], "bitset update failed")
+
+        try:
+            values.add(130)
+            check(env, False, "expected ValueError from out-of-universe add")
+        except ValueError:
+            pass
+        try:
+            bad_element = bitset(4, [4])
+            check(env, False, "expected ValueError from constructor element")
+        except ValueError:
+            pass
+        try:
+            bad = bitset(-1)
+            check(env, False, "expected ValueError from negative capacity")
+        except ValueError:
+            pass
+        try:
+            bad_full = bitset.full(-1)
+            check(env, False, "expected ValueError from negative full capacity")
+        except ValueError:
+            pass
+
+        small = bitset(10, [1, 3, 8])
+        large = bitset(100, [1, 3, 8])
+        check(env, small == large and not (small != large),
+              "bitset equality must ignore capacity")
+        check(env, bitset(100, [90]) != bitset(10, [1]),
+              "different bitsets compared equal across capacities")
+        superset = bitset(100, [1, 3, 8, 90])
+        check(env, small < superset and small <= superset and superset > small,
+              "bitset subset comparison failed")
+        check(env, Set.isdisjoint(small, bitset(200, [11, 150])),
+              "bitset disjointness failed")
+
+        left = bitset(10, [1, 8])
+        right = bitset(100, [8, 20])
+        union = left | right
+        intersection = left & right
+        difference = left - right
+        symmetric = left ^ right
+        check(env, union.capacity() == 100 and list(union) == [1, 8, 20],
+              "bitset union failed")
+        check(env, intersection.capacity() == 10 and list(intersection) == [8],
+              "bitset intersection failed")
+        check(env, difference.capacity() == 10 and list(difference) == [1],
+              "bitset difference failed")
+        check(env, symmetric.capacity() == 100 and list(symmetric) == [1, 20],
+              "bitset symmetric difference failed")
+        check(env, Set.union(left,right) == union and Set.intersection(left,right) == intersection,
+              "named bitset operations failed")
+        check(env, Set.difference(left,right) == difference and
+              Set.symmetric_difference(left,right) == symmetric,
+              "named bitset difference operations failed")
+
+        popped: bitset = bitset(130, [1, 64, 129])
+        seen: list[int] = []
+        while popped:
+            seen.append(popped.pop())
+        check(env, seen == [1, 64, 129] and len(popped) == 0,
+              "bitset pop failed")
+        popped.add(1)
+        check(env, popped.pop() == 1, "bitset pop cursor failed to wrap")
+        try:
+            popped.pop()
+            check(env, False, "expected ValueError from empty pop")
+        except ValueError:
+            pass
+
+        payload = serialize(values)
+        restored = deserialize(payload)
+        if isinstance(restored, bitset):
+            check(env, serialize(restored) == payload and restored.capacity() == 130 and
+                  list(restored) == list(values) and len(restored) == len(values),
+                  "bitset serialization failed")
+        else:
+            check(env, False, "bitset deserialized with wrong type")
+        shared = [values, values]
+        check(env, serialize(deserialize(serialize(shared))) == serialize(shared),
+              "shared bitset serialization failed")
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

@@ -1,0 +1,129 @@
+def check(env, condition: bool, message: str) -> None:
+    if not condition:
+        print(message)
+        env.exit(1)
+
+def expect_index_error(env, xs: bitarray, index: int) -> None:
+    try:
+        value = xs[index]
+    except IndexError:
+        return
+    check(env, False, "expected IndexError")
+
+def get_bit(xs: bitarray, index: int) -> bool:
+    return xs[index]
+
+def set_bit(xs: bitarray, index: int, value: bool) -> None:
+    xs[index] = value
+
+def count_true[C(object,Container[bool])](xs: C) -> int:
+    count = 0
+    for value in xs:
+        if value:
+            count += 1
+    return count
+
+def generic_or[L(object,Logical)](left: L, right: L) -> L:
+    return left | right
+
+actor main(env):
+    try:
+        empty: bitarray = bitarray(0)
+        check(env, len(empty) == 0 and not empty, "empty bitarray is invalid")
+
+        zeros: bitarray = bitarray(130)
+        check(env, len(zeros) == 130, "wrong bitarray length")
+        check(env, not zeros[0] and not zeros[63] and not zeros[64] and not zeros[129],
+              "bitarray is not false initialized")
+
+        ones: bitarray = bitarray(130, True)
+        check(env, ones[0] and ones[63] and ones[64] and ones[129],
+              "bitarray is not true initialized")
+
+        ones[0] = False
+        ones[63] = False
+        set_bit(ones, 64, False)
+        ones[129] = False
+        check(env, not ones[0] and not ones[63] and not get_bit(ones, 64) and not ones[129],
+              "clearing bits failed")
+        check(env, ones[1] and ones[62] and ones[65] and ones[128],
+              "clearing a bit damaged its neighbours")
+
+        zeros[0] = True
+        zeros[63] = True
+        set_bit(zeros, 64, True)
+        zeros[129] = True
+        check(env, zeros[0] and zeros[63] and get_bit(zeros, 64) and zeros[129],
+              "setting bits failed")
+        check(env, not zeros[1] and not zeros[62] and not zeros[65] and not zeros[128],
+              "setting a bit damaged its neighbours")
+        check(env, count_true(zeros) == 4, "bitarray iteration failed")
+        check(env, True in zeros and False in zeros,
+              "bitarray value membership failed")
+
+        all_true = bitarray(4, True)
+        check(env, True in all_true and False not in all_true,
+              "true bitarray membership failed")
+        all_false = bitarray(4)
+        check(env, False in all_false and True not in all_false,
+              "false bitarray membership failed")
+
+        short = bitarray(5)
+        short[0] = True
+        short[4] = True
+        long = bitarray(70)
+        long[4] = True
+        long[5] = True
+        long[69] = True
+
+        intersection = short & long
+        union = generic_or(short, long)
+        symmetric = short ^ long
+        check(env, len(intersection) == 5 and count_true(intersection) == 1 and
+              intersection[4], "bitarray intersection failed")
+        check(env, len(union) == 70 and count_true(union) == 4 and
+              union[0] and union[4] and union[5] and union[69],
+              "bitarray union failed")
+        check(env, len(symmetric) == 70 and count_true(symmetric) == 3 and
+              symmetric[0] and symmetric[5] and symmetric[69] and not symmetric[4],
+              "bitarray symmetric difference failed")
+        check(env, len(short) == 5 and count_true(short) == 2 and
+              len(long) == 70 and count_true(long) == 3,
+              "bitarray logical operation modified an operand")
+
+        widened = short
+        widened |= long
+        check(env, len(widened) == 70 and count_true(widened) == 4,
+              "bitarray in-place logical operation failed")
+        check(env, len(bitarray(0) & long) == 0 and
+              len(bitarray(0) | long) == 70 and
+              len(bitarray(0) ^ long) == 70,
+              "empty bitarray logical operation failed")
+
+        expect_index_error(env, zeros, -1)
+        expect_index_error(env, zeros, 130)
+
+        try:
+            bad: bitarray = bitarray(-1)
+            check(env, False, "expected ValueError")
+        except ValueError:
+            pass
+
+        payload = serialize(zeros)
+        restored = deserialize(payload)
+        if isinstance(restored, bitarray):
+            check(env, serialize(restored) == payload and count_true(restored) == 4 and
+                  True in restored and False in restored,
+                  "bitarray serialization failed")
+        else:
+            check(env, False, "bitarray deserialized with wrong type")
+        check(env, serialize(deserialize(serialize(ones))) == serialize(ones),
+              "true-initialized bitarray serialization failed")
+        shared = [zeros, zeros]
+        check(env, serialize(deserialize(serialize(shared))) == serialize(shared),
+              "shared bitarray serialization failed")
+
+        env.exit(0)
+    except Exception as e:
+        print(e)
+        env.exit(1)

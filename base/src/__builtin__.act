@@ -573,7 +573,36 @@ class hasher(object):
 
 protocol Hashable (Eq):
     hash : (hasher) -> None
-    
+
+# Element types with a fixed, pointer-free runtime representation suitable for
+# array storage.  The initial implementation deliberately supports only the
+# two primary Acton numeric types, int and float.
+protocol ArrayElement:
+    pass
+
+class array[A(ArrayElement)] (object):
+    def __init__(self, length: int, initial: ?A=None) -> None:
+        NotImplemented
+
+# Fixed-size packed storage for Boolean values.  Unlike sequence indexing,
+# negative indices are deliberately rejected rather than counted from the end.
+# Logical operations zero-extend the shorter operand: intersection takes the
+# shorter length, while union and symmetric difference take the longer length.
+class bitarray (object):
+    def __init__(self, length: int, initial: bool=False) -> None:
+        NotImplemented
+
+# A fixed-universe set of non-negative integers backed by packed bits.
+# Capacity constrains mutation but is not part of extensional set equality.
+class bitset (object):
+    def __init__(self, capacity: int, iterable: ?Iterable[int]=None) -> None:
+        NotImplemented
+    @staticmethod
+    def full(capacity: int) -> bitset:
+        NotImplemented
+    def capacity(self) -> int:
+        NotImplemented
+
 class complex (atom):
     def __init__(self, val: Number) -> None:
         NotImplemented
@@ -805,6 +834,11 @@ extension float (Ord):
 extension float (Hashable):
     NotImplemented
 
+extension int (ArrayElement):
+    NotImplemented
+extension float (ArrayElement):
+    NotImplemented
+
 extension complex (Number):
     NotImplemented
 extension complex (Div[complex]):
@@ -819,8 +853,10 @@ extension complex (Hashable):
 protocol IIndexed[A (Eq),B]:
     __getitem__  : (A) -> B
 
-protocol Indexed[A (Eq),B] (IIndexed[A,B]):
+protocol MutIndexed[A (Eq),B] (IIndexed[A,B]):
     __setitem__  : mut(A,B) -> None
+
+protocol Indexed[A (Eq),B] (MutIndexed[A,B]):
     __delitem__  : mut(A) -> None
 
 protocol ISliceable[A] (IIndexed[int,A]):
@@ -843,6 +879,8 @@ protocol Container[A(Eq)] (Collection[A]):
 
 #   IIndexed               Iterable       Plus
 #     |      \                |            |
+#     |       MutIndexed      |            |
+#     |           |           |            |
 #     |        Indexed        |            |
 #     |           |           |            |
 #   ISliceable    |        Collection     Times
@@ -871,9 +909,9 @@ protocol Sequence[A] (ISequence[A], Sliceable[A]):
 #    |
 #   Container       IIndexed
 #    |                |     \
-#    |                |      Indexed
+#    |                |     MutIndexed
 #   IMapping <---------        |
-#    |                         |
+#    |                         Indexed
 #    |                         |
 #   Mapping <-------------------
 
@@ -910,6 +948,24 @@ protocol Mapping[A(Eq), B] (IMapping[A,B], Indexed[A,B]):
 protocol ISet[A (Eq)] (Container[A], Ord, Logical, Minus):
     @staticmethod
     isdisjoint  : (Self,Self) -> bool
+    @staticmethod
+    union       :  (Self,Self) -> Self
+    @staticmethod
+    intersection:  (Self,Self) -> Self
+    @staticmethod
+    difference  :  (Self,Self) -> Self
+    @staticmethod
+    symmetric_difference:  (Self,Self) -> Self
+
+    def union(a,b):
+        return a | b
+    def intersection(a,b):
+        return a & b
+    def difference(a,b):
+        return a - b
+    def symmetric_difference(a,b):
+        return a ^ b
+
 
 
 protocol Set[A (Eq)] (ISet[A]):
@@ -920,6 +976,24 @@ protocol Set[A (Eq)] (ISet[A]):
 
 
 ## Collection protocol extensions ########################################
+
+extension array[A(ArrayElement)] (MutIndexed[int,A]):
+    NotImplemented
+
+extension array[A(ArrayElement,Eq)] (Container[A]):
+    NotImplemented
+
+extension bitarray (MutIndexed[int,bool]):
+    NotImplemented
+
+extension bitarray (Container[bool]):
+    NotImplemented
+
+extension bitarray (Logical):
+    NotImplemented
+
+extension bitset (Set[int]):
+    NotImplemented
 
 extension list[A] (Sequence[A]):
     NotImplemented
