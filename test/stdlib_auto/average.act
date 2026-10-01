@@ -12,10 +12,9 @@ actor main(env):
     for n in range(1000000):
         xs[n] = float(n)
     av = average(xs)
-    if av != 500000:
+    if abs(av - 499999.5) > 0.001:
         print("average of array is wrong")
         env.exit(1)
-#     print(average(xs))
 #     print("gc time", acton.rts.get_gc_time(env.syscap).total, "millisecs")
 #     print("Total heap memory allocated",acton.rts.get_gc_total_bytes(env.syscap),"bytes")
     env.exit(0)
