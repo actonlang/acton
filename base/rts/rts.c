@@ -1897,8 +1897,12 @@ void wt_work_cb(uv_check_t *ev) {
             B_Msg x = (B_Msg)r.value;
             assert(x != NULL);
 
-            bool added_waiting = ADD_waiting(current, x);
+            // Send the actor's messages before it waits: once it is on x's
+            // waiting list, x's completion can enqueue it and another worker
+            // can run it, while flushing still reads its current message. If
+            // x completes first, ADD_waiting sees that and the actor goes on.
             FLUSH_outgoing_local(current);
+            bool added_waiting = ADD_waiting(current, x);
 
             if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
                 rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
