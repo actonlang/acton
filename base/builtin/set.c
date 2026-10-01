@@ -495,7 +495,7 @@ static void B_set_hash_table(B_set_table *set, B_Hashable hashwit, B_hasher h) {
     for (uint64_t i = 0; i <= set->mask; i++) {
         B_setentry *entry = &set->table[i];
         if (ACTIVE_ENTRY(entry)) {
-            B_hasher hi = B_hasherG_new(NULL);
+            B_hasher hi = B_hasherG_new(0);
             hashwit->$class->hash(hashwit, entry->key, hi);
             uint64_t d = B_hasherD_finalize(hi);
             sum += d;

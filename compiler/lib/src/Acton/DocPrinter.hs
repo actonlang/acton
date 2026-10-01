@@ -197,10 +197,14 @@ docDeclWithTypes tenv (Def _ n q p k a b d x ddoc) =
     extractParamTypeFromRow name (TRow _ _ n t rest)
         | nstr n == name = Just t
         | otherwise = extractParamTypeFromRow name rest
+    extractParamTypeFromRow name (TDefRow _ _ n t _ rest)
+        | nstr n == name = Just t
+        | otherwise = extractParamTypeFromRow name rest
     extractParamTypeFromRow _ _ = Nothing
 
     advanceRow :: Type -> Type
     advanceRow (TRow _ _ _ _ rest) = rest
+    advanceRow (TDefRow _ _ _ _ _ rest) = rest
     advanceRow t = t
 
 docDeclWithTypes tenv (Actor _ n q p k b ddoc) =
@@ -460,10 +464,14 @@ docMethodWithTypes tenv (Def _ n q p k a b _ _ ddoc) =
     extractParamTypeFromRow name (TRow _ _ n t rest)
         | nstr n == name = Just t
         | otherwise = extractParamTypeFromRow name rest
+    extractParamTypeFromRow name (TDefRow _ _ n t _ rest)
+        | nstr n == name = Just t
+        | otherwise = extractParamTypeFromRow name rest
     extractParamTypeFromRow _ _ = Nothing
 
     advanceRow :: Type -> Type
     advanceRow (TRow _ _ _ _ rest) = rest
+    advanceRow (TDefRow _ _ _ _ _ rest) = rest
     advanceRow t = t
 docMethodWithTypes _ _ = empty
 
@@ -562,6 +570,7 @@ collectUglyTypeVarsFromType (TFun _ _ posRow kwdRow resType) =
     collectUglyTypeVarsFromType posRow ++ collectUglyTypeVarsFromType kwdRow ++ collectUglyTypeVarsFromType resType
 collectUglyTypeVarsFromType (TCon _ (TC _ ts)) = concatMap collectUglyTypeVarsFromType ts
 collectUglyTypeVarsFromType (TRow _ _ _ t rest) = collectUglyTypeVarsFromType t ++ collectUglyTypeVarsFromType rest
+collectUglyTypeVarsFromType (TDefRow _ _ _ t _ rest) = collectUglyTypeVarsFromType t ++ collectUglyTypeVarsFromType rest
 collectUglyTypeVarsFromType (TTuple _ posRow kwdRow) = collectUglyTypeVarsFromType posRow ++ collectUglyTypeVarsFromType kwdRow
 collectUglyTypeVarsFromType (TOpt _ t) = collectUglyTypeVarsFromType t
 collectUglyTypeVarsFromType _ = []
@@ -584,6 +593,8 @@ cleanupTypeVars mapping (TCon l (TC qn ts)) =
     TCon l (TC qn (map (cleanupTypeVars mapping) ts))
 cleanupTypeVars mapping (TRow l k n t rest) =
     TRow l k n (cleanupTypeVars mapping t) (cleanupTypeVars mapping rest)
+cleanupTypeVars mapping (TDefRow l k n t d rest) =
+    TDefRow l k n (cleanupTypeVars mapping t) d (cleanupTypeVars mapping rest)
 cleanupTypeVars mapping (TTuple l posRow kwdRow) =
     TTuple l (cleanupTypeVars mapping posRow) (cleanupTypeVars mapping kwdRow)
 cleanupTypeVars mapping (TOpt l t) =
@@ -664,6 +675,7 @@ docDeclUnified useStyle tenv decl@(Def _ n q p k a b d x ddoc) =
         containsUglyTypeVar posRow || containsUglyTypeVar kwdRow || containsUglyTypeVar resType
     containsUglyTypeVar (TCon _ (TC _ ts)) = any containsUglyTypeVar ts
     containsUglyTypeVar (TRow _ _ _ t rest) = containsUglyTypeVar t || containsUglyTypeVar rest
+    containsUglyTypeVar (TDefRow _ _ _ t _ rest) = containsUglyTypeVar t || containsUglyTypeVar rest
     containsUglyTypeVar (TTuple _ posRow kwdRow) = containsUglyTypeVar posRow || containsUglyTypeVar kwdRow
     containsUglyTypeVar (TOpt _ t) = containsUglyTypeVar t
     containsUglyTypeVar _ = False
@@ -1157,10 +1169,14 @@ docMethodStyledWithTypes useBold useColor tenv (Def _ n q p k a b _ _ ddoc) =
     extractParamTypeFromRow name (TRow _ _ n t rest)
         | nstr n == name = Just t
         | otherwise = extractParamTypeFromRow name rest
+    extractParamTypeFromRow name (TDefRow _ _ n t _ rest)
+        | nstr n == name = Just t
+        | otherwise = extractParamTypeFromRow name rest
     extractParamTypeFromRow _ _ = Nothing
 
     advanceRow :: Type -> Type
     advanceRow (TRow _ _ _ _ rest) = rest
+    advanceRow (TDefRow _ _ _ _ _ rest) = rest
     advanceRow t = t
 docMethodStyledWithTypes _ _ _ _ = empty
 
@@ -1764,6 +1780,14 @@ newtype SimplifiedType = SimplifiedType Type
 instance Pretty SimplifiedType where
     pretty (SimplifiedType t) = prettySimplifiedType t
 
+prettyDefaultSpec :: DefaultSpec -> Doc
+prettyDefaultSpec (DfltExpr source _ _) = text " = " <> pretty source
+prettyDefaultSpec DfltDynamic           = text " = <default>"
+
+renderDefaultSpec :: DefaultSpec -> String
+renderDefaultSpec (DfltExpr source _ _) = " = " ++ render (pretty source)
+renderDefaultSpec DfltDynamic           = " = <default>"
+
 -- | Pretty print a type with simplified qualified names
 prettySimplifiedType :: Type -> Doc
 prettySimplifiedType (TVar _ tv) = pretty tv
@@ -1781,6 +1805,11 @@ prettySimplifiedType (TWild _) = text "_"
 prettySimplifiedType (TNil _ _) = empty
 prettySimplifiedType (TRow _ _ label rtype rtail) =
     pretty label <> colon <+> prettySimplifiedType rtype <>
+    case rtail of
+        TNil _ _ -> empty
+        _ -> comma <+> prettySimplifiedType rtail
+prettySimplifiedType (TDefRow _ _ label rtype d rtail) =
+    pretty label <> colon <+> prettySimplifiedType rtype <> prettyDefaultSpec d <>
     case rtail of
         TNil _ _ -> empty
         _ -> comma <+> prettySimplifiedType rtail
@@ -1826,6 +1855,11 @@ prettySimplifiedPosRow (TRow _ _ _ rtype rtail) =
     case rtail of
         TNil _ _ -> empty
         _ -> comma <+> prettySimplifiedPosRow rtail
+prettySimplifiedPosRow (TDefRow _ _ label rtype d rtail) =
+    pretty label <> colon <+> prettySimplifiedType rtype <> prettyDefaultSpec d <>
+    case rtail of
+        TNil _ _ -> empty
+        _ -> comma <+> prettySimplifiedPosRow rtail
 prettySimplifiedPosRow (TStar _ _ _) = text "*args"
 prettySimplifiedPosRow t = prettySimplifiedType t
 
@@ -1833,6 +1867,11 @@ prettySimplifiedKwdRow :: KwdRow -> Doc
 prettySimplifiedKwdRow (TNil _ _) = empty
 prettySimplifiedKwdRow (TRow _ _ label rtype rtail) =
     pretty label <> colon <+> prettySimplifiedType rtype <>
+    case rtail of
+        TNil _ _ -> empty
+        _ -> comma <+> prettySimplifiedKwdRow rtail
+prettySimplifiedKwdRow (TDefRow _ _ label rtype d rtail) =
+    pretty label <> colon <+> prettySimplifiedType rtype <> prettyDefaultSpec d <>
     case rtail of
         TNil _ _ -> empty
         _ -> comma <+> prettySimplifiedKwdRow rtail
@@ -1896,6 +1935,11 @@ renderTypeWithGenericsAndConstraints generics constraints t = renderTypeHtml gen
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderTypeHtml gens cons rtail
+    renderTypeHtml gens cons (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtml gens cons rtype ++ renderDefaultSpec d ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderTypeHtml gens cons rtail
     renderTypeHtml gens cons (TStar _ _ rtail) = "*" ++ renderTypeHtml gens cons rtail
     renderTypeHtml gens _ (TFX _ fx) = render (pretty fx)
     renderTypeHtml gens _ t = render (pretty (SimplifiedType t))  -- Fallback for any other type
@@ -1942,6 +1986,11 @@ renderTypeWithGenericsAndConstraints generics constraints t = renderTypeHtml gen
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderPosRow gens cons rtail
+    renderPosRow gens cons (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtml gens cons rtype ++ renderDefaultSpec d ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderPosRow gens cons rtail
     renderPosRow gens _ (TStar _ _ _) = "*args"
     renderPosRow gens cons t = renderTypeHtml gens cons t
 
@@ -1949,6 +1998,11 @@ renderTypeWithGenericsAndConstraints generics constraints t = renderTypeHtml gen
     renderKwdRow gens _ (TNil _ _) = ""
     renderKwdRow gens cons (TRow _ _ label rtype rtail) =
         render (pretty label) ++ "=" ++ renderTypeHtml gens cons rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderKwdRow gens cons rtail
+    renderKwdRow gens cons (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtml gens cons rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderKwdRow gens cons rtail
@@ -2008,6 +2062,11 @@ renderTypeWithGenericsConstraintsAndClassesAndModule currentModule generics cons
     renderTypeHtmlWithClassesAndModule _ gens _ _ (TNil _ _) = ""
     renderTypeHtmlWithClassesAndModule curMod gens cons classes (TRow _ _ label rtype rtail) =
         render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtail
+    renderTypeHtmlWithClassesAndModule curMod gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtail
@@ -2075,6 +2134,11 @@ renderTypeWithGenericsConstraintsAndClassesAndModule currentModule generics cons
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderPosRowWithClassesAndModule curMod gens cons classes rtail
+    renderPosRowWithClassesAndModule curMod gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtype ++ renderDefaultSpec d ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderPosRowWithClassesAndModule curMod gens cons classes rtail
     renderPosRowWithClassesAndModule _ _ _ _ (TStar _ _ _) = "*args"
     renderPosRowWithClassesAndModule curMod gens cons classes t = renderTypeHtmlWithClassesAndModule curMod gens cons classes t
 
@@ -2082,6 +2146,11 @@ renderTypeWithGenericsConstraintsAndClassesAndModule currentModule generics cons
     renderKwdRowWithClassesAndModule _ _ _ _ (TNil _ _) = ""
     renderKwdRowWithClassesAndModule curMod gens cons classes (TRow _ _ label rtype rtail) =
         render (pretty label) ++ "=" ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderKwdRowWithClassesAndModule curMod gens cons classes rtail
+    renderKwdRowWithClassesAndModule curMod gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesAndModule curMod gens cons classes rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderKwdRowWithClassesAndModule curMod gens cons classes rtail
@@ -2142,6 +2211,11 @@ renderTypeWithGenericsConstraintsClassesModuleAndScope currentModule generics co
     renderTypeHtmlWithClassesModuleAndScope _ _ _ _ _ (TNil _ _) = ""
     renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope (TRow _ _ label rtype rtail) =
         render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtail
+    renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtail
@@ -2209,6 +2283,11 @@ renderTypeWithGenericsConstraintsClassesModuleAndScope currentModule generics co
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderPosRowWithClassesModuleAndScope curMod gens cons classes scope rtail
+    renderPosRowWithClassesModuleAndScope curMod gens cons classes scope (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtype ++ renderDefaultSpec d ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderPosRowWithClassesModuleAndScope curMod gens cons classes scope rtail
     renderPosRowWithClassesModuleAndScope _ _ _ _ _ (TStar _ _ _) = "*args"
     renderPosRowWithClassesModuleAndScope curMod gens cons classes scope t = renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope t
 
@@ -2216,6 +2295,11 @@ renderTypeWithGenericsConstraintsClassesModuleAndScope currentModule generics co
     renderKwdRowWithClassesModuleAndScope _ _ _ _ _ (TNil _ _) = ""
     renderKwdRowWithClassesModuleAndScope curMod gens cons classes scope (TRow _ _ label rtype rtail) =
         render (pretty label) ++ "=" ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderKwdRowWithClassesModuleAndScope curMod gens cons classes scope rtail
+    renderKwdRowWithClassesModuleAndScope curMod gens cons classes scope (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClassesModuleAndScope curMod gens cons classes scope rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderKwdRowWithClassesModuleAndScope curMod gens cons classes scope rtail
@@ -2272,6 +2356,11 @@ renderTypeWithGenericsConstraintsAndClasses generics constraints classNames t = 
     renderTypeHtmlWithClasses gens _ _ (TNil _ _) = ""
     renderTypeHtmlWithClasses gens cons classes (TRow _ _ label rtype rtail) =
         render (pretty label) ++ ": " ++ renderTypeHtmlWithClasses gens cons classes rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderTypeHtmlWithClasses gens cons classes rtail
+    renderTypeHtmlWithClasses gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClasses gens cons classes rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderTypeHtmlWithClasses gens cons classes rtail
@@ -2342,6 +2431,11 @@ renderTypeWithGenericsConstraintsAndClasses generics constraints classNames t = 
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderPosRowWithClasses gens cons classes rtail
+    renderPosRowWithClasses gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClasses gens cons classes rtype ++ renderDefaultSpec d ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderPosRowWithClasses gens cons classes rtail
     renderPosRowWithClasses gens _ _ (TStar _ _ _) = "*args"
     renderPosRowWithClasses gens cons classes t = renderTypeHtmlWithClasses gens cons classes t
 
@@ -2349,6 +2443,11 @@ renderTypeWithGenericsConstraintsAndClasses generics constraints classNames t = 
     renderKwdRowWithClasses gens _ _ (TNil _ _) = ""
     renderKwdRowWithClasses gens cons classes (TRow _ _ label rtype rtail) =
         render (pretty label) ++ "=" ++ renderTypeHtmlWithClasses gens cons classes rtype ++
+        case rtail of
+            TNil _ _ -> ""
+            _ -> ", " ++ renderKwdRowWithClasses gens cons classes rtail
+    renderKwdRowWithClasses gens cons classes (TDefRow _ _ label rtype d rtail) =
+        render (pretty label) ++ ": " ++ renderTypeHtmlWithClasses gens cons classes rtype ++ renderDefaultSpec d ++
         case rtail of
             TNil _ _ -> ""
             _ -> ", " ++ renderKwdRowWithClasses gens cons classes rtail
@@ -2444,17 +2543,24 @@ extractParamTypeFromRow _ (TNil _ _) = Nothing
 extractParamTypeFromRow name (TRow _ _ n t rest)
     | nstr n == name = Just t
     | otherwise = extractParamTypeFromRow name rest
+extractParamTypeFromRow name (TDefRow _ _ n t _ rest)
+    | nstr n == name = Just t
+    | otherwise = extractParamTypeFromRow name rest
 extractParamTypeFromRow _ _ = Nothing
 
 -- Advance to next position in row
 advanceRow :: Type -> Type
 advanceRow (TRow _ _ _ _ rest) = rest
+advanceRow (TDefRow _ _ _ _ _ rest) = rest
 advanceRow t = t
 
 -- Extract parameter type from keyword row
 extractParamTypeFromKwdRow :: String -> Type -> Maybe Type
 extractParamTypeFromKwdRow _ (TNil _ _) = Nothing
 extractParamTypeFromKwdRow name (TRow _ _ n t rest)
+    | nstr n == name = Just t
+    | otherwise = extractParamTypeFromKwdRow name rest
+extractParamTypeFromKwdRow name (TDefRow _ _ n t _ rest)
     | nstr n == name = Just t
     | otherwise = extractParamTypeFromKwdRow name rest
 extractParamTypeFromKwdRow _ _ = Nothing
