@@ -30,7 +30,10 @@ static inline void cpu_relax(void) {
 // from the holder and from each other, and a waiter tries to take the lock
 // only when it looks free. The pause between reads doubles up to a limit,
 // so the waiters do not all retry the moment the lock is released. Taking
-// and releasing the lock are full barriers; the wake logic relies on that.
+// the lock is an acquire and releasing it a release. Neither is a full
+// barrier on Arm: a load after spinlock_unlock() can complete before the
+// stores made under the lock are visible to other threads, so code that
+// needs that order, like wake_wt(), issues a fence.
 static inline void spinlock_lock($Lock *f) {
     unsigned int backoff = 1;
     while (atomic_exchange(f, 1)) {

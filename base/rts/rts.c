@@ -408,6 +408,15 @@ void wake_wt(int wtid) {
 #ifdef ACTON_THREADS
     // wake up corresponding worker threads....
     if (wtid == SHARED_RQ) {
+        // When the caller has just put an actor on the shared queue,
+        // releasing the queue lock does not order that store before our
+        // reads of wt_stats[].state below: on Arm those reads may complete
+        // before the actor is visible to other threads. This fence orders
+        // the enqueue before those reads. It pairs with the fence a worker
+        // issues after storing WT_Idle and before it reads the queues for
+        // the last time (wt_work_cb()): either that worker finds the actor,
+        // or we read WT_Idle and wake it.
+        atomic_thread_fence(memory_order_seq_cst);
         for (int i = 1; i <= num_wthreads; i++) {
             if (wt_stats[i].state == WT_Idle) {
                 uv_async_send(&wake_ev[i]);
@@ -1753,10 +1762,24 @@ void wt_work_cb(uv_check_t *ev) {
         }
         volatile $Actor current = DEQ_ready(wctx->id);
         if (!current) {
-            // An enqueuer wakes only workers it sees idle, and we marked
-            // ourselves idle after our last continuation. A full fence
-            // before looking once more means that either the enqueuer sees
-            // us idle or we see its actor.
+            // Both queues looked empty, so we are about to return to the
+            // event loop and sleep until another thread wakes us. A thread
+            // that puts an actor on the shared queue then calls
+            // wake_wt(SHARED_RQ), which wakes a worker only if it reads that
+            // worker's wt_stats[].state as WT_Idle. We stored WT_Idle after
+            // our previous continuation, but DEQ_ready() reads the queue
+            // heads without taking the queue locks, so without a fence the
+            // CPU may read them before our WT_Idle store is visible to other
+            // threads. An enqueuer could then read our state as WT_Working
+            // and wake no one, while we read its queue as empty and sleep,
+            // leaving its actor queued.
+            // This fence makes our WT_Idle store visible to all threads
+            // before we read the queues again, and wake_wt() has the
+            // matching fence between the enqueue and its reads of the
+            // worker states. With both fences, at least one side sees the
+            // other's store: we find the actor here, or the enqueuer reads
+            // WT_Idle and wakes us. A worker that finds an actor on its
+            // first look skips the fence.
             atomic_thread_fence(memory_order_seq_cst);
             current = DEQ_ready(wctx->id);
             if (!current)
