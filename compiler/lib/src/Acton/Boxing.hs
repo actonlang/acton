@@ -206,10 +206,10 @@ directMethodImpl env qn n           = case findQName qn env of
                                         Just NDef{} -> True
                                         _           -> False
 
--- Statically resolved indexing on builtin containers can use a private raw
--- worker.  The public protocol method and witness table keep their boxed ABI;
--- only the direct call selected above is replaced.  rtypeOfFun then drives the
--- usual argument/result boxing for the worker's declared representation.
+-- Statically resolved operations on selected builtin containers can use a
+-- private raw worker.  The public protocol method and witness table keep their
+-- boxed ABI; only the direct call selected above is replaced.  rtypeOfFun then
+-- drives the usual argument/result boxing for the worker's representation.
 rawBuiltinMethodCall                :: BoxEnv -> Name -> PosArg -> Maybe Expr
 rawBuiltinMethodCall env attr p     = do f <- rawBuiltinMethod env attr (posargs p)
                                          case rtypeOfFun env f of
@@ -221,9 +221,10 @@ rawBuiltinMethod                   :: BoxEnv -> Name -> [Expr] -> Maybe Expr
 -- avoiding needless QuickType work, this is important for chained calls such
 -- as bytes.from_hex(...).hex(): a probe for hex must not try to instantiate
 -- the polymorphic bytes constructor merely to discover that hex has no raw
--- indexing worker.
+-- worker.
 rawBuiltinMethod _ attr _
-  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW]
+  | attr `notElem` [getitemKW, setitemKW, delitemKW, lenKW,
+                    containsKW, containsnotKW, setAddKW, discardKW]
                                     = Nothing
 rawBuiltinMethod env attr es@(recv:_)
                                     = case (unalias env (typeOf env recv), attr, es) of
@@ -251,6 +252,14 @@ rawBuiltinMethod env attr es@(recv:_)
                                         (TCon _ (TC q []), n, [_, _])
                                           | q == qnBitarray, n == getitemKW
                                             -> Just $ eQVar primUBitarrayGetItem
+                                          | q == qnBitset, n == containsKW
+                                            -> Just $ eQVar primUBitsetContains
+                                          | q == qnBitset, n == containsnotKW
+                                            -> Just $ eQVar primUBitsetContainsNot
+                                          | q == qnBitset, n == setAddKW
+                                            -> Just $ eQVar primUBitsetAdd
+                                          | q == qnBitset, n == discardKW
+                                            -> Just $ eQVar primUBitsetDiscard
                                           | q == qnStr, n == getitemKW
                                             -> Just $ eQVar primUStrGetItem
                                           | q == qnBytes, n == getitemKW
@@ -839,9 +848,9 @@ instance Boxing Expr where
                                          case rawMatrixMethodCall env attr p1 of
                                            Just c  -> return (ws,c)
                                            Nothing -> error "Internal error: raw matrix method lost during boxing"
-    -- Concrete builtin containers resolve indexing directly to raw workers
-    -- so they retain the raw element ABI. Their protocol witnesses continue
-    -- to serve polymorphic code.
+    -- Concrete builtin containers resolve selected operations directly to raw
+    -- workers so they retain the raw element ABI. Their protocol witnesses
+    -- continue to serve polymorphic code.
     boxing env (Call _ (Dot _ recv attr) p KwdNil)
       -- A class receiver denotes a static/class method, not a container value.
       -- In particular, asking QuickType for the value type of polymorphic

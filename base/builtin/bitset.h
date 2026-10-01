@@ -33,3 +33,9 @@ struct B_IteratorD_bitset {
 extern struct B_IteratorD_bitsetG_class B_IteratorD_bitsetG_methods;
 B_IteratorD_bitset B_IteratorD_bitsetG_new(B_bitset src);
 
+// Raw entry points selected by the compiler for operations on a concrete
+// bitset. The Set[int] witness methods retain their ordinary boxed ABI.
+bool $bitsetD_U__contains__(B_bitset self, int64_t elem);
+bool $bitsetD_U__containsnot__(B_bitset self, int64_t elem);
+B_NoneType $bitsetD_U_add(B_bitset self, int64_t elem);
+B_NoneType $bitsetD_U_discard(B_bitset self, int64_t elem);

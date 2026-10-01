@@ -2270,6 +2270,19 @@ main = do
         , "xs->$class->__setitem__"
         , "xs->$class->__len__"
         ]
+      testCodeGenContains env0 "raw_bitset"
+        [ "$bitsetD_U__contains__(xs, i)"
+        , "$bitsetD_U__containsnot__(xs, i)"
+        , "$bitsetD_U_add(xs, i)"
+        , "$bitsetD_U_discard(xs, i)"
+        ]
+      testCodeGenDoesNotContain env0 "raw_bitset"
+        [ "toB_int(i)"
+        , "B_SetD_bitsetD___contains__"
+        , "B_SetD_bitsetD___containsnot__"
+        , "B_SetD_bitsetD_add"
+        , "B_SetD_bitsetD_discard"
+        ]
       testCodeGenContains env0 "local_shadows_function" ["B_str boom;", "return boom;"]
 
     describe "Test run context" $ do

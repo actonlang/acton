@@ -586,6 +586,8 @@ class array[A(ArrayElement)] (object):
 
 # Fixed-size packed storage for Boolean values.  Unlike sequence indexing,
 # negative indices are deliberately rejected rather than counted from the end.
+# Logical operations zero-extend the shorter operand: intersection takes the
+# shorter length, while union and symmetric difference take the longer length.
 class bitarray (object):
     def __init__(self, length: int, initial: bool=False) -> None:
         NotImplemented
@@ -594,6 +596,9 @@ class bitarray (object):
 # Capacity constrains mutation but is not part of extensional set equality.
 class bitset (object):
     def __init__(self, capacity: int, iterable: ?Iterable[int]=None) -> None:
+        NotImplemented
+    @staticmethod
+    def full(capacity: int) -> bitset:
         NotImplemented
     def capacity(self) -> int:
         NotImplemented
@@ -982,6 +987,9 @@ extension bitarray (MutIndexed[int,bool]):
     NotImplemented
 
 extension bitarray (Container[bool]):
+    NotImplemented
+
+extension bitarray (Logical):
     NotImplemented
 
 extension bitset (Set[int]):

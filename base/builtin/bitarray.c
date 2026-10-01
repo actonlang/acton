@@ -105,6 +105,55 @@ B_NoneType B_bitarrayD___setitem__(B_bitarray self, int64_t index, bool value) {
     return $bitarrayD_U__setitem__(self, index, value);
 }
 
+// Logical operations treat a missing suffix of the shorter operand as false.
+// Consequently, intersection has the shorter length while union and symmetric
+// difference have the longer length.
+enum B_bitarray_op { B_BITARRAY_AND, B_BITARRAY_OR, B_BITARRAY_XOR };
+
+static uint64_t B_bitarray_word_at(B_bitarray self, uint64_t index) {
+    return index < B_bitarray_word_count(self->length) ? self->data[index] : 0;
+}
+
+static B_bitarray B_bitarray_binary(B_bitarray left, B_bitarray right,
+                                     enum B_bitarray_op op) {
+    int64_t length;
+    if (op == B_BITARRAY_AND)
+        length = left->length < right->length ? left->length : right->length;
+    else
+        length = left->length > right->length ? left->length : right->length;
+
+    B_bitarray result = B_bitarrayG_new(length, B_False);
+    uint64_t word_count = B_bitarray_word_count(length);
+    for (uint64_t i = 0; i < word_count; i++) {
+        uint64_t a = B_bitarray_word_at(left, i);
+        uint64_t b = B_bitarray_word_at(right, i);
+        switch (op) {
+        case B_BITARRAY_AND: result->data[i] = a & b; break;
+        case B_BITARRAY_OR:  result->data[i] = a | b; break;
+        case B_BITARRAY_XOR: result->data[i] = a ^ b; break;
+        }
+        if (i + 1 == word_count)
+            result->data[i] &= B_bitarray_tail_mask(length);
+        result->count += __builtin_popcountll(result->data[i]);
+    }
+    return result;
+}
+
+B_bitarray B_LogicalD_bitarrayD___and__(B_LogicalD_bitarray wit,
+                                        B_bitarray left, B_bitarray right) {
+    return B_bitarray_binary(left, right, B_BITARRAY_AND);
+}
+
+B_bitarray B_LogicalD_bitarrayD___or__(B_LogicalD_bitarray wit,
+                                       B_bitarray left, B_bitarray right) {
+    return B_bitarray_binary(left, right, B_BITARRAY_OR);
+}
+
+B_bitarray B_LogicalD_bitarrayD___xor__(B_LogicalD_bitarray wit,
+                                        B_bitarray left, B_bitarray right) {
+    return B_bitarray_binary(left, right, B_BITARRAY_XOR);
+}
+
 // MutIndexed uses the ordinary boxed protocol ABI. Direct bitarray indexing
 // continues to use the raw bool workers above.
 B_bool B_MutIndexedD_bitarrayD___getitem__(B_MutIndexedD_bitarray wit,

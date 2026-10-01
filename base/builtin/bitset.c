@@ -44,11 +44,15 @@ static B_bitset B_bitset_alloc(int64_t capacity) {
     return self;
 }
 
-static bool B_bitset_contains_raw(B_bitset self, int64_t elem) {
+bool $bitsetD_U__contains__(B_bitset self, int64_t elem) {
     if (elem < 0 || elem >= self->capacity)
         return false;
     uint64_t bit = (uint64_t)elem;
     return (self->data[bit >> 6] >> (bit & 63)) & UINT64_C(1);
+}
+
+bool $bitsetD_U__containsnot__(B_bitset self, int64_t elem) {
+    return !$bitsetD_U__contains__(self, elem);
 }
 
 static bool B_bitset_assign_raw(B_bitset self, int64_t elem, bool value) {
@@ -70,6 +74,17 @@ static void B_bitset_add_raw(B_bitset self, int64_t elem) {
     if (elem < 0 || elem >= self->capacity)
         RAISE_EXC(&B_bitset_element_error);
     B_bitset_assign_raw(self, elem, true);
+}
+
+B_NoneType $bitsetD_U_add(B_bitset self, int64_t elem) {
+    B_bitset_add_raw(self, elem);
+    return B_None;
+}
+
+B_NoneType $bitsetD_U_discard(B_bitset self, int64_t elem) {
+    if (elem >= 0 && elem < self->capacity)
+        B_bitset_assign_raw(self, elem, false);
+    return B_None;
 }
 
 static void B_bitset_add_iterable(B_bitset self, B_Iterable wit, $WORD iterable) {
@@ -164,6 +179,17 @@ B_NoneType B_bitsetD___init__(B_bitset self, B_Iterable wit,
     B_bitset_init_storage(self, capacity);
     B_bitset_add_iterable(self, wit, iterable);
     return B_None;
+}
+
+B_bitset B_bitsetD_full(int64_t capacity) {
+    B_bitset self = B_bitset_alloc(capacity);
+    uint64_t word_count = B_bitset_word_count(capacity);
+    if (word_count) {
+        memset(self->data, 0xff, (size_t)word_count * sizeof(uint64_t));
+        self->data[word_count - 1] &= B_bitset_tail_mask(capacity);
+    }
+    self->count = capacity;
+    return self;
 }
 
 bool B_bitsetD___bool__(B_bitset self) {
@@ -278,11 +304,11 @@ int64_t B_SetD_bitsetD___len__(B_SetD_bitset wit, B_bitset self) {
 }
 
 bool B_SetD_bitsetD___contains__(B_SetD_bitset wit, B_bitset self, B_int elem) {
-    return B_bitset_contains_raw(self, elem->val);
+    return $bitsetD_U__contains__(self, elem->val);
 }
 
 bool B_SetD_bitsetD___containsnot__(B_SetD_bitset wit, B_bitset self, B_int elem) {
-    return !B_bitset_contains_raw(self, elem->val);
+    return $bitsetD_U__containsnot__(self, elem->val);
 }
 
 bool B_SetD_bitsetD_isdisjoint(B_SetD_bitset wit, B_bitset left, B_bitset right) {
@@ -296,14 +322,11 @@ bool B_SetD_bitsetD_isdisjoint(B_SetD_bitset wit, B_bitset left, B_bitset right)
 }
 
 B_NoneType B_SetD_bitsetD_add(B_SetD_bitset wit, B_bitset self, B_int elem) {
-    B_bitset_add_raw(self, elem->val);
-    return B_None;
+    return $bitsetD_U_add(self, elem->val);
 }
 
 B_NoneType B_SetD_bitsetD_discard(B_SetD_bitset wit, B_bitset self, B_int elem) {
-    if (elem->val >= 0 && elem->val < self->capacity)
-        B_bitset_assign_raw(self, elem->val, false);
-    return B_None;
+    return $bitsetD_U_discard(self, elem->val);
 }
 
 B_int B_SetD_bitsetD_pop(B_SetD_bitset wit, B_bitset self) {

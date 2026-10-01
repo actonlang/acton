@@ -1,0 +1,11 @@
+def bit_contains(xs: bitset, i: int) -> bool:
+    return i in xs
+
+def bit_containsnot(xs: bitset, i: int) -> bool:
+    return i not in xs
+
+def bit_add(xs: bitset, i: int) -> None:
+    xs.add(i)
+
+def bit_discard(xs: bitset, i: int) -> None:
+    xs.discard(i)

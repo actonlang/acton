@@ -5,6 +5,7 @@ struct B_ContainerD_array B_ContainerD_arrayD_intG_instance;
 struct B_ContainerD_array B_ContainerD_arrayD_floatG_instance;
 struct B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_instance;
 struct B_ContainerD_bitarray B_ContainerD_bitarrayG_instance;
+struct B_LogicalD_bitarray B_LogicalD_bitarrayG_instance;
 struct B_SetD_bitset B_SetD_bitsetG_instance;
 struct B_OrdD_SetD_bitset B_OrdD_SetD_bitsetG_instance;
 struct B_LogicalD_SetD_bitset B_LogicalD_SetD_bitsetG_instance;
@@ -313,6 +314,9 @@ struct B_ContainerD_bitarray B_ContainerD_bitarrayG_instance = {
     &B_ContainerD_bitarrayG_methods,
     (B_Eq)&B_HashableD_boolG_instance
 };
+struct B_LogicalD_bitarray B_LogicalD_bitarrayG_instance = {
+    &B_LogicalD_bitarrayG_methods
+};
 struct B_SetD_bitset B_SetD_bitsetG_instance = {
     &B_SetD_bitsetG_methods,
     (B_Eq)&B_OrdD_intG_instance,
@@ -363,6 +367,7 @@ B_ContainerD_array B_ContainerD_arrayD_intG_witness = &B_ContainerD_arrayD_intG_
 B_ContainerD_array B_ContainerD_arrayD_floatG_witness = &B_ContainerD_arrayD_floatG_instance;
 B_MutIndexedD_bitarray B_MutIndexedD_bitarrayG_witness = &B_MutIndexedD_bitarrayG_instance;
 B_ContainerD_bitarray B_ContainerD_bitarrayG_witness = &B_ContainerD_bitarrayG_instance;
+B_LogicalD_bitarray B_LogicalD_bitarrayG_witness = &B_LogicalD_bitarrayG_instance;
 B_SetD_bitset B_SetD_bitsetG_witness = &B_SetD_bitsetG_instance;
 B_TimesD_bytes B_TimesD_bytesG_witness = &B_TimesD_bytesG_instance;
 B_ContainerD_bytes B_ContainerD_bytesG_witness = &B_ContainerD_bytesG_instance;
