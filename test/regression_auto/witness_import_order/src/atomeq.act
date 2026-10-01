@@ -1,0 +1,7 @@
+# The imported module: extends the builtin supertype atom with Eq. __eq__
+# always returns False, so a comparison that uses this witness gives a
+# wrong result that the test can see.
+
+extension atom (Eq):
+    def __eq__(self, other: atom) -> bool:
+        return False
