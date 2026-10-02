@@ -13,3 +13,14 @@ def boolean_default(x: bool=True) -> bool:
 
 def generic_default[T(Number)](x: T=1) -> T:
     return x
+
+def dict_default(x: dict[str, int]={}) -> dict[str, int]:
+    return x
+
+def same_module_dict_default() -> dict[str, int]:
+    return dict_default()
+
+def nested_dict_default() -> dict[str, int]:
+    def inner(x: dict[str, int]={}) -> dict[str, int]:
+        return x
+    return inner()
