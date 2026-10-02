@@ -1747,9 +1747,35 @@ void wt_wake_cb(uv_async_t *ev) {
     // work is run later when wt_work_cb is called as part of the "check" phase.
 }
 
+// When a worker takes an actor from a ready queue, it keeps running the
+// actor's continuations while the actor has work: up to KEEP_CONTS of them,
+// or until KEEP_NS has passed, whichever comes first. Then the actor goes to
+// the end of the queue if another actor is waiting. If no other actor is
+// waiting, the worker keeps running it.
+#define KEEP_CONTS 8
+#define KEEP_NS (10 * 1000)
+
+static inline long long int ts_ns(uv_timespec64_t ts) {
+    return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+// Whether another actor is waiting in this worker's queue or in the shared
+// queue. Worker 0 never takes actors from the shared queue, so for worker 0
+// only its own queue counts.
+static inline bool others_waiting(int wtid) {
+    return rqs[wtid].head != NULL || (wtid != 0 && rqs[SHARED_RQ].head != NULL);
+}
+
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)ev->data;
     assert(wctx->id >= 0 && wctx->id < 256);
+    // current: the actor this worker runs. It stays set from one iteration
+    // to the next while the worker keeps running the same actor.
+    // taken_ns: when the worker took that actor from a queue
+    // conts: how many of its continuations the worker has run since
+    volatile $Actor current = NULL;
+    volatile long long int taken_ns = 0;
+    volatile int conts = 0;
 
     uv_timespec64_t ts_start, ts1, ts2, ts3;
     long long int runtime = 0;
@@ -1760,7 +1786,9 @@ void wt_work_cb(uv_check_t *ev) {
         if (rts_exit) {
             return;
         }
-        volatile $Actor current = DEQ_ready(wctx->id);
+        bool continued = current != NULL;
+        if (!continued)
+            current = DEQ_ready(wctx->id);
         if (!current) {
             // Both queues looked empty, so we are about to return to the
             // event loop and sleep until another thread wakes us. A thread
@@ -1785,8 +1813,15 @@ void wt_work_cb(uv_check_t *ev) {
             if (!current)
                 return;
         }
-
-        wake_wt(SHARED_RQ);
+        if (!continued) {
+            // Putting an actor on the queue wakes one idle worker, but
+            // several actors queued in a row can all wake the same worker.
+            // So when we take an actor and more are waiting, we wake another
+            // worker. We mark ourselves as working first, so that this wake
+            // goes to a sleeping worker and not to ourselves.
+            wt_stats[wctx->id].state = WT_Working;
+            wake_wt(SHARED_RQ);
+        }
 
         SET_SELF(current);
         volatile B_Msg m = current->B_Msg;
@@ -1794,7 +1829,10 @@ void wt_work_cb(uv_check_t *ev) {
         $WORD val = m->value;
 
         uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts1);
-        wt_stats[wctx->id].state = WT_Working;
+        if (!continued) {
+            taken_ns = ts_ns(ts1);
+            conts = 0;
+        }
 
         $R r;
         if (wctx->jump0 || $PUSH()) {                         // Normal path
@@ -1822,6 +1860,7 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
             else                              { wt_stats[wctx->id].conts_inf++; }
         } else {                                        // Exceptional path
+            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
             assert(wctx->jump0 != NULL);
             assert(wctx->jump0->xval != NULL);
             B_BaseException ex = wctx->jump0->xval;
@@ -1829,6 +1868,7 @@ void wt_work_cb(uv_check_t *ev) {
             r = $R_FAIL(ex);
         }
 
+        bool more = false;             // the actor still has work
         switch (r.tag) {
         case $RDONE: {
             save_actor_state(current, m);
@@ -1844,7 +1884,7 @@ void wt_work_cb(uv_check_t *ev) {
             }
             rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
-                ENQ_ready(current);
+                more = true;
             }
             break;
         }
@@ -1852,7 +1892,7 @@ void wt_work_cb(uv_check_t *ev) {
             m->$cont = r.cont;
             m->value = r.value;
             rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-            ENQ_ready(current);
+            more = true;
             break;
         }
         case $RFAIL: {
@@ -1862,7 +1902,7 @@ void wt_work_cb(uv_check_t *ev) {
                 m->$cont = c->$cont;
                 m->value = B_False;             // False signals the exceptional branch
                 rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
-                ENQ_ready(current);
+                more = true;
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
                 B_BaseException ex = (B_BaseException)r.value;
@@ -1885,7 +1925,7 @@ void wt_work_cb(uv_check_t *ev) {
                     b = c;
                 }
                 if (DEQ_msg(current)) {
-                    ENQ_ready(current);
+                    more = true;
                 }
                 rtsd_printf("## Done handling failed actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             }
@@ -1933,15 +1973,36 @@ void wt_work_cb(uv_check_t *ev) {
                 rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
                 m->value = x->value;
-                ENQ_ready(current);
+                more = true;
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
                 rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
                 m->value = x->value;
-                ENQ_ready(current);
+                more = true;
             }
             break;
         }
         }
+        // If the actor still has work, run it again here instead of putting
+        // it back on the queue. Putting it back would cost a push, a pop and
+        // a wake of another worker. It would also usually move the actor to
+        // another core, and make it wait behind every actor in the queue.
+        // KEEP_CONTS and KEEP_NS limit how long it runs while other actors
+        // wait. An actor that was pinned to another worker during this
+        // continuation, for example by set_actor_affinity, goes to that
+        // worker's queue instead.
+        bool keep = false;
+        if (more) {
+            conts++;
+            bool runs_here = current->$affinity == SHARED_RQ
+                             || current->$affinity == wctx->id;
+            keep = runs_here
+                   && (!others_waiting(wctx->id)
+                       || (conts < KEEP_CONTS && ts_ns(ts2) - taken_ns < KEEP_NS));
+            if (!keep)
+                ENQ_ready(current);
+        }
+        if (!keep)
+            current = NULL;
         SET_SELF(NULL);
 
         uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts3);
@@ -1961,14 +2022,23 @@ void wt_work_cb(uv_check_t *ev) {
         else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
         else                              { wt_stats[wctx->id].bkeep_inf++; }
 
-        wt_stats[wctx->id].state = WT_Idle;
+        // Stay marked as working while we keep running the same actor. We
+        // will not take anything from a queue until we are done with it, so
+        // wake_wt() should wake some other worker.
+        if (!current)
+            wt_stats[wctx->id].state = WT_Idle;
 
         runtime = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts_start.tv_sec * 1000000000 + ts_start.tv_nsec);
         // run for max 20ms before yielding to IO
         // NOTE: since we are not preemptive, a single long continuation can
         // exceed this cap
-        if (runtime > 20*1000000)
+        if (runtime > 20*1000000) {
+            if (current) {
+                ENQ_ready(current);
+                wt_stats[wctx->id].state = WT_Idle;
+            }
             break;
+        }
     }
 
     // if there's more work, wake up ourselves again to process more but
