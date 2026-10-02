@@ -21,7 +21,16 @@ class Bar(object):
     def f(self, x, y='world'):
         return x + ', ' + y
 
+actor DefaultActor():
+    action def f(x: ?bool=None, y: ?bool=None) -> None:
+        pass
+
 actor main(env):
+    # Actor interfaces are inferred through a provisional method type. Make
+    # sure that learning its keyword-row shape preserves default arguments.
+    default_actor: DefaultActor = DefaultActor()
+    default_actor.f(x=False)
+
     optional_alias = optional_default
     if optional_default() != 3 or optional_default(None) is not None or optional_alias() != 3:
         print("Nullable default argument semantics failed")

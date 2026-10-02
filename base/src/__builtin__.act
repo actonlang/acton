@@ -153,17 +153,17 @@ class str (atom):
         NotImplemented
     def center       (self, width: int, fillchar: ?str=None) -> str:
         NotImplemented
-    def count        (self, sub: str, start: ?int=None, end: ?int=None) -> int:
+    def count        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def encode       (self) -> bytes:
         NotImplemented
-    def endswith     (self, suffix: str, start: ?int=None, end: ?int=None) -> bool:
+    def endswith     (self, suffix: str, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def expandtabs   (self, tabsize: ?int=None) -> str:
         NotImplemented
-    def find         (self, sub: str, start: ?int=None, end: ?int=None) -> int:
+    def find         (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def index        (self, sub: str, start: ?int=None, end: ?int=None) -> int:
+    def index        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -195,9 +195,9 @@ class str (atom):
         NotImplemented
     def replace      (self, old: str, new: str, count: ?int=None) -> str:
         NotImplemented
-    def rfind        (self, sub: str, start: ?int=None, end: ?int=None) -> int:
+    def rfind        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: str, start: ?int=None, end: ?int=None) -> int:
+    def rindex       (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def rjust        (self, width: int, fillchar: ?str=None) -> str:
         NotImplemented
@@ -209,7 +209,7 @@ class str (atom):
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[str]:
         NotImplemented
-    def startswith   (self, prefix: str, start: ?int=None, end: ?int=None) -> bool:
+    def startswith   (self, prefix: str, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def strip        (self, chars: ?str=None) -> str:
         NotImplemented
@@ -225,22 +225,22 @@ class bytes (atom):
         NotImplemented
     def center       (self, width: int, fillchar: ?bytes=None) -> bytes:
         NotImplemented
-    def count        (self, sub: bytes, start: ?int=None, end: ?int=None) -> int:
+    def count        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytes, start: ?int=None, end: ?int=None) -> bool:
+    def endswith     (self, suffix: bytes, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def expandtabs   (self, tabsize: ?int=None) -> bytes:
         NotImplemented
-    def find         (self, sub: bytes, start: ?int=None, end: ?int=None) -> int:
+    def find         (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytes:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytes, start: ?int=None, end: ?int=None) -> int:
+    def index        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -270,9 +270,9 @@ class bytes (atom):
         NotImplemented
     def replace      (self, old: bytes, new: bytes, count: ?int=None) -> bytes:
         NotImplemented
-    def rfind        (self, sub: bytes, start: ?int=None, end: ?int=None) -> int:
+    def rfind        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: bytes, start: ?int=None, end: ?int=None) -> int:
+    def rindex       (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def rjust        (self, width: int, fillchar: ?bytes=None) -> bytes:
         NotImplemented
@@ -284,7 +284,7 @@ class bytes (atom):
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[bytes]:
         NotImplemented
-    def startswith   (self, prefix: bytes, start: ?int=None, end: ?int=None) -> bool:
+    def startswith   (self, prefix: bytes, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def strip        (self, chars: ?bytes=None) -> bytes:
         NotImplemented
@@ -300,22 +300,22 @@ class bytearray (object):
         NotImplemented
     def center       (self, width: int, fillchar: ?bytearray=None) -> bytearray:
         NotImplemented
-    def count        (self, sub: bytearray, start: ?int=None, end: ?int=None) -> int:
+    def count        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytearray, start: ?int=None, end: ?int=None) -> bool:
+    def endswith     (self, suffix: bytearray, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def expandtabs   (self, tabsize: ?int=None) -> bytearray:
         NotImplemented
-    def find         (self, sub: bytearray, start: ?int=None, end: ?int=None) -> int:
+    def find         (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytearray:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytearray, start: ?int=None, end: ?int=None) -> int:
+    def index        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -345,9 +345,9 @@ class bytearray (object):
         NotImplemented
     def replace      (self, old: bytearray, new: bytearray, count: ?int=None) -> bytearray:
         NotImplemented
-    def rfind        (self, sub: bytearray, start: ?int=None, end: ?int=None) -> int:
+    def rfind        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: bytearray, start: ?int=None, end: ?int=None) -> int:
+    def rindex       (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def rjust        (self, width: int, fillchar: ?bytearray=None) -> bytearray:
         NotImplemented
@@ -359,7 +359,7 @@ class bytearray (object):
         NotImplemented
     def splitlines   (self, keepends: ?bool=None) -> list[bytearray]:
         NotImplemented
-    def startswith   (self, prefix: bytearray, start: ?int=None, end: ?int=None) -> bool:
+    def startswith   (self, prefix: bytearray, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
     def strip        (self, chars: ?bytearray=None) -> bytearray:
         NotImplemented
