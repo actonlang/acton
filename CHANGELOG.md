@@ -24,6 +24,10 @@
   are being redesigned. [#3084]
 
 ### Compiler & Build
+- Compile direct synchronous `for` loops over `range()` without allocating the
+  range object on the heap, and pass statically known range bounds as unboxed
+  integers. Range values that may escape the loop remain heap allocated.
+  [#3189]
 - Compile conversions between statically known fixed-width numeric types
   without boxing, while retaining range checks for narrowing conversions, and
   keep builtin sequence indices unboxed across lookup and mutable operations
@@ -36,6 +40,9 @@
 - Compile protocols that inherit another protocol with fixed type arguments
   without passing those type arguments to the wrong witness constructor, fixing
   C generation for nested protocol inheritance. [#3098]
+- Keep imported protocol witnesses in import and definition order, so broad
+  imported extensions no longer override more specific builtin witnesses and
+  change inferred types. [#3198]
 - Reuse statically known witnesses reached through multiple inherited
   protocols instead of constructing them repeatedly, including for list
   indexing and mutation. This makes affected benchmark programs run at three
@@ -98,6 +105,21 @@
   watch mode and Zig cache summaries. [#3085]
 
 ### Runtime & Standard Library
+- Add compact fixed-size containers for numeric and Boolean workloads:
+  `array[int]` and `array[float]` store unboxed values, `bitarray` packs Boolean
+  values, and `bitset` represents bounded sets of non-negative integers. The
+  new `matrix` module provides fixed-size numeric matrices with mutable row,
+  column, rectangular, transposed, and reshaped views that share storage.
+  [#3202]
+- Reduce scheduler overhead and prevent lost wakeups when many runtime workers
+  are active. Workers now avoid the global sync-pause mutex when no pause is
+  requested, contended ready-queue spinlocks back off without repeatedly
+  writing the lock, and matching memory fences keep newly queued actors from
+  being left asleep on Arm. [#3205] [#3206] [#3210]
+- Flush messages produced by a turn before an actor begins waiting for an
+  awaited result, preventing another worker from resuming the actor
+  concurrently and causing crashes, reordered messages, or incorrect timer
+  baselines. [#3209]
 - Use 64-bit lengths for `str`, `bytes`, and `bytearray`, allowing their core
   operations to produce values larger than 2 GiB. Large widths, counts, and
   totals are checked without integer overflow; values beyond the supported
@@ -160,13 +182,17 @@
 - Return exactly two hexadecimal characters per input byte from `bytes.hex()`,
   preventing unrelated memory from being included in the result and corrupting
   hash strings. [#3133]
-- Preserve embedded NUL characters when decoding `bytes` or `bytearray` to
-  `str`, and use the complete string for comparison, hashing, iteration,
-  prefix and suffix checks, and JSON keys and values. Decoding now rejects
-  invalid UTF-8 or trailing JSON input after a NUL instead of accepting a
-  truncated prefix, and `json.decode()` rejects non-object roots. Where libc
-  is available, string comparisons use its optimized memory comparison rather
-  than Zig's bytewise fallback. [#3125] [#3126] [#3128]
+- Preserve embedded NUL characters in `str` and `bytes` literals, `%`
+  formatting and interpolated strings, `print()`, regular-expression patterns
+  and matches, and when decoding `bytes` or `bytearray` to `str`. Comparisons,
+  hashing, iteration, prefix and suffix checks, and JSON keys and values use
+  the complete string; decoding rejects invalid UTF-8 or trailing JSON input
+  after a NUL instead of accepting a truncated prefix, and `json.decode()`
+  rejects non-object roots. File operations reject paths containing a NUL with
+  `ValueError` instead of operating on the prefix before it. Where libc is
+  available, string comparisons use its optimized memory comparison rather
+  than Zig's bytewise fallback. [#3125] [#3126] [#3128] [#3196] [#3199]
+  [#3200]
 - Allow list equality and inequality when elements implement only `Eq`,
   while ordering comparisons continue to require `Ord`. [#3120]
 - Hash `bool`, narrow integers, and `float` by value, so equal values in
@@ -227,7 +253,7 @@
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
   [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
-  [#3130] [#3134] [#3139]
+  [#3130] [#3134] [#3139] [#3203] [#3204] [#3207]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
@@ -262,6 +288,16 @@
     for wide ranges; compared curves share axes and show both final values.
   - Comparison summaries and legends list the baseline before the current run,
     color each label to match its curve, and keep wrapped headings aligned.
+  - `acton test --rts-wthreads N` runs ordinary, performance, scaling, and
+    stress test processes with a fixed worker count, includes it in cache and
+    baseline identities, and enables reproducible scheduler scaling studies.
+    The fleet benchmark measures a representative actor-and-timer workload,
+    while the scheduling suite covers ring handoffs, deep mailboxes, fan-out,
+    pipelines, latency under load, and work queued after replies.
+  - Recorded performance and scaling baselines from different machines now
+    still show deltas with an explicit warning instead of rejecting the
+    comparison. Their live integration tests now run with the default
+    `make test` suite and in CI.
 - Stop running full baseline performance comparisons on every pull request;
   use `acton test perf --compare` or `utils/perf-compare` when a change needs
   targeted measurement. [#3145]
@@ -5144,9 +5180,22 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3185]: https://github.com/actonlang/acton/pull/3185
 [#3186]: https://github.com/actonlang/acton/pull/3186
 [#3188]: https://github.com/actonlang/acton/pull/3188
+[#3189]: https://github.com/actonlang/acton/pull/3189
 [#3190]: https://github.com/actonlang/acton/pull/3190
 [#3191]: https://github.com/actonlang/acton/pull/3191
 [#3193]: https://github.com/actonlang/acton/pull/3193
+[#3196]: https://github.com/actonlang/acton/pull/3196
+[#3198]: https://github.com/actonlang/acton/pull/3198
+[#3199]: https://github.com/actonlang/acton/pull/3199
+[#3200]: https://github.com/actonlang/acton/pull/3200
+[#3202]: https://github.com/actonlang/acton/pull/3202
+[#3203]: https://github.com/actonlang/acton/pull/3203
+[#3204]: https://github.com/actonlang/acton/pull/3204
+[#3205]: https://github.com/actonlang/acton/pull/3205
+[#3206]: https://github.com/actonlang/acton/pull/3206
+[#3207]: https://github.com/actonlang/acton/pull/3207
+[#3209]: https://github.com/actonlang/acton/pull/3209
+[#3210]: https://github.com/actonlang/acton/pull/3210
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
