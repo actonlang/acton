@@ -17,4 +17,9 @@ actor main(env):
     if generic_value != 1:
         print("generic default witness failed")
         env.exit(1)
+    if (provider.dict_default() != {} or
+        provider.same_module_dict_default() != {} or
+        provider.nested_dict_default() != {}):
+        print("collection default expansion failed")
+        env.exit(1)
     env.exit(0)

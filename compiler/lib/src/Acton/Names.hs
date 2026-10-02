@@ -274,7 +274,7 @@ instance Vars Expr where
     freeQ (BStrings _ ss)           = []
     freeQ (Call _ e ps ks)          = freeQ e ++ freeQ ps ++ freeQ ks
     freeQ (TApp _ e ts)             = freeQ e ++ freeQ ts
-    freeQ (Let _ ss e)              = freeQ ss ++ (freeQ e `diffQ` bound ss)
+    freeQ (Let _ ss e)              = (freeQ ss ++ freeQ e) `diffQ` bound ss
     freeQ (Async _ e)               = freeQ e
     freeQ (Await _ e)               = freeQ e
     freeQ (Index _ e ix)            = freeQ e ++ freeQ ix

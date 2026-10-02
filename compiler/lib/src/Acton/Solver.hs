@@ -1028,8 +1028,8 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
                                                  r2 <- pure $ tNil KRow
                                                  unify env info (tUni tv) r2
 
-castkwd env info r1 (TRow _ _ n2 t2 r2)     = castkwdRow env info r1 n2 t2 False r2
-castkwd env info r1 (TDefRow _ _ n2 t2 _ r2)= castkwdRow env info r1 n2 t2 True r2
+castkwd env info r1 (TRow _ _ n2 t2 r2)     = castkwdRow env info r1 n2 t2 Nothing r2
+castkwd env info r1 (TDefRow _ _ n2 t2 d r2)= castkwdRow env info r1 n2 t2 (Just d) r2
 
 castkwd env info r1 (TStar _ _ r2)          = match r1
   where match (TUni _ tv)
@@ -1065,14 +1065,16 @@ castkwd env info r1 r2@TNil{}               = term r1
         term (TStar _ _ r)                  = do --traceM (" ## castkwd Star - Nil: " ++ prstr (tStar KRow r) ++ " ≠ " ++ prstr (tNil KRow))
                                                  noRed0 env (Cast info env r1 r2)
 
-castkwdRow env info r1 n2 t2 optional r2
+castkwdRow env info r1 n2 t2 md r2
                                             = do (t1,r1') <- pick r1
                                                  r2 <- usubst r2
                                                  cs <- castkwd env info r1' r2
                                                  return (Cast info env t1 t2 : cs)
   where pick (TUni _ tv)
           | tv `elem` ufree r2              = conflictingRow tv
-          | otherwise                       = do r1 <- tRow KRow n2 t2 <$> newUnivarOfKind KRow env
+          | otherwise                       = do tail <- newUnivarOfKind KRow env
+                                                 let r1 = maybe (tRow KRow n2 t2 tail)
+                                                                (\d -> tDefRow KRow n2 t2 d tail) md
                                                  unify env info (tUni tv) r1
                                                  pick r1
         pick row
@@ -1080,7 +1082,7 @@ castkwdRow env info r1 n2 t2 optional r2
                                             = if n == n2 then return (t,r) else kwdNotFound0 env info n2
         pick (TStar _ _ _)                  = kwdNotFound0 env info n2
         pick TNil{}
-          | optional                       = return (t2, r2)
+          | Just _ <- md                    = return (t2, r2)
           | otherwise                      = kwdNotFound0 env info n2
 
 

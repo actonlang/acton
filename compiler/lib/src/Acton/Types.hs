@@ -151,9 +151,13 @@ qualifyInterfaceDefaults env          = map qualifyBinding
         -- Keep the presentation expression exactly as written.  Only the
         -- checked expansion needs definition-site qualification.
         qualifyDefault ws (DfltExpr e v ref)
-                                        = DfltExpr e (qualifyExpr ws v) ref
+                                        = DfltExpr e (qualifyExpr ws v) (exportRef ref)
         qualifyDefault _ DfltDynamic    = DfltDynamic
         qualifyExpr ws                  = qualifyDefaultExprExcept env ws
+        exportRef (Just q)
+          | Internal Tempvar _ _ <- noq q
+                                        = Nothing
+        exportRef ref                   = ref
 
 -- Instantiating a polymorphic signature creates fresh caller-side protocol
 -- witnesses.  Checked defaults refer to stable witness placeholders derived
@@ -351,19 +355,25 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                  result <- newEmptyMVar
                                                  writeChan workQ (Just (env,te1,s1,item,result))
                                                  -- Continue scanning with the scanned declarations visible.
-                                                 -- Store te1 and result wait on reversed accumulators to preserve
-                                                 -- source order cheaply when collect reverses them.
+                                                 -- Keep te1 in the scanning environment, but collect the checked
+                                                 -- environment returned by the worker. Checked defaults can differ
+                                                 -- from their provisional scan representations.
                                                  go slots workQ q (tydefineClosed te1 env) (te1:tes) (readMVar result:rs) ss
                                                -- A non-total statement was already fully checked by scanOrCheck,
                                                -- so becomes complete / total before we get here and the scanner may
                                                -- continue.
                                                Right (_,te2,_,ss1) ->
-                                                 go slots workQ q (tydefineClosed te2 env) (te2:tes) (return (Right ss1):rs) ss
-        -- Wait for all statement results in source order, concatenate the
-        -- accumulated environments, keep typed statements whose checks
-        -- succeeded, and keep every error for aggregate reporting.
+                                                 go slots workQ q (tydefineClosed te2 env) (te2:tes)
+                                                    (return (Right (te2,ss1)):rs) ss
+        -- Wait for all statement results in source order, concatenate their
+        -- checked environments, keep typed statements whose checks succeeded,
+        -- and keep every error for aggregate reporting.
         collect tes rs                  = do xs <- sequence (reverse rs)
-                                             return (concat (reverse tes), [ s | Right ss1 <- xs, s <- ss1 ], [ e | Left e <- xs ])
+                                             let te0 = concat [ te1 | Right (te1,_) <- xs ]
+                                                 ss0 = [ s | Right (_,ss1) <- xs, s <- ss1 ]
+                                                 refs = defaultRefSubst te0
+                                             return (clearDefaultRefs refs te0, termsubst refs ss0,
+                                                     [ e | Left e <- xs ])
         -- Scanner/checker front door for one statement. Ordinary exceptions
         -- become Left values so infTop can collect multiple errors; async
         -- exceptions still escape through tryTop.
@@ -415,9 +425,10 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                              case r of
                                                (Left err, _) -> Control.Exception.throwIO err
                                                (Right x, st') -> return (x, st')
-        -- checkTotal returns only the typed statements, but still forces the
-        -- worker's type environment so any delayed failures surface in worker.
-        forceSuite te ss                = snd <$> forceChecked te ss
+        -- Return both checked declarations and statements: default expressions
+        -- in a total declaration are finalized by the worker even though the
+        -- scanner has already continued with its provisional environment.
+        forceSuite                      = forceChecked
         forceChecked te ss              = do te <- Control.Exception.evaluate (force te)
                                              ss <- Control.Exception.evaluate (force ss)
                                              return (te,ss)
@@ -551,24 +562,124 @@ finishToStmt env te eq s                = do te <- defaultX env te
                                              --traceM ("===========\n" ++ render (nest 4 $ vcat $ map pretty te))
                                              --traceM ("-----------\n" ++ render (nest 4 $ pretty s))
                                              eq <- usubst eq
-                                             let s0 = qualifyDefaultNames env (inlineDefaultWitnesses eq s)
+                                             let s0 = qualifyDefaultNames env s
                                              let (eq0, eq1) = spliteqns eq
                                              --traceM ("~~~~~~~~~~~~ top:\n" ++ render (nest 4 $ vcat $ map pretty eq0))
                                              --traceM ("============ scoped:\n" ++ render (nest 4 $ vcat $ map pretty eq1))
                                              s <- defaultX env =<< termred eq1 <$> usubst (pushEqns env eq0 s0)
+                                             let s1 = qualifyDefaultNames env (inlineDefaultWitnesses eq s)
                                              --traceM (".........................................."  ++ prstrs (bound s) ++ "\n")
-                                             let s' = fixupSelf s
-                                             tieWitKnots (refreshDefaults te s') [s']
+                                             let s' = fixupSelf s1
+                                                 te1 = refreshDefaults te s'
+                                                 refs = defaultRefSubst te1
+                                                 s'' = termsubst refs s'
+                                                 te2 = substituteDefaultRefs refs te1
+                                             tieWitKnots te2 [s'']
+
+-- During the scan phase, recursive declarations must publish their callable
+-- types before their defaults have been checked.  Calls in the same recursive
+-- group must therefore not copy the provisional source expression directly:
+-- doing so bypasses elaboration of literals, coercions, and protocol
+-- witnesses.  Give every provisional default a temporary reference instead;
+-- finishToStmt replaces those references with the checked expressions after
+-- solving the group.
+deferDefaultExpansions (TFun l fx p k r)= TFun l fx <$> deferDefaultRow p <*> deferDefaultRow k <*> pure r
+deferDefaultExpansions t                = return t
+
+deferDefaultRow (TDefRow l rk n t d rest)
+                                        = do d' <- deferSpec d
+                                             rest' <- deferDefaultRow rest
+                                             return (TDefRow l rk n t d' rest')
+  where deferSpec (DfltExpr source _ Nothing)
+                                        = do refName <- newTmp
+                                             let ref = NoQ refName
+                                             return (DfltExpr source (eQVar ref) (Just ref))
+        deferSpec spec                 = return spec
+deferDefaultRow (TRow l rk n t rest)   = TRow l rk n t <$> deferDefaultRow rest
+deferDefaultRow (TStar l rk rest)      = TStar l rk <$> deferDefaultRow rest
+deferDefaultRow row                    = return row
+
+defaultRefSubst                         = concatMap refsBinding
+  where refsBinding (_,i)               = refsInfo i
+        refsInfo (NVar t)               = refsType t
+        refsInfo (NSVar t)              = refsType t
+        refsInfo (NDef (TSchema _ _ t) _ _)
+                                            = refsType t
+        refsInfo (NSig (TSchema _ _ t) _ _)
+                                            = refsType t
+        refsInfo (NAct _ p k te _)      = refsType p ++ refsType k ++ defaultRefSubst te
+        refsInfo (NClass _ _ te _)      = defaultRefSubst te
+        refsInfo (NProto _ _ te _)      = defaultRefSubst te
+        refsInfo (NType _ t _)          = refsType t
+        refsInfo (NExt _ c ps te _ _)   = concatMap refsType (tcargs c) ++
+                                              concatMap (concatMap refsType . tcargs . snd) ps ++
+                                              defaultRefSubst te
+        refsInfo _                      = []
+
+        refsType (TCon _ (TC _ ts))    = concatMap refsType ts
+        refsType (TFun _ fx p k r)     = concatMap refsType [fx,p,k,r]
+        refsType (TTuple _ p k)         = refsType p ++ refsType k
+        refsType (TOpt _ t)             = refsType t
+        refsType (TRow _ _ _ t r)       = refsType t ++ refsType r
+        refsType (TDefRow _ _ _ t d r)  = ref d ++ refsType t ++ refsType r
+        refsType (TStar _ _ r)          = refsType r
+        refsType (TUnboxed _ t)         = refsType t
+        refsType _                      = []
+
+        ref (DfltExpr _ (Var _ (NoQ valueName)) (Just (NoQ n)))
+          | valueName == n                 = []
+        ref (DfltExpr _ value (Just (NoQ n)))
+                                            = [(n,value)]
+        ref _                           = []
+
+substituteDefaultRefs                  = updateDefaultRefs False
+
+clearDefaultRefs                       = updateDefaultRefs True
+
+updateDefaultRefs clear refs           = map clearBinding
+  where clearBinding (n,i)              = (n, clearInfo i)
+        clearInfo (NVar t)              = NVar (clearType t)
+        clearInfo (NSVar t)             = NSVar (clearType t)
+        clearInfo (NDef sc d doc)       = NDef (clearSchema sc) d doc
+        clearInfo (NSig sc d doc)       = NSig (clearSchema sc) d doc
+        clearInfo (NAct q p k te doc)   = NAct q (clearType p) (clearType k) (updateDefaultRefs clear refs te) doc
+        clearInfo (NClass q cs te doc)  = NClass q cs (updateDefaultRefs clear refs te) doc
+        clearInfo (NProto q ps te doc)  = NProto q ps (updateDefaultRefs clear refs te) doc
+        clearInfo (NType q t doc)       = NType q (clearType t) doc
+        clearInfo (NExt q c ps te os doc)
+                                            = NExt q c ps (updateDefaultRefs clear refs te) os doc
+        clearInfo i                     = i
+
+        clearSchema (TSchema l q t)     = TSchema l q (clearType t)
+        clearType (TCon l (TC n ts))    = TCon l (TC n (map clearType ts))
+        clearType (TFun l fx p k r)     = TFun l (clearType fx) (clearType p) (clearType k) (clearType r)
+        clearType (TTuple l p k)        = TTuple l (clearType p) (clearType k)
+        clearType (TOpt l t)            = TOpt l (clearType t)
+        clearType (TRow l rk n t r)     = TRow l rk n (clearType t) (clearType r)
+        clearType (TDefRow l rk n t d r)= TDefRow l rk n (clearType t) (clearRef d) (clearType r)
+        clearType (TStar l rk r)        = TStar l rk (clearType r)
+        clearType (TUnboxed l t)        = TUnboxed l (clearType t)
+        clearType t                     = t
+
+        clearRef (DfltExpr source value ref)
+                                            = DfltExpr source (termsubst refs value) ref'
+          where ref'                    = case ref of
+                                               Just q | clear, Internal Tempvar _ _ <- noq q -> Nothing
+                                               _ -> ref
+        clearRef DfltDynamic            = DfltDynamic
 
 -- The scan phase must publish a function type before its body is checked, so
 -- its default rows initially contain parsed expressions. Replace those with
 -- the checked and witness-reduced expressions before exporting the interface.
-refreshDefaults te (Decl _ ds)         = map refresh te
-  where refresh entry@(n,i)            = case [ d | d <- ds, dname' d == n ] of
+refreshDefaults te stmt                = map refresh te
+  where ds                             = topDecls stmt
+        refresh entry@(n,i)             = case [ d | d <- ds, dname' d == n ] of
                                              d:_ -> (n, refreshInfo d i)
                                              []  -> entry
         refreshInfo Def{pos=p,kwd=k} (NDef sc dec doc)
                                             = NDef (refreshSchema p k sc) dec doc
+        refreshInfo Def{pos=p,kwd=k} (NSig sc dec doc)
+                                            = NSig (refreshSchema p k sc) dec doc
         refreshInfo Actor{pos=p,kwd=k,dbody=b} (NAct q pr kr members doc)
                                             = NAct q (refreshRow defs pr) (refreshRow defs kr)
                                                      (refreshMembers members b) doc
@@ -581,9 +692,8 @@ refreshDefaults te (Decl _ ds)         = map refresh te
                                             = NExt q c us (refreshMembers members b) os doc
         refreshInfo _ i                 = i
 
-        refreshMembers members body     = foldl refreshStmt members body
-        refreshStmt members (Decl _ ms) = map (refreshMember ms) members
-        refreshStmt members _           = members
+        refreshMembers members body     = map (refreshMember ms) members
+          where ms                      = concatMap topDecls body
         refreshMember ms entry@(n,i)    = case [ d | d <- ms, dname' d == n ] of
                                              d:_ -> (n, refreshInfo d i)
                                              []  -> entry
@@ -607,7 +717,10 @@ refreshDefaults te (Decl _ ds)         = map refresh te
         defaultSource DfltDynamic        = eNotImpl
         defaultRef (DfltExpr _ _ ref)    = ref
         defaultRef DfltDynamic           = Nothing
-refreshDefaults te _                    = te
+
+        topDecls (Decl _ declarations)  = declarations
+        topDecls (With _ _ body)        = concatMap topDecls body
+        topDecls _                      = []
 
 parameterDefaults p k                  = posDefaults p ++ kwdDefaults k
   where posDefaults (PosPar n _ (Just e) rest)
@@ -694,7 +807,11 @@ qualifyDefaultExpr env                 = qualifyDefaultExprExcept env []
 qualifyDefaultExprExcept env excluded e
                                         = qexpr $ termsubst subst e
   where subst                           = [ (n, eQVar $ unalias env (NoQ n))
-                                          | NoQ n <- nub (freeQ e), n `notElem` excluded ]
+                                          | NoQ n <- nub (freeQ e), n `notElem` excluded,
+                                            not (temporaryDefaultRef n) ]
+
+        temporaryDefaultRef (Internal Tempvar _ _) = True
+        temporaryDefaultRef _                      = False
 
         qexpr (Var l q@QName{})         = Var l (unalias env q)
         qexpr (Call l f p k)            = Call l (qexpr f) (qposarg p) (qkwdarg k)
@@ -740,7 +857,7 @@ qualifyDefaultExprExcept env excluded e
         qelem (Star x)                   = Star (qexpr x)
         qassoc (Assoc k v)               = Assoc (qexpr k) (qexpr v)
         qassoc (StarStar x)              = StarStar (qexpr x)
-        qcomp (CompFor l p x c)          = CompFor l p (qexpr x) (qcomp c)
+        qcomp (CompFor l p x c)          = CompFor l (qpat p) (qexpr x) (qcomp c)
         qcomp (CompIf l x c)             = CompIf l (qexpr x) (qcomp c)
         qcomp NoComp                     = NoComp
         qsliz (Sliz l x y z)             = Sliz l (fmap qexpr x) (fmap qexpr y) (fmap qexpr z)
@@ -754,7 +871,7 @@ qualifyDefaultExprExcept env excluded e
         qkwdpar KwdNIL                   = KwdNIL
 
         qstmt (Expr l x)                 = Expr l (qexpr x)
-        qstmt (Assign l ps x)            = Assign l ps (qexpr x)
+        qstmt (Assign l ps x)            = Assign l (map qpat ps) (qexpr x)
         qstmt (MutAssign l x y)          = MutAssign l (qexpr x) (qexpr y)
         qstmt (AugAssign l x op y)       = AugAssign l (qexpr x) op (qexpr y)
         qstmt (Assert l x msg)           = Assert l (qexpr x) (fmap qexpr msg)
@@ -763,12 +880,12 @@ qualifyDefaultExprExcept env excluded e
         qstmt (Raise l x)                = Raise l (qexpr x)
         qstmt (If l bs els)              = If l (map qbranch bs) (map qstmt els)
         qstmt (While l x ss els)         = While l (qexpr x) (map qstmt ss) (map qstmt els)
-        qstmt (For l p x ss els)         = For l p (qexpr x) (map qstmt ss) (map qstmt els)
+        qstmt (For l p x ss els)         = For l (qpat p) (qexpr x) (map qstmt ss) (map qstmt els)
         qstmt (Try l ss hs els fin)      = Try l (map qstmt ss) (map qhandler hs)
                                                 (map qstmt els) (map qstmt fin)
         qstmt (With l items ss)          = With l (map qitem items) (map qstmt ss)
-        qstmt (Data l p ss)              = Data l p (map qstmt ss)
-        qstmt (VarAssign l ps x)         = VarAssign l ps (qexpr x)
+        qstmt (Data l p ss)              = Data l (fmap qpat p) (map qstmt ss)
+        qstmt (VarAssign l ps x)         = VarAssign l (map qpat ps) (qexpr x)
         qstmt (After l now x y)          = After l now (qexpr x) (qexpr y)
         qstmt (Signature l ns sc d)      = Signature l ns (unalias env sc) d
         qstmt (Decl l ds)                = Decl l (map qdecl ds)
@@ -776,7 +893,19 @@ qualifyDefaultExprExcept env excluded e
 
         qbranch (Branch x ss)            = Branch (qexpr x) (map qstmt ss)
         qhandler (Handler ex ss)         = Handler ex (map qstmt ss)
-        qitem (WithItem x p)             = WithItem (qexpr x) p
+        qitem (WithItem x p)             = WithItem (qexpr x) (fmap qpat p)
+        qpat (PWild l t)                  = PWild l (unalias env t)
+        qpat (PVar l n t)                 = PVar l n (unalias env t)
+        qpat (PParen l p)                 = PParen l (qpat p)
+        qpat (PTuple l p k)               = PTuple l (qpospat p) (qkwdpat k)
+        qpat (PList l ps p)               = PList l (map qpat ps) (fmap qpat p)
+        qpat (PData l n is)               = PData l n (map qexpr is)
+        qpospat (PosPat p ps)             = PosPat (qpat p) (qpospat ps)
+        qpospat (PosPatStar p)            = PosPatStar (qpat p)
+        qpospat PosPatNil                 = PosPatNil
+        qkwdpat (KwdPat n p ps)           = KwdPat n (qpat p) (qkwdpat ps)
+        qkwdpat (KwdPatStar p)            = KwdPatStar (qpat p)
+        qkwdpat KwdPatNil                 = KwdPatNil
         qdecl d@Def{}                    = d{ pos = qpospar (pos d), kwd = qkwdpar (kwd d),
                                                ann = unalias env (ann d), dbody = map qstmt (dbody d) }
         qdecl d@Actor{}                  = d{ pos = qpospar (pos d), kwd = qkwdpar (kwd d),
@@ -1175,7 +1304,10 @@ instance InfEnv Stmt where
                                              (_,te1,ds1) <- infEnv (setInDecl env) ds
                                              (cs2,ds2) <- checkEnv (tydefine te1 env) ds1
                                              --traceM ("-------- done: " ++ prstrs (declnames ds))
-                                             return (cs2, te1, Decl l ds2)
+                                             let stmt = Decl l ds2
+                                                 te2 = refreshDefaults te1 stmt
+                                                 refs = defaultRefSubst te2
+                                             return (cs2, clearDefaultRefs refs te2, termsubst refs stmt)
 
     infEnv env (Delete l targ)          = do (cs0,t0,e0,tg) <- infTarg env targ
                                              (cs1,stmt) <- del t0 e0 tg
@@ -1368,7 +1500,8 @@ instance InfEnv Decl where
                                                  return ([], [(n, NDef (fxUnwrapSc env sc) dec ddoc)], d{deco = dec})
                                              NReserved -> do
                                                  when (inClass env) $ lockSelf env l p k dec'
-                                                 t <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
+                                                 t0 <- tFun (fxUnwrap env fx) (prowOf p) (krowOf k) <$> maybe (newUnivar env) return a
+                                                 t <- deferDefaultExpansions t0
                                                  let sc = tSchema q (if inClass env then dropSelf t dec' else t)
                                                  --traceM ("\n## infEnv def " ++ prstr (n, NDef sc dec' Nothing))
                                                  return ([], [(n, NDef sc dec' ddoc)], d)
@@ -1380,8 +1513,8 @@ instance InfEnv Decl where
       | nodup (p,k)                     = case findName n env of
                                              NReserved -> do
                                                  te <- infActorEnv env b
-                                                 let prow = prowOf p
-                                                     krow = krowOf k
+                                                 prow <- deferDefaultRow (prowOf p)
+                                                 krow <- deferDefaultRow (krowOf k)
                                                  --traceM ("\n## infEnv actor " ++ prstr (n, NAct q prow krow te ddoc))
                                                  return ([], [(n, NAct q prow krow te ddoc)], d)
                                              _ ->
