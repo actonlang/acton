@@ -244,13 +244,10 @@ $R processQ_ProcessD_writeG_local(processQ_Process self, $Cont c$cont, B_bytes d
         return $R_CONT(c$cont, B_None);
     }
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init((char *)data->str, (unsigned int)data->nbytes);
-
     struct process_data *process_data = (struct process_data *)p->data;
     uv_stream_t *stdin_handle = (uv_stream_t *)&process_data->stdin_pipe;
 
-    int r = uv_write(req, stdin_handle, &buf, 1, NULL);
+    int r = io_stream_write(stdin_handle, (char *)data->str, data->nbytes);
     if (r != 0) {
         char errmsg[1024] = "Error writing to stdin of process: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));

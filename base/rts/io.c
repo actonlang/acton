@@ -44,3 +44,15 @@ void alloc_buffer(uv_handle_t *handle, size_t size, uv_buf_t *buf) {
     }
     *buf = uv_buf_init(io_read_buf, size);
 }
+
+int io_stream_write(uv_stream_t *stream, char *data, size_t len) {
+    uv_buf_t bufs[io_nbufs(len)];
+    unsigned int nbufs = io_bufs(bufs, data, len);
+    for (unsigned int i = 0; i < nbufs; i++) {
+        uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
+        int r = uv_write(req, stream, &bufs[i], 1, NULL);
+        if (r < 0)
+            return r;
+    }
+    return 0;
+}
