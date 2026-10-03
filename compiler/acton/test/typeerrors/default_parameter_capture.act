@@ -1,0 +1,5 @@
+def make_default():
+    captured = 3
+    def inner(value: int=captured) -> int:
+        return value
+    return inner

@@ -45,15 +45,15 @@ static int64_t B_bitarray_checked_index(B_bitarray self, int64_t index) {
     return index;
 }
 
-B_bitarray B_bitarrayG_new(int64_t length, B_bool initial) {
+B_bitarray B_bitarrayG_new(int64_t length, bool initial) {
     B_bitarray self = acton_malloc(sizeof(struct B_bitarray));
     self->$class = &B_bitarrayG_methods;
-    B_bitarray_init_storage(self, length, initial && initial->val);
+    B_bitarray_init_storage(self, length, initial);
     return self;
 }
 
-B_NoneType B_bitarrayD___init__(B_bitarray self, int64_t length, B_bool initial) {
-    B_bitarray_init_storage(self, length, initial && initial->val);
+B_NoneType B_bitarrayD___init__(B_bitarray self, int64_t length, bool initial) {
+    B_bitarray_init_storage(self, length, initial);
     return B_None;
 }
 
@@ -122,7 +122,7 @@ static B_bitarray B_bitarray_binary(B_bitarray left, B_bitarray right,
     else
         length = left->length > right->length ? left->length : right->length;
 
-    B_bitarray result = B_bitarrayG_new(length, B_False);
+    B_bitarray result = B_bitarrayG_new(length, false);
     uint64_t word_count = B_bitarray_word_count(length);
     for (uint64_t i = 0; i < word_count; i++) {
         uint64_t a = B_bitarray_word_at(left, i);
@@ -223,7 +223,7 @@ B_Iterator B_ContainerD_bitarrayD___iter__(B_ContainerD_bitarray wit,
 B_bitarray B_ContainerD_bitarrayD___fromiter__(B_ContainerD_bitarray wit,
                                                B_Iterable iter_wit, $WORD iterable) {
     B_list values = B_listG_new(iter_wit, iterable);
-    B_bitarray result = B_bitarrayG_new(values->length, B_False);
+    B_bitarray result = B_bitarrayG_new(values->length, false);
     for (int64_t i = 0; i < values->length; i++) {
         if (((B_bool)values->data[i])->val)
             $bitarrayD_U__setitem__(result, i, true);

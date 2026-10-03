@@ -10,19 +10,19 @@ W_Apa_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 class Apa ($Actor, __builtin__.value):
     proc def __init__ (self : Self) -> None:
         self.setupG_local(self.notice)
-        print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
     proc def setupG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
-        print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
         (async cb)(W_Apa_39.__fromatom__(0))
         return None
     proc def computeG_local (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
         v: __builtin__.int = $AWAITf@[__builtin__.int]((async cb)(W_Apa_39.__fromatom__(1)))
         m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
         N_tmp: __builtin__.int = W_Apa_105.__mul__(v, W_Apa_39.__fromatom__(10))
         return N_tmp
     proc def noticeG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
         N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return N_1tmp
     action def setup (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
@@ -33,9 +33,9 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNCf@[__builtin__.int](self, proc lambda: self.noticeG_local(i))
 class Bepa ($Actor, __builtin__.value):
     proc def __init__ (self : Self) -> None:
-        print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
     proc def callbackG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
         N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return N_2tmp
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
@@ -55,15 +55,15 @@ class main ($Actor, __builtin__.value):
         self.env = env
         self.a = ApaG_newact()
         self.b = BepaG_newact()
-        print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
         (async self.a.setup)(self.a.notice)
         self.x = (async self.a.compute)(self.b.callback)
         self.r = $AWAITf@[__builtin__.int](self.x)
-        print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), "\" \"", "\"\\n\"", False, False)
         (async self.a.compute)(self.myproc)
-        print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
     proc def myprocG_local (self : Self, i : __builtin__.int) -> __builtin__.int:
-        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
         if W_Apa_308.__eq__(i, W_Apa_39.__fromatom__(2)):
             (async self.env.exit)(W_Apa_39.__fromatom__(0))
         return i

@@ -450,9 +450,14 @@ instance Pretty QBind where
     pretty (QBind v [])             = pretty v
     pretty (QBind v cs)             = pretty v <> parens (commaList cs)
 
-prettyPosRow (TRow _ PRow _ t (TNil _ PRow))
+prettyPosRow (TRow _ PRow n t (Just d) (TNil _ PRow))
+                                    = prettyDefaultRow n t d
+prettyPosRow (TRow _ PRow n t (Just d) p)
+                                    = prettyDefaultRow n t d <> comma <+> prettyPosRow p
+prettyPosRow (TRow _ PRow _ t Nothing (TNil _ PRow))
                                     = pretty t
-prettyPosRow (TRow _ PRow _ t p)    = pretty t <> comma <+> prettyPosRow p
+prettyPosRow (TRow _ PRow _ t Nothing p)
+                                    = pretty t <> comma <+> prettyPosRow p
 prettyPosRow (TStar _ PRow r)
   | TVar _ v <- r                   = text "*" <> pretty v
   | TUni _ u <- r                   = text "*" <> pretty u
@@ -464,9 +469,14 @@ prettyPosRow (TWild _)              = text "+"
 prettyPosRow (TNil _ PRow)          = empty
 prettyPosRow t                      = text "??" <>  pretty t
 
-prettyKwdRow (TRow _ KRow n t (TNil _ KRow))
+prettyKwdRow (TRow _ KRow n t (Just d) (TNil _ KRow))
+                                    = prettyDefaultRow n t d
+prettyKwdRow (TRow _ KRow n t (Just d) k)
+                                    = prettyDefaultRow n t d <> comma <+> prettyKwdRow k
+prettyKwdRow (TRow _ KRow n t Nothing (TNil _ KRow))
                                     = pretty n <> colon <+> pretty t
-prettyKwdRow (TRow _ KRow n t k)    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
+prettyKwdRow (TRow _ KRow n t Nothing k)
+                                    = pretty n <> colon <+> pretty t <> comma <+> prettyKwdRow k
 prettyKwdRow (TStar _ KRow r)
   | TVar _ v <- r                   = text "**" <> pretty v
   | TUni _ u <- r                   = text "**" <> pretty u
@@ -477,6 +487,9 @@ prettyKwdRow (TUni _ u)             = text "++" <> pretty u
 prettyKwdRow (TWild _)              = text "++"
 prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "??" <>  pretty t
+
+prettyDefaultRow n t (DfltExpr e _ _) = pretty n <> colon <+> pretty t <+> equals <+> pretty e
+prettyDefaultRow n t DfltDynamic    = pretty n <> colon <+> pretty t <+> equals <+> text "_"
 
 prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
 prettyFunRow p (TNil _ KRow)        = prettyPosRow p
@@ -493,13 +506,13 @@ instance Pretty Type where
       | TNil{} <- p, TVar{} <- k    = pretty k                              -- Print top row variable as a tyvar
       | TUni{} <- p, TNil{} <- k    = pretty p                              -- Print top row variable as a univar
       | TNil{} <- p, TUni{} <- k    = pretty k                              -- Print top row variable as a univar
-      | TRow _ _ _ t TNil{} <- p,
+      | TRow _ _ _ t _ TNil{} <- p,
         TNil{} <- k                 = parens (pretty t <> comma)
       | otherwise                   = parens (prettyFunRow p k)
     pretty (TOpt _ t)               = text "?" <> pretty t
     pretty (TNone _)                = text "None"
     pretty (TWild _)                = text "_"
-    pretty (TRow _ PRow _ t TNil{}) = parens $ pretty t <> comma
+    pretty (TRow _ PRow _ t Nothing TNil{}) = parens $ pretty t <> comma
     pretty r@TRow{rkind=PRow}       = parens $ prettyPosRow r
     pretty r@TRow{rkind=KRow}       = parens $ prettyKwdRow r
     pretty r@TStar{rkind=PRow}      = parens $ prettyPosRow r

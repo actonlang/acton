@@ -256,7 +256,7 @@ class NotIsInstanceError[T](AssertionError):
         return f"{self._name()}({repr(self.a)}, {repr(self.t)}, {repr(self.error_message)}, {repr(self.print_vals)})"
 
 
-def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_diff: bool=True):
+def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True, print_diff: bool=True):
     """Assert that two values are equal
     """
     if ((a is None and b is not None)
@@ -269,62 +269,62 @@ def assertEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True, print_dif
             diff_str = f"{term.normal}{diff.diff(str(a), str(b), color=True)}{term.normal}"
         raise NotEqualError(a, b, msg, print_vals, diff_str)
 
-def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str, print_vals: bool=True):
+def assertNotEqual[T(Eq)](a: ?T, b: ?T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are not equal
     """
     if ((a is None and b is None)
         or (a is not None and b is not None and a == b)):
         raise EqualError(a, b, msg, print_vals)
 
-def assertTrue(a, msg: ?str, print_vals: bool=True):
+def assertTrue(a, msg: ?str=None, print_vals: bool=True):
     """Assert that the boolean evaluation of a value is True
     """
     if not bool(a):
         raise NotTrueError(a, msg, print_vals)
 
-def assertFalse(a, msg: ?str, print_vals: bool=True):
+def assertFalse(a, msg: ?str=None, print_vals: bool=True):
     """Assert that the boolean evaluation of a value is False
     """
     if bool(a):
         raise NotFalseError(a, msg, print_vals)
 
-def assertIs[T(Identity)](a: T, b: T, msg: ?str, print_vals: bool=True):
+def assertIs[T(Identity)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are the same identity, i.e. the same object
     """
     if not (a is b):
         raise NotIsError(a, b, msg)
 
-def assertIsNot[T(Identity)](a: T, b: T, msg: ?str, print_vals: bool=True):
+def assertIsNot[T(Identity)](a: T, b: T, msg: ?str=None, print_vals: bool=True):
     """Assert that two values are not the same identity, i.e. different objects
     """
     if a is b:
         raise IsError(a, b, msg)
 
-def assertNone(a, msg: ?str, print_vals: bool=True):
+def assertNone(a, msg: ?str=None, print_vals: bool=True):
     """Assert that a value equals None
     """
     if not (a is None):
         raise NotNoneError(a, msg, print_vals)
 
-def assertNotNone(a, msg: ?str, print_vals: bool=True):
+def assertNotNone(a, msg: ?str=None, print_vals: bool=True):
     """Assert that a value does not equal None
     """
     if not (a is not None):
         raise NoneError(a, msg, print_vals)
 
-def assertIn(a, b, msg: ?str, print_vals: bool=True):
+def assertIn(a, b, msg: ?str=None, print_vals: bool=True):
     """Assert that a value is in a container
     """
     if not (a in b):
         raise NotInError(a, b, msg, print_vals)
 
-def assertNotIn(a, b, msg: ?str, print_vals: bool=True):
+def assertNotIn(a, b, msg: ?str=None, print_vals: bool=True):
     """Assert that a value is not in a container
     """
     if a in b:
         raise InError(a, b, msg, print_vals)
 
-def error(msg: ?str):
+def error(msg: ?str=None):
     """Raise a generic test error"""
     raise AssertionError(msg) if msg is not None else _test_error
 

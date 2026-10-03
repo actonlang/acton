@@ -16,7 +16,7 @@ T_9w def main () -> T_5w:
 
 == types: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](*("Hello parse!",), sep = None, end = None, err = None, flush = None)
+    print@[(__builtin__.str,)](*("Hello parse!",), sep = " ", end = "\\n", err = False, flush = False)
 =================================================
 
 
@@ -30,7 +30,7 @@ main : () -> None
 
 == norm: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 ================================================
 
@@ -38,7 +38,7 @@ pure def main () -> None:
 
 == deact: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 =================================================
 
@@ -46,7 +46,7 @@ pure def main () -> None:
 
 == cps: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 ===============================================
 
@@ -54,7 +54,7 @@ pure def main () -> None:
 
 == llift: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", False, False)
     return None
 =================================================
 
@@ -62,11 +62,11 @@ pure def main () -> None:
 
 == box: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     return None
 ===============================================
 
-/* Acton impl hash: 825dbf41f0ff0574e3676d5b6490e43d40409216d0ddb0a1a0f8f899c8e66317 */
+/* Acton impl hash: c8cafea9f67148de4df788105da422d1ba1b11a2ab662443d2280d2516668ca7 */
 #pragma once
 #include "builtin/builtin.h"
 #include "rts/rts.h"

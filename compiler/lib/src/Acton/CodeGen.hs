@@ -77,21 +77,27 @@ derivedHead (Derived n _)           = n
 staticWitnessName (Dot _ c a)       = (nm, NoQ a:as)
    where (nm,as)                    = staticWitnessName c
 staticWitnessName (Call _ (Var _ v@(GName m n)) PosNil KwdNil)
-    | m == mBuiltin                 = (Just v, [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just v, [])
 staticWitnessName (Call _ (Var _ (QName m n)) PosNil KwdNil)
-    | m == mBuiltin                 = (Just (GName m n), [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just (GName m n), [])
 staticWitnessName (Call _ (TApp _ (Var _ (GName m n)) ts) _ KwdNil)
    | m == mBuiltin,
+     not (isInternal n),
      Just key <- specialStaticKey n ts
                                     = (Just (gBuiltin (Derived n key)),[])
 staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) ts) _ KwdNil)
    | m == mBuiltin,
+     not (isInternal n),
      Just key <- specialStaticKey n ts
                                     = (Just (gBuiltin (Derived n key)),[])
 staticWitnessName (Call _ (TApp _ (Var _ v@(GName m n)) _) PosNil KwdNil)
-    | m == mBuiltin                 = (Just v, [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just v, [])
 staticWitnessName (Call _ (TApp _ (Var _ (QName m n)) _) PosNil KwdNil)
-    | m == mBuiltin                 = (Just (GName m n), [])
+    | m == mBuiltin, not (isInternal n)
+                                    = (Just (GName m n), [])
 staticWitnessName _                 = (Nothing, [])
 
 specialStaticKey (Derived n1 n2) [TCon _ (TC gn1 []), _]
@@ -236,10 +242,10 @@ settype env _ t                     = repType env t
 repType env t                       = gen env t
 
 repParams env (TNil _ _)            = empty
-repParams env (TRow _ _ _ t r@TRow{})
+repParams env (TRow _ _ _ t _ r@TRow{})
                                     = repType env t <> comma <+> repParams env r
-repParams env (TRow _ _ _ t TNil{}) = repType env t
-repParams env (TRow _ _ _ t TVar{}) = repType env t
+repParams env (TRow _ _ _ t _ TNil{}) = repType env t
+repParams env (TRow _ _ _ t _ TVar{}) = repType env t
 repParams env t@TVar{}              = gen env t
 repParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
@@ -249,10 +255,10 @@ rawType env t
   where t'                          = boxedRepType t
 
 rawParams env (TNil _ _)            = empty
-rawParams env (TRow _ _ _ t r@TRow{})
+rawParams env (TRow _ _ _ t _ r@TRow{})
                                     = rawType env t <> comma <+> rawParams env r
-rawParams env (TRow _ _ _ t TNil{}) = rawType env t
-rawParams env (TRow _ _ _ t TVar{}) = rawType env t
+rawParams env (TRow _ _ _ t _ TNil{}) = rawType env t
+rawParams env (TRow _ _ _ t _ TVar{}) = rawType env t
 rawParams env t@TVar{}              = gen env t
 rawParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
@@ -555,9 +561,9 @@ genPosPar env n d t p
             | isInit n              = gen env p
             | p1 == PosNIL          = genTypeDecl env x (fromJust y) <+> gen env x
             | otherwise             = genTypeDecl env x (fromJust y) <+> gen env x <> comma <+> match p1 (posrow t)
-          match (PosPar n (Just t) Nothing PosNIL) (TRow _ _ _ t' _)
+          match (PosPar n (Just t) Nothing PosNIL) (TRow _ _ _ t' _ _)
                                     = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n
-          match (PosPar n (Just t) Nothing r) (TRow _ _ _ t' tl)
+          match (PosPar n (Just t) Nothing r) (TRow _ _ _ t' _ tl)
                                     = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n <> comma <+> match r tl
           match PosNIL (TNil _ _)   = empty
           match p TVar{}            = gen env p
@@ -1437,17 +1443,17 @@ castLit env (Strings l ss) p        = format (concat ss) p
 
 -- Render normal call arguments against the formal positional row.  Only
 -- parameters whose formal type is TUnboxed are forced to raw C values.
-genCallPosArgs env (TRow _ _ _ t r) (PosArg e PosNil)
+genCallPosArgs env (TRow _ _ _ t _ r) (PosArg e PosNil)
                                     = genCallArg env t e
-genCallPosArgs env (TRow _ _ _ t r) (PosArg e p)
+genCallPosArgs env (TRow _ _ _ t _ r) (PosArg e p)
                                     = genCallArg env t e <> comma <+> genCallPosArgs env r p
 genCallPosArgs env _ p              = gen env p
 
 -- Render constructor arguments.  Constructor C signatures use raw values for
 -- unboxable Acton types even when the source-level parameter type is boxed.
-genUCallPosArgs env (TRow _ _ _ t r) (PosArg e PosNil)
+genUCallPosArgs env (TRow _ _ _ t _ r) (PosArg e PosNil)
                                     = genUCallArg env t e
-genUCallPosArgs env (TRow _ _ _ t r) (PosArg e p)
+genUCallPosArgs env (TRow _ _ _ t _ r) (PosArg e p)
                                     = genUCallArg env t e <> comma <+> genUCallPosArgs env r p
 genUCallPosArgs env _ p             = gen env p
 
@@ -1460,13 +1466,13 @@ genCallArg env (TUnboxed _ t) (Box _ e)
 genCallArg env (TUnboxed _ t) e
   | rawExpr env e                   = gen env e
   | otherwise                       = gen env (B.unbox t e)
-genCallArg env _ e                  = gen env e
+genCallArg env t e                  = genExp env t e
 
 -- Render one constructor argument in the representation used by generated
 -- constructors: raw for unboxable values, normal boxed generation otherwise.
 genUCallArg env t e
   | B.isUnboxable t'                = genRawExpr env e
-  | otherwise                       = gen env e
+  | otherwise                       = genExp env t e
   where t'                          = boxedRepType t
 
 -- Generate an expression as raw C when its boxed representation is unboxable.
@@ -1881,17 +1887,15 @@ dotCast env ent ts e n
         (sc, dec)                   = findAttr' env c0 n
         t                           = vsubst fullsubst $ if ent then addSelf t1 dec else t1
         t1                          = exposeMsg' (sctype sc)
-        t' sc'                      = if ent then addSelf (t1' sc') dec else t1' sc'
-        t1' sc'                     = exposeMsg' (sctype sc')
         fullsubst                   = (tvSelf,t0) : (qbound (scbind sc) `zip` ts) ++ argsubst
-        te                          = findAttrSchemas env (tcname c0)
-        gen_t
-          | null ts                 = gen env $ if ent then addSelf rt dec else rt
-          | otherwise               = case lookup n te of
-                                        Just (NDef sc' _ _) -> gen env (B.matchTypes t (sctype sc'))
-                                        Just (NSig sc' _ _) -> gen env (B.matchTypes t (t' sc'))
-                                        Just (NVar t) -> gen env t
-                                        ni  -> error ("Internal error in CodeGen.dotCast: looking for NameInfo for " ++ show n ++ ", found "++ show ni)
+        -- rtypeOf has already matched the selected method against the oldest
+        -- slot declaration, so its TUnboxed annotations describe the actual C
+        -- ABI.  Substitute method type arguments into that representation
+        -- type without recomputing the match: recomputation can misalign
+        -- witness and defaulted rows in a generic method (list.index was the
+        -- concrete failure) and unbox the neighbouring generic argument.
+        gen_t                       = gen env $ vsubst (qbound (scbind sc) `zip` ts) $
+                                                 if ent then addSelf rt dec else rt
         rt                          = exposeMsg' (B.rtypeOf env rtc n)
 
 needsPrimCallableCast (TCon _ (TC q _)) n
@@ -2418,8 +2422,8 @@ instance Gen Type where
     gen env (TOpt _ t)              = gen env t
     gen env (TNone _)               = gen env qnNoneType
     gen env (TWild _)               = word
-    gen env (TRow _ _ _ t TNil{})   = gen env t
-    gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
+    gen env (TRow _ _ _ t _ TNil{}) = gen env t
+    gen env (TRow _ _ _ t _ r)      = gen env t <> comma <+> gen env r
     gen env (TNil _ _)              = empty
     gen env (TUnboxed _ t)          = text (unboxed_c_type t)
 

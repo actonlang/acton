@@ -1,0 +1,9 @@
+Building file test/typeerrors/default_parameter_expression.act using temporary scratch directory
+   default_parameter_expression  Parse done                                                               0.000 s
+[error Compilation error]: Default value must be a literal, constructor expression, or module-level name
+     +--> default_parameter_expression.act@3:24-3:34
+     |
+   3 | def invalid(value: int=answer + 1) -> int:
+     :                        ^--------- 
+     :                        `- Default value must be a literal, constructor expression, or module-level name
+-----+

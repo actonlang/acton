@@ -718,8 +718,9 @@ unify' env _ (TFX _ fx1) (TFX _ fx2)
 
 unify' env _ (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = return ()
-unify' env info (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
-  | k1 == k2 && n1 == n2                    = do unify env info t1 t2
+unify' env info (TRow _ k1 n1 t1 d1 r1) (TRow _ k2 n2 t2 d2 r2)
+  | k1 == k2 && n1 == n2 && isJust d1 == isJust d2
+                                            = do unify env info t1 t2
                                                  unify env info r1 r2
 unify' env info (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = unify env info r1 r2
@@ -759,8 +760,9 @@ match vs (TFX _ fx1) (TFX _ fx2)
 
 match vs (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = Just []
-match vs (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
-  | k1 == k2 && n1 == n2                    = matches vs [t1,r1] [t2,r2]
+match vs (TRow _ k1 n1 t1 d1 r1) (TRow _ k2 n2 t2 d2 r2)
+  | k1 == k2 && n1 == n2 && isJust d1 == isJust d2
+                                            = matches vs [t1,r1] [t2,r2]
 match vs (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = match vs r1 r2
 match vs (TVar _ tv1) (TVar _ tv2)
@@ -835,9 +837,13 @@ instance USubst Type where
     usubstWith s (TNone l)          = TNone l
     usubstWith s (TWild l)          = TWild l
     usubstWith s (TNil l k)         = TNil l k
-    usubstWith s (TRow l k n t r)   = TRow l k n (usubstWith s t) (usubstWith s r)
+    usubstWith s (TRow l k n t d r) = TRow l k n (usubstWith s t) (usubstWith s d) (usubstWith s r)
     usubstWith s (TStar l k r)      = TStar l k (usubstWith s r)
     usubstWith s (TFX l fx)         = TFX l fx
+
+instance USubst DefaultSpec where
+    usubstWith s (DfltExpr e v r)   = DfltExpr (usubstWith s e) (usubstWith s v) r
+    usubstWith _ DfltDynamic        = DfltDynamic
 
 instance USubst QBind where
     usubstWith s (QBind v cs)       = QBind v (usubstWith s cs)
@@ -1044,7 +1050,7 @@ instance WellFormed Type where
     wf env (TFun _ x p k t) = wf env x ++ wf env p ++ wf env p ++ wf env k ++ wf env t
     wf env (TTuple _ p k)   = wf env p ++ wf env k
     wf env (TOpt _ t)       = wf env t
-    wf env (TRow _ _ _ t r) = wf env t ++ wf env r
+    wf env (TRow _ _ _ t _ r) = wf env t ++ wf env r
     wf env (TStar _ _ r)    = wf env r
     wf env _                = []
 
@@ -1161,7 +1167,7 @@ spliteqns eqns                          = partition isTop eqns
 proto2type t (TC n ts)                   = tCon $ TC n (t:ts)
 
 wit2row ws                              = \p -> foldr f p ws
-  where f (w,t)                         = TRow NoLoc PRow nWild t
+  where f (w,t)                         = TRow NoLoc PRow nWild t Nothing
 
 wit2arg ws                              = \p -> foldr f p ws
   where f (w,t)                         = PosArg (eVar w)

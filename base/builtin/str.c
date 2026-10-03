@@ -643,37 +643,26 @@ static int64_t get_index(int64_t i, int64_t nchars) {
 }
 
 
-// Eliminates slice notation in find, index, count and other methods
-// with optional start and end and adds defaults for omitted parameters.
-// As for slice indices, a negative index counts from the end, so -1 is the
-// last position, and indices outside the string are clamped to it. Returns
-// -1 if start is beyond the end.
-
-static int fix_start_end(int64_t nchars, B_int *start, B_int *end) {
-    if (*start==NULL) {
-        *start = toB_int(0);
-    } else {
-        int64_t st = fromB_int(*start);
-        if (st > nchars) {
-            return -1;
-        }
-        if (st < 0)
-            st += nchars;
-        st = st < 0 ? 0 : st;
-        *start = toB_int(st);
+// Eliminates slice notation in find, index, count and other methods. As for
+// slice indices, a negative index counts from the end, so -1 is the last
+// position, and indices outside the string are clamped to it. Returns -1 if
+// start is beyond the end. Omitted arguments have already been expanded to 0
+// and INT64_MAX by the compiler; the latter is clamped to nchars below.
+static int fix_start_end(int64_t nchars, int64_t *start, int64_t *end) {
+    int64_t st = *start;
+    if (st > nchars) {
+        return -1;
     }
-    if (*end==NULL) {
-        *end = toB_int(nchars);
-    } else {
-        int64_t en = fromB_int(*end);
-        if (en > nchars)
-            en = nchars;
-        else if (en < 0)
-            en += nchars;
-        en = en < 0 ? 0 : en;
+    if (st < 0)
+        st += nchars;
+    *start = st < 0 ? 0 : st;
 
-        *end = toB_int(en);
-    }
+    int64_t en = *end;
+    if (en > nchars)
+        en = nchars;
+    else if (en < 0)
+        en += nchars;
+    *end = en < 0 ? 0 : en;
     return 0;
 }
 
@@ -1093,18 +1082,18 @@ B_str B_strD_center(B_str s, int64_t width, B_str fill) {
 }
 
 
-int64_t B_strD_count(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_count(B_str s, B_str sub, int64_t start, int64_t end) {
     int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return 0;
     if (sub->nbytes == 0) {
         // The empty string occurs before every character and at the end
-        int64_t n = fromB_int(en) - fromB_int(st);
+        int64_t n = en - st;
         return n < 0 ? 0 : n + 1;
     }
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
+    unsigned char *p = skip_chars(s->str,st,isascii);
+    unsigned char *q = skip_chars(p,en-st,isascii);
     int64_t res = 0;
     int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     while (n>=0) {
@@ -1122,13 +1111,13 @@ B_bytes B_strD_encode(B_str s) {
     return res;
 }
 
-bool B_strD_endswith(B_str s, B_str sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_strD_endswith(B_str s, B_str sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return false;
-    if (en->val-st->val < sub->nchars) return false;
+    if (en-st < sub->nchars) return false;
     int isascii = s->nchars==s->nbytes;
-    unsigned char *q = skip_chars(s->str+s->nbytes,fromB_int(en)-s->nchars,isascii);
+    unsigned char *q = skip_chars(s->str+s->nbytes,en-s->nchars,isascii);
     if (q-s->str < sub->nbytes) return false;
     return memcmp(q-sub->nbytes, sub->str, sub->nbytes) == 0;
 }
@@ -1147,19 +1136,19 @@ B_str B_strD_expandtabs(B_str s, B_int tabsize){
     return res;
 }
 
-int64_t B_strD_find(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_find(B_str s, B_str sub, int64_t start, int64_t end) {
     int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
+    unsigned char *p = skip_chars(s->str,st,isascii);
+    unsigned char *q = skip_chars(p,en-st,isascii);
     int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return $char_no(s,n+p-s->str);
 }
 
-int64_t B_strD_index(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_index(B_str s, B_str sub, int64_t start, int64_t end) {
    int64_t n = B_strD_find(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_substring_not_found_error);
@@ -1407,7 +1396,7 @@ B_str B_strD_lstrip(B_str s, B_str cs) {
 }
 
 B_tuple B_strD_partition(B_str s, B_str sep) {
-    int64_t n = B_strD_find(s,sep,NULL,NULL);
+    int64_t n = B_strD_find(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,s,null_str,null_str);
     } else {
@@ -1427,7 +1416,7 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT64_MAX);
-    int64_t c = B_strD_count(s, old, NULL, NULL);
+    int64_t c = B_strD_count(s, old, 0, INT64_MAX);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return s;
@@ -1467,20 +1456,20 @@ B_str B_strD_replace(B_str s, B_str old, B_str new, B_int count) {
 }
 
 
-int64_t B_strD_rfind(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_rfind(B_str s, B_str sub, int64_t start, int64_t end) {
     int isascii = s->nchars == s->nbytes;
-    B_int st = start;
-    B_int en = end;
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return -1;
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
-    unsigned char *q = skip_chars(p,fromB_int(en)-fromB_int(st),isascii);
+    unsigned char *p = skip_chars(s->str,st,isascii);
+    unsigned char *q = skip_chars(p,en-st,isascii);
     int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return $char_no(s,n+p-s->str);
 }
 
 
-int64_t B_strD_rindex(B_str s, B_str sub, B_int start, B_int end) {
+int64_t B_strD_rindex(B_str s, B_str sub, int64_t start, int64_t end) {
     int64_t n = B_strD_rfind(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_rsubstring_not_found_error);
@@ -1514,7 +1503,7 @@ B_str B_strD_rjust(B_str s, int64_t width, B_str fill) {
 }
 
 B_tuple B_strD_rpartition(B_str s, B_str sep) {
-    int64_t n = B_strD_rfind(s,sep,NULL,NULL);
+    int64_t n = B_strD_rfind(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,null_str,null_str,s);
     } else {
@@ -1680,13 +1669,13 @@ B_str B_strD_rstrip(B_str s, B_str cs) {
     return res;
 }
 
-bool B_strD_startswith(B_str s, B_str sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_strD_startswith(B_str s, B_str sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nchars,&st,&en) < 0) return false;
-    if (en->val-st->val < sub->nchars) return false;
+    if (en-st < sub->nchars) return false;
     int isascii = s->nchars==s->nbytes;
-    unsigned char *p = skip_chars(s->str,fromB_int(st),isascii);
+    unsigned char *p = skip_chars(s->str,st,isascii);
     if (s->str+s->nbytes-p < sub->nbytes) return false;
     return memcmp(p, sub->str, sub->nbytes) == 0;
 }
@@ -2148,12 +2137,12 @@ B_bytearray B_bytearrayD_center(B_bytearray s, int64_t width, B_bytearray fill) 
     return res;
 }
 
-int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytearrayD_count(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
-    int64_t stval = fromB_int(st);
-    int64_t enval = fromB_int(en);
+    int64_t stval = st;
+    int64_t enval = en;
     unsigned char *p = &s->str[stval];
     unsigned char *q = &p[enval-stval];
     int64_t res = 0;
@@ -2170,12 +2159,12 @@ B_str B_bytearrayD_decode(B_bytearray s) {
     return actStrFromCStringLengthCopy((const char *)s->str, s->nbytes);
 }
 
-bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_bytearrayD_endswith(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    int64_t stval = fromB_int(st);
-    int64_t enval = fromB_int(en);
+    int64_t stval = st;
+    int64_t enval = en;
     if (enval-stval < sub->nbytes) return false;
     return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
@@ -2190,12 +2179,12 @@ B_bytearray B_bytearrayD_expandtabs(B_bytearray s, B_int tabsz){
     return res;
 }
 
-int64_t B_bytearrayD_find(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytearrayD_find(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
+    unsigned char *p = &s->str[st];
+    unsigned char *q = &s->str[en];
     int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
@@ -2275,7 +2264,7 @@ B_str B_bytearrayD_hex(B_bytearray s) {
 }
 
 
-int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+int64_t B_bytearrayD_index(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
     int64_t n = B_bytearrayD_find(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_substring_not_found_error);
@@ -2465,7 +2454,7 @@ B_bytearray B_bytearrayD_lstrip(B_bytearray s, B_bytearray cs) {
 
 
 B_tuple B_bytearrayD_partition(B_bytearray s, B_bytearray sep) {
-    int64_t n = B_bytearrayD_find(s,sep,NULL,NULL);
+    int64_t n = B_bytearrayD_find(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,B_bytearrayD_copy(s),toB_bytearray(""),toB_bytearray(""));
     } else {
@@ -2486,7 +2475,7 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT64_MAX);
-    int64_t c = B_bytearrayD_count(s, old, NULL, NULL);
+    int64_t c = B_bytearrayD_count(s, old, 0, INT64_MAX);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return B_bytearrayD_copy(s);
@@ -2523,19 +2512,19 @@ B_bytearray B_bytearrayD_replace(B_bytearray s, B_bytearray old, B_bytearray new
 }
 
 
-int64_t B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytearrayD_rfind(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
+    unsigned char *p = &s->str[st];
+    unsigned char *q = &s->str[en];
     int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
 
 
-int64_t B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
+int64_t B_bytearrayD_rindex(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
     int64_t n = B_bytearrayD_rfind(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_bytearray_rsubstring_not_found_error);
@@ -2565,7 +2554,7 @@ B_bytearray B_bytearrayD_rjust(B_bytearray s, int64_t width, B_bytearray fill) {
 }
 
 B_tuple B_bytearrayD_rpartition(B_bytearray s, B_bytearray sep) {
-    int64_t n = B_bytearrayD_rfind(s,sep,NULL,NULL);
+    int64_t n = B_bytearrayD_rfind(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,toB_bytearray(""),toB_bytearray(""),B_bytearrayD_copy(s));
     } else {
@@ -2709,15 +2698,15 @@ B_list B_bytearrayD_splitlines(B_bytearray s, B_bool keepends) {
     return res;
 }
 
-bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_bytearrayD_startswith(B_bytearray s, B_bytearray sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    unsigned char *p = s->str + fromB_int(st);
+    unsigned char *p = s->str + st;
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
     for (int64_t i=0; i<sub->nbytes; i++) {
-        if (p >= s->str + fromB_int(en) || *p++ != *q++) {
+        if (p >= s->str + en || *p++ != *q++) {
             return false;
         }
     }
@@ -3279,13 +3268,13 @@ B_bytes B_bytesD_center(B_bytes s, int64_t width, B_bytes fill) {
     return res;
 }
 
-int64_t B_bytesD_count(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytesD_count(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return 0;
-    int64_t stval = fromB_int(st);
+    int64_t stval = st;
     unsigned char *p = &s->str[stval];
-    unsigned char *q = &p[fromB_int(en)-stval];
+    unsigned char *q = &p[en-stval];
     int64_t res = 0;
     int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     while (n>=0) {
@@ -3300,12 +3289,12 @@ B_str B_bytesD_decode(B_bytes s) {
     return actStrFromCStringLengthCopy((const char *)s->str, s->nbytes);
 }
 
-bool B_bytesD_endswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_bytesD_endswith(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    int64_t stval = fromB_int(st);
-    int64_t enval = fromB_int(en);
+    int64_t stval = st;
+    int64_t enval = en;
     if (enval-stval < sub->nbytes) return false;
     return memcmp(&s->str[enval-sub->nbytes],sub->str,sub->nbytes)==0;
 }
@@ -3323,12 +3312,12 @@ B_bytes B_bytesD_expandtabs(B_bytes s, B_int tabsz){
     return res;
 }
 
-int64_t B_bytesD_find(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytesD_find(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
+    unsigned char *p = &s->str[st];
+    unsigned char *q = &s->str[en];
     int64_t n = bmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
@@ -3386,7 +3375,7 @@ B_str B_bytesD_hex(B_bytes s) {
     return hex_from_bytes(s->str, s->nbytes);
 }
 
-int64_t B_bytesD_index(B_bytes s, B_bytes sub, B_int start, B_int end) {
+int64_t B_bytesD_index(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
     int64_t n = B_bytesD_find(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_substring_not_found_error);
@@ -3575,7 +3564,7 @@ B_bytes B_bytesD_lstrip(B_bytes s, B_bytes cs) {
 
 
 B_tuple B_bytesD_partition(B_bytes s, B_bytes sep) {
-    int64_t n = B_bytesD_find(s,sep,NULL,NULL);
+    int64_t n = B_bytesD_find(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,s,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""));
     } else {
@@ -3621,7 +3610,7 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
     // A negative count, like no count, replaces every occurrence
     if (count == NULL || fromB_int(count) < 0)
         count = toB_int(INT64_MAX);
-    int64_t c = B_bytesD_count(s, old, NULL, NULL);
+    int64_t c = B_bytesD_count(s, old, 0, INT64_MAX);
     int64_t c0 = fromB_int(count) < c ? fromB_int(count) : c;
     if (c0 == 0) {
         return B_bytesD_copy(s);
@@ -3658,19 +3647,19 @@ B_bytes B_bytesD_replace(B_bytes s, B_bytes old, B_bytes new, B_int count) {
 }
 
 
-int64_t B_bytesD_rfind(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+int64_t B_bytesD_rfind(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return -1;
-    unsigned char *p = &s->str[fromB_int(st)];
-    unsigned char *q = &s->str[fromB_int(en)];
+    unsigned char *p = &s->str[st];
+    unsigned char *q = &s->str[en];
     int64_t n = rbmh(p, sub->str, q-p, sub->nbytes);
     if (n<0) return -1;
     return n+p-s->str;
 }
 
 
-int64_t B_bytesD_rindex(B_bytes s, B_bytes sub, B_int start, B_int end) {
+int64_t B_bytesD_rindex(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
     int64_t n = B_bytesD_rfind(s,sub,start,end);
     if (n<0) {
         RAISE_EXC(&B_str_bytes_rsubstring_not_found_error);
@@ -3700,7 +3689,7 @@ B_bytes B_bytesD_rjust(B_bytes s, int64_t width, B_bytes fill) {
 }
 
 B_tuple B_bytesD_rpartition(B_bytes s, B_bytes sep) {
-    int64_t n = B_bytesD_rfind(s,sep,NULL,NULL);
+    int64_t n = B_bytesD_rfind(s,sep,0,INT64_MAX);
     if (n<0) {
         return $NEWTUPLE(3,actBytesFromCStringCopy(""),actBytesFromCStringCopy(""),s);
     } else {
@@ -3844,15 +3833,15 @@ B_list B_bytesD_splitlines(B_bytes s, B_bool keepends) {
     return res;
 }
 
-bool B_bytesD_startswith(B_bytes s, B_bytes sub, B_int start, B_int end) {
-    B_int st = start;
-    B_int en = end;
+bool B_bytesD_startswith(B_bytes s, B_bytes sub, int64_t start, int64_t end) {
+    int64_t st = start;
+    int64_t en = end;
     if (fix_start_end(s->nbytes,&st,&en) < 0) return false;
-    unsigned char *p = s->str + fromB_int(st);
+    unsigned char *p = s->str + st;
     if (sub->nbytes > 0 && p+sub->nbytes > s->str+s->nbytes) return false;
     unsigned char *q = sub->str;
     for (int64_t i=0; i<sub->nbytes; i++) {
-        if (p >= s->str + fromB_int(en) || *p++ != *q++) {
+        if (p >= s->str + en || *p++ != *q++) {
             return false;
         }
     }
