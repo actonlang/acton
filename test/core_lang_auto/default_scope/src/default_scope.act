@@ -7,6 +7,9 @@ actor main(env):
     if provider.from_import() != 42:
         print("imported definition-site default failed")
         env.exit(1)
+    if provider.from_qualified_import() != 40:
+        print("qualified module default failed")
+        env.exit(1)
     if not provider.boolean_default():
         print("unboxed boolean default failed")
         env.exit(1)
@@ -18,8 +21,19 @@ actor main(env):
         print("generic default witness failed")
         env.exit(1)
     if (provider.dict_default() != {} or
+        provider.set_default() != set() or
         provider.same_module_dict_default() != {} or
         provider.nested_dict_default() != {}):
         print("collection default expansion failed")
         env.exit(1)
+    overridden: provider.DefaultBase = provider.DefaultDerived()
+    if overridden.value() != 42:
+        print("imported inherited method default failed")
+        env.exit(1)
+    callback_default = provider.CallbackDefault()
+    callback_default.send()
+    callback_base: provider.CallbackBase = provider.CallbackDerived()
+    callback_base.send()
+    callback_forwarder = provider.CallbackForwarder(callback_base)
+    callback_forwarder.send()
     env.exit(0)

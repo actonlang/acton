@@ -554,7 +554,7 @@ instance Conv Type where
     conv env (TCon l c)                 = TCon l (conv env c)
     conv env (TTuple l p k)             = TTuple l (conv env p) (conv env k)
     conv env (TOpt l t)                 = TOpt l (conv env t)
-    conv env (TRow l k n t r)           = TRow l k n (conv env t) (conv env r)
+    conv env (TRow l k n t d r)         = TRow l k n (conv env t) d (conv env r)
     conv env t                          = t
 
 instance Conv TCon where
