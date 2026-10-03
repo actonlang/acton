@@ -137,11 +137,9 @@ qualifyInterfaceDefaults env          = map qualifyBinding
         qualifyTypeWith ws (TTuple l p k)
                                         = TTuple l (qualifyTypeWith ws p) (qualifyTypeWith ws k)
         qualifyTypeWith ws (TOpt l t)   = TOpt l (qualifyTypeWith ws t)
-        qualifyTypeWith ws (TRow l rk n t r)
-                                        = TRow l rk n (qualifyTypeWith ws t) (qualifyTypeWith ws r)
-        qualifyTypeWith ws (TDefRow l rk n t d r)
-                                        = TDefRow l rk n (qualifyTypeWith ws t) (qualifyDefault ws d)
-                                                           (qualifyTypeWith ws r)
+        qualifyTypeWith ws (TRow l rk n t d r)
+                                        = TRow l rk n (qualifyTypeWith ws t) (fmap (qualifyDefault ws) d)
+                                                        (qualifyTypeWith ws r)
         qualifyTypeWith ws (TStar l rk r)
                                         = TStar l rk (qualifyTypeWith ws r)
         qualifyTypeWith ws (TUnboxed l t)
@@ -175,10 +173,9 @@ substDefaultTerms s (TFun l fx p k r) = TFun l (substDefaultTerms s fx)
                                                (substDefaultTerms s r)
 substDefaultTerms s (TTuple l p k)    = TTuple l (substDefaultTerms s p) (substDefaultTerms s k)
 substDefaultTerms s (TOpt l t)        = TOpt l (substDefaultTerms s t)
-substDefaultTerms s (TRow l rk n t r) = TRow l rk n (substDefaultTerms s t) (substDefaultTerms s r)
-substDefaultTerms s (TDefRow l rk n t d r)
-                                        = TDefRow l rk n (substDefaultTerms s t)
-                                                  (substDefault d) (substDefaultTerms s r)
+substDefaultTerms s (TRow l rk n t d r)
+                                        = TRow l rk n (substDefaultTerms s t)
+                                                  (fmap substDefault d) (substDefaultTerms s r)
   where substDefault (DfltExpr e v ref)= DfltExpr e (termsubst s v) ref
         substDefault DfltDynamic       = DfltDynamic
 substDefaultTerms s (TStar l rk r)    = TStar l rk (substDefaultTerms s r)
@@ -586,16 +583,15 @@ finishToStmt env te eq s                = do te <- defaultX env te
 deferDefaultExpansions (TFun l fx p k r)= TFun l fx <$> deferDefaultRow p <*> deferDefaultRow k <*> pure r
 deferDefaultExpansions t                = return t
 
-deferDefaultRow (TDefRow l rk n t d rest)
-                                        = do d' <- deferSpec d
+deferDefaultRow (TRow l rk n t d rest)
+                                        = do d' <- mapM deferSpec d
                                              rest' <- deferDefaultRow rest
-                                             return (TDefRow l rk n t d' rest')
+                                             return (TRow l rk n t d' rest')
   where deferSpec (DfltExpr source _ Nothing)
                                         = do refName <- newTmp
                                              let ref = NoQ refName
                                              return (DfltExpr source (eQVar ref) (Just ref))
         deferSpec spec                 = return spec
-deferDefaultRow (TRow l rk n t rest)   = TRow l rk n t <$> deferDefaultRow rest
 deferDefaultRow (TStar l rk rest)      = TStar l rk <$> deferDefaultRow rest
 deferDefaultRow row                    = return row
 
@@ -620,8 +616,7 @@ defaultRefSubst                         = concatMap refsBinding
         refsType (TFun _ fx p k r)     = concatMap refsType [fx,p,k,r]
         refsType (TTuple _ p k)         = refsType p ++ refsType k
         refsType (TOpt _ t)             = refsType t
-        refsType (TRow _ _ _ t r)       = refsType t ++ refsType r
-        refsType (TDefRow _ _ _ t d r)  = ref d ++ refsType t ++ refsType r
+        refsType (TRow _ _ _ t d r)     = maybe [] ref d ++ refsType t ++ refsType r
         refsType (TStar _ _ r)          = refsType r
         refsType (TUnboxed _ t)         = refsType t
         refsType _                      = []
@@ -655,8 +650,7 @@ updateDefaultRefs clear refs           = map clearBinding
         clearType (TFun l fx p k r)     = TFun l (clearType fx) (clearType p) (clearType k) (clearType r)
         clearType (TTuple l p k)        = TTuple l (clearType p) (clearType k)
         clearType (TOpt l t)            = TOpt l (clearType t)
-        clearType (TRow l rk n t r)     = TRow l rk n (clearType t) (clearType r)
-        clearType (TDefRow l rk n t d r)= TDefRow l rk n (clearType t) (clearRef d) (clearType r)
+        clearType (TRow l rk n t d r)   = TRow l rk n (clearType t) (fmap clearRef d) (clearType r)
         clearType (TStar l rk r)        = TStar l rk (clearType r)
         clearType (TUnboxed l t)        = TUnboxed l (clearType t)
         clearType t                     = t
@@ -681,9 +675,12 @@ refreshDefaults te stmt                = map refresh te
         refreshInfo Def{pos=p,kwd=k} (NSig sc dec doc)
                                             = NSig (refreshSchema p k sc) dec doc
         refreshInfo Actor{pos=p,kwd=k,dbody=b} (NAct q pr kr members doc)
-                                            = NAct q (refreshRow defs pr) (refreshRow defs kr)
+                                            = NAct q (refreshPosRow p k pr' kr')
+                                                     kr'
                                                      (refreshMembers members b) doc
           where defs                    = parameterDefaults p k
+                pr'                     = refreshRow defs pr
+                kr'                     = refreshRow defs kr
         refreshInfo Class{dbody=b} (NClass q us members doc)
                                             = NClass q us (refreshMembers members b) doc
         refreshInfo Protocol{dbody=b} (NProto q us members doc)
@@ -699,19 +696,57 @@ refreshDefaults te stmt                = map refresh te
                                              []  -> entry
 
         refreshSchema p k (TSchema l q (TFun lt fx pr kr result))
-                                            = TSchema l q (TFun lt fx (refreshRow defs pr) (refreshRow defs kr) result)
+                                            = TSchema l q (TFun lt fx
+                                                     (refreshPosRow p k pr' kr') kr' result)
           where defs                    = parameterDefaults p k
+                pr'                     = refreshRow defs pr
+                kr'                     = refreshRow defs kr
         refreshSchema _ _ sc            = sc
 
-        refreshRow defs (TDefRow l rk n t old rest)
-                                            = TDefRow l rk n t spec (refreshRow defs rest)
+        refreshRow defs (TRow l rk n t old rest)
+                                            = TRow l rk n t spec (refreshRow defs rest)
           where spec                    = case lookup n defs of
-                                               Just e  -> DfltExpr (defaultSource old) e (defaultRef old)
+                                               Just e  -> Just $ case old of
+                                                                    Just d  -> DfltExpr (defaultSource d) e (defaultRef d)
+                                                                    Nothing -> DfltExpr e e Nothing
                                                Nothing -> old
-        refreshRow defs (TRow l rk n t rest)
-                                            = TRow l rk n t (refreshRow defs rest)
         refreshRow defs (TStar l rk rest)= TStar l rk (refreshRow defs rest)
         refreshRow _ row                 = row
+
+        -- Override constraints can erase both the names and default markers
+        -- from the positional row. Reapply the checked declaration defaults
+        -- by callable position. The inferred function rows may omit an
+        -- implicit method `self`, so first align the declaration against the
+        -- complete fixed-parameter shape, then select its positional prefix.
+        refreshPosRow pospars kwdpars prow krow
+                                            = refreshPos slots row
+          where declared                = posDefaultSlots pospars ++ kwdDefaultSlots kwdpars
+                callableCount           = rowEntryCount prow + rowEntryCount krow
+                callable                = drop (max 0 (length declared - callableCount)) declared
+                slots                   = take (rowEntryCount prow) callable
+                row                     = prow
+
+        refreshPos (mb:more) (TRow l rk n t old rest)
+                                            = TRow l rk n t spec (refreshPos more rest)
+          where spec                    = case mb of
+                                               Just e  -> Just $ case old of
+                                                                    Just d  -> DfltExpr (defaultSource d) e (defaultRef d)
+                                                                    Nothing -> DfltExpr e e Nothing
+                                               Nothing -> Nothing
+        refreshPos _ row                = row
+
+        posDefaultSlots (PosPar _ _ d rest)
+                                            = d : posDefaultSlots rest
+        posDefaultSlots PosSTAR{}        = []
+        posDefaultSlots PosNIL           = []
+
+        kwdDefaultSlots (KwdPar _ _ d rest)
+                                            = d : kwdDefaultSlots rest
+        kwdDefaultSlots KwdSTAR{}        = []
+        kwdDefaultSlots KwdNIL           = []
+
+        rowEntryCount TRow{rtail=rest}   = 1 + rowEntryCount rest
+        rowEntryCount _                  = 0
 
         defaultSource (DfltExpr e _ _)   = e
         defaultSource DfltDynamic        = eNotImpl
@@ -928,11 +963,15 @@ inlineWitnessExpr eq e                 = case allEqs of
         -- numeric defaults without allocation.
         e'                              = inlineAll e
         kept                            = [ Eqn level w t (inlineAll rhs)
-                                          | Eqn level w t rhs <- allEqs, not (inlineEq t) ]
+                                          | Eqn level w t rhs <- allEqs, not (inlineEq t rhs) ]
         allEqs                          = witnessEquations (filter isWitness $ free e) []
-        inlineEqs                       = [ q | q@(Eqn _ _ t _) <- allEqs, inlineEq t ]
-        inlineEq TFun{}                 = True
-        inlineEq _                      = False
+        inlineEqs                       = [ q | q@(Eqn _ _ t rhs) <- allEqs, inlineEq t rhs ]
+        inlineEq TFun{} _               = True
+        inlineEq _ rhs                  = wrapperRoot rhs `elem`
+                                              [primWrapProc, primWrapAction, primWrapMut, primWrapPure]
+        wrapperRoot (Var _ n)           = n
+        wrapperRoot (TApp _ f _)        = wrapperRoot f
+        wrapperRoot _                   = NoQ nWild
         inlineAll x                     = foldl subst x (reverse inlineEqs)
         subst x (Eqn _ w _ rhs)         = termsubst [(w,rhs)] x
 
@@ -1752,14 +1791,54 @@ instance (Check a) => Check [a] where
 
 ------------------
 
-infActorEnv env ss                      = do dsigs <- mapM mkNDef dvars                                 -- exposed defs without sigs
+infActorEnv env ss                      = do dsigs <- mapM mkNDef ddefs                                 -- exposed defs without sigs
                                              bsigs <- mapM mkNVar pvars                                 -- exposed assigns without sigs
                                              return (abssigs ++ unSig concsigs ++ dsigs ++ bsigs)       -- abstract sigs ++ exposed sigs + the above
   where sigs                            = [ (n, NSig sc dec Nothing) | Signature _ ns sc dec <- ss, n <- ns ]
         (concsigs, abssigs)             = partition ((`elem`(dvars++pvars)) . fst) sigs
         dvars                           = methods ss \\ dom sigs
-        mkNDef n                        = do t <- newUnivar env
-                                             return (n, NDef (monotype $ t) NoDec Nothing)
+        ddefs                           = [ d | Decl _ ds <- ss, d@Def{dname=n} <- ds, n `elem` dvars ]
+        -- Calls through an actor interface can occur while the actor's
+        -- recursive declaration group is still being checked.  Methods with
+        -- defaults need their known callable shape at scan time; a single
+        -- unconstrained type variable loses the default markers when an early
+        -- call first fixes its row.  Explicitly generic methods likewise need
+        -- their quantified scope here.  Keep the old monomorphic assumption
+        -- for all other methods, since it deliberately lets recursive actor
+        -- inference determine the entire function type as one unit.
+        mkNDef (Def _ n q p k a _ dec fx doc)
+          | not (null q) || hasDefaultsP p || hasDefaultsK k
+                                        = do result <- maybe (newUnivar env) return a
+                                             effect <- newUnivarOfKind KFX env
+                                             pr <- freshRow PRow (prowOf p)
+                                             kr <- freshRow KRow (krowOf k)
+                                             t <- deferDefaultExpansions $ tFun effect pr kr result
+                                             -- prowOf/krowOf represent missing annotations
+                                             -- with wildcards.  The old monomorphic recursion
+                                             -- assumption supplied inference variables for those
+                                             -- positions, so uses of an unannotated actor method
+                                             -- could still determine its parameter types.  Keep
+                                             -- that property while retaining the row shape and its
+                                             -- default markers.  Freshen only those wildcards: the
+                                             -- general instwild operation also expands named types,
+                                             -- including the actor currently reserved by the scan.
+                                             return (n, NDef (tSchema q t) dec doc)
+          | otherwise                   = do t <- newUnivar env
+                                             return (n, NDef (monotype t) dec doc)
+        hasDefaultsP (PosPar _ _ d p)   = isJust d || hasDefaultsP p
+        hasDefaultsP PosSTAR{}          = False
+        hasDefaultsP PosNIL             = False
+        hasDefaultsK (KwdPar _ _ d k)   = isJust d || hasDefaultsK k
+        hasDefaultsK KwdSTAR{}          = False
+        hasDefaultsK KwdNIL             = False
+        freshRow k (TWild _)            = newUnivarOfKind k env
+        freshRow k (TRow l rk n t d r)  = do t' <- freshEntry t
+                                             r' <- freshRow rk r
+                                             return (TRow l rk n t' d r')
+        freshRow k (TStar l rk r)       = TStar l rk <$> freshRow rk r
+        freshRow _ r                    = return r
+        freshEntry (TWild _)            = newUnivar env
+        freshEntry t                    = return t
         svars                           = statevars ss
         pvars                           = pvarsF ss \\ dom (sigs) \\ dvars
         pvarsF ss                       = nub $ concat $ map pvs ss
@@ -1791,15 +1870,32 @@ matchActorAssumption env n0 p k te      = do --traceM ("## matchActorAssumption 
         check1 (n, NSVar t0)            = do --traceM ("## matchActorAssumption for state var " ++ prstr n)
                                              return ([Cast (locinfo n 62) env t t0], [])
           where Just (NSVar t)          = lookup n te1
-        check1 (n, NDef sc0 _ _)        = do (cs0,_,t) <- instantiateDefaults env sc
-                                             (c0,t') <- wrap env t
+        check1 (n, NDef sc0 _ _)
+          | TUni{} <- sctype sc0        = do (cs0,_,t0) <- instantiateDefaults env sc
+                                             (c0,t') <- wrap env t0
                                              let c1 = Cast (locinfo n 63) env t' (sctype sc0)
                                                  cs1 = maybeSeal env n (leaves sc0)
-                                                 q0 = scbind sc0
+                                             (cs2,eq) <- markScoped env n0 (scbind sc0) obs
+                                                                  (c0:c1:cs0++cs1)
+                                             return (cs2, eq)
+          | otherwise                   = do (c0,t') <- wrap env0 t
+                                             let c1 = Cast (locinfo n 63) env0 t' (sctype sc0)
                                              --traceM ("## matchActorAssumption for method " ++ prstr n ++ ": " ++ prstr c1)
-                                             (cs2,eq) <- markScoped env n0 q0 obs (c0:c1:cs0++cs1)
+                                             -- A structured provisional interface retains
+                                             -- defaults or an explicit quantified scope.  Do
+                                             -- not seal each still-unknown leaf here: method-body
+                                             -- constraints are combined only by the enclosing
+                                             -- actor solve, and early sealing prevents those
+                                             -- constraints from completing inference.
+                                             (cs2,eq) <- markScoped env n0 q0 obs [c0,c1]
                                              return (cs2, eq)
           where Just (NDef sc _ _)      = lookup n te1
+                q0                      = scbind sc0
+                env0                    = tydefineVars q0 env
+                -- Both schemas originate in the same method declaration.  Match
+                -- them under one rigid quantified scope; instantiating only the
+                -- checked schema would let its fresh variables escape that scope.
+                t                       = vsubst (qbound (scbind sc) `zip` map tVar (qbound q0)) (sctype sc)
         check1 (n, i)                   = return ([], [])
 
 
@@ -2399,7 +2495,55 @@ checkIndependentDefaults env p k        = checkP [] p
                                             = err (loc e) ("Default value may not depend on parameter " ++ prstr n)
           | n:_ <- free e `intersect` defaultLocalNames env
                                             = err (loc e) ("Default value may not capture enclosing name " ++ prstr n)
+          | not (liftableDefault env e)     = err (loc e) "Default value must be a literal, constructor expression, or module-level name"
           | otherwise                       = return ()
+
+-- A default is copied, verbatim in source terms, from its definition into
+-- each call that omits the parameter.  Keep that operation easy to explain:
+-- permit literals (including recursively literal containers), references to
+-- stable module-level values, and constructor applications whose arguments
+-- are themselves liftable.  In particular, an arbitrary function or method
+-- call is not made into an implicit call-site computation.
+liftableDefault env                       = lift
+  where lift Int{}                        = True
+        lift Float{}                      = True
+        lift Bool{}                       = True
+        lift None{}                       = True
+        lift Strings{}                    = True
+        lift BStrings{}                   = True
+        lift e@Var{}                      = moduleValue e
+        lift (Paren _ e)                  = lift e
+        lift (UnOp _ op e)                = op `elem` [UPlus, UMinus, BNot] && lift e
+        lift (Tuple _ p k)                = liftPos p && liftKwd k
+        lift (List _ es)                  = all liftElem es
+        lift (Dict _ as)                  = all liftAssoc as
+        lift (Set _ es)                   = all liftElem es
+        lift (Call _ f p k)               = constructor f && liftPos p && liftKwd k
+        lift _                             = False
+
+        liftPos (PosArg e p)              = lift e && liftPos p
+        liftPos (PosStar e)               = lift e
+        liftPos PosNil                    = True
+        liftKwd (KwdArg _ e k)            = lift e && liftKwd k
+        liftKwd (KwdStar e)               = lift e
+        liftKwd KwdNil                    = True
+        liftElem (Elem e)                 = lift e
+        liftElem (Star e)                 = lift e
+        liftAssoc (Assoc k v)             = lift k && lift v
+        liftAssoc (StarStar e)            = lift e
+
+        constructor (TApp _ f _)          = constructor f
+        constructor e                     = maybe False (\q -> isClass env q || isActor env q) (exprQName e)
+
+        moduleValue e                     = case exprQName e >>= (`tryQName` env) of
+                                                 Just NVar{} -> True
+                                                 Just NDef{} -> True
+                                                 _           -> False
+
+        exprQName (Var _ q)               = Just q
+        exprQName (Dot _ prefix n)         = do m <- isModName env prefix
+                                                return (QName m n)
+        exprQName _                       = Nothing
 
 noDefaultsP (PosPar n t _ p)            = PosPar n t Nothing (noDefaultsP p)
 noDefaultsP k                           = k
@@ -2532,7 +2676,7 @@ instance Infer Expr where
                                                 return (cs, tBool, IsInstance l e' c)
                                              _ -> nameUnexpected c
     infer env (BinOp l s@Strings{} Mod e)
-      | TRow _ _ _ t TNil{} <- prow     = do (cs,e') <- inferSub env t e
+      | TRow _ _ _ t _ TNil{} <- prow   = do (cs,e') <- inferSub env t e
                                              return (cs, tStr, eCall formatF [s,eTuple [e']])
       | otherwise                       = do (cs,e') <- inferSub env tup e
                                              return (cs, tStr, eCall formatF [s,e'])
@@ -3149,8 +3293,7 @@ testActor                               = sDecl [Actor NoLoc (name "test_main") 
                                              [sExpr (eCall (eQVar (gname [name "testing"] (name "test_runner")))
                                                            (map (eVar . name) ["env","__unit_tests","__simple_sync_tests","__sync_tests","__async_tests","__env_tests"]))] Nothing]
 
-row2list (TRow _ _ _ t r)               = t : row2list r
-row2list (TDefRow _ _ _ t _ r)          = t : row2list r
+row2list (TRow _ _ _ t _ r)             = t : row2list r
 row2list (TNil _ _)                     = []
 
 mkAssoc d testType modName =

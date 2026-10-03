@@ -528,8 +528,7 @@ instance OptVars Type where
     optvars (TCon _ c)                  = optvars c
     optvars (TFun _ fx p k t)           = optvars [p, k, t]
     optvars (TTuple _ p k)              = optvars [p, k]
-    optvars (TRow _ _ _ t r)            = optvars [t, r]
-    optvars (TDefRow _ _ _ t _ r)       = optvars [t, r]
+    optvars (TRow _ _ _ t _ r)          = optvars [t, r]
     optvars (TStar _ _ r)               = optvars r
     optvars _                           = []
 
@@ -700,12 +699,7 @@ reduce' eq c@(Sel info env w t1@(TTuple _ _ r) n t2)
                                                  return (mkEqn env w (wFun t1 t2) e : eq)
   | otherwise                               = do --traceM ("### Sel " ++ prstr c)
                                                  select r
-  where select (TRow _ _ n' t r)
-          | n == n'                         = do w' <- newWitness
-                                                 let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
-                                                 reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
-          | otherwise                       = select r
-        select (TDefRow _ _ n' t _ r)
+  where select (TRow _ _ n' t _ r)
           | n == n'                         = do w' <- newWitness
                                                  let e = eLambda [(px0,t1)] (eDot (eCallVar w' [eVar px0]) n)
                                                  reduce (mkEqn env w (wFun t1 t2) e : eq) [Sub info env w' t t2]
@@ -955,15 +949,7 @@ castpos env info r1             (TUni _ tv)
                                                  usubstitute tv r2
                                                  castpos env info r1 r2
 
-castpos env info (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
-                                            = do --traceM (" ## castpos A " ++ prstr t1 ++ " < " ++ prstr t2)
-                                                 (cs,ts) <- castpos env info r1 r2
-                                                 return (Cast info env t1 t2 : cs, ts)
-castpos env info (TDefRow _ _ _ t1 _ r1) (TRow _ _ _ t2 r2)
-                                            = castposEntry env info t1 r1 t2 r2
-castpos env info (TRow _ _ _ t1 r1) (TDefRow _ _ _ t2 _ r2)
-                                            = castposEntry env info t1 r1 t2 r2
-castpos env info (TDefRow _ _ _ t1 _ r1) (TDefRow _ _ _ t2 _ r2)
+castpos env info (TRow _ _ _ t1 _ r1) (TRow _ _ _ t2 _ r2)
                                             = castposEntry env info t1 r1 t2 r2
 castpos env info (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## castpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
@@ -978,17 +964,14 @@ castpos env info r1                 (TStar _ _ r2)
                                             = do --traceM (" ## castpos E " ++ prstr r1 ++ " ~ " ++ prstr r2)
                                                  castpos env info r1 r2
 
-castpos env info r1@TNil{}          r@TRow{}
+castpos env info r1@TNil{}          r@(TRow _ _ _ _ Nothing _)
                                             = do --traceM (" ## castpos G Nil ~ " ++ prstr r)
                                                  posElemNotFound0 env True (Cast info env r1 r) nWild
-castpos env info r1@TNil{}          (TDefRow _ _ _ _ _ r2)
+castpos env info r1@TNil{}          (TRow _ _ _ _ (Just _) r2)
                                             = castpos env info r1 r2
-castpos env info (TRow _ _ _ t1 r1) r2@TNil{}
+castpos env info (TRow _ _ _ t1 _ r1) r2@TNil{}
                                             = do --traceM (" ## castpos H " ++ prstr t1)
                                                  (cs,ts) <- castpos env info r1 r2
-                                                 return (cs, t1 : ts)
-castpos env info (TDefRow _ _ _ t1 _ r1) r2@TNil{}
-                                            = do (cs,ts) <- castpos env info r1 r2
                                                  return (cs, t1 : ts)
 
 castposEntry env info t1 r1 t2 r2   = do
@@ -1028,8 +1011,7 @@ castkwd env info r1 (TUni _ tv)             = do unif r1
                                                  r2 <- pure $ tNil KRow
                                                  unify env info (tUni tv) r2
 
-castkwd env info r1 (TRow _ _ n2 t2 r2)     = castkwdRow env info r1 n2 t2 Nothing r2
-castkwd env info r1 (TDefRow _ _ n2 t2 d r2)= castkwdRow env info r1 n2 t2 (Just d) r2
+castkwd env info r1 (TRow _ _ n2 t2 d r2)   = castkwdRow env info r1 n2 t2 d r2
 
 castkwd env info r1 (TStar _ _ r2)          = match r1
   where match (TUni _ tv)
@@ -1067,6 +1049,7 @@ castkwd env info r1 r2@TNil{}               = term r1
 
 castkwdRow env info r1 n2 t2 md r2
                                             = do (t1,r1') <- pick r1
+                                                 r1' <- usubst r1'
                                                  r2 <- usubst r2
                                                  cs <- castkwd env info r1' r2
                                                  return (Cast info env t1 t2 : cs)
@@ -1180,18 +1163,14 @@ sub' env info eq w t1 t2                    = do cast env info t1 t2
                                                  return (idwit env w t1 t2 : eq)
 
 
-rowTail (TRow _ _ _ _ r)                    = rowTail r
-rowTail (TDefRow _ _ _ _ _ r)               = rowTail r
+rowTail (TRow _ _ _ _ _ r)                  = rowTail r
 rowTail r                                   = r
 
 varTails                                    = all (isUnivar . rowTail)
 
-rowShape env (TRow _ k n t r)               = do t' <- newUnivar env
+rowShape env (TRow _ k n t d r)             = do t' <- newUnivar env
                                                  r' <- rowShape env r
-                                                 return (tRow k n t' r')
-rowShape env (TDefRow _ k n t d r)          = do t' <- newUnivar env
-                                                 r' <- rowShape env r
-                                                 return (tDefRow k n t' d r')
+                                                 return $ maybe (tRow k n t' r') (\x -> tDefRow k n t' x r') d
 rowShape env (TStar _ k r)                  = do r' <- rowShape env r
                                                  return (tStar k r')
 rowShape env r                              = return r
@@ -1211,13 +1190,7 @@ subpos env info f i r1             (TUni _ tv)
                                                  usubstitute tv r2
                                                  subpos env info f i r1 r2
 
-subpos env info f i (TRow _ _ _ t1 r1) (TRow _ _ _ t2 r2)
-                                            = subposEntry env info f i t1 r1 t2 r2
-subpos env info f i (TDefRow _ _ _ t1 _ r1) (TRow _ _ _ t2 r2)
-                                            = subposEntry env info f i t1 r1 t2 r2
-subpos env info f i (TRow _ _ _ t1 r1) (TDefRow _ _ _ t2 _ r2)
-                                            = subposEntry env info f i t1 r1 t2 r2
-subpos env info f i (TDefRow _ _ _ t1 _ r1) (TDefRow _ _ _ t2 _ r2)
+subpos env info f i (TRow _ _ _ t1 _ r1) (TRow _ _ _ t2 _ r2)
                                             = subposEntry env info f i t1 r1 t2 r2
 subpos env info f i (TStar _ _ r1)     (TStar _ _ r2)
                                             = do --traceM (" ## subpos B " ++ prstr (tTupleP r1) ++ " < " ++ prstr (tTupleP r2))
@@ -1234,20 +1207,17 @@ subpos env info f i r1                (TStar _ _ r2)
                                                  (cs,as,es) <- subpos env info f i r1 r2
                                                  return (cs, PosStar (eTupleP as), es)
 
-subpos env info f i r1@TNil{}          r@TRow{}
+subpos env info f i r1@TNil{}          r@(TRow _ _ _ _ Nothing _)
                                             = do --traceM (" ## subpos G Nil ~ " ++ prstr r)
                                                  posElemNotFound0 env True (Cast info env r1 r) nWild
-subpos env info f i r1@TNil{}          r@(TDefRow _ _ _ _ d r2)
+subpos env info f i r1@TNil{}          r@(TRow _ _ _ _ (Just d) r2)
                                             = do (cs,as,es) <- subpos env info f i r1 r2
                                                  case defaultExpr d of
                                                    Just e  -> return (cs, PosArg e as, es)
                                                    Nothing -> notYet (loc r) "Calling a first-class function with a dynamic default"
-subpos env info f i (TRow _ _ _ t1 r1) r2@TNil{}
+subpos env info f i (TRow _ _ _ t1 _ r1) r2@TNil{}
                                             = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
                                                  (cs,as,es) <- subpos env info f (i+1) r1 r2
-                                                 return (cs, as, (f i, t1) : es)
-subpos env info f i (TDefRow _ _ _ t1 _ r1) r2@TNil{}
-                                            = do (cs,as,es) <- subpos env info f (i+1) r1 r2
                                                  return (cs, as, (f i, t1) : es)
 
 subposEntry env info f i t1 r1 t2 r2   = do
@@ -1293,10 +1263,8 @@ subkwd env info f seen r1 (TUni _ tv)       = do unif f seen r1
                                                  r2 <- pure $ tNil KRow
                                                  unify env info (tUni tv) r2
 
-subkwd env info f seen r1 (TRow _ _ n2 t2 r2)
-                                            = subkwdRow env info f seen r1 n2 t2 Nothing r2
-subkwd env info f seen r1 (TDefRow _ _ n2 t2 d r2)
-                                            = subkwdRow env info f seen r1 n2 t2 (Just d) r2
+subkwd env info f seen r1 (TRow _ _ n2 t2 d r2)
+                                            = subkwdRow env info f seen r1 n2 t2 d r2
 
 subkwd env info f seen r1 (TStar _ _ r2)    = do (cs,e) <- match f seen r1
                                                  return (cs, KwdStar e)
@@ -1368,8 +1336,7 @@ subkwdRow env info f seen r1 n2 t2 mbd r2
                                                  Nothing -> notYet (loc n2) "Calling a first-class function with a dynamic default"
           | otherwise                       = kwdNotFound0 env info n2
 
-rowEntryView (TRow _ _ n t r)          = Just (n,t,Nothing,r)
-rowEntryView (TDefRow _ _ n t d r)     = Just (n,t,Just d,r)
+rowEntryView (TRow _ _ n t d r)        = Just (n,t,d,r)
 rowEntryView _                         = Nothing
 
 
@@ -1685,8 +1652,7 @@ instwild env _ (TFun l e p k t)         = TFun l <$> instwild env KFX e <*> inst
 instwild env _ (TTuple l p k)           = TTuple l <$> instwild env PRow p <*> instwild env KRow k
 instwild env _ (TOpt l t)               = TOpt l <$> instwild env KType t
 instwild env _ (TCon l c)               = TCon l <$> instwildcon env c
-instwild env _ (TRow l k n t r)         = TRow l k n <$> instwild env KType t <*> instwild env k r
-instwild env _ (TDefRow l k n t d r)    = TDefRow l k n <$> instwild env KType t <*> pure d <*> instwild env k r
+instwild env _ (TRow l k n t d r)       = TRow l k n <$> instwild env KType t <*> pure d <*> instwild env k r
 instwild env _ (TStar l k r)            = TStar l k <$> instwild env k r
 instwild env k t                        = return t
 

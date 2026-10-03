@@ -255,9 +255,11 @@ type KUni       = Int
 -- checked expansion for the compiler.  The latter may contain elaborated
 -- protocol witnesses and fully qualified definition-site names; exposing it
 -- as the written default would make an otherwise useful public signature
--- unreadable.  The optional reference is reserved for a definition-site
--- provider used by later lowering.  DfltDynamic describes an omittable
--- parameter whose particular default is carried by a first-class function.
+-- unreadable.  The optional reference is only an internal scan-phase
+-- placeholder used while a recursive declaration group is being checked; it
+-- is resolved before the interface is exported.  DfltDynamic describes an
+-- omittable parameter whose particular default is carried by a first-class
+-- function.
 data DefaultSpec = DfltExpr { dexpr::Expr, dvalue::Expr, dref::Maybe QName }
                  | DfltDynamic
                  deriving (Show,Read,Generic,NFData)
@@ -271,8 +273,8 @@ data Type       = TUni      { tloc::SrcLoc, uvar::TUni }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
-                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
-                | TDefRow   { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, dflt::DefaultSpec, rtail::TRow }
+                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type,
+                              dflt::Maybe DefaultSpec, rtail::TRow }
                 | TStar     { tloc::SrcLoc, rkind::Kind, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
                 | TUnboxed  { tloc::SrcLoc, utp::Type }
@@ -377,8 +379,8 @@ tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
-tRow k          = TRow NoLoc k
-tDefRow k       = TDefRow NoLoc k
+tRow k n t      = TRow NoLoc k n t Nothing
+tDefRow k n t d = TRow NoLoc k n t (Just d)
 tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
@@ -437,20 +439,15 @@ chop 0 _                = PosNIL
 chop i (PosPar n a d p) = PosPar n a d (chop (i-1) p)
 chop _ p                = p
 
-arity (TRow _ _ _ _ r)  = 1 + arity r
-arity (TDefRow _ _ _ _ _ r) = 1 + arity r
+arity (TRow _ _ _ _ _ r)= 1 + arity r
 arity _                 = 0
 
-pPar ns (TRow _ PRow n t p)
-                        = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
-pPar ns (TDefRow _ PRow n t d p)
+pPar ns (TRow _ PRow n t _ p)
                         = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
 pPar ns (TNil _ PRow)   = PosNIL
 pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 
-kPar kw (TRow _ KRow n t r)
-                        = KwdPar n (Just t) Nothing (kPar kw r)
-kPar kw (TDefRow _ KRow n t d r)
+kPar kw (TRow _ KRow n t _ r)
                         = KwdPar n (Just t) Nothing (kPar kw r)
 kPar kw (TNil _ KRow)   = KwdNIL
 kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
@@ -459,9 +456,7 @@ kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
 -- with a star tail bundled as one nested tuple, or Nothing if a row tail is still open.
 -- Must mirror the component layout Normalizer.joinRow establishes in generated code.
 tupleComponents p k     = (++) <$> comps p <*> comps k
-  where comps (TRow _ _ _ t r)
-                        = (t :) <$> comps r
-        comps (TDefRow _ _ _ t _ r)
+  where comps (TRow _ _ _ t _ r)
                         = (t :) <$> comps r
         comps (TStar _ PRow r)
                         = Just [tTupleP r]
@@ -471,7 +466,6 @@ tupleComponents p k     = (++) <$> comps p <*> comps k
         comps _         = Nothing
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
-tRowLoc t@TDefRow{}     = getLoc [tloc t, loc (rtype t)]
 
 defaultExpr (DfltExpr _ e _) = Just e
 defaultExpr DfltDynamic    = Nothing
@@ -517,8 +511,7 @@ instance Leaves Type where
     leaves (TFun _ x p k t) = leaves [x,p,k,t]
     leaves (TTuple _ p k)   = leaves [p,k]
     leaves (TOpt _ t)       = leaves t
-    leaves (TRow _ _ _ t r) = leaves [t,r]
-    leaves (TDefRow _ _ _ t _ r) = leaves [t,r]
+    leaves (TRow _ _ _ t _ r) = leaves [t,r]
     leaves (TStar _ _ r)    = leaves r
     leaves _                = []
 
@@ -838,9 +831,12 @@ instance Eq Type where
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
     TNil _ k1           == TNil _ k2            = k1 == k2
-    TRow _ k1 n1 t1 r1  == TRow _ k2 n2 t2 r2   = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
-    TDefRow _ k1 n1 t1 _ r1 == TDefRow _ k2 n2 t2 _ r2
-                                                = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
+    -- Whether an argument may be omitted is part of the callable type.  The
+    -- particular default expression is declaration metadata, however, and
+    -- must not participate in structural equality.
+    TRow _ k1 n1 t1 d1 r1 == TRow _ k2 n2 t2 d2 r2
+                                                = k1 == k2 && n1 == n2 && isJust d1 == isJust d2
+                                                  && t1 == t2 && r1 == r2
     TStar _ k1 r1       == TStar _ k2 r2        = k1 == k2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     TUnboxed _ t1       == TUnboxed _ t2        = t1 == t2

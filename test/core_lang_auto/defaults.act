@@ -6,6 +6,10 @@ def f(x, y='world'):
 def optional_default(x: ?int=3) -> ?int:
     return x
 
+# Keep positional and keyword-only defaults aligned across a star row.
+def split_defaults(x: int=11, *rest, y: int=22) -> int:
+    return x + y
+
 class Foo(object):
     def __init__(self, x, y='world'):
         self.x = x
@@ -21,19 +25,38 @@ class Bar(object):
     def f(self, x, y='world'):
         return x + ', ' + y
 
+class DefaultBase(object):
+    def __init__(self):
+        pass
+
+    def f(self, x: int=7) -> int:
+        return x
+
+class DefaultDerived(DefaultBase):
+    def __init__(self):
+        pass
+
+    def f(self, x: int=7) -> int:
+        return x
+
 actor DefaultActor():
     action def f(x: ?bool=None, y: ?bool=None) -> None:
         pass
 
 actor main(env):
     # Actor interfaces are inferred through a provisional method type. Make
-    # sure that learning its keyword-row shape preserves default arguments.
+    # sure that learning its row shape preserves default arguments, including
+    # a call that supplies no positional arguments at all.
     default_actor: DefaultActor = DefaultActor()
+    default_actor.f()
     default_actor.f(x=False)
 
     optional_alias = optional_default
     if optional_default() != 3 or optional_default(None) is not None or optional_alias() != 3:
         print("Nullable default argument semantics failed")
+        env.exit(1)
+    if split_defaults() != 33 or split_defaults(4, y=5) != 9:
+        print("Split positional/keyword default semantics failed")
         env.exit(1)
 
     # Test function call
@@ -137,6 +160,12 @@ actor main(env):
         env.exit(1)
     if gout7 != "hello, world":
         print("Bad 7:", gout7)
+        env.exit(1)
+
+    # Method override constraints must not erase a source-declared default.
+    overridden: DefaultBase = DefaultDerived()
+    if overridden.f() != 7:
+        print("Inherited method default failed")
         env.exit(1)
 
 

@@ -368,13 +368,7 @@ matchTypes t@TCon{} t'@TCon{}
    | t == t'                        = if isUnboxable t then TUnboxed NoLoc t else t
 matchTypes (TFun _ fx p _ r) (TFun _ fx' p' _ r')
                                     = tFun fx (matchTypes p p') kwdNil (matchTypes r r')
-matchTypes (TRow _ _ _ t r) (TRow _ _ _ t' r')
-                                    = posRow (matchTypes t t') (matchTypes r r')
-matchTypes (TDefRow _ _ _ t _ r) (TRow _ _ _ t' r')
-                                    = posRow (matchTypes t t') (matchTypes r r')
-matchTypes (TRow _ _ _ t r) (TDefRow _ _ _ t' _ r')
-                                    = posRow (matchTypes t t') (matchTypes r r')
-matchTypes (TDefRow _ _ _ t _ r) (TDefRow _ _ _ t' _ r')
+matchTypes (TRow _ _ _ t _ r) (TRow _ _ _ t' _ r')
                                     = posRow (matchTypes t t') (matchTypes r r')
 matchTypes TNil{} TNil{}            = posNil                                    
 matchTypes t (TUnboxed _ t')        = matchTypes t t'
@@ -652,8 +646,6 @@ fixarg env _ e                   = e
 
 fixargs                         :: BoxEnv -> PosArg -> Type -> PosArg
 fixargs env (PosArg e p) r@TRow{}= PosArg (fixarg env (rtype r) e) (fixargs env p (rtail r))
-fixargs env (PosArg e p) r@TDefRow{}
-                                  = PosArg (fixarg env (rtype r) e) (fixargs env p (rtail r))
 -- fixargs(PosStar e) r       = PosStar (tryUnbox t e) 
 --    where t                      = rtype r
 fixargs env p@PosArg{} _          = p
