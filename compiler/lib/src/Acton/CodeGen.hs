@@ -252,10 +252,10 @@ settype env _ t                     = repType env t
 repType env t                       = gen env t
 
 repParams env (TNil _ _)            = empty
-repParams env (TRow _ _ _ t r@TRow{})
+repParams env (TRow _ _ _ t _ r@TRow{})
                                     = repType env t <> comma <+> repParams env r
-repParams env (TRow _ _ _ t TNil{}) = repType env t
-repParams env (TRow _ _ _ t TVar{}) = repType env t
+repParams env (TRow _ _ _ t _ TNil{}) = repType env t
+repParams env (TRow _ _ _ t _ TVar{}) = repType env t
 repParams env t@TVar{}              = gen env t
 repParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
@@ -265,10 +265,10 @@ rawType env t
   where t'                          = boxedRepType t
 
 rawParams env (TNil _ _)            = empty
-rawParams env (TRow _ _ _ t r@TRow{})
+rawParams env (TRow _ _ _ t _ r@TRow{})
                                     = rawType env t <> comma <+> rawParams env r
-rawParams env (TRow _ _ _ t TNil{}) = rawType env t
-rawParams env (TRow _ _ _ t TVar{}) = rawType env t
+rawParams env (TRow _ _ _ t _ TNil{}) = rawType env t
+rawParams env (TRow _ _ _ t _ TVar{}) = rawType env t
 rawParams env t@TVar{}              = gen env t
 rawParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
@@ -571,9 +571,9 @@ genPosPar env n d t p
             | isInit n              = gen env p
             | p1 == PosNIL          = genTypeDecl env x (fromJust y) <+> gen env x
             | otherwise             = genTypeDecl env x (fromJust y) <+> gen env x <> comma <+> match p1 (posrow t)
-          match (PosPar n (Just t) Nothing PosNIL) (TRow _ _ _ t' _)
+          match (PosPar n (Just t) Nothing PosNIL) (TRow _ _ _ t' _ _)
                                     = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n
-          match (PosPar n (Just t) Nothing r) (TRow _ _ _ t' tl)
+          match (PosPar n (Just t) Nothing r) (TRow _ _ _ t' _ tl)
                                     = genVolatile env n <+> settype env (rawParam t' t) t <+> gen env n <> comma <+> match r tl
           match PosNIL (TNil _ _)   = empty
           match p TVar{}            = gen env p
@@ -1487,17 +1487,17 @@ castLit env (Strings l ss) p        = format (concat ss) p
 
 -- Render normal call arguments against the formal positional row.  Only
 -- parameters whose formal type is TUnboxed are forced to raw C values.
-genCallPosArgs env (TRow _ _ _ t r) (PosArg e PosNil)
+genCallPosArgs env (TRow _ _ _ t _ r) (PosArg e PosNil)
                                     = genCallArg env t e
-genCallPosArgs env (TRow _ _ _ t r) (PosArg e p)
+genCallPosArgs env (TRow _ _ _ t _ r) (PosArg e p)
                                     = genCallArg env t e <> comma <+> genCallPosArgs env r p
 genCallPosArgs env _ p              = gen env p
 
 -- Render constructor arguments.  Constructor C signatures use raw values for
 -- unboxable Acton types even when the source-level parameter type is boxed.
-genUCallPosArgs env (TRow _ _ _ t r) (PosArg e PosNil)
+genUCallPosArgs env (TRow _ _ _ t _ r) (PosArg e PosNil)
                                     = genUCallArg env t e
-genUCallPosArgs env (TRow _ _ _ t r) (PosArg e p)
+genUCallPosArgs env (TRow _ _ _ t _ r) (PosArg e p)
                                     = genUCallArg env t e <> comma <+> genUCallPosArgs env r p
 genUCallPosArgs env _ p             = gen env p
 
@@ -2466,8 +2466,8 @@ instance Gen Type where
     gen env (TOpt _ t)              = gen env t
     gen env (TNone _)               = gen env qnNoneType
     gen env (TWild _)               = word
-    gen env (TRow _ _ _ t TNil{})   = gen env t
-    gen env (TRow _ _ _ t r)        = gen env t <> comma <+> gen env r
+    gen env (TRow _ _ _ t _ TNil{}) = gen env t
+    gen env (TRow _ _ _ t _ r)      = gen env t <> comma <+> gen env r
     gen env (TNil _ _)              = empty
     gen env (TUnboxed _ t)          = text (unboxed_c_type t)
 

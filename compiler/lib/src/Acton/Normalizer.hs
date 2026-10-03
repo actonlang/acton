@@ -1277,15 +1277,11 @@ eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
     eq1 _ _                             = False
 eta e                               = e
 
-nargs (TRow _ _ _ _ r)              = 1 + nargs r
-nargs (TDefRow _ _ _ _ _ r)         = 1 + nargs r
+nargs (TRow _ _ _ _ _ r)            = 1 + nargs r
 nargs (TStar _ _ _)                 = 1
 nargs (TNil _ _)                    = 0
 
-narg n (TRow _ _ n' _ r)
-  | n == n'                         = 0
-  | otherwise                       = 1 + narg n r
-narg n (TDefRow _ _ n' _ _ r)
+narg n (TRow _ _ n' _ _ r)
   | n == n'                         = 0
   | otherwise                       = 1 + narg n r
 narg n (TStar _ _ _)
@@ -1407,9 +1403,8 @@ instance Conv Type where
       | otherwise                   = TCon l (conv env c)
     conv env (TTuple l p k)         = TTuple l (joinRow env p k) kwdNil
     conv env (TOpt l t)             = TOpt l (conv env t)
-    conv env (TRow l k n t r)       = TRow l PRow nWild (conv env t) (conv env r)
-    conv env (TDefRow l k n t _ r)  = TRow l PRow nWild (conv env t) (conv env r)
-    conv env (TStar l k r)          = TRow l PRow nWild (TTuple l (conv env r) kwdNil) posNil
+    conv env (TRow l k n t _ r)     = TRow l PRow nWild (conv env t) Nothing (conv env r)
+    conv env (TStar l k r)          = TRow l PRow nWild (TTuple l (conv env r) kwdNil) Nothing posNil
     conv env (TNil l k)             = TNil l PRow
     conv env t                      = t
 
@@ -1417,9 +1412,8 @@ instance Conv TCon where
     conv env (TC c ts)              = TC c (conv env ts)
 
 -- Must mirror Syntax.tupleComponents, which the solver uses to derive tuple witnesses.
-joinRow env (TRow l k n t p) r      = TRow l PRow nWild (conv env t) (joinRow env p r)
-joinRow env (TDefRow l k n t _ p) r = TRow l PRow nWild (conv env t) (joinRow env p r)
-joinRow env (TStar l k p) r         = TRow l PRow nWild (TTuple l (conv env p) kwdNil) (conv env r)
+joinRow env (TRow l k n t _ p) r    = TRow l PRow nWild (conv env t) Nothing (joinRow env p r)
+joinRow env (TStar l k p) r         = TRow l PRow nWild (TTuple l (conv env p) kwdNil) Nothing (conv env r)
 joinRow env (TNil _ _) r            = conv env r
 -- To be removed:
 joinRow env p (TNil _ _)            = conv env p

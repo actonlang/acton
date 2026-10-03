@@ -163,9 +163,8 @@ instance ConvTWild Type where
     convTWild env (TTuple l p k)    = TTuple l <$> convTWild env p <*> convTWild env k
     convTWild env (TOpt l t)        = TOpt l <$> convTWild env t
     convTWild env (TCon l c)        = TCon l <$> convTWild env c
-    convTWild env (TRow l k n t r)  = TRow l k n <$> convTWild env t <*> convTWild env r
-    convTWild env (TDefRow l k n t d r)
-                                    = TDefRow l k n <$> convTWild env t <*> convTWild env d <*> convTWild env r
+    convTWild env (TRow l k n t d r)
+                                    = TRow l k n <$> convTWild env t <*> mapM (convTWild env) d <*> convTWild env r
     convTWild env (TStar l k r)     = TStar l k <$> convTWild env r
     convTWild env t                 = return t
 
@@ -230,9 +229,8 @@ instance ConvPExist Type where
     convPExist env (TFun l e p k t) = TFun l <$> convPExist env e <*> convPExist env p <*> convPExist env k <*> convPExist env t
     convPExist env (TTuple l p k)   = TTuple l <$> convPExist env p <*> convPExist env k
     convPExist env (TOpt l t)       = TOpt l <$> convPExist env t
-    convPExist env (TRow l k n t r) = TRow l k n <$> convPExist env t <*> convPExist env r
-    convPExist env (TDefRow l k n t d r)
-                                    = TDefRow l k n <$> convPExist env t <*> pure d <*> convPExist env r
+    convPExist env (TRow l k n t d r)
+                                    = TRow l k n <$> convPExist env t <*> pure d <*> convPExist env r
     convPExist env (TStar l k r)    = TStar l k <$> convPExist env r
     convPExist env t                = return t
 
@@ -559,12 +557,9 @@ instance KInfer Type where
                                          return (KType, TOpt l t)
     kinfer env (TNone l)            = return (KType, TNone l)
     kinfer env (TNil l k)           = return (k, TNil l k)
-    kinfer env (TRow l k n t r)     = do t <- kexp KType env t
+    kinfer env (TRow l k n t d r)   = do t <- kexp KType env t
                                          r <- kexp k env r
-                                         return (k, TRow l k n t r)
-    kinfer env (TDefRow l k n t d r)= do t <- kexp KType env t
-                                         r <- kexp k env r
-                                         return (k, TDefRow l k n t d r)
+                                         return (k, TRow l k n t d r)
     kinfer env (TStar l k r)        = do r <- kexp k env r
                                          return (k, TStar l k r)
     kinfer env (TFX l fx)           = return (KFX, TFX l fx)
@@ -651,8 +646,7 @@ instance KSubst Type where
     ksubst g (TOpt l t)             = TOpt l <$> ksubst g t
     ksubst g (TNone l)              = return $ TNone l
     ksubst g (TNil l s)             = return $ TNil l s
-    ksubst g (TRow l k n t r)       = TRow l k n <$> ksubst g t <*> ksubst g r
-    ksubst g (TDefRow l k n t d r)  = TDefRow l k n <$> ksubst g t <*> ksubst g d <*> ksubst g r
+    ksubst g (TRow l k n t d r)     = TRow l k n <$> ksubst g t <*> ksubst g d <*> ksubst g r
     ksubst g (TStar l k r)          = TStar l k <$> ksubst g r
     ksubst g (TFX l fx)             = return $ TFX l fx
 

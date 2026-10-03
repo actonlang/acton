@@ -1,11 +1,15 @@
 import origin as source
 
-local_answer = 41
+local_answer = 42
+imported_answer = source.answer + 2
 
-def from_local(x: int=local_answer + 1) -> int:
+def from_local(x: int=local_answer) -> int:
     return x
 
-def from_import(x: int=source.answer + 2) -> int:
+def from_import(x: int=imported_answer) -> int:
+    return x
+
+def from_qualified_import(x: int=source.answer) -> int:
     return x
 
 def boolean_default(x: bool=True) -> bool:
@@ -17,6 +21,9 @@ def generic_default[T(Number)](x: T=1) -> T:
 def dict_default(x: dict[str, int]={}) -> dict[str, int]:
     return x
 
+def set_default(x: set[str]=set()) -> set[str]:
+    return x
+
 def same_module_dict_default() -> dict[str, int]:
     return dict_default()
 
@@ -24,3 +31,42 @@ def nested_dict_default() -> dict[str, int]:
     def inner(x: dict[str, int]={}) -> dict[str, int]:
         return x
     return inner()
+
+class DefaultBase(object):
+    def __init__(self):
+        pass
+
+    def value(self, x: int=42) -> int:
+        return x
+
+class DefaultDerived(DefaultBase):
+    def __init__(self):
+        pass
+
+    def value(self, x: int=42) -> int:
+        return x
+
+actor CallbackDefault():
+    def send(done: ?action() -> None=None) -> None:
+        if done is not None:
+            done()
+
+class CallbackBase(object):
+    def __init__(self):
+        pass
+
+    def send(self, done: ?action() -> None=None) -> None:
+        if done is not None:
+            done()
+
+class CallbackDerived(CallbackBase):
+    def __init__(self):
+        pass
+
+    def send(self, done: ?action() -> None=None) -> None:
+        if done is not None:
+            done()
+
+actor CallbackForwarder(worker: CallbackBase):
+    def send(done: ?action() -> None=None) -> None:
+        worker.send(done)

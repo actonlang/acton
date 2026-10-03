@@ -497,9 +497,16 @@ feedType t sink = case t of
   A.TNone _           -> feedTag 116 sink
   A.TWild _           -> feedTag 117 sink
   A.TNil _ k          -> feedTag 118 sink >> feedKind k sink
-  A.TRow _ k n ty row -> feedTag 119 sink >> feedKind k sink >> feedName n sink >> feedType ty sink >> feedType row sink
-  A.TDefRow _ k n ty d row
-                      -> feedTag 123 sink >> feedKind k sink >> feedName n sink >> feedType ty sink >> feedDefaultSpec d sink >> feedType row sink
+  -- Preserve the semantic tags used by the former required/default row constructors.
+  -- Besides avoiding gratuitous incremental-cache churn, this keeps required
+  -- and defaulted entries distinct without making the Maybe representation
+  -- itself part of the public hash format.
+  A.TRow _ k n ty Nothing row
+                      -> feedTag 119 sink >> feedKind k sink >> feedName n sink >>
+                         feedType ty sink >> feedType row sink
+  A.TRow _ k n ty (Just d) row
+                      -> feedTag 123 sink >> feedKind k sink >> feedName n sink >>
+                         feedType ty sink >> feedDefaultSpec d sink >> feedType row sink
   A.TStar _ k row     -> feedTag 120 sink >> feedKind k sink >> feedType row sink
   A.TFX _ fx          -> feedTag 121 sink >> feedFX fx sink
   A.TUnboxed _ ty     -> feedTag 122 sink >> feedType ty sink
@@ -942,9 +949,9 @@ foldDepsType add t acc = case t of
   A.TNone{}           -> acc
   A.TWild{}           -> acc
   A.TNil{}            -> acc
-  A.TRow _ _ _ ty row -> foldDepsType add row (foldDepsType add ty acc)
-  A.TDefRow _ _ _ ty d row
-                       -> foldDepsType add row (foldDepsType add ty (foldDefaultDeps add d acc))
+  A.TRow _ _ _ ty d row
+                       -> let defaults = maybe acc (\spec -> foldDefaultDeps add spec acc) d
+                          in foldDepsType add row (foldDepsType add ty defaults)
   A.TStar _ _ row     -> foldDepsType add row acc
   A.TFX{}             -> acc
   A.TUnboxed _ ty     -> foldDepsType add ty acc
@@ -1339,13 +1346,12 @@ implItemSplitDeps mn env localNames item =
       A.TNone{}          -> acc
       A.TWild{}          -> acc
       A.TNil{}           -> acc
-      A.TRow _ _ _ ty row -> splitTypeDirect bound row (splitTypeDirect bound ty acc)
-      A.TDefRow _ _ _ ty d row ->
+      A.TRow _ _ _ ty d row ->
         let acc1 = splitTypeDirect bound ty acc
             acc2 = case d of
-                     A.DfltExpr e v ref -> splitMaybeInto (splitQName bound) ref
+                     Just (A.DfltExpr e v ref) -> splitMaybeInto (splitQName bound) ref
                                             (splitExprDirect bound v (splitExprDirect bound e acc1))
-                     A.DfltDynamic    -> acc1
+                     _ -> acc1
         in splitTypeDirect bound row acc2
       A.TStar _ _ row    -> splitTypeDirect bound row acc
       A.TFX{}            -> acc

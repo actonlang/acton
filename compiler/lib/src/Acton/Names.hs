@@ -466,8 +466,7 @@ instance Vars Type where
     freeQ (TTuple _ p k)            = freeQ p ++ freeQ k
     freeQ (TOpt _ t)                = freeQ t
     freeQ (TCon  _ c)               = freeQ c
-    freeQ (TRow _ _ _ t r)          = freeQ t ++ freeQ r
-    freeQ (TDefRow _ _ _ t d r)     = freeQ t ++ freeQ d ++ freeQ r
+    freeQ (TRow _ _ _ t d r)        = freeQ t ++ freeQ d ++ freeQ r
     freeQ (TStar _ _ r)             = freeQ r
     freeQ (TUnboxed _ t)            = freeQ t
     freeQ _                         = []
@@ -476,8 +475,7 @@ instance Vars Type where
     nmap f (TFun l fx p k t)        = TFun l (nmap f fx) (nmap f p) (nmap f k) (nmap f t)
     nmap f (TTuple l p k)           = TTuple l (nmap f p) (nmap f k)
     nmap f (TOpt l t)               = TOpt l (nmap f t)
-    nmap f (TRow l k n t r)         = TRow l k n (nmap f t) (nmap f r)
-    nmap f (TDefRow l k n t d r)    = TDefRow l k n (nmap f t) d (nmap f r)
+    nmap f (TRow l k n t d r)       = TRow l k n (nmap f t) d (nmap f r)
     nmap f (TStar l k r)            = TStar l k (nmap f r)
     nmap f (TUnboxed l t)           = TUnboxed l (nmap f t)
     nmap f t                        = t

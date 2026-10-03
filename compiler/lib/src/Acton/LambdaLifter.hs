@@ -482,7 +482,7 @@ instance Conv Type where
     conv (TCon l c)                     = TCon l (conv c)
     conv (TTuple l p k)                 = TTuple l (conv p) (conv k)
     conv (TOpt l t)                     = TOpt l (conv t)
-    conv (TRow l k n t r)               = TRow l k n (conv t) (conv r)
+    conv (TRow l k n t d r)             = TRow l k n (conv t) d (conv r)
     conv (TFX l x)                      = TFX l x
     conv t                              = t
 
