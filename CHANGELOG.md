@@ -112,10 +112,12 @@
   column, rectangular, transposed, and reshaped views that share storage.
   [#3202]
 - Reduce scheduler overhead and prevent lost wakeups when many runtime workers
-  are active. Workers now avoid the global sync-pause mutex when no pause is
-  requested, contended ready-queue spinlocks back off without repeatedly
-  writing the lock, and matching memory fences keep newly queued actors from
-  being left asleep on Arm. [#3205] [#3206] [#3210]
+  are active. Workers keep short runs of ready work on the same actor to avoid
+  repeated queue operations and core migration, while yielding when other
+  actors wait. They also avoid the global sync-pause mutex when no pause is
+  requested, back off on contended ready-queue spinlocks, and use matching
+  memory fences to keep newly queued actors from being left asleep on Arm.
+  [#3205] [#3206] [#3208] [#3210]
 - Flush messages produced by a turn before an actor begins waiting for an
   awaited result, preventing another worker from resuming the actor
   concurrently and causing crashes, reordered messages, or incorrect timer
@@ -5194,6 +5196,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3205]: https://github.com/actonlang/acton/pull/3205
 [#3206]: https://github.com/actonlang/acton/pull/3206
 [#3207]: https://github.com/actonlang/acton/pull/3207
+[#3208]: https://github.com/actonlang/acton/pull/3208
 [#3209]: https://github.com/actonlang/acton/pull/3209
 [#3210]: https://github.com/actonlang/acton/pull/3210
 
