@@ -3507,15 +3507,6 @@ int main(int argc, char **argv) {
     timer_init(aux_uv_loop);
     timer_fire();
 
-#ifdef ACTON_THREADS
-    // Set affinity for main thread
-    if (cpu_pin) {
-        CPU_ZERO(&cpu_set);
-        CPU_SET(0, &cpu_set);
-        pthread_setaffinity_np(pthread_self(), sizeof(cpu_set), &cpu_set);
-    }
-#endif
-
     // Run the uv loop for the main thread
     wt_stats[0].state = WT_Idle;
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
