@@ -52,6 +52,9 @@
 #ifdef __APPLE__
 #include <fcntl.h>
 #endif
+#ifdef __x86_64__
+#include <cpuid.h>
+#endif
 #ifdef __linux__
 #include <sys/prctl.h>
 #ifdef ACTON_GC_DISABLE_THP
@@ -1755,10 +1758,69 @@ void wt_wake_cb(uv_async_t *ev) {
 #define KEEP_CONTS 8
 #define KEEP_NS (10 * 1000)
 
+// The worker loop reads the time before and after each continuation, so a
+// read must be cheap. Where we can, we read the CPU's own counter instead of
+// calling uv_clock_gettime(): CNTVCT_EL0 on aarch64, and the TSC on x86_64
+// when the CPU says that it ticks at a constant rate. Both are timers, not
+// cycle counters. They tick at a fixed rate whatever the frequency of the
+// core, and all cores of a chip, performance and efficiency cores alike, read
+// the same count, so the time does not jump when a worker moves to another
+// core. On a machine with several x86 sockets whose TSCs are not in step, a
+// worker that moves to another socket does see the time jump by the
+// difference. That only affects the statistics and the decisions to keep
+// running an actor around that move. counter_mult converts counter ticks to
+// nanoseconds: ns = ticks * counter_mult / 2^32. It is 0 when there is no
+// such counter. counter_name is the clock we read, for --rts-verbose.
+static uint64_t counter_mult = 0;
+static const char *counter_name = "uv_clock_gettime()";
+
+#if defined(__aarch64__) || defined(__x86_64__)
+static inline uint64_t read_counter(void) {
+#if defined(__aarch64__)
+    uint64_t ticks;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(ticks) :: "memory");
+    return ticks;
+#else
+    return __builtin_ia32_rdtsc();
+#endif
+}
+#endif
+
 static inline long long int now_ns(void) {
+#if defined(__aarch64__) || defined(__x86_64__)
+    if (counter_mult)
+        return ((unsigned __int128)read_counter() * counter_mult) >> 32;
+#endif
     uv_timespec64_t ts;
     uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+// Sets counter_mult. Called once, before the workers start.
+static void init_counter(void) {
+#if defined(__aarch64__)
+    uint64_t freq;
+    __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    if (freq > 0) {
+        counter_mult = ((uint64_t)1000000000 << 32) / freq;
+        counter_name = "CNTVCT_EL0";
+    }
+#elif defined(__x86_64__)
+    // CPUID leaf 0x80000007, EDX bit 8: the TSC is invariant, it ticks at a
+    // constant rate through frequency changes and idle states. Without it,
+    // the rate follows the core clock and we keep calling uv_clock_gettime().
+    // The rate is not known up front, so we measure it against
+    // CLOCK_MONOTONIC over 1 ms.
+    unsigned int eax, ebx, ecx, edx;
+    if (!__get_cpuid(0x80000007, &eax, &ebx, &ecx, &edx) || !(edx & (1 << 8)))
+        return;
+    long long int ns0 = now_ns(), ns1;
+    uint64_t ticks0 = read_counter();
+    while ((ns1 = now_ns()) - ns0 < 1000 * 1000)
+        ;
+    counter_mult = ((unsigned __int128)(ns1 - ns0) << 32) / (read_counter() - ticks0);
+    counter_name = "TSC";
+#endif
 }
 
 // Whether another actor is waiting in this worker's queue or in the shared
@@ -2711,6 +2773,7 @@ void DaveNull () {}
 
 int main(int argc, char **argv) {
     rts_perf_init();
+    init_counter();
     // Init garbage collector and suppress warnings
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
@@ -3039,6 +3102,10 @@ int main(int argc, char **argv) {
     }
     num_wthreads = 0;
 #endif
+    if (counter_mult)
+        log_info("Worker clock: %s, %.1f MHz", counter_name, 4294967296e3 / counter_mult);
+    else
+        log_info("Worker clock: %s", counter_name);
     // Zeroize statistics
     for (int i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;
