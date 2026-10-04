@@ -110,3 +110,12 @@ should count from when a request arrived, even when it is set after an
 <code>await</code>; <code>after now</code> would restart the count from
 that point.</p>
 </div>
+
+## Timer precision
+
+A timer never fires before its due time. On Linux and macOS the runtime
+sets a kernel timer to the due time, so a timer usually fires within a
+fraction of a millisecond of it. On other platforms, such as Windows,
+timers can be a millisecond or more late. On any platform a timer fires
+later while the machine is busy, since its call has to wait for a thread
+to run it, and during garbage collection pauses.

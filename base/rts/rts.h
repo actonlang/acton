@@ -291,8 +291,8 @@ extern pid_t pid;
 void wake_wt(int wtid);
 
 time_t current_time();
-time_t next_timeout();
-void handle_timeout();
+bool next_timeout(time_t *due);
+bool handle_timeout(time_t now);
 void rts_shutdown();
 
 void pin_actor_affinity();

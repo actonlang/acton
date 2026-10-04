@@ -1,0 +1,47 @@
+# A delay can put a timer's due time before the epoch. Such a timer is
+# overdue like any other timer whose due time has passed: it must fire at
+# once, and timers after it must still fire.
+
+import acton.rts
+import time
+
+actor Watchdog(env, start: action() -> None):
+    # Counts sleeps instead of setting a timer, since timers are what may be
+    # stuck; after 0 sends the next round as a message, not through the timer
+    # queue, and exiting waits for at most one sleep
+    var rounds = 0
+
+    def run():
+        acton.rts.sleep(env.syscap, 0.1)
+        rounds += 1
+        if rounds == 1:
+            # A plain message, once the runtime has started and no timer is
+            # queued, so that nothing but the overdue timer's own wakeup can
+            # deliver it
+            start()
+        if rounds < 100:
+            after 0: run()
+        else:
+            print("Timers did not fire within 10 s")
+            env.exit(1)
+
+actor main(env):
+    var armed = time.Stopwatch()
+
+    def start():
+        armed = time.Stopwatch()
+        after -1e10: tick("before epoch")
+
+    def tick(name: str):
+        if name == "before epoch":
+            elapsed = armed.elapsed().to_float()
+            if elapsed > 1.0:
+                print("Overdue timer fired after", elapsed, "s")
+                env.exit(1)
+            else:
+                after now 0.05: tick("later")
+        else:
+            env.exit(0)
+
+    wd = Watchdog(env, start)
+    wd.run()

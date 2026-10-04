@@ -4,8 +4,8 @@
 #
 # RTS coverage:
 #  - Timer machinery: both after-statements $AFTER into the global timerQ
-#    via ENQ_timed (baseline-ordered insert); main_timer_cb/handle_timeout
-#    DEQ_timeds each at its deadline and delivers with a plain ENQ_msg to
+#    via ENQ_timed (baseline-ordered insert); timer_fire/handle_timeout
+#    DEQ_timeds each once it is due and delivers with a plain ENQ_msg to
 #    main.
 #  - Target property: main is parked in $RWAIT on produce() (spin delays the
 #    producer past both timer deadlines), so its mailbox head is the parked

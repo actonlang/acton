@@ -106,7 +106,6 @@ uv_async_t stop_ev[MAX_WTHREADS];
 uv_async_t wake_ev[MAX_WTHREADS];
 uv_check_t work_ev[MAX_WTHREADS];
 WorkerCtx wctxs[MAX_WTHREADS];
-uv_timer_t *timer_ev;
 
 char *mon_log_path = NULL;
 int mon_log_period = 30;
@@ -1253,15 +1252,20 @@ void FLUSH_outgoing_local($Actor self) {
     }
 }
 
-time_t next_timeout() {
+// Get the due time of the first timed message. Returns false if there is
+// none.
+bool next_timeout(time_t *due) {
     spinlock_lock(&timerQ_lock);
-    time_t next = timerQ_len ? timerQ[0].msg->$baseline : 0;
+    bool found = timerQ_len > 0;
+    if (found)
+        *due = timerQ[0].msg->$baseline;
     spinlock_unlock(&timerQ_lock);
-    return next;
+    return found;
 }
 
-void handle_timeout() {
-    time_t now = current_time();
+// Deliver the first timed message if it is due at time now. Returns
+// whether there was one.
+bool handle_timeout(time_t now) {
     B_Msg m = DEQ_timed(now);
     if (m) {
         rtsd_printf("## Dequeued timed msg with baseline %ld (now is %ld)", m->$baseline, now);
@@ -1309,6 +1313,7 @@ void handle_timeout() {
         }
 #endif
     }
+    return m != NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1741,40 +1746,158 @@ void main_stop_cb(uv_async_t *ev) {
 }
 
 
+// Timer for the timed message queue, on thread 0's event loop.
+//
+// The queue's first message is due at an absolute time in microseconds on
+// the runtime's clock (CLOCK_REALTIME). libuv's timers count whole
+// milliseconds: waiting for a message less than a millisecond away would
+// take a busy loop, and rounding would make it up to a millisecond late. On
+// Linux and macOS a kernel timer set to the due time wakes the event loop
+// instead; the loop polls the timer's file descriptor, a timerfd or a
+// kqueue holding one EVFILT_TIMER. The timerfd follows CLOCK_REALTIME, also
+// when the clock is set. The kqueue timer turns the due time into a
+// deadline when it is set; the deadline keeps counting while the system
+// sleeps but does not move when the clock is set. Elsewhere a libuv timer is
+// set to the next whole millisecond and fires when the platform's wait
+// returns, which on Windows can take a scheduler tick, so timers there are
+// late by up to that. Messages are never delivered early: handle_timeout()
+// checks each one against the clock.
+#if defined(__linux__)
+#include <sys/timerfd.h>
+#define KERNEL_TIMER
+#elif defined(__APPLE__)
+#include <sys/event.h>
+#define KERNEL_TIMER
+#endif
+
 void arm_timer_ev();
+void check_uv_fatal(int status, char msg[]);
+
+// Deliver every timed message that is due, then set the timer for the next
+static void timer_fire(void) {
+    time_t now = current_time();
+    while (handle_timeout(now))
+        ;
+    arm_timer_ev();
+}
+
+#ifdef KERNEL_TIMER
+static int timer_fd = -1;
+static uv_poll_t timer_poll;
+
+static void timer_poll_cb(uv_poll_t *handle, int status, int events) {
+#if defined(__linux__)
+    uint64_t expirations;
+    while (read(timer_fd, &expirations, sizeof(expirations)) > 0)
+        ;
+#else
+    struct kevent kev;
+    struct timespec zero = {0, 0};
+    while (kevent(timer_fd, NULL, 0, &kev, 1, &zero) > 0)
+        ;
+#endif
+    timer_fire();
+}
+
+static void timer_init(uv_loop_t *loop) {
+#if defined(__linux__)
+    timer_fd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+#else
+    timer_fd = kqueue();
+#endif
+    if (timer_fd < 0) {
+        log_fatal("Unable to create timer: %s", strerror(errno));
+        exit(1);
+    }
+    check_uv_fatal(uv_poll_init(loop, &timer_poll, timer_fd), "Error initializing timer poll: ");
+    check_uv_fatal(uv_poll_start(&timer_poll, UV_READABLE, timer_poll_cb), "Error starting timer poll: ");
+}
+
+// Set the timer to fire at due (microseconds, at least 1). A due time in
+// the past fires at once.
+static void timer_set(time_t due) {
+#if defined(__linux__)
+    struct itimerspec its = {0};
+    its.it_value.tv_sec = due / 1000000;
+    its.it_value.tv_nsec = (due % 1000000) * 1000;
+    if (timerfd_settime(timer_fd, TFD_TIMER_ABSTIME, &its, NULL) != 0) {
+        log_fatal("Unable to set timer: %s", strerror(errno));
+        exit(1);
+    }
+#else
+    // The kernel rejects a time that overflows in nanoseconds
+    if (due > INT64_MAX / 1000)
+        due = INT64_MAX / 1000;
+    struct kevent kev;
+    // NOTE_CRITICAL: coalesce as little as possible with other timers.
+    // NOTE_MACH_CONTINUOUS_TIME: keep counting while the system sleeps.
+    EV_SET(&kev, 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
+           NOTE_USECONDS | NOTE_ABSOLUTE | NOTE_CRITICAL | NOTE_MACH_CONTINUOUS_TIME, due, NULL);
+    int r;
+    while ((r = kevent(timer_fd, &kev, 1, NULL, 0, NULL)) != 0 && errno == EINTR)
+        ;
+    if (r != 0) {
+        log_fatal("Unable to set timer: %s", strerror(errno));
+        exit(1);
+    }
+#endif
+}
+
+static void timer_stop(void) {
+#if defined(__linux__)
+    // An all-zero value disarms
+    struct itimerspec its = {0};
+    if (timerfd_settime(timer_fd, 0, &its, NULL) != 0) {
+        log_fatal("Unable to stop timer: %s", strerror(errno));
+        exit(1);
+    }
+#else
+    struct kevent kev;
+    EV_SET(&kev, 1, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
+    // Deleting a timer that has already fired fails with ENOENT, harmlessly
+    kevent(timer_fd, &kev, 1, NULL, 0, NULL);
+#endif
+}
+#else
+static uv_timer_t timer_ev;
+
+static void timer_cb(uv_timer_t *ev) {
+    timer_fire();
+}
+
+static void timer_init(uv_loop_t *loop) {
+    check_uv_fatal(uv_timer_init(loop, &timer_ev), "Error initializing timer: ");
+}
+
+// Set the timer to fire at due (microseconds, at least 1)
+static void timer_set(time_t due) {
+    // Round up to whole milliseconds, the resolution of libuv timers. libuv
+    // counts the timeout from its cached loop time, so update that first.
+    uv_update_time(timer_ev.loop);
+    long long int offset = (due - current_time() + 999) / 1000;
+    if (offset < 0)
+        offset = 0;
+    check_uv_fatal(uv_timer_start(&timer_ev, timer_cb, offset, 0), "Unable to set timer: ");
+}
+
+static void timer_stop(void) {
+    uv_timer_stop(&timer_ev);
+}
+#endif
+
 void main_wake_cb(uv_async_t *ev) {
     // Wäjky-päjky
     arm_timer_ev();
 }
 
-void main_timer_cb(uv_timer_t *ev) {
-    handle_timeout();
-    arm_timer_ev();
-}
-
 void arm_timer_ev() {
-    time_t next_time = next_timeout();
-    if (next_time) {
-        time_t now = current_time();
-        long long int offset = (next_time - now) / 1000; // offset in milliseconds
-        // Negative offset means we missed to trigger in time. Set timeout to 0
-        // to directly run on next uv cycle.
-        if (offset < 0)
-            offset = 0;
-        int r = uv_timer_start(timer_ev, main_timer_cb, offset, 0);
-        if (r != 0) {
-            char errmsg[1024] = "Unable to set timer: ";
-            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-            log_fatal(errmsg);
-        }
-    } else {
-        int r = uv_timer_stop(timer_ev);
-        if (r != 0) {
-            char errmsg[1024] = "Unable to stop timer: ";
-            uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-            log_fatal(errmsg);
-        }
-    }
+    time_t due;
+    if (!next_timeout(&due))
+        timer_stop();
+    else
+        // A baseline can be before the epoch, which the kernel timers
+        // reject; any time in the past fires at once
+        timer_set(due < 1 ? 1 : due);
 }
 
 void wt_stop_cb(uv_async_t *ev) {
@@ -3381,9 +3504,8 @@ int main(int argc, char **argv) {
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
     // Run the timer queue and keep track of other periodic tasks
-    timer_ev = GC_malloc(sizeof(uv_timer_t));
-    uv_timer_init(aux_uv_loop, timer_ev);
-    uv_timer_start(timer_ev, main_timer_cb, 0, 0);
+    timer_init(aux_uv_loop);
+    timer_fire();
 
 #ifdef ACTON_THREADS
     // Set affinity for main thread
