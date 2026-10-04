@@ -1,0 +1,40 @@
+# Actors that several workers create at the same time get ids of their own
+
+actor Child(report: action(str) -> None):
+    report(actorid())
+
+actor Spawner(children: int, report: action(str) -> None, ping: action() -> None):
+    for i in range(children):
+        Child(report)
+        # Messages take keys too. A varying number of them between two new
+        # actors puts the actors' keys at varying places in each worker's
+        # sequence of keys.
+        for j in range(i % 3):
+            ping()
+    report(actorid())
+
+actor main(env):
+    spawners = 32
+    children = 300
+    expected = spawners * (children + 1)
+    var ids = {actorid()}
+    var reports = 0
+
+    def ping():
+        pass
+
+    def report(id: str):
+        ids.add(id)
+        reports += 1
+        if reports == expected:
+            if len(ids) != expected + 1:
+                print("Actors that share an id:", expected + 1 - len(ids))
+                env.exit(1)
+            for i in ids:
+                if int(i) >= 0:
+                    print("Actor id not negative:", i)
+                    env.exit(1)
+            env.exit(0)
+
+    for i in range(spawners):
+        Spawner(children, report, ping)

@@ -82,5 +82,5 @@ $R B_EnvD_is_ttyG_local (B_Env self, $Cont C_cont) {
 
 B_str B_actorid() {
     $Actor a = GET_SELF();
-    return $FORMAT("%ld", a->$globkey);
+    return $FORMAT("%" PRId64, a->$globkey);
 }

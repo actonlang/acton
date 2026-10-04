@@ -474,7 +474,7 @@ struct linesQ_Apa {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
     int64_t apa;
     int64_t apb;
     int64_t y;
@@ -506,7 +506,7 @@ struct linesQ_Bepa {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
 };
 struct linesQ_mainG_class {
     char *$GCINFO;
@@ -536,7 +536,7 @@ struct linesQ_main {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
     B_Env env;
     linesQ_Apa a;
     linesQ_Bepa b;

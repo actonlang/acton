@@ -209,8 +209,17 @@ static size_t timerQ_capacity = 0;
 static uint64_t timerQ_sequence = 0;
 static $Lock timerQ_lock;
 
-int64_t next_key = -10;
-$Lock next_key_lock;
+// Every actor and message has a key, a negative number that is unique within
+// the process. BOOTSTRAP() gives env and root the keys ENV_KEY and ROOT_KEY,
+// so that deserialize_system() finds them after a restart. All other keys come
+// from get_next_key() and start at key_top: FIRST_KEY, or below the smallest
+// key that deserialize_system() restored.
+#define ENV_KEY (-11)
+#define ROOT_KEY (-12)
+#define FIRST_KEY (-1024)
+static int64_t key_top;
+// The next key for threads that are not workers (see get_next_key())
+static _Atomic int64_t other_key;
 
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
@@ -245,13 +254,13 @@ int get_wtid() {
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
     long i = get_wctx()->id;
-    log_debug("Pinning affinity for %s actor %ld to current WT %d", a->$class->$GCINFO, a->$globkey, i);
+    log_debug("Pinning affinity for %s actor %" PRId64 " to current WT %d", a->$class->$GCINFO, a->$globkey, i);
     a->$affinity = i;
 }
 
 void set_actor_affinity(int wthread_id) {
     $Actor a = ($Actor)pthread_getspecific(self_key);
-    log_debug("Setting affinity for %s actor %ld to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
+    log_debug("Setting affinity for %s actor %" PRId64 " to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
     a->$affinity = wthread_id;
 }
 #else // ACTON_THREADS
@@ -440,11 +449,36 @@ void reset_timeout() {
     // Wake up timerQ thread
     uv_async_send(&wake_ev[0]);
 }
+// Keys only need to be unique. Worker w hands out key_top - w and then every
+// key_step-th number below it, where key_step is the number of workers plus
+// one. The worker keeps its next key in its context, so taking a key writes
+// no shared memory. The sequence that is left over is for threads that are
+// not workers. They take their keys from other_key with an atomic
+// subtraction. A finalizer can send a message, and it runs on whichever thread
+// allocates memory. For example, with workers 0 to 3 (num_wthreads 3),
+// key_step is 5. From key_top -1024, worker 0 hands out -1024, -1029, -1034
+// and so on, worker 3 hands out -1027, -1032, -1037, and threads that are not
+// workers take -1028, -1033, -1038.
 int64_t get_next_key() {
-    spinlock_lock(&next_key_lock);
-    int64_t res = --next_key;
-    spinlock_unlock(&next_key_lock);
-    return res;
+    WorkerCtx wctx = GET_WCTX();
+    if (!wctx)
+        return atomic_fetch_sub_explicit(&other_key, num_wthreads + 2, memory_order_relaxed);
+    int64_t key = wctx->key_next;
+    wctx->key_next = key - wctx->key_step;
+    return key;
+}
+
+static void start_worker_keys(WorkerCtx wctx) {
+    wctx->key_next = key_top - wctx->id;
+    wctx->key_step = num_wthreads + 2;
+}
+
+// Makes all keys from now on start at top. Only the main thread runs at this
+// point; the other workers start their keys in main_loop().
+static void start_keys(int64_t top) {
+    key_top = top;
+    atomic_store_explicit(&other_key, top - num_wthreads - 1, memory_order_relaxed);
+    start_worker_keys(get_wctx());
 }
 
 #define ACTORS_TABLE    ($WORD)0
@@ -503,7 +537,9 @@ B_Msg B_MsgG_newXX( $Actor to, $Cont cont, time_t baseline, $WORD value) {
     m->$waiting = NULL;
     m->$baseline = baseline;
     m->value = value;
-    atomic_store(&m->$wait_lock, 0);
+    // No other thread can see the new message yet, so the store needs no
+    // ordering
+    atomic_store_explicit(&m->$wait_lock, 0, memory_order_relaxed);
     m->$globkey = get_next_key();
     return m;
 }
@@ -546,7 +582,7 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$waiting = NULL;
     res->$baseline = (time_t)$val_deserialize(state);
     res->value = $step_deserialize(state);
-    atomic_store(&res->$wait_lock, 0);
+    atomic_store_explicit(&res->$wait_lock, 0, memory_order_relaxed);
     return res;
 }
 
@@ -559,10 +595,11 @@ void $ActorD___init__($Actor a) {
     a->$waitsfor = NULL;
     a->$consume_hd = 0;
     a->$catcher = NULL;
-    atomic_store(&a->B_Msg_lock, 0);
+    // No other thread can see the new actor yet
+    atomic_store_explicit(&a->B_Msg_lock, 0, memory_order_relaxed);
     a->$globkey = get_next_key();
     a->$affinity = SHARED_RQ;
-    rtsd_printf("# New Actor %ld at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
+    rtsd_printf("# New Actor %" PRId64 " at %p of class %s", a->$globkey, a, a->$class->$GCINFO);
 }
 
 bool $ActorD___bool__($Actor self) {
@@ -570,7 +607,7 @@ bool $ActorD___bool__($Actor self) {
 }
 
 B_str $ActorD___str__($Actor self) {
-  return $FORMAT("<$Actor %ld %s at %p>", self->$globkey, self->$class->$GCINFO, self);
+  return $FORMAT("<$Actor %" PRId64 " %s at %p>", self->$globkey, self->$class->$GCINFO, self);
 }
 
 B_NoneType $ActorD___resume__($Actor self) {
@@ -602,7 +639,7 @@ $Actor $ActorD___deserialize__($Actor res, $Serial$state state) {
     res->$waitsfor = $step_deserialize(state);
     res->$consume_hd = (long)$val_deserialize(state);
     res->$catcher = $step_deserialize(state);
-    atomic_store(&res->B_Msg_lock, 0);
+    atomic_store_explicit(&res->B_Msg_lock, 0, memory_order_relaxed);
     if (res->$affinity > 0)
         res->$affinity = SHARED_RQ;
     return res;
@@ -959,11 +996,11 @@ void queue_group_message_callback(queue_callback_args * qca) {
 //    rtsd_printf("   # There are messages in actor queues for group %d, subscriber %d, status %d\n", (int) qca->group_id, (int) qca->consumer_id, qca->status);
 }
 
-void create_db_queue(long key) {
+void create_db_queue(int64_t key) {
     int minority_status = 0;
     while(!rts_exit) {
         int ret = remote_create_queue_in_txn(MSG_QUEUE, ($WORD)key, &minority_status, NULL, db);
-        rtsd_printf("#### Create queue %ld returns %d", key, ret);
+        rtsd_printf("#### Create queue %" PRId64 " returns %d", key, ret);
         if(ret == NO_QUORUM_ERR) {
             sleep(3);
             continue;
@@ -973,12 +1010,12 @@ void create_db_queue(long key) {
     }
 }
 
-void init_db_queue(long key) {
+void init_db_queue(int64_t key) {
     if (db)
         create_db_queue(key);
 }
 
-void register_actor(long key) {
+void register_actor(int64_t key) {
     if (db) {
         int status = add_actor_to_membership(key, db);
         assert(status == 0);
@@ -1024,7 +1061,7 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
 
 B_Msg $AFTER(B_float sec, $Cont cont) {
     $Actor self = GET_SELF();
-    rtsd_printf("# AFTER by %ld", self->$globkey);
+    rtsd_printf("# AFTER by %" PRId64, self->$globkey);
     time_t baseline = self->B_Msg->$baseline + sec->val * 1000000;
     B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
@@ -1035,7 +1072,7 @@ B_Msg $AFTER(B_float sec, $Cont cont) {
 // baseline of the message being handled
 B_Msg $AFTER_NOW(B_float sec, $Cont cont) {
     $Actor self = GET_SELF();
-    rtsd_printf("# AFTER_NOW by %ld", self->$globkey);
+    rtsd_printf("# AFTER_NOW by %" PRId64, self->$globkey);
     time_t baseline = current_time() + sec->val * 1000000;
     B_Msg m = B_MsgG_newXX(self, cont, baseline, &$Done$instance);
     PUSH_outgoing(self, m);
@@ -1108,7 +1145,7 @@ void create_all_actor_queues() {
     }
 }
 
-int handle_status_and_schema_mismatch(int ret, int minority_status, long key)
+int handle_status_and_schema_mismatch(int ret, int minority_status, int64_t key)
 {
     // If schema on any of the DB servers needs updating (based on minority_status), do that.
     // If there was a quorum of healthy servers, we can go on after this, the operation succeeded.
@@ -1169,17 +1206,17 @@ void reverse_outgoing_queue($Actor self) {
 // Leaves no side effects in local queues if txns need to abort
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
 void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
-    rtsd_printf("#### FLUSH_outgoing messages from %ld to DB queues", self->$globkey);
+    rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to DB queues", self->$globkey);
     B_Msg m = self->$outgoing;
     while (m) {
-        long dest = (m->$baseline == self->B_Msg->$baseline)? m->$to->$globkey : 0;
+        int64_t dest = (m->$baseline == self->B_Msg->$baseline)? m->$to->$globkey : 0;
         int ret = 0, minority_status = 0;
         while(!rts_exit) {
             ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)dest, &minority_status, txnid, db);
             if (dest) {
-                    rtsd_printf("   # enqueue msg %ld to queue %ld returns %d, minority_status=%d", m->$globkey, dest, ret, minority_status);
+                    rtsd_printf("   # enqueue msg %" PRId64 " to queue %" PRId64 " returns %d, minority_status=%d", m->$globkey, dest, ret, minority_status);
             } else {
-                    rtsd_printf("   # enqueue msg %ld to TIMER_QUEUE returns %d, minority_status=%d", m->$globkey, ret, minority_status);
+                    rtsd_printf("   # enqueue msg %" PRId64 " to TIMER_QUEUE returns %d, minority_status=%d", m->$globkey, ret, minority_status);
             }
             if(!handle_status_and_schema_mismatch(ret, minority_status, dest))
                 break;
@@ -1192,13 +1229,13 @@ void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
 // Actually send all buffered messages of the sender, using internal queues only
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
 void FLUSH_outgoing_local($Actor self) {
-    rtsd_printf("#### FLUSH_outgoing messages from %ld to RTS-internal queues", self->$globkey);
+    rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to RTS-internal queues", self->$globkey);
     B_Msg m = self->$outgoing;
     self->$outgoing = NULL;
     while (m) {
         B_Msg next = m->$next;
         m->$next = NULL;
-        long dest;
+        int64_t dest;
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
@@ -1240,7 +1277,7 @@ void handle_timeout() {
                     continue;
                 timer_consume_hd++;
 
-                long key = TIMER_QUEUE;
+                int64_t key = TIMER_QUEUE;
                 snode_t *m_start, *m_end;
                 int entries_read = 0, minority_status = 0;
                 int64_t read_head = -1;
@@ -1251,12 +1288,12 @@ void handle_timeout() {
                     continue;
 
                 int ret1 = remote_consume_queue_in_txn(($WORD)db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
-                rtsd_printf("   # consume msg %ld from TIMER_QUEUE returns %d", m->$globkey, ret1);
+                rtsd_printf("   # consume msg %" PRId64 " from TIMER_QUEUE returns %d", m->$globkey, ret1);
                 if(handle_status_and_schema_mismatch(ret1, minority_status, key))
                     continue;
 
                 int ret2 = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)m->$to->$globkey, &minority_status, txnid, db);
-                rtsd_printf("   # (timed) enqueue msg %ld to queue %ld returns %d", m->$globkey, m->$to->$globkey, ret2);
+                rtsd_printf("   # (timed) enqueue msg %" PRId64 " to queue %" PRId64 " returns %d", m->$globkey, m->$to->$globkey, ret2);
                 if(handle_status_and_schema_mismatch(ret2, minority_status, key))
                     continue;
 
@@ -1277,20 +1314,20 @@ void handle_timeout() {
 B_dict globdict = NULL;
 
 $WORD try_globdict($WORD w) {
-    long key = (long)w;
+    int64_t key = (int64_t)w;
     $WORD obj = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, toB_int(key), NULL);
     return obj;
 }
 
 #ifdef ACTON_DB
-long read_queued_msg(long key, int64_t *read_head) {
+int64_t read_queued_msg(int64_t key, int64_t *read_head) {
     snode_t *m_start, *m_end;
     int entries_read = 0, minority_status = 0, ret = 0;
     
     while(!rts_exit) {
         ret = remote_read_queue_in_txn(($WORD)db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key,
                                            1, &entries_read, read_head, &m_start, &m_end, &minority_status, NULL, db);
-        rtsd_printf("   # read msg from queue %ld returns %d, entries read: %d, minority_status: %d", key, ret, entries_read, minority_status);
+        rtsd_printf("   # read msg from queue %" PRId64 " returns %d, entries read: %d, minority_status: %d", key, ret, entries_read, minority_status);
         if(!handle_status_and_schema_mismatch(ret, minority_status, key))
             break;
     }
@@ -1298,8 +1335,8 @@ long read_queued_msg(long key, int64_t *read_head) {
     if (!entries_read)
         return 0;
     db_row_t *r = (db_row_t*)m_start->value;
-    rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
-    return (long)r->column_array[0];
+    rtsd_printf("# r %p, key: %" PRId64 ", cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (int64_t)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+    return (int64_t)r->column_array[0];
 }
 #endif
 
@@ -1353,7 +1390,7 @@ void print_msg(B_Msg m) {
     rtsd_printf("     waiting: %p", m->$waiting);
     rtsd_printf("     baseline: %ld", m->$baseline);
     rtsd_printf("     value: %p", m->value);
-    rtsd_printf("     globkey: %ld", m->$globkey);
+    rtsd_printf("     globkey: %" PRId64, m->$globkey);
 }
 
 void print_actor($Actor a) {
@@ -1364,7 +1401,7 @@ void print_actor($Actor a) {
     rtsd_printf("     waitsfor: %p", a->$waitsfor);
     rtsd_printf("     consume_hd: %ld", (long)a->$consume_hd);
     rtsd_printf("     catcher: %p", a->$catcher);
-    rtsd_printf("     globkey: %ld", a->$globkey);
+    rtsd_printf("     globkey: %" PRId64, a->$globkey);
 }
 
 #ifdef ACTON_DB
@@ -1387,21 +1424,21 @@ void deserialize_system(snode_t *actors_start) {
     
     globdict = $NEW(B_dict,(B_Hashable)B_HashableD_intG_witness,NULL,NULL);
 
-    long min_key = 0;
+    int64_t min_key = 0;
 
     rtsd_printf("#### Msg allocation:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
-        long key = (long)r->key;
+        rtsd_printf("# r %p, key: %" PRId64 ", cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (int64_t)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+        int64_t key = (int64_t)r->key;
         if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
-            rtsd_printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
+            rtsd_printf("# r2 %p, key: %" PRId64 ", cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (int64_t)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
             B_Msg msg = (B_Msg)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             msg->$globkey = key;
             B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), msg);
-            rtsd_printf("# Allocated Msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            rtsd_printf("# Allocated Msg %p = %" PRId64 " of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
@@ -1409,34 +1446,34 @@ void deserialize_system(snode_t *actors_start) {
     rtsd_printf("#### Actor allocation:");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        rtsd_printf("# r %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (long)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
-        long key = (long)r->key;
+        rtsd_printf("# r %p, key: %" PRId64 ", cells: %p, columns: %p, no_cols: %d, blobsize: %d", r, (int64_t)r->key, r->cells, r->column_array, r->no_columns, r->last_blob_size);
+        int64_t key = (int64_t)r->key;
         if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
-            rtsd_printf("# r2 %p, key: %ld, cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (long)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
+            rtsd_printf("# r2 %p, key: %" PRId64 ", cells: %p, columns: %p, no_cols: %d, blobsize: %d", r2, (int64_t)r2->key, r2->cells, r2->column_array, r2->no_columns, r2->last_blob_size);
             BlobHd *head = (BlobHd*)r2->column_array[0];
             $Actor act = ($Actor)$GET_METHODS(head->class_id)->__deserialize__(NULL, NULL);
             act->$globkey = key;
             B_dictD_setitem(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), act);
-            rtsd_printf("# Allocated Actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            rtsd_printf("# Allocated Actor %p = %" PRId64 " of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             if (key < min_key)
                 min_key = key;
         }
         register_actor(key);
     }
-    next_key = min_key;
+    start_keys(min_key <= FIRST_KEY ? min_key - 1 : FIRST_KEY);
 
     rtsd_printf("#### Msg contents:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        long key = (long)r->key;
+        int64_t key = (int64_t)r->key;
         if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             B_Msg msg = (B_Msg)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
-            rtsd_printf("####### Deserializing msg %p = %ld of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
+            rtsd_printf("####### Deserializing msg %p = %" PRId64 " of class %s = %d", msg, msg->$globkey, msg->$class->$GCINFO, msg->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)msg, row, try_globdict);
             print_msg(msg);
@@ -1446,40 +1483,40 @@ void deserialize_system(snode_t *actors_start) {
     rtsd_printf("#### Actor contents:");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        long key = (long)r->key;
+        int64_t key = (int64_t)r->key;
         if (r->cells) {
             db_row_t* r2 = (HEAD(r->cells))->value;
             $WORD *blob = ($WORD*)r2->column_array[0];
             int blob_size = r2->last_blob_size;
             $ROW row = extract_row(blob, blob_size);
             $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
-            rtsd_printf("####### Deserializing actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+            rtsd_printf("####### Deserializing actor %p = %" PRId64 " of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
             print_rows(row);
             $glob_deserialize(($Serializable)act, row, try_globdict);
 
             B_Msg m = act->$waitsfor;
             if (m && !FROZEN(m)) {
                 ADD_waiting(act, m);
-                rtsd_printf("# Adding Actor %ld to wait for Msg %ld", act->$globkey, m->$globkey);
+                rtsd_printf("# Adding Actor %" PRId64 " to wait for Msg %" PRId64, act->$globkey, m->$globkey);
             }
             else {
                 act->$waitsfor = NULL;
             }
 
-            rtsd_printf("#### Reading msgs queue %ld contents:", key);
+            rtsd_printf("#### Reading msgs queue %" PRId64 " contents:", key);
             int64_t prev_read_head = -1; //, prev_consume_head = -1;
             int ret = 0, minority_status = 0;
             while (!rts_exit) {
-                    long msg_key = read_queued_msg(key, &prev_read_head);
+                    int64_t msg_key = read_queued_msg(key, &prev_read_head);
                 if (!msg_key)
                     break;
                 m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
-                rtsd_printf("# Adding Msg %ld to Actor %ld", m->$globkey, act->$globkey);
+                rtsd_printf("# Adding Msg %" PRId64 " to Actor %" PRId64, m->$globkey, act->$globkey);
                 ENQ_msg(m, act);
             }
             if (act->B_Msg && !act->$waitsfor) {
                 ENQ_ready(act);
-                rtsd_printf("# Adding Actor %ld to the readyQ", act->$globkey);
+                rtsd_printf("# Adding Actor %" PRId64 " to the readyQ", act->$globkey);
             }
             print_actor(act);
         }
@@ -1488,9 +1525,9 @@ void deserialize_system(snode_t *actors_start) {
     rtsd_printf("#### Actor resume:");
     for(snode_t * node = actors_start; node!=NULL; node=NEXT(node)) {
         db_row_t* r = (db_row_t*) node->value;
-        long key = (long)r->key;
+        int64_t key = (int64_t)r->key;
         $Actor act = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(key), NULL);
-        rtsd_printf("####### Resuming actor %p = %ld of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
+        rtsd_printf("####### Resuming actor %p = %" PRId64 " of class %s = %d", act, act->$globkey, act->$class->$GCINFO, act->$class->$class_id);
         act->$class->__resume__(act);
     }
 
@@ -1498,28 +1535,18 @@ void deserialize_system(snode_t *actors_start) {
     time_t now = current_time();
     int64_t prev_read_head = -1;
     while(!rts_exit) {
-        long msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
+        int64_t msg_key = read_queued_msg(TIMER_QUEUE, &prev_read_head);
         if (!msg_key)
             break;
         B_Msg m = B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(msg_key), NULL);
         if (m->$baseline < now)
             m->$baseline = now;
-        rtsd_printf("# Adding Msg %ld to the timerQ", m->$globkey);
+        rtsd_printf("# Adding Msg %" PRId64 " to the timerQ", m->$globkey);
         ENQ_timed(m);
     }
 
-    /*
-     * Actor IDs (-11 & -12) here chosen by fair dice roll... Haha, kidding.
-     * These values are aligned with the IDs allocated by get_next_key() when
-     * called in the BOOTSTRAP() function. The ID allocator next_key starts at
-     * -10, so -11 is the first key handed out and with the env actor is created
-     * first, it will get -11. Similarly for the root actor, which is assigned
-     * ID -12 (via the $NEWROOT call embedded in the external function $ROOT).
-     * These values must be kept in sync with next_key and the structure in
-     * the BOOTSTRAP() function!
-     */
-    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-11), NULL);
-    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-12), NULL);
+    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(ENV_KEY), NULL);
+    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(ROOT_KEY), NULL);
     globdict = NULL;
     rtsd_printf("System deserialized");
 }
@@ -1528,10 +1555,10 @@ void deserialize_system(snode_t *actors_start) {
 $WORD try_globkey($WORD obj) {
     $SerializableG_class c = (($Serializable)obj)->$class;
     if (c->$class_id == MSG_ID) {
-        long key = ((B_Msg)obj)->$globkey;
+        int64_t key = ((B_Msg)obj)->$globkey;
         return ($WORD)key;
     } else if (c->$class_id == ACTOR_ID || c->$superclass && c->$superclass->$class_id == ACTOR_ID) {
-        long key = (($Actor)obj)->$globkey;
+        int64_t key = (($Actor)obj)->$globkey;
         return ($WORD)key;
     }
     return 0;
@@ -1547,7 +1574,7 @@ long $total_rowsize($ROW r) {           // In words
 }
 
 #ifdef ACTON_DB
-void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
+void insert_row(int64_t key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     $WORD column[2] = {($WORD)key, 0};
     $WORD blob[total];
     $WORD *p = blob;
@@ -1575,21 +1602,21 @@ void insert_row(long key, size_t total, $ROW row, $WORD table, uuid_t *txnid) {
     int ret = 0, minority_status = 0;
     while(!rts_exit) {
         ret = remote_insert_in_txn(column, 2, 1, 1, blob, total*sizeof($WORD), table, &minority_status, txnid, db);
-        rtsd_printf("   # insert to table %ld, row %ld, returns %d", (long)table, key, ret);
+        rtsd_printf("   # insert to table %ld, row %" PRId64 ", returns %d", (long)table, key, ret);
         if(!handle_status_and_schema_mismatch(ret, minority_status, 0))
             break;
     }
 }
 
 void serialize_msg(B_Msg m, uuid_t *txnid) {
-    rtsd_printf("#### Serializing Msg %ld", m->$globkey);
+    rtsd_printf("#### Serializing Msg %" PRId64, m->$globkey);
     $ROW row = $glob_serialize(($Serializable)m, try_globkey);
     print_rows(row);
     insert_row(m->$globkey, $total_rowsize(row), row, MSGS_TABLE, txnid);
 }
 
 void serialize_actor($Actor a, uuid_t *txnid) {
-    rtsd_printf("#### Serializing Actor %ld", a->$globkey);
+    rtsd_printf("#### Serializing Actor %" PRId64, a->$globkey);
     $ROW row = $glob_serialize(($Serializable)a, try_globkey);
     print_rows(row);
     insert_row(a->$globkey, $total_rowsize(row), row, ACTORS_TABLE, txnid);
@@ -1628,10 +1655,18 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,actStrFromCStringCopy(argv[i]));
 
+    // env and root get the fixed keys ENV_KEY and ROOT_KEY. B_EnvG_newactor()
+    // and $ROOT() take one key each, for the actor they create, so the actor
+    // gets this worker's next key.
+    WorkerCtx wctx = get_wctx();
+    int64_t key_next = wctx->key_next;
+    wctx->key_next = ENV_KEY;
     env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
     env_actor->nr_wthreads = num_wthreads;
 
+    wctx->key_next = ROOT_KEY;
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
+    wctx->key_next = key_next;
     time_t now = current_time();
     B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
 #ifdef ACTON_DB
@@ -1639,7 +1674,7 @@ void BOOTSTRAP(int argc, char *argv[]) {
             int ret = 0, minority_status = 0;
             while(!rts_exit) {
                 ret = remote_enqueue_in_txn(($WORD*)&m->$globkey, 1, NULL, 0, MSG_QUEUE, (WORD)root_actor->$globkey, &minority_status, NULL, db);
-                rtsd_printf("   # enqueue bootstrap msg %ld to root actor queue %ld returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
+                rtsd_printf("   # enqueue bootstrap msg %" PRId64 " to root actor queue %" PRId64 " returns %d, minority_status %d", m->$globkey, root_actor->$globkey, ret, minority_status);
                 if(!handle_status_and_schema_mismatch(ret, minority_status, root_actor->$globkey))
                     break;
             }
@@ -1665,18 +1700,18 @@ void save_actor_state($Actor current, B_Msg m) {
                     FLUSH_outgoing_db(current, txnid);
                     serialize_msg(current->B_Msg, txnid);
 
-                    long key = current->$globkey;
+                    int64_t key = current->$globkey;
                     snode_t *m_start, *m_end;
                     int entries_read = 0, minority_status = 0;
                     int64_t read_head = -1;
 
                     int ret0 = remote_read_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, 1, &entries_read, &read_head, &m_start, &m_end, &minority_status, NULL, db);
-                    rtsd_printf("   # dummy read msg from queue %ld returns %d, entries read: %d", key, ret0, entries_read);
+                    rtsd_printf("   # dummy read msg from queue %" PRId64 " returns %d, entries read: %d", key, ret0, entries_read);
                     if(handle_status_and_schema_mismatch(ret0, minority_status, key))
                         continue;
 
                     int ret1 = remote_consume_queue_in_txn(($WORD) db->local_rts_id, 0, 0, MSG_QUEUE, ($WORD)key, read_head, &minority_status, txnid, db);
-                    rtsd_printf("   # consume msg %ld from queue %ld returns %d", m->$globkey, key, ret1);
+                    rtsd_printf("   # consume msg %" PRId64 " from queue %" PRId64 " returns %d", m->$globkey, key, ret1);
                     if(handle_status_and_schema_mismatch(ret1, minority_status, key))
                         continue;
 
@@ -1922,7 +1957,7 @@ void wt_work_cb(uv_check_t *ev) {
             if (!wctx->jump0) {
                 wctx->jump0 = wctx->jump_top;
             }
-            rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            rtsd_printf("## Running actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
             end_ns = now_ns();
@@ -1947,7 +1982,7 @@ void wt_work_cb(uv_check_t *ev) {
             assert(wctx->jump0 != NULL);
             assert(wctx->jump0->xval != NULL);
             B_BaseException ex = wctx->jump0->xval;
-            rtsd_printf("## (%d) Actor %ld : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            rtsd_printf("## (%d) Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
 
@@ -1962,10 +1997,10 @@ void wt_work_cb(uv_check_t *ev) {
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
                 ENQ_ready(b);
-                rtsd_printf("## Waking up actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                rtsd_printf("## Waking up actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
                 b = c;
             }
-            rtsd_printf("## DONE actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            rtsd_printf("## DONE actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             if (DEQ_msg(current)) {
                 more = true;
             }
@@ -1974,7 +2009,7 @@ void wt_work_cb(uv_check_t *ev) {
         case $RCONT: {
             m->$cont = r.cont;
             m->value = r.value;
-            rtsd_printf("## CONT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+            rtsd_printf("## CONT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             more = true;
             break;
         }
@@ -1984,7 +2019,7 @@ void wt_work_cb(uv_check_t *ev) {
                 c->xval = (B_BaseException)r.value;
                 m->$cont = c->$cont;
                 m->value = B_False;             // False signals the exceptional branch
-                rtsd_printf("## FAIL/handle actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                rtsd_printf("## FAIL/handle actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 more = true;
             } else {                            // An unhandled exception
                 save_actor_state(current, m);
@@ -1997,20 +2032,20 @@ void wt_work_cb(uv_check_t *ev) {
                 // the waiting actor. Thus we only print Unhandled exception in
                 // the originating actor when there is no one waiting for us.
                 if (!b)
-                    fprintf(stderr, "Unhandled exception in actor: %s[%ld]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
+                    fprintf(stderr, "Unhandled exception in actor: %s[%" PRId64 "]:\n  %s\n", unmangle_name(current->$class->$GCINFO), current->$globkey, fromB_str(ex->$class->__str__(ex)));
                 while (b) {
                     b->B_Msg->$cont = &$Fail$instance;
                     b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
                     ENQ_ready(b);
-                    rtsd_printf("## Propagating exception to actor %ld : %s", b->$globkey, b->$class->$GCINFO);
+                    rtsd_printf("## Propagating exception to actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
                     b = c;
                 }
                 if (DEQ_msg(current)) {
                     more = true;
                 }
-                rtsd_printf("## Done handling failed actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                rtsd_printf("## Done handling failed actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             }
             break;
         }
@@ -2051,14 +2086,14 @@ void wt_work_cb(uv_check_t *ev) {
             bool added_waiting = ADD_waiting(current, x);
 
             if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
-                rtsd_printf("## AWAIT actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                rtsd_printf("## AWAIT actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             } else if (EXCEPTIONAL(x)) {        // x->cont == MARK_EXCEPTION: x->value holds the raised exception, current is not in x->waiting
-                rtsd_printf("## AWAIT/fail actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                rtsd_printf("## AWAIT/fail actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->$cont = &$Fail$instance;
                 m->value = x->value;
                 more = true;
             } else {                            // x->cont == MARK_RESULT: x->value holds the final response, current is not in x->waiting
-                rtsd_printf("## AWAIT/wakeup actor %ld : %s", current->$globkey, current->$class->$GCINFO);
+                rtsd_printf("## AWAIT/wakeup actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 m->value = x->value;
                 more = true;
             }
@@ -2112,12 +2147,13 @@ void wt_work_cb(uv_check_t *ev) {
 }
 
 void *main_loop(void *idx) {
-    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
     wctxs[(long)idx] = wctx;
     wctx->id = (long)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     wctx->jump0 = NULL;
+    start_worker_keys(wctx);
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
@@ -3184,7 +3220,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
 
-    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
     wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
@@ -3193,6 +3229,7 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
+    start_keys(FIRST_KEY);
 
     $ROOTINIT();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);
