@@ -1755,7 +1755,9 @@ void wt_wake_cb(uv_async_t *ev) {
 #define KEEP_CONTS 8
 #define KEEP_NS (10 * 1000)
 
-static inline long long int ts_ns(uv_timespec64_t ts) {
+static inline long long int now_ns(void) {
+    uv_timespec64_t ts;
+    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
@@ -1777,10 +1779,13 @@ void wt_work_cb(uv_check_t *ev) {
     volatile long long int taken_ns = 0;
     volatile int conts = 0;
 
-    uv_timespec64_t ts_start, ts1, ts2, ts3;
-    long long int runtime = 0;
-
-    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts_start);
+    // We read the time before and after each continuation. The time between
+    // continuations, and from the start of this call to the first one, is
+    // bookkeeping. Like the variables above, these are volatile so that they
+    // keep their values when a continuation raises and we longjmp back to
+    // $PUSH().
+    volatile long long int start_ns = now_ns();
+    volatile long long int end_ns = start_ns;
     while (true) {
         maybe_sync_pause();
         if (rts_exit) {
@@ -1828,10 +1833,26 @@ void wt_work_cb(uv_check_t *ev) {
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
-        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts1);
+        long long int cont_start_ns = now_ns();
         if (!continued) {
-            taken_ns = ts_ns(ts1);
+            taken_ns = cont_start_ns;
             conts = 0;
+        }
+        {
+            long long int diff = cont_start_ns - end_ns;
+            wt_stats[wctx->id].bkeep_count++;
+            wt_stats[wctx->id].bkeep_sum += diff;
+            if      (diff < 100)              { wt_stats[wctx->id].bkeep_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[wctx->id].bkeep_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[wctx->id].bkeep_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[wctx->id].bkeep_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[wctx->id].bkeep_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[wctx->id].bkeep_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[wctx->id].bkeep_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[wctx->id].bkeep_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].bkeep_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
+            else                              { wt_stats[wctx->id].bkeep_inf++; }
         }
 
         $R r;
@@ -1842,8 +1863,8 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
-            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
-            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+            end_ns = now_ns();
+            long long int diff = end_ns - cont_start_ns;
 
             wt_stats[wctx->id].conts_count++;
             wt_stats[wctx->id].conts_sum += diff;
@@ -1860,7 +1881,7 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
             else                              { wt_stats[wctx->id].conts_inf++; }
         } else {                                        // Exceptional path
-            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
+            end_ns = now_ns();
             assert(wctx->jump0 != NULL);
             assert(wctx->jump0->xval != NULL);
             B_BaseException ex = wctx->jump0->xval;
@@ -1997,7 +2018,7 @@ void wt_work_cb(uv_check_t *ev) {
                              || current->$affinity == wctx->id;
             keep = runs_here
                    && (!others_waiting(wctx->id)
-                       || (conts < KEEP_CONTS && ts_ns(ts2) - taken_ns < KEEP_NS));
+                       || (conts < KEEP_CONTS && end_ns - taken_ns < KEEP_NS));
             if (!keep)
                 ENQ_ready(current);
         }
@@ -2005,34 +2026,16 @@ void wt_work_cb(uv_check_t *ev) {
             current = NULL;
         SET_SELF(NULL);
 
-        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts3);
-        long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
-        wt_stats[wctx->id].bkeep_count++;
-        wt_stats[wctx->id].bkeep_sum += diff;
-
-        if      (diff < 100)              { wt_stats[wctx->id].bkeep_100ns++; }
-        else if (diff < 1   * 1000)       { wt_stats[wctx->id].bkeep_1us++; }
-        else if (diff < 10  * 1000)       { wt_stats[wctx->id].bkeep_10us++; }
-        else if (diff < 100 * 1000)       { wt_stats[wctx->id].bkeep_100us++; }
-        else if (diff < 1   * 1000000)    { wt_stats[wctx->id].bkeep_1ms++; }
-        else if (diff < 10  * 1000000)    { wt_stats[wctx->id].bkeep_10ms++; }
-        else if (diff < 100 * 1000000)    { wt_stats[wctx->id].bkeep_100ms++; }
-        else if (diff < 1   * 1000000000) { wt_stats[wctx->id].bkeep_1s++; }
-        else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].bkeep_10s++; }
-        else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
-        else                              { wt_stats[wctx->id].bkeep_inf++; }
-
         // Stay marked as working while we keep running the same actor. We
         // will not take anything from a queue until we are done with it, so
         // wake_wt() should wake some other worker.
         if (!current)
             wt_stats[wctx->id].state = WT_Idle;
 
-        runtime = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts_start.tv_sec * 1000000000 + ts_start.tv_nsec);
         // run for max 20ms before yielding to IO
         // NOTE: since we are not preemptive, a single long continuation can
         // exceed this cap
-        if (runtime > 20*1000000) {
+        if (end_ns - start_ns > 20*1000000) {
             if (current) {
                 ENQ_ready(current);
                 wt_stats[wctx->id].state = WT_Idle;

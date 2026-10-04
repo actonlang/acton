@@ -62,9 +62,10 @@ struct wt_stat {
     unsigned long long conts_10s;    // bucket for <10s
     unsigned long long conts_100s;   // bucket for <100s
     unsigned long long conts_inf;   // bucket for <+Inf
-    // Bookkeeping is all the other work we do not directly related to running
-    // actor continuations, like taking locks, committing information, talking
-    // to the database etc
+    // Bookkeeping is the time a worker spends between continuations, and from
+    // the start of its work callback to the first one: handling the result of
+    // a continuation, taking locks, taking the next actor from a queue,
+    // talking to the database etc
     unsigned long long bkeep_count; // number of bookkeeping rounds
     unsigned long long bkeep_sum;   // nanoseconds spent bookkeeping
     unsigned long long bkeep_100ns; // bucket for <100ns
