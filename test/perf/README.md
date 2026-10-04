@@ -356,9 +356,9 @@ manager, and messages arrive at a higher rate.
 change to the runtime's scheduler can be judged across patterns rather than
 on one workload such as `fleet`. Scale counts operations per body; divide
 CPU time per body by scale for the cost per operation. An operation is one
-message for the rings, a call and its reply for `hot_server`, a message and
-about 20 µs of work for `fan_out`, 9 deliveries for `pipeline` (8 stages and
-the sink), and a round trip for `latency_under_load` and
+message for the rings and `pairs`, a call and its reply for `hot_server`, a
+message and about 20 µs of work for `fan_out`, 9 deliveries for `pipeline`
+(8 stages and the sink), and a round trip for `latency_under_load` and
 `reply_behind_work`. Measure at several worker counts:
 
 ```sh
@@ -370,6 +370,9 @@ acton test perf --module scheduling --name latency_under_load --scale 1000 --tim
   body. Every hop hands over to an actor with an empty mailbox and nothing
   runs in parallel, so more worker threads can only add overhead.
 - `ring_tokens` passes 64 tokens around the same ring, scale hops in total.
+- `pairs` has 64 pairs of actors, each passing its own token back and
+  forth, scale hops in total. Handoffs run in parallel as in `ring_tokens`,
+  but no two tokens ever visit the same actor.
 - `hot_server` has 64 clients make scale synchronous calls in total to one
   server actor, whose mailbox stays deep.
 - `fan_out` sends scale work items of about 20 µs each at once, round robin

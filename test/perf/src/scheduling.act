@@ -7,6 +7,8 @@ one workload:
 - ring: one token passed around a ring of actors; every hop is a handoff to
   an actor with an empty mailbox, and nothing runs in parallel
 - ring_tokens: 64 tokens on the same ring, so handoffs run in parallel
+- pairs: 64 pairs of actors, each passing its own token back and forth, so
+  handoffs run in parallel and no two tokens ever visit the same actor
 - hot_server: many clients make synchronous calls to one server actor, whose
   mailbox stays deep
 - fan_out: a burst of work items to many worker actors, each of which
@@ -22,6 +24,7 @@ import testing
 import time
 
 RING_SIZE = 1000
+PAIRS = 64
 CLIENTS = 64
 WORKERS = 64
 WORK_US = 20
@@ -75,8 +78,8 @@ actor RingNode(done: action(int) -> None):
             n.token(id, hops - 1)
 
 
-actor RingTest(t: testing.AsyncT, tokens: int):
-    """Scale hops per body, split over the tokens"""
+actor RingTest(t: testing.AsyncT, rings: int, size: int, tokens: int):
+    """Scale hops per body, split over the tokens, on rings of size actors"""
     var nodes: list[RingNode] = []
     var pending = 0
     iterations = t.loop()
@@ -91,24 +94,29 @@ actor RingTest(t: testing.AsyncT, tokens: int):
         if isinstance(c, just):
             pending = tokens
             for i in range(tokens):
-                nodes[i * RING_SIZE // tokens].token(i, share(c.val, tokens, i))
+                nodes[i * rings * size // tokens].token(i, share(c.val, tokens, i))
         else:
             t.success()
 
-    for i in range(RING_SIZE):
+    for i in range(rings * size):
         nodes.append(RingNode(done))
-    for i in range(RING_SIZE):
-        linked = nodes[i].link(nodes[(i + 1) % RING_SIZE])
+    for i in range(rings * size):
+        # Link each node to the next one in its own ring
+        linked = nodes[i].link(nodes[i - i % size + (i + 1) % size])
     run()
 
 
 actor _test_ring(t: testing.AsyncT):
     """One token around a ring of 1000 actors, scale hops per body"""
-    RingTest(t, 1)
+    RingTest(t, 1, RING_SIZE, 1)
 
 actor _test_ring_tokens(t: testing.AsyncT):
     """64 tokens around a ring of 1000 actors, scale hops per body in total"""
-    RingTest(t, 64)
+    RingTest(t, 1, RING_SIZE, 64)
+
+actor _test_pairs(t: testing.AsyncT):
+    """64 pairs of actors, one token per pair, scale hops per body in total"""
+    RingTest(t, PAIRS, 2, PAIRS)
 
 
 actor Server():
