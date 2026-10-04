@@ -260,12 +260,19 @@ struct JumpBuf {
 
 struct WorkerCtx;
 typedef struct WorkerCtx *WorkerCtx;
+// A worker writes its context for every new message and actor, and whenever
+// it enters or leaves a try block, so each context gets a cache line of its
+// own (see struct mpmcq).
 struct WorkerCtx {
     long id;
     uv_loop_t *uv_loop;
     volatile JumpBuf jump_top;
     volatile JumpBuf jump0;
-};
+    // The next key this worker hands out, and the distance to the one after
+    // it (see get_next_key())
+    int64_t key_next;
+    int64_t key_step;
+} __attribute__((aligned(128)));
 extern WorkerCtx wctxs[MAX_WTHREADS];
 
 WorkerCtx get_wctx();

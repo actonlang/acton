@@ -209,8 +209,17 @@ static size_t timerQ_capacity = 0;
 static uint64_t timerQ_sequence = 0;
 static $Lock timerQ_lock;
 
-int64_t next_key = -10;
-$Lock next_key_lock;
+// Every actor and message has a key, a negative number that is unique within
+// the process. BOOTSTRAP() gives env and root the keys ENV_KEY and ROOT_KEY,
+// so that deserialize_system() finds them after a restart. All other keys come
+// from get_next_key() and start at key_top: FIRST_KEY, or below the smallest
+// key that deserialize_system() restored.
+#define ENV_KEY (-11)
+#define ROOT_KEY (-12)
+#define FIRST_KEY (-1024)
+static int64_t key_top;
+// The next key for threads that are not workers (see get_next_key())
+static _Atomic int64_t other_key;
 
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
@@ -440,11 +449,36 @@ void reset_timeout() {
     // Wake up timerQ thread
     uv_async_send(&wake_ev[0]);
 }
+// Keys only need to be unique. Worker w hands out key_top - w and then every
+// key_step-th number below it, where key_step is the number of workers plus
+// one. The worker keeps its next key in its context, so taking a key writes
+// no shared memory. The sequence that is left over is for threads that are
+// not workers. They take their keys from other_key with an atomic
+// subtraction. A finalizer can send a message, and it runs on whichever thread
+// allocates memory. For example, with workers 0 to 3 (num_wthreads 3),
+// key_step is 5. From key_top -1024, worker 0 hands out -1024, -1029, -1034
+// and so on, worker 3 hands out -1027, -1032, -1037, and threads that are not
+// workers take -1028, -1033, -1038.
 int64_t get_next_key() {
-    spinlock_lock(&next_key_lock);
-    int64_t res = --next_key;
-    spinlock_unlock(&next_key_lock);
-    return res;
+    WorkerCtx wctx = GET_WCTX();
+    if (!wctx)
+        return atomic_fetch_sub_explicit(&other_key, num_wthreads + 2, memory_order_relaxed);
+    int64_t key = wctx->key_next;
+    wctx->key_next = key - wctx->key_step;
+    return key;
+}
+
+static void start_worker_keys(WorkerCtx wctx) {
+    wctx->key_next = key_top - wctx->id;
+    wctx->key_step = num_wthreads + 2;
+}
+
+// Makes all keys from now on start at top. Only the main thread runs at this
+// point; the other workers start their keys in main_loop().
+static void start_keys(int64_t top) {
+    key_top = top;
+    atomic_store_explicit(&other_key, top - num_wthreads - 1, memory_order_relaxed);
+    start_worker_keys(get_wctx());
 }
 
 #define ACTORS_TABLE    ($WORD)0
@@ -1424,7 +1458,7 @@ void deserialize_system(snode_t *actors_start) {
         }
         register_actor(key);
     }
-    next_key = min_key;
+    start_keys(min_key <= FIRST_KEY ? min_key - 1 : FIRST_KEY);
 
     rtsd_printf("#### Msg contents:");
     for(snode_t * node = msgs_start; node!=NULL; node=NEXT(node)) {
@@ -1508,18 +1542,8 @@ void deserialize_system(snode_t *actors_start) {
         ENQ_timed(m);
     }
 
-    /*
-     * Actor IDs (-11 & -12) here chosen by fair dice roll... Haha, kidding.
-     * These values are aligned with the IDs allocated by get_next_key() when
-     * called in the BOOTSTRAP() function. The ID allocator next_key starts at
-     * -10, so -11 is the first key handed out and with the env actor is created
-     * first, it will get -11. Similarly for the root actor, which is assigned
-     * ID -12 (via the $NEWROOT call embedded in the external function $ROOT).
-     * These values must be kept in sync with next_key and the structure in
-     * the BOOTSTRAP() function!
-     */
-    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-11), NULL);
-    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(-12), NULL);
+    env_actor  = (B_Env)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(ENV_KEY), NULL);
+    root_actor = ($Actor)B_dictD_get(globdict, (B_Hashable)B_HashableD_intG_witness, to$int(ROOT_KEY), NULL);
     globdict = NULL;
     rtsd_printf("System deserialized");
 }
@@ -1628,10 +1652,18 @@ void BOOTSTRAP(int argc, char *argv[]) {
     for (int i=0; i< argc; i++)
         wit->$class->append(wit,args,actStrFromCStringCopy(argv[i]));
 
+    // env and root get the fixed keys ENV_KEY and ROOT_KEY. B_EnvG_newactor()
+    // and $ROOT() take one key each, for the actor they create, so the actor
+    // gets this worker's next key.
+    WorkerCtx wctx = get_wctx();
+    int64_t key_next = wctx->key_next;
+    wctx->key_next = ENV_KEY;
     env_actor = B_EnvG_newactor(B_WorldCapG_new(), B_SysCapG_new(), args);
     env_actor->nr_wthreads = num_wthreads;
 
+    wctx->key_next = ROOT_KEY;
     root_actor = $ROOT();                           // Assumed to return $NEWACTOR(X) for the selected root actor X
+    wctx->key_next = key_next;
     time_t now = current_time();
     B_Msg m = B_MsgG_newXX(root_actor, &$InitRoot$cont, now, &$Done$instance);
 #ifdef ACTON_DB
@@ -2112,12 +2144,13 @@ void wt_work_cb(uv_check_t *ev) {
 }
 
 void *main_loop(void *idx) {
-    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
     wctxs[(long)idx] = wctx;
     wctx->id = (long)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     wctx->jump0 = NULL;
+    start_worker_keys(wctx);
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
@@ -3184,7 +3217,7 @@ int main(int argc, char **argv) {
     B___init__();
     $register_rts();
 
-    WorkerCtx wctx = (WorkerCtx)GC_malloc(sizeof(struct WorkerCtx));
+    WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
     wctxs[0] = wctx;
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
@@ -3193,6 +3226,7 @@ int main(int argc, char **argv) {
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
+    start_keys(FIRST_KEY);
 
     $ROOTINIT();
     acton_replace_allocator(GC_malloc, GC_malloc_atomic, GC_realloc, GC_calloc, acton_noop_free, GC_strdup, GC_strndup);

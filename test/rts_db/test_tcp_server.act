@@ -142,6 +142,9 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
         connect_cap = net.TCPConnectCap(net.TCPCap(net.NetCap(env.cap)))
         port = port_chunk+199
         cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose", "--rts-wthreads=%d" % app_wthreads] + db_args(port_chunk, 3)
+        # The server restarts with another number of workers, which restoring
+        # its actors from the database must not depend on
+        restart_cmd = ["./rts_db/ddb_test_server", str(port), "--rts-verbose", "--rts-wthreads=%d" % (app_wthreads + 2)] + db_args(port_chunk, 3)
         p = None
 
         def tcpc_on_connect(c):
@@ -241,7 +244,7 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
                 if exit_code == 0 and term_signal == 0:
                     log("App successfully exited in state %d with exit code %d and termination signal %d" % (state, exit_code, term_signal))
                     state = 6
-                    p = process.Process(process_cap, cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
+                    p = process.Process(process_cap, restart_cmd, app_server_on_stdout, on_stderr, app_server_on_exit, on_error)
                     ps.append(p)
                     p_alive += 1
                     if p is not None:
