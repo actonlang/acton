@@ -9,8 +9,31 @@ def check_hash[A(Hashable)](a: A, b: A, different: A):
         assert d[(b, i)] == "found"
     assert len({a, b, different}) == 2
 
+def check_fast_hash[A(Hashable)](value: A):
+    # B_hash has allocation-free specializations for several builtins.  Their
+    # results must be identical to the general streaming path used by
+    # seed_hash.
+    assert hash(value) == seed_hash(u64(0), value)
+
 actor main(env):
     try:
+        check_fast_hash(-9223372036854775807 - 1)
+        check_fast_hash(-42)
+        check_fast_hash(0)
+        check_fast_hash(42)
+        check_fast_hash(9223372036854775807)
+        check_fast_hash(u64(0))
+        check_fast_hash(u64(42))
+        check_fast_hash(u64("18446744073709551615"))
+        check_fast_hash("")
+        check_fast_hash("a\x00Å🌍")
+        check_fast_hash(b"")
+        check_fast_hash(b"a\x00\xff")
+        check_hash(int("-42"), int("-42"), int(43))
+        check_hash(u64("18446744073709551615"),
+                   u64("18446744073709551615"), u64(43))
+        check_hash("a\x00Å🌍", "a\x00Å🌍", "different")
+        check_hash(b"a\x00\xff", b"a\x00\xff", b"different")
         check_hash(i32("-42"), i32("-42"), i32(43))
         check_hash(i16("-42"), i16("-42"), i16(43))
         check_hash(i8("-42"), i8("-42"), i8(43))

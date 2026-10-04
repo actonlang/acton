@@ -92,8 +92,11 @@ export fn zig_hash_wyhash_final(hasher: *std.hash.Wyhash) callconv(.c) u64 {
     return hasher.final();
 }
 
+export fn zig_hash_wyhash_hash_buffer(seed: u64, ptr: [*]const u8, len: usize) callconv(.c) u64 {
+    return std.hash.Wyhash.hash(seed, ptr[0..len]);
+}
+
 export fn zig_hash_wyhash_hash(seed: u64, data: *acton.bytes) callconv(.c) u64 {
     const len: usize = @intCast(data.nbytes); // destination type from context
-    const slice = data.str[0..len];
-    return std.hash.Wyhash.hash(seed, slice);
+    return zig_hash_wyhash_hash_buffer(seed, data.str, len);
 }
