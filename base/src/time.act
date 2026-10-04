@@ -109,6 +109,14 @@ def get_monotonic() -> (int, int):
     """
     NotImplemented
 
+def monotonic_ns() -> int:
+    """clock_gettime for CLOCK_MONOTONIC, in nanoseconds
+
+    Returns time represented as nanoseconds since an arbitrary start time. It
+    allocates nothing.
+    """
+    NotImplemented
+
 
 class clock_data:
     def __init__(self, status: int, offset: int, error: int) -> (status: int, offset: int, error: int):

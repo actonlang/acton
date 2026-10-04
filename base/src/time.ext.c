@@ -120,6 +120,18 @@ B_tuple timeQ_get_monotonic () {
                      toB_int(ts.tv_nsec));
 }
 
+int64_t timeQ_monotonic_ns () {
+    uv_timespec64_t ts;
+    int r = uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts);
+    if (r < 0) {
+        char errmsg[1024] = "Error getting time: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg));
+        log_warn("%s", errmsg);
+        RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
+    }
+    return ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
 B_tuple timeQ_get_realtime () {
     uv_timespec64_t ts;
     if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) == -1) {

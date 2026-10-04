@@ -13,6 +13,14 @@ def _test_time():
 #    print(d)
 #    a = time.Instant.now()
 
+def _test_monotonic_ns():
+    a = time.monotonic_ns()
+    s, ns = time.get_monotonic()
+    b = time.monotonic_ns()
+    # The same clock, read in order
+    testing.assertTrue(a <= s * 1000000000 + ns, "monotonic_ns before get_monotonic")
+    testing.assertTrue(s * 1000000000 + ns <= b, "monotonic_ns after get_monotonic")
+
 def _test_instant_add():
     c = time.MonotonicClock(0, 0, 0)
     t1 = time.Instant(1234, 2 * 10**17, c)
