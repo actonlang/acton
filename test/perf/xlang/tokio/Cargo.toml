@@ -1,0 +1,15 @@
+[package]
+name = "xlang-tokio"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "sync", "time"] }
+
+[profile.release]
+codegen-units = 1
+
+[features]
+# Count heap allocations with a global allocator wrapper (diagnostic builds)
+count-allocs = []
