@@ -38,6 +38,8 @@
 #include "q.h"
 
 extern long num_wthreads;
+// Each worker updates its own entry after every continuation. Entries get cache
+// lines of their own, so that workers do not slow each other down.
 struct wt_stat {
     unsigned int idx;          // worker thread index
     char key[10];              // thread index as string for convenience
@@ -76,9 +78,7 @@ struct wt_stat {
     unsigned long long bkeep_10s;    // bucket for <10s
     unsigned long long bkeep_100s;   // bucket for <100s
     unsigned long long bkeep_inf;   // bucket for <+Inf
-    // Avoid cache trashing by aligning on cache line size (64!?)
-    char padding[56];
-};
+} __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
 struct B_Msg;
