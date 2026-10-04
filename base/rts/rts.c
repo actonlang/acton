@@ -52,6 +52,9 @@
 #ifdef __APPLE__
 #include <fcntl.h>
 #endif
+#ifdef __x86_64__
+#include <cpuid.h>
+#endif
 #ifdef __linux__
 #include <sys/prctl.h>
 #ifdef ACTON_GC_DISABLE_THP
@@ -1755,8 +1758,69 @@ void wt_wake_cb(uv_async_t *ev) {
 #define KEEP_CONTS 8
 #define KEEP_NS (10 * 1000)
 
-static inline long long int ts_ns(uv_timespec64_t ts) {
+// The worker loop reads the time before and after each continuation, so a
+// read must be cheap. Where we can, we read the CPU's own counter instead of
+// calling uv_clock_gettime(): CNTVCT_EL0 on aarch64, and the TSC on x86_64
+// when the CPU says that it ticks at a constant rate. Both are timers, not
+// cycle counters. They tick at a fixed rate whatever the frequency of the
+// core, and all cores of a chip, performance and efficiency cores alike, read
+// the same count, so the time does not jump when a worker moves to another
+// core. On a machine with several x86 sockets whose TSCs are not in step, a
+// worker that moves to another socket does see the time jump by the
+// difference. That only affects the statistics and the decisions to keep
+// running an actor around that move. counter_mult converts counter ticks to
+// nanoseconds: ns = ticks * counter_mult / 2^32. It is 0 when there is no
+// such counter. counter_name is the clock we read, for --rts-verbose.
+static uint64_t counter_mult = 0;
+static const char *counter_name = "uv_clock_gettime()";
+
+#if defined(__aarch64__) || defined(__x86_64__)
+static inline uint64_t read_counter(void) {
+#if defined(__aarch64__)
+    uint64_t ticks;
+    __asm__ volatile("mrs %0, cntvct_el0" : "=r"(ticks) :: "memory");
+    return ticks;
+#else
+    return __builtin_ia32_rdtsc();
+#endif
+}
+#endif
+
+static inline long long int now_ns(void) {
+#if defined(__aarch64__) || defined(__x86_64__)
+    if (counter_mult)
+        return ((unsigned __int128)read_counter() * counter_mult) >> 32;
+#endif
+    uv_timespec64_t ts;
+    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
+}
+
+// Sets counter_mult. Called once, before the workers start.
+static void init_counter(void) {
+#if defined(__aarch64__)
+    uint64_t freq;
+    __asm__ volatile("mrs %0, cntfrq_el0" : "=r"(freq));
+    if (freq > 0) {
+        counter_mult = ((uint64_t)1000000000 << 32) / freq;
+        counter_name = "CNTVCT_EL0";
+    }
+#elif defined(__x86_64__)
+    // CPUID leaf 0x80000007, EDX bit 8: the TSC is invariant, it ticks at a
+    // constant rate through frequency changes and idle states. Without it,
+    // the rate follows the core clock and we keep calling uv_clock_gettime().
+    // The rate is not known up front, so we measure it against
+    // CLOCK_MONOTONIC over 1 ms.
+    unsigned int eax, ebx, ecx, edx;
+    if (!__get_cpuid(0x80000007, &eax, &ebx, &ecx, &edx) || !(edx & (1 << 8)))
+        return;
+    long long int ns0 = now_ns(), ns1;
+    uint64_t ticks0 = read_counter();
+    while ((ns1 = now_ns()) - ns0 < 1000 * 1000)
+        ;
+    counter_mult = ((unsigned __int128)(ns1 - ns0) << 32) / (read_counter() - ticks0);
+    counter_name = "TSC";
+#endif
 }
 
 // Whether another actor is waiting in this worker's queue or in the shared
@@ -1777,10 +1841,13 @@ void wt_work_cb(uv_check_t *ev) {
     volatile long long int taken_ns = 0;
     volatile int conts = 0;
 
-    uv_timespec64_t ts_start, ts1, ts2, ts3;
-    long long int runtime = 0;
-
-    uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts_start);
+    // We read the time before and after each continuation. The time between
+    // continuations, and from the start of this call to the first one, is
+    // bookkeeping. Like the variables above, these are volatile so that they
+    // keep their values when a continuation raises and we longjmp back to
+    // $PUSH().
+    volatile long long int start_ns = now_ns();
+    volatile long long int end_ns = start_ns;
     while (true) {
         maybe_sync_pause();
         if (rts_exit) {
@@ -1828,10 +1895,26 @@ void wt_work_cb(uv_check_t *ev) {
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
-        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts1);
+        long long int cont_start_ns = now_ns();
         if (!continued) {
-            taken_ns = ts_ns(ts1);
+            taken_ns = cont_start_ns;
             conts = 0;
+        }
+        {
+            long long int diff = cont_start_ns - end_ns;
+            wt_stats[wctx->id].bkeep_count++;
+            wt_stats[wctx->id].bkeep_sum += diff;
+            if      (diff < 100)              { wt_stats[wctx->id].bkeep_100ns++; }
+            else if (diff < 1   * 1000)       { wt_stats[wctx->id].bkeep_1us++; }
+            else if (diff < 10  * 1000)       { wt_stats[wctx->id].bkeep_10us++; }
+            else if (diff < 100 * 1000)       { wt_stats[wctx->id].bkeep_100us++; }
+            else if (diff < 1   * 1000000)    { wt_stats[wctx->id].bkeep_1ms++; }
+            else if (diff < 10  * 1000000)    { wt_stats[wctx->id].bkeep_10ms++; }
+            else if (diff < 100 * 1000000)    { wt_stats[wctx->id].bkeep_100ms++; }
+            else if (diff < 1   * 1000000000) { wt_stats[wctx->id].bkeep_1s++; }
+            else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].bkeep_10s++; }
+            else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
+            else                              { wt_stats[wctx->id].bkeep_inf++; }
         }
 
         $R r;
@@ -1842,8 +1925,8 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## Running actor %ld : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
 
-            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
-            long long int diff = (ts2.tv_sec * 1000000000 + ts2.tv_nsec) - (ts1.tv_sec * 1000000000 + ts1.tv_nsec);
+            end_ns = now_ns();
+            long long int diff = end_ns - cont_start_ns;
 
             wt_stats[wctx->id].conts_count++;
             wt_stats[wctx->id].conts_sum += diff;
@@ -1860,7 +1943,7 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
             else                              { wt_stats[wctx->id].conts_inf++; }
         } else {                                        // Exceptional path
-            uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts2);
+            end_ns = now_ns();
             assert(wctx->jump0 != NULL);
             assert(wctx->jump0->xval != NULL);
             B_BaseException ex = wctx->jump0->xval;
@@ -1997,7 +2080,7 @@ void wt_work_cb(uv_check_t *ev) {
                              || current->$affinity == wctx->id;
             keep = runs_here
                    && (!others_waiting(wctx->id)
-                       || (conts < KEEP_CONTS && ts_ns(ts2) - taken_ns < KEEP_NS));
+                       || (conts < KEEP_CONTS && end_ns - taken_ns < KEEP_NS));
             if (!keep)
                 ENQ_ready(current);
         }
@@ -2005,34 +2088,16 @@ void wt_work_cb(uv_check_t *ev) {
             current = NULL;
         SET_SELF(NULL);
 
-        uv_clock_gettime(UV_CLOCK_MONOTONIC, &ts3);
-        long long int diff = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts2.tv_sec * 1000000000 + ts2.tv_nsec);
-        wt_stats[wctx->id].bkeep_count++;
-        wt_stats[wctx->id].bkeep_sum += diff;
-
-        if      (diff < 100)              { wt_stats[wctx->id].bkeep_100ns++; }
-        else if (diff < 1   * 1000)       { wt_stats[wctx->id].bkeep_1us++; }
-        else if (diff < 10  * 1000)       { wt_stats[wctx->id].bkeep_10us++; }
-        else if (diff < 100 * 1000)       { wt_stats[wctx->id].bkeep_100us++; }
-        else if (diff < 1   * 1000000)    { wt_stats[wctx->id].bkeep_1ms++; }
-        else if (diff < 10  * 1000000)    { wt_stats[wctx->id].bkeep_10ms++; }
-        else if (diff < 100 * 1000000)    { wt_stats[wctx->id].bkeep_100ms++; }
-        else if (diff < 1   * 1000000000) { wt_stats[wctx->id].bkeep_1s++; }
-        else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].bkeep_10s++; }
-        else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
-        else                              { wt_stats[wctx->id].bkeep_inf++; }
-
         // Stay marked as working while we keep running the same actor. We
         // will not take anything from a queue until we are done with it, so
         // wake_wt() should wake some other worker.
         if (!current)
             wt_stats[wctx->id].state = WT_Idle;
 
-        runtime = (ts3.tv_sec * 1000000000 + ts3.tv_nsec) - (ts_start.tv_sec * 1000000000 + ts_start.tv_nsec);
         // run for max 20ms before yielding to IO
         // NOTE: since we are not preemptive, a single long continuation can
         // exceed this cap
-        if (runtime > 20*1000000) {
+        if (end_ns - start_ns > 20*1000000) {
             if (current) {
                 ENQ_ready(current);
                 wt_stats[wctx->id].state = WT_Idle;
@@ -2708,6 +2773,7 @@ void DaveNull () {}
 
 int main(int argc, char **argv) {
     rts_perf_init();
+    init_counter();
     // Init garbage collector and suppress warnings
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
@@ -3036,6 +3102,10 @@ int main(int argc, char **argv) {
     }
     num_wthreads = 0;
 #endif
+    if (counter_mult)
+        log_info("Worker clock: %s, %.1f MHz", counter_name, 4294967296e3 / counter_mult);
+    else
+        log_info("Worker clock: %s", counter_name);
     // Zeroize statistics
     for (int i=0; i < MAX_WTHREADS; i++) {
         wt_stats[i].idx = i;

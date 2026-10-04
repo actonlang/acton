@@ -38,6 +38,8 @@
 #include "q.h"
 
 extern long num_wthreads;
+// Each worker updates its own entry after every continuation. Entries get cache
+// lines of their own, so that workers do not slow each other down.
 struct wt_stat {
     unsigned int idx;          // worker thread index
     char key[10];              // thread index as string for convenience
@@ -60,9 +62,10 @@ struct wt_stat {
     unsigned long long conts_10s;    // bucket for <10s
     unsigned long long conts_100s;   // bucket for <100s
     unsigned long long conts_inf;   // bucket for <+Inf
-    // Bookkeeping is all the other work we do not directly related to running
-    // actor continuations, like taking locks, committing information, talking
-    // to the database etc
+    // Bookkeeping is the time a worker spends between continuations, and from
+    // the start of its work callback to the first one: handling the result of
+    // a continuation, taking locks, taking the next actor from a queue,
+    // talking to the database etc
     unsigned long long bkeep_count; // number of bookkeeping rounds
     unsigned long long bkeep_sum;   // nanoseconds spent bookkeeping
     unsigned long long bkeep_100ns; // bucket for <100ns
@@ -76,9 +79,7 @@ struct wt_stat {
     unsigned long long bkeep_10s;    // bucket for <10s
     unsigned long long bkeep_100s;   // bucket for <100s
     unsigned long long bkeep_inf;   // bucket for <+Inf
-    // Avoid cache trashing by aligning on cache line size (64!?)
-    char padding[56];
-};
+} __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
 struct B_Msg;
