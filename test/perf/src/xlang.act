@@ -1,0 +1,902 @@
+"""Compare Acton's runtime with Go's and Tokio's
+
+`xlang run` runs tests of src/scheduling.act in Acton, with the scheduling test
+binary that `acton test perf` builds, and in the Go and Tokio ports in xlang/go/
+and xlang/tokio/. The runtimes run interleaved: for each repeat, thread count
+and test, each runtime runs once, in reverse order on even repeats. Every run
+appends one JSON line to the output file, and every repeat starts with a line
+about the machine and its load.
+
+`xlang build` builds all three: Acton's test binary in release mode with
+`acton test perf`, the Go port with `go build` and the Tokio port with
+`cargo build --release`. `xlang run` uses those unless given other binaries.
+
+`xlang summary` prints tables of medians over the runs in such files, and
+`xlang page` writes a web page with charts and tables of them.
+
+Run it from test/perf.
+"""
+
+import argparse
+import crypto.hash.md5
+import file
+import json
+import math
+import process
+import time
+
+
+# (test, operations per body, time budget in ms), as in the scheduling sweeps
+TESTS = [("ring", 524288, 6000), ("ring_tokens", 524288, 6000), ("pairs", 524288, 6000),
+         ("hot_server", 262144, 6000), ("fan_out", 32768, 6000), ("pipeline", 65536, 6000),
+         ("latency_under_load", 500, 8000)]
+
+# What one operation is, per test
+OPERATIONS = {"ring": "a hop", "ring_tokens": "a hop", "pairs": "a hop",
+              "hot_server": "a call and its reply", "fan_out": "a message and 20 us of work",
+              "pipeline": "a message through 8 stages", "latency_under_load": "a round trip"}
+
+RUNTIMES = ["acton", "go", "tokio"]
+NAMES = {"acton": "Acton", "go": "Go", "tokio": "Tokio"}
+
+# Where `xlang build` puts the binaries, relative to test/perf
+BINARIES = {"acton": "out/bin/.test_scheduling", "go": "xlang/go/xlang-go",
+            "tokio": "xlang/tokio/target/release/xlang-tokio"}
+
+# The Go and Tokio ports mirror this version of src/scheduling.act. When
+# that file changes, check the ports and then update the digest.
+SCHEDULING_MD5 = "c0addd0f76259bec173640e4c736c691"
+
+
+def obj(v: ?value) -> dict[str, ?value]:
+    if isinstance(v, dict):
+        return v
+    raise ValueError("Expected a JSON object")
+
+def array(v: ?value) -> list[?value]:
+    if isinstance(v, list):
+        return v
+    raise ValueError("Expected a JSON array")
+
+def number(v: ?value) -> float:
+    if isinstance(v, int):
+        return float(v)
+    if isinstance(v, float):
+        return v
+    raise ValueError("Expected a JSON number")
+
+def text(v: ?value) -> str:
+    if isinstance(v, str):
+        return v
+    raise ValueError("Expected a JSON string")
+
+def hexdigest(digest: bytes) -> str:
+    return "".join(["%02x" % b for b in digest])
+
+def median(values: list[float]) -> float:
+    s = sorted(values)
+    n = len(s)
+    if n % 2 == 1:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) / 2.0
+
+def sizes(test: str) -> (int, int):
+    for name, scale, time_ms in TESTS:
+        if name == test:
+            return (scale, time_ms)
+    raise ValueError("Unknown test " + test)
+
+def acton_info(stderr: str) -> ?dict[str, ?value]:
+    """The last complete report in the output of Acton's test binary"""
+    infos = []
+    for line in stderr.splitlines():
+        if line.startswith("{{"):
+            try:
+                info = obj(json.decode(line)).get("test_info")
+                if info is not None:
+                    complete = obj(info).get("complete")
+                    if isinstance(complete, bool) and complete:
+                        infos.append(obj(info))
+            except Exception:
+                pass
+    return infos[-1] if len(infos) > 0 else None
+
+def rtt_rows(stdout: str) -> list[list[float]]:
+    """Acton's latency tests print one line per body: ... rtt_ms p50=X p99=Y max=Z"""
+    rows = []
+    for line in stdout.splitlines():
+        if "rtt_ms p50=" in line:
+            fields = {}
+            for kv in line.split("rtt_ms ")[1].strip().split(" "):
+                parts = kv.split("=")
+                fields[parts[0]] = float(parts[1])
+            rows.append([fields["p50"], fields["p99"], fields["max"]])
+    return rows
+
+def add_rtts(rec: dict[str, ?value], rows: list[list[float]]) -> None:
+    """Medians over bodies of the per-body p50, p99 and max round trips"""
+    if len(rows) > 0:
+        rec["rtt_p50_ms"] = median([r[0] for r in rows])
+        rec["rtt_p99_ms"] = median([r[1] for r in rows])
+        rec["rtt_max_ms"] = median([r[2] for r in rows])
+        rec["rtt_bodies"] = len(rows)
+
+def perf_counts(csv: str) -> dict[str, float]:
+    """Cycles and instructions from perf stat -x , output"""
+    counts = {}
+    for line in csv.splitlines():
+        fields = line.strip().split(",")
+        if len(fields) > 2 and fields[2] in ["cycles", "instructions"]:
+            try:
+                counts[fields[2]] = float(fields[0])
+            except ValueError:
+                pass
+    return counts
+
+
+# ---------------------------------------------------------------- summary
+
+def rate(v: float) -> str:
+    return "%.2f" % v if v < 10.0 else "%.1f" % v if v < 100.0 else "%.0f" % v
+
+def whole(v: float) -> str:
+    """An integer with thousands separators"""
+    s = str(int(round(v)))
+    groups = []
+    while len(s) > 3:
+        groups.insert(0, s[-3:])
+        s = s[:-3]
+    groups.insert(0, s)
+    return ",".join(groups)
+
+def ms(v: float) -> str:
+    return "%.3f" % v
+
+def table(head: list[str], rows: list[list[str]]) -> str:
+    lines = ["| " + " | ".join(head) + " |",
+             "|---|" + "".join(["---:|" for h in head[1:]])]
+    for r in rows:
+        lines.append("| " + " | ".join(r) + " |")
+    return "\n".join(lines) + "\n"
+
+def collect(lines: list[str]) -> (dict[str, list[dict[str, ?value]]], list[dict[str, ?value]]):
+    """Runs grouped by test, thread count and runtime, and the machine lines"""
+    runs: dict[str, list[dict[str, ?value]]] = {}
+    hosts = []
+    for line in lines:
+        if not line.strip():
+            continue
+        d = obj(json.decode(line))
+        if d.get("kind") is not None:
+            hosts.append(d)
+            continue
+        if d.get("error") is not None:
+            continue
+        key = text(d["test"]) + "/" + str(int(number(d["threads"]))) + "/" + text(d["runtime"])
+        if key not in runs:
+            runs[key] = []
+        runs[key].append(d)
+    return (runs, hosts)
+
+def group(runs: dict[str, list[dict[str, ?value]]], test: str, threads: int, runtime: str) -> list[dict[str, ?value]]:
+    key = test + "/" + str(threads) + "/" + runtime
+    if key in runs:
+        return runs[key]
+    return []
+
+def values(runs: dict[str, list[dict[str, ?value]]], test: str, threads: int, runtime: str, field: str) -> list[float]:
+    res = []
+    for d in group(runs, test, threads, runtime):
+        v = d.get(field)
+        if v is not None:
+            res.append(number(v))
+    return res
+
+def per_op(runs: dict[str, list[dict[str, ?value]]], test: str, threads: int, runtime: str, field: str) -> list[float]:
+    """Millions of operations per second ("rate"), CPU ns per operation
+    ("cpu"), or a per-body field divided by the operations per body"""
+    res = []
+    for d in group(runs, test, threads, runtime):
+        scale = number(d["scale"])
+        if field == "rate":
+            w = d.get("wall_ms_per_body")
+            if w is not None:
+                res.append(scale / number(w) / 1000.0)
+        elif field == "cpu":
+            u = d.get("cpu_user_ms_per_body")
+            y = d.get("cpu_sys_ms_per_body")
+            if u is not None and y is not None:
+                res.append((number(u) + number(y)) * 1000000.0 / scale)
+        else:
+            v = d.get(field)
+            if v is not None:
+                res.append(number(v) / scale)
+    return res
+
+def thread_counts(runs: dict[str, list[dict[str, ?value]]], test: str) -> list[int]:
+    return sorted(list(set([int(k.split("/")[1]) for k in runs.keys() if k.split("/")[0] == test])))
+
+def present(runs: dict[str, list[dict[str, ?value]]], test: str, threads: list[int]) -> list[str]:
+    return [rt for rt in RUNTIMES if any([len(group(runs, test, t, rt)) > 0 for t in threads])]
+
+def machine_names(hosts: list[dict[str, ?value]]) -> list[str]:
+    seen = []
+    for h in hosts:
+        name = h.get("uname")
+        if name is None:
+            name = h.get("system")
+        label = h.get("label")
+        note = text(label) if label is not None else ""
+        line = (text(name) if name is not None else "unknown") + ((", " + note) if note != "" else "")
+        if line not in seen:
+            seen.append(line)
+    return seen
+
+def summarize(lines: list[str]) -> str:
+    runs, hosts = collect(lines)
+    out = []
+    counts = [len(v) for v in runs.values()]
+    out.append("Median of up to %d runs per cell.\n" % (max(counts) if len(counts) > 0 else 0))
+    for test, scale, time_ms in TESTS:
+        threads = thread_counts(runs, test)
+        if len(threads) == 0:
+            continue
+        out.append("%s: one operation is %s\n" % (test, OPERATIONS[test]))
+        rts = present(runs, test, threads)
+        rows = []
+        if test == "latency_under_load":
+            head = ["threads"] + [NAMES[rt] + " p50 ms" for rt in rts] + [NAMES[rt] + " p99 ms" for rt in rts]
+            for t in threads:
+                row = [str(t)]
+                for field in ["rtt_p50_ms", "rtt_p99_ms"]:
+                    for rt in rts:
+                        vs = values(runs, test, t, rt, field)
+                        row.append(ms(median(vs)) if len(vs) > 0 else "")
+                rows.append(row)
+        else:
+            head = ["threads"] + [NAMES[rt] + " M/s" for rt in rts] + [NAMES[rt] + " CPU ns" for rt in rts]
+            # Only when every runtime has them: on macOS Acton's harness counts
+            # cycles, but Go and Tokio run without counters there
+            cycles = all([any([len(per_op(runs, test, t, rt, "cycles_per_body")) > 0 for t in threads]) for rt in rts])
+            if cycles:
+                head += [NAMES[rt] + " cycles" for rt in rts]
+            if test == "fan_out":
+                head += [NAMES[rt] + " % of ideal" for rt in rts]
+            for t in threads:
+                row = [str(t)]
+                for rt in rts:
+                    vs = per_op(runs, test, t, rt, "rate")
+                    row.append(rate(median(vs)) if len(vs) > 0 else "")
+                for rt in rts:
+                    vs = per_op(runs, test, t, rt, "cpu")
+                    row.append(whole(median(vs)) if len(vs) > 0 else "")
+                if cycles:
+                    for rt in rts:
+                        vs = per_op(runs, test, t, rt, "cycles_per_body")
+                        row.append(whole(median(vs)) if len(vs) > 0 else "")
+                if test == "fan_out":
+                    # Ideal: every thread works all the time, one item per 20 us
+                    for rt in rts:
+                        vs = per_op(runs, test, t, rt, "rate")
+                        row.append("%.0f" % (100.0 * median(vs) / (float(t) * 0.05)) if len(vs) > 0 else "")
+                rows.append(row)
+        out.append(table(head, rows))
+    names = machine_names(hosts)
+    if len(names) > 0:
+        out.append("Machines:")
+        for n in names:
+            out.append("- " + n)
+    return "\n".join(out)
+
+
+# ---------------------------------------------------------------- page
+
+# Panel geometry in SVG units: plot area x0..x1, y0..y1
+PANEL_W = 300
+PANEL_H = 216
+PLOT_X0 = 34
+PLOT_X1 = 262
+PLOT_Y0 = 10
+PLOT_Y1 = 192
+PAD = 10
+# Round trips below this many ms sit on the bottom of a log axis
+RTT_FLOOR = 0.0001
+
+def esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+def log10(x: float) -> float:
+    return math.log(x) / math.log(10.0)
+
+def log2(x: float) -> float:
+    return math.log(x) / math.log(2.0)
+
+def tick_text(v: float) -> str:
+    """1, 2, 5, 20, 0.5, 0.002, 1k, 20k"""
+    if v >= 1000.0:
+        return tick_text(v / 1000.0) + "k"
+    if v >= 1.0:
+        return str(int(round(v)))
+    s = "%.6f" % v
+    while s.endswith("0"):
+        s = s[:-1]
+    return s
+
+def label(v: float, kind: str) -> str:
+    """A value at the end of a line"""
+    if kind == "rate":
+        return "%.2f" % v if v < 1.0 else "%.1f" % v if v < 10.0 else "%.0f" % v
+    if kind == "ns":
+        return "%d" % int(round(v)) if v < 1000.0 else "%.1fk" % (v / 1000.0) if v < 10000.0 else "%.0fk" % (v / 1000.0)
+    return "<0.001" if v < 0.001 else "%.3f" % v if v < 1.0 else "%.2f" % v
+
+def domain(vs: list[float]) -> (float, float):
+    """Whole decades around the values, for a log axis"""
+    lo = log10(min(vs))
+    hi = log10(max(vs))
+    a = int(lo) if lo >= 0.0 or float(int(lo)) == lo else int(lo) - 1
+    b = int(hi) if hi <= 0.0 or float(int(hi)) == hi else int(hi) + 1
+    if b <= a:
+        b = a + 1
+    return (10.0 ** float(a), 10.0 ** float(b))
+
+def ticks(lo: float, hi: float) -> list[float]:
+    res = []
+    d = lo
+    while d < hi * 1.001:
+        for m in [1.0, 2.0, 5.0]:
+            v = d * m
+            if v <= hi * 1.001:
+                res.append(v)
+        d = d * 10.0
+    return res
+
+def xpos(t: int, tmax: int) -> float:
+    return float(PLOT_X0 + PAD) + log2(float(t)) / log2(float(tmax)) * float(PLOT_X1 - PLOT_X0 - 2 * PAD)
+
+def ypos(v: float, lo: float, hi: float) -> float:
+    return float(PLOT_Y1) - (log10(v) - log10(lo)) / (log10(hi) - log10(lo)) * float(PLOT_Y1 - PLOT_Y0)
+
+def lines_svg(cls: str, series: dict[str, list[(int, float)]], tmax: int, kind: str) -> str:
+    """Grid, lines, dots and end values of one metric, in a group of class cls"""
+    vs = []
+    for rt in series.keys():
+        for t, v in series[rt]:
+            vs.append(max([v, RTT_FLOOR]))
+    lo, hi = domain(vs)
+    out = ['<g class="%s">' % cls]
+    for v in ticks(lo, hi):
+        y = ypos(v, lo, hi)
+        out.append('<line class="grid" x1="%d" x2="%d" y1="%.1f" y2="%.1f"/>' % (PLOT_X0, PLOT_X1, y, y))
+        out.append('<text class="tick" x="%d" y="%.1f" text-anchor="end" dy="0.32em">%s</text>' % (PLOT_X0 - 6, y, tick_text(v)))
+    coords: dict[str, list[(float, float)]] = {}
+    for rt in RUNTIMES:
+        if rt in series:
+            coords[rt] = [(xpos(t, tmax), ypos(max([v, RTT_FLOOR]), lo, hi)) for t, v in series[rt]]
+            out.append('<polyline class="ln %s" points="%s"/>' % (rt, " ".join(["%.1f,%.1f" % (x, y) for x, y in coords[rt]])))
+    for rt in RUNTIMES:
+        if rt in coords:
+            for x, y in coords[rt]:
+                out.append('<circle class="halo" cx="%.1f" cy="%.1f" r="6"/><circle class="dot %s" cx="%.1f" cy="%.1f" r="4"/>' % (x, y, rt, x, y))
+    # Values at the line ends unless they would collide; Acton's first
+    placed = []
+    for rt in RUNTIMES:
+        if rt in coords:
+            x, y = coords[rt][-1]
+            t, v = series[rt][-1]
+            if all([abs(y - p) >= 11.0 for p in placed]):
+                placed.append(y)
+                out.append('<text class="endlbl" x="%.1f" y="%.1f" dy="0.32em">%s</text>' % (x + 9.0, y, label(v, kind)))
+    out.append("</g>")
+    return "".join(out)
+
+def panel_svg(pid: str, aria: str, threads: list[int], tmax: int, groups: list[str]) -> str:
+    out = ['<svg viewBox="0 0 %d %d" class="sm" data-panel="%s" tabindex="0" role="img" aria-label="%s">' % (PANEL_W, PANEL_H, pid, aria)]
+    out.extend(groups)
+    out.append('<line class="axis" x1="%d" x2="%d" y1="%d" y2="%d"/>' % (PLOT_X0, PLOT_X1, PLOT_Y1, PLOT_Y1))
+    for t in threads:
+        out.append('<text class="tick" x="%.1f" y="%d" text-anchor="middle">%d</text>' % (xpos(t, tmax), PLOT_Y1 + 15, t))
+    out.append('<line class="xhair" x1="0" x2="0" y1="%d" y2="%d" visibility="hidden"/>' % (PLOT_Y0, PLOT_Y1))
+    out.append('<rect class="hit" x="%d" y="%d" width="%d" height="%d"/>' % (PLOT_X0, PLOT_Y0, PLOT_X1 - PLOT_X0 + 30, PLOT_Y1 - PLOT_Y0 + 20))
+    out.append("</svg>")
+    return "".join(out)
+
+def legend() -> str:
+    return '<div class="legend">' + "".join(['<span class="key"><svg viewBox="0 0 22 10" aria-hidden="true"><line class="ln %s" x1="1" x2="21" y1="5" y2="5"/><circle class="dot %s" cx="11" cy="5" r="3.5"/></svg>%s</span>' % (rt, rt, NAMES[rt]) for rt in RUNTIMES]) + "</div>"
+
+def html_table(head: list[str], rows: list[list[str]]) -> str:
+    out = ['<div class="scroll"><table class="data"><thead><tr>']
+    for h in head:
+        out.append("<th>" + h + "</th>")
+    out.append("</tr></thead><tbody>")
+    for r in rows:
+        out.append("<tr>" + "".join(["<td>" + c + "</td>" for c in r]) + "</tr>")
+    out.append("</tbody></table></div>")
+    return "".join(out)
+
+def machine_html(mi: int, lines: list[str], panels: dict[str, ?value]) -> str:
+    """Charts and tables of one machine's results"""
+    runs, hosts = collect(lines)
+    names = machine_names(hosts)
+    all_threads = sorted(list(set([int(k.split("/")[1]) for k in runs.keys()])))
+    if len(all_threads) == 0:
+        return ""
+    tmax = max(all_threads)
+    counts = [len(v) for v in runs.values()]
+    out = ["<section>", "<h2>" + esc(names[0] if len(names) > 0 else "Machine %d" % (mi + 1)) + "</h2>",
+           '<p class="machine">Median of up to %d runs per point.</p>' % max(counts)]
+    # Throughput tests: messages per second, or CPU time per operation
+    subs = {"rate": "Millions of operations per second, log scales; higher is better.",
+            "cpu": "CPU time per operation in ns, all threads of the process, log scales; lower is better."}
+    out.append('<figure class="chart" data-metric="rate"><div class="chart-head"><div><h3 class="chart-title">Throughput as the thread count grows</h3><p class="chart-sub">' + subs["rate"] + '</p></div>')
+    out.append('<div class="seg" role="group" aria-label="Metric"><button type="button" aria-pressed="true" data-metric="rate" data-sub="' + subs["rate"] + '">Operations per second</button><button type="button" aria-pressed="false" data-metric="cpu" data-sub="' + subs["cpu"] + '">CPU time per operation</button></div></div>')
+    out.append(legend())
+    out.append('<div class="multiples">')
+    rows = []
+    for test, scale, time_ms in TESTS:
+        threads = thread_counts(runs, test)
+        if len(threads) == 0 or test == "latency_under_load":
+            continue
+        rts = present(runs, test, threads)
+        rate_series: dict[str, list[(int, float)]] = {}
+        cpu_series: dict[str, list[(int, float)]] = {}
+        xs: list[?value] = []
+        for t in threads:
+            v: dict[str, ?value] = {}
+            for rt in rts:
+                r = per_op(runs, test, t, rt, "rate")
+                c = per_op(runs, test, t, rt, "cpu")
+                if len(r) > 0 and len(c) > 0:
+                    if rt not in rate_series:
+                        rate_series[rt] = []
+                        cpu_series[rt] = []
+                    rate_series[rt].append((t, median(r)))
+                    cpu_series[rt].append((t, median(c)))
+                    v[rt] = [rate(median(r)) + " M/s", whole(median(c)) + " ns CPU"]
+            point: dict[str, ?value] = {"t": t, "x": xpos(t, tmax), "v": v}
+            xs.append(point)
+        pid = "%d-%s" % (mi, test)
+        entry: dict[str, ?value] = {"title": test, "xs": xs}
+        panels[pid] = entry
+        parts = []
+        for rt in rts:
+            if rt in rate_series:
+                t_last, r_last = rate_series[rt][-1]
+                parts.append(NAMES[rt] + " " + rate(r_last) + " M/s at " + str(t_last) + " threads")
+        aria = test + ": " + "; ".join(parts)
+        groups = [lines_svg("m-rate", rate_series, tmax, "rate"), lines_svg("m-cpu", cpu_series, tmax, "ns")]
+        out.append('<div class="panel"><div class="ptitle"><code>%s</code> %s</div>%s</div>' % (test, OPERATIONS[test], panel_svg(pid, aria, all_threads, tmax, groups)))
+        for t in threads:
+            row = [test, str(t)]
+            for rt in RUNTIMES:
+                r = per_op(runs, test, t, rt, "rate")
+                row.append(rate(median(r)) if len(r) > 0 else "")
+            for rt in RUNTIMES:
+                c = per_op(runs, test, t, rt, "cpu")
+                row.append(whole(median(c)) if len(c) > 0 else "")
+            rows.append(row)
+    out.append("</div></figure>")
+    # Latency under load: p50 and p99 round trips
+    threads = thread_counts(runs, "latency_under_load")
+    lat_rows = []
+    if len(threads) > 0:
+        rts = present(runs, "latency_under_load", threads)
+        out.append('<figure class="chart"><div><h3 class="chart-title">Round trips through an idle actor while every thread is busy</h3><p class="chart-sub">latency_under_load, ms, log scales; lower is better. Values under 0.001 ms are drawn at 0.0001.</p></div>')
+        out.append(legend())
+        out.append('<div class="multiples two">')
+        for field, name, other in [("rtt_p50_ms", "p50", "rtt_p99_ms"), ("rtt_p99_ms", "p99", "rtt_p50_ms")]:
+            series: dict[str, list[(int, float)]] = {}
+            xs: list[?value] = []
+            for t in threads:
+                v: dict[str, ?value] = {}
+                for rt in rts:
+                    a = values(runs, "latency_under_load", t, rt, field)
+                    b = values(runs, "latency_under_load", t, rt, other)
+                    if len(a) > 0 and len(b) > 0:
+                        if rt not in series:
+                            series[rt] = []
+                        series[rt].append((t, median(a)))
+                        v[rt] = [label(median(a), "ms") + " ms " + name, label(median(b), "ms") + " ms " + ("p99" if name == "p50" else "p50")]
+                point: dict[str, ?value] = {"t": t, "x": xpos(t, tmax), "v": v}
+                xs.append(point)
+            pid = "%d-latency-%s" % (mi, name)
+            entry: dict[str, ?value] = {"title": "latency_under_load " + name, "xs": xs}
+            panels[pid] = entry
+            out.append('<div class="panel"><div class="ptitle"><code>%s</code> round trip</div>%s</div>' % (name, panel_svg(pid, "latency_under_load " + name + " round trip", all_threads, tmax, [lines_svg("m-all", series, tmax, "ms")])))
+        out.append("</div></figure>")
+        for t in threads:
+            row = [str(t)]
+            for field in ["rtt_p50_ms", "rtt_p99_ms"]:
+                for rt in RUNTIMES:
+                    a = values(runs, "latency_under_load", t, rt, field)
+                    row.append(ms(median(a)) if len(a) > 0 else "")
+            lat_rows.append(row)
+    out.append("<h3>Medians</h3>")
+    out.append(html_table(["test", "threads"] + [NAMES[rt] + " M/s" for rt in RUNTIMES] + [NAMES[rt] + " CPU ns" for rt in RUNTIMES], rows))
+    if len(lat_rows) > 0:
+        out.append(html_table(["latency_under_load, threads"] + [NAMES[rt] + " p50 ms" for rt in RUNTIMES] + [NAMES[rt] + " p99 ms" for rt in RUNTIMES], lat_rows))
+    out.append("</section>")
+    return "".join(out)
+
+def page_html(machines: list[list[str]], css: str, js: str, intro: str) -> str:
+    panels: dict[str, ?value] = {}
+    sections = []
+    for i in range(len(machines)):
+        sections.append(machine_html(i, machines[i], panels))
+    head = ["<!doctype html>", '<meta charset="utf-8">', '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            "<title>Acton, Go and Tokio</title>",
+            '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;600&display=swap">',
+            "<style>" + css + "</style>"]
+    top = ['<main><header style="display:grid;gap:12px"><h1>Acton, Go and Tokio</h1>',
+             '<p class="lede">Tests of test/perf/src/scheduling.act in Acton and in Go and Tokio ports, run interleaved on each machine with test/perf/src/xlang.act. Compare runtimes within one machine only.</p></header>',
+             intro]
+    tail = ['<div id="tip" aria-hidden="true" hidden></div>',
+            '<script type="application/json" id="panel-data">' + json.encode(panels) + "</script>",
+            "<script>" + js + "</script></main>"]
+    return "\n".join(head + top + sections + tail) + "\n"
+
+
+# ---------------------------------------------------------------- run
+
+actor main(env: Env):
+    fcap = file.FileCap(env.cap)
+    rcap = file.ReadFileCap(fcap)
+    wcap = file.WriteFileCap(fcap)
+    pcap = process.ProcessCap(env.cap)
+    fs = file.FS(fcap)
+
+    var args = argparse.Args()
+    var out: ?file.WriteFile = None
+    var child: ?process.RunProcess = None
+    var pending: ?proc(int, str, str) -> None = None
+    var steps: list[(int, int, str, str)] = []
+    var step = 0
+    var current: (int, int, str, str) = (0, 0, "", "")
+    var paths: dict[str, str] = {}
+    var counters = "acton"
+    var on_linux = False
+    var uname = ""
+    var label = ""
+    var digest = ""
+    var host: dict[str, ?value] = {}
+    var tmp = ""
+    var fifos = 0
+    var perf_csv = ""
+    var perf_cmd: list[str] = []
+    var budget = 0
+    var builds: list[(list[str], str)] = []
+
+    proc def read(path: str) -> bytes:
+        f = file.ReadFile(rcap, path)
+        try:
+            return f.read()
+        finally:
+            await async f.close()
+
+    proc def finish(code: int) -> None:
+        o = out
+        out = None
+        if o is not None:
+            await async o.close()
+        if tmp != "":
+            try:
+                await async fs.rmtree(tmp)
+                await async fs.rmdir(tmp)
+            except Exception as error:
+                print("xlang: " + str(error), err=True)
+        env.exit(code)
+
+    proc def fail(error: Exception) -> None:
+        print("xlang: " + str(error), err=True)
+        finish(1)
+
+    def command_done(p: process.Process, code: int, sig: int, stdout: bytes, stderr: bytes):
+        done = pending
+        pending = None
+        child = None
+        if done is not None:
+            try:
+                done(128 + sig if sig != 0 else code, stdout.decode(), stderr.decode())
+            except Exception as error:
+                fail(error)
+
+    def command_error(p: process.Process, message: str):
+        fail(OSError(message))
+
+    proc def run(cmd: list[str], workdir: ?str, done: proc(int, str, str) -> None) -> None:
+        pending = done
+        child = process.RunProcess(pcap, cmd, command_done, command_error, workdir, None)
+
+    proc def write_line(d: dict[str, ?value]) -> None:
+        o = out
+        if o is not None:
+            await async o.write((json.encode(d) + "\n").encode())
+
+    proc def record() -> dict[str, ?value]:
+        rep, threads, test, runtime = current
+        scale, time_ms = sizes(test)
+        return {"rep": rep, "runtime": runtime, "threads": threads, "test": test, "scale": scale,
+                "time": str(time.now())}
+
+    proc def next_step() -> None:
+        if step == len(steps):
+            finish(0)
+            return
+        current = steps[step]
+        step += 1
+        rep, threads, test, runtime = current
+        if threads == 0:
+            machine(rep)
+        elif runtime == "acton":
+            run_acton(threads, test)
+        else:
+            run_port(threads, test, runtime)
+
+    # A line about the machine and its load, at the start of every repeat
+
+    proc def machine(rep: int) -> None:
+        host = {"kind": "host", "rep": rep, "time": str(time.now()), "uname": uname, "label": label,
+                "scheduling_md5": digest}
+        run(["uptime"], None, got_uptime)
+
+    proc def got_uptime(code: int, stdout: str, stderr: str) -> None:
+        host["uptime"] = stdout.strip()
+        if on_linux:
+            run(["ps", "-eo", "pcpu,pid,comm", "--sort=-pcpu"], None, got_top)
+        else:
+            run(["ps", "-Ao", "pcpu,pid,comm", "-r"], None, got_top)
+
+    proc def got_top(code: int, stdout: str, stderr: str) -> None:
+        host["top"] = [line.strip() for line in stdout.splitlines()[:8]]
+        run(["git", "rev-parse", "HEAD"], None, got_commit)
+
+    proc def got_commit(code: int, stdout: str, stderr: str) -> None:
+        if code == 0:
+            host["commit"] = stdout.strip()
+        if on_linux:
+            for key, path in [("governor", "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"),
+                              ("boost", "/sys/devices/system/cpu/cpufreq/boost")]:
+                try:
+                    host[key] = read(path).decode().strip()
+                except Exception:
+                    pass
+            governor = host.get("governor")
+            boost = host.get("boost")
+            if not (isinstance(governor, str) and governor == "performance" and isinstance(boost, str) and boost == "0"):
+                print("xlang: warning: the CPU frequency governor is not performance with boost off", err=True)
+        write_line(host)
+        next_step()
+
+    # Acton: the scheduling test binary, run as `acton test perf` runs it
+
+    proc def run_acton(threads: int, test: str) -> None:
+        scale, time_ms = sizes(test)
+        time_ms = budget if budget > 0 else time_ms
+        if counters == "off":
+            await async env.unsetenv("ACTON_TEST_PERF")
+        else:
+            await async env.setenv("ACTON_TEST_PERF", "1")
+        binary = paths["acton"]
+        # The test/perf project directory, as `acton test perf` runs it
+        project = "/".join(binary.split("/")[:-3])
+        run([binary, "--rts-wthreads", str(threads), "test", "_test_" + test + "_wrapper",
+             "perf", "--scale", str(scale), "--time", str(time_ms)], project if project != "" else None, acton_done)
+
+    proc def acton_done(code: int, stdout: str, stderr: str) -> None:
+        rec = record()
+        info = acton_info(stderr)
+        if info is not None:
+            success = info.get("success")
+            if isinstance(success, bool) and success:
+                rec["version"] = "acton"
+                rec["samples"] = info.get("num_iterations")
+                rec["bodies"] = info.get("loop_iterations")
+                rec["wall_ms_per_body"] = info.get("avg_wall_duration")
+                rec["cpu_user_ms_per_body"] = info.get("avg_cpu_user")
+                rec["cpu_sys_ms_per_body"] = info.get("avg_cpu_system")
+                rec["cycles_per_body"] = info.get("avg_cycles")
+                rec["instr_per_body"] = info.get("avg_instructions")
+                rec["alloc_bytes_per_body"] = info.get("mem_usage_delta_avg")
+                add_rtts(rec, rtt_rows(stdout))
+            else:
+                rec["error"] = "test failed: " + str(info.get("exception"))
+        else:
+            rec["error"] = "no complete result: " + stderr[-300:]
+        write_line(rec)
+        next_step()
+
+    # Go and Tokio: the ports, on Linux optionally under perf stat
+
+    proc def run_port(threads: int, test: str, runtime: str) -> None:
+        scale, time_ms = sizes(test)
+        time_ms = budget if budget > 0 else time_ms
+        cmd = [paths[runtime], "-threads", str(threads), "-scale", str(scale), "-time", str(time_ms), test]
+        if counters == "perf":
+            fifos += 1
+            ctl = tmp + "/ctl-" + str(fifos)
+            ack = tmp + "/ack-" + str(fifos)
+            perf_csv = tmp + "/perf-" + str(fifos) + ".csv"
+            perf_cmd = ["perf", "stat", "-x", ",", "-e", "cycles,instructions", "-D", "-1",
+                        "--control", "fifo:" + ctl + "," + ack, "-o", perf_csv, "--"] + cmd
+            # The ports enable and disable the counters around their samples
+            await async env.setenv("XLANG_PERF_CTL", ctl)
+            await async env.setenv("XLANG_PERF_ACK", ack)
+            run(["mkfifo", ctl, ack], None, fifos_made)
+        else:
+            perf_csv = ""
+            run(cmd, None, port_done)
+
+    proc def fifos_made(code: int, stdout: str, stderr: str) -> None:
+        if code != 0:
+            raise OSError("mkfifo failed: " + stderr)
+        run(perf_cmd, None, port_done)
+
+    proc def port_done(code: int, stdout: str, stderr: str) -> None:
+        rec = record()
+        reports = [line for line in stdout.splitlines() if line.startswith("{{")]
+        if code != 0 or len(reports) == 0:
+            rec["error"] = "exit %d: %s" % (code, stderr[-300:])
+        else:
+            d = obj(json.decode(reports[-1]))
+            bodies = number(d["bodies"])
+            rec["version"] = d.get("version")
+            rec["samples"] = len(array(d["samples"]))
+            rec["bodies"] = d.get("bodies")
+            for field in ["wall_ms_per_body", "cpu_user_ms_per_body", "cpu_sys_ms_per_body", "alloc_bytes_per_body"]:
+                rec[field] = d.get(field)
+            rows = d.get("rtt_ms_per_body")
+            if rows is not None:
+                add_rtts(rec, [[number(v) for v in array(r)] for r in array(rows)])
+            if perf_csv != "":
+                counts = perf_counts(read(perf_csv).decode())
+                for key, event in [("cycles_per_body", "cycles"), ("instr_per_body", "instructions")]:
+                    if event in counts:
+                        rec[key] = counts[event] / bodies
+        write_line(rec)
+        next_step()
+
+    proc def start(code: int, stdout: str, stderr: str) -> None:
+        uname = stdout.strip()
+        on_linux = uname.startswith("Linux")
+        if counters == "perf":
+            if not on_linux:
+                raise ValueError("--counters perf needs Linux and perf")
+            tmp = fs.mktmpdir(prefix="xlang-")
+        next_step()
+
+    proc def cmd_run(a: argparse.Args) -> None:
+        output = a.get_str("output")
+        counters = a.get_str("counters")
+        if counters not in ["acton", "perf", "off"]:
+            raise ValueError("--counters must be acton, perf or off")
+        label = a.get_str("label")
+        budget = a.get_int("time")
+        runtimes = [rt for rt in a.get_str("runtimes").split(",") if rt != ""]
+        for rt in runtimes:
+            if rt not in RUNTIMES:
+                raise ValueError("Unknown runtime " + rt)
+            p = a.get_str(rt)
+            if p == "":
+                p = BINARIES[rt]
+            paths[rt] = p if p.startswith("/") else fs.cwd() + "/" + p
+            try:
+                await async fs.stat(paths[rt])
+            except OSError:
+                raise ValueError("No " + NAMES[rt] + " binary at " + paths[rt] + "; run xlang build or give --" + rt)
+        if "acton" in paths and read(paths["acton"]).find(b"__ubsan_handle") >= 0:
+            # Plain `acton test` builds in Debug mode, with UBSan, in the same place
+            raise ValueError(paths["acton"] + " is a Debug build; build it with `acton test perf` (xlang build does)")
+        tests = [name for name, scale, time_ms in TESTS]
+        if a.get_str("tests") != "":
+            tests = [t for t in a.get_str("tests").split(",") if t in tests]
+        threads = [int(t) for t in a.get_str("threads").split(" ") if t != ""]
+        offset = a.get_int("rep_offset")
+        for rep in range(1 + offset, a.get_int("reps") + 1 + offset):
+            steps.append((rep, 0, "", ""))
+            for t in threads:
+                for test in tests:
+                    for rt in (runtimes if rep % 2 == 1 else list(reversed(runtimes))):
+                        steps.append((rep, t, test, rt))
+        source = a.get_str("scheduling")
+        try:
+            digest = hexdigest(crypto.hash.md5.hash(read(source)))
+            if digest != SCHEDULING_MD5:
+                print("xlang: warning: " + source + " has changed since the Go and Tokio ports were checked against it", err=True)
+        except Exception:
+            print("xlang: warning: cannot read " + source + " to check the ports against it", err=True)
+        out = file.WriteFile(wcap, output, append=True)
+        run(["uname", "-srm"], None, start)
+
+    proc def cmd_build(a: argparse.Args) -> None:
+        compiler = a.get_str("compiler")
+        if compiler == "":
+            compiler = "../../dist/bin/acton"
+            try:
+                await async fs.stat(compiler)
+            except OSError:
+                compiler = "acton"
+        # The builds run in other directories, so a relative path must become
+        # absolute; a bare name is looked up in PATH
+        if "/" in compiler and not compiler.startswith("/"):
+            compiler = fs.cwd() + "/" + compiler
+        # The test binary of the scheduling module; running one tiny test builds
+        # it. Without --cpu, acton builds for a baseline CPU (apple_m1,
+        # x86_64_v2+aes), so ask for this machine's CPU, as for Rust below.
+        builds.append(([compiler, "test", "perf", "--cpu", a.get_str("cpu"), "--module", "scheduling",
+                        "--name", "ring", "--scale", "1", "--time", "300ms", "--rts-wthreads", "2"], "."))
+        builds.append((["go", "build", "-trimpath", "-o", "xlang-go", "."], "xlang/go"))
+        builds.append((["cargo", "build", "--release"], "xlang/tokio"))
+        if env.getenv("RUSTFLAGS") is None:
+            await async env.setenv("RUSTFLAGS", "-C target-cpu=" + a.get_str("cpu"))
+        next_build(0, "", "")
+
+    proc def next_build(code: int, stdout: str, stderr: str) -> None:
+        if code != 0:
+            raise RuntimeError("build failed:\n" + stdout[-2000:] + stderr[-2000:])
+        if len(builds) == 0:
+            for rt in RUNTIMES:
+                print(NAMES[rt] + ": " + BINARIES[rt])
+            finish(0)
+            return
+        cmd, directory = builds.pop(0)
+        print("$ " + (" ".join(cmd) if directory == "." else "(cd " + directory + " && " + " ".join(cmd) + ")"))
+        run(cmd, directory, next_build)
+
+    proc def cmd_page(a: argparse.Args) -> None:
+        machines = []
+        for path in a.get_strlist("files"):
+            machines.append(read(path).decode().splitlines())
+        intro = a.get_str("intro")
+        html = page_html(machines, read("xlang/page/style.css").decode(), read("xlang/page/script.js").decode(),
+                         read(intro).decode() if intro != "" else "")
+        output = a.get_str("output")
+        f = file.WriteFile(wcap, output)
+        await async f.write(html.encode())
+        await async f.close()
+        print("Wrote " + output)
+        finish(0)
+
+    proc def cmd_summary(a: argparse.Args) -> None:
+        lines = []
+        for path in a.get_strlist("files"):
+            lines.extend(read(path).decode().splitlines())
+        print(summarize(lines))
+        finish(0)
+
+    try:
+        p = argparse.Parser()
+        r = p.add_cmd("run", "Run the tests in each runtime, interleaved, and append JSON lines to a file", cmd_run)
+        r.add_arg("output", "file to append results to")
+        r.add_option("reps", "int", default=1, help="repeats")
+        r.add_option("rep_offset", "int", default=0, help="number the repeats from this + 1, for runs split into chunks")
+        r.add_option("threads", "str", default="4", help="thread counts, separated by spaces")
+        r.add_option("tests", "str", default="", help="tests to run, separated by commas (default: all)")
+        r.add_option("runtimes", "str", default="acton,go,tokio", help="runtimes to run, separated by commas")
+        r.add_option("acton", "str", default="", help="Acton's scheduling test binary, a release build (default: " + BINARIES["acton"] + ")")
+        r.add_option("go", "str", default="", help="the Go port (default: " + BINARIES["go"] + ")")
+        r.add_option("tokio", "str", default="", help="the Tokio port (default: " + BINARIES["tokio"] + ")")
+        r.add_option("counters", "str", default="acton", help="acton: Acton's harness counts cycles (as acton test perf does); perf: also Go and Tokio under perf stat (Linux); off: no counters")
+        r.add_option("time", "int", default=0, help="time budget per run in ms instead of each test's default")
+        r.add_option("label", "str", default="", help="free text for the machine lines, such as the Acton build")
+        r.add_option("scheduling", "str", default="src/scheduling.act", help="the Acton tests the ports mirror")
+        b = p.add_cmd("build", "Build Acton's test binary in release mode, the Go port and the Tokio port", cmd_build)
+        b.add_option("compiler", "str", default="", help="the acton compiler (default: ../../dist/bin/acton, else acton on PATH)")
+        b.add_option("cpu", "str", default="native", help="CPU to build Acton and the Tokio port for; Go keeps GOAMD64 or GOARM64 from the environment")
+        g = p.add_cmd("page", "Write a web page with charts and tables, one section per result file (one file per machine)", cmd_page)
+        g.add_arg("files", "result files, one per machine", nargs="+")
+        g.add_option("output", "str", default="xlang.html", help="the page to write")
+        g.add_option("intro", "str", default="", help="an HTML fragment to put under the title, such as findings")
+        s = p.add_cmd("summary", "Print tables of medians from result files", cmd_summary)
+        s.add_arg("files", "result files", nargs="+")
+        args = p.parse(env.argv)
+        cmd = args.cmd
+        if cmd is not None:
+            cmd(args)
+        else:
+            p.print_usage()
+            finish(2)
+    except argparse.PrintUsage as error:
+        print(error.error_message)
+        finish(0)
+    except Exception as error:
+        fail(error)

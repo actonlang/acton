@@ -390,6 +390,10 @@ acton test perf --module scheduling --name latency_under_load --scale 1000 --tim
   unless another worker takes the probe, the round trip includes the job.
   Read the round-trip percentiles as for `latency_under_load`.
 
+`xlang/` has Go and Tokio ports of these tests, except `reply_behind_work`,
+and `src/xlang.act` is a program that runs all three runtimes on one machine;
+see [xlang/README.md](xlang/README.md).
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:
