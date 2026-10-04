@@ -435,7 +435,7 @@ struct deactQ_Apa {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
 };
 struct deactQ_BepaG_class {
     char *$GCINFO;
@@ -463,7 +463,7 @@ struct deactQ_Bepa {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
 };
 struct deactQ_mainG_class {
     char *$GCINFO;
@@ -491,7 +491,7 @@ struct deactQ_main {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
     B_Env env;
     deactQ_Apa a;
     deactQ_Bepa b;

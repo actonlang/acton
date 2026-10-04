@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <time.h>
 #ifdef ACTON_THREADS
@@ -137,7 +138,7 @@ struct B_Msg {
     time_t $baseline;
     $Lock $wait_lock;
     $WORD value;
-    $long $globkey;
+    $int64 $globkey;
 };
 
 struct $ActorG_class {
@@ -164,7 +165,7 @@ struct $Actor {
     B_Msg $waitsfor;
     $int64 $consume_hd;
     $Catcher $catcher;
-    $long $globkey;
+    $int64 $globkey;
 };
 
 struct $CatcherG_class {
@@ -210,8 +211,8 @@ B_Msg $AFTER(B_float, $Cont);
 B_Msg $AFTER_NOW(B_float, $Cont);
 $R $AWAIT($Cont, B_Msg);
 
-void init_db_queue(long);
-void register_actor(long key);
+void init_db_queue(int64_t key);
+void register_actor(int64_t key);
 void serialize_state_shortcut($Actor);
 
 #ifdef ACTON_DB

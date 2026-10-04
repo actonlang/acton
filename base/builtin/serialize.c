@@ -116,7 +116,7 @@ void $step_serialize($WORD self, $Serial$state state) {
                 // This also catches Msg or Cont because they reference the target actor transitively
                 RAISE_EXC(&B_serialize_actor_error);
             if (state->globmap) {
-                long key = (long)state->globmap(self);
+                int64_t key = (int64_t)state->globmap(self);
                 if (key < 0) {
                     $val_serialize(-class_id,&key,state);
                     return;
@@ -142,7 +142,7 @@ $WORD $step_deserialize($Serial$state state) {
         state->row = this->next;
         state->row_no++;
         if (this->class_id < 0) {
-            long key = (long)this->blob[0];
+            int64_t key = (int64_t)this->blob[0];
             if (key < 0)
                 return state->globmap(($WORD)key);
             else
