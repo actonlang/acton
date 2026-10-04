@@ -31,12 +31,12 @@ JOB_US = 1000
 
 
 def now_ns() -> int:
-    s, ns = time.get_monotonic()
-    return s * 1000000000 + ns
+    return time.monotonic_ns()
 
 def busy(us: int) -> int:
-    """Work on this thread for about us microseconds. Reading the clock
-    allocates, so it is read only every 128 passes of integer arithmetic."""
+    """Work on this thread for about us microseconds, with integer arithmetic,
+    reading the clock every 128 passes. It allocates nothing, so the work
+    makes no garbage for the collector."""
     end = now_ns() + us * 1000
     x = 1
     n = 0
