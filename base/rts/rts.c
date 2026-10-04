@@ -279,7 +279,9 @@ static pthread_mutex_t sync_pause_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t sync_pause_cond = PTHREAD_COND_INITIALIZER;
 // Every worker reads the request flag before each continuation, and it is
 // written only when a pause starts or ends. It has a cache line of its own
-// so that the check stays a load from the reader's own cache.
+// so that the check stays a load from the reader's own cache. The flag is
+// written with atomic_exchange(): if it were only loaded and stored, the
+// compiler could replace the struct with its field and drop the padding.
 static struct {
     _Atomic int requested;
 } __attribute__((aligned(128))) sync_pause_flag;
@@ -330,7 +332,7 @@ int acton_sync_pause_begin(void) {
         return -1;
     }
 
-    sync_pause_flag.requested = 1;
+    atomic_exchange(&sync_pause_flag.requested, 1);
     sync_pause_owner = owner;
     sync_pause_parked_count = 0;
     sync_pause_clear_parked();
@@ -340,7 +342,7 @@ int acton_sync_pause_begin(void) {
         sync_pause_wait();
     }
     if (rts_exit) {
-        sync_pause_flag.requested = 0;
+        atomic_exchange(&sync_pause_flag.requested, 0);
         sync_pause_owner = -1;
         sync_pause_parked_count = 0;
         pthread_cond_broadcast(&sync_pause_cond);
@@ -365,7 +367,7 @@ void acton_sync_pause_end(void) {
         return;
     }
 
-    sync_pause_flag.requested = 0;
+    atomic_exchange(&sync_pause_flag.requested, 0);
     sync_pause_owner = -1;
     sync_pause_parked_count = 0;
     pthread_cond_broadcast(&sync_pause_cond);
