@@ -1,0 +1,23 @@
+def check_str() -> bool:
+    parts = ["a", "b", "c"]
+    return ("".join(parts) == "abc" and
+            "-".join(ilist(parts)) == "a-b-c" and
+            ":".join(iter(parts)) == "a:b:c")
+
+def check_bytes() -> bool:
+    parts = [b"a", b"b", b"c"]
+    return (b"".join(parts) == b"abc" and
+            b"-".join(ilist(parts)) == b"a-b-c" and
+            b":".join(iter(parts)) == b"a:b:c")
+
+def check_bytearray() -> bool:
+    parts = [bytearray(b"a"), bytearray(b"b"), bytearray(b"c")]
+    return (bytearray(b"").join(parts) == bytearray(b"abc") and
+            bytearray(b"-").join(ilist(parts)) == bytearray(b"a-b-c") and
+            bytearray(b":").join(iter(parts)) == bytearray(b"a:b:c"))
+
+actor main(env):
+    if not check_str() or not check_bytes() or not check_bytearray():
+        print("join list fast path failed")
+        env.exit(1)
+    env.exit(0)
