@@ -760,7 +760,7 @@ instance Boxing Expr where
                                         NVar (TCon _ (TC _ ts))
                                   --         | any (not . vFree) ts    -> return ([n], eCallP (eDot (eQVar w) attr) p)
                                            | attr == fromatomKW      -> boxingFromAtom w es ts rt pr rest
-                                           | attr `elem` augopKWs    -> boxingBinop w (incr2bin attr) es ts rt pr rest
+                                           | attr `elem` augopKWs    -> boxingAugop w attr es ts rt pr rest
                                            | attr `elem` binopKWs    -> boxingBinop w attr es ts rt pr rest  -- rest indicates "result type", not any form of remainder
                                            | attr `elem` unopKWs     -> boxingUnop w attr es ts rt pr rest
                                            | attr `elem` eqordKWs    -> boxingCompop w attr es ts rt pr rest
@@ -797,6 +797,16 @@ instance Boxing Expr where
                                     = return (HashSet.empty, Box (last ts) (unbox (head ts) x))
       boxingFromAtom w es ts rt pr rest
                                     = boxingDirectOrDynamic w fromatomKW (posarg es) rt pr rest
+      -- The protocol default of an augmented operator method applies the binary
+      -- operator.  Call the binary operator when the type is unboxable or a static
+      -- builtin witness uses this default.  Otherwise call the augmented method,
+      -- which can be an override.
+      boxingAugop w attr es ts rt pr rest
+        | usesDefault               = boxingBinop w (incr2bin attr) es ts rt pr rest
+        | otherwise                 = boxingDirectOrDynamic w attr (posarg es) rt pr rest
+        where usesDefault           = case lookupStaticWitness env n >>= \sw -> staticWitnessMethodClass env sw attr of
+                                        Just tc -> not (directMethodImpl env (tcname tc) attr)
+                                        Nothing -> any isUnboxable (take 1 ts)
       boxingBinop w attr es@[x1, x2] ts _ _ _
         | isUnboxable t            =  return (HashSet.empty, Box (last ts) $ Paren NoLoc $ BinOp NoLoc (unbox t x1) op (unbox t x2))
         where t                     = head ts
