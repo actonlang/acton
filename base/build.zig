@@ -70,6 +70,10 @@ pub fn build(b: *std.Build) void {
     const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
+    // Must match the collector options in backend/build.zig, so that both
+    // resolve to the same libgc. The collector has parallel markers and
+    // thread-local allocation wherever it has threads.
+    const gc_enable_threads = !target.result.cpu.arch.isWasm();
     const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
@@ -78,6 +82,15 @@ pub fn build(b: *std.Build) void {
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
+    const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
+    const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
+    const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
+    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse gc_enable_threads;
+    const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 1048576; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse 1048576;
+    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
+    const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
+    const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse gc_enable_threads;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -91,9 +104,50 @@ pub fn build(b: *std.Build) void {
         std.log.err("gc_page_hash_table_log2 must be between 1 and 30, or 0 for the default", .{});
         std.process.exit(1);
     }
-    // Must match the collector options in backend/build.zig, so that both
-    // resolve to the same libgc.
-    const gc_enable_threads = !target.result.cpu.arch.isWasm();
+    if (gc_block_size != 0 and (gc_block_size < 4096 or gc_block_size > 65536 or !std.math.isPowerOfTwo(gc_block_size))) {
+        std.log.err("gc_block_size must be a power of two from 4096 to 65536, or 0 for the default", .{});
+        std.process.exit(1);
+    }
+    if (gc_block_size > 32768 and gc_mark_bit_per_object) {
+        std.log.err("gc_block_size above 32768 is not supported with gc_mark_bit_per_object", .{});
+        std.process.exit(1);
+    }
+    if (gc_initial_mark_stack_size != 0) {
+        if (gc_initial_mark_stack_size < 4096 or !std.math.isPowerOfTwo(gc_initial_mark_stack_size)) {
+            std.log.err("gc_initial_mark_stack_size must be a power of two from 4096, or 0 for the collector's default", .{});
+            std.process.exit(1);
+        }
+        // An entry is two pointers. The collector allocates the stack in
+        // whole heap blocks.
+        const entry_bytes: u64 = 2 * (target.result.ptrBitWidth() / 8);
+        const block_bytes: u64 = if (gc_block_size != 0) gc_block_size else 4096;
+        if (gc_initial_mark_stack_size * entry_bytes % block_bytes != 0) {
+            std.log.err("gc_initial_mark_stack_size must fill whole heap blocks: at least {d} entries on this target", .{block_bytes / entry_bytes});
+            std.process.exit(1);
+        }
+        // The collector computes the size of the stack in bytes in size_t.
+        const max_entries = (std.math.shl(u64, 1, target.result.ptrBitWidth()) -% 1) / entry_bytes;
+        if (gc_initial_mark_stack_size > max_entries) {
+            std.log.err("gc_initial_mark_stack_size must be at most {d} on this target", .{std.math.floorPowerOfTwo(u64, max_entries)});
+            std.process.exit(1);
+        }
+    }
+    if (gc_thread_local_size_limit != 0) {
+        // Objects of more than half a block are allocated in whole blocks.
+        const max_limit: u32 = (if (gc_block_size != 0) gc_block_size else 4096) / 2;
+        if (gc_thread_local_size_limit % 16 != 0 or gc_thread_local_size_limit > max_limit) {
+            std.log.err("gc_thread_local_size_limit must be a multiple of 16 from 16 to {d} (half the heap block size), or 0 for the default", .{max_limit});
+            std.process.exit(1);
+        }
+    }
+    if (gc_mark_range_stealing and !gc_enable_threads) {
+        std.log.err("gc_mark_range_stealing requires a target with threads", .{});
+        std.process.exit(1);
+    }
+    if (gc_no_thread_local_warmup and !gc_enable_threads) {
+        std.log.err("gc_no_thread_local_warmup requires a target with threads", .{});
+        std.process.exit(1);
+    }
     const gc_enable_mprotect_vdb = gcEnableMprotectVdb(target.result);
 
     const projpath_outtypes = joinPath(b.allocator, buildroot_path, "out/types");
@@ -116,6 +170,15 @@ pub fn build(b: *std.Build) void {
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .heap_growth_divisor = gc_heap_growth_divisor,
+        .alloc_budget_percent = gc_alloc_budget_percent,
+        .block_size = gc_block_size,
+        .enable_mark_range_stealing = gc_mark_range_stealing,
+        .initial_mark_stack_size = gc_initial_mark_stack_size,
+        .enable_end_padding = !gc_no_end_padding,
+        .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
+        .disable_realloc_free = gc_realloc_no_free,
+        .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -135,14 +198,19 @@ pub fn build(b: *std.Build) void {
         \\extern "C" {{
         \\#endif
         \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void);
+        \\GC_API unsigned GC_CALL acton_gc_get_block_size(void);
+        \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void);
+        \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void);
+        \\GC_API int GC_CALL acton_gc_get_end_padding(void);
+        \\GC_API unsigned GC_CALL acton_gc_get_thread_local_size_limit(void);
         \\#ifdef __cplusplus
         \\}}
         \\#endif
         \\#endif
         \\
     , .{ gc_dirty_tracking_backend, gc_required_vdb, @intFromBool(gc_enable_threads) }));
-    // The effective page-hash size depends on the collector defaults and its
-    // configuration macros, so read it from the collector's private header,
+    // The effective settings depend on the collector defaults and its
+    // configuration macros, so read them from the collector's private header,
     // compiled with the C flags of libgc itself.
     const gc_config = b.addObject(.{
         .name = "acton_gc_config",
@@ -158,6 +226,33 @@ pub fn build(b: *std.Build) void {
             \\#include "private/gc_priv.h"
             \\GC_API unsigned GC_CALL acton_gc_get_page_hash_table_log2(void) {
             \\    return LOG_PHT_ENTRIES;
+            \\}
+            \\GC_API unsigned GC_CALL acton_gc_get_block_size(void) {
+            \\    return HBLKSIZE;
+            \\}
+            \\GC_API int GC_CALL acton_gc_get_mark_range_stealing(void) {
+            \\#if defined(PARALLEL_MARK) && defined(STEAL_MARK_STACK_RANGES)
+            \\    return 1;
+            \\#else
+            \\    return 0;
+            \\#endif
+            \\}
+            \\// The same default as in mark.c.
+            \\#ifndef INITIAL_MARK_STACK_SIZE
+            \\#define INITIAL_MARK_STACK_SIZE (1 * HBLKSIZE)
+            \\#endif
+            \\GC_API unsigned long GC_CALL acton_gc_get_initial_mark_stack_size(void) {
+            \\    return INITIAL_MARK_STACK_SIZE;
+            \\}
+            \\GC_API int GC_CALL acton_gc_get_end_padding(void) {
+            \\    return GC_get_all_interior_pointers() && !GC_get_dont_add_byte_at_end();
+            \\}
+            \\GC_API unsigned GC_CALL acton_gc_get_thread_local_size_limit(void) {
+            \\#ifdef THREAD_LOCAL_ALLOC
+            \\    return (GC_TINY_FREELISTS - 1) * GC_GRANULE_BYTES;
+            \\#else
+            \\    return 0;
+            \\#endif
             \\}
             \\
         ),
@@ -417,6 +512,15 @@ pub fn build(b: *std.Build) void {
             .gc_mark_bit_per_object = gc_mark_bit_per_object,
             .gc_dirty_tracking_backend = gc_dirty_tracking_backend,
             .gc_page_hash_table_log2 = gc_page_hash_table_log2,
+            .gc_heap_growth_divisor = gc_heap_growth_divisor,
+            .gc_alloc_budget_percent = gc_alloc_budget_percent,
+            .gc_block_size = gc_block_size,
+            .gc_mark_range_stealing = gc_mark_range_stealing,
+            .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
+            .gc_no_end_padding = gc_no_end_padding,
+            .gc_thread_local_size_limit = gc_thread_local_size_limit,
+            .gc_realloc_no_free = gc_realloc_no_free,
+            .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }
@@ -467,4 +571,12 @@ pub fn build(b: *std.Build) void {
 // page as dirty, as all macOS builds did before.
 pub fn gcEnableMprotectVdb(t: std.Target) bool {
     return !(t.os.tag.isDarwin() and t.cpu.arch == .x86_64);
+}
+
+// The collector's GC_TINY_FREELISTS for gc_thread_local_size_limit (0 keeps
+// the default): one thread-local free list per granule of two pointers, from
+// the list of empty objects up to the limit.
+pub fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
+    if (size_limit == 0) return 0;
+    return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
 }

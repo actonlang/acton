@@ -12,6 +12,15 @@ pub fn build(b: *std.Build) void {
     const gc_mark_bit_per_object = b.option(bool, "gc_mark_bit_per_object", "Track GC marks per object") orelse false;
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
+    const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (0 keeps the fixed increment)") orelse 0;
+    const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (0 keeps the free space divisor policy)") orelse 0;
+    const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
+    const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
+    const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 1048576; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse 1048576;
+    const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
+    const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
+    const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
 
     const dep_libargp = b.dependency("libargp", .{
         .target = target,
@@ -31,6 +40,15 @@ pub fn build(b: *std.Build) void {
         .enable_mark_bit_per_obj = gc_mark_bit_per_object,
         .dirty_tracking_backend = gc_dirty_tracking_backend,
         .page_hash_table_log2 = gc_page_hash_table_log2,
+        .heap_growth_divisor = gc_heap_growth_divisor,
+        .alloc_budget_percent = gc_alloc_budget_percent,
+        .block_size = gc_block_size,
+        .enable_mark_range_stealing = gc_mark_range_stealing,
+        .initial_mark_stack_size = gc_initial_mark_stack_size,
+        .enable_end_padding = !gc_no_end_padding,
+        .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
+        .disable_realloc_free = gc_realloc_no_free,
+        .disable_thread_local_warmup = gc_no_thread_local_warmup,
         .enable_mprotect_vdb = !(target.result.os.tag.isDarwin() and target.result.cpu.arch == .x86_64),
     });
     const libgc = dep_libgc.artifact("gc");
@@ -146,4 +164,10 @@ pub fn build(b: *std.Build) void {
     actondb.root_module.link_libc = true;
     actondb.root_module.link_libcpp = true;
     b.installArtifact(actondb);
+}
+
+// Same as gcTinyFreelists in base/build.zig.
+fn gcTinyFreelists(t: std.Target, size_limit: u32) u32 {
+    if (size_limit == 0) return 0;
+    return size_limit / (2 * (t.ptrBitWidth() / 8)) + 1;
 }

@@ -1,0 +1,53 @@
+import acton.rts
+
+def small_object_size() -> int:
+    """GC_size of a new 16-byte object"""
+    NotImplemented
+
+def realloc_frees_moved() -> bool:
+    """Whether GC_realloc freed every small object it moved"""
+    NotImplemented
+
+actor Worker(wid: int, report: action(int, int) -> None):
+    def work():
+        retained = [[wid, i, i + 1] for i in range(50000)]
+        total = 0
+        for r in range(20):
+            garbage = [[r, i] for i in range(20000)]
+            total += len(garbage)
+        for i, triple in enumerate(retained):
+            if triple != [wid, i, i + 1]:
+                report(wid, -1)
+                return
+        report(wid, total)
+
+actor main(env):
+    # The test compares these lines with the settings it built.
+    info = acton.rts.get_gc_info(env.syscap)
+    print("block_size=" + str(info.block_size))
+    print("end_padding=" + str(info.end_padding))
+    print("small_object_size=" + str(small_object_size()))
+    print("thread_local_size_limit=" + str(info.thread_local_size_limit))
+    print("no_thread_local_warmup=" + str(info.no_thread_local_warmup))
+    print("realloc_no_free=" + str(info.realloc_no_free))
+    print("realloc_frees_moved=" + str(realloc_frees_moved()))
+    print("mark_range_stealing=" + str(info.mark_range_stealing))
+    print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
+    print("alloc_budget_percent=" + str(info.alloc_budget_percent))
+
+    var done = 0
+
+    def report(wid: int, total: int):
+        if total != 20 * 20000:
+            print("worker", wid, "lost data")
+            env.exit(1)
+            return
+        done += 1
+        if done == 4:
+            print("GC options OK")
+            env.exit(0)
+
+    # Allocate from several worker threads at once.
+    for wid in range(4):
+        w = Worker(wid, report)
+        async w.work()

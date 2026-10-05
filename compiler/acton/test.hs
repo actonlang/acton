@@ -1702,6 +1702,8 @@ actonProjTests =
   , gcBuildOptionTests
   , gcThpBuildOptionTests
   , gcTuningBuildOptionTests
+  , gcHeapGrowthBuildOptionTests
+  , gcCollectorOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2490,6 +2492,206 @@ gcTuningBuildOptionTests = testGroup "GC dirty tracking build options" $
       -- Dependency declarations deliberately conflict with root defaults.
       writeProject shared "shared" "" (options "userfaultfd" "22")
       action acton app shared runEnv writeOptions
+
+gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
+  [ testCase "build setting is the default and the environment overrides it" $
+      withFixture $ \acton proj runEnv writeOptions -> do
+        let build = readCreateProcessWithExitCode
+              (proc acton ["build", "--color", "never"])
+                { cwd = Just proj, env = Just runEnv } ""
+            run expected extraEnv = readCreateProcessWithExitCode
+              (proc (proj </> "out/bin/main") [show expected, "--rts-wthreads", "2"])
+                { cwd = Just proj, env = Just (extraEnv ++ runEnv) } ""
+            assertRuns expected extraEnv = do
+              result@(_, out, _) <- run (expected :: Int) extraEnv
+              expectSuccess "heap growth divisor and retained objects" result
+              assertEqual "application completes" "GC heap growth OK\n" out
+        -- Reuse generated outputs to exercise rebuilding between settings.
+        forM_ [([], 0), ([("gc_heap_growth_divisor", "16")], 16),
+               ([("gc_heap_growth_divisor", "0")], 0)] $ \(selected, expected) -> do
+          writeOptions selected
+          expectSuccess "build selected heap growth" =<< build
+          assertRuns expected []
+        writeOptions [("gc_heap_growth_divisor", "16")]
+        expectSuccess "build scaled heap growth" =<< build
+        assertRuns 4 [("GC_HEAP_GROWTH_DIVISOR", "4")]
+        assertRuns 0 [("GC_HEAP_GROWTH_DIVISOR", "0")]
+  , testCase "invalid values fail clearly" $
+      withFixture $ \acton proj runEnv writeOptions ->
+        forM_ ["invalid", "-1", "1.5"] $ \value -> do
+          writeOptions [("gc_heap_growth_divisor", value)]
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"])
+              { cwd = Just proj, env = Just runEnv } ""
+          assertBool ("invalid value should fail: " ++ value ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name gc_heap_growth_divisor\n" ++ out ++ err)
+            ("gc_heap_growth_divisor" `isInfixOf` (out ++ err))
+  ]
+  where
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    withFixture action = withSystemTempDirectory "acton-gc-growth" $ \proj -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      environment <- getEnvironment
+      createDirectoryIfMissing True (proj </> "src")
+      copyFile "test/project/gc_growth/src/main.act" (proj </> "src/main.act")
+      let runEnv = [("GC_MARKERS", "2")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
+          fingerprint = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_growth") 1)
+          writeOptions selected = writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"gc_growth\""
+            , "fingerprint = " ++ fingerprint
+            , "build_options = {" ++ intercalate ", "
+                [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
+            ]
+      action acton proj runEnv writeOptions
+
+gcCollectorOptionTests = testGroup "GC collector options"
+  [ testCase "settings reach the collector and allocation still works" $
+      withFixture $ \acton proj runEnv writeOptions -> do
+        let build flags = readCreateProcessWithExitCode
+              (proc acton (["build", "--color", "never"] ++ flags))
+                { cwd = Just proj, env = Just runEnv } ""
+            assertReports label expected extraEnv = do
+              result@(_, out, _) <- readCreateProcessWithExitCode
+                (proc (proj </> "out/bin/main") ["--rts-wthreads", "4"])
+                  { cwd = Just proj, env = Just (extraEnv ++ runEnv) } ""
+              expectSuccess label result
+              forM_ expected $ \(key, value) ->
+                assertBool (label ++ ": expected " ++ key ++ "=" ++ value
+                            ++ " in the output\n" ++ out)
+                  ((key ++ "=" ++ value) `elem` lines out)
+              assertBool (label ++ ": application completes\n" ++ out)
+                ("GC options OK" `elem` lines out)
+        -- Reuse generated outputs to exercise rebuilding between settings.
+        writeOptions []
+        expectSuccess "build default collector" =<< build []
+        assertReports "default collector" defaults []
+        -- The environment overrides the runtime policy of either build.
+        assertReports "environment overrides" overridden overrides
+        writeOptions tuned
+        expectSuccess "build tuned collector" =<< build []
+        assertReports "tuned collector" tunedReports []
+        assertReports "environment overrides tuned settings"
+          tunedOverridden tunedOverrides
+        forM_ others $ \(selected, reports) -> do
+          writeOptions selected
+          expectSuccess ("build collector with " ++ show selected) =<< build []
+          assertReports ("collector with " ++ show selected) reports []
+        writeOptions tuned
+        -- A database build also builds the collector for the backend, which
+        -- must use the same settings.
+        expectSuccess "database build of tuned collector" =<< build ["--db"]
+        writeOptions []
+        expectSuccess "return to the default collector" =<< build []
+        assertReports "default collector again" defaults []
+  , testCase "invalid values fail clearly" $
+      withFixture $ \acton proj runEnv writeOptions ->
+        forM_ invalid $ \(selected, key) -> do
+          writeOptions selected
+          (code, out, err) <- readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"])
+              { cwd = Just proj, env = Just runEnv } ""
+          assertBool ("invalid setting should fail: " ++ show selected
+                      ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name " ++ key ++ "\n" ++ out ++ err)
+            (key `isInfixOf` (out ++ err))
+  ]
+  where
+    -- Reported get_gc_info fields for a build without settings.
+    defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
+                ("end_padding", "True"), ("small_object_size", "32"),
+                ("thread_local_size_limit", "384"),
+                ("no_thread_local_warmup", "True"),
+                ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
+                ("mark_range_stealing", "True"),
+                ("initial_mark_stack_size", "1048576")]
+    -- Build.act settings and the fields they should report.
+    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
+             ("gc_mark_range_stealing", "false"),
+             ("gc_initial_mark_stack_size", "65536"),
+             ("gc_no_end_padding", "true"),
+             ("gc_thread_local_size_limit", "2048"),
+             ("gc_realloc_no_free", "false"),
+             ("gc_no_thread_local_warmup", "false")]
+    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
+                    ("end_padding", "False"), ("small_object_size", "16"),
+                    ("thread_local_size_limit", "2048"),
+                    ("no_thread_local_warmup", "False"),
+                    ("realloc_no_free", "False"),
+                    ("realloc_frees_moved", "True"),
+                    ("mark_range_stealing", "False"),
+                    ("initial_mark_stack_size", "65536")]
+    -- With 0, the initial mark stack has the collector's default size: as
+    -- many entries as a block has bytes.
+    others = [([("gc_block_size", "65536"),
+                ("gc_initial_mark_stack_size", "0"),
+                ("gc_thread_local_size_limit", "32768")],
+               [("block_size", "65536"), ("initial_mark_stack_size", "65536"),
+                ("thread_local_size_limit", "32768")]),
+              -- The smallest limit. Objects of every larger size come from
+              -- the global free lists, which the collector sets up on demand.
+              ([("gc_thread_local_size_limit", "16")],
+               [("thread_local_size_limit", "16")])]
+    -- The environment turns the modes that are on by default off in the
+    -- default build, and on in the tuned build, which turned them off.
+    overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
+                 ("GC_NO_THREAD_LOCAL_WARMUP", "0")]
+    overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
+                  ("realloc_frees_moved", "True"),
+                  ("no_thread_local_warmup", "False")]
+    tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
+                      ("GC_REALLOC_NO_FREE", "1"),
+                      ("GC_NO_THREAD_LOCAL_WARMUP", "1")]
+    tunedOverridden = [("alloc_budget_percent", "50"),
+                       ("realloc_no_free", "True"),
+                       ("realloc_frees_moved", "False"),
+                       ("no_thread_local_warmup", "True")]
+    -- Invalid settings and the option the diagnostic should name.
+    invalid =
+      [ ([(key, value)], key)
+      | (key, value) <- [("gc_alloc_budget_percent", "-1"),
+                        ("gc_alloc_budget_percent", "invalid"),
+                        ("gc_block_size", "2048"),
+                        ("gc_block_size", "12288"),
+                        ("gc_block_size", "131072"),
+                        ("gc_block_size", "invalid"),
+                        ("gc_mark_range_stealing", "maybe"),
+                        ("gc_initial_mark_stack_size", "2048"),
+                        ("gc_initial_mark_stack_size", "12288"),
+                        ("gc_initial_mark_stack_size", "invalid"),
+                        ("gc_no_end_padding", "maybe"),
+                        ("gc_thread_local_size_limit", "100"),
+                        ("gc_thread_local_size_limit", "4096"),
+                        ("gc_thread_local_size_limit", "invalid"),
+                        ("gc_realloc_no_free", "maybe"),
+                        ("gc_no_thread_local_warmup", "maybe")]
+      ] ++
+      [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
+         "gc_block_size")
+      ]
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    withFixture action = withSystemTempDirectory "acton-gc-options" $ \proj -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      environment <- getEnvironment
+      createDirectoryIfMissing True (proj </> "src")
+      forM_ ["main.act", "main.ext.c"] $ \file ->
+        copyFile ("test/project/gc_options/src" </> file) (proj </> "src" </> file)
+      let runEnv = [("GC_MARKERS", "2")]
+                ++ filter (not . isPrefixOf "GC_" . fst) environment
+          fingerprint = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName "gc_options") 1)
+          writeOptions selected = writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"gc_options\""
+            , "fingerprint = " ++ fingerprint
+            , "build_options = {" ++ intercalate ", "
+                [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
+            ]
+      action acton proj runEnv writeOptions
 
 dependencyDeclarationTests =
   testGroup "dependency declarations"
