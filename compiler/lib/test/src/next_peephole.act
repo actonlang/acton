@@ -68,3 +68,13 @@ def raw_ranges(start: int, stop: int, step: int) -> int:
     for i in range(start, stop, step):
         total += i
     return total
+
+# An inner for-loop has its iterator declaration hoisted ahead of the branch
+# that initializes it.  It should still use automatic range storage rather
+# than allocate a new range for every outer-loop iteration.
+def nested_ranges(rows: int, width: int) -> int:
+    total = 0
+    for row in range(rows):
+        for column in range(width + row):
+            total += column
+    return total

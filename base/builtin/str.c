@@ -1321,11 +1321,24 @@ bool B_strD_isupper(B_str s) {
     return hascased;
 }
 
+// Joining needs two passes over its input: one to size the result and one to
+// fill it.  General iterables therefore have to be materialized.  A builtin
+// list or ilist already provides stable contiguous storage for both passes,
+// so borrowing it avoids constructing an identical temporary list.
+static B_list_base join_parts(B_Iterable wit, $WORD iter) {
+    if (iter &&
+        (wit == (B_Iterable)B_CollectionD_SequenceD_listG_witness ||
+         wit == (B_Iterable)B_CollectionD_ISequenceD_ilistG_witness))
+        return (B_list_base)iter;
+
+    B_CollectionD_SequenceD_list list_wit = B_CollectionD_SequenceD_listG_witness;
+    return (B_list_base)list_wit->$class->__fromiter__(list_wit, wit, iter);
+}
+
 B_str B_strD_join(B_str s, B_Iterable wit, $WORD iter) {
     int64_t totchars = 0;
     int64_t totbytes = 0;
-    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
+    B_list_base lst = join_parts(wit, iter);
     B_str nxt;
     int64_t len = lst->length;
     // The total is checked as it grows by a part and a separator, so it
@@ -2384,8 +2397,7 @@ bool B_bytearrayD_isupper(B_bytearray s) {
 
 B_bytearray B_bytearrayD_join(B_bytearray s, B_Iterable wit, $WORD iter) {
     int64_t totbytes = 0;
-    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
+    B_list_base lst = join_parts(wit, iter);
     B_bytearray nxt;
     int64_t len = lst->length;
     // The total is checked as it grows by a part and a separator, so it
@@ -3494,8 +3506,7 @@ bool B_bytesD_isupper(B_bytes s) {
 
 B_bytes B_bytesD_join(B_bytes s, B_Iterable wit, $WORD iter) {
     int64_t totbytes = 0;
-    B_CollectionD_SequenceD_list wit2 = B_CollectionD_SequenceD_listG_witness;
-    B_list lst = wit2->$class->__fromiter__(wit2, wit, iter);
+    B_list_base lst = join_parts(wit, iter);
     B_bytes nxt;
     int64_t len = lst->length;
     // The total is checked as it grows by a part and a separator, so it

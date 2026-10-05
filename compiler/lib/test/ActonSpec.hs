@@ -2186,8 +2186,16 @@ main = do
         , "$rangeD_U_init(N_4iter, 0LL, stop, 1LL);"
         , "$rangeD_U_init(N_8iter, start, stop, 1LL);"
         , "$rangeD_U_init(N_12iter, start, stop, step);"
+        , "struct B_range N_20iterG_range_storage;"
+        , "N_20iter = (B_Iterator)&N_20iterG_range_storage;"
+        , "$rangeD_U_init(&N_20iterG_range_storage, 0LL"
         ]
-      testCodeGenDoesNotContain env0 "next_peephole" ["B_next)(it)", "$ISINSTANCE0(item, B_just)", "B_rangeG_new"]
+      testCodeGenDoesNotContain env0 "next_peephole"
+        [ "B_next)(it)"
+        , "$ISINSTANCE0(item, B_just)"
+        , "B_rangeG_new"
+        , "$rangeD_U_new(0LL, (((int64_t)(width + row)))"
+        ]
       testCodeGenContains env0 "range_cps" ["$rangeD_U_new(0LL, 3LL, 1LL)"]
       testCodeGenDoesNotContain env0 "range_cps" ["struct B_range"]
       testCodeGenContains env0 "static_witness_path"

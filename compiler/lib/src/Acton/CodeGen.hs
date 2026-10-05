@@ -120,10 +120,16 @@ type GenEnv                         = EnvF GenX
 data PayloadRep                     = PayloadWord
                                     | PayloadRaw Type
 
+-- A newly declared range iterator can use B_range directly.  A declaration
+-- hoisted out of a conditional already has the protocol-level B_Iterator
+-- type, so raw range operations must recover its concrete pointer type.
+data RangePointerRep                = ConcreteRange
+                                    | ErasedIterator
+
 -- Physical representations known only to CodeGen; the type checker still
 -- sees these bindings as ordinary maybe[A] and Iterator[int] values.
 data LocalRep                       = MaybeLocal Type PayloadRep
-                                    | RangeLocal
+                                    | RangeLocal RangePointerRep
                                     | ArrayIterLocal Type
 
 data GenX                           = GenX { globalX :: HashSet.HashSet Name
@@ -176,8 +182,12 @@ maybeLocal env n                    = case localRep env n of
                                         _                    -> Nothing
 
 rangeIter env n                     = case localRep env n of
-                                        Just RangeLocal -> True
-                                        _               -> False
+                                        Just (RangeLocal _) -> True
+                                        _                   -> False
+
+rangeIterNeedsCast env n            = case localRep env n of
+                                        Just (RangeLocal ErasedIterator) -> True
+                                        _                                -> False
 
 arrayIter env n                     = case localRep env n of
                                         Just (ArrayIterLocal t) -> Just t
@@ -943,7 +953,10 @@ localRepEnvAfter env s env1
                                     = setLocalRep n ml env1
 localRepEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
   | Just _ <- rangeIterSource env t e
-                                    = setLocalRep n RangeLocal env1
+                                    = setLocalRep n (RangeLocal pointerRep) env1
+  where pointerRep                  = if n `HashSet.member` localDefined env
+                                      then ErasedIterator
+                                      else ConcreteRange
 localRepEnvAfter env (Assign _ [PVar _ n (Just t)] e) env1
   | Just elemT <- arrayIterSource env t e
                                     = setLocalRep n (ArrayIterLocal elemT) env1
@@ -1079,6 +1092,17 @@ rangeStorageName n                  = Derived n (globalName "range_storage")
 genStackRange env n args            = text "struct B_range" <+> storage <> semi $+$
                                       gen env tRange <+> iter <+> equals <+> char '&' <> storage <> semi $+$
                                       text "$rangeD_U_init" <> parens (iter <> comma <+> genRawRangeArgs env args) <> semi
+  where storage                     = gen env (rangeStorageName n)
+        iter                        = gen env n
+
+-- Locals defined by a conditional are sometimes declared before the
+-- conditional and initialized inside it.  This is the shape produced for a
+-- range loop nested in another normalized for-loop.  Keep the existing
+-- iterator declaration, but point it at automatic range storage at the
+-- initialization site instead of allocating a fresh range on every entry.
+genStackRangeAssign env n args      = text "struct B_range" <+> storage <> semi $+$
+                                      iter <+> equals <+> parens (gen env (tIterator tInt)) <> char '&' <> storage <> semi $+$
+                                      text "$rangeD_U_init" <> parens (char '&' <> storage <> comma <+> genRawRangeArgs env args) <> semi
   where storage                     = gen env (rangeStorageName n)
         iter                        = gen env n
 
@@ -1245,6 +1269,7 @@ genArrayNextBoolCallOn env t recv out
 -- representation for the specialized next call; ordinary expression uses
 -- are cast back to their declared Iterator[int] representation below.
 genRangePhysical env (Var _ (NoQ n))
+  | rangeIterNeedsCast env n        = parens (gen env tRange) <> gen env (NoQ n)
   | rangeIter env n                 = gen env (NoQ n)
 genRangePhysical env e              = genExp env tRange e
 
@@ -1288,6 +1313,13 @@ genStmt env (Assign _ [PVar _ n (Just t)] e)
     Just r <- rangeIterSource env t e,
     Just args <- rawRangeArgs env r
                                     = (genStackRange env n args, [])
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | n `HashSet.member` localDefined env,
+    ret env /= tR,
+    isNormalizedForIterator n,
+    Just r <- rangeIterSource env t e,
+    Just args <- rawRangeArgs env r
+                                    = (genStackRangeAssign env n args, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env),
     Just r <- rangeIterSource env t e
