@@ -1,0 +1,20 @@
+# A tuple literal assigned to plain variables is scalarized by the normalizer.
+# This test protects the simultaneous-assignment semantics of that lowering:
+# both right-hand sides are evaluated, from left to right, before either target
+# is updated.
+
+def mark(seen: list[int], value: int) -> int:
+    seen.append(value)
+    return value
+
+actor main(env):
+    seen: list[int] = []
+    a = 10
+    b = 20
+
+    a, b = mark(seen, b), mark(seen, a)
+
+    if a != 20 or b != 10 or seen != [20, 10]:
+        print("Failed:", a, b, seen)
+        env.exit(1)
+    env.exit(0)

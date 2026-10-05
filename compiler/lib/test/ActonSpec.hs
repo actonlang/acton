@@ -2203,6 +2203,16 @@ main = do
         , "uint8_t N_5tmp = ((uint8_t)($checked_uint_from_u64(x, UINT8_MAX, \"u8\")));"
         ]
       testCodeGenDoesNotContain env0 "numeric_casts" ["toB_int(x)", "B_bigintG_new", "B_floatG_new"]
+      testCodeGenContains env0 "tuple_assign_scalar"
+        [ "double N_tmp ="
+        , "double N_1tmp ="
+        , "zr = N_tmp;"
+        , "zi = N_1tmp;"
+        ]
+      testCodeGenDoesNotContain env0 "tuple_assign_scalar"
+        [ "$NEWTUPLE(2"
+        , "toB_float("
+        ]
       testCodeGenDoesNotContain env0 "static_witness_path" ["B_SequenceD_listG_new()"]
       testCodeGenContains env0 "raw_builtin_indexing"
         [ "$listD_U__getitem__(xs, i)"
