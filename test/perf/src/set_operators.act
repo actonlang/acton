@@ -1,0 +1,92 @@
+import testing
+
+
+# Scale is the number of elements in the set that an operator changes. Each
+# loop body of an in-place test applies EDITS operations with a one-element
+# operand and restores the set after each operation. In-place operators change
+# the set, so their time per body does not grow with scale. The binary operator
+# test makes one new set per body and grows with scale. The & tests intersect
+# a small set with a set of scale elements, and a set that held scale elements
+# and now holds one with a one-element set, EDITS times per body.
+EDITS = 1000
+
+def ior_one(t: testing.SyncT, size: int):
+    target = set(range(size))
+    one = {size}
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target |= one
+            target.discard(size)
+    testing.assertEqual(len(target), size)
+    testing.assertNotIn(size, target)
+
+def isub_one(t: testing.SyncT, size: int):
+    target = set(range(size + 1))
+    one = {size}
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target -= one
+            target.add(size)
+    testing.assertEqual(len(target), size + 1)
+    testing.assertIn(size, target)
+
+def ixor_one(t: testing.SyncT, size: int):
+    target = set(range(size))
+    one = {size}
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target ^= one
+            target ^= one
+    testing.assertEqual(len(target), size)
+    testing.assertNotIn(size, target)
+
+def or_one(t: testing.SyncT, size: int):
+    source = set(range(size))
+    one = {size}
+    last: set[int] = set()
+    bodies = 0
+    for _ in t.loop():
+        bodies += 1
+        last = source | one
+    if bodies > 0:
+        testing.assertEqual(len(last), size + 1)
+    testing.assertEqual(len(source), size)
+
+def and_small(t: testing.SyncT, size: int):
+    big = set(range(size))
+    small = {0, size}
+    count = 0
+    for _ in t.loop():
+        for _ in range(EDITS):
+            count += len(small & big)
+    testing.assertEqual(count % EDITS, 0)
+
+def and_drained(t: testing.SyncT, size: int):
+    drained = set(range(size + 1))
+    drained -= set(range(1, size + 1))
+    one = {0}
+    count = 0
+    for _ in t.loop():
+        for _ in range(EDITS):
+            count += len(drained & one)
+    testing.assertEqual(len(drained), 1)
+    testing.assertEqual(count % EDITS, 0)
+
+
+def _test_set_ior_one(t: testing.SyncT):
+    ior_one(t, t.scale())
+
+def _test_set_isub_one(t: testing.SyncT):
+    isub_one(t, t.scale())
+
+def _test_set_ixor_one(t: testing.SyncT):
+    ixor_one(t, t.scale())
+
+def _test_set_or_one(t: testing.SyncT):
+    or_one(t, t.scale())
+
+def _test_set_and_drained(t: testing.SyncT):
+    and_drained(t, t.scale())
+
+def _test_set_and_small(t: testing.SyncT):
+    and_small(t, t.scale())
