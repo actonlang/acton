@@ -190,6 +190,17 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
         normList v n [] Nothing     = []
         t                           = typeOf env p
 
+plainPosPats                       :: PosPat -> Maybe [Pattern]
+plainPosPats (PosPat p@(PVar _ _ _) ps)
+                                    = (p :) <$> plainPosPats ps
+plainPosPats PosPatNil              = Just []
+plainPosPats _                      = Nothing
+
+fixedPosArgs                       :: PosArg -> Maybe [Expr]
+fixedPosArgs (PosArg e es)          = (e :) <$> fixedPosArgs es
+fixedPosArgs PosNil                 = Just []
+fixedPosArgs _                      = Nothing
+
 
 
 class Norm a where
@@ -314,6 +325,21 @@ instance Norm Stmt where
       where retContext e            = exitContext env $ Return l $ Just e
             t                       = typeOf env e
 
+    -- A fixed tuple literal assigned to a fixed tuple of variables does not
+    -- need a tuple object.  Evaluate every right-hand component first, so
+    -- swaps and exceptions retain simultaneous-assignment semantics, and only
+    -- then update the targets.  Boxing can subsequently give each temporary
+    -- its unboxed representation where possible.
+    norm' env (Assign l [PTuple _ pp KwdPatNil] (Tuple _ pa KwdNil))
+      | Just ps <- plainPosPats pp
+      , Just es <- fixedPosArgs pa
+      , not (null ps)
+      , length ps == length es      = do ns <- mapM (const $ newName "tmp") es
+                                         let temps = [ Assign l [pVar n $ typeOf env e] e
+                                                     | (n,e) <- zip ns es ]
+                                             stores = [ Assign l [p] (eVar n)
+                                                      | (p,n) <- zip ps ns ]
+                                         normSuite env (temps ++ stores)
     norm' env (Assign l ps e)       = do e' <- norm env e
                                          (ps1,stmts) <- unzip <$> mapM (normPat env) ps
                                          ps2 <- norm env ps1

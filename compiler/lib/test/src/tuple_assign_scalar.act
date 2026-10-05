@@ -1,0 +1,4 @@
+def update(zr: float, zi: float, tr: float, ti: float,
+           cr: float, ci: float) -> float:
+    zr, zi = tr - ti + cr, 2.0 * zr * zi + ci
+    return zr + zi
