@@ -509,12 +509,13 @@ protocol Logical:
     @staticmethod
     __xor__     : (Self,Self) -> Self
 
+    # An in-place form can change its first operand and return it.
     @staticmethod
-    __iand__    : (Self,Self) -> Self
+    __iand__    : mut(Self,Self) -> Self
     @staticmethod
-    __ior__     : (Self,Self) -> Self
+    __ior__     : mut(Self,Self) -> Self
     @staticmethod
-    __ixor__    : (Self,Self) -> Self
+    __ixor__    : mut(Self,Self) -> Self
 
     def __iand__(a,b):
         return a & b
@@ -537,8 +538,9 @@ protocol Plus:
 protocol Minus:
     @staticmethod
     __sub__      : (Self,Self) -> Self
+    # The in-place form can change its first operand and return it.
     @staticmethod
-    __isub__     : (Self,Self) -> Self
+    __isub__     : mut(Self,Self) -> Self
 
     def __isub__(a,b):
         return a - b
@@ -1029,6 +1031,22 @@ extension idict[A(Hashable),B(Eq)] (Ord):
 
 extension set[A(Hashable)] (Set[A]):
     NotImplemented
+
+    def __iand__(a, b):
+        """Remove the elements of a that are not in b. Return a."""
+        NotImplemented
+
+    def __ior__(a, b):
+        """Add the elements of b to a. Return a."""
+        NotImplemented
+
+    def __ixor__(a, b):
+        """Remove the elements of b that are in a and add the others. Return a."""
+        NotImplemented
+
+    def __isub__(a, b):
+        """Remove the elements of b from a. Return a."""
+        NotImplemented
 
 extension set[A(Hashable)] (Freeze[iset[A]]):
     NotImplemented

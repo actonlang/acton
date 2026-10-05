@@ -184,15 +184,24 @@ static void B_set_table_add(B_set_table *set, B_Hashable hashwit, $WORD key) {
     B_set_table_add_hash(set, hashwit, key, B_hash(hashwit, key));
 }
 
+static void B_set_table_drop_entry(B_set_table *set, B_setentry *entry) {
+    entry->key = dummy;
+    entry->hash = 0;
+    set->numelements--;
+}
+
 static bool B_set_table_discard_hash(B_set_table *set, B_Hashable hashwit, $WORD elem, uint64_t hash) {
     B_setentry *entry = B_set_table_lookkey(set, hashwit, elem, hash);
     if (ACTIVE_ENTRY(entry)) {
-        entry->key = dummy;
-        entry->hash = 0;
-        set->numelements--;
+        B_set_table_drop_entry(set, entry);
         return true;
     }
     return false;
+}
+
+static void B_set_table_clear(B_set_table *set) {
+    acton_free(set->table);
+    B_set_table_init_empty(set);
 }
 
 static void B_set_table_copy_into(B_set_table *dst, B_set_table *src) {
@@ -354,6 +363,80 @@ static void B_set_table_xor_into(B_set_table *res, B_set_table *set, B_set_table
         B_setentry *entry = &other->table[i];
         if (ACTIVE_ENTRY(entry) && !B_set_table_discard_hash(res, hashwit, entry->key, entry->hash))
             B_set_table_add_hash(res, hashwit, entry->key, entry->hash);
+    }
+}
+
+// In-place operations change set and do not copy it. Each walks the table of
+// other, or the smaller table when the result allows either.
+
+static void B_set_table_ior(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other)
+        return;
+    for (uint64_t i = 0; i <= other->mask; i++) {
+        B_setentry *entry = &other->table[i];
+        if (ACTIVE_ENTRY(entry))
+            B_set_table_add_hash(set, hashwit, entry->key, entry->hash);
+    }
+}
+
+static void B_set_table_isub(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other) {
+        B_set_table_clear(set);
+        return;
+    }
+    if (set->numelements == 0 || other->numelements == 0)
+        return;
+    if (other->mask <= set->mask) {
+        for (uint64_t i = 0; i <= other->mask; i++) {
+            B_setentry *entry = &other->table[i];
+            if (ACTIVE_ENTRY(entry))
+                B_set_table_discard_hash(set, hashwit, entry->key, entry->hash);
+        }
+    } else {
+        for (uint64_t i = 0; i <= set->mask; i++) {
+            B_setentry *entry = &set->table[i];
+            if (ACTIVE_ENTRY(entry) && B_set_table_contains_hash(other, hashwit, entry->key, entry->hash))
+                B_set_table_drop_entry(set, entry);
+        }
+    }
+}
+
+static void B_set_table_iand(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other)
+        return;
+    if (set->mask <= other->mask) {
+        for (uint64_t i = 0; i <= set->mask; i++) {
+            B_setentry *entry = &set->table[i];
+            if (ACTIVE_ENTRY(entry) && !B_set_table_contains_hash(other, hashwit, entry->key, entry->hash))
+                B_set_table_drop_entry(set, entry);
+        }
+        return;
+    }
+    // The table of other is smaller: build the result in a new table that
+    // keeps the elements of set, and replace the table of set.
+    B_set_table res;
+    B_set_table_init_empty(&res);
+    for (uint64_t i = 0; i <= other->mask; i++) {
+        B_setentry *entry = &other->table[i];
+        if (!ACTIVE_ENTRY(entry))
+            continue;
+        B_setentry *found = B_set_table_lookkey(set, hashwit, entry->key, entry->hash);
+        if (ACTIVE_ENTRY(found))
+            B_set_table_add_hash(&res, hashwit, found->key, found->hash);
+    }
+    acton_free(set->table);
+    *set = res;
+}
+
+static void B_set_table_ixor(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other) {
+        B_set_table_clear(set);
+        return;
+    }
+    for (uint64_t i = 0; i <= other->mask; i++) {
+        B_setentry *entry = &other->table[i];
+        if (ACTIVE_ENTRY(entry) && !B_set_table_discard_hash(set, hashwit, entry->key, entry->hash))
+            B_set_table_add_hash(set, hashwit, entry->key, entry->hash);
     }
 }
 
@@ -690,6 +773,26 @@ B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set oth
     B_set res = B_set_from_table(&tmp);
     acton_free(tmp.table);
     return res;
+}
+
+B_set B_MinusD_SetD_setD___isub__(B_MinusD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_isub(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___iand__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_iand(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___ior__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_ior(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___ixor__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_ixor(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
 }
 
 // Freeze[set] /////////////////////////////////////////////////////////////////////////////////////

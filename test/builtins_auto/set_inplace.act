@@ -1,0 +1,181 @@
+# The augmented operators |=, &=, -= and ^= change a set in place and keep
+# the right operand. On an iset they make a new iset.
+
+class Holder(object):
+    def __init__(self, s: set[int]):
+        self.s = s
+
+def union_into[T(Logical)](a: T, b: T) -> T:
+    a |= b
+    return a
+
+def same_set(a: set[int], b: set[int]) -> bool:
+    """Return True if a and b are the same object."""
+    sentinel = -987654321
+    if sentinel in a:
+        return False
+    a.add(sentinel)
+    same = sentinel in b
+    a.discard(sentinel)
+    return same
+
+def check_ior(fail: list[str]):
+    s: set[int] = {1, 2, 3}
+    alias = s
+    t: set[int] = {3, 4}
+    s |= t
+    if s != {1, 2, 3, 4}:
+        fail.append("|= contents")
+    if not same_set(s, alias):
+        fail.append("|= same object")
+    if t != {3, 4}:
+        fail.append("|= keeps right operand")
+
+def check_iand(fail: list[str]):
+    s: set[int] = {1, 2, 3}
+    alias = s
+    s &= {2, 3, 4}
+    if s != {2, 3}:
+        fail.append("&= contents")
+    if not same_set(s, alias):
+        fail.append("&= same object")
+
+def check_isub(fail: list[str]):
+    s: set[int] = {1, 2, 3}
+    alias = s
+    s -= {2, 5}
+    if s != {1, 3}:
+        fail.append("-= contents")
+    if not same_set(s, alias):
+        fail.append("-= same object")
+
+def check_ixor(fail: list[str]):
+    s: set[int] = {1, 2, 3}
+    alias = s
+    s ^= {3, 4}
+    if s != {1, 2, 4}:
+        fail.append("^= contents")
+    if not same_set(s, alias):
+        fail.append("^= same object")
+
+def check_alias(fail: list[str]):
+    words: set[str] = {"a", "b"}
+    seen = words
+    words |= {"c"}
+    words -= {"a"}
+    if seen != {"b", "c"}:
+        fail.append("alias sees change")
+
+def check_self(fail: list[str]):
+    s: set[int] = {1, 2}
+    s |= s
+    if s != {1, 2}:
+        fail.append("s |= s")
+    s &= s
+    if s != {1, 2}:
+        fail.append("s &= s")
+    s ^= s
+    if len(s) != 0:
+        fail.append("s ^= s")
+    r: set[int] = {1, 2}
+    r -= r
+    if len(r) != 0:
+        fail.append("s -= s")
+    r.add(7)
+    if r != {7}:
+        fail.append("add after s -= s")
+
+def check_sizes(fail: list[str]):
+    # Both orders of a large and a small operand
+    big: set[int] = set(range(1000))
+    small: set[int] = {5, 500, 5000}
+    a = set(big)
+    a &= small
+    if a != {5, 500}:
+        fail.append("big &= small")
+    b = set(small)
+    b &= big
+    if b != {5, 500}:
+        fail.append("small &= big")
+    c = set(big)
+    c -= small
+    if len(c) != 998 or 5 in c or 500 in c or 999 not in c:
+        fail.append("big -= small")
+    d = set(small)
+    d -= big
+    if d != {5000}:
+        fail.append("small -= big")
+    e = set(big)
+    e ^= small
+    if len(e) != 999 or 5000 not in e or 5 in e:
+        fail.append("big ^= small")
+    if len(big) != 1000 or len(small) != 3:
+        fail.append("operands unchanged")
+
+def check_remove_then_add(fail: list[str]):
+    # Removed entries must not hide later entries
+    a: set[int] = set(range(1000))
+    a -= set(range(0, 1000, 2))
+    a |= set(range(10))
+    for i in range(1000):
+        if (i in a) != (i % 2 == 1 or i < 10):
+            fail.append("remove then add: " + str(i))
+            return
+    if len(a) != 505:
+        fail.append("remove then add: len")
+
+def check_targets(fail: list[str]):
+    d: dict[str, set[int]] = {"k": {1}}
+    inner = d["k"]
+    d["k"] |= {2}
+    if d["k"] != {1, 2} or not same_set(d["k"], inner):
+        fail.append("index target")
+
+    h = Holder({1, 2})
+    before = h.s
+    h.s -= {1}
+    if h.s != {2} or not same_set(h.s, before):
+        fail.append("attribute target")
+
+    g: set[int] = {1}
+    if not same_set(union_into(g, {2}), g) or g != {1, 2}:
+        fail.append("generic")
+
+def check_iset(fail: list[str]):
+    fs: iset[int] = iset([1, 2])
+    old = fs
+    fs |= iset([3])
+    if fs != iset([1, 2, 3]) or old != iset([1, 2]):
+        fail.append("iset |=")
+    gs: iset[int] = iset([1, 2])
+    old_gs = gs
+    gs -= iset([1])
+    if gs != iset([2]) or old_gs != iset([1, 2]):
+        fail.append("iset -=")
+
+def check_frozen(fail: list[str]):
+    m: set[int] = {1, 2}
+    m |= {3}
+    f = freeze(m)
+    old_f = f
+    f |= iset([4])
+    if f != iset([1, 2, 3, 4]) or old_f != iset([1, 2, 3]):
+        fail.append("frozen |=")
+
+actor main(env):
+    fail: list[str] = []
+    check_ior(fail)
+    check_iand(fail)
+    check_isub(fail)
+    check_ixor(fail)
+    check_alias(fail)
+    check_self(fail)
+    check_sizes(fail)
+    check_remove_then_add(fail)
+    check_targets(fail)
+    check_iset(fail)
+    check_frozen(fail)
+    if fail:
+        print("Failed:", fail)
+        env.exit(1)
+    env.exit(0)
