@@ -1,0 +1,240 @@
+import testing
+import time
+
+
+# How closely timers fire to their due time. Each loop body covers 1000
+# consecutive 1 ms slots after a short lead, so a body takes about one
+# second. Lateness is measured against the monotonic clock and printed once
+# per body; see the README for how to read it. A body fails if a timer
+# fires early, if a timer is armed after it is already due, or if the body
+# has not finished DEADLINE_S seconds after its last slot.
+
+SLOTS = 1000
+PERIOD_NS = 1000000
+# The first slot is due LEAD_NS plus LEAD_PER_TIMER_NS per timer after the
+# body starts, which leaves time to arm every timer before it is due
+LEAD_NS = 20000000
+LEAD_PER_TIMER_NS = 2000
+# The deadline is itself a timer: it catches a lost timer, but not a timer
+# thread that no longer wakes up, which makes the run hang
+DEADLINE_S = 10.0
+# Delays and the runtime clock are truncated to microseconds, so a timer can
+# appear to fire a few microseconds early; anything beyond this is early.
+EARLY_NS = 20000
+
+def now_ns() -> int:
+    return time.monotonic_ns()
+
+def summary(name: str, scale: int, late_ns: list[int], early: int) -> str:
+    ordered = sorted(late_ns)
+    n = len(ordered)
+    def pct(p: int) -> float:
+        return float(ordered[(n - 1) * p // 100]) / 1e6 if n > 0 else 0.0
+    return "%s scale=%d timers=%d late_ms min=%.3f p50=%.3f p90=%.3f p99=%.3f max=%.3f early=%d" % (
+        name, scale, n, pct(0), pct(50), pct(90), pct(99), pct(100), early)
+
+def deadline(lead: int) -> float:
+    return float(lead + SLOTS * PERIOD_NS) / 1e9 + DEADLINE_S
+
+
+actor Receiver(coord: TimerSpread):
+    var late_ns: list[int] = []
+    var early = 0
+    var armed_late = 0
+    var pending = 0
+
+    def arm(targets: list[int]):
+        late_ns = []
+        early = 0
+        armed_late = 0
+        pending = len(targets)
+        if pending == 0:
+            coord.receiver_done()
+            return
+        for target in targets:
+            after now float(target - now_ns()) / 1e9: fire(target)
+        # The timers reach the timer queue when this call returns; after 0
+        # sends a plain message, which runs after that, to check whether
+        # the first timer was due before it was queued
+        after 0: armed(targets[0])
+
+    def armed(first: int):
+        if now_ns() >= first:
+            armed_late = 1
+
+    def fire(target: int):
+        d = now_ns() - target
+        if d < -EARLY_NS:
+            early += 1
+        late_ns.append(d)
+        pending -= 1
+        if pending == 0:
+            coord.receiver_done()
+
+    def collect() -> (list[int], int, int):
+        return (late_ns, early, armed_late)
+
+
+actor TimerSpread(t: testing.AsyncT, receivers: int):
+    """One-shot timers, scale per 1 ms slot, spread over the receivers."""
+    iterations = t.loop()
+    var rs: list[Receiver] = []
+    var scale = 1
+    var body = 0
+    var done = 0
+    var failed = False
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            scale = c.val
+        else:
+            t.success()
+            return
+        body += 1
+        done = 0
+        lead = LEAD_NS + SLOTS * scale * LEAD_PER_TIMER_NS
+        start = now_ns() + lead
+        shares: list[list[int]] = []
+        for i in range(receivers):
+            shares.append([])
+        # Timer k is due in slot k // scale; neighbouring timers go to
+        # different receivers
+        for k in range(SLOTS * scale):
+            shares[k % receivers].append(start + (k // scale) * PERIOD_NS)
+        for i in range(receivers):
+            rs[i].arm(shares[i])
+        b = body
+        after now deadline(lead): check(b)
+
+    def check(b: int):
+        if b == body and done < receivers and not failed:
+            failed = True
+            t.failure(AssertionError("body %d not done %.0f s after its last slot: %d of %d receivers done" % (
+                b, DEADLINE_S, done, receivers)))
+
+    def receiver_done():
+        done += 1
+        if done < receivers or failed:
+            return
+        late_ns: list[int] = []
+        early = 0
+        armed_late = 0
+        for r in rs:
+            l, e, a = r.collect()
+            late_ns.extend(l)
+            early += e
+            armed_late += a
+        print(summary("spread", scale, late_ns, early))
+        if armed_late > 0:
+            failed = True
+            t.failure(AssertionError("%d of %d receivers queued timers after the first was due" % (armed_late, receivers)))
+            return
+        if early > 0:
+            failed = True
+            t.failure(AssertionError("%d timers fired early" % early))
+            return
+        run()
+
+    for i in range(receivers):
+        rs.append(Receiver(self))
+    run()
+
+
+actor Ticker(coord: TimerPeriodic, slots: int):
+    var start = 0
+    var ticks = 0
+    var late_ns: list[int] = []
+    var early = 0
+    var armed_late = 0
+
+    def begin(first: int):
+        start = first
+        ticks = 0
+        late_ns = []
+        early = 0
+        n = now_ns()
+        armed_late = 1 if n >= first else 0
+        after now float(first - n) / 1e9: tick()
+
+    def tick():
+        # Plain after keeps a drift-free schedule: tick k is due at
+        # start + k ms, however late the previous tick ran
+        d = now_ns() - (start + ticks * PERIOD_NS)
+        if d < -EARLY_NS:
+            early += 1
+        late_ns.append(d)
+        ticks += 1
+        if ticks < slots:
+            after 0.001: tick()
+        else:
+            coord.ticker_done()
+
+    def collect() -> (list[int], int, int):
+        return (late_ns, early, armed_late)
+
+
+actor TimerPeriodic(t: testing.AsyncT, slots: int):
+    """Scale actors, each with a periodic 1 ms timer for slots ticks."""
+    iterations = t.loop()
+    var ts: list[Ticker] = []
+    var scale = 1
+    var body = 0
+    var done = 0
+    var failed = False
+
+    def run():
+        c = next(iterations)
+        if isinstance(c, just):
+            scale = c.val
+        else:
+            t.success()
+            return
+        while len(ts) < scale:
+            ts.append(Ticker(self, slots))
+        body += 1
+        done = 0
+        lead = LEAD_NS + scale * LEAD_PER_TIMER_NS
+        start = now_ns() + lead
+        for i in range(scale):
+            ts[i].begin(start)
+        b = body
+        after now deadline(lead): check(b)
+
+    def check(b: int):
+        if b == body and done < scale and not failed:
+            failed = True
+            t.failure(AssertionError("body %d not done %.0f s after its last slot: %d of %d tickers done" % (
+                b, DEADLINE_S, done, scale)))
+
+    def ticker_done():
+        done += 1
+        if done < scale or failed:
+            return
+        late_ns: list[int] = []
+        early = 0
+        armed_late = 0
+        for i in range(scale):
+            l, e, a = ts[i].collect()
+            late_ns.extend(l)
+            early += e
+            armed_late += a
+        print(summary("periodic", scale, late_ns, early))
+        if armed_late > 0:
+            failed = True
+            t.failure(AssertionError("%d tickers were started after their first tick was due" % armed_late))
+            return
+        if early > 0:
+            failed = True
+            t.failure(AssertionError("%d ticks fired early" % early))
+            return
+        run()
+
+    run()
+
+
+actor _test_spread(t: testing.AsyncT):
+    TimerSpread(t, 16)
+
+actor _test_periodic(t: testing.AsyncT):
+    TimerPeriodic(t, SLOTS)

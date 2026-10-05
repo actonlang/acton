@@ -394,6 +394,49 @@ acton test perf --module scheduling --name latency_under_load --scale 1000 --tim
 and `src/xlang.act` is a program that runs all three runtimes on one machine;
 see [xlang/README.md](xlang/README.md).
 
+## Timer precision
+
+`timer_precision` measures how closely timers fire to their due time. Each
+loop body covers 1000 consecutive 1 ms slots. The first slot is due after a
+lead of 20 ms plus 2 microseconds per timer, which leaves time to arm every
+timer before it is due.
+
+- `spread` arms one-shot timers with `after now`: scale timers per slot, so
+  scale 1 is 1000 timers 1 ms apart and scale 100 is 100,000 timers, 100 per
+  millisecond. The timers are shared by 16 receiver actors, so the test
+  measures timer delivery rather than one actor's queue.
+- `periodic` runs scale actors, each with a 1 ms timer re-armed with plain
+  `after`, 1000 ticks each. Plain `after` keeps a drift-free schedule, so
+  tick k is due exactly k ms after the first.
+
+Lateness is printed once per body as the minimum, median, 90th and 99th
+percentile and maximum in milliseconds, against the monotonic clock:
+
+```sh
+acton test perf --module timer_precision --name spread --scale 1 --time 10s --show-log
+acton test perf --module timer_precision --name periodic --scale 100 --time 10s --show-log
+acton test scale --module timer_precision --name spread --start-scale 1 --end-scale 1000
+```
+
+The runner's wall time per body is the lead, 1000 ms of slots, the last
+timer's lateness and the time to collect and sort the lateness values,
+which grows with scale. Its CPU time per body covers arming and delivering
+the timers, including any time the runtime spends waiting for them, and the
+test's own work: recording each timer's lateness and sorting the values for
+the percentiles. A body fails if a timer fires more than 20 microseconds
+before its due time (the runtime's clock and delays are truncated to
+microseconds), if a timer is queued after it is already due, or if the body
+has not finished 10 seconds after its last slot. That deadline is itself a
+timer, so a timer thread that no longer wakes up makes the run hang
+instead. Read lateness together with CPU time per body: a runtime can make
+timers precise by waiting for them actively, and that shows up as CPU time.
+On Linux and macOS the runtime sleeps until a kernel timer wakes it at the
+next timer's due time, so lateness below a millisecond costs little CPU
+time. The macOS kernel timer is less precise: on an M4 Pro timers fire with
+a median lateness near 0.07 ms and a 99th percentile of 0.2 to 0.9 ms,
+against about 0.015 ms and 0.02 to 0.05 ms on Linux on a Ryzen 5950X.
+Elsewhere the runtime wakes at the next whole millisecond or later.
+
 ## Comparing implementations
 
 To compare Acton itself, run the repository utility:
