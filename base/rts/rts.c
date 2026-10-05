@@ -297,6 +297,10 @@ static void sync_pause_clear_parked(void) {
 }
 
 static void wake_all_wt(void) {
+    // Workers read the pause request without a lock (maybe_sync_pause), so
+    // order it before uv_async_send()'s read of a pending wake, as in
+    // wake_loop()
+    atomic_thread_fence(memory_order_seq_cst);
     for (int i = 0; i <= num_wthreads; i++) {
         uv_async_send(&wake_ev[i]);
     }
@@ -412,6 +416,21 @@ static void maybe_sync_pause(void) { }
 static void sync_pause_workers_started(void) { }
 #endif
 
+// Wake the loop that ev belongs to, after the caller made something visible
+// that its thread reads without a lock: an actor in its pinned queue, whose
+// head it reads before taking the lock. uv_async_send() sends nothing while
+// an earlier wake is still pending, and it learns that from a plain read.
+// Without a full fence, that read can complete before the caller's stores
+// are visible to the loop's thread. The loop may then take the earlier wake,
+// clear it, look and find nothing, while we see the wake as pending and send
+// nothing. The fence keeps the read after the caller's stores: either we
+// send a wake, or the loop has yet to take the pending one and sees the
+// stores when it does.
+static inline void wake_loop(uv_async_t *ev) {
+    atomic_thread_fence(memory_order_seq_cst);
+    uv_async_send(ev);
+}
+
 void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
@@ -439,7 +458,7 @@ void wake_wt(int wtid) {
         }
     } else {
         // thread specific queue
-        uv_async_send(&wake_ev[wtid]);
+        wake_loop(&wake_ev[wtid]);
     }
 #else
     uv_async_send(&wake_ev[wtid]);
