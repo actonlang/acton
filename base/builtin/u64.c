@@ -36,8 +36,8 @@ uint64_t u64_pow(uint64_t a, uint64_t e) {
 
 uint64_t B_u64G_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    unsigned long n = b->val.n[0];
     int sz = b->val.size;
+    unsigned long n = sz == 0 ? 0 : b->val.n[0];
     if (sz > 1 || sz < 0) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "u64(): value %s out of range for type u64",get_str(&b->val));
