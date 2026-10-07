@@ -19,11 +19,21 @@ LEAD_PER_TIMER_NS = 2000
 # thread that no longer wakes up, which makes the run hang
 DEADLINE_S = 10.0
 # Delays and the runtime clock are truncated to microseconds, so a timer can
-# appear to fire a few microseconds early; anything beyond this is early.
+# appear to fire a few microseconds early. On macOS the runtime clock is mach
+# continuous time, which time synchronization does not adjust, while
+# time.monotonic_ns() follows its frequency corrections, so a timer can also
+# appear early by the difference in rate times its delay. A timer is early
+# when it fires more than EARLY_NS plus 1/RATE_DIV of its delay before its due
+# time. 1/RATE_DIV is 500 ppm, the largest frequency correction that the
+# kernel's NTP code makes.
 EARLY_NS = 20000
+RATE_DIV = 2000
 
 def now_ns() -> int:
     return time.monotonic_ns()
+
+def early_limit(delay_ns: int) -> int:
+    return EARLY_NS + delay_ns // RATE_DIV
 
 def summary(name: str, scale: int, late_ns: list[int], early: int) -> str:
     ordered = sorted(late_ns)
@@ -42,6 +52,7 @@ actor Receiver(coord: TimerSpread):
     var early = 0
     var armed_late = 0
     var pending = 0
+    var armed_at = 0
 
     def arm(targets: list[int]):
         late_ns = []
@@ -51,6 +62,7 @@ actor Receiver(coord: TimerSpread):
         if pending == 0:
             coord.receiver_done()
             return
+        armed_at = now_ns()
         for target in targets:
             after now float(target - now_ns()) / 1e9: fire(target)
         # The timers reach the timer queue when this call returns; after 0
@@ -64,7 +76,7 @@ actor Receiver(coord: TimerSpread):
 
     def fire(target: int):
         d = now_ns() - target
-        if d < -EARLY_NS:
+        if d < -early_limit(target - armed_at):
             early += 1
         late_ns.append(d)
         pending -= 1
@@ -147,6 +159,7 @@ actor Ticker(coord: TimerPeriodic, slots: int):
     var late_ns: list[int] = []
     var early = 0
     var armed_late = 0
+    var begun = 0
 
     def begin(first: int):
         start = first
@@ -154,14 +167,16 @@ actor Ticker(coord: TimerPeriodic, slots: int):
         late_ns = []
         early = 0
         n = now_ns()
+        begun = n
         armed_late = 1 if n >= first else 0
         after now float(first - n) / 1e9: tick()
 
     def tick():
         # Plain after keeps a drift-free schedule: tick k is due at
         # start + k ms, however late the previous tick ran
-        d = now_ns() - (start + ticks * PERIOD_NS)
-        if d < -EARLY_NS:
+        due = start + ticks * PERIOD_NS
+        d = now_ns() - due
+        if d < -early_limit(due - begun):
             early += 1
         late_ns.append(d)
         ticks += 1

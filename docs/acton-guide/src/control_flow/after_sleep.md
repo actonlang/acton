@@ -57,8 +57,12 @@ runs, so the time a round spends working does not push the next one
 back. A `tick()` that ends with `after 1: tick()` stays on a steady
 one-second schedule as long as each round takes less than a second. If
 it falls behind anyway, because a round ran long or the machine was
-busy or suspended, the overdue rounds run back to back until it has
-caught up.
+busy, the overdue rounds run back to back until it has caught up. On
+Linux and macOS the runtime's clock keeps counting while the machine is
+suspended, so the same happens after a suspend. Where the clock stops
+while the machine sleeps, a schedule that is pending during a sleep
+moves back by as long as the machine slept, and no rounds run to catch
+up.
 
 `after now` is a plain delay: it counts from the moment the statement
 runs. Use it when the wait itself is what matters, such as a backoff
@@ -113,9 +117,16 @@ that point.</p>
 
 ## Timer precision
 
-A timer never fires before its due time. On Linux and macOS the runtime
-sets a kernel timer to the due time, so a timer usually fires within a
-fraction of a millisecond of it. On other platforms, such as Windows,
-timers can be a millisecond or more late. On any platform a timer fires
-later while the machine is busy, since its call has to wait for a thread
-to run it, and during garbage collection pauses.
+Timers run on a monotonic clock, so setting the wall clock does not move
+them. A timer never fires before its due time on that clock. On Linux
+and macOS the runtime sets a kernel timer that counts on the same clock,
+so a timer usually fires within a fraction of a millisecond of its due
+time. On other platforms, such as Windows, timers can be a millisecond
+or more late. On any platform a timer fires later while the machine is
+busy, since its call has to wait for a thread to run it, and during
+garbage collection pauses.
+
+On macOS the runtime's clock is mach continuous time, which time
+synchronization does not adjust, while `time.monotonic()` follows its
+frequency corrections. Measured with `time.monotonic()`, a timer there
+can fire early or late by a small fraction of its delay.

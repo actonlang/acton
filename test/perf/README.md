@@ -423,19 +423,24 @@ timer's lateness and the time to collect and sort the lateness values,
 which grows with scale. Its CPU time per body covers arming and delivering
 the timers, including any time the runtime spends waiting for them, and the
 test's own work: recording each timer's lateness and sorting the values for
-the percentiles. A body fails if a timer fires more than 20 microseconds
-before its due time (the runtime's clock and delays are truncated to
-microseconds), if a timer is queued after it is already due, or if the body
-has not finished 10 seconds after its last slot. That deadline is itself a
-timer, so a timer thread that no longer wakes up makes the run hang
-instead. Read lateness together with CPU time per body: a runtime can make
-timers precise by waiting for them actively, and that shows up as CPU time.
-On Linux and macOS the runtime sleeps until a kernel timer wakes it at the
-next timer's due time, so lateness below a millisecond costs little CPU
-time. The macOS kernel timer is less precise: on an M4 Pro timers fire with
-a median lateness near 0.07 ms and a 99th percentile of 0.2 to 0.9 ms,
-against about 0.015 ms and 0.02 to 0.05 ms on Linux on a Ryzen 5950X.
-Elsewhere the runtime wakes at the next whole millisecond or later.
+the percentiles. A body fails if a timer fires early, if a timer is queued
+after it is already due, or if the body has not finished 10 seconds after
+its last slot. That deadline is itself a timer, so a timer thread that no
+longer wakes up makes the run hang instead. A timer counts as early when it
+fires more than 20 microseconds plus 500 ppm of its delay before its due
+time. The 20 microseconds cover the runtime's clock and delays being
+truncated to microseconds. The 500 ppm cover a difference in rate on macOS,
+where the runtime's clock is mach continuous time, which time
+synchronization does not adjust, while `time.monotonic_ns()` follows its
+frequency corrections. Read lateness together with CPU time per body: a
+runtime can make timers precise by waiting for them actively, and that
+shows up as CPU time. On Linux and macOS the runtime sleeps until a kernel
+timer wakes it at the next timer's due time, so lateness below a
+millisecond costs little CPU time. The macOS kernel timer is less precise:
+on an M4 Pro timers fire with a median lateness near 0.07 ms and a 99th
+percentile of 0.2 to 0.9 ms, against about 0.015 ms and 0.02 to 0.05 ms on
+Linux on a Ryzen 5950X. Elsewhere the runtime wakes at the next whole
+millisecond or later.
 
 ## Comparing implementations
 

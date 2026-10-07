@@ -51,6 +51,7 @@
 #endif
 #ifdef __APPLE__
 #include <fcntl.h>
+#include <mach/mach_time.h>
 #endif
 #ifdef __x86_64__
 #include <cpuid.h>
@@ -222,13 +223,44 @@ static _Atomic int64_t other_key;
 
 int64_t timer_consume_hd = 0;       // Lacks protection, although spinlocks wouldn't help concurrent increments. Must fix in db!
 
+// The runtime's clock, in microseconds. Message baselines, and the timer
+// queue that orders messages by them, are times on this clock, and thread 0's
+// timer for the timed message queue counts on the same clock. It is
+// CLOCK_BOOTTIME on Linux, or CLOCK_MONOTONIC on kernels whose timerfd
+// rejects CLOCK_BOOTTIME, mach_continuous_time() on macOS, and uv_hrtime(),
+// the clock that libuv's timers count on, elsewhere. The operating system
+// keeps these clocks. They never go back, setting the wall clock does not
+// move them, and they keep their count across a sleep, also on machines where
+// a sleep resets the CPU's own counter. Serialized messages carry their
+// baseline as wall clock time (B_MsgD___serialize__).
+#if defined(__linux__)
+// Set by init_clock()
+static clockid_t rts_clock = CLOCK_BOOTTIME;
+#elif defined(__APPLE__)
+// Converts mach time to nanoseconds. Set by init_clock().
+static mach_timebase_info_data_t rts_timebase;
+#endif
+
 time_t current_time() {
-    uv_timespec64_t now;
-    if (uv_clock_gettime(UV_CLOCK_REALTIME, &now) != 0) {
+#if defined(__linux__)
+    struct timespec ts;
+    clock_gettime(rts_clock, &ts);
+    return (int64_t)ts.tv_sec * 1000000 + ts.tv_nsec / 1000;
+#elif defined(__APPLE__)
+    return mach_continuous_time() * rts_timebase.numer / rts_timebase.denom / 1000;
+#else
+    return uv_hrtime() / 1000;
+#endif
+}
+
+// The wall clock's time minus current_time(), in microseconds
+static time_t wall_offset_us(void) {
+    uv_timespec64_t ts;
+    if (uv_clock_gettime(UV_CLOCK_REALTIME, &ts) != 0) {
         log_error("uv_clock_gettime() failed");
         return 0;
     }
-    return now.tv_sec * 1000000 + now.tv_nsec / 1000;
+    return ts.tv_sec * 1000000 + ts.tv_nsec / 1000 - current_time();
 }
 
 #ifdef ACTON_THREADS
@@ -582,7 +614,8 @@ B_str B_MsgD___repr__(B_Msg self) {
 void B_MsgD___serialize__(B_Msg self, $Serial$state state) {
     $step_serialize(self->$to,state);
     $step_serialize(self->$cont,state);
-    $val_serialize(ITEM_ID,&self->$baseline,state);
+    time_t wall = self->$baseline + wall_offset_us();
+    $val_serialize(ITEM_ID,&wall,state);
     $step_serialize(self->value,state);
 }
 
@@ -600,7 +633,7 @@ B_Msg B_MsgD___deserialize__(B_Msg res, $Serial$state state) {
     res->$to = $step_deserialize(state);
     res->$cont = $step_deserialize(state);
     res->$waiting = NULL;
-    res->$baseline = (time_t)$val_deserialize(state);
+    res->$baseline = (time_t)$val_deserialize(state) - wall_offset_us();
     res->value = $step_deserialize(state);
     atomic_store_explicit(&res->$wait_lock, 0, memory_order_relaxed);
     return res;
@@ -1767,20 +1800,31 @@ void main_stop_cb(uv_async_t *ev) {
 
 // Timer for the timed message queue, on thread 0's event loop.
 //
-// The queue's first message is due at an absolute time in microseconds on
-// the runtime's clock (CLOCK_REALTIME). libuv's timers count whole
-// milliseconds: waiting for a message less than a millisecond away would
-// take a busy loop, and rounding would make it up to a millisecond late. On
-// Linux and macOS a kernel timer set to the due time wakes the event loop
-// instead; the loop polls the timer's file descriptor, a timerfd or a
-// kqueue holding one EVFILT_TIMER. The timerfd follows CLOCK_REALTIME, also
-// when the clock is set. The kqueue timer turns the due time into a
-// deadline when it is set; the deadline keeps counting while the system
-// sleeps but does not move when the clock is set. Elsewhere a libuv timer is
-// set to the next whole millisecond and fires when the platform's wait
-// returns, which on Windows can take a scheduler tick, so timers there are
-// late by up to that. Messages are never delivered early: handle_timeout()
-// checks each one against the clock.
+// The queue's first message is due at a time in microseconds on the
+// runtime's clock, current_time(). Thread 0 delivers a message only when its
+// due time is at or before current_time() (handle_timeout()), so no message
+// is delivered before its due time on that clock. The timer counts on the
+// same clock, so it wakes thread 0 when the first message is due.
+//
+// libuv's timers count whole milliseconds: waiting for a message less than a
+// millisecond away would take a busy loop, and rounding would make it up to a
+// millisecond late. On Linux and macOS a kernel timer wakes the event loop
+// instead; the loop polls the timer's file descriptor, a timerfd or a kqueue
+// holding one EVFILT_TIMER. init_clock() creates the timerfd on the runtime's
+// clock, and timer_set() sets it to the due time. A kqueue timer set to an
+// absolute time in microseconds waits for a wall clock time, so timer_set()
+// sets the kqueue timer to the time left until the due time instead, which
+// the kernel counts on mach continuous time, the runtime's clock. Elsewhere a
+// libuv timer is set to the time left, rounded up to whole milliseconds,
+// which libuv counts on the runtime's clock. It fires when the platform's
+// wait returns, which on Windows can take a scheduler tick, so timers there
+// are late by up to that.
+//
+// CLOCK_BOOTTIME and mach continuous time keep counting while the system
+// sleeps, so a timer that comes due during a sleep fires when the system
+// wakes. Where the runtime's clock stops while the system sleeps, as
+// CLOCK_MONOTONIC does on Linux, a timer that is pending during a sleep fires
+// later by as long as the system slept.
 #if defined(__linux__)
 #include <sys/timerfd.h>
 #define KERNEL_TIMER
@@ -1819,15 +1863,14 @@ static void timer_poll_cb(uv_poll_t *handle, int status, int events) {
 }
 
 static void timer_init(uv_loop_t *loop) {
-#if defined(__linux__)
-    timer_fd = timerfd_create(CLOCK_REALTIME, TFD_NONBLOCK | TFD_CLOEXEC);
-#else
+    // On Linux, init_clock() has created the timerfd
+#if defined(__APPLE__)
     timer_fd = kqueue();
-#endif
     if (timer_fd < 0) {
         log_fatal("Unable to create timer: %s", strerror(errno));
         exit(1);
     }
+#endif
     check_uv_fatal(uv_poll_init(loop, &timer_poll, timer_fd), "Error initializing timer poll: ");
     check_uv_fatal(uv_poll_start(&timer_poll, UV_READABLE, timer_poll_cb), "Error starting timer poll: ");
 }
@@ -1844,14 +1887,18 @@ static void timer_set(time_t due) {
         exit(1);
     }
 #else
-    // The kernel rejects a time that overflows in nanoseconds
-    if (due > INT64_MAX / 1000)
-        due = INT64_MAX / 1000;
+    // The time left, or 1 microsecond for a due time in the past
+    time_t now = current_time();
+    time_t wait_us = due > now ? due - now : 1;
+    // The kernel rejects a wait that overflows in nanoseconds
+    if (wait_us > INT64_MAX / 1000)
+        wait_us = INT64_MAX / 1000;
     struct kevent kev;
     // NOTE_CRITICAL: coalesce as little as possible with other timers.
-    // NOTE_MACH_CONTINUOUS_TIME: keep counting while the system sleeps.
+    // NOTE_MACH_CONTINUOUS_TIME: count the wait on mach continuous time, the
+    // runtime's clock, which keeps counting while the system sleeps.
     EV_SET(&kev, 1, EVFILT_TIMER, EV_ADD | EV_ONESHOT,
-           NOTE_USECONDS | NOTE_ABSOLUTE | NOTE_CRITICAL | NOTE_MACH_CONTINUOUS_TIME, due, NULL);
+           NOTE_USECONDS | NOTE_CRITICAL | NOTE_MACH_CONTINUOUS_TIME, wait_us, NULL);
     int r;
     while ((r = kevent(timer_fd, &kev, 1, NULL, 0, NULL)) != 0 && errno == EINTR)
         ;
@@ -1904,6 +1951,27 @@ static void timer_stop(void) {
 }
 #endif
 
+// Choose the runtime's clock (current_time()). On Linux it must be a clock
+// that a timerfd can count on, so this also creates the timerfd. Called at the
+// start of main(), before anything reads current_time().
+static void init_clock(void) {
+#if defined(__linux__)
+    // Kernels that do not support CLOCK_BOOTTIME for a timerfd reject it
+    // with EINVAL
+    timer_fd = timerfd_create(CLOCK_BOOTTIME, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (timer_fd < 0 && errno == EINVAL) {
+        rts_clock = CLOCK_MONOTONIC;
+        timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    }
+    if (timer_fd < 0) {
+        log_fatal("Unable to create timer: %s", strerror(errno));
+        exit(1);
+    }
+#elif defined(__APPLE__)
+    mach_timebase_info(&rts_timebase);
+#endif
+}
+
 void main_wake_cb(uv_async_t *ev) {
     // Wäjky-päjky
     arm_timer_ev();
@@ -1914,8 +1982,8 @@ void arm_timer_ev() {
     if (!next_timeout(&due))
         timer_stop();
     else
-        // A baseline can be before the epoch, which the kernel timers
-        // reject; any time in the past fires at once
+        // A baseline can be before the clock's zero, which the timerfd
+        // rejects; any time in the past fires at once
         timer_set(due < 1 ? 1 : due);
 }
 
@@ -2954,6 +3022,7 @@ void DaveNull () {}
 int main(int argc, char **argv) {
     rts_perf_init();
     init_counter();
+    init_clock();
     // Init garbage collector and suppress warnings
 #ifdef ACTON_GC_DISABLE_THP
     GC_set_on_os_get_mem(gc_disable_thp);
