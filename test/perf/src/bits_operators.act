@@ -1,0 +1,71 @@
+import testing
+
+
+# Scale is the capacity of the bitset or the length of the bitarray that an
+# operator changes. Each loop body applies EDITS in-place operations with an
+# operand of one bit and restores the target after each. The in-place operators
+# change the target, so the time per body does not grow with scale.
+EDITS = 1000
+
+def bitset_ior_one(t: testing.SyncT, size: int):
+    target = bitset(size + 1)
+    one = bitset(1, [0])
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target |= one
+            target.discard(0)
+    testing.assertEqual(len(target), 0)
+    testing.assertEqual(target.capacity(), size + 1)
+
+def bitset_isub_one(t: testing.SyncT, size: int):
+    target = bitset(size + 1, [0])
+    one = bitset(1, [0])
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target -= one
+            target.add(0)
+    testing.assertEqual(len(target), 1)
+
+def bitset_ixor_one(t: testing.SyncT, size: int):
+    target = bitset(size + 1)
+    one = bitset(1, [0])
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target ^= one
+            target ^= one
+    testing.assertEqual(len(target), 0)
+
+def bitarray_ior_one(t: testing.SyncT, size: int):
+    target = bitarray(size + 1)
+    one = bitarray(1, True)
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target |= one
+            target[0] = False
+    testing.assertEqual(len(target), size + 1)
+    testing.assertFalse(target[0])
+
+def bitarray_ixor_one(t: testing.SyncT, size: int):
+    target = bitarray(size + 1)
+    one = bitarray(1, True)
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target ^= one
+            target ^= one
+    testing.assertFalse(target[0])
+
+
+def _test_bitset_ior_one(t: testing.SyncT):
+    bitset_ior_one(t, t.scale())
+
+def _test_bitset_isub_one(t: testing.SyncT):
+    bitset_isub_one(t, t.scale())
+
+def _test_bitset_ixor_one(t: testing.SyncT):
+    bitset_ixor_one(t, t.scale())
+
+def _test_bitarray_ior_one(t: testing.SyncT):
+    bitarray_ior_one(t, t.scale())
+
+def _test_bitarray_ixor_one(t: testing.SyncT):
+    bitarray_ixor_one(t, t.scale())

@@ -1,0 +1,69 @@
+import testing
+
+
+# Scale is the number of elements in the list or bytearray that an operator
+# changes. Each loop body of an in-place test applies EDITS += operations with
+# a one-element operand and removes the element again after each. The setup
+# grows the storage once, so that no body copies the sequence. += changes the
+# sequence, so the time per body does not grow with scale. The binary
+# operator test makes one new list per body and grows with scale. The sum test
+# adds scale one-element lists, once per body.
+EDITS = 1000
+
+def list_iadd_one(t: testing.SyncT, size: int):
+    target = list(range(size))
+    one = [size]
+    target += one
+    target.pop()
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target += one
+            target.pop()
+    testing.assertEqual(len(target), size)
+
+def list_add_one(t: testing.SyncT, size: int):
+    source = list(range(size))
+    one = [size]
+    last: list[int] = []
+    bodies = 0
+    for _ in t.loop():
+        bodies += 1
+        last = source + one
+    if bodies > 0:
+        testing.assertEqual(len(last), size + 1)
+    testing.assertEqual(len(source), size)
+
+def bytearray_iadd_one(t: testing.SyncT, size: int):
+    target = bytearray(b"x" * size)
+    one = bytearray(b"y")
+    target += one
+    del target[-1]
+    for _ in t.loop():
+        for _ in range(EDITS):
+            target += one
+            del target[-1]
+    testing.assertEqual(len(target), size)
+
+def sum_lists(t: testing.SyncT, size: int):
+    parts = [[i] for i in range(size)]
+    total: list[int] = []
+    bodies = 0
+    for _ in t.loop():
+        bodies += 1
+        total = sum(parts)
+    if bodies > 0:
+        testing.assertEqual(len(total), size)
+    testing.assertEqual(parts[0], [0])
+
+
+def _test_list_iadd_one(t: testing.SyncT):
+    list_iadd_one(t, t.scale())
+
+def _test_list_add_one(t: testing.SyncT):
+    list_add_one(t, t.scale())
+
+def _test_bytearray_iadd_one(t: testing.SyncT):
+    bytearray_iadd_one(t, t.scale())
+
+def _test_sum_lists(t: testing.SyncT):
+    sum_lists(t, t.scale())
