@@ -27,9 +27,9 @@ signature, it means values of type <code>A</code> support ordering.</p>
 - `Times[A] (Plus)`: `*` and `*=`, with right-hand operand type `A`
 - `Div[A]`: `/` and `/=`, with result type `A`
 
-The in-place forms of `Logical` and `Minus` can change their left operand
-and return it, as the mutable `set` does. The default implementations return
-a new value.
+The in-place forms of `Logical`, `Plus`, `Minus` and `Times` can change their
+left operand and return it, as `set`, `list` and `bytearray` do. The default
+implementations return a new value.
 
 ## Hashing
 

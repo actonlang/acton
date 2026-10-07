@@ -527,8 +527,9 @@ protocol Logical:
 protocol Plus:
     @staticmethod
     __add__      : (Self,Self) -> Self
+    # The in-place form can change its first operand and return it.
     @staticmethod
-    __iadd__     : (Self,Self) -> Self
+    __iadd__     : mut(Self,Self) -> Self
     @staticmethod
     __zero__     : () -> Self
 
@@ -548,8 +549,9 @@ protocol Minus:
 protocol Times[A] (Plus):
     @staticmethod
     __mul__      : (Self,A) -> Self
+    # The in-place form can change its first operand and return it.
     @staticmethod
-    __imul__     : (Self,A) -> Self
+    __imul__     : mut(Self,A) -> Self
 
     def __imul__(a,b):
         return a * b
@@ -999,6 +1001,18 @@ extension bitset (Set[int]):
 
 extension list[A] (Sequence[A]):
     NotImplemented
+
+    def __iadd__(a, b):
+        """Append the elements of b to a. Return a."""
+        NotImplemented
+
+    def __imul__(a, b):
+        """Repeat the elements of a so that a holds b copies of them. Return a.
+
+        If b <= 0, remove all elements of a.
+        """
+        NotImplemented
+
 extension list[A(Eq)] (Container[A]):
     NotImplemented
 extension list[A(Eq)] (Eq):
@@ -1078,6 +1092,18 @@ extension bytearray (Ord):
     NotImplemented
 extension bytearray (Sequence[int]):
     NotImplemented
+
+    def __iadd__(a, b):
+        """Append the bytes of b to a. Return a."""
+        NotImplemented
+
+    def __imul__(a, b):
+        """Repeat the bytes of a so that a holds b copies of them. Return a.
+
+        If b <= 0, remove all bytes of a.
+        """
+        NotImplemented
+
 extension bytearray (Container[int]):
     NotImplemented
 
@@ -1298,8 +1324,15 @@ def sum [A(Plus)] (it: Iterable[A], start: ?A) -> A:
         res = start
     else:
         res = Plus.__zero__()
+    first = True
     for i in iter(it):
-        res += i
+        if first:
+            # + makes a new value, which the in-place additions after it can
+            # change without changing start
+            res = res + i
+            first = False
+        else:
+            res += i
     return res
 
 class zip[A,B](Iterator[(A,B)]):
