@@ -917,13 +917,13 @@ int64_t set_str(zz_ptr a, unsigned char *nstr, int64_t nbytes, B_int intbase) {
 
 
 // gcd functions from BSDNT //////////////////////////////////
-B_bigint $gcd(B_bigint a, B_bigint b) {
+B_bigint B_gcd(B_bigint a, B_bigint b) {
     B_bigint res = malloc_bigint();
     zz_gcd(&res->val, &a->val, &b->val);
     return res;
 }
 
-B_tuple $xgcd(B_bigint a, B_bigint b) {
+B_tuple B_xgcd(B_bigint a, B_bigint b) {
     B_bigint d = malloc_bigint();
     B_bigint s = malloc_bigint();
     B_bigint t = malloc_bigint();
