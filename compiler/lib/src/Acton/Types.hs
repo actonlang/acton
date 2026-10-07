@@ -527,7 +527,8 @@ infTopStmt env s                        = do (total,te1,s) <- scanTopStmt env s
 
 
 scanTopStmt                             :: Env -> Stmt -> TypeM (Bool, TEnv, Stmt)
-scanTopStmt env (Decl l ds)             = do (_,te,ds) <- infEnv (setInDecl env) ds
+scanTopStmt env (Decl l ds)
+  | nodup ds                            = do (_,te,ds) <- infEnv (setInDecl env) ds
                                              return (null $ ufree te, te, Decl l ds)
 scanTopStmt env (Signature l ns sc d)   = return (True, [ (n, NSig sc d Nothing) | n <- ns ], Signature l ns sc d)
 scanTopStmt env (Assign l pats e)       = do (te,_,pats) <- infEnvT env pats

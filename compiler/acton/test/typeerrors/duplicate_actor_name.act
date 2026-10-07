@@ -1,0 +1,14 @@
+actor Server():
+    def call(x: int) -> int:
+        return x
+
+actor Server():
+    def ping(t0: int, reply: action(int) -> None):
+        reply(t0)
+
+    def job(us: int):
+        pass
+
+actor main(env):
+    server = Server()
+    env.exit(0)
