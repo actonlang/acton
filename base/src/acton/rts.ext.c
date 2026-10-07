@@ -288,39 +288,41 @@ B_dict actonQ_rtsQ__io_handles (B_SysCap cap) {
 B_dict actonQ_rtsQ_rts_stats (B_SysCap cap) {
     B_Hashable wit = (B_Hashable)B_HashableD_u64G_witness;
     B_dict d = $NEW(B_dict, wit, NULL, NULL);
+#define WT(f) WT_STAT_GET(wt_stats[i].f)
     for (int i = 0; i <= num_wthreads; i++) {
         B_tuple stats = $NEWTUPLE(28,
                             actStrFromCString("TODO"), // state
-                            toB_u64(wt_stats[i].sleeps),
-                            toB_u64(wt_stats[i].conts_count),
-                            toB_u64(wt_stats[i].conts_sum),
-                            toB_u64(wt_stats[i].conts_100ns),
-                            toB_u64(wt_stats[i].conts_1us),
-                            toB_u64(wt_stats[i].conts_10us),
-                            toB_u64(wt_stats[i].conts_100us),
-                            toB_u64(wt_stats[i].conts_1ms),
-                            toB_u64(wt_stats[i].conts_10ms),
-                            toB_u64(wt_stats[i].conts_100ms),
-                            toB_u64(wt_stats[i].conts_1s),
-                            toB_u64(wt_stats[i].conts_10s),
-                            toB_u64(wt_stats[i].conts_100s),
-                            toB_u64(wt_stats[i].conts_inf),
-                            toB_u64(wt_stats[i].bkeep_count),
-                            toB_u64(wt_stats[i].bkeep_sum),
-                            toB_u64(wt_stats[i].bkeep_100ns),
-                            toB_u64(wt_stats[i].bkeep_1us),
-                            toB_u64(wt_stats[i].bkeep_10us),
-                            toB_u64(wt_stats[i].bkeep_100us),
-                            toB_u64(wt_stats[i].bkeep_1ms),
-                            toB_u64(wt_stats[i].bkeep_10ms),
-                            toB_u64(wt_stats[i].bkeep_100ms),
-                            toB_u64(wt_stats[i].bkeep_1s),
-                            toB_u64(wt_stats[i].bkeep_10s),
-                            toB_u64(wt_stats[i].bkeep_100s),
-                            toB_u64(wt_stats[i].bkeep_inf)
+                            toB_u64(WT(sleeps)),
+                            toB_u64(WT(conts_count)),
+                            toB_u64(WT(conts_sum)),
+                            toB_u64(WT(conts_100ns)),
+                            toB_u64(WT(conts_1us)),
+                            toB_u64(WT(conts_10us)),
+                            toB_u64(WT(conts_100us)),
+                            toB_u64(WT(conts_1ms)),
+                            toB_u64(WT(conts_10ms)),
+                            toB_u64(WT(conts_100ms)),
+                            toB_u64(WT(conts_1s)),
+                            toB_u64(WT(conts_10s)),
+                            toB_u64(WT(conts_100s)),
+                            toB_u64(WT(conts_inf)),
+                            toB_u64(WT(bkeep_count)),
+                            toB_u64(WT(bkeep_sum)),
+                            toB_u64(WT(bkeep_100ns)),
+                            toB_u64(WT(bkeep_1us)),
+                            toB_u64(WT(bkeep_10us)),
+                            toB_u64(WT(bkeep_100us)),
+                            toB_u64(WT(bkeep_1ms)),
+                            toB_u64(WT(bkeep_10ms)),
+                            toB_u64(WT(bkeep_100ms)),
+                            toB_u64(WT(bkeep_1s)),
+                            toB_u64(WT(bkeep_10s)),
+                            toB_u64(WT(bkeep_100s)),
+                            toB_u64(WT(bkeep_inf))
                             );
         B_dictD_setitem(d, wit, toB_u64(i), stats);
     }
+#undef WT
     return d;
 }
 
