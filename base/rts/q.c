@@ -56,6 +56,12 @@ int ENQ_ready($Actor a) {
     // TODO: atomics!
 }
 #elif defined MPMC && MPMC == 2
+// Add d to the count of q, which is locked (see struct mpmcq)
+static inline void rq_count_add(struct mpmcq *q, long d) {
+    unsigned long long n = __atomic_load_n(&q->count, __ATOMIC_RELAXED);
+    __atomic_store_n(&q->count, n + (unsigned long long)d, __ATOMIC_RELAXED);
+}
+
 int ENQ_ready($Actor a) {
     int i = a->$affinity;
     assert(a != NULL && a->$waitsfor == NULL);
@@ -64,11 +70,11 @@ int ENQ_ready($Actor a) {
         rqs[i].tail->$next = a;
         rqs[i].tail = a;
     } else {
-        rqs[i].head = a;
+        __atomic_store_n(&rqs[i].head, a, __ATOMIC_RELAXED);
         rqs[i].tail = a;
     }
     a->$next = NULL;
-    rqs[i].count++;
+    rq_count_add(&rqs[i], 1);
     spinlock_unlock(&rqs[i].lock);
     // If we enqueue to someone who is not us, immediately wake them up...
     WorkerCtx wctx = GET_WCTX();
@@ -83,13 +89,13 @@ int ENQ_ready($Actor a) {
 int ENQ_ready($Actor a) {
     int i = a->$affinity;
     spinlock_lock(&rqs[i].lock);
-    if (rqs[i].head) {
-        $Actor x = rqs[i].head;
+    $Actor x = __atomic_load_n(&rqs[i].head, __ATOMIC_RELAXED);
+    if (x) {
         while (x->$next)
             x = x->$next;
         x->$next = a;
     } else {
-        rqs[i].head = a;
+        __atomic_store_n(&rqs[i].head, a, __ATOMIC_RELAXED);
     }
     a->$next = NULL;
     spinlock_unlock(&rqs[i].lock);
@@ -117,20 +123,21 @@ $Actor _DEQ_ready(int idx) {
 #elif defined MPMC && MPMC == 2
 $Actor _DEQ_ready(int idx) {
     $Actor res = NULL;
-    if (rqs[idx].head == NULL) {
+    if (__atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED) == NULL) {
         return res;
     }
 
     spinlock_lock(&rqs[idx].lock);
-    res = rqs[idx].head;
+    res = __atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED);
     if (res) {
-        rqs[idx].head = res->$next;
+        $Actor next = res->$next;
+        __atomic_store_n(&rqs[idx].head, next, __ATOMIC_RELAXED);
         res->$next = NULL;
-        if (rqs[idx].head == NULL) {
+        if (next == NULL) {
             rqs[idx].tail = NULL;
         }
         assert(res->$waitsfor == NULL);
-        rqs[idx].count--;
+        rq_count_add(&rqs[idx], -1);
     } else {
         rqs[idx].tail = NULL;
     }
@@ -141,13 +148,13 @@ $Actor _DEQ_ready(int idx) {
 // First version
 $Actor _DEQ_ready(int idx) {
     $Actor res = NULL;
-    if (rqs[idx].head == NULL)
+    if (__atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED) == NULL)
         return res;
 
     spinlock_lock(&rqs[idx].lock);
-    res = rqs[idx].head;
+    res = __atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED);
     if (res) {
-        rqs[idx].head = res->$next;
+        __atomic_store_n(&rqs[idx].head, res->$next, __ATOMIC_RELAXED);
         res->$next = NULL;
     }
     spinlock_unlock(&rqs[idx].lock);

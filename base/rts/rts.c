@@ -466,7 +466,7 @@ void wake_wt(int wtid) {
     // We are sometimes optimistically called, i.e. the caller sometimes does
     // not really know whether there is new work or not. We check and if there
     // is not, then there is no need to wake anyone up.
-    if (!rqs[wtid].head)
+    if (!__atomic_load_n(&rqs[wtid].head, __ATOMIC_RELAXED))
         return;
 
 #ifdef ACTON_THREADS
@@ -2074,7 +2074,8 @@ static void init_counter(void) {
 // queue. Worker 0 never takes actors from the shared queue, so for worker 0
 // only its own queue counts.
 static inline bool others_waiting(int wtid) {
-    return rqs[wtid].head != NULL || (wtid != 0 && rqs[SHARED_RQ].head != NULL);
+    return __atomic_load_n(&rqs[wtid].head, __ATOMIC_RELAXED) != NULL
+           || (wtid != 0 && __atomic_load_n(&rqs[SHARED_RQ].head, __ATOMIC_RELAXED) != NULL);
 }
 
 void wt_work_cb(uv_check_t *ev) {
@@ -2480,11 +2481,12 @@ const char* stats_to_json () {
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
     for (unsigned int i = 1; i < NUM_THREADS; i++) {
+        unsigned long long qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED);
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
         yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
-        yyjson_mut_obj_add_int(doc, j_wt, "qlen",        rqs[i].count);
+        yyjson_mut_obj_add_int(doc, j_wt, "qlen",        qlen);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
         yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
@@ -3413,9 +3415,9 @@ int main(int argc, char **argv) {
     aux_uv_loop = uv_loops[0];
 
     for (int i=0; i < NUM_RQS; i++) {
-        rqs[i].head = NULL;
+        __atomic_store_n(&rqs[i].head, NULL, __ATOMIC_RELAXED);
         rqs[i].tail = NULL;
-        rqs[i].count = 0;
+        __atomic_store_n(&rqs[i].count, 0, __ATOMIC_RELAXED);
     }
 
 #if defined(_WIN32) || defined(_WIN64)
