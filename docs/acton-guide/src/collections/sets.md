@@ -52,6 +52,35 @@ print(tags)
 `pop()` removes and returns one element. On an empty set it raises an
 exception, so check before calling it if the set may be empty.
 
+## Set operators
+
+```python
+a = {1, 2, 3}
+b = {3, 4}
+
+print(a | b)    # union
+print(a & b)    # intersection
+print(a - b)    # difference
+print(a ^ b)    # symmetric difference
+```
+
+These operators return a new set and do not change their operands.
+
+The augmented forms `|=`, `&=`, `-=` and `^=` change the set on the left
+in place, as in Python. Every name that refers to that set sees the change:
+
+```python
+seen = {"docs"}
+alias = seen
+seen |= {"api", "guide"}
+seen -= {"docs"}
+print(sorted(alias))    # ['api', 'guide']
+```
+
+An in-place operation walks the right operand, or the smaller of the two
+sets for `&=` and `-=`. Its cost does not grow with the size of the set that
+it changes. On an `iset`, the augmented forms make a new `iset`.
+
 ## Iteration and order
 
 ```python

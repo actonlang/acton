@@ -63,26 +63,32 @@ static void B_set_insert_clean(B_setentry *table, uint64_t mask, $WORD key, uint
     }
 }
 
+// Allocate an empty table with more than minsize entries and set *mask.
+static B_setentry *B_set_table_alloc(uint64_t minsize, uint64_t *mask) {
+    uint64_t size = MIN_SIZE;
+
+    while (size <= minsize) {
+        if (size > UINT64_MAX / UINT64_C(2))
+            RAISE_EXC(&B_set_table_too_large_error);
+        size <<= 1;
+    }
+    if (size > SIZE_MAX / sizeof(B_setentry))
+        RAISE_EXC(&B_set_table_too_large_error);
+
+    size_t table_size = (size_t)size * sizeof(B_setentry);
+    B_setentry *table = acton_malloc(table_size);
+    if (table == NULL)
+        RAISE_EXC(&B_set_allocation_failed_error);
+
+    memset(table, 0, table_size);
+    *mask = size - 1;
+    return table;
+}
+
 static void B_set_table_resize(B_set_table *set, uint64_t minsize) {
     B_setentry *oldtable = set->table;
     uint64_t oldmask = set->mask;
-    uint64_t newsize = MIN_SIZE;
-
-    while (newsize <= minsize) {
-        if (newsize > UINT64_MAX / UINT64_C(2))
-            RAISE_EXC(&B_set_table_too_large_error);
-        newsize <<= 1;
-    }
-    if (newsize > SIZE_MAX / sizeof(B_setentry))
-        RAISE_EXC(&B_set_table_too_large_error);
-
-    size_t table_size = (size_t)newsize * sizeof(B_setentry);
-    B_setentry *newtable = acton_malloc(table_size);
-    if (newtable == NULL)
-        RAISE_EXC(&B_set_allocation_failed_error);
-
-    memset(newtable, 0, table_size);
-    set->mask = newsize - 1;
+    B_setentry *newtable = B_set_table_alloc(minsize, &set->mask);
     set->table = newtable;
 
     if (set->fill == set->numelements) {
@@ -184,21 +190,44 @@ static void B_set_table_add(B_set_table *set, B_Hashable hashwit, $WORD key) {
     B_set_table_add_hash(set, hashwit, key, B_hash(hashwit, key));
 }
 
+static void B_set_table_drop_entry(B_set_table *set, B_setentry *entry) {
+    entry->key = dummy;
+    entry->hash = 0;
+    set->numelements--;
+}
+
 static bool B_set_table_discard_hash(B_set_table *set, B_Hashable hashwit, $WORD elem, uint64_t hash) {
     B_setentry *entry = B_set_table_lookkey(set, hashwit, elem, hash);
     if (ACTIVE_ENTRY(entry)) {
-        entry->key = dummy;
-        entry->hash = 0;
-        set->numelements--;
+        B_set_table_drop_entry(set, entry);
         return true;
     }
     return false;
 }
 
+static void B_set_table_clear(B_set_table *set) {
+    acton_free(set->table);
+    B_set_table_init_empty(set);
+}
+
+// Copy src into dst. If at most 1/8 of the table of src holds elements, size
+// the new table for the elements and not for the capacity of src.
 static void B_set_table_copy_into(B_set_table *dst, B_set_table *src) {
-    memcpy(dst, src, sizeof(B_set_table));
-    dst->table = acton_malloc((src->mask + 1) * sizeof(B_setentry));
-    memcpy(dst->table, src->table, (src->mask + 1) * sizeof(B_setentry));
+    if (src->numelements * UINT64_C(8) > src->mask) {
+        memcpy(dst, src, sizeof(B_set_table));
+        dst->table = acton_malloc((src->mask + 1) * sizeof(B_setentry));
+        memcpy(dst->table, src->table, (src->mask + 1) * sizeof(B_setentry));
+        return;
+    }
+    dst->table = B_set_table_alloc(src->numelements * UINT64_C(2), &dst->mask);
+    dst->numelements = src->numelements;
+    dst->fill = src->numelements;
+    dst->finger = 0;
+    for (uint64_t i = 0; i <= src->mask; i++) {
+        B_setentry *entry = &src->table[i];
+        if (ACTIVE_ENTRY(entry))
+            B_set_insert_clean(dst->table, dst->mask, entry->key, entry->hash);
+    }
 }
 
 static B_NoneType B_set_table_init_from_iterable(B_set_table *set, B_Hashable hashwit, B_Iterable wit, $WORD iterable) {
@@ -266,7 +295,7 @@ static void B_set_table_deserialize_payload(B_set_table *set, $ROW row, $Serial$
 static bool B_set_table_isdisjoint(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
     if (set == other)
         return set->numelements == 0;
-    if (other->numelements > set->numelements)
+    if (other->mask > set->mask)
         return B_set_table_isdisjoint(other, set, hashwit);
     for (uint64_t i = 0; i <= other->mask; i++) {
         B_setentry *entry = &other->table[i];
@@ -281,6 +310,8 @@ static bool B_set_table_eq(B_set_table *set, B_set_table *other, B_Hashable hash
         return true;
     if (set->numelements != other->numelements)
         return false;
+    if (other->mask > set->mask)
+        return B_set_table_eq(other, set, hashwit);
     for (uint64_t i = 0; i <= other->mask; i++) {
         B_setentry *entry = &other->table[i];
         if (ACTIVE_ENTRY(entry) && !B_set_table_contains_hash(set, hashwit, entry->key, entry->hash))
@@ -313,17 +344,89 @@ static bool B_set_table_ge(B_set_table *set, B_set_table *other, B_Hashable hash
     return true;
 }
 
-static void B_set_table_sub_into(B_set_table *res, B_set_table *set, B_set_table *other, B_Hashable hashwit) {
-    B_set_table_copy_into(res, set);
+// In-place operations change set and do not copy it. Each walks the table of
+// other, or the smaller table when the result allows either.
+
+static void B_set_table_ior(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other)
+        return;
     for (uint64_t i = 0; i <= other->mask; i++) {
         B_setentry *entry = &other->table[i];
         if (ACTIVE_ENTRY(entry))
-            B_set_table_discard_hash(res, hashwit, entry->key, entry->hash);
+            B_set_table_add_hash(set, hashwit, entry->key, entry->hash);
     }
 }
 
+static void B_set_table_isub(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other) {
+        B_set_table_clear(set);
+        return;
+    }
+    if (set->numelements == 0 || other->numelements == 0)
+        return;
+    if (other->mask <= set->mask) {
+        for (uint64_t i = 0; i <= other->mask; i++) {
+            B_setentry *entry = &other->table[i];
+            if (ACTIVE_ENTRY(entry))
+                B_set_table_discard_hash(set, hashwit, entry->key, entry->hash);
+        }
+    } else {
+        for (uint64_t i = 0; i <= set->mask; i++) {
+            B_setentry *entry = &set->table[i];
+            if (ACTIVE_ENTRY(entry) && B_set_table_contains_hash(other, hashwit, entry->key, entry->hash))
+                B_set_table_drop_entry(set, entry);
+        }
+    }
+}
+
+static void B_set_table_iand(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other)
+        return;
+    if (set->mask <= other->mask) {
+        for (uint64_t i = 0; i <= set->mask; i++) {
+            B_setentry *entry = &set->table[i];
+            if (ACTIVE_ENTRY(entry) && !B_set_table_contains_hash(other, hashwit, entry->key, entry->hash))
+                B_set_table_drop_entry(set, entry);
+        }
+        return;
+    }
+    // The table of other is smaller: build the result in a new table that
+    // keeps the elements of set, and replace the table of set.
+    B_set_table res;
+    B_set_table_init_empty(&res);
+    for (uint64_t i = 0; i <= other->mask; i++) {
+        B_setentry *entry = &other->table[i];
+        if (!ACTIVE_ENTRY(entry))
+            continue;
+        B_setentry *found = B_set_table_lookkey(set, hashwit, entry->key, entry->hash);
+        if (ACTIVE_ENTRY(found))
+            B_set_table_add_hash(&res, hashwit, found->key, found->hash);
+    }
+    acton_free(set->table);
+    *set = res;
+}
+
+static void B_set_table_ixor(B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    if (set == other) {
+        B_set_table_clear(set);
+        return;
+    }
+    for (uint64_t i = 0; i <= other->mask; i++) {
+        B_setentry *entry = &other->table[i];
+        if (ACTIVE_ENTRY(entry) && !B_set_table_discard_hash(set, hashwit, entry->key, entry->hash))
+            B_set_table_add_hash(set, hashwit, entry->key, entry->hash);
+    }
+}
+
+// Binary operations build the result in res.
+
+static void B_set_table_sub_into(B_set_table *res, B_set_table *set, B_set_table *other, B_Hashable hashwit) {
+    B_set_table_copy_into(res, set);
+    B_set_table_isub(res, other, hashwit);
+}
+
 static void B_set_table_and_into(B_set_table *res, B_set_table *set, B_set_table *other, B_Hashable hashwit) {
-    if (other->numelements > set->numelements) {
+    if (other->mask < set->mask) {
         B_set_table_and_into(res, other, set, hashwit);
         return;
     }
@@ -341,20 +444,16 @@ static void B_set_table_or_into(B_set_table *res, B_set_table *set, B_set_table 
         return;
     }
     B_set_table_copy_into(res, set);
-    for (uint64_t i = 0; i <= other->mask; i++) {
-        B_setentry *entry = &other->table[i];
-        if (ACTIVE_ENTRY(entry))
-            B_set_table_add_hash(res, hashwit, entry->key, entry->hash);
-    }
+    B_set_table_ior(res, other, hashwit);
 }
 
 static void B_set_table_xor_into(B_set_table *res, B_set_table *set, B_set_table *other, B_Hashable hashwit) {
-    B_set_table_copy_into(res, set);
-    for (uint64_t i = 0; i <= other->mask; i++) {
-        B_setentry *entry = &other->table[i];
-        if (ACTIVE_ENTRY(entry) && !B_set_table_discard_hash(res, hashwit, entry->key, entry->hash))
-            B_set_table_add_hash(res, hashwit, entry->key, entry->hash);
+    if (other->numelements > set->numelements) {
+        B_set_table_xor_into(res, other, set, hashwit);
+        return;
     }
+    B_set_table_copy_into(res, set);
+    B_set_table_ixor(res, other, hashwit);
 }
 
 static $WORD B_set_table_pop(B_set_table *set) {
@@ -377,17 +476,16 @@ static $WORD B_set_table_pop(B_set_table *set) {
     return res;
 }
 
-static B_set B_set_from_table(B_set_table *table) {
+// Allocate a set or an iset object. The caller fills its data.
+static B_set B_set_alloc(void) {
     B_set res = acton_malloc(sizeof(struct B_set));
     res->$class = &B_setG_methods;
-    B_set_table_copy_into(&res->data, table);
     return res;
 }
 
-static B_iset B_iset_from_table(B_set_table *table) {
+static B_iset B_iset_alloc(void) {
     B_iset res = acton_malloc(sizeof(struct B_iset));
     res->$class = &B_isetG_methods;
-    B_set_table_copy_into(&res->data, table);
     return res;
 }
 
@@ -462,7 +560,9 @@ void B_set_add_entry(B_set set, B_Hashable hashwit, $WORD key, uint64_t hash) {
 
 B_set B_set_copy(B_set set, B_Hashable hashwit) {
     (void)hashwit;
-    return B_set_from_table(&set->data);
+    B_set res = B_set_alloc();
+    B_set_table_copy_into(&res->data, &set->data);
+    return res;
 }
 
 // iset object methods /////////////////////////////////////////////////////////////////////////////
@@ -661,35 +761,47 @@ bool B_OrdD_SetD_setD___le__(B_OrdD_SetD_set wit, B_set set, B_set other) {
 }
 
 B_set B_MinusD_SetD_setD___sub__(B_MinusD_SetD_set wit, B_set set, B_set other) {
-    B_set_table tmp;
-    B_set_table_sub_into(&tmp, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
-    B_set res = B_set_from_table(&tmp);
-    acton_free(tmp.table);
+    B_set res = B_set_alloc();
+    B_set_table_sub_into(&res->data, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
     return res;
 }
 
 B_set B_LogicalD_SetD_setD___and__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table tmp;
-    B_set_table_and_into(&tmp, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
-    B_set res = B_set_from_table(&tmp);
-    acton_free(tmp.table);
+    B_set res = B_set_alloc();
+    B_set_table_and_into(&res->data, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
     return res;
 }
 
 B_set B_LogicalD_SetD_setD___or__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table tmp;
-    B_set_table_or_into(&tmp, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
-    B_set res = B_set_from_table(&tmp);
-    acton_free(tmp.table);
+    B_set res = B_set_alloc();
+    B_set_table_or_into(&res->data, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
     return res;
 }
 
 B_set B_LogicalD_SetD_setD___xor__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
-    B_set_table tmp;
-    B_set_table_xor_into(&tmp, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
-    B_set res = B_set_from_table(&tmp);
-    acton_free(tmp.table);
+    B_set res = B_set_alloc();
+    B_set_table_xor_into(&res->data, &set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
     return res;
+}
+
+B_set B_MinusD_SetD_setD___isub__(B_MinusD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_isub(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___iand__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_iand(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___ior__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_ior(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
+}
+
+B_set B_LogicalD_SetD_setD___ixor__(B_LogicalD_SetD_set wit, B_set set, B_set other) {
+    B_set_table_ixor(&set->data, &other->data, ((B_SetD_set)wit->W_Set)->W_HashableD_AD_SetD_set);
+    return set;
 }
 
 // Freeze[set] /////////////////////////////////////////////////////////////////////////////////////
@@ -751,34 +863,26 @@ bool B_OrdD_ISetD_isetD___le__(B_OrdD_ISetD_iset wit, B_iset set, B_iset other) 
 }
 
 B_iset B_MinusD_ISetD_isetD___sub__(B_MinusD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_set_table tmp;
-    B_set_table_sub_into(&tmp, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
-    B_iset res = B_iset_from_table(&tmp);
-    acton_free(tmp.table);
+    B_iset res = B_iset_alloc();
+    B_set_table_sub_into(&res->data, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
     return res;
 }
 
 B_iset B_LogicalD_ISetD_isetD___and__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_set_table tmp;
-    B_set_table_and_into(&tmp, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
-    B_iset res = B_iset_from_table(&tmp);
-    acton_free(tmp.table);
+    B_iset res = B_iset_alloc();
+    B_set_table_and_into(&res->data, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
     return res;
 }
 
 B_iset B_LogicalD_ISetD_isetD___or__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_set_table tmp;
-    B_set_table_or_into(&tmp, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
-    B_iset res = B_iset_from_table(&tmp);
-    acton_free(tmp.table);
+    B_iset res = B_iset_alloc();
+    B_set_table_or_into(&res->data, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
     return res;
 }
 
 B_iset B_LogicalD_ISetD_isetD___xor__(B_LogicalD_ISetD_iset wit, B_iset set, B_iset other) {
-    B_set_table tmp;
-    B_set_table_xor_into(&tmp, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
-    B_iset res = B_iset_from_table(&tmp);
-    acton_free(tmp.table);
+    B_iset res = B_iset_alloc();
+    B_set_table_xor_into(&res->data, &set->data, &other->data, ((B_ISetD_iset)wit->W_ISet)->W_HashableD_AD_ISetD_iset);
     return res;
 }
 

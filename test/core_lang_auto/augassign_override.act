@@ -1,0 +1,70 @@
+# Augmented assignment calls the in-place method (__ior__, __isub__, ...)
+# that a type defines, not the binary operator
+
+class Ops(object):
+    def __init__(self, log: list[str]):
+        self.log = log
+
+extension Ops (Logical):
+    def __and__(a, b):
+        return Ops(a.log + ["and"])
+    def __or__(a, b):
+        return Ops(a.log + ["or"])
+    def __xor__(a, b):
+        return Ops(a.log + ["xor"])
+    def __iand__(a, b):
+        return Ops(a.log + ["iand"])
+    def __ior__(a, b):
+        return Ops(a.log + ["ior"])
+    def __ixor__(a, b):
+        return Ops(a.log + ["ixor"])
+
+extension Ops (Minus):
+    def __sub__(a, b):
+        return Ops(a.log + ["sub"])
+    def __isub__(a, b):
+        return Ops(a.log + ["isub"])
+
+class Holder(object):
+    def __init__(self, ops: Ops):
+        self.ops = ops
+
+def local_ops() -> list[str]:
+    x = Ops([])
+    x |= Ops([])
+    x &= Ops([])
+    x ^= Ops([])
+    x -= Ops([])
+    return x.log
+
+def generic_ior[T(Logical)](a: T, b: T) -> T:
+    a |= b
+    return a
+
+actor main(env):
+    failures: list[str] = []
+
+    def expect(what: str, ok: bool):
+        if not ok:
+            failures.append(what)
+
+    expect("variable", local_ops() == ["ior", "iand", "ixor", "isub"])
+
+    h = Holder(Ops([]))
+    h.ops |= Ops([])
+    h.ops -= Ops([])
+    expect("attribute", h.ops.log == ["ior", "isub"])
+
+    l = [Ops([])]
+    l[0] ^= Ops([])
+    l[0] &= Ops([])
+    expect("index", l[0].log == ["ixor", "iand"])
+
+    expect("generic", generic_ior(Ops([]), Ops([])).log == ["ior"])
+
+    expect("binary", (Ops([]) | Ops([])).log == ["or"])
+
+    if failures:
+        print("Failed:", failures)
+        env.exit(1)
+    env.exit(0)
