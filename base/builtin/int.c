@@ -35,8 +35,8 @@ long int_pow(long a, long e) {
 
 int64_t B_intG_new(B_atom a, B_int base) {  // base is optional
     B_bigint b = B_bigintG_new(a, base);
-    unsigned long n = b->val.n[0];
     int sz = b->val.size;
+    unsigned long n = sz == 0 ? 0 : b->val.n[0];
     if (labs(sz) > 1 || (sz==1 && n > 0x7ffffffffffffffful) || sz == -1 && n > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "int(): value %s out of range for type int",get_str(&b->val));

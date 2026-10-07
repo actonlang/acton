@@ -39,16 +39,18 @@ int64_t set_str(zz_ptr a, unsigned char *str, int64_t nbytes, B_int intbase);
 B_bigint malloc_bigint() {
     B_bigint res = acton_malloc(sizeof(struct B_bigint));
     res->$class = &B_bigintG_methods;
-    res->val.n = acton_malloc_atomic(sizeof(unsigned long));
-    res->val.size = 0;
-    res->val.alloc = 1;
+    // BSDNT supports an empty, allocation-free value. Operations allocate
+    // limbs on demand through zz_fit().
+    zz_init(&res->val);
     return res;
 }
 
-void zz_malloc_fit(zz_ptr res, len_t m) {
-    res->n = acton_malloc_atomic(sizeof(unsigned long) * m);
-    res->size = 0;
-    res->alloc = m;
+static B_bigint malloc_bigint_word(unsigned long word, long size) {
+    B_bigint res = malloc_bigint();
+    zz_fit(&res->val, 1);
+    res->val.n[0] = word;
+    res->val.size = size;
+    return res;
 }
 
 B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b);
@@ -81,56 +83,36 @@ B_bigint B_bigintG_new(B_atom a, B_int base) {
         unsigned long v = ((B_u64)a)->val;
         if (v==0) 
             return toB_bigint(0L);
-        else {
-            B_bigint res = malloc_bigint();
-            res->val.size=1;
-            res->val.n[0] = v;
-            return res;
-        }
+        else
+            return malloc_bigint_word(v, 1);
     }
     if ($ISINSTANCE0(a,B_u32)) {
         unsigned int v = ((B_u32)a)->val;
         if (v==0) 
             return toB_bigint(0L);
-        else {
-            B_bigint res = malloc_bigint();
-            res->val.size=1;
-            res->val.n[0] = (unsigned long)v;
-            return res;
-        }
+        else
+            return malloc_bigint_word((unsigned long)v, 1);
     }
     if ($ISINSTANCE0(a,B_u16)) {
         unsigned short v = ((B_u16)a)->val;
         if (v==0) 
             return toB_bigint(0L);
-        else {
-            B_bigint res = malloc_bigint();
-            res->val.size=1;
-            res->val.n[0] = (unsigned long)v;
-            return res;
-        }
+        else
+            return malloc_bigint_word((unsigned long)v, 1);
     }
     if ($ISINSTANCE0(a,B_u8)) {
         unsigned char v = ((B_u8)a)->val;
         if (v==0) 
             return toB_bigint(0L);
-        else {
-            B_bigint res = malloc_bigint();
-            res->val.size=1;
-            res->val.n[0] = (unsigned long)v;
-            return res;
-        }
+        else
+            return malloc_bigint_word((unsigned long)v, 1);
     }
     if ($ISINSTANCE0(a,B_u1)) {
         unsigned char v = ((B_u8)a)->val;
         if (v==0) 
             return toB_bigint(0L);
-        else {
-            B_bigint res = malloc_bigint();
-            res->val.size=1;
-            res->val.n[0] = (unsigned long)v;
-            return res;
-        }
+        else
+            return malloc_bigint_word((unsigned long)v, 1);
     }
     if ($ISINSTANCE0(a,B_float)) {
         double aval = ((B_float)a)->val;
@@ -163,10 +145,12 @@ B_NoneType B_bigintD___init__(B_bigint self, B_atom a, B_int base){
 }
 
 void B_bigintD___serialize__(B_bigint self,$Serial$state state) {
-    int blobsize = 1 + labs(self->val.size);
+    long nwords = labs(self->val.size);
+    int blobsize = 1 + nwords;
     $ROW row = $add_header(BIGINT_ID,blobsize,state);
     row->blob[0] = ($WORD)self->val.size;
-    memcpy(&row->blob[1],self->val.n,labs(self->val.size)*sizeof(long));
+    if (nwords > 0)
+        memcpy(&row->blob[1],self->val.n,nwords*sizeof(long));
 }
 
 B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
@@ -177,10 +161,13 @@ B_bigint B_bigintD___deserialize__(B_bigint res,$Serial$state state) {
     $ROW this = state->row;
     state->row = this->next;
     state->row_no++;
-    res->val.size = (long)this->blob[0];
-    res->val.alloc = labs(res->val.size);
-    res->val.n = acton_malloc(res->val.alloc*sizeof(long));
-    memcpy(res->val.n,&this->blob[1],res->val.alloc*sizeof(long));
+    long size = (long)this->blob[0];
+    long nwords = labs(size);
+    res->val.n = nwords > 0 ? acton_malloc_atomic(nwords*sizeof(long)) : NULL;
+    res->val.size = size;
+    res->val.alloc = nwords;
+    if (nwords > 0)
+        memcpy(res->val.n,&this->blob[1],nwords*sizeof(long));
     return res;
 }
 
@@ -332,8 +319,8 @@ $WORD B_IntegralD_bigintD_denominator (B_IntegralD_bigint wit, B_bigint n, B_Int
 }
   
 int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
-    unsigned long k = n->val.n[0];
     long sz = n->val.size;
+    unsigned long k = sz == 0 ? 0 : n->val.n[0];
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__int__: value %s out of range for type int",get_str(&n->val));
@@ -343,8 +330,8 @@ int64_t B_IntegralD_bigintD___int__ (B_IntegralD_bigint wit, B_bigint n) {
 }
 
 int64_t B_IntegralD_bigintD___index__ (B_IntegralD_bigint wit, B_bigint n) {
-    unsigned long k = n->val.n[0];
     long sz = n->val.size;
+    unsigned long k = sz == 0 ? 0 : n->val.n[0];
     if (labs(sz) > 1 || (sz==1 && k > 0x7ffffffffffffffful) || sz == -1 && k > 0x8000000000000000ul) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "bigint.__index__: value %s out of range for type int",get_str(&n->val));
@@ -373,8 +360,19 @@ B_bigint B_IntegralD_bigintD___floordiv__(B_IntegralD_bigint wit, B_bigint a, B_
 }
 
 B_bigint B_IntegralD_bigintD___mod__(B_IntegralD_bigint wit, B_bigint a, B_bigint b) {
-    B_tuple t = B_IntegralD_bigintD___divmod__(wit,a,b);
-    return t->components[1];
+    if (b->val.size == 0){
+        RAISE_EXC(&B_bigint_divmod_zero_error);
+    }
+
+    // bsdnt has no remainder-only operation, but its quotient need not be an
+    // Acton bigint.  Keep it as a temporary zz value so % does not allocate a
+    // boxed quotient and a tuple only to discard both immediately.
+    zz_t q;
+    zz_init(q);
+    B_bigint r = malloc_bigint();
+    zz_divrem(q,&r->val,&a->val,&b->val);
+    zz_clear(q);
+    return r;
 }
 
 B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int64_t b) {
@@ -393,7 +391,7 @@ B_bigint B_IntegralD_bigintD___lshift__(B_IntegralD_bigint wit,  B_bigint a, int
     long mres = labs(ma) + shw + (shb > 0);
     B_bigint res = malloc_bigint();
     zz_ptr rval = &res->val;
-    zz_malloc_fit(rval,mres);
+    zz_fit(rval,mres);
     word_t ci = nn_shl(rval->n, aval.n, labs(ma), shb);
     rval->n[labs(ma)] = ci;
     if (shw>0) {
@@ -424,7 +422,7 @@ B_bigint B_IntegralD_bigintD___rshift__(B_IntegralD_bigint wit,  B_bigint a, int
     long shw = bval/64;
     long shb = bval%64;
     long mres = labs(ma) - shw;
-    zz_malloc_fit(rval,mres);
+    zz_fit(rval,mres);
     unsigned long tmp[mres];
     for (int i = 0; i < mres; i++)
         tmp[i] = aval.n[i+shw];
@@ -490,7 +488,7 @@ B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit,  
     // if both are positive, rsize = bsize
     // if one is positive, use that size
     // if both are negative, rsize = asize
-    zz_malloc_fit(&res->val,bneg ? asize : bsize);
+    zz_fit(&res->val,bneg ? asize : bsize);
     res->val.size = 0;
     if (bneg) {
         for (int i = asize-1; i >= bsize; i--) {
@@ -537,7 +535,7 @@ B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit,  B
         long tneg = aneg; aneg = bneg; bneg = tneg;
     }
     B_bigint res = malloc_bigint();
-    zz_malloc_fit(&res->val,bneg ? bsize : asize);
+    zz_fit(&res->val,bneg ? bsize : asize);
     res->val.size = 0;
     if (!bneg) {
         for (int i = asize-1; i >= bsize; i--) {
@@ -584,7 +582,7 @@ B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  
         long tneg = aneg; aneg = bneg; bneg = tneg;
     }
     B_bigint res = malloc_bigint();
-    zz_malloc_fit(&res->val,asize);
+    zz_fit(&res->val,asize);
     res->val.size = 0;
     for (int i = asize-1; i >= bsize; i--) {
         res->val.n[i] = bneg ? (~a1[i]) : a1[i];
@@ -688,12 +686,9 @@ long fromB_bigint(B_bigint n) {
 B_bigint toB_bigint(long n) {
     if (n >= 0 && n < 256)
         return &B_bigint_strs[n];
-    else {
-        B_bigint res = malloc_bigint();
-        res->val.n[0] = n > 0 ? n : (n == LONG_MIN ? 9223372036854775808UL : -n);
-        res->val.size = n < 0 ? -1 : n > 0;
-        return res;
-    }
+    else
+        return malloc_bigint_word(n > 0 ? n : (n == LONG_MIN ? 9223372036854775808UL : -n),
+                                  n < 0 ? -1 : 1);
 }
 
 B_bigint toB_bigint2(char *str) {
@@ -922,13 +917,13 @@ int64_t set_str(zz_ptr a, unsigned char *nstr, int64_t nbytes, B_int intbase) {
 
 
 // gcd functions from BSDNT //////////////////////////////////
-B_bigint $gcd(B_bigint a, B_bigint b) {
+B_bigint B_gcd(B_bigint a, B_bigint b) {
     B_bigint res = malloc_bigint();
     zz_gcd(&res->val, &a->val, &b->val);
     return res;
 }
 
-B_tuple $xgcd(B_bigint a, B_bigint b) {
+B_tuple B_xgcd(B_bigint a, B_bigint b) {
     B_bigint d = malloc_bigint();
     B_bigint s = malloc_bigint();
     B_bigint t = malloc_bigint();

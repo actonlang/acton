@@ -35,8 +35,8 @@ int8_t i8_pow(int8_t a, int8_t e) {
 
 int8_t B_i8G_new(B_atom a, B_int base) {
     B_bigint b = B_bigintG_new(a, base);
-    unsigned long n = b->val.n[0];
     long sz = b->val.size;
+    unsigned long n = sz == 0 ? 0 : b->val.n[0];
     if (labs(sz) > 1 || (sz==1 && n > 0x7ful) || (sz == -1 && n > 0x80ul)) {
         char errmsg[1024];
         snprintf(errmsg, sizeof(errmsg), "i8(): value %s out of range for type i8",get_str(&b->val));

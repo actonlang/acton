@@ -15,8 +15,8 @@ char *get_str(zz_ptr n);
 
 B_bigint B_bigintG_new(B_atom a, B_int base);
 
-B_bigint $gcd(B_bigint, B_bigint);
-B_tuple $xgcd(B_bigint, B_bigint);
+B_bigint B_gcd(B_bigint, B_bigint);
+B_tuple B_xgcd(B_bigint, B_bigint);
 
 extern struct B_bigint B_bigint_strs[256];
 

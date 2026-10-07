@@ -115,6 +115,13 @@ def test_u64_divzero():
             return
     raise testing.NotRaisesError("expected ZeroDivisionError for u64")
 
+def test_bigint_modzero():
+    try:
+        bigint(3) % bigint(0)
+    except ZeroDivisionError:
+        return
+    raise testing.NotRaisesError("expected ZeroDivisionError for bigint modulo")
+
 
 def test_i8():
     test_i8_divzero()
@@ -323,6 +330,26 @@ def test_u64():
 
 
 def test_bigint():
+    test_bigint_modzero()
+    a = bigint("123456789012345678901234567890")
+    b = bigint("9876543210987654321")
+    z = a - a
+    if (str(z) != "0" or int(z) != 0 or i8(z) != 0 or i16(z) != 0 or
+        i32(z) != 0 or u1(z) != 0 or u8(z) != 0 or u16(z) != 0 or
+        u32(z) != 0 or u64(z) != 0):
+        raise ValueError("allocation-free bigint zero conversion broken")
+    if bigint(0) % b != bigint(0) or bigint(3) % b != bigint(3):
+        raise ValueError("small bigint modulo broken")
+    if a % b != bigint("925925941327160484"):
+        raise ValueError("positive bigint modulo broken")
+    if (-a) % b != bigint("8950617269660493837"):
+        raise ValueError("negative dividend bigint modulo broken")
+    if a % (-b) != -bigint("8950617269660493837"):
+        raise ValueError("negative divisor bigint modulo broken")
+    if (-a) % (-b) != -bigint("925925941327160484"):
+        raise ValueError("negative bigint modulo broken")
+    if a != (a // b) * b + a % b:
+        raise ValueError("bigint division and modulo disagree")
     if (141234567898765434567654345678765456787654 << 12) != 578496790113343219989112199900223311002230784:
         raise ValueError("left shift of positive bigint broken")
     if (-141234567898765434567654345678765456787654 << 12) != -578496790113343219989112199900223311002230784:
