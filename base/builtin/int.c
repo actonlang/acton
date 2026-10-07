@@ -70,8 +70,11 @@ B_str B_intD___repr__(B_int n) {
     return $FORMAT("%lld", n->val);
 }
 
+// Boxed scalars are allocated pointer-free: the only pointer in them is
+// $class, which points to a static method table. Atomic memory is not zeroed,
+// so constructors must write every field and nothing may read the padding.
 B_int toB_int(int64_t i) {
-    B_int res = acton_malloc(sizeof(struct B_int));
+    B_int res = acton_malloc_atomic(sizeof(struct B_int));
     res->$class = &B_intG_methods;
     res->val = i;
     return res;

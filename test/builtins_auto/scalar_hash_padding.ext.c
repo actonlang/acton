@@ -19,7 +19,14 @@ $WORD scalar_hash_paddingQ_with_padding($WORD value, uint8_t padding) {
     COPY_PADDED(B_u8)
     COPY_PADDED(B_u16)
     COPY_PADDED(B_u32)
+    COPY_PADDED(B_i8)
+    COPY_PADDED(B_i16)
+    COPY_PADDED(B_i32)
 #undef COPY_PADDED
     $RAISE((B_BaseException)$NEW(B_ValueError, actStrFromCString("Unexpected scalar type")));
     return NULL;
+}
+
+B_bytes scalar_hash_paddingQ_serialize_padded($WORD value, uint8_t padding) {
+    return B_serialize((B_value)scalar_hash_paddingQ_with_padding(value, padding));
 }
