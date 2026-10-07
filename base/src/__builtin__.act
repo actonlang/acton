@@ -527,8 +527,9 @@ protocol Logical:
 protocol Plus:
     @staticmethod
     __add__      : (Self,Self) -> Self
+    # The in-place form can change its first operand and return it.
     @staticmethod
-    __iadd__     : (Self,Self) -> Self
+    __iadd__     : mut(Self,Self) -> Self
     @staticmethod
     __zero__     : () -> Self
 
@@ -548,8 +549,9 @@ protocol Minus:
 protocol Times[A] (Plus):
     @staticmethod
     __mul__      : (Self,A) -> Self
+    # The in-place form can change its first operand and return it.
     @staticmethod
-    __imul__     : (Self,A) -> Self
+    __imul__     : mut(Self,A) -> Self
 
     def __imul__(a,b):
         return a * b
@@ -590,12 +592,17 @@ class array[A(ArrayElement)] (object):
 # negative indices are deliberately rejected rather than counted from the end.
 # Logical operations zero-extend the shorter operand: intersection takes the
 # shorter length, while union and symmetric difference take the longer length.
+# The in-place forms &=, |= and ^= change the bitarray on the left, its length
+# included, and keep the right operand.
 class bitarray (object):
     def __init__(self, length: int, initial: bool=False) -> None:
         NotImplemented
 
 # A fixed-universe set of non-negative integers backed by packed bits.
 # Capacity constrains mutation but is not part of extensional set equality.
+# Intersection takes the smaller capacity, difference the capacity of the left
+# operand, and union and symmetric difference the larger capacity. The in-place
+# forms &=, |=, -= and ^= change the bitset on the left, its capacity included.
 class bitset (object):
     def __init__(self, capacity: int, iterable: ?Iterable[int]=None) -> None:
         NotImplemented
@@ -994,11 +1001,69 @@ extension bitarray (Container[bool]):
 extension bitarray (Logical):
     NotImplemented
 
+    def __iand__(a, b):
+        """Clear the bits of a that are not set in b. Return a.
+
+        a gets the shorter length of the two.
+        """
+        NotImplemented
+
+    def __ior__(a, b):
+        """Set the bits of a that are set in b. Return a.
+
+        a gets the longer length of the two.
+        """
+        NotImplemented
+
+    def __ixor__(a, b):
+        """Flip the bits of a that are set in b. Return a.
+
+        a gets the longer length of the two.
+        """
+        NotImplemented
+
 extension bitset (Set[int]):
     NotImplemented
 
+    def __iand__(a, b):
+        """Remove the elements of a that are not in b. Return a.
+
+        a gets the smaller capacity of the two.
+        """
+        NotImplemented
+
+    def __ior__(a, b):
+        """Add the elements of b to a. Return a.
+
+        a gets the larger capacity of the two.
+        """
+        NotImplemented
+
+    def __ixor__(a, b):
+        """Remove the elements of b that are in a and add the others. Return a.
+
+        a gets the larger capacity of the two.
+        """
+        NotImplemented
+
+    def __isub__(a, b):
+        """Remove the elements of b from a. Return a."""
+        NotImplemented
+
 extension list[A] (Sequence[A]):
     NotImplemented
+
+    def __iadd__(a, b):
+        """Append the elements of b to a. Return a."""
+        NotImplemented
+
+    def __imul__(a, b):
+        """Repeat the elements of a so that a holds b copies of them. Return a.
+
+        If b <= 0, remove all elements of a.
+        """
+        NotImplemented
+
 extension list[A(Eq)] (Container[A]):
     NotImplemented
 extension list[A(Eq)] (Eq):
@@ -1078,6 +1143,18 @@ extension bytearray (Ord):
     NotImplemented
 extension bytearray (Sequence[int]):
     NotImplemented
+
+    def __iadd__(a, b):
+        """Append the bytes of b to a. Return a."""
+        NotImplemented
+
+    def __imul__(a, b):
+        """Repeat the bytes of a so that a holds b copies of them. Return a.
+
+        If b <= 0, remove all bytes of a.
+        """
+        NotImplemented
+
 extension bytearray (Container[int]):
     NotImplemented
 
@@ -1298,8 +1375,15 @@ def sum [A(Plus)] (it: Iterable[A], start: ?A) -> A:
         res = start
     else:
         res = Plus.__zero__()
+    first = True
     for i in iter(it):
-        res += i
+        if first:
+            # + makes a new value, which the in-place additions after it can
+            # change without changing start
+            res = res + i
+            first = False
+        else:
+            res += i
     return res
 
 class zip[A,B](Iterator[(A,B)]):

@@ -1,0 +1,216 @@
+# += and *= change a list or a bytearray in place and keep the right operand.
+# On ilist, str and bytes they make a new value. sum() does not change its
+# start value.
+
+class Holder(object):
+    def __init__(self, l: list[int]):
+        self.l = l
+
+def extend_generic[T(Plus)](a: T, b: T) -> T:
+    a += b
+    return a
+
+def repeat_generic[T(Times[int])](a: T, n: int) -> T:
+    a *= n
+    return a
+
+def same_list(a: list[int], b: list[int]) -> bool:
+    """Return True if a and b are the same object."""
+    a.append(-987654321)
+    same = len(b) > 0 and b[-1] == -987654321
+    a.pop()
+    return same
+
+def same_bytearray(a: bytearray, b: bytearray) -> bool:
+    """Return True if a and b are the same object."""
+    a.append(255)
+    same = len(b) > 0 and b[-1] == 255
+    del a[-1]
+    return same
+
+def check_list_iadd(fail: list[str]):
+    l = [1, 2]
+    alias = l
+    r = [3, 4]
+    l += r
+    if l != [1, 2, 3, 4]:
+        fail.append("list += contents")
+    if not same_list(l, alias):
+        fail.append("list += same object")
+    if r != [3, 4]:
+        fail.append("list += keeps right operand")
+    l += []
+    if l != [1, 2, 3, 4]:
+        fail.append("list += []")
+    e: list[int] = []
+    e += [5]
+    if e != [5]:
+        fail.append("empty list += ")
+
+def check_list_imul(fail: list[str]):
+    l = [1, 2]
+    alias = l
+    l *= 3
+    if l != [1, 2, 1, 2, 1, 2] or not same_list(l, alias):
+        fail.append("list *= 3")
+    l *= 1
+    if l != [1, 2, 1, 2, 1, 2]:
+        fail.append("list *= 1")
+    l *= 0
+    if l != [] or alias != []:
+        fail.append("list *= 0")
+    l.append(7)
+    if alias != [7]:
+        fail.append("append after list *= 0")
+    m = [1]
+    m *= -2
+    if m != []:
+        fail.append("list *= -2")
+    e: list[int] = []
+    e *= 5
+    if e != []:
+        fail.append("empty list *= 5")
+    try:
+        big = [1, 2]
+        big *= 2**40
+        fail.append("list *= huge did not raise")
+    except ValueError:
+        pass
+    except MemoryError:
+        pass
+
+def check_list_self(fail: list[str]):
+    l = [1, 2, 3]
+    l += l
+    if l != [1, 2, 3, 1, 2, 3]:
+        fail.append("l += l")
+    # Grows past the capacity several times
+    g = [0]
+    for i in range(10):
+        g += g
+    if len(g) != 1024 or g[1023] != 0:
+        fail.append("repeated l += l")
+
+def check_list_targets(fail: list[str]):
+    d: dict[str, list[int]] = {"k": [1]}
+    inner = d["k"]
+    d["k"] += [2]
+    if d["k"] != [1, 2] or not same_list(d["k"], inner):
+        fail.append("index target")
+
+    h = Holder([1])
+    before = h.l
+    h.l += [2]
+    h.l *= 2
+    if h.l != [1, 2, 1, 2] or not same_list(h.l, before):
+        fail.append("attribute target")
+
+    nested = [[1], [2]]
+    first = nested[0]
+    nested[0] += [3]
+    if nested[0] != [1, 3] or not same_list(nested[0], first):
+        fail.append("list item target")
+
+    g = [1]
+    if not same_list(extend_generic(g, [2]), g) or g != [1, 2]:
+        fail.append("generic +=")
+    if not same_list(repeat_generic(g, 2), g) or g != [1, 2, 1, 2]:
+        fail.append("generic *=")
+
+def check_bytearray(fail: list[str]):
+    b = bytearray(b"ab")
+    alias = b
+    r = bytearray(b"cd")
+    b += r
+    if b != bytearray(b"abcd") or not same_bytearray(b, alias):
+        fail.append("bytearray +=")
+    if r != bytearray(b"cd"):
+        fail.append("bytearray += keeps right operand")
+    b *= 2
+    if b != bytearray(b"abcdabcd") or not same_bytearray(b, alias):
+        fail.append("bytearray *= 2")
+    b += b
+    if b != bytearray(b"abcdabcdabcdabcd"):
+        fail.append("bytearray b += b")
+    b *= 0
+    if len(alias) != 0:
+        fail.append("bytearray *= 0")
+    b += bytearray(b"x")
+    if alias != bytearray(b"x"):
+        fail.append("bytearray += after *= 0")
+    e = bytearray(b"")
+    e += bytearray(b"")
+    e *= 3
+    if len(e) != 0:
+        fail.append("empty bytearray")
+    g = bytearray(b"z")
+    if not same_bytearray(extend_generic(g, bytearray(b"y")), g) or g != bytearray(b"zy"):
+        fail.append("generic bytearray +=")
+    if not same_bytearray(repeat_generic(g, 2), g) or g != bytearray(b"zyzy"):
+        fail.append("generic bytearray *=")
+    try:
+        big = bytearray(b"ab")
+        big *= 2**62
+        fail.append("bytearray *= huge did not raise")
+    except ValueError:
+        pass
+    except MemoryError:
+        pass
+
+def check_immutable(fail: list[str]):
+    il = ilist([1, 2])
+    old_il = il
+    il += ilist([3])
+    il *= 2
+    if il != ilist([1, 2, 3, 1, 2, 3]) or old_il != ilist([1, 2]):
+        fail.append("ilist")
+    s = "ab"
+    old_s = s
+    s += "c"
+    s *= 2
+    if s != "abcabc" or old_s != "ab":
+        fail.append("str")
+    by = b"ab"
+    old_by = by
+    by += b"c"
+    by *= 2
+    if by != b"abcabc" or old_by != b"ab":
+        fail.append("bytes")
+
+def check_sum(fail: list[str]):
+    start = [0]
+    parts = [[1], [2, 3]]
+    total = sum(parts, start)
+    if total != [0, 1, 2, 3]:
+        fail.append("sum with start")
+    if start != [0]:
+        fail.append("sum changed start")
+    if parts != [[1], [2, 3]]:
+        fail.append("sum changed an element")
+    if sum([], start) != [0]:
+        fail.append("sum of nothing")
+    no_start = sum(parts)
+    if no_start != [1, 2, 3] or parts[0] != [1]:
+        fail.append("sum without start")
+    bstart = bytearray(b"a")
+    if sum([bytearray(b"b"), bytearray(b"c")], bstart) != bytearray(b"abc") or bstart != bytearray(b"a"):
+        fail.append("sum of bytearrays")
+    if sum([1, 2, 3], 10) != 16 or sum(["a", "b"], "c") != "cab":
+        fail.append("sum of int or str")
+
+actor main(env):
+    fail: list[str] = []
+    try:
+        check_list_iadd(fail)
+        check_list_imul(fail)
+        check_list_self(fail)
+        check_list_targets(fail)
+        check_bytearray(fail)
+        check_immutable(fail)
+        check_sum(fail)
+    except Exception as e:
+        fail.append("unexpected exception: " + str(e))
+    if fail:
+        print("Failed:", fail)
+        env.exit(1)
+    env.exit(0)

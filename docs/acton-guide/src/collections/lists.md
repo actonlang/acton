@@ -75,6 +75,35 @@ long list is O(n) because elements need to shift. `pop()` is O(1) at the
 end and O(n) at other positions.</p>
 </div>
 
+## Joining and repeating lists
+
+```python
+a = [1, 2]
+b = [3]
+
+print(a + b)    # [1, 2, 3]
+print(a * 2)    # [1, 2, 1, 2]
+```
+
+`+` and `*` return a new list and do not change their operands.
+
+The augmented forms `+=` and `*=` change the list on the left in place, as in
+Python. Every name that refers to that list sees the change:
+
+```python
+items = ["a"]
+alias = items
+items += ["b", "c"]
+items *= 2
+print(alias)    # ['a', 'b', 'c', 'a', 'b', 'c']
+```
+
+<div class="advanced-content">
+<p><code>items += more</code> copies the elements of <code>more</code>, like
+<code>items.extend(more)</code>, so its cost does not grow with the length of
+<code>items</code>. <code>items *= n</code> writes only the added copies.</p>
+</div>
+
 ## Common utilities
 
 ```python

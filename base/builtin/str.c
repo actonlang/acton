@@ -3113,6 +3113,39 @@ B_bytearray B_TimesD_SequenceD_bytearrayD___mul__ (B_TimesD_SequenceD_bytearray 
     return res;
 }
 
+B_bytearray B_TimesD_SequenceD_bytearrayD___iadd__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_bytearray b) {
+    // b can be a, so its length is read before a grows
+    int64_t n = b->nbytes;
+    if (n == 0)
+        return a;
+    expand_bytearray(a, n);
+    memcpy(a->str + a->nbytes, b->str, n);
+    a->nbytes += n;
+    return a;
+}
+
+// Repeat the bytes of a n times in a, or remove them if n <= 0. Only the added
+// copies are written.
+B_bytearray B_TimesD_SequenceD_bytearrayD___imul__ (B_TimesD_SequenceD_bytearray wit, B_bytearray a, B_int n) {
+    int64_t nval = n->val;
+    int64_t len = a->nbytes;
+    if (nval <= 0) {
+        a->nbytes = 0;
+        return a;
+    }
+    if (len == 0 || nval == 1)
+        return a;
+    // The count times the length could overflow, so the count is checked
+    // against how many copies fit instead
+    if (nval > MAX_STR_LEN / len)
+        RAISE_EXC(&B_str_too_long_error);
+    expand_bytearray(a, len * (nval - 1));
+    for (int64_t i = 1; i < nval; i++)
+        memcpy(a->str + i * len, a->str, len);
+    a->nbytes = len * nval;
+    return a;
+}
+
 // End of bytearray implementation ////////////////////////////////////////////////
 
 

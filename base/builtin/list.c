@@ -14,6 +14,8 @@
 
 static struct B_MemoryError B_list_allocation_failed_error =
     STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
+static struct B_ValueError B_list_too_long_error =
+    STATIC_EXCEPTION(B_ValueError, "result too long");
 static struct B_ValueError B_list_negative_start_error =
     STATIC_EXCEPTION(B_ValueError, "start position must be >= 0");
 static struct B_ValueError B_list_start_too_large_error =
@@ -256,6 +258,27 @@ static B_list_base B_list_base_mul(B_list_base lst, B_int n, $SuperG_class cls) 
         memcpy(res->data + i * lst->length, lst->data, lst->length * sizeof($WORD));
     res->length = lst->length * count;
     return res;
+}
+
+// Repeat the elements of lst n times in lst, or remove them if n <= 0. Only
+// the added copies are written.
+static void B_list_base_imul(B_list_base lst, B_int n) {
+    int64_t count = n->val;
+    int len = lst->length;
+    if (count <= 0) {
+        B_list_base_clear(lst);
+        return;
+    }
+    if (len == 0 || count == 1)
+        return;
+    // The count times the length could overflow, so the count is checked
+    // against how many copies fit instead
+    if (count > INT_MAX / len)
+        RAISE_EXC(&B_list_too_long_error);
+    B_list_base_expand(lst, (int)(len * (count - 1)));
+    for (int64_t i = 1; i < count; i++)
+        memcpy(lst->data + i * len, lst->data, len * sizeof($WORD));
+    lst->length = (int)(len * count);
 }
 
 static $WORD B_list_base_getitem(B_list_base lst, int64_t n) {
@@ -650,6 +673,16 @@ B_list B_TimesD_SequenceD_listD___zero__(B_TimesD_SequenceD_list wit) {
 
 B_list B_TimesD_SequenceD_listD___mul__(B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
     return (B_list)B_list_base_mul((B_list_base)lst, n, ($SuperG_class)&B_listG_methods);
+}
+
+B_list B_TimesD_SequenceD_listD___iadd__(B_TimesD_SequenceD_list wit, B_list lst, B_list other) {
+    B_list_base_extend((B_list_base)lst, (B_list_base)other);
+    return lst;
+}
+
+B_list B_TimesD_SequenceD_listD___imul__(B_TimesD_SequenceD_list wit, B_list lst, B_int n) {
+    B_list_base_imul((B_list_base)lst, n);
+    return lst;
 }
 
 bool B_ContainerD_listD___contains__(B_ContainerD_list wit, B_list lst, $WORD elem) {

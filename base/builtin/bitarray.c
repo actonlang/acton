@@ -139,6 +139,60 @@ static B_bitarray B_bitarray_binary(B_bitarray left, B_bitarray right,
     return result;
 }
 
+// Give self a new length, in new storage. Bits past a smaller length are
+// dropped and bits past the old length are false. The cost is proportional to
+// the new length.
+static void B_bitarray_set_length(B_bitarray self, int64_t length) {
+    bool shrinks = length < self->length;
+    uint64_t old_words = B_bitarray_word_count(self->length);
+    uint64_t new_words = B_bitarray_word_count(length);
+    uint64_t *data = NULL;
+    if (new_words) {
+        uint64_t kept = old_words < new_words ? old_words : new_words;
+        data = acton_malloc_atomic((size_t)new_words * sizeof(uint64_t));
+        if (kept)
+            memcpy(data, self->data, (size_t)kept * sizeof(uint64_t));
+        memset(data + kept, 0, (size_t)(new_words - kept) * sizeof(uint64_t));
+        data[new_words - 1] &= B_bitarray_tail_mask(length);
+    }
+    self->data = data;
+    self->length = length;
+    if (shrinks) {
+        self->count = 0;
+        for (uint64_t i = 0; i < new_words; i++)
+            self->count += __builtin_popcountll(data[i]);
+    }
+}
+
+// An in-place operation changes left and gives it the length that the binary
+// operation gives its result. Its cost is proportional to the shorter of the
+// two lengths, or to the length of right when left grows to it.
+static void B_bitarray_inplace(B_bitarray left, B_bitarray right,
+                               enum B_bitarray_op op) {
+    int64_t length = left->length;
+    if (op == B_BITARRAY_AND ? right->length < length : right->length > length)
+        length = right->length;
+    if (length != left->length)
+        B_bitarray_set_length(left, length);
+
+    uint64_t word_count = B_bitarray_word_count(left->length < right->length
+                                                ? left->length : right->length);
+    int64_t count = left->count;
+    for (uint64_t i = 0; i < word_count; i++) {
+        uint64_t a = left->data[i];
+        uint64_t b = right->data[i];
+        uint64_t r = 0;
+        switch (op) {
+        case B_BITARRAY_AND: r = a & b; break;
+        case B_BITARRAY_OR:  r = a | b; break;
+        case B_BITARRAY_XOR: r = a ^ b; break;
+        }
+        left->data[i] = r;
+        count += __builtin_popcountll(r) - __builtin_popcountll(a);
+    }
+    left->count = count;
+}
+
 B_bitarray B_LogicalD_bitarrayD___and__(B_LogicalD_bitarray wit,
                                         B_bitarray left, B_bitarray right) {
     return B_bitarray_binary(left, right, B_BITARRAY_AND);
@@ -152,6 +206,24 @@ B_bitarray B_LogicalD_bitarrayD___or__(B_LogicalD_bitarray wit,
 B_bitarray B_LogicalD_bitarrayD___xor__(B_LogicalD_bitarray wit,
                                         B_bitarray left, B_bitarray right) {
     return B_bitarray_binary(left, right, B_BITARRAY_XOR);
+}
+
+B_bitarray B_LogicalD_bitarrayD___iand__(B_LogicalD_bitarray wit,
+                                         B_bitarray left, B_bitarray right) {
+    B_bitarray_inplace(left, right, B_BITARRAY_AND);
+    return left;
+}
+
+B_bitarray B_LogicalD_bitarrayD___ior__(B_LogicalD_bitarray wit,
+                                        B_bitarray left, B_bitarray right) {
+    B_bitarray_inplace(left, right, B_BITARRAY_OR);
+    return left;
+}
+
+B_bitarray B_LogicalD_bitarrayD___ixor__(B_LogicalD_bitarray wit,
+                                         B_bitarray left, B_bitarray right) {
+    B_bitarray_inplace(left, right, B_BITARRAY_XOR);
+    return left;
 }
 
 // MutIndexed uses the ordinary boxed protocol ABI. Direct bitarray indexing
