@@ -158,6 +158,59 @@ static B_bitset B_bitset_binary(B_bitset left, B_bitset right,
     return result;
 }
 
+// Give self a new capacity, in new storage. Elements past a smaller capacity
+// are dropped. The cost is proportional to the new capacity.
+static void B_bitset_set_capacity(B_bitset self, int64_t capacity) {
+    bool shrinks = capacity < self->capacity;
+    uint64_t old_words = B_bitset_word_count(self->capacity);
+    uint64_t new_words = B_bitset_word_count(capacity);
+    uint64_t *data = NULL;
+    if (new_words) {
+        uint64_t kept = old_words < new_words ? old_words : new_words;
+        data = acton_malloc_atomic((size_t)new_words * sizeof(uint64_t));
+        if (kept)
+            memcpy(data, self->data, (size_t)kept * sizeof(uint64_t));
+        memset(data + kept, 0, (size_t)(new_words - kept) * sizeof(uint64_t));
+        data[new_words - 1] &= B_bitset_tail_mask(capacity);
+    }
+    self->data = data;
+    self->capacity = capacity;
+    if (shrinks)
+        B_bitset_recount(self);
+}
+
+// An in-place operation changes left and gives it the capacity that the
+// binary operation gives its result. Its cost is proportional to the smaller
+// of the two capacities, or to the capacity of right when left grows to it.
+static void B_bitset_inplace(B_bitset left, B_bitset right,
+                             enum B_bitset_op op) {
+    int64_t capacity = left->capacity;
+    if (op == B_BITSET_INTERSECTION && right->capacity < capacity)
+        capacity = right->capacity;
+    if ((op == B_BITSET_UNION || op == B_BITSET_XOR) && right->capacity > capacity)
+        capacity = right->capacity;
+    if (capacity != left->capacity)
+        B_bitset_set_capacity(left, capacity);
+
+    uint64_t word_count = B_bitset_word_count(left->capacity < right->capacity
+                                              ? left->capacity : right->capacity);
+    int64_t count = left->count;
+    for (uint64_t i = 0; i < word_count; i++) {
+        uint64_t a = left->data[i];
+        uint64_t b = right->data[i];
+        uint64_t r = 0;
+        switch (op) {
+        case B_BITSET_UNION:        r = a | b; break;
+        case B_BITSET_INTERSECTION: r = a & b; break;
+        case B_BITSET_DIFFERENCE:   r = a & ~b; break;
+        case B_BITSET_XOR:          r = a ^ b; break;
+        }
+        left->data[i] = r;
+        count += __builtin_popcountll(r) - __builtin_popcountll(a);
+    }
+    left->count = count;
+}
+
 static bool B_bitset_subset(B_bitset left, B_bitset right) {
     uint64_t word_count = B_bitset_word_count(left->capacity);
     for (uint64_t i = 0; i < word_count; i++) {
@@ -381,6 +434,30 @@ B_bitset B_LogicalD_SetD_bitsetD___xor__(B_LogicalD_SetD_bitset wit,
 B_bitset B_MinusD_SetD_bitsetD___sub__(B_MinusD_SetD_bitset wit,
                                        B_bitset left, B_bitset right) {
     return B_bitset_binary(left, right, B_BITSET_DIFFERENCE);
+}
+
+B_bitset B_LogicalD_SetD_bitsetD___iand__(B_LogicalD_SetD_bitset wit,
+                                          B_bitset left, B_bitset right) {
+    B_bitset_inplace(left, right, B_BITSET_INTERSECTION);
+    return left;
+}
+
+B_bitset B_LogicalD_SetD_bitsetD___ior__(B_LogicalD_SetD_bitset wit,
+                                         B_bitset left, B_bitset right) {
+    B_bitset_inplace(left, right, B_BITSET_UNION);
+    return left;
+}
+
+B_bitset B_LogicalD_SetD_bitsetD___ixor__(B_LogicalD_SetD_bitset wit,
+                                          B_bitset left, B_bitset right) {
+    B_bitset_inplace(left, right, B_BITSET_XOR);
+    return left;
+}
+
+B_bitset B_MinusD_SetD_bitsetD___isub__(B_MinusD_SetD_bitset wit,
+                                        B_bitset left, B_bitset right) {
+    B_bitset_inplace(left, right, B_BITSET_DIFFERENCE);
+    return left;
 }
 
 // Serialization ///////////////////////////////////////////////////////////////////////////////////

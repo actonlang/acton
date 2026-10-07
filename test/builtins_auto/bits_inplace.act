@@ -1,0 +1,221 @@
+# &=, |=, -= and ^= change a bitset or a bitarray in place and keep the right
+# operand. The result has the capacity or length that the binary operator
+# gives its result.
+
+def or_generic[T(Logical)](a: T, b: T) -> T:
+    a |= b
+    return a
+
+def same_bitset(a: bitset, b: bitset) -> bool:
+    """Return True if a and b are the same object. a has a capacity > 0."""
+    for e in range(a.capacity()):
+        if e not in a:
+            a.add(e)
+            same = e in b
+            a.discard(e)
+            return same
+    a.discard(0)
+    same = 0 not in b
+    a.add(0)
+    return same
+
+def same_bitarray(a: bitarray, b: bitarray) -> bool:
+    """Return True if a and b are the same object. a has a length > 0."""
+    old = a[0]
+    a[0] = not old
+    same = b[0] != old
+    a[0] = old
+    return same
+
+def bits(xs: bitarray) -> list[int]:
+    return [i for i in range(len(xs)) if xs[i]]
+
+def make_bits(length: int, ones: list[int]) -> bitarray:
+    xs = bitarray(length)
+    for i in ones:
+        xs[i] = True
+    return xs
+
+def check_bitset_ops(fail: list[str]):
+    s = bitset(130, [1, 64, 129])
+    alias = s
+    t = bitset(130, [2, 64])
+    s |= t
+    if list(s) != [1, 2, 64, 129] or len(s) != 4 or not same_bitset(s, alias):
+        fail.append("bitset |=")
+    if list(t) != [2, 64]:
+        fail.append("bitset |= keeps right operand")
+    s &= bitset(130, [2, 3, 129])
+    if list(s) != [2, 129] or len(s) != 2 or not same_bitset(s, alias):
+        fail.append("bitset &=")
+    s ^= bitset(130, [2, 5])
+    if list(s) != [5, 129] or len(s) != 2 or not same_bitset(s, alias):
+        fail.append("bitset ^=")
+    s -= bitset(130, [5, 6])
+    if list(s) != [129] or len(s) != 1 or not same_bitset(s, alias):
+        fail.append("bitset -=")
+    if s.capacity() != 130:
+        fail.append("bitset capacity kept")
+
+def check_bitset_capacity(fail: list[str]):
+    # |= and ^= take the larger capacity, &= the smaller and -= keeps it
+    a = bitset(10, [1, 9])
+    alias = a
+    a |= bitset(200, [150])
+    if a.capacity() != 200 or list(a) != [1, 9, 150] or len(a) != 3:
+        fail.append("bitset |= grows")
+    a.add(199)
+    if 199 not in alias:
+        fail.append("add after bitset |= grows")
+    a &= bitset(10, [1, 2, 9])
+    if a.capacity() != 10 or list(a) != [1, 9] or len(a) != 2:
+        fail.append("bitset &= shrinks")
+    try:
+        a.add(10)
+        fail.append("add past the new capacity did not raise")
+    except ValueError:
+        pass
+    a ^= bitset(70, [1, 65])
+    if a.capacity() != 70 or list(a) != [9, 65] or len(a) != 2:
+        fail.append("bitset ^= grows")
+    a -= bitset(300, [9, 250])
+    if a.capacity() != 70 or list(a) != [65] or len(a) != 1:
+        fail.append("bitset -= larger")
+    a -= bitset(3, [0, 1, 2])
+    if a.capacity() != 70 or list(a) != [65]:
+        fail.append("bitset -= smaller")
+    b = bitset(130, [0, 64, 129])
+    b &= bitset(300, [64, 129, 200])
+    if b.capacity() != 130 or list(b) != [64, 129]:
+        fail.append("bitset &= larger")
+    c = bitset(130, [0, 64, 129])
+    c |= bitset(5, [3])
+    if c.capacity() != 130 or list(c) != [0, 3, 64, 129]:
+        fail.append("bitset |= smaller")
+    e = bitset(0)
+    e |= bitset(0)
+    e &= bitset(64, [1])
+    e ^= bitset(0)
+    e -= bitset(64, [1])
+    if e.capacity() != 0 or len(e) != 0:
+        fail.append("empty bitset")
+    f = bitset(0)
+    f |= bitset(64, [63])
+    if f.capacity() != 64 or list(f) != [63]:
+        fail.append("empty bitset |= grows")
+
+def check_bitset_self(fail: list[str]):
+    s = bitset(100, [1, 99])
+    s |= s
+    s &= s
+    if list(s) != [1, 99]:
+        fail.append("bitset s |= s, s &= s")
+    s ^= s
+    if len(s) != 0 or list(s) != []:
+        fail.append("bitset s ^= s")
+    r = bitset(100, [1, 99])
+    r -= r
+    if len(r) != 0:
+        fail.append("bitset s -= s")
+    r.add(50)
+    if list(r) != [50]:
+        fail.append("add after bitset s -= s")
+
+def check_bitset_pop(fail: list[str]):
+    # pop continues after the element it popped last, here past the new capacity
+    s = bitset(200, [150, 190])
+    if s.pop() != 150:
+        fail.append("bitset pop")
+    s.add(10)
+    s &= bitset(100, [10, 50])
+    if s.pop() != 10 or len(s) != 0:
+        fail.append("bitset pop after &= shrinks")
+    if not same_bitset(or_generic(s, bitset(3, [2])), s) or list(s) != [2]:
+        fail.append("bitset generic |=")
+
+def check_bitarray(fail: list[str]):
+    a = make_bits(70, [0, 5, 69])
+    alias = a
+    b = make_bits(70, [5, 6])
+    a |= b
+    if bits(a) != [0, 5, 6, 69] or not same_bitarray(a, alias):
+        fail.append("bitarray |=")
+    if bits(b) != [5, 6]:
+        fail.append("bitarray |= keeps right operand")
+    a &= make_bits(70, [0, 6, 7])
+    if bits(a) != [0, 6] or not same_bitarray(a, alias):
+        fail.append("bitarray &=")
+    a ^= make_bits(70, [0, 1])
+    if bits(a) != [1, 6] or not same_bitarray(a, alias):
+        fail.append("bitarray ^=")
+    if len(a) != 70:
+        fail.append("bitarray length kept")
+
+def check_bitarray_length(fail: list[str]):
+    # |= and ^= take the longer length and &= the shorter
+    a = make_bits(5, [0, 4])
+    alias = a
+    a |= make_bits(130, [64, 129])
+    if len(a) != 130 or bits(a) != [0, 4, 64, 129]:
+        fail.append("bitarray |= grows")
+    a[100] = True
+    if not alias[100]:
+        fail.append("setitem after bitarray |= grows")
+    a &= make_bits(65, [0, 3, 64])
+    if len(a) != 65 or bits(a) != [0, 64]:
+        fail.append("bitarray &= shrinks")
+    try:
+        a[65] = True
+        fail.append("setitem past the new length did not raise")
+    except IndexError:
+        pass
+    a ^= make_bits(70, [0, 69])
+    if len(a) != 70 or bits(a) != [64, 69]:
+        fail.append("bitarray ^= grows")
+    c = make_bits(70, [1, 69])
+    c |= make_bits(3, [2])
+    c ^= make_bits(3, [1])
+    if len(c) != 70 or bits(c) != [2, 69]:
+        fail.append("bitarray |= and ^= shorter")
+    d = make_bits(10, [1, 9])
+    d &= make_bits(70, [9, 60])
+    if len(d) != 10 or bits(d) != [9]:
+        fail.append("bitarray &= longer")
+    e = bitarray(0)
+    e &= make_bits(10, [1])
+    e |= bitarray(0)
+    if len(e) != 0:
+        fail.append("empty bitarray")
+    e |= make_bits(3, [2])
+    if len(e) != 3 or bits(e) != [2]:
+        fail.append("empty bitarray |= grows")
+
+def check_bitarray_self(fail: list[str]):
+    a = make_bits(70, [0, 69])
+    a |= a
+    a &= a
+    if bits(a) != [0, 69]:
+        fail.append("bitarray a |= a, a &= a")
+    a ^= a
+    if bits(a) != [] or len(a) != 70:
+        fail.append("bitarray a ^= a")
+    g = make_bits(3, [0])
+    if not same_bitarray(or_generic(g, make_bits(5, [4])), g) or bits(g) != [0, 4]:
+        fail.append("bitarray generic |=")
+
+actor main(env):
+    fail: list[str] = []
+    try:
+        check_bitset_ops(fail)
+        check_bitset_capacity(fail)
+        check_bitset_self(fail)
+        check_bitset_pop(fail)
+        check_bitarray(fail)
+        check_bitarray_length(fail)
+        check_bitarray_self(fail)
+    except Exception as e:
+        fail.append("unexpected exception: " + str(e))
+    if fail:
+        print("Failed:", fail)
+        env.exit(1)
+    env.exit(0)

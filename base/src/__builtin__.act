@@ -592,12 +592,17 @@ class array[A(ArrayElement)] (object):
 # negative indices are deliberately rejected rather than counted from the end.
 # Logical operations zero-extend the shorter operand: intersection takes the
 # shorter length, while union and symmetric difference take the longer length.
+# The in-place forms &=, |= and ^= change the bitarray on the left, its length
+# included, and keep the right operand.
 class bitarray (object):
     def __init__(self, length: int, initial: bool=False) -> None:
         NotImplemented
 
 # A fixed-universe set of non-negative integers backed by packed bits.
 # Capacity constrains mutation but is not part of extensional set equality.
+# Intersection takes the smaller capacity, difference the capacity of the left
+# operand, and union and symmetric difference the larger capacity. The in-place
+# forms &=, |=, -= and ^= change the bitset on the left, its capacity included.
 class bitset (object):
     def __init__(self, capacity: int, iterable: ?Iterable[int]=None) -> None:
         NotImplemented
@@ -996,8 +1001,54 @@ extension bitarray (Container[bool]):
 extension bitarray (Logical):
     NotImplemented
 
+    def __iand__(a, b):
+        """Clear the bits of a that are not set in b. Return a.
+
+        a gets the shorter length of the two.
+        """
+        NotImplemented
+
+    def __ior__(a, b):
+        """Set the bits of a that are set in b. Return a.
+
+        a gets the longer length of the two.
+        """
+        NotImplemented
+
+    def __ixor__(a, b):
+        """Flip the bits of a that are set in b. Return a.
+
+        a gets the longer length of the two.
+        """
+        NotImplemented
+
 extension bitset (Set[int]):
     NotImplemented
+
+    def __iand__(a, b):
+        """Remove the elements of a that are not in b. Return a.
+
+        a gets the smaller capacity of the two.
+        """
+        NotImplemented
+
+    def __ior__(a, b):
+        """Add the elements of b to a. Return a.
+
+        a gets the larger capacity of the two.
+        """
+        NotImplemented
+
+    def __ixor__(a, b):
+        """Remove the elements of b that are in a and add the others. Return a.
+
+        a gets the larger capacity of the two.
+        """
+        NotImplemented
+
+    def __isub__(a, b):
+        """Remove the elements of b from a. Return a."""
+        NotImplemented
 
 extension list[A] (Sequence[A]):
     NotImplemented

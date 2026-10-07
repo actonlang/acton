@@ -28,8 +28,8 @@ signature, it means values of type <code>A</code> support ordering.</p>
 - `Div[A]`: `/` and `/=`, with result type `A`
 
 The in-place forms of `Logical`, `Plus`, `Minus` and `Times` can change their
-left operand and return it, as `set`, `list` and `bytearray` do. The default
-implementations return a new value.
+left operand and return it, as `set`, `list`, `bytearray`, `bitset` and
+`bitarray` do. The default implementations return a new value.
 
 ## Hashing
 
