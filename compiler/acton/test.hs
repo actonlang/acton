@@ -2951,6 +2951,11 @@ rtsTests =
           forM_ ["1", "2", "8"] $ \n -> do
               (returnCode, cmdOut, cmdErr) <- runThing ("--rts-wthreads " ++ n) "../../test/rts/wake_stress.act"
               assertEqual ("wake_stress with " ++ n ++ " worker threads: " ++ cmdOut ++ cmdErr) ExitSuccess returnCode
+  ,   testCase "take an actor queued behind a long continuation" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/steal_behind_long_continuation.act"
+          forM_ ["2", "8"] $ \n -> do
+              (returnCode, cmdOut, cmdErr) <- runThing ("--rts-wthreads " ++ n) "../../test/rts/steal_behind_long_continuation.act"
+              assertEqual ("steal_behind_long_continuation with " ++ n ++ " worker threads: " ++ cmdOut ++ cmdErr) ExitSuccess returnCode
   ]
 
 stdlibTests =
