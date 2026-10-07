@@ -48,7 +48,8 @@ export fn stdQ_base64Q_decode(data: *acton.bytes) callconv(.c) *acton.bytes {
 }
 
 export fn zig_crypto_hash_md5_init() callconv(.c) *std.crypto.hash.Md5 {
-    const alloc = gc.allocator();
+    // Md5 state is only integers and bytes, so it need not be scanned
+    const alloc = gc.atomicAllocator();
     const hasher_ptr = alloc.create(std.crypto.hash.Md5) catch {
         unreachable("OOM while allocating Md5 hasher");
     };
@@ -70,7 +71,8 @@ export fn zig_crypto_hash_md5_finalize(hasher: *std.crypto.hash.Md5, output: *ac
 }
 
 export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
-    const alloc = gc.allocator();
+    // Wyhash state is only integers and bytes, so it need not be scanned
+    const alloc = gc.atomicAllocator();
     const hasher_ptr = alloc.create(std.hash.Wyhash) catch {
         acton.raise_MemoryError("OOM while allocating Wyhash hasher");
         unreachable; // raise above does longjmp so this is unreachable

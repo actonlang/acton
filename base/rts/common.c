@@ -123,8 +123,9 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
     acton__allocator.strdup = strdup_func;
     acton__allocator.strndup = strndup_func;
 
-    bsdnt_replace_allocator(acton__allocator.malloc,
-                            acton__allocator.realloc,
+    // bsdnt only allocates limb arrays and digit strings, never pointers
+    bsdnt_replace_allocator(acton__allocator.malloc_atomic,
+                            acton_realloc_atomic,
                             acton__allocator.free);
 
     return 0;
