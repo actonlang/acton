@@ -77,7 +77,11 @@ def fused_local_condition(limit: int) -> int:
 
 # Actor bodies are local scopes too; they have no declared return type, so
 # coverage here prevents accidentally restricting forwarding to functions.
+# The captured state value must be sampled at construction while the plan
+# itself remains fusible.
 actor fused_local_actor(env):
-    values = (i * i for i in range(10))
+    factor = 2
+    values = (factor * i for i in range(10))
+    factor = 3
     total = sum(values)
     env.exit(total)

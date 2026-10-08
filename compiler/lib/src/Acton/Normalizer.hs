@@ -67,7 +67,6 @@ data NormX                          = NormX {
                                         marksX :: [ContextMark],
                                         rtypeX :: Maybe Type,
                                         localScopeX :: Bool,
-                                        functionScopeX :: Bool,
                                         capturedLocalsX :: [Name],
                                         lambdavarsX :: PosPar,
                                         classattrsX :: [Name],
@@ -87,15 +86,13 @@ setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 getRet env                          = fromJust $ rtypeX $ envX env
 
 enterFunctionScope ns env          = modX env $ \x -> x{ localScopeX = True,
-                                                          functionScopeX = True,
                                                           capturedLocalsX = nub (ns ++ capturedLocalsX x) }
 
 enterActorScope ns env             = modX env $ \x -> x{ localScopeX = True,
-                                                          functionScopeX = False,
                                                           capturedLocalsX = nub (ns ++ capturedLocalsX x) }
 
 advanceLocalEnv s env
-  | functionScopeX (envX env)       = modX env1 $ \x -> x{ capturedLocalsX = nub (bound s ++ capturedLocalsX x) }
+  | localScopeX (envX env)          = modX env1 $ \x -> x{ capturedLocalsX = nub (bound s ++ capturedLocalsX x) }
   | otherwise                       = env1
   where env1                        = define (envOf s) env
 
@@ -117,7 +114,7 @@ setClassAttrs ns env                = modX env $ \x -> x{ classattrsX = ns }
 setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
 
 normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, localScopeX = False,
-                                                      functionScopeX = False, capturedLocalsX = [],
+                                                      capturedLocalsX = [],
                                                       lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
 
 
@@ -128,10 +125,11 @@ normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Not
 -- below, and the name is never rebound, retain the GeneratorExpr until its
 -- consumer.  The outer iterator is still evaluated at the original assignment
 -- point.  Ordinary function locals used by its deferred clauses are also
--- copied there, preserving Acton's capture-by-value closure semantics.  Actor
--- state remains state and is therefore read through the actor as usual.  Only
--- the plan which consumes these saved values moves forward.  Every less
--- obvious case keeps the ordinary lazy iterator object.
+-- copied there, preserving Acton's capture-by-value closure semantics.  This
+-- includes actor state: the deactorizer samples actor fields used freely by a
+-- lambda when that lambda is constructed, and a forwarded generator must do
+-- the same.  Only the plan which consumes these saved values moves forward.
+-- Every less obvious case keeps the ordinary lazy iterator object.
 forwardLocalGenerators             :: NormEnv -> Suite -> NormM Suite
 forwardLocalGenerators env ss
   | not $ localScopeX $ envX env    = return ss

@@ -281,13 +281,16 @@ actor main(env):
         if sum(actor_values) != 14:
             result = 44
     if result == 0:
-        # Actor locals denote actor state.  Both the ordinary lazy form and a
-        # forwarded plan therefore observe the updated state, unlike lexical
-        # function locals, which are captured by value above.
+        # Actor state used freely by a deferred computation is sampled when
+        # the computation is constructed, just as it is for an actor lambda.
+        # Check the lambda, ordinary iterator, and forwarded/fused plan against
+        # one another so fusion cannot change this capture rule.
         actor_factor = 2
+        actor_lambda = lambda i: actor_factor * i
         actor_capture = (actor_factor * i for i in range(4))
+        actor_fallback = (actor_factor * i for i in range(4))
         actor_factor = 3
-        if sum(actor_capture) != 18:
+        if actor_lambda(3) != 6 or sum(actor_capture) != 12 or consume_with_bias(actor_fallback) != 112:
             result = 45
     if result != 0:
         print("generator expression test failed:", result)
