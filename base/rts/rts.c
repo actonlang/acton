@@ -1170,6 +1170,7 @@ B_BaseException $POP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
+    assert(current != wctx->jump0);     // jump0 belongs to the worker loop, never to a try
     //    assert(current->prev != NULL);
     wctx->jump_top = current->prev;
     return current->xval;
@@ -1180,6 +1181,7 @@ void $DROP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
+    assert(current != wctx->jump0);     // jump0 belongs to the worker loop, never to a try
     //   (current->prev != NULL);
     wctx->jump_top = current->prev;
 }
@@ -2171,6 +2173,7 @@ void wt_work_cb(uv_check_t *ev) {
             }
             rtsd_printf("## Running actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
+            assert(wctx->jump_top == wctx->jump0);      // the continuation popped every try it pushed
 
             end_ns = now_ns();
             long long int diff = end_ns - cont_start_ns;
