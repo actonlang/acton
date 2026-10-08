@@ -150,7 +150,6 @@ qualifyInterfaceDefaults env          = map qualifyBinding
         -- checked expansion needs definition-site qualification.
         qualifyDefault ws (DfltExpr e v ref)
                                         = DfltExpr e (qualifyExpr ws v) (exportRef ref)
-        qualifyDefault _ DfltDynamic    = DfltDynamic
         qualifyExpr ws                  = qualifyDefaultExprExcept env ws
         exportRef (Just q)
           | Internal Tempvar _ _ <- noq q
@@ -177,7 +176,6 @@ substDefaultTerms s (TRow l rk n t d r)
                                         = TRow l rk n (substDefaultTerms s t)
                                                   (fmap substDefault d) (substDefaultTerms s r)
   where substDefault (DfltExpr e v ref)= DfltExpr e (termsubst s v) ref
-        substDefault DfltDynamic       = DfltDynamic
 substDefaultTerms s (TStar l rk r)    = TStar l rk (substDefaultTerms s r)
 substDefaultTerms s (TUnboxed l t)    = TUnboxed l (substDefaultTerms s t)
 substDefaultTerms _ t                 = t
@@ -660,7 +658,6 @@ updateDefaultRefs clear refs           = map clearBinding
           where ref'                    = case ref of
                                                Just q | clear, Internal Tempvar _ _ <- noq q -> Nothing
                                                _ -> ref
-        clearRef DfltDynamic            = DfltDynamic
 
 -- The scan phase must publish a function type before its body is checked, so
 -- its default rows initially contain parsed expressions. Replace those with
@@ -749,9 +746,7 @@ refreshDefaults te stmt                = map refresh te
         rowEntryCount _                  = 0
 
         defaultSource (DfltExpr e _ _)   = e
-        defaultSource DfltDynamic        = eNotImpl
         defaultRef (DfltExpr _ _ ref)    = ref
-        defaultRef DfltDynamic           = Nothing
 
         topDecls (Decl _ declarations)  = declarations
         topDecls (With _ _ body)        = concatMap topDecls body

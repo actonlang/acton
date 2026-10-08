@@ -549,7 +549,7 @@ signatureParameters pos kw = positionalParameters 1 pos ++ keywordParameters kw
     positionalParameters ix row =
       case row of
         S.TRow _ S.PRow _ typ d rest ->
-          positional ix typ (d >>= S.defaultExpr) : positionalParameters (ix + 1) rest
+          positional ix typ (S.defaultExpr <$> d) : positionalParameters (ix + 1) rest
         S.TStar _ S.PRow rest ->
           [SignatureParameter ("*args: " ++ displayType (S.tTupleP rest))]
         _ -> []
@@ -571,7 +571,7 @@ keywordParameters row =
   case row of
     S.TRow _ S.KRow name typ d rest ->
       SignatureParameter (S.rawstr name ++ ": " ++ displayType typ ++
-                          maybe "" ((" = " ++) . prstr) (d >>= S.defaultExpr)) : keywordParameters rest
+                          maybe "" ((" = " ++) . prstr) (S.defaultExpr <$> d)) : keywordParameters rest
     S.TStar _ S.KRow rest ->
       [SignatureParameter ("**kwargs: " ++ displayType (S.tTupleK rest))]
     _ -> []

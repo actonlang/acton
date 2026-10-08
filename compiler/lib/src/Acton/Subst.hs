@@ -72,7 +72,6 @@ instance VFree Type where
 
 instance VFree DefaultSpec where
     vfree (DfltExpr e v _)          = vfree e ++ vfree v
-    vfree DfltDynamic               = []
 
 instance VFree TCon where
     vfree (TC n ts)                 = vfree ts
@@ -243,7 +242,6 @@ instance VSubst Type where
 
 instance VSubst DefaultSpec where
     vsubst s (DfltExpr e v r)       = DfltExpr (vsubst s e) (vsubst s v) r
-    vsubst _ DfltDynamic            = DfltDynamic
 instance VSubst TCon where
     vsubst s (TC n ts)              = TC n (vsubst s ts)
 
@@ -446,7 +444,6 @@ instance UFree Type where
 
 instance UFree DefaultSpec where
     ufree (DfltExpr e v _)          = ufree e ++ ufree v
-    ufree DfltDynamic               = []
 
 instance UFree PosPar where
     ufree (PosPar n t e p)          = ufree t ++ ufree p
@@ -686,8 +683,9 @@ schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
 schematic (TTuple _ _ _)            = tTuple tWild tWild
 schematic (TOpt _ _)                = tOpt tWild
-schematic (TRow _ k n _ d r)        = maybe (tRow k n tWild) (const $ tDefRow k n tWild DfltDynamic) d
-                                              (schematic r)
+-- A schematic row has forgotten the expression needed to expand an omitted
+-- argument, so expose the conservative required-argument view.
+schematic (TRow _ k n _ _ r)        = tRow k n tWild (schematic r)
 schematic (TStar _ k _)             = tStar k tWild
 schematic t                         = t
 

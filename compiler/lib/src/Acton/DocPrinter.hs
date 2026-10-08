@@ -1766,11 +1766,9 @@ instance Pretty SimplifiedType where
 
 prettyDefaultSpec :: DefaultSpec -> Doc
 prettyDefaultSpec (DfltExpr source _ _) = text " = " <> pretty source
-prettyDefaultSpec DfltDynamic           = text " = <default>"
 
 renderDefaultSpec :: DefaultSpec -> String
 renderDefaultSpec (DfltExpr source _ _) = " = " ++ render (pretty source)
-renderDefaultSpec DfltDynamic           = " = <default>"
 
 -- | Pretty print a type with simplified qualified names
 prettySimplifiedType :: Type -> Doc

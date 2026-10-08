@@ -76,7 +76,7 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
 
 #undef HASH_SCALAR
 
-    B_hasher h = B_hasherG_new(NULL);
+    B_hasher h = B_hasherG_new(0);
     wit->$class->hash(wit, value, h);
     return B_hasherD_finalize(h);
 }

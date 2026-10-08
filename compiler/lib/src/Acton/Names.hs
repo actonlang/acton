@@ -482,4 +482,3 @@ instance Vars Type where
 
 instance Vars DefaultSpec where
     freeQ (DfltExpr e v _)          = freeQ e ++ freeQ v
-    freeQ DfltDynamic               = []

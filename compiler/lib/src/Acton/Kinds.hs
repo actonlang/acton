@@ -173,7 +173,6 @@ instance ConvTWild TCon where
 
 instance ConvTWild DefaultSpec where
     convTWild env (DfltExpr e v r)  = DfltExpr <$> convTWild env e <*> convTWild env v <*> pure r
-    convTWild _ DfltDynamic         = pure DfltDynamic
 
 instance ConvTWild Expr where
     convTWild _ e                   = pure e
@@ -652,7 +651,6 @@ instance KSubst Type where
 
 instance KSubst DefaultSpec where
     ksubst g (DfltExpr e v r)       = DfltExpr <$> ksubst g e <*> ksubst g v <*> pure r
-    ksubst _ DfltDynamic            = pure DfltDynamic
 
 instance KSubst Stmt where
     ksubst g (Expr l e)             = Expr l <$> ksubst g e

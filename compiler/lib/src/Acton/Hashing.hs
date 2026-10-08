@@ -513,7 +513,6 @@ feedType t sink = case t of
 
 feedDefaultSpec :: A.DefaultSpec -> HashFeed
 feedDefaultSpec (A.DfltExpr e v ref) sink = feedTag 124 sink >> feedExpr e sink >> feedExpr v sink >> feedMaybe feedQName ref sink
-feedDefaultSpec A.DfltDynamic sink      = feedTag 125 sink
 
 feedTSchema :: A.TSchema -> HashFeed
 feedTSchema (A.TSchema _ q t) sink = feedTag 130 sink >> feedQBinds q sink >> feedType t sink
@@ -963,7 +962,6 @@ foldDepsType add t acc = case t of
 foldDefaultDeps add (A.DfltExpr _ value ref) acc =
   let acc' = foldl' (flip add) acc (Names.freeQ value)
   in maybe acc' (`add` acc') ref
-foldDefaultDeps _ A.DfltDynamic acc              = acc
 
 foldDepsTVar :: (A.QName -> acc -> acc) -> A.TVar -> acc -> acc
 foldDepsTVar _ _ acc = acc
