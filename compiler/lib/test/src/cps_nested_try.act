@@ -1,0 +1,32 @@
+proc def force_cps(arg: int) -> int:
+    return arg
+
+def ret_inner(x: int) -> int:
+    try:
+        try:
+            if x > 0:
+                return 1
+        except ValueError:
+            pass
+        force_cps(x)
+    except ValueError:
+        pass
+    finally:
+        pass
+    return 0
+
+def ret_else(x: int) -> int:
+    try:
+        try:
+            pass
+        except ValueError:
+            pass
+        else:
+            if x > 0:
+                return 1
+        force_cps(x)
+    except ValueError:
+        pass
+    finally:
+        pass
+    return 0

@@ -1,0 +1,86 @@
+proc def force_cps (arg : __builtin__.int) -> __builtin__.int:
+    return arg
+
+W_ret_inner_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_ret_inner_7: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def ret_inner (x : __builtin__.int) -> __builtin__.int:
+    if $PUSHF():
+        if $PUSH():
+            if $PUSH():
+                if W_ret_inner_7.__gt__(x, W_ret_inner_5.__fromatom__(0)):
+                    N_tmp: __builtin__.int = W_ret_inner_5.__fromatom__(1)
+                    $DROP()
+                    $DROP()
+                    $RAISE($RET(N_tmp))
+                $DROP()
+            else:
+                N_1x: __builtin__.BaseException = $POP()
+                if isinstance(N_1x, ValueError):
+                    pass
+                else:
+                    $RAISE(N_1x)
+            force_cps(x)
+            $DROP()
+        else:
+            N_2x: __builtin__.BaseException = $POP()
+            if isinstance(N_2x, ValueError):
+                pass
+            else:
+                $RAISE(N_2x)
+        $RAISE($SEQ())
+    else:
+        N_3xx: __builtin__.BaseException = $POP()
+        pass
+        if isinstance(N_3xx, $RET):
+            N_3xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_3xx)
+            return $CAST@[__builtin__.value, __builtin__.int](N_3xxG_RET.val)
+        elif isinstance(N_3xx, $SEQ):
+            pass
+        else:
+            $RAISE(N_3xx)
+    N_4tmp: __builtin__.int = W_ret_inner_5.__fromatom__(0)
+    return N_4tmp
+
+W_ret_else_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_ret_else_7: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def ret_else (x : __builtin__.int) -> __builtin__.int:
+    if $PUSHF():
+        if $PUSH():
+            if $PUSH():
+                pass
+                $DROP()
+                if W_ret_else_7.__gt__(x, W_ret_else_5.__fromatom__(0)):
+                    N_5tmp: __builtin__.int = W_ret_else_5.__fromatom__(1)
+                    $DROP()
+                    $RAISE($RET(N_5tmp))
+            else:
+                N_6x: __builtin__.BaseException = $POP()
+                if isinstance(N_6x, ValueError):
+                    pass
+                else:
+                    $RAISE(N_6x)
+            force_cps(x)
+            $DROP()
+        else:
+            N_7x: __builtin__.BaseException = $POP()
+            if isinstance(N_7x, ValueError):
+                pass
+            else:
+                $RAISE(N_7x)
+        $RAISE($SEQ())
+    else:
+        N_8xx: __builtin__.BaseException = $POP()
+        pass
+        if isinstance(N_8xx, $RET):
+            N_8xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_8xx)
+            return $CAST@[__builtin__.value, __builtin__.int](N_8xxG_RET.val)
+        elif isinstance(N_8xx, $SEQ):
+            pass
+        else:
+            $RAISE(N_8xx)
+    N_9tmp: __builtin__.int = W_ret_else_5.__fromatom__(0)
+    return N_9tmp
