@@ -3,9 +3,14 @@ actor main(env):
     d[1] = "one"
     d[2] = "two"
     del d[2]
+    # This insert resizes the table to 4 slots, and dictresize does not build
+    # the indices of such a table. The next del finds no index for its entry.
     d[3] = "three"
     del d[1]
-    print(str(d))
-    print(str(d[3]))
+    if str(d) != "{{3:'three'}}":
+        print("Unexpected result of str(d):", d)
+        env.exit(1)
+    if d == {4: "four"}:
+        print("Unexpected equality with a dict of other keys:", d)
+        env.exit(1)
     env.exit(0)
-    

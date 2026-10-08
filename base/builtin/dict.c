@@ -143,7 +143,7 @@ static int $lookdict(B_dict_base dict, B_Hashable hashwit, uint64_t hash, $WORD 
     }
     if (table->tb_size == INIT_SIZE) {
         // Ignore hash and do linear search
-        for (int ix = 0; ix < (int)table->tb_nentries; ix++) {
+        for (int ix = 0; ix < table->tb_nentries; ix++) {
             $entry_t entry = &TB_ENTRIES(table)[ix];
             if (entry->value != DELETED && (entry->key == key || (hashwit->$class->__eq__(hashwit,key,entry->key)))) {
                 // found an entry with the same or equal key
@@ -683,8 +683,10 @@ static $WORD B_dict_base_pop(B_dict_base dict, B_Hashable hashwit, $WORD key, $W
     if (ix < 0)
         return deflt;
     $entry_t entry = &TB_ENTRIES(table)[ix];
-    int i = $lookdict_index(table, hash, ix);
-    table->tb_indices[i] = DKIX_DUMMY;
+    if (table->tb_size > INIT_SIZE) {
+        int i = $lookdict_index(table, hash, ix);
+        table->tb_indices[i] = DKIX_DUMMY;
+    }
     res = entry->value;
     entry->value = DELETED;
     dict->numelements--;
