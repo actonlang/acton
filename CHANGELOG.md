@@ -15,6 +15,12 @@
   and `freeze()` consume mutable collections into their immutable forms, with
   hashable `iset` values usable as dictionary keys or nested sets. [#3122]
   [#3152]
+- Make augmented assignment use mutating protocol methods when a type overrides
+  them. `set` applies `|=`, `&=`, `-=`, and `^=` in place; `list` and
+  `bytearray` apply `+=` and `*=` in place; and `bitset` and `bitarray` update
+  their packed storage and size. Aliases observe these changes, while immutable
+  types retain value semantics and `sum()` leaves mutable start values
+  unchanged. [#3226] [#3230]
 - End iteration through ordinary control flow instead of exceptions.
   `Iterator.__next__()` and `next()` now return `maybe[A]`, using `just(value)`
   for items and `nothing()` for exhaustion. This makes some iteration-heavy
@@ -26,8 +32,12 @@
 ### Compiler & Build
 - Compile direct synchronous `for` loops over `range()` without allocating the
   range object on the heap, and pass statically known range bounds as unboxed
-  integers. Range values that may escape the loop remain heap allocated.
-  [#3189]
+  integers. Nested range loops keep their private iterators in stack storage,
+  while range values that may escape the loop remain heap allocated. [#3189]
+  [#3224]
+- Compile fixed tuple-literal assignments into scalar temporaries and stores,
+  avoiding a temporary tuple allocation while preserving left-to-right
+  evaluation and simultaneous-assignment semantics. [#3223]
 - Compile conversions between statically known fixed-width numeric types
   without boxing, while retaining range checks for narrowing conversions, and
   keep builtin sequence indices unboxed across lookup and mutable operations
@@ -78,6 +88,13 @@
   its build, invalidate cached tests when changed, and are recorded with
   performance results. Explicit Linux backends fail instead of silently
   falling back when unavailable. [#3140] [#3146]
+- Add GC build options for heap growth and allocation budgets, heap block and
+  mark-stack sizes, parallel range stealing, thread-local allocation, object
+  end padding, and moved `GC_realloc` storage. Acton now defaults to range
+  stealing, a larger initial mark stack, immediate thread-local free lists,
+  and collector-reclaimed small realloc copies; each default can be restored
+  to the previous behavior in `Build.act`, with runtime environment overrides
+  where supported. [#3212]
 - Allow Linux and macOS applications to select mimalloc for ordinary C and
   native-library allocation with `build_options = {"malloc": "mimalloc"}`.
   The system allocator remains the default, and the option does not replace
@@ -108,22 +125,37 @@
 - Add compact fixed-size containers for numeric and Boolean workloads:
   `array[int]` and `array[float]` store unboxed values, `bitarray` packs Boolean
   values, and `bitset` represents bounded sets of non-negative integers. The
-  new `matrix` module provides fixed-size numeric matrices with mutable row,
-  column, rectangular, transposed, and reshaped views that share storage.
-  [#3202]
+  new `matrix` module provides fixed-size numeric matrices. Rows and columns
+  are mutable `vector_view` values, and rectangular, transposed, and reshaped
+  views are matrices; all views share storage with the original. [#3202]
 - Reduce scheduler overhead and prevent lost wakeups when many runtime workers
   are active. Workers keep short runs of ready work on the same actor to avoid
   repeated queue operations and core migration, while yielding when other
   actors wait. They also avoid the global sync-pause mutex when no pause is
   requested, wait longer between retries on contended ready-queue spinlocks,
   and use matching memory fences to keep newly queued actors from being left
-  asleep on Arm. Ready queues and worker statistics occupy separate cache
-  lines so workers no longer slow each other down by updating neighbouring
-  entries. Fewer clock reads and direct hardware timer reads on supported
-  aarch64 and x86_64 CPUs further reduce the cost of short actor work and
-  improve sub-microsecond runtime timing statistics on macOS. Other CPUs
-  retain the monotonic clock fallback, and `--rts-verbose` reports the worker
-  clock in use. [#3205] [#3206] [#3208] [#3210] [#3214] [#3215]
+  asleep on Arm, including pinned-actor and synchronized-pause wakeups. Ready
+  queues, worker statistics, pause state, and per-worker actor-ID sequences
+  occupy separate cache lines so workers no longer contend on frequently
+  updated shared state. Actor IDs remain unique but are no longer allocated
+  from one global sequence. Fewer clock reads and direct hardware timer reads
+  on supported aarch64 and x86_64 CPUs further reduce the cost of short actor
+  work and improve sub-microsecond runtime timing statistics on macOS. Other
+  CPUs retain the monotonic clock fallback, and `--rts-verbose` reports the
+  worker clock in use. [#3205] [#3206] [#3208] [#3210] [#3214] [#3215]
+  [#3218] [#3219] [#3221]
+- Read and write ready-queue heads and counts atomically, including where
+  workers check a queue without taking its lock, removing data races that
+  ThreadSanitizer reports at no added cost on x86_64 or aarch64. A queue's
+  count is lowered only when a worker takes an actor, so it no longer drifts
+  below the number of queued actors when workers race for the same actor.
+  [#3232] [#3233]
+- Run timed messages on monotonic clocks, so wrong or adjusted wall clocks no
+  longer move pending delays. Linux and macOS use suspend-aware clocks and
+  kernel timers instead of spinning through the last fraction of each delay,
+  cutting CPU use by more than 90% in dense timer workloads. This trades
+  busy-wait precision for normal OS wakeup precision, particularly on macOS;
+  other platforms use libuv's monotonic clock and timer. [#3222] [#3231]
 - Flush messages produced by a turn before an actor begins waiting for an
   awaited result, preventing another worker from resuming the actor
   concurrently and causing crashes, reordered messages, or incorrect timer
@@ -171,18 +203,28 @@
   x86_64 macOS retains the previous fallback. [#3172]
 - Hash values from their existing byte representation instead of allocating a
   `bytes` wrapper, and hash tuple components with one hasher while preserving
-  component boundaries. This removes per-value and per-component allocations,
-  making short values about 25% faster, two-component tuples roughly 45-50%
-  faster, and 64 KiB strings almost ten times faster to hash. [#3160] [#3161]
+  component boundaries. `hash()` also bypasses the stateful hasher allocation
+  for `int`, `u64`, `str`, and `bytes`. This removes per-value and
+  per-component allocations, making short values about 25% faster,
+  two-component tuples roughly 45-50% faster, and 64 KiB strings almost ten
+  times faster to hash. [#3160] [#3161] [#3216]
 - Add `acton.rts.get_gc_info()` for inspecting the collector's mode, configured
-  and active dirty-tracking backends, marking and collection policy, and
-  current heap, free, and unmapped byte counts. [#3146]
+  and active dirty-tracking backends, marking and collection policy, heap and
+  mark-stack layout, thread-local allocation behavior, and current heap, free,
+  and unmapped byte counts. [#3146] [#3212]
+- Add allocation-free `time.monotonic_ns()` for reading the monotonic clock as
+  an integer nanosecond count in deadline checks and other hot loops. [#3217]
+- Allocate `bigint` limb storage only when it is needed, and compute `%`
+  without boxing a discarded quotient and `divmod()` tuple, reducing heap work
+  for zero values and remainder-heavy arithmetic. [#3229]
 - Add `math.ldexp(x, exp)` and `std.math.ldexp(x, exp)` for computing
   `x * 2**exp` across the full Acton `int` exponent range. [#3190]
 - Update the bundled collector so unlimited generational collection can use
   parallel marking, idle `userfaultfd` monitoring sleeps, write protection
   handles Linux memory-mapping boundaries, and custom stop callbacks remain
-  installed. [#3144]
+  installed. Further fixes prevent missed `userfaultfd` writes, heap corruption
+  in newly enabled thread-local and mark-stack modes, and allocation failure
+  when a full heap can recover through collection. [#3144] [#3212]
 - Include `bytes` and `complex` in `atom`, allowing APIs that accept immutable
   builtin values to receive them. Unsupported `atom` inputs to numeric
   constructors now raise `ValueError` instead of terminating the process.
@@ -224,6 +266,12 @@
   tuples compare equal to themselves even when they contain `NaN`. [#3106]
 - Keep `range()` empty when its step points away from the stop value instead of
   yielding an erroneous element. [#3157]
+- Fix `del` and `pop()` on small dictionaries, which hold at most two
+  entries. Removing a key could corrupt the dictionary's entry count, so
+  `str()` showed the dictionary as empty, serialization dropped its entries,
+  and comparisons with the dictionary as the left operand checked only
+  lengths, so `d == other` was true for any `other` of the same length.
+  [#3236]
 - Use libc's optimized memory fill where available, reducing time and CPU use
   in GC-heavy workloads while retaining Zig's implementation on platforms that
   need it. [#3139]
@@ -231,6 +279,9 @@
   `sum`, and `zip` in Acton and streamline collection iteration to avoid
   allocation-heavy iterator handling in common builtin operations. [#3104]
   [#3131]
+- Join `str`, `bytes`, and `bytearray` parts from `list` and `ilist` values
+  without first materializing an identical temporary list, while preserving
+  support for arbitrary iterables. [#3224]
 - Drain queued writes before closing server-side TCP connections, preventing
   large response payloads from being truncated when
   `TCPListenConnection.close()` follows `write()`. [#3110]
@@ -261,7 +312,7 @@
 - Expand performance testing into a repeatable workflow for measuring
   individual benchmarks and how they scale with workload size. [#3105] [#3107]
   [#3112] [#3113] [#3115] [#3117] [#3118] [#3121] [#3124] [#3127]
-  [#3130] [#3134] [#3139] [#3203] [#3204] [#3207]
+  [#3130] [#3134] [#3139] [#3203] [#3204] [#3207] [#3220] [#3222]
   - `acton test perf` calibrates opt-in `t.loop()` benchmarks within a
     configurable time budget, warms up and measures fresh invocations, accepts
     explicit or recorded workload scales, and includes dedicated builtin and
@@ -300,8 +351,13 @@
     stress test processes with a fixed worker count, includes it in cache and
     baseline identities, and enables reproducible scheduler scaling studies.
     The fleet benchmark measures a representative actor-and-timer workload,
-    while the scheduling suite covers ring handoffs, deep mailboxes, fan-out,
-    pipelines, latency under load, and work queued after replies.
+    while the scheduling suite covers ring and independent-pair handoffs, deep
+    mailboxes, fan-out, pipelines, latency under load, and work queued after
+    replies. A timer-precision suite measures one-shot and periodic firing
+    accuracy and CPU cost.
+  - The cross-runtime `xlang` runner builds and interleaves equivalent Acton,
+    Go, and Tokio scheduling workloads, then produces median summaries and
+    interactive HTML charts for throughput, CPU cost, and latency.
   - Recorded performance and scaling baselines from different machines now
     still show deltas with an explicit warning instead of rejecting the
     comparison. Their live integration tests now run with the default
@@ -5205,8 +5261,25 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3208]: https://github.com/actonlang/acton/pull/3208
 [#3209]: https://github.com/actonlang/acton/pull/3209
 [#3210]: https://github.com/actonlang/acton/pull/3210
+[#3212]: https://github.com/actonlang/acton/pull/3212
 [#3214]: https://github.com/actonlang/acton/pull/3214
 [#3215]: https://github.com/actonlang/acton/pull/3215
+[#3216]: https://github.com/actonlang/acton/pull/3216
+[#3217]: https://github.com/actonlang/acton/pull/3217
+[#3218]: https://github.com/actonlang/acton/pull/3218
+[#3219]: https://github.com/actonlang/acton/pull/3219
+[#3220]: https://github.com/actonlang/acton/pull/3220
+[#3221]: https://github.com/actonlang/acton/pull/3221
+[#3222]: https://github.com/actonlang/acton/pull/3222
+[#3223]: https://github.com/actonlang/acton/pull/3223
+[#3224]: https://github.com/actonlang/acton/pull/3224
+[#3226]: https://github.com/actonlang/acton/pull/3226
+[#3229]: https://github.com/actonlang/acton/pull/3229
+[#3230]: https://github.com/actonlang/acton/pull/3230
+[#3231]: https://github.com/actonlang/acton/pull/3231
+[#3232]: https://github.com/actonlang/acton/pull/3232
+[#3233]: https://github.com/actonlang/acton/pull/3233
+[#3236]: https://github.com/actonlang/acton/pull/3236
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
@@ -5354,6 +5427,7 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [0.29.0]: https://github.com/actonlang/acton/compare/v0.28.3...v0.29.0
 [0.29.1]: https://github.com/actonlang/acton/compare/v0.29.0...v0.29.1
 [0.30.0]: https://github.com/actonlang/acton/compare/v0.29.1...v0.30.0
+[0.31.0]: https://github.com/actonlang/acton/compare/v0.30.0...v0.31.0
 
 [homebrew-acton#7]: https://github.com/actonlang/homebrew-acton/pull/7
 [homebrew-acton#28]: https://github.com/actonlang/homebrew-acton/pull/28
