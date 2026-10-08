@@ -4,10 +4,10 @@ Acton supports higher order functions, which means you can pass a
 function as an argument to another function and choose behavior at the
 call site.
 
-That is Acton's nearest equivalent to the reusable part of Rust's
-closure and iterator story. Acton does not have a Rust-style closure or
-iterator-adapter path to learn first; use higher-order functions,
-comprehensions, and explicit iteration instead.
+For collection transformations, use higher order functions,
+comprehensions, or [generator expressions](../collections/lists.md#generator-expressions).
+Generator expressions describe lazy iteration, and builtins such as
+`map`, `filter`, and `flatmap` accept functions to transform iterables.
 
 <div class="beginner-content">
 <p>A function can be treated like any other value. That makes it easy to

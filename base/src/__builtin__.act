@@ -1283,6 +1283,16 @@ class map[A,B](Iterator[B]):
         return nothing()
 
 class flatmap[A,B](Iterator[B]):
+    """Lazily flatten the iterators returned by a pure callback.
+
+    flatmap(f, it) accepts an Iterable[A] and a function from A to
+    Iterator[B]. It constructs the outer iterator immediately, then calls
+    f as iteration advances. Each inner iterator is exhausted before the
+    next input is consumed; empty inner iterators are skipped.
+
+    Use iter() inside f to turn a collection into an iterator. The result
+    is a single-pass Iterator[B].
+    """
     @property
     _f: (A) -> Iterator[B]
     _outer: Iterator[A]
