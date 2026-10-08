@@ -286,7 +286,7 @@ static B_str B_dict_base_str(B_dict_base self) {
             elem->$class = &B_strG_methods;
             elem->nbytes = keystr->nbytes + valuestr->nbytes + 1;
             elem->nchars = keystr->nchars + valuestr->nchars + 1;
-            elem->str = acton_malloc(elem->nbytes + 1);
+            elem->str = acton_malloc_atomic(elem->nbytes + 1);
             memcpy(elem->str, keystr->str, keystr->nbytes);
             elem->str[keystr->nbytes] = ':';
             memcpy(&elem->str[keystr->nbytes + 1], valuestr->str, valuestr->nbytes);

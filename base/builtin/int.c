@@ -71,7 +71,7 @@ B_str B_intD___repr__(B_int n) {
 }
 
 B_int toB_int(int64_t i) {
-    B_int res = acton_malloc(sizeof(struct B_int));
+    B_int res = acton_malloc_atomic(sizeof(struct B_int));
     res->$class = &B_intG_methods;
     res->val = i;
     return res;

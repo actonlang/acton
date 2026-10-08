@@ -72,7 +72,7 @@ B_str B_u32D___repr__(B_u32 n) {
 }
 
 B_u32 toB_u32(uint32_t i) {
-    B_u32 res = acton_malloc(sizeof(struct B_u32));
+    B_u32 res = acton_malloc_atomic(sizeof(struct B_u32));
     res->$class = &B_u32G_methods;
     res->val = i;
     return res;

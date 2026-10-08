@@ -72,7 +72,7 @@ B_str B_i8D___repr__(B_i8 n) {
 }
 
 B_i8 toB_i8(int8_t i) {
-    B_i8 res = acton_malloc(sizeof(struct B_i8));
+    B_i8 res = acton_malloc_atomic(sizeof(struct B_i8));
     res->$class = &B_i8G_methods;
     res->val = i;
     return res;

@@ -87,7 +87,7 @@ B_str B_u1D___repr__(B_u1 n) {
 }
 
 B_u1 toB_u1(uint8_t i) {
-    B_u1 res = acton_malloc(sizeof(struct B_u1));
+    B_u1 res = acton_malloc_atomic(sizeof(struct B_u1));
     res->$class = &B_u1G_methods;
     res->val = U1_NORM(i);
     return res;

@@ -18,7 +18,7 @@ static struct B_ZeroDivisionError B_complex_truediv_zero_error =
     STATIC_EXCEPTION(B_ZeroDivisionError, "complex truediv: divisor is zero");
 
 B_complex toB_complex(complex double c) {
-    B_complex res = acton_malloc(sizeof(struct B_complex));
+    B_complex res = acton_malloc_atomic(sizeof(struct B_complex));
     res->$class = &B_complexG_methods;
     res->val = c;
     return res;

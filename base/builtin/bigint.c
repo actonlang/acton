@@ -469,12 +469,12 @@ B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit,  
     if (asize==0) return toB_bigint(0);
     unsigned long  *a1, *b1;
     if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
+        a1 = acton_malloc_atomic(asize*sizeof(long));
         twocompl(a1, a->val.n, asize);
     } else
         a1 = a->val.n;
     if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
+        b1 = acton_malloc_atomic(bsize*sizeof(long));
         twocompl(b1, b->val.n, bsize);
     } else
         b1 = b->val.n;
@@ -519,12 +519,12 @@ B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit,  B
     if (asize==0) return b;
     unsigned long  *a1, *b1;
     if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
+        a1 = acton_malloc_atomic(asize*sizeof(long));
         twocompl(a1, a->val.n, asize);
     } else
         a1 = a->val.n;
     if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
+        b1 = acton_malloc_atomic(bsize*sizeof(long));
         twocompl(b1, b->val.n, bsize);
     } else
         b1 = b->val.n;
@@ -566,12 +566,12 @@ B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  
     if (asize==0) return b;
     unsigned long  *a1, *b1;
     if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
+        a1 = acton_malloc_atomic(asize*sizeof(long));
         twocompl(a1, a->val.n, asize);
     } else
         a1 = a->val.n;
     if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
+        b1 = acton_malloc_atomic(bsize*sizeof(long));
         twocompl(b1, b->val.n, bsize);
     } else
         b1 = b->val.n;
