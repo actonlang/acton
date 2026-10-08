@@ -406,7 +406,6 @@ instance Unalias Type where
 
 instance Unalias DefaultSpec where
     unalias env (DfltExpr e v r)    = DfltExpr e v (unalias env r)
-    unalias _ DfltDynamic           = DfltDynamic
 
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
@@ -1232,10 +1231,11 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-glb env (TRow _ k1 n1 t1 Nothing r1) (TRow _ k2 n2 t2 Nothing r2)
+-- A bound assembled from several rows cannot choose one declaration's
+-- default.  Keep the common required-argument view; a source declaration can
+-- reattach its checked default after inference.
+glb env (TRow _ k1 n1 t1 _ r1) (TRow _ k2 n2 t2 _ r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> glb env t1 t2 <*> glb env r1 r2
-glb env (TRow _ k1 n1 t1 (Just _) r1) (TRow _ k2 n2 t2 (Just _) r2)
-  | k1 == k2 && n1 == n2                = tDefRow k1 n1 <$> glb env t1 t2 <*> pure DfltDynamic <*> glb env r1 r2
 glb env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> glb env r1 r2
 
@@ -1327,10 +1327,9 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-lub env (TRow _ k1 n1 t1 Nothing r1) (TRow _ k2 n2 t2 Nothing r2)
+-- As for glb, losing the particular expression also loses omittability.
+lub env (TRow _ k1 n1 t1 _ r1) (TRow _ k2 n2 t2 _ r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
-lub env (TRow _ k1 n1 t1 (Just _) r1) (TRow _ k2 n2 t2 (Just _) r2)
-  | k1 == k2 && n1 == n2                = tDefRow k1 n1 <$> lub env t1 t2 <*> pure DfltDynamic <*> lub env r1 r2
 lub env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> lub env r1 r2
 lub env (TUnboxed _ t1) t2              = lub env t1 t2
@@ -1674,7 +1673,6 @@ instance Simp Type where
 
 instance Simp DefaultSpec where
     simp env (DfltExpr e v r)       = DfltExpr e v r
-    simp _ DfltDynamic              = DfltDynamic
 
 instance Simp TCon where
     simp env (TC n ts)              = TC (simp env n) (simp env ts)                             -- Simplify constructor names

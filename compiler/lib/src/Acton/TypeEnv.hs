@@ -843,7 +843,6 @@ instance USubst Type where
 
 instance USubst DefaultSpec where
     usubstWith s (DfltExpr e v r)   = DfltExpr (usubstWith s e) (usubstWith s v) r
-    usubstWith _ DfltDynamic        = DfltDynamic
 
 instance USubst QBind where
     usubstWith s (QBind v cs)       = QBind v (usubstWith s cs)

@@ -53,7 +53,7 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
         return zig_hash_wyhash_hash_buffer(0, bytes_value->str, bytes_value->nbytes);
     }
 
-    B_hasher h = B_hasherG_new(NULL);
+    B_hasher h = B_hasherG_new(0);
     wit->$class->hash(wit, value, h);
     return B_hasherD_finalize(h);
 }

@@ -954,6 +954,17 @@ main = do
         timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
 
     describe "Environment" $ do
+      it "forgets defaults when row expressions are no longer available" $ do
+        let d = S.DfltExpr (S.eInt 3) (S.eInt 3) Nothing
+            x = S.name "x"
+            defaultRow = S.tDefRow S.PRow x Builtin.tInt d S.posNil
+            requiredRow = S.tRow S.PRow x Builtin.tInt S.posNil
+        Acton.Env.headcast env0 defaultRow requiredRow `shouldBe` True
+        Acton.Env.glb env0 defaultRow defaultRow `shouldBe` Just requiredRow
+        Acton.Env.lub env0 defaultRow defaultRow `shouldBe` Just requiredRow
+        Acton.Env.glb env0 defaultRow requiredRow `shouldBe` Just requiredRow
+        Acton.Env.lub env0 defaultRow requiredRow `shouldBe` Just requiredRow
+
       it "treats mismatched .tydb headers for loaded modules as stale" $ do
         withSystemTempDirectory "acton-env" $ \dir -> do
           let directMod = S.modName ["direct"]

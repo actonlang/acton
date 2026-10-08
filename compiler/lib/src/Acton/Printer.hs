@@ -492,7 +492,6 @@ prettyKwdRow (TNil _ KRow)          = empty
 prettyKwdRow t                      = text "??" <>  pretty t
 
 prettyDefaultRow n t (DfltExpr e _ _) = pretty n <> colon <+> pretty t <+> equals <+> pretty e
-prettyDefaultRow n t DfltDynamic    = pretty n <> colon <+> pretty t <+> equals <+> text "_"
 
 prettyFunRow (TNil _ PRow) k        = prettyKwdRow k
 prettyFunRow p (TNil _ KRow)        = prettyPosRow p

@@ -1212,9 +1212,7 @@ subpos env info f i r1@TNil{}          r@(TRow _ _ _ _ Nothing _)
                                                  posElemNotFound0 env True (Cast info env r1 r) nWild
 subpos env info f i r1@TNil{}          r@(TRow _ _ _ _ (Just d) r2)
                                             = do (cs,as,es) <- subpos env info f i r1 r2
-                                                 case defaultExpr d of
-                                                   Just e  -> return (cs, PosArg e as, es)
-                                                   Nothing -> notYet (loc r) "Calling a first-class function with a dynamic default"
+                                                 return (cs, PosArg (defaultExpr d) as, es)
 subpos env info f i (TRow _ _ _ t1 _ r1) r2@TNil{}
                                             = do --traceM (" ## subpos H " ++ prstr t1 ++ " = " ++ prstr (f i))
                                                  (cs,as,es) <- subpos env info f (i+1) r1 r2
@@ -1331,9 +1329,7 @@ subkwdRow env info f seen r1 n2 t2 mbd r2
                                                           return ([Sub info env w t t2], eCallVar w [f n])
         pick f seen (TStar _ _ r)           = pick (eDot (f attrKW)) seen r
         pick f seen (TNil _ _)
-          | Just d <- mbd                   = case defaultExpr d of
-                                                 Just e  -> return ([], e)
-                                                 Nothing -> notYet (loc n2) "Calling a first-class function with a dynamic default"
+          | Just d <- mbd                   = return ([], defaultExpr d)
           | otherwise                       = kwdNotFound0 env info n2
 
 rowEntryView (TRow _ _ n t d r)        = Just (n,t,d,r)

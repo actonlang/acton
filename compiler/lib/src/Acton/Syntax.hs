@@ -31,7 +31,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,36]
+version = [0,37]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -257,11 +257,10 @@ type KUni       = Int
 -- as the written default would make an otherwise useful public signature
 -- unreadable.  The optional reference is only an internal scan-phase
 -- placeholder used while a recursive declaration group is being checked; it
--- is resolved before the interface is exported.  DfltDynamic describes an
--- omittable parameter whose particular default is carried by a first-class
--- function.
+-- is resolved before the interface is exported.  A present DefaultSpec always
+-- contains the expression that can be copied into an omitted argument; when
+-- inference loses that expression, the row becomes required instead.
 data DefaultSpec = DfltExpr { dexpr::Expr, dvalue::Expr, dref::Maybe QName }
-                 | DfltDynamic
                  deriving (Show,Read,Generic,NFData)
 
 data Type       = TUni      { tloc::SrcLoc, uvar::TUni }
@@ -467,8 +466,7 @@ tupleComponents p k     = (++) <$> comps p <*> comps k
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
 
-defaultExpr (DfltExpr _ e _) = Just e
-defaultExpr DfltDynamic    = Nothing
+defaultExpr (DfltExpr _ e _) = e
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVW" ]
 
