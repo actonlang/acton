@@ -61,6 +61,13 @@ actor main(env):
         check_base_requires_str(5)
         expect_value_error(lambda: int(5.0, 16))
         expect_value_error(lambda: u8(5, 16))
+        # A negative str padded to a full parse chunk (18 digits) must keep
+        # its sign, so unsigned types reject it
+        padded = "-" + "0" * 17 + "5"
+        expect_value_error(lambda: u64(padded))
+        expect_value_error(lambda: u32(padded))
+        expect_value_error(lambda: u16(padded))
+        expect_value_error(lambda: u8(padded))
         assert int("123") == 123
         assert int("10", 2) == 2
         assert bigint("123") == bigint(123)

@@ -891,8 +891,7 @@ int64_t set_str(zz_ptr a, unsigned char *nstr, int64_t nbytes, B_int intbase) {
     int64_t offset =  len % POWINWORD[base];
     
     if (offset == 0) {
-        return set_str0(a, nstr, base, parts);
-        a->size *= sgn;
+        set_str0(a, nstr, base, parts);
     } else {
         unsigned long headval = 0;
         int64_t partdigits = 0;
@@ -910,9 +909,9 @@ int64_t set_str(zz_ptr a, unsigned char *nstr, int64_t nbytes, B_int intbase) {
         } else {
             zz_seti(a, headval);
         }
-        a->size *= sgn;
-        return pre; // we shouldn't return chars consumed since we throw exception if whole string not consumed.
-    } 
+    }
+    a->size *= sgn;
+    return pre; // we shouldn't return chars consumed since we throw exception if whole string not consumed.
 }
 
 
