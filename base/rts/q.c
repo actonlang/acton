@@ -130,10 +130,10 @@ $Actor _DEQ_ready(int idx) {
             rqs[idx].tail = NULL;
         }
         assert(res->$waitsfor == NULL);
+        rqs[idx].count--;
     } else {
         rqs[idx].tail = NULL;
     }
-    rqs[idx].count--;
     spinlock_unlock(&rqs[idx].lock);
     return res;
 }
