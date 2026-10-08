@@ -1,0 +1,6 @@
+# A generator consumed from a short-circuiting expression deliberately keeps
+# its lazy representation.  Moving its loop across `and` would make a
+# conditional consumption unconditional.
+def short_circuit_generator(flag: bool, limit: int) -> bool:
+    values = (i * i for i in range(limit))
+    return flag and sum(values) > 0

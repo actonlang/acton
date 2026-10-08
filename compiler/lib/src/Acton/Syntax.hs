@@ -111,6 +111,7 @@ data Expr       = Var           { eloc::SrcLoc, var::QName }
                 | DictComp      { eloc::SrcLoc, assoc1::Assoc, comp::Comp }
                 | Set           { eloc::SrcLoc, elems::[Elem] }
                 | SetComp       { eloc::SrcLoc, elem1::Elem, comp::Comp }
+                | GeneratorExpr { eloc::SrcLoc, elem1::Elem, comp::Comp }
                 | Paren         { eloc::SrcLoc, exp1::Expr }
                 | Box           { tp :: Type, exp1 :: Expr }
                 | UnBox         { tp :: Type, exp1 :: Expr }
@@ -740,6 +741,7 @@ instance Eq Expr where
     x@DictComp{}        ==  y@DictComp{}        = assoc1 x == assoc1 y && comp x == comp y
     x@Set{}             ==  y@Set{}             = elems x == elems y
     x@SetComp{}         ==  y@SetComp{}         = elem1 x == elem1 y && comp x == comp y
+    x@GeneratorExpr{}   ==  y@GeneratorExpr{}   = elem1 x == elem1 y && comp x == comp y
     x@Paren{}           ==  y                   = exp1 x == y
     x                   ==  y@Paren{}           = x == exp1 y
     _                   ==  _                   = False

@@ -970,6 +970,16 @@ sameLocalName n (NoQ n')            = n == n'
 sameLocalName _ _                   = False
 
 genMaybeOutReturn env valT e
+  | Just it <- nextIterator env e   = lbrace $+$
+                                      nest 4 (gen env (tIterator valT) <+> text "$next_iter" <+> equals <+> genExp env (tIterator valT) it <> semi $+$
+                                              text "return $next_iter->$class->__next__($next_iter, $next_out);") $+$
+                                      rbrace
+  | Just (n, _) <- maybeLocalVar env e
+                                    = text "if" <+> parens (genMaybeTag env n) <+> lbrace $+$
+                                      nest 4 (char '*' <> maybeOutParamName <+> equals <+> genMaybePayloadBoxed env n <> semi $+$
+                                              text "return true" <> semi) $+$
+                                      rbrace $+$
+                                      text "return false" <> semi
   | Just v <- justValue env e       = char '*' <> maybeOutParamName <+> equals <+> genMaybeOutValue env valT v <> semi $+$
                                       text "return true" <> semi
   | isNothingValue env e            = text "return false" <> semi
@@ -1222,6 +1232,8 @@ genMaterializedMaybe env n (MaybeLocal t _)
 
 maybeLocalVar env (Var _ (NoQ n))
   | Just ml <- maybeLocal env n     = Just (n, ml)
+maybeLocalVar env (Call _ f (PosArg e PosNil) KwdNil)
+  | isCastToJust env f              = maybeLocalVar env e
 maybeLocalVar env (Paren _ e)       = maybeLocalVar env e
 maybeLocalVar env (Box _ e)         = maybeLocalVar env e
 maybeLocalVar env (UnBox _ e)       = maybeLocalVar env e

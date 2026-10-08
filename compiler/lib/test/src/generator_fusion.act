@@ -1,0 +1,83 @@
+# A generator consumed directly by builtin sum is lowered to nested loops.  In
+# particular, the intermediate iterator combinators and their boxed values
+# must not survive into generated C.
+def fused_sum(limit: int) -> int:
+    return sum(i * n for n in range(limit) if n % 2 == 0
+                     for i in range(n) if i % 2 == 1)
+
+def fused_sum_start(limit: int) -> int:
+    return sum((i * i for i in range(limit)), 10)
+
+def fused_for(limit: int) -> int:
+    total = 0
+    for value in (i * n for n in range(limit) for i in range(n)):
+        if value > 100:
+            break
+        if value % 2 == 0:
+            continue
+        total += value
+    return total
+
+def fused_any(limit: int) -> bool:
+    return any(i * n for n in range(limit) for i in range(n))
+
+def fused_all(limit: int) -> bool:
+    return all(i * n + 1 for n in range(limit) for i in range(n))
+
+def fused_max(limit: int) -> int:
+    return max((i * n for n in range(limit) for i in range(n)), -1)
+
+def fused_min(limit: int) -> int:
+    return min((i * n for n in range(limit) for i in range(n)), 100)
+
+def fused_max_def(limit: int) -> int:
+    values = (i * i for i in range(limit))
+    return max_def(values, -1)
+
+def fused_min_def(limit: int) -> int:
+    values = (i * i for i in range(limit))
+    return min_def(values, 100)
+
+def fused_generic_sum[A(Plus)](values: list[A]) -> A:
+    return sum(value for value in values)
+
+def fused_tuple_pattern(pairs: list[(int,int)]) -> int:
+    return sum(a + b for (a,b) in pairs)
+
+def fused_list_pattern(rows: list[list[int]]) -> int:
+    return sum(a + b for [a,b] in rows)
+
+# A single-use local retains its plan until the eventual consumer.  The
+# unrelated statement between construction and consumption ensures this is
+# not merely an adjacent-statement peephole.
+def fused_local_sum(limit: int) -> int:
+    values = (i * n for n in range(limit) for i in range(n))
+    bias = 10
+    return sum(values) + bias
+
+def fused_local_for(limit: int) -> int:
+    values = (i * n for n in range(limit) for i in range(n))
+    total = 10
+    for value in values:
+        total += value
+    return total
+
+def identity(value: int) -> int:
+    return value
+
+def fused_local_argument(limit: int) -> int:
+    values = (i * i for i in range(limit))
+    return identity(sum(values))
+
+def fused_local_condition(limit: int) -> int:
+    values = (i * i for i in range(limit))
+    if sum(values) > 10:
+        return 1
+    return 0
+
+# Actor bodies are local scopes too; they have no declared return type, so
+# coverage here prevents accidentally restricting forwarding to functions.
+actor fused_local_actor(env):
+    values = (i * i for i in range(10))
+    total = sum(values)
+    env.exit(total)

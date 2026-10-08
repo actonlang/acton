@@ -1282,6 +1282,33 @@ class map[A,B](Iterator[B]):
             return just(self.f(x.val))
         return nothing()
 
+class flatmap[A,B](Iterator[B]):
+    @property
+    _f: (A) -> Iterator[B]
+    _outer: Iterator[A]
+    _inner: ?Iterator[B]
+
+    def __init__(self, f: (A) -> Iterator[B], it: Iterable[A]):
+        self._f = f
+        self._outer = iter(it)
+        self._inner = None
+
+    mut def __next__(self) -> maybe[B]:
+        while True:
+            inner = self._inner
+            if inner is not None:
+                x = inner.__next__()
+                if isinstance(x, just):
+                    return x
+                self._inner = None
+
+            x = self._outer.__next__()
+            if isinstance(x, just):
+                self._inner = self._f(x.val)
+            else:
+                return nothing()
+        return nothing()
+
 def max [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
     res: ?A = dflt
     for x in it:

@@ -21,6 +21,7 @@ import Acton.Env
 import Acton.QuickType
 import Acton.Prim
 import Acton.Builtin
+import Acton.Transform (termsubst)
 import Data.List
 import Pretty
 import Utils
@@ -65,6 +66,9 @@ type NormEnv                        = EnvF NormX
 data NormX                          = NormX {
                                         marksX :: [ContextMark],
                                         rtypeX :: Maybe Type,
+                                        localScopeX :: Bool,
+                                        functionScopeX :: Bool,
+                                        capturedLocalsX :: [Name],
                                         lambdavarsX :: PosPar,
                                         classattrsX :: [Name],
                                         selfparamX :: Maybe Name
@@ -82,6 +86,21 @@ setRet t env                        = modX env $ \x -> x{ rtypeX = t }
 
 getRet env                          = fromJust $ rtypeX $ envX env
 
+enterFunctionScope ns env          = modX env $ \x -> x{ localScopeX = True,
+                                                          functionScopeX = True,
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+
+enterActorScope ns env             = modX env $ \x -> x{ localScopeX = True,
+                                                          functionScopeX = False,
+                                                          capturedLocalsX = nub (ns ++ capturedLocalsX x) }
+
+advanceLocalEnv s env
+  | functionScopeX (envX env)       = modX env1 $ \x -> x{ capturedLocalsX = nub (bound s ++ capturedLocalsX x) }
+  | otherwise                       = env1
+  where env1                        = define (envOf s) env
+
+advanceLocalSuite ss env           = foldl (flip advanceLocalEnv) env ss
+
 addLambdavars p env                 = modX env $ \x -> x{ lambdavarsX = joinP (lambdavarsX x) p }
   where joinP PosNIL p              = p
         joinP (PosPar n mbt mbe p') p
@@ -97,24 +116,258 @@ setClassAttrs ns env                = modX env $ \x -> x{ classattrsX = ns }
 
 setSelfParam n env                  = modX env $ \x -> x{ selfparamX = Just n }
 
-normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
+normEnv env0                        = setX env0 NormX{ marksX = [], rtypeX = Nothing, localScopeX = False,
+                                                      functionScopeX = False, capturedLocalsX = [],
+                                                      lambdavarsX = PosNIL, classattrsX = [], selfparamX = Nothing }
 
 
 -- Normalize terms ---------------------------------------------------------------------------------------
+
+-- A generator bound to a local name need not lose its fusible structure.  If
+-- the name has exactly one use, that use is one of the consumers handled
+-- below, and the name is never rebound, retain the GeneratorExpr until its
+-- consumer.  The outer iterator is still evaluated at the original assignment
+-- point.  Ordinary function locals used by its deferred clauses are also
+-- copied there, preserving Acton's capture-by-value closure semantics.  Actor
+-- state remains state and is therefore read through the actor as usual.  Only
+-- the plan which consumes these saved values moves forward.  Every less
+-- obvious case keeps the ordinary lazy iterator object.
+forwardLocalGenerators             :: NormEnv -> Suite -> NormM Suite
+forwardLocalGenerators env ss
+  | not $ localScopeX $ envX env    = return ss
+forwardLocalGenerators _ []        = return []
+forwardLocalGenerators env (s:ss)
+  | Just (n,gen) <- localGeneratorBinding s,
+    localUses n ss == 1,
+    n `notElem` assigned ss,
+    Just (before,consumer,after,consumerEnv) <- findLocalGeneratorConsumer (advanceLocalEnv s env) n gen ss
+                                    = do stored <- storeGeneratorSource env gen
+                                         case stored of
+                                             Just (sourceInits,gen') ->
+                                                 case replaceLocalGeneratorConsumer consumerEnv n gen' consumer of
+                                                     Just consumer' -> do
+                                                         rest <- forwardLocalGenerators (advanceLocalSuite sourceInits env)
+                                                                        (before ++ (consumer' : after))
+                                                         return (sourceInits ++ rest)
+                                                     Nothing -> keep
+                                             Nothing -> keep
+  where keep                        = do rest <- forwardLocalGenerators (advanceLocalEnv s env) ss
+                                         return (s : rest)
+forwardLocalGenerators env (s:ss)  = do
+    rest <- forwardLocalGenerators (advanceLocalEnv s env) ss
+    return (s : rest)
+
+localGeneratorBinding             :: Stmt -> Maybe (Name,Expr)
+localGeneratorBinding (Assign _ [PVar _ n _] gen@GeneratorExpr{})
+                                    = Just (n,gen)
+localGeneratorBinding _            = Nothing
+
+localUses                          :: Name -> Suite -> Int
+localUses n                        = length . filter (== n) . free
+
+expressionUses                     :: Name -> Expr -> Int
+expressionUses n                   = length . filter (== n) . free
+
+storeGeneratorSource              :: NormEnv -> Expr -> NormM (Maybe (Suite,Expr))
+storeGeneratorSource env gen@GeneratorExpr{}
+                                    = do sourceName <- newName "gen_source"
+                                         captureNames <- mapM captureName captures
+                                         let sub = zip captures (map eVar captureNames)
+                                             captureInits = zipWith captureInit captures captureNames
+                                             gen' = termsubst sub gen
+                                             captureEnv = advanceLocalSuite captureInits env
+                                         return $ case gen' of
+                                             GeneratorExpr l elem (CompFor cl p source co) ->
+                                                 let sourceInit = sAssign (pVar sourceName $ typeOf captureEnv source) source
+                                                     co' = CompFor cl p (eVar sourceName) co
+                                                 in Just (captureInits ++ [sourceInit], GeneratorExpr l elem co')
+                                             _ -> Nothing
+  where captures                    = filter (not . isWitness) $
+                                      nub (free gen) `intersect` capturedLocalsX (envX env)
+        captureName _               = newName "gen_capture"
+        captureInit old new         = sAssign (pVar new $ typeOf env (eVar old)) (eVar old)
+storeGeneratorSource _ _           = return Nothing
+
+findLocalGeneratorConsumer        :: NormEnv -> Name -> Expr -> Suite -> Maybe (Suite,Stmt,Suite,NormEnv)
+findLocalGeneratorConsumer _ _ _ [] = Nothing
+findLocalGeneratorConsumer env n gen (s:ss)
+  | localUses n [s] == 0           = do
+      (before,consumer,after,consumerEnv) <-
+          findLocalGeneratorConsumer (advanceLocalEnv s env) n gen ss
+      return (s:before,consumer,after,consumerEnv)
+  | localUses n [s] == 1,
+    Just _ <- replaceLocalGeneratorConsumer env n gen s
+                                    = Just ([],s,ss,env)
+  | otherwise                       = Nothing
+
+replaceLocalGeneratorConsumer     :: NormEnv -> Name -> Expr -> Stmt -> Maybe Stmt
+replaceLocalGeneratorConsumer env n gen (Assign l ps e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ Assign l ps e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (MutAssign l target e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ MutAssign l target e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (AugAssign l target op e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ AugAssign l target op e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (Assert l e msg)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ Assert l e' msg
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (Expr l e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ Expr l e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (Return l (Just e))
+  | localGeneratorConsumer env n gen e
+                                    = Just $ Return l (Just e')
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (Raise l e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ Raise l e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen (VarAssign l ps e)
+  | localGeneratorConsumer env n gen e
+                                    = Just $ VarAssign l ps e'
+  where e'                         = termsubst [(n,gen)] e
+replaceLocalGeneratorConsumer env n gen s@(If _ bs _)
+  | any branchConsumer bs          = Just $ termsubst [(n,gen)] s
+  where branchConsumer (Branch e _)= localGeneratorConsumer env n gen e
+replaceLocalGeneratorConsumer _ n gen (For l p source body els)
+  | Just _ <- forGeneratorExpr source'
+                                    = Just $ For l p source' body els
+  where source'                    = termsubst [(n,gen)] source
+replaceLocalGeneratorConsumer _ _ _ _ = Nothing
+
+-- Follow the unique use through expression forms which evaluate their
+-- children eagerly.  In particular, do not cross lambdas, comprehensions,
+-- conditional expressions, or the short-circuiting and/or operators.  Once
+-- the use reaches the iterable argument of a supported builtin, substitution
+-- exposes the same direct fusion path used by a literal generator expression.
+localGeneratorConsumer            :: NormEnv -> Name -> Expr -> Expr -> Bool
+localGeneratorConsumer env n gen e
+  | expressionUses n e /= 1        = False
+localGeneratorConsumer env n gen e@Call{}
+  | directLocalGeneratorConsumer env n gen e
+                                    = True
+localGeneratorConsumer env n gen (Call _ f p k)
+                                    = localGeneratorConsumer env n gen f ||
+                                      localGeneratorConsumerPos env n gen p ||
+                                      localGeneratorConsumerKwd env n gen k
+localGeneratorConsumer env n gen (TApp _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (Index _ e i)
+                                    = localGeneratorConsumer env n gen e ||
+                                      localGeneratorConsumer env n gen i
+localGeneratorConsumer env n gen (IsInstance _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (BinOp _ e1 op e2)
+  | op `notElem` [And,Or]          = localGeneratorConsumer env n gen e1 ||
+                                      localGeneratorConsumer env n gen e2
+localGeneratorConsumer env n gen (UnOp _ _ e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (Dot _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (Rest _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (DotI _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (RestI _ e _)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (Tuple _ p k)
+                                    = localGeneratorConsumerPos env n gen p ||
+                                      localGeneratorConsumerKwd env n gen k
+localGeneratorConsumer env n gen (List _ es)
+                                    = any (localGeneratorConsumerElem env n gen) es
+localGeneratorConsumer env n gen (Dict _ as)
+                                    = any (localGeneratorConsumerAssoc env n gen) as
+localGeneratorConsumer env n gen (Set _ es)
+                                    = any (localGeneratorConsumerElem env n gen) es
+localGeneratorConsumer env n gen (Paren _ e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (Box _ e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer env n gen (UnBox _ e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumer _ _ _ _     = False
+
+localGeneratorConsumerPos         :: NormEnv -> Name -> Expr -> PosArg -> Bool
+localGeneratorConsumerPos env n gen (PosArg e p)
+                                    = localGeneratorConsumer env n gen e ||
+                                      localGeneratorConsumerPos env n gen p
+localGeneratorConsumerPos env n gen (PosStar e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumerPos _ _ _ PosNil = False
+
+localGeneratorConsumerKwd         :: NormEnv -> Name -> Expr -> KwdArg -> Bool
+localGeneratorConsumerKwd env n gen (KwdArg _ e k)
+                                    = localGeneratorConsumer env n gen e ||
+                                      localGeneratorConsumerKwd env n gen k
+localGeneratorConsumerKwd env n gen (KwdStar e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumerKwd _ _ _ KwdNil = False
+
+localGeneratorConsumerElem        :: NormEnv -> Name -> Expr -> Elem -> Bool
+localGeneratorConsumerElem env n gen (Elem e)
+                                    = localGeneratorConsumer env n gen e
+localGeneratorConsumerElem env n gen (Star e)
+                                    = localGeneratorConsumer env n gen e
+
+localGeneratorConsumerAssoc       :: NormEnv -> Name -> Expr -> Assoc -> Bool
+localGeneratorConsumerAssoc env n gen (Assoc key value)
+                                    = localGeneratorConsumer env n gen key ||
+                                      localGeneratorConsumer env n gen value
+localGeneratorConsumerAssoc env n gen (StarStar e)
+                                    = localGeneratorConsumer env n gen e
+
+directLocalGeneratorConsumer      :: NormEnv -> Name -> Expr -> Expr -> Bool
+directLocalGeneratorConsumer env n gen call@(Call _ f p k)
+  | Just input <- generatorConsumerInput env f args,
+    expressionUses n input == 1    = directGeneratorConsumer env $ termsubst [(n,gen)] call
+  where args                       = joinArg p k
+directLocalGeneratorConsumer _ _ _ _ = False
+
+generatorConsumerInput            :: NormEnv -> Expr -> PosArg -> Maybe Expr
+generatorConsumerInput env f args
+  | any (\builtin -> isBuiltinFunction env (name builtin) f)
+        ["sum","max","min","max_def","min_def","set","dict"]
+                                    = item 2
+  | any (\builtin -> isBuiltinFunction env (name builtin) f) ["any","all","list"]
+                                    = item 1
+  | otherwise                       = Nothing
+  where item i                      = do es <- fixedPosArgs args
+                                         if i < length es then Just (es !! i) else Nothing
+
+directGeneratorConsumer           :: NormEnv -> Expr -> Bool
+directGeneratorConsumer env (Paren _ e)
+                                    = directGeneratorConsumer env e
+directGeneratorConsumer env (Call l f p k)
+                                    = present (sumGeneratorCall env f args) ||
+                                      present (boolGeneratorCall env f args) ||
+                                      present (extremumGeneratorCall env f args) ||
+                                      present (collectionGeneratorComp env l f args)
+  where args                       = joinArg p k
+        present Nothing            = False
+        present (Just _)           = True
+directGeneratorConsumer _ _        = False
 
 -- Comprehensions deferred while normalizing an enclosing statement's expressions
 -- (e.g. a branch condition) must be materialized before that statement, not
 -- inside a nested suite of it, so shield any comprehensions pending on entry
 -- from the getComps drain below.
 normSuite env ss                    = do pending <- getComps
-                                         ss' <- normSuite' env ss
+                                         ss0 <- forwardLocalGenerators env ss
+                                         ss' <- normSuite' env ss0
                                          mapM_ addComp (reverse pending)
                                          return ss'
 
 normSuite' env []                   = return []
 normSuite' env (s : ss)             = do s' <- norm' env s
                                          comps <- getComps
-                                         ss' <- normSuite' (define (envOf s) env) ss
+                                         ss' <- normSuite' (advanceLocalEnv s env) ss
                                          defs <- mapM mkCompFun comps
                                          return (concat defs ++ s' ++ ss')
   where mkCompFun (f,lambound,comp) = do w <- newName "w"
@@ -183,11 +436,16 @@ normPat env p@(PList _ ps pt)       = do v <- newName "lst"
                                          ss <- normSuite env $ normList v 0 ps pt
                                          return (pVar v $ conv env t, ss)
   where normList v n (p:ps) pt      = s : normList v (n+1) ps pt
-          where s                   = Assign NoLoc [p] (eCall (eDot (eQVar qnIIndexed) getitemKW)
+          where s                   = Assign NoLoc [p] (eCall (tApp (eQVar primUGetItem) [te])
                                         [eVar v, Int NoLoc n (show n)])
-        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot (eQVar qnISliceable) getsliceKW)
-                                        [eVar v, Int NoLoc n (show n), None NoLoc, None NoLoc])]
+        normList v n [] (Just p)    = [Assign NoLoc [p] (eCall (eDot sequenceWitness getsliceKW)
+                                        [eVar v, eCall (eQVar qnSlice)
+                                                       [Int NoLoc n (show n), None NoLoc, None NoLoc]])]
         normList v n [] Nothing     = []
+        sequenceWitness             = eCall (tApp (eQVar witSequenceList) [te]) []
+        te                          = case unalias env t of
+                                          TCon _ (TC c [a]) | c == qnList -> a
+                                          t' -> error ("normPat: expected list type, got " ++ prstr t')
         t                           = typeOf env p
 
 plainPosPats                       :: PosPat -> Maybe [Pattern]
@@ -345,6 +603,11 @@ instance Norm Stmt where
                                          ps2 <- norm env ps1
                                          let p'@(PVar _ n _) : ps' = ps2
                                          return $ Assign l [p'] e' : [ Assign l [p] (eVar n) | p <- ps' ] ++ concat stmts
+    norm' env (For _ target source body els)
+      | Just (result,co) <- forGeneratorExpr source
+                                    = do plan <- iteratorPlan result co
+                                         let env1 = define (iteratorPlanEnv plan) env
+                                         fusedFor env1 target plan body els >>= normSuite env1
     norm' env s@(For l p e b els)
                                     = do i <- newName "iter"
                                          m <- newName "maybe"
@@ -508,7 +771,8 @@ instance Norm Decl where
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
                                          return $ Def l n q p' KwdNIL (conv env t) (ret b') d x doc
-      where env1                    = setMarks [] $ setRet t $ define (envOf p ++ envOf k) env0
+      where env1                    = enterFunctionScope (dom $ envOf p ++ envOf k) $
+                                      setMarks [] $ setRet t $ define (envOf p ++ envOf k) env0
             env0                    = defineTVars q env00
             env00                   = case p of
                                         PosPar self _ _ _ | not $ null $ classattrs env, d /= Static ->
@@ -521,7 +785,8 @@ instance Norm Decl where
                                     = do p' <- joinPar <$> norm env0 p <*> norm (define (envOf p) env0) k
                                          b' <- normSuite env1 b
                                          return $ Actor l n q p' KwdNIL b' doc
-      where env1                    = setMarks [] $ define (envOf p ++ envOf k) env0
+      where env1                    = enterActorScope (dom $ envOf p ++ envOf k) $
+                                      setMarks [] $ define (envOf p ++ envOf k) env0
             env0                    = define [(selfKW, NVar t0)] $ defineTVars q env
             t0                      = tCon $ TC (NoQ n) (map tVar $ qbound q)
     norm env (Class l n q as b doc) = Class l n q as <$> normSuite env1 b <*> return doc
@@ -566,6 +831,24 @@ instance Norm Expr where
     norm env (Ellipsis l)           = return $ Ellipsis l
     norm env (Strings l ss)         = return $ Strings l (catStrings ss)
     norm env (BStrings l ss)        = return $ BStrings l (catStrings ss)
+    norm env (Call l e p k)
+      | Just (w,result,co,start) <- sumGeneratorCall env e (joinArg p k)
+                                    = do plan <- iteratorPlan result co
+                                         let env1 = define (iteratorPlanEnv plan) env
+                                         fusedSum env1 w start plan >>= norm env1
+    norm env (Call l e p k)
+      | Just (kind,result,co) <- boolGeneratorCall env e (joinArg p k)
+                                    = do plan <- iteratorPlan result co
+                                         let env1 = define (iteratorPlanEnv plan) env
+                                         fusedBool env1 kind plan >>= norm env1
+    norm env (Call l e p k)
+      | Just (kind,w,result,co,dflt) <- extremumGeneratorCall env e (joinArg p k)
+                                    = do plan <- iteratorPlan result co
+                                         let env1 = define (iteratorPlanEnv plan) env
+                                         fusedExtremum env1 kind w dflt plan >>= norm env1
+    norm env (Call l e p k)
+      | Just comp <- collectionGeneratorComp env l e (joinArg p k)
+                                    = norm env comp
     norm env (Call l e p k)         = Call l <$> norm env e <*> norm env (joinArg p k) <*> pure KwdNil
     norm env (TApp l e ts)          = TApp l <$> normInst env ts e <*> pure (conv env ts)
     norm env (Let l ss e)          = Let l <$> norm env ss <*> norm env e
@@ -599,6 +882,12 @@ instance Norm Expr where
     norm env e@DictComp{}           = deferComp env e
     norm env (Set l es)             = Set l <$> norm env es
     norm env e@SetComp{}            = deferComp env e
+    norm env (GeneratorExpr _ (Elem e) co)
+                                    = do plan <- iteratorPlan e co
+                                         let env1 = define (iteratorPlanEnv plan) env
+                                         lowerIteratorPlan env1 plan >>= norm env1
+    norm env e@(GeneratorExpr l (Star _) _)
+                                    = notYet l e
     norm env (Paren l e)            = norm env e
     norm env e                      = error ("norm unexpected: " ++ prstr e)
 
@@ -606,6 +895,379 @@ deferComp env e                     = do f <- newName "compfun"
                                          let p = getLambdavars env
                                          addComp (f,p,e)
                                          return (Call NoLoc (eVar f) (posarg $ map eVar $ pospars' p) KwdNil)
+
+-- Retain the structure of a generator independently of its eventual
+-- representation.  Escaping plans currently lower to the public lazy
+-- combinators below; local consumers can instead turn the same plan into
+-- nested loops without first allocating an iterator pipeline.
+data IteratorPlan                  = IteratorYield Expr
+                                   | IteratorFor Pattern Expr [Expr] IteratorPlan
+
+-- Fused plans put the comprehension clauses directly into their surrounding
+-- function.  Freshen every pattern first so a comprehension variable cannot
+-- overwrite a same-named local outside the generator.  The substitution is
+-- extended one clause at a time: a source sees preceding bindings, whereas
+-- its own pattern is in scope only in the following tests and clauses.
+iteratorPlan                       :: Expr -> Comp -> NormM IteratorPlan
+iteratorPlan result                = build []
+  where build subst (CompFor _ p source co)
+                                    = do renaming <- mapM fresh (bound p)
+                                         let subst' = [ (n,eVar n') | (n,n') <- renaming ] ++
+                                                      [ pair | pair@(n,_) <- subst, n `notElem` bound p ]
+                                             p' = renameIteratorPattern renaming p
+                                             source' = termsubst subst source
+                                             (tests,rest) = leadingTests co
+                                             tests' = termsubst subst' tests
+                                         rest' <- case rest of
+                                                      NoComp -> return $ IteratorYield (termsubst subst' result)
+                                                      CompFor{} -> build subst' rest
+                                                      CompIf{} -> error "iteratorPlan: misplaced if-clause"
+                                         return $ IteratorFor p' source' tests' rest'
+        build _ co                 = error ("iteratorPlan: expected for-clause, got " ++ prstr co)
+        fresh n                    = do n' <- newName "gen"
+                                        return (n,n')
+
+iteratorPlanEnv                   :: IteratorPlan -> [(Name,NameInfo)]
+iteratorPlanEnv IteratorYield{}    = []
+iteratorPlanEnv (IteratorFor p _ _ rest)
+                                    = envOf p ++ iteratorPlanEnv rest
+
+renameIteratorPattern             :: [(Name,Name)] -> Pattern -> Pattern
+renameIteratorPattern ren (PWild l t)
+                                    = PWild l t
+renameIteratorPattern ren (PVar l n t)
+                                    = PVar l (rename n) t
+  where rename n                   = maybe n id (lookup n ren)
+renameIteratorPattern ren (PParen l p)
+                                    = PParen l (renameIteratorPattern ren p)
+renameIteratorPattern ren (PTuple l p k)
+                                    = PTuple l (renamePosPat ren p) (renameKwdPat ren k)
+renameIteratorPattern ren (PList l ps p)
+                                    = PList l (map (renameIteratorPattern ren) ps)
+                                              (renameIteratorPattern ren <$> p)
+
+renamePosPat                       :: [(Name,Name)] -> PosPat -> PosPat
+renamePosPat ren (PosPat p ps)      = PosPat (renameIteratorPattern ren p) (renamePosPat ren ps)
+renamePosPat ren (PosPatStar p)     = PosPatStar (renameIteratorPattern ren p)
+renamePosPat _ PosPatNil            = PosPatNil
+
+renameKwdPat                       :: [(Name,Name)] -> KwdPat -> KwdPat
+renameKwdPat ren (KwdPat n p ps)    = KwdPat n (renameIteratorPattern ren p) (renameKwdPat ren ps)
+renameKwdPat ren (KwdPatStar p)     = KwdPatStar (renameIteratorPattern ren p)
+renameKwdPat _ KwdPatNil            = KwdPatNil
+
+-- A generator expression is a lazy pipeline.  Each for-clause consumes an
+-- Iterator; its immediately following if-clauses become a filter.  The last
+-- for-clause maps to the result expression, while an earlier one flat-maps to
+-- the pipeline for the remaining clauses.  Consequently only the outermost
+-- iterator expression is evaluated when the generator expression is created.
+lowerIteratorPlan                  :: NormEnv -> IteratorPlan -> NormM Expr
+lowerIteratorPlan env (IteratorFor p source tests rest)
+                                    = do source' <- case tests of
+                                                        [] -> return source
+                                                        _  -> do predicate <- generatorLambda env p ta (andExpr tests)
+                                                                 return $ filterIterator ta predicate source
+                                         case rest of
+                                             IteratorYield result -> do
+                                                 f <- generatorLambda env p ta result
+                                                 return $ mapIterator ta tb f source'
+                                             IteratorFor{} -> do
+                                                 inner <- lowerIteratorPlan env rest
+                                                 f <- generatorLambda env p ta inner
+                                                 return $ flatmapIterator ta tb f source'
+  where ta                          = typeOf env p
+        tb                          = iteratorPlanType env rest
+lowerIteratorPlan _ IteratorYield{} = error "lowerIteratorPlan: top-level yield"
+
+iteratorPlanType                   :: NormEnv -> IteratorPlan -> Type
+iteratorPlanType env (IteratorYield result)
+                                    = typeOf env result
+iteratorPlanType env (IteratorFor _ _ _ rest)
+                                    = iteratorPlanType env rest
+
+-- Recognize builtin sum with either its implicit zero or an explicit start.
+-- The type checker has already inserted the Plus and Iterable witnesses and
+-- expanded the omitted start argument, so the argument row is fixed here.
+-- Calls to a shadowing function named sum do not match.
+sumGeneratorCall                    :: NormEnv -> Expr -> PosArg -> Maybe (Expr,Expr,Comp,Maybe Expr)
+sumGeneratorCall env f args
+  | isBuiltinSum env f,
+    Just [w,_,GeneratorExpr _ (Elem result) co,start] <- fixedPosArgs args
+                                    = Just (w,result,co,if isNoneExpr start then Nothing else Just start)
+  | otherwise                       = Nothing
+
+isBuiltinSum                       :: NormEnv -> Expr -> Bool
+isBuiltinSum env                    = isBuiltinFunction env (name "sum")
+
+isBuiltinFunction                  :: NormEnv -> Name -> Expr -> Bool
+isBuiltinFunction env builtin (TApp _ f _)
+                                    = isBuiltinFunction env builtin f
+isBuiltinFunction env builtin (Var _ n)
+                                    = unalias env n == gBuiltin builtin
+isBuiltinFunction _ _ _            = False
+
+isNoneExpr                         :: Expr -> Bool
+isNoneExpr None{}                   = True
+isNoneExpr (Paren _ e)              = isNoneExpr e
+isNoneExpr _                        = False
+
+-- Consume a plan as nested loops.  Binding the outer source before creating
+-- the accumulator preserves generator construction timing: the first source
+-- is evaluated at the call site, while nested sources, filters, and the result
+-- remain deferred until their surrounding loop reaches them.
+fusedSum                           :: NormEnv -> Expr -> Maybe Expr -> IteratorPlan -> NormM Expr
+fusedSum env witness start plan     = do sourceName <- newName "gen_source"
+                                         accName <- newName "sum"
+                                         let source = iteratorPlanSource plan
+                                             sourceType = typeOf env source
+                                             resultType = iteratorPlanType env plan
+                                             plan' = setIteratorPlanSource (eVar sourceName) plan
+                                             initSource = sAssign (pVar sourceName $ conv env sourceType) source
+                                             initAcc = sAssign (pVar accName $ conv env resultType)
+                                                                 (maybe (eCall (eDot witness zeroKW) []) id start)
+                                             add result = [sAssign (pVar accName $ conv env resultType)
+                                                                   (eCall (eDot witness iaddKW) [eVar accName,result])]
+                                             loops = consumeIteratorPlan plan' add
+                                         return $ eLet (initSource : initAcc : loops) (eVar accName)
+
+data BoolGeneratorFold             = FoldAny | FoldAll
+
+boolGeneratorCall                  :: NormEnv -> Expr -> PosArg -> Maybe (BoolGeneratorFold,Expr,Comp)
+boolGeneratorCall env f args
+  | Just [_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+    isBuiltinFunction env (name "any") f
+                                    = Just (FoldAny,result,co)
+  | Just [_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+    isBuiltinFunction env (name "all") f
+                                    = Just (FoldAll,result,co)
+  | otherwise                       = Nothing
+
+-- any and all use the same direct-loop machinery as a fused for-loop, but
+-- stop at the first decisive value.  The result and escape flag are raw bools;
+-- the yielded value itself remains unboxed whenever its __bool__ path permits.
+fusedBool                          :: NormEnv -> BoolGeneratorFold -> IteratorPlan -> NormM Expr
+fusedBool env kind plan             = do sourceName <- newName "gen_source"
+                                         resultName <- newName "bool_result"
+                                         doneName <- newName "gen_done"
+                                         let source = iteratorPlanSource plan
+                                             sourceType = typeOf env source
+                                             plan' = setIteratorPlanSource (eVar sourceName) plan
+                                             initial = case kind of
+                                                           FoldAny -> False
+                                                           FoldAll -> True
+                                             decisive = not initial
+                                             initSource = sAssign (pVar sourceName $ conv env sourceType) source
+                                             initResult = sAssign (pVar resultName tBool) (eBool initial)
+                                             initDone = sAssign (pVar doneName tBool) (eBool False)
+                                             truth result = eCall (eDot result boolKW) []
+                                             decide = [ sAssign (pVar resultName tBool) (eBool decisive)
+                                                      , sAssign (pVar doneName tBool) (eBool True)
+                                                      , sBreak
+                                                      ]
+                                             emit result = case kind of
+                                                               FoldAny -> [sIf1 (truth result) decide []]
+                                                               FoldAll -> [sIf1 (truth result) [] decide]
+                                             loops = consumeEscapingIteratorPlan doneName True plan' emit
+                                         return $ eLet (initSource : initResult : initDone : loops) (eVar resultName)
+
+data ExtremumGeneratorFold         = FoldMax | FoldMin
+
+extremumGeneratorCall             :: NormEnv -> Expr -> PosArg -> Maybe (ExtremumGeneratorFold,Expr,Expr,Comp,Expr)
+extremumGeneratorCall env f args
+  | Just [w,_,GeneratorExpr _ (Elem result) co,dflt] <- fixedPosArgs args,
+    rawDefault dflt,
+    any (\builtin -> isBuiltinFunction env (name builtin) f) ["max","max_def"]
+                                    = Just (FoldMax,w,result,co,dflt)
+  | Just [w,_,GeneratorExpr _ (Elem result) co,dflt] <- fixedPosArgs args,
+    rawDefault dflt,
+    any (\builtin -> isBuiltinFunction env (name builtin) f) ["min","min_def"]
+                                    = Just (FoldMin,w,result,co,dflt)
+  | otherwise                       = Nothing
+  where rawDefault e
+          | isNoneExpr e            = False
+          | TOpt{} <- unalias env (typeOf env e)
+                                    = False
+          | otherwise               = True
+
+-- With a definite default, max/min have an initialized accumulator and need
+-- no optional state.  Bind each yielded expression once before comparing it;
+-- even a pure expression may be expensive and must retain iterator semantics.
+fusedExtremum                     :: NormEnv -> ExtremumGeneratorFold -> Expr -> Expr -> IteratorPlan -> NormM Expr
+fusedExtremum env kind witness dflt plan
+                                    = do sourceName <- newName "gen_source"
+                                         accName <- newName "extremum"
+                                         candidateName <- newName "candidate"
+                                         let source = iteratorPlanSource plan
+                                             sourceType = typeOf env source
+                                             resultType = iteratorPlanType env plan
+                                             plan' = setIteratorPlanSource (eVar sourceName) plan
+                                             initSource = sAssign (pVar sourceName $ conv env sourceType) source
+                                             initAcc = sAssign (pVar accName $ conv env resultType) dflt
+                                             comparison = case kind of FoldMax -> gtKW; FoldMin -> ltKW
+                                             emit result = [ sAssign (pVar candidateName $ conv env resultType) result
+                                                           , sIf1 (eCall (eDot witness comparison)
+                                                                         [eVar candidateName,eVar accName])
+                                                                  [sAssign (pVar accName $ conv env resultType)
+                                                                           (eVar candidateName)] []
+                                                           ]
+                                             loops = consumeIteratorPlan plan' emit
+                                         return $ eLet (initSource : initAcc : loops) (eVar accName)
+
+-- Collection constructors already have equivalent eager comprehension
+-- machinery.  Recasting list(generator), set(generator), and the pair-shaped
+-- dict(generator) as comprehensions lets that machinery consume the clauses
+-- directly.  Dict fusion also avoids constructing a temporary tuple for each
+-- key/value pair; the boxed elements required by the collections remain.
+collectionGeneratorComp           :: NormEnv -> SrcLoc -> Expr -> PosArg -> Maybe Expr
+collectionGeneratorComp env l f args
+  | Just [_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+    isBuiltinFunction env (name "list") f
+                                    = Just $ ListComp l (Elem result) co
+  | Just [hashWitness,_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+    isBuiltinFunction env (name "set") f
+                                    = let env1 = define (envOf co) env
+                                          resultType = typeOf env1 result
+                                          result' = annot (tHashableW resultType) hashWitness resultType result
+                                      in Just $ SetComp l (Elem result') co
+  | Just [hashWitness,_,GeneratorExpr _ (Elem result) co] <- fixedPosArgs args,
+    Just (key,value) <- generatorPair result,
+    isBuiltinFunction env (name "dict") f
+                                    = let env1 = define (envOf co) env
+                                          keyType = typeOf env1 key
+                                          key' = annot (tHashableW keyType) hashWitness keyType key
+                                      in Just $ DictComp l (Assoc key' value) co
+  | otherwise                       = Nothing
+
+generatorPair                      :: Expr -> Maybe (Expr,Expr)
+generatorPair (Tuple _ (PosArg key (PosArg value PosNil)) KwdNil)
+                                    = Just (key,value)
+generatorPair (Paren _ result)      = generatorPair result
+generatorPair _                     = Nothing
+
+-- A for-loop asks the Iterable witness for an Iterator before normalization.
+-- Recover a generator expression from that compiler-inserted call so it can
+-- be consumed directly instead of materializing its combinator pipeline.
+forGeneratorExpr                   :: Expr -> Maybe (Expr,Comp)
+forGeneratorExpr (Call _ (Dot _ _ n) (PosArg (GeneratorExpr _ (Elem result) co) PosNil) KwdNil)
+  | n == iterKW                    = Just (result,co)
+forGeneratorExpr _                 = Nothing
+
+-- Inline a generator used immediately by a for-loop.  A consumer break must
+-- escape every generated loop, not merely the innermost one, so a private flag
+-- is propagated outward.  Continue naturally targets the innermost generated
+-- loop (the next yielded value); clearing the flag also handles a continue in
+-- finally overriding an earlier break.
+fusedFor                           :: NormEnv -> Pattern -> IteratorPlan -> Suite -> Suite -> NormM Suite
+fusedFor env target plan body els   = do sourceName <- newName "gen_source"
+                                         doneName <- newName "gen_done"
+                                         let source = iteratorPlanSource plan
+                                             sourceType = typeOf env source
+                                             plan' = setIteratorPlanSource (eVar sourceName) plan
+                                             initSource = sAssign (pVar sourceName $ conv env sourceType) source
+                                             initDone = sAssign (pVar doneName tBool) (eBool False)
+                                             body' = markGeneratorLoopControl doneName body
+                                             emit result = sAssign target result : body'
+                                             loops = consumeEscapingIteratorPlan doneName True plan' emit
+                                             finish
+                                               | null els = []
+                                               | otherwise = [sIf1 (UnOp NoLoc Not (eVar doneName)) els []]
+                                         return $ initSource : initDone : loops ++ finish
+
+consumeEscapingIteratorPlan       :: Name -> Bool -> IteratorPlan -> (Expr -> Suite) -> Suite
+consumeEscapingIteratorPlan _ _ (IteratorYield result) emit
+                                    = emit result
+consumeEscapingIteratorPlan done top (IteratorFor p source tests rest) emit
+                                    = loop : propagate
+  where nested                     = consumeEscapingIteratorPlan done False rest emit
+        body
+          | null tests              = nested
+          | otherwise               = [sIf1 (andExpr tests) nested []]
+        loop                        = For NoLoc p source body []
+        propagate
+          | top                     = []
+          | otherwise               = [sIf1 (eVar done) [sBreak] []]
+
+markGeneratorLoopControl          :: Name -> Suite -> Suite
+markGeneratorLoopControl done      = concatMap mark
+  where mark (Break l)             = [sAssign (pVar done tBool) (eBool True), Break l]
+        mark (Continue l)          = [sAssign (pVar done tBool) (eBool False), Continue l]
+        mark (If l bs els)         = [If l [ Branch test (markGeneratorLoopControl done suite)
+                                                  | Branch test suite <- bs ]
+                                              (markGeneratorLoopControl done els)]
+        -- Break and continue in a nested loop body belong to that loop.  Its
+        -- else-suite executes outside it and still belongs to our consumer.
+        mark (While l test suite els)
+                                    = [While l test suite (markGeneratorLoopControl done els)]
+        mark (For l p source suite els)
+                                    = [For l p source suite (markGeneratorLoopControl done els)]
+        mark (Try l suite hs els fin)
+                                    = [Try l (markGeneratorLoopControl done suite)
+                                             [ Handler ex (markGeneratorLoopControl done hsuite)
+                                               | Handler ex hsuite <- hs ]
+                                             (markGeneratorLoopControl done els)
+                                             (markGeneratorLoopControl done fin)]
+        mark (With l items suite)   = [With l items (markGeneratorLoopControl done suite)]
+        mark stmt                   = [stmt]
+
+iteratorPlanSource                 :: IteratorPlan -> Expr
+iteratorPlanSource (IteratorFor _ source _ _)
+                                    = source
+iteratorPlanSource IteratorYield{}  = error "iteratorPlanSource: top-level yield"
+
+setIteratorPlanSource              :: Expr -> IteratorPlan -> IteratorPlan
+setIteratorPlanSource source (IteratorFor p _ tests rest)
+                                    = IteratorFor p source tests rest
+setIteratorPlanSource _ IteratorYield{}
+                                    = error "setIteratorPlanSource: top-level yield"
+
+consumeIteratorPlan               :: IteratorPlan -> (Expr -> Suite) -> Suite
+consumeIteratorPlan (IteratorYield result) emit
+                                    = emit result
+consumeIteratorPlan (IteratorFor p source tests rest) emit
+                                    = [For NoLoc p source body []]
+  where nested                     = consumeIteratorPlan rest emit
+        body
+          | null tests              = nested
+          | otherwise               = [sIf1 (andExpr tests) nested []]
+
+leadingTests                       :: Comp -> ([Expr],Comp)
+leadingTests (CompIf _ test co)     = let (tests,rest) = leadingTests co
+                                      in (test:tests,rest)
+leadingTests co                     = ([],co)
+
+andExpr                            :: [Expr] -> Expr
+andExpr [e]                         = e
+andExpr (e:es)                      = eBinOp e And (andExpr es)
+andExpr []                          = error "andExpr: empty test list"
+
+generatorLambda                    :: NormEnv -> Pattern -> Type -> Expr -> NormM Expr
+generatorLambda env (PVar _ n _) t body
+                                    = return $ Lambda NoLoc (pospar [(n,t)]) KwdNIL body (fxOf env body)
+generatorLambda env p t body        = do n <- newName "genitem"
+                                         let body' = eLet [sAssign p (eVar n)] body
+                                             env' = define [(n,NVar t)] env
+                                         return $ Lambda NoLoc (pospar [(n,t)]) KwdNIL body' (fxOf env' body')
+
+-- These calls are introduced after type inference.  Supply the already-known
+-- Iterable witness explicitly and cast the concrete combinator object to its
+-- public Iterator result type.
+filterIterator                     :: Type -> Expr -> Expr -> Expr
+filterIterator a predicate source   = eCAST (tFilter a) (tIterator a) call
+  where call                        = eCall (tApp (eQVar qnFilter) [a,tIterator a])
+                                          [iteratorWitness a,predicate,source]
+
+mapIterator                        :: Type -> Type -> Expr -> Expr -> Expr
+mapIterator a b f source            = eCAST (tMap a b) (tIterator b) call
+  where call                        = eCall (tApp (eQVar qnMap) [a,b,tIterator a])
+                                          [iteratorWitness a,f,source]
+
+flatmapIterator                    :: Type -> Type -> Expr -> Expr -> Expr
+flatmapIterator a b f source        = eCAST (tFlatmap a b) (tIterator b) call
+  where call                        = eCall (tApp (eQVar qnFlatmap) [a,b,tIterator a])
+                                          [iteratorWitness a,f,source]
+
+iteratorWitness                    :: Type -> Expr
+iteratorWitness a                   = eCall (tApp (eQVar witIterableIterator) [a]) []
 
 eta (Lambda _ p KwdNIL (Call _ e p' KwdNil) fx)
   | eq1 p p'                        = e

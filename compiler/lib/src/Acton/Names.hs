@@ -296,6 +296,7 @@ instance Vars Expr where
     freeQ (Tuple _ ps ks)           = freeQ ps ++ freeQ ks
     freeQ (List _ es)               = freeQ es
     freeQ (ListComp _ e co)         = (freeQ e `diffQ` bound co) ++ freeQ co
+    freeQ (GeneratorExpr _ e co)    = (freeQ e `diffQ` bound co) ++ freeQ co
     freeQ (Dict _ es)               = freeQ es
     freeQ (DictComp _ e co)         = (freeQ e `diffQ` bound co) ++ freeQ co
     freeQ (Set _ es)                = freeQ es

@@ -2189,12 +2189,49 @@ main = do
         , "struct B_range N_20iterG_range_storage;"
         , "N_20iter = (B_Iterator)&N_20iterG_range_storage;"
         , "$rangeD_U_init(&N_20iterG_range_storage, 0LL"
+        , "*$next_out = item.val;"
+        , "return $next_iter->$class->__next__($next_iter, $next_out);"
         ]
       testCodeGenDoesNotContain env0 "next_peephole"
         [ "B_next)(it)"
         , "$ISINSTANCE0(item, B_just)"
         , "B_rangeG_new"
         , "$rangeD_U_new(0LL, (((int64_t)(width + row)))"
+        ]
+      testCodeGenContains env0 "generator_fusion"
+        [ "$rangeD_U__next_i64"
+        , "struct B_range"
+        ]
+      testCodeGenDoesNotContain env0 "generator_fusion"
+        [ "B_mapG_new"
+        , "B_filterG_new"
+        , "B_flatmapG_new"
+        , "B_sum)("
+        , "B_any)("
+        , "B_all)("
+        , "B_max)("
+        , "B_min)("
+        , "B_max_def)("
+        , "B_min_def)("
+        , "toB_int("
+        ]
+      testCodeGenContains env0 "generator_escape_fallback" ["B_mapG_new"]
+      testCodeGenContains env0 "generator_short_circuit_fallback" ["B_mapG_new"]
+      testCodeGenDoesNotContain env0 "generator_local_context_fusion"
+        [ "B_mapG_new"
+        , "B_filterG_new"
+        , "B_flatmapG_new"
+        , "B_sum)("
+        ]
+      testCodeGenContains env0 "generator_collection_fusion" ["$rangeD_U__next_i64"]
+      testCodeGenDoesNotContain env0 "generator_collection_fusion"
+        [ "B_mapG_new"
+        , "B_filterG_new"
+        , "B_flatmapG_new"
+        , "B_list)("
+        , "B_set)("
+        , "B_dict)("
+        , "$NEWTUPLE(2"
         ]
       testCodeGenContains env0 "range_cps" ["$rangeD_U_new(0LL, 3LL, 1LL)"]
       testCodeGenDoesNotContain env0 "range_cps" ["struct B_range"]
