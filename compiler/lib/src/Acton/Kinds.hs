@@ -396,6 +396,7 @@ instance KCheck Expr where
     kchk env (DictComp l a c)       = DictComp l <$> kchk env a <*> kchk env c
     kchk env (Set l es)             = Set l <$> kchk env es
     kchk env (SetComp l e c)        = SetComp l <$> kchk env e <*> kchk env c
+    kchk env (GeneratorExpr l e c)  = GeneratorExpr l <$> kchk env e <*> kchk env c
     kchk env (Paren l e)            = Paren l <$> kchk env e
 
 instance KCheck Pattern where
@@ -715,6 +716,7 @@ instance KSubst Expr where
     ksubst g (DictComp l a c)       = DictComp l <$> ksubst g a <*> ksubst g c
     ksubst g (Set l es)             = Set l <$> ksubst g es
     ksubst g (SetComp l e c)        = SetComp l <$> ksubst g e <*> ksubst g c
+    ksubst g (GeneratorExpr l e c)  = GeneratorExpr l <$> ksubst g e <*> ksubst g c
     ksubst g (Paren l e)            = Paren l <$> ksubst g e
 
 instance KSubst Pattern where

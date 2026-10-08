@@ -2336,6 +2336,8 @@ atom_expr = do
                <|>
                  ((try . parens) $ S.Paren NoLoc <$> yield_expr)
                <|>
+                 ((try . parens) genexpmaker)
+               <|>
                  (parens $ S.Paren NoLoc <$> expr_or_tuplemaker)
                <|>
                  (brackets $ do
@@ -2381,6 +2383,17 @@ atom_expr = do
                         <|>
                            (S.StarStar <$> (starstar *> arithexpr))
 
+        genexpmaker :: Parser S.Expr
+        genexpmaker = S.GeneratorExpr NoLoc <$> (S.Elem <$> expr) <*> comp_for
+
+        -- A generator expression may omit its own parentheses when it is the
+        -- sole argument of a call.  Keeping this as a separate alternative to
+        -- funargs makes a following comma an error, just as in Python.
+        soleGeneratorArg :: Parser (S.PosArg, S.KwdArg)
+        soleGeneratorArg = do
+            e <- addLoc genexpmaker
+            return (S.PosArg e S.PosNil, S.KwdNil)
+
         var = do nm <- name
                  return (S.Var (S.nloc nm) (S.NoQ nm))
 
@@ -2400,7 +2413,7 @@ atom_expr = do
                            return (COther,f))
                        <|>
                          (do
-                            (ps,ks) <- parens funargs 
+                            (ps,ks) <- parens (try soleGeneratorArg <|> funargs)
                             return (CCall,\a -> S.Call (loc a `upto` loc ks) a ps ks))
                         <|>
                          (do

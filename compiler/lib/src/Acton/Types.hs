@@ -1602,6 +1602,8 @@ checkNoSelfReference self seen expr = checkExpr expr
     checkExpr (DictComp _ (Assoc k v) comp)
                                         = checkExpr k && checkExpr v && checkComp comp
     checkExpr (SetComp _ elem comp)     = checkElem elem && checkComp comp
+    checkExpr (GeneratorExpr _ elem comp)
+                                        = checkElem elem && checkComp comp
     checkExpr (Lambda _ _ _ body _)     = checkExpr body
     checkExpr (Yield _ e)               = maybe True checkExpr e
     checkExpr (YieldFrom _ e)           = checkExpr e
@@ -2248,7 +2250,7 @@ instance Infer Expr where
                                              t1 <- newUnivar env
                                              return ([Sub (noinfo 444) env w tNone t1, Sub (noinfo 555) env w1 t t1],t1,eNone)
             alt t False                 = return ([],t,eCall (tApp (eQVar primRaiseValueError) [t]) [Strings NoLoc ["Forced unwrapping applied to None"]] )
- 
+
     infer env e@(Rest _ _ _)            = notYetExpr e
 --    infer env (Rest l e n)              = do p <- newUnivarOfKind PRow env
 --                                             k <- newUnivarOfKind KRow env
@@ -2317,6 +2319,14 @@ instance Infer Expr where
                                              let Assoc k v = head as
                                                  a' = Assoc (annot (tHashableW tk) (eVar w) tk k) v
                                              return (Proto (locinfo l 90) env w tk pHashable : cs1++cs2, tDict tk tv, DictComp l (termsubst s a') co')
+    infer env (GeneratorExpr l e co)
+      | nodup co                        = do (cs1,env',s,co') <- infGenComp env co
+                                             t0 <- newUnivar env
+                                             pushFX fxPure tNone
+                                             (cs2,es) <- infElems env' [e] t0
+                                             popFX
+                                             let [e'] = es
+                                             return (cs1++cs2, tIterator t0, GeneratorExpr l (termsubst s e') co')
 
     infer env (Paren l e)               = do (cs,t,e') <- infer env e
                                              return (cs, t, Paren l e')
@@ -2511,6 +2521,21 @@ infComp env (CompFor l p e c)           = do (te1,t1,p') <- infEnvT (reserve (bo
                                              w <- newWitness
                                              return (Proto (locinfo2 101 e) env w t2 (pIterable t1) :
                                                      cs2++cs3, env', s, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
+
+-- A generator constructs its first iterator immediately, but evaluates all
+-- following clauses and its result expression from Iterator.__next__.  The
+-- latter must therefore be pure, as required by Iterator and by the public
+-- map/filter/flatmap combinators used during normalization.
+infGenComp env (CompFor l p e c)        = do (te1,t1,p') <- infEnvT (reserve (bound p) env) p
+                                             t2 <- newUnivar env
+                                             (cs2,e') <- inferSub env t2 e
+                                             pushFX fxPure tNone
+                                             (cs3,env',s,c') <- infComp (define te1 env) c
+                                             popFX
+                                             w <- newWitness
+                                             return (Proto (locinfo2 109 e) env w t2 (pIterable t1) :
+                                                     cs2++cs3, env', s, CompFor l p' (eCall (eDot (eVar w) iterKW) [e']) c')
+infGenComp env co                        = infComp env co
 
 instance InfEnvT PosPat where
     infEnvT env (PosPat p ps)           = do (te1,t,p') <- infEnvT env p

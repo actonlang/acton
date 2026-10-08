@@ -145,6 +145,7 @@ instance VFree Expr where
     vfree (Tuple l p k)             = vfree p ++ vfree k
     vfree (List l es)               = vfree es
     vfree (ListComp l e c)          = vfree e ++ vfree c
+    vfree (GeneratorExpr l e c)     = vfree e ++ vfree c
     vfree (Dict l as)               = vfree as
     vfree (DictComp l a c)          = vfree a ++ vfree c
     vfree (Set l es)                = vfree es
@@ -321,6 +322,7 @@ instance VSubst Expr where
     vsubst s (Tuple l p k)          = Tuple l (vsubst s p) (vsubst s k)
     vsubst s (List l es)            = List l (vsubst s es)
     vsubst s (ListComp l e c)       = ListComp l (vsubst s e) (vsubst s c)
+    vsubst s (GeneratorExpr l e c)  = GeneratorExpr l (vsubst s e) (vsubst s c)
     vsubst s (Dict l as)            = Dict l (vsubst s as)
     vsubst s (DictComp l a c)       = DictComp l (vsubst s a) (vsubst s c)
     vsubst s (Set l es)             = Set l (vsubst s es)
@@ -488,6 +490,7 @@ instance UFree Expr where
     ufree (Tuple l p k)             = ufree p ++ ufree k
     ufree (List l es)               = ufree es
     ufree (ListComp l e c)          = ufree e ++ ufree c
+    ufree (GeneratorExpr l e c)     = ufree e ++ ufree c
     ufree (Dict l as)               = ufree as
     ufree (DictComp l a c)          = ufree a ++ ufree c
     ufree (Set l es)                = ufree es

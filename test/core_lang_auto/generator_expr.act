@@ -1,0 +1,297 @@
+def fail_iter() -> Iterator[int]:
+    raise ValueError("deferred iterable")
+
+def fail_value(x: int) -> int:
+    raise ValueError("deferred value")
+
+def fail_default() -> int:
+    raise RuntimeError("default evaluated first")
+
+def next_plus(it: Iterator[int], extra: int) -> int:
+    x = it.__next__()
+    if isinstance(x, just):
+        return x.val + extra
+    return extra
+
+def consume_with_bias(it: Iterator[int]) -> int:
+    total = 100
+    for value in it:
+        total += value
+    return total
+
+def generic_generator_sum[A(Plus)](values: list[A]) -> A:
+    return sum(value for value in values)
+
+def call_shadowed(sum: (Iterator[int]) -> int) -> int:
+    return sum(i for i in range(3))
+
+def check() -> int:
+    g = (i * n for i in range(6) if i % 2 == 0 for n in range(i))
+    if [x for x in g] != [0, 2, 0, 4, 8, 12]:
+        return 1
+    if [x for x in g] != []:
+        return 2
+
+    pairs = [(1, 2), (3, 4), (5, 5)]
+    if [x for x in (a + b for (a, b) in pairs if a != b)] != [3, 7]:
+        return 3
+
+    fm = flatmap(lambda i: range(i), range(4))
+    if [x for x in fm] != [0, 0, 1, 0, 1, 2]:
+        return 4
+
+    # The first iterable is evaluated when the generator is constructed.
+    raised = False
+    try:
+        eager = (x for x in fail_iter())
+    except ValueError:
+        raised = True
+    if not raised:
+        return 5
+
+    # Nested iterables and result expressions remain deferred until __next__.
+    nested = (x for i in range(1) for x in fail_iter())
+    raised = False
+    try:
+        nested.__next__()
+    except ValueError:
+        raised = True
+    if not raised:
+        return 6
+
+    values = (fail_value(x) for x in range(1))
+    raised = False
+    try:
+        values.__next__()
+    except ValueError:
+        raised = True
+    if not raised:
+        return 7
+
+    # A generator expression which is the sole call argument does not need a
+    # second pair of parentheses.
+    if sum(x * x for x in range(5)) != 30:
+        return 8
+
+    # With further arguments, the generator's own parentheses are required.
+    if next_plus((x for x in range(2, 3)), 10) != 12:
+        return 9
+
+    # A directly consumed generator is fused into the sum loop, including
+    # nested clauses and filters.
+    if sum(i * n for n in range(6) if n % 2 == 0
+                         for i in range(n) if i % 2 == 1) != 18:
+        return 10
+
+    # An explicit start value is retained as the fused accumulator's initial
+    # value; the generator pipeline is not materialized.
+    if sum((x for x in range(3)), 10) != 13:
+        return 11
+
+    # Fusing a generator must not leak or overwrite its private bindings.
+    shadow = 100
+    if sum(shadow for shadow in range(3)) != 3 or shadow != 100:
+        return 12
+
+    # A generator consumed immediately by for is fused as well.  Break must
+    # escape both generated loops, while continue advances to the next value.
+    loop_total = 0
+    completed = False
+    for value in (i + 10 * n for n in range(3) for i in range(3)):
+        if value == 11:
+            break
+        if value % 2 == 0:
+            continue
+        loop_total += value
+    else:
+        completed = True
+    if loop_total != 1 or completed:
+        return 13
+
+    completed = False
+    for value in (i for i in range(3)):
+        loop_total += value
+    else:
+        completed = True
+    if loop_total != 4 or not completed or shadow != 100:
+        return 14
+
+    # Boolean consumers short-circuit without constructing an iterator
+    # pipeline.  Reaching the second value would raise in both cases.
+    if not any(i == 0 or fail_value(i) == 0 for i in range(2)):
+        return 15
+    if all(i != 0 and fail_value(i) == 0 for i in range(2)):
+        return 16
+
+    # A finally-suite may replace a pending break with continue.  The escape
+    # flag used for nested fused loops must follow that final decision.
+    finally_total = 0
+    for value in (i for i in range(4)):
+        try:
+            if value == 1:
+                break
+            finally_total += value
+        finally:
+            if value == 1:
+                continue
+    else:
+        finally_total += 100
+    if finally_total != 105:
+        return 17
+
+    # The yielded type need not itself be bool; the fused consumers retain
+    # the ordinary value.__bool__ dispatch.
+    if not any(i for i in range(2)):
+        return 18
+    if all(i for i in range(1)):
+        return 19
+
+    if max((i * n for n in range(4) for i in range(n)), -1) != 6:
+        return 20
+    if min((i * n for n in range(4) for i in range(n)), 100) != 0:
+        return 21
+    if max((i for i in range(0)), -1) != -1:
+        return 22
+    empty_raised = False
+    try:
+        max(i for i in range(0))
+    except ValueError:
+        empty_raised = True
+    if not empty_raised:
+        return 23
+    if list(i * i for i in range(4)) != [0, 1, 4, 9]:
+        return 24
+    if set(i % 3 for i in range(6)) != {0, 1, 2}:
+        return 25
+    if dict((i, i * i) for i in range(4)) != {0: 0, 1: 1, 2: 4, 3: 9}:
+        return 26
+
+    # The target of a fused for-loop has ordinary loop-variable lifetime.  An
+    # empty loop leaves its existing value untouched.
+    last = -1
+    for last in (i for i in range(3)):
+        pass
+    if last != 2:
+        return 27
+    untouched = 7
+    for untouched in (i for i in range(0)):
+        pass
+    if untouched != 7:
+        return 28
+
+    # Consecutive filters retain left-to-right short-circuiting.
+    if sum(i for i in range(1) if i != 0 if fail_value(i) == 0) != 0:
+        return 29
+
+    # Generator construction (and therefore its outer source) precedes later
+    # call arguments, including a fused max default.
+    source_won = False
+    try:
+        max((i for i in fail_iter()), fail_default())
+    except ValueError:
+        source_won = True
+    except RuntimeError:
+        pass
+    if not source_won:
+        return 30
+
+    # Recognition is tied to the builtin itself, not merely its spelling.
+    if call_shadowed(consume_with_bias) != 103:
+        return 31
+
+    # Direct dictionary insertion retains the last value for duplicate keys.
+    if dict((i % 2, i) for i in range(4)) != {0: 2, 1: 3}:
+        return 32
+
+    # A generator stored in a single-use local is fused at its later consumer.
+    # Its outer source is nevertheless evaluated at the original assignment.
+    source_won = False
+    try:
+        timing_values = (i for i in fail_iter())
+        fail_default()
+        sum(timing_values)
+    except ValueError:
+        source_won = True
+    except RuntimeError:
+        pass
+    if not source_won:
+        return 33
+
+    # Ordinary function locals are captured by value when the generator is
+    # constructed, just as they are by other Acton closures.
+    factor = 2
+    factor_values = (factor * i for i in range(4))
+    factor = 3
+    if sum(factor_values) != 12:
+        return 34
+
+    loop_values = (i for i in range(4))
+    local_total = 10
+    for value in loop_values:
+        local_total += value
+    if local_total != 16:
+        return 35
+
+    # The ordinary heap-backed representation is the semantic reference for
+    # captures when forwarding is inapplicable.
+    fallback_factor = 2
+    fallback_values = (fallback_factor * i for i in range(4))
+    fallback_factor = 3
+    if consume_with_bias(fallback_values) != 112:
+        return 36
+
+    # Capture tracking also crosses into nested statement suites.
+    branch_factor = 2
+    if branch_factor == 2:
+        branch_values = (branch_factor * i for i in range(4))
+        branch_factor = 3
+        if sum(branch_values) != 12:
+            return 37
+
+    if max_def((i * i for i in range(4)), -1) != 9:
+        return 38
+    if min_def((i * i for i in range(4)), 100) != 0:
+        return 39
+
+    # Generic witnesses follow the plan into the fused accumulator.
+    if generic_generator_sum([1, 2, 3]) != 6:
+        return 40
+
+    # Every legal comprehension pattern is freshened before fusion, including
+    # tuple and list destructuring.
+    tuple_pairs = [(1, 2), (3, 4)]
+    if sum(a + b for (a,b) in tuple_pairs) != 10:
+        return 41
+    list_pairs = [[1, 2], [3, 4]]
+    if sum(a + b for [a,b] in list_pairs) != 10:
+        return 42
+
+    # Named plans also pass through eager literal and statement structure.
+    literal_values = (i * i for i in range(4))
+    if [sum(literal_values)] != [14]:
+        return 43
+    asserted_values = (i * i for i in range(4))
+    assert sum(asserted_values) == 14
+    return 0
+
+actor main(env):
+    result = check()
+    if result == 0:
+        actor_values = (i * i for i in range(4))
+        if sum(actor_values) != 14:
+            result = 44
+    if result == 0:
+        # Actor state used freely by a deferred computation is sampled when
+        # the computation is constructed, just as it is for an actor lambda.
+        # Check the lambda, ordinary iterator, and forwarded/fused plan against
+        # one another so fusion cannot change this capture rule.
+        actor_factor = 2
+        actor_lambda = lambda i: actor_factor * i
+        actor_capture = (actor_factor * i for i in range(4))
+        actor_fallback = (actor_factor * i for i in range(4))
+        actor_factor = 3
+        if actor_lambda(3) != 6 or sum(actor_capture) != 12 or consume_with_bias(actor_fallback) != 112:
+            result = 45
+    if result != 0:
+        print("generator expression test failed:", result)
+    env.exit(result)

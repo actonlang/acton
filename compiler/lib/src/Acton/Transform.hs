@@ -204,6 +204,8 @@ instance Transform Expr where
     trans env (Set l es)                = Set l (trans env es)
     trans env (SetComp l e c)           = SetComp l (trans env1 e) (trans env1 c)
       where env1                        = blockscope (bound c) env
+    trans env (GeneratorExpr l e c)     = GeneratorExpr l (trans env1 e) (trans env1 c)
+      where env1                        = blockscope (bound c) env
 --    trans env (Paren l e)               = Paren l (trans env e)
     trans env (Paren l e)               = trans env e
     trans env e                         = e

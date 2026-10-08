@@ -250,6 +250,10 @@ instance QType Expr where
       where (_, fxc, c')            = qType env f c
             (t, fx, e')             = qType env1 f e
             env1                    = define (envOf c) env
+    qType env f (GeneratorExpr l e c) = (tIterator t, upbound env [fxc,fx], GeneratorExpr l e' c')
+      where (_, fxc, c')            = qType env f c
+            (t, fx, e')             = qType env1 f e
+            env1                    = define (envOf c) env
     qType env f (SetComp l e c)     = (tSet t, upbound env [fxc,fx], SetComp l e' c')
       where (_, fxc, c')            = qType env f c
             (t, fx, e')             = qType env1 f e

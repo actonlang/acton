@@ -1,0 +1,27 @@
+# A single-use local plan may cross eager literal structure and straight-line
+# statement expressions without changing when its outer source is evaluated.
+def fused_local_list(limit: int) -> list[int]:
+    values = (i * i for i in range(limit))
+    return [sum(values)]
+
+def fused_local_set(limit: int) -> set[int]:
+    values = (i * i for i in range(limit))
+    return {sum(values)}
+
+def fused_local_dict(limit: int) -> dict[str,int]:
+    values = (i * i for i in range(limit))
+    return {"sum": sum(values)}
+
+def fused_local_assert(limit: int) -> None:
+    values = (i * i for i in range(limit))
+    assert sum(values) >= 0
+
+def fused_local_augassign(limit: int) -> int:
+    values = (i * i for i in range(limit))
+    total = 10
+    total += sum(values)
+    return total
+
+def fused_local_raise(limit: int) -> None:
+    values = (i * i for i in range(limit))
+    raise ValueError(str(sum(values)))

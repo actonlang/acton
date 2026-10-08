@@ -1,0 +1,5 @@
+# A returned generator truly escapes its creating function and must retain the
+# ordinary lazy iterator representation.
+def escaping_generator(limit: int) -> Iterator[int]:
+    values = (i * i for i in range(limit))
+    return values

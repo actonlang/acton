@@ -906,6 +906,7 @@ instance USubst Expr where
     usubstWith s (Tuple l p k)        = Tuple l (usubstWith s p) (usubstWith s k)
     usubstWith s (List l es)          = List l (usubstWith s es)
     usubstWith s (ListComp l e c)     = ListComp l (usubstWith s e) (usubstWith s c)
+    usubstWith s (GeneratorExpr l e c)  = GeneratorExpr l (usubstWith s e) (usubstWith s c)
     usubstWith s (Dict l as)          = Dict l (usubstWith s as)
     usubstWith s (DictComp l a c)     = DictComp l (usubstWith s a) (usubstWith s c)
     usubstWith s (Set l es)           = Set l (usubstWith s es)

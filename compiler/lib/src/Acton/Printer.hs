@@ -180,6 +180,8 @@ instance Pretty Expr where
     pretty (Ellipsis _)             = text "..."
     pretty (Strings _ ss)           = hsep (map (pretty . show) ss)
     pretty (BStrings _ ss)          = hsep (map (\s -> text " b" <> pretty s) ss)
+    pretty (Call _ f (PosArg (GeneratorExpr _ e co) PosNil) KwdNil)
+                                    = prettyAtom f <> parens (pretty e <+> pretty co)
     pretty (Call _ e ps ks)         = prettyAtom e <> parens (pretty (ps,ks))
     pretty (TApp _ e ts)            = pretty e <> text "@" <> brackets (commaSep pretty ts)
     pretty (Let _ ss e)             = text "let:" $+$ prettySuite ss $+$  text "in" <+> pretty e
@@ -208,6 +210,7 @@ instance Pretty Expr where
     pretty (Set _ [])               = text "set" <> parens empty
     pretty (Set _ es)               = braces (commaList es)
     pretty (SetComp _ e co)         = braces (pretty e <+> pretty co)
+    pretty (GeneratorExpr _ e co)   = parens (pretty e <+> pretty co)
     pretty (Paren _ e@Tuple{})      = pretty e
     pretty (Paren _ e)              = parens (pretty e)
     pretty (Box t e)                = parens (text "BOX" <+> pretty t <+> pretty e)

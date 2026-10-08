@@ -474,6 +474,7 @@ feedExpr expr sink = case expr of
   A.Paren _ e           -> feedTag 88 sink >> feedExpr e sink
   A.Box t e             -> feedTag 89 sink >> feedType t sink >> feedExpr e sink
   A.UnBox t e           -> feedTag 90 sink >> feedType t sink >> feedExpr e sink
+  A.GeneratorExpr _ e c -> feedTag 91 sink >> feedElem e sink >> feedComp c sink
 
 feedPattern :: A.Pattern -> HashFeed
 feedPattern pat sink = case pat of
@@ -1221,6 +1222,8 @@ implItemSplitDeps mn env localNames item =
         splitCompDirect bound c (splitAssocDirect (boundComp c bound) a acc)
       A.Set _ es            -> splitListInto (splitElemDirect bound) es acc
       A.SetComp _ e c       ->
+        splitCompDirect bound c (splitElemDirect (boundComp c bound) e acc)
+      A.GeneratorExpr _ e c      ->
         splitCompDirect bound c (splitElemDirect (boundComp c bound) e acc)
       A.Paren _ e           -> splitExprDirect bound e acc
       A.UnBox _ e           -> splitExprDirect bound e acc

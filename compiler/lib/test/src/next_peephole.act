@@ -78,3 +78,22 @@ def nested_ranges(rows: int, width: int) -> int:
         for column in range(width + row):
             total += column
     return total
+
+# Returning a tagged maybe local from __next__ forwards its tag and payload
+# through the iterator bool/out ABI without materializing just or nothing.
+class forwarding_iterator(Iterator[int]):
+    def __init__(self, inner: Iterator[int]):
+        self.inner = inner
+
+    def __next__(self) -> maybe[int]:
+        item = self.inner.__next__()
+        if isinstance(item, just):
+            return item
+        return nothing()
+
+class direct_forwarding_iterator(Iterator[int]):
+    def __init__(self, inner: Iterator[int]):
+        self.inner = inner
+
+    def __next__(self) -> maybe[int]:
+        return self.inner.__next__()

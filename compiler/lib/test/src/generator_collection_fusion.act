@@ -1,0 +1,11 @@
+# Eager collection constructors consume generator clauses directly.  Their
+# elements still use the collection's boxed representation, but no lazy
+# iterator-combinator pipeline should be built around them.
+def fused_list(limit: int) -> list[int]:
+    return list(i * n for n in range(limit) for i in range(n))
+
+def fused_set(limit: int) -> set[int]:
+    return set(i * n for n in range(limit) for i in range(n))
+
+def fused_dict(limit: int) -> dict[int,int]:
+    return dict((i, i * i) for i in range(limit))
