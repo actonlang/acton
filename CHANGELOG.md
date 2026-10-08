@@ -1,6 +1,80 @@
 # Changelog
 
-## Unreleased
+## [0.31.0] - 2026-10-08
+
+This release brings major performance improvements across the compiler,
+runtime, and standard library. Iteration is faster, many operations allocate
+less, and actor scheduling and timers have lower overhead. Acton now uses its
+own fork of the Boehm garbage collector, with performance improvements and
+opt-in tuning options. The release also adds immutable collections, compact
+numeric and bit containers, and a `matrix` module, alongside better performance
+tools, cleaner project builds, and many other fixes and improvements.
+
+### Notable changes
+
+#### Faster programs
+
+Iteration now ends through ordinary control flow: `next()` returns a `maybe`
+value instead of throwing an exception at the end. This makes some
+iteration-heavy applications more than twice as fast. Range loops, numeric
+conversions, hashing, and builtin operations allocate less, while actor
+scheduling avoids unnecessary queue and synchronization work. Linux and macOS
+now wait for timed messages on kernel timers instead of spinning, reducing CPU
+time for timer-heavy workloads by more than 90%.
+
+#### Garbage collection
+
+Acton now uses its own fork of the Boehm garbage collector, with improvements
+to parallel marking, thread-local allocation, and memory tracking. Improved
+defaults apply automatically, while opt-in options let applications tune heap
+growth, allocation budgets, mark storage, and dirty-page tracking through
+`Build.act`. `acton.rts.get_gc_info()` reports the active mode and settings to
+help inspect and compare configurations.
+
+Linux and macOS applications can also choose mimalloc for C and native-library
+allocations. This is separate from garbage collection of Acton objects.
+
+#### Performance benchmarks: `acton test perf`
+
+`acton test perf` measures individual benchmarks at a fixed or calibrated
+workload size. Reports include timing, allocation and memory use, GC statistics,
+and optional hardware counters. Benchmarks mark their measured operations with
+`t.loop()`, so setup and cleanup around the loop do not count toward operation
+time or allocation totals.
+
+Measurements can be compared with a saved report or another Git revision. For
+example, `acton test perf --name my_test --compare git:main` builds both project
+versions and measures `main` against the current working tree, including
+uncommitted changes, at a shared workload size. Runs use fresh processes and
+balanced pairs to reduce noise. Both versions use the running compiler and
+runtime; `utils/perf-compare` supports measuring changes to the compiler,
+runtime, or builtins themselves.
+
+#### Scaling studies: `acton test scale`
+
+`acton test scale` shows how a benchmark's cost grows with its workload. The
+benchmark defines what scale means, such as the number of elements to sort,
+and reads the chosen size with `t.scale()`. As with performance benchmarks,
+only the body of the `t.loop()` loop contributes to operation time and
+allocation totals.
+
+The study increases the scale, usually doubling it, and measures each size in
+fresh processes until the observed growth settles over a broad range or a time
+or memory limit stops it. The report shows a table of growth between sizes and
+terminal charts of time, time per unit of scale, and allocated bytes.
+
+A study can be compared with a saved study or a Git revision. By default,
+`acton test scale --compare git:main` measures `main` and the current working
+tree at the same completed workload sizes and overlays their curves. Explicit
+end bounds allow both versions to explore independently.
+
+#### New collections
+
+Immutable `ilist`, `idict`, and `iset` values provide collection APIs without
+mutation, with `freeze()` converting mutable collections into their immutable
+forms. `array`, `bitarray`, and `bitset` offer compact storage for numeric and
+Boolean workloads, while `matrix` adds numeric matrices with views that share
+the underlying storage.
 
 ### Language
 - Add `after now delay: call()` for delays that start when the statement runs,
