@@ -1,5 +1,19 @@
 #include <setjmp.h>
 
+// setjmp/longjmp for try/raise. On macOS and the BSDs, plain setjmp/longjmp
+// also save and restore the signal mask, which costs a sigprocmask system
+// call on every try entry and every raise (~10x slower exception handling).
+// Nothing raises out of a signal handler, so the mask never needs restoring
+// and _setjmp/_longjmp, which skip it, are safe. glibc and musl setjmp do not
+// save the mask and Windows has none, so use plain setjmp/longjmp there.
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#define $SETJMP(buf)        _setjmp(buf)
+#define $LONGJMP(buf, val)  _longjmp(buf, val)
+#else
+#define $SETJMP(buf)        setjmp(buf)
+#define $LONGJMP(buf, val)  longjmp(buf, val)
+#endif
+
 struct JumpBuf;
 typedef struct JumpBuf *JumpBuf;
 struct JumpBuf {
@@ -12,7 +26,7 @@ void $RAISE(B_BaseException e);
 JumpBuf $PUSH_BUF();
 void $DROP();
 B_BaseException $POP();
-#define $PUSH()             (!setjmp($PUSH_BUF()->buf))
+#define $PUSH()             (!$SETJMP($PUSH_BUF()->buf))
 
 // File-scope initializer for an exception with a fixed ASCII string literal.
 // The exception and its string have static storage; raising only updates the catch

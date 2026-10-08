@@ -283,7 +283,7 @@ JumpBuf $PUSH_BUF();
 B_BaseException $POP();
 void $DROP();
 void $RAISE(B_BaseException e);
-#define $PUSH()             (!setjmp($PUSH_BUF()->buf))
+#define $PUSH()             (!$SETJMP($PUSH_BUF()->buf))
 #define $PUSHF $PUSH
 
 extern pid_t pid;
