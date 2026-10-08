@@ -1,0 +1,93 @@
+# A dict whose table shrinks back to the initial size is searched linearly and
+# its index array is not rebuilt. Popping from such a table used to look up an
+# index slot that did not exist and write before the index array, corrupting
+# the table header so that len(), str() and iteration disagreed.
+
+def check(cond: bool, what: str):
+    if not cond:
+        raise ValueError(what)
+
+def check_dict(d: dict[int, str], expected: list[(int, str)], what: str):
+    check(len(d) == len(expected), what + ": len " + str(len(d)) + " != " + str(len(expected)))
+    exp_str = "{{" + ", ".join([str(k) + ":" + repr(v) for k, v in expected]) + "}}"
+    check(str(d) == exp_str, what + ": str " + str(d) + " != " + exp_str)
+    check(list(d.keys()) == [k for k, v in expected], what + ": keys")
+    check(list(d.values()) == [v for k, v in expected], what + ": values")
+    check(repr(list(d.items())) == repr(expected), what + ": items")
+    for k, v in expected:
+        check(k in d, what + ": " + str(k) + " missing")
+        check(d[k] == v, what + ": value of " + str(k))
+
+def grown(n: int) -> dict[int, str]:
+    d: dict[int, str] = {}
+    for i in range(n):
+        d[i] = "v" + str(i)
+    return d
+
+def test_del_then_pop(n: int):
+    d = grown(n)
+    # Delete down to one key, which compacts the entries into a 4-slot table
+    for i in range(n - 1):
+        del d[i]
+    last = n - 1
+    check_dict(d, [(last, "v" + str(last))], "del down to 1")
+    d[100] = "a"
+    check_dict(d, [(last, "v" + str(last)), (100, "a")], "del, add")
+    check(d.pop(last) == "v" + str(last), "pop last")
+    check_dict(d, [(100, "a")], "del, add, pop")
+    d[101] = "b"
+    check_dict(d, [(100, "a"), (101, "b")], "del, add, pop, add")
+    check(d.pop(101) == "b", "pop 101")
+    check_dict(d, [(100, "a")], "pop 101")
+    check(d.pop(100) == "a", "pop 100")
+    check_dict(d, [], "pop 100")
+    check(d.pop(100) is None, "pop from empty")
+
+def test_pop_then_popitem(n: int):
+    d = grown(n)
+    for i in range(n - 1):
+        d.pop(i)
+    last = n - 1
+    check_dict(d, [(last, "v" + str(last))], "pop down to 1")
+    d[200] = "x"
+    # Popping the oldest entry leaves a hole before the newest one
+    d.pop(last)
+    check_dict(d, [(200, "x")], "pop oldest")
+    d[201] = "y"
+    check_dict(d, [(200, "x"), (201, "y")], "pop oldest, add")
+    item = d.popitem()
+    check(item.0 == 201 and item.1 == "y", "popitem 201")
+    check_dict(d, [(200, "x")], "popitem 201")
+    item = d.popitem()
+    check(item.0 == 200 and item.1 == "x", "popitem 200")
+    check_dict(d, [], "popitem 200")
+
+def test_regrow(n: int):
+    d = grown(n)
+    for i in range(n - 1):
+        del d[i]
+    last = n - 1
+    d[300] = "p"
+    del d[last]
+    # Grow past the small table again and empty it with popitem
+    expected: list[(int, str)] = [(300, "p")]
+    for i in range(20):
+        d[400 + i] = "q" + str(i)
+        expected.append((400 + i, "q" + str(i)))
+    check_dict(d, expected, "regrow")
+    while len(expected) > 0:
+        exp = expected.pop(-1)
+        item = d.popitem()
+        check(item.0 == exp.0 and item.1 == exp.1, "popitem while emptying")
+        check_dict(d, expected, "popitem while emptying")
+
+actor main(env):
+    try:
+        for n in [8, 10, 20, 33, 100, 1000]:
+            test_del_then_pop(n)
+            test_pop_then_popitem(n)
+            test_regrow(n)
+    except ValueError as e:
+        print("FAIL:", e)
+        env.exit(1)
+    env.exit(0)
