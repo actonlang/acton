@@ -482,7 +482,7 @@ void wake_wt(int wtid) {
         // or we read WT_Idle and wake it.
         atomic_thread_fence(memory_order_seq_cst);
         for (int i = 1; i <= num_wthreads; i++) {
-            if (wt_stats[i].state == WT_Idle) {
+            if (WT_STAT_GET(wt_stats[i].state) == WT_Idle) {
                 uv_async_send(&wake_ev[i]);
                 return;
             }
@@ -2136,7 +2136,7 @@ void wt_work_cb(uv_check_t *ev) {
             // So when we take an actor and more are waiting, we wake another
             // worker. We mark ourselves as working first, so that this wake
             // goes to a sleeping worker and not to ourselves.
-            wt_stats[wctx->id].state = WT_Working;
+            WT_STAT_SET(wt_stats[wctx->id].state, WT_Working);
             wake_wt(SHARED_RQ);
         }
 
@@ -2152,19 +2152,19 @@ void wt_work_cb(uv_check_t *ev) {
         }
         {
             long long int diff = cont_start_ns - end_ns;
-            wt_stats[wctx->id].bkeep_count++;
-            wt_stats[wctx->id].bkeep_sum += diff;
-            if      (diff < 100)              { wt_stats[wctx->id].bkeep_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[wctx->id].bkeep_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[wctx->id].bkeep_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[wctx->id].bkeep_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[wctx->id].bkeep_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[wctx->id].bkeep_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[wctx->id].bkeep_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[wctx->id].bkeep_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].bkeep_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].bkeep_100s++; }
-            else                              { wt_stats[wctx->id].bkeep_inf++; }
+            WT_STAT_ADD(wt_stats[wctx->id].bkeep_count, 1);
+            WT_STAT_ADD(wt_stats[wctx->id].bkeep_sum, diff);
+            if      (diff < 100)              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ns, 1); }
+            else if (diff < 1   * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1us, 1); }
+            else if (diff < 10  * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10us, 1); }
+            else if (diff < 100 * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100us, 1); }
+            else if (diff < 1   * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1ms, 1); }
+            else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10ms, 1); }
+            else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ms, 1); }
+            else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1s, 1); }
+            else if (diff < (long long int)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10s, 1); }
+            else if (diff < (long long int)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100s, 1); }
+            else                              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_inf, 1); }
         }
 
         $R r;
@@ -2179,20 +2179,20 @@ void wt_work_cb(uv_check_t *ev) {
             end_ns = now_ns();
             long long int diff = end_ns - cont_start_ns;
 
-            wt_stats[wctx->id].conts_count++;
-            wt_stats[wctx->id].conts_sum += diff;
+            WT_STAT_ADD(wt_stats[wctx->id].conts_count, 1);
+            WT_STAT_ADD(wt_stats[wctx->id].conts_sum, diff);
 
-            if      (diff < 100)              { wt_stats[wctx->id].conts_100ns++; }
-            else if (diff < 1   * 1000)       { wt_stats[wctx->id].conts_1us++; }
-            else if (diff < 10  * 1000)       { wt_stats[wctx->id].conts_10us++; }
-            else if (diff < 100 * 1000)       { wt_stats[wctx->id].conts_100us++; }
-            else if (diff < 1   * 1000000)    { wt_stats[wctx->id].conts_1ms++; }
-            else if (diff < 10  * 1000000)    { wt_stats[wctx->id].conts_10ms++; }
-            else if (diff < 100 * 1000000)    { wt_stats[wctx->id].conts_100ms++; }
-            else if (diff < 1   * 1000000000) { wt_stats[wctx->id].conts_1s++; }
-            else if (diff < (long long int)10  * 1000000000) { wt_stats[wctx->id].conts_10s++; }
-            else if (diff < (long long int)100 * 1000000000) { wt_stats[wctx->id].conts_100s++; }
-            else                              { wt_stats[wctx->id].conts_inf++; }
+            if      (diff < 100)              { WT_STAT_ADD(wt_stats[wctx->id].conts_100ns, 1); }
+            else if (diff < 1   * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_1us, 1); }
+            else if (diff < 10  * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_10us, 1); }
+            else if (diff < 100 * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_100us, 1); }
+            else if (diff < 1   * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_1ms, 1); }
+            else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_10ms, 1); }
+            else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_100ms, 1); }
+            else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_1s, 1); }
+            else if (diff < (long long int)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_10s, 1); }
+            else if (diff < (long long int)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_100s, 1); }
+            else                              { WT_STAT_ADD(wt_stats[wctx->id].conts_inf, 1); }
         } else {                                        // Exceptional path
             end_ns = now_ns();
             assert(wctx->jump0 != NULL);
@@ -2343,7 +2343,7 @@ void wt_work_cb(uv_check_t *ev) {
         // will not take anything from a queue until we are done with it, so
         // wake_wt() should wake some other worker.
         if (!current)
-            wt_stats[wctx->id].state = WT_Idle;
+            WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
 
         // run for max 20ms before yielding to IO
         // NOTE: since we are not preemptive, a single long continuation can
@@ -2351,7 +2351,7 @@ void wt_work_cb(uv_check_t *ev) {
         if (end_ns - start_ns > 20*1000000) {
             if (current) {
                 ENQ_ready(current);
-                wt_stats[wctx->id].state = WT_Idle;
+                WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
             }
             break;
         }
@@ -2388,9 +2388,9 @@ void *main_loop(void *idx) {
     work_ev[wctx->id].data = wctx;
     uv_check_start(&work_ev[wctx->id], (uv_check_cb)wt_work_cb);
 
-    wt_stats[wctx->id].state = WT_Idle;
+    WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
     int r = uv_run(wctx->uv_loop, UV_RUN_DEFAULT);
-    wt_stats[wctx->id].state = WT_NoExist;
+    WT_STAT_SET(wt_stats[wctx->id].state, WT_NoExist);
     rtsd_printf("Exiting...");
     return NULL;
 }
@@ -2483,40 +2483,42 @@ const char* stats_to_json () {
     // Worker threads
     yyjson_mut_val *j_stat = yyjson_mut_obj(doc);
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
+#define WT(f) WT_STAT_GET(wt_stats[i].f)
     for (unsigned int i = 1; i < NUM_THREADS; i++) {
         unsigned long long qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED);
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
-        yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[wt_stats[i].state]);
-        yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      wt_stats[i].sleeps);
+        yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[WT(state)]);
+        yyjson_mut_obj_add_int(doc, j_wt, "sleeps",      WT(sleeps));
         yyjson_mut_obj_add_int(doc, j_wt, "qlen",        qlen);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_count", wt_stats[i].conts_count);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   wt_stats[i].conts_sum);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", wt_stats[i].conts_100ns);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   wt_stats[i].conts_1us);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  wt_stats[i].conts_10us);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", wt_stats[i].conts_100us);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   wt_stats[i].conts_1ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  wt_stats[i].conts_10ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", wt_stats[i].conts_100ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    wt_stats[i].conts_1s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   wt_stats[i].conts_10s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  wt_stats[i].conts_100s);
-        yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   wt_stats[i].conts_inf);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", wt_stats[i].bkeep_count);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   wt_stats[i].bkeep_sum);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", wt_stats[i].bkeep_100ns);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   wt_stats[i].bkeep_1us);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  wt_stats[i].bkeep_10us);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", wt_stats[i].bkeep_100us);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   wt_stats[i].bkeep_1ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  wt_stats[i].bkeep_10ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", wt_stats[i].bkeep_100ms);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    wt_stats[i].bkeep_1s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   wt_stats[i].bkeep_10s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  wt_stats[i].bkeep_100s);
-        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   wt_stats[i].bkeep_inf);
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_count", WT(conts_count));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_sum",   WT(conts_sum));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ns", WT(conts_100ns));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1us",   WT(conts_1us));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10us",  WT(conts_10us));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100us", WT(conts_100us));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1ms",   WT(conts_1ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10ms",  WT(conts_10ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100ms", WT(conts_100ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_1s",    WT(conts_1s));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_10s",   WT(conts_10s));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_100s",  WT(conts_100s));
+        yyjson_mut_obj_add_int(doc, j_wt, "conts_inf",   WT(conts_inf));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_count", WT(bkeep_count));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_sum",   WT(bkeep_sum));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ns", WT(bkeep_100ns));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1us",   WT(bkeep_1us));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10us",  WT(bkeep_10us));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100us", WT(bkeep_100us));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1ms",   WT(bkeep_1ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10ms",  WT(bkeep_10ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100ms", WT(bkeep_100ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_1s",    WT(bkeep_1s));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   WT(bkeep_10s));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  WT(bkeep_100s));
+        yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   WT(bkeep_inf));
     }
+#undef WT
 
     // Database
     yyjson_mut_val *j_dbc = yyjson_mut_obj(doc);
@@ -3601,9 +3603,9 @@ int main(int argc, char **argv) {
     timer_fire();
 
     // Run the uv loop for the main thread
-    wt_stats[0].state = WT_Idle;
+    WT_STAT_SET(wt_stats[0].state, WT_Idle);
     int r = uv_run(aux_uv_loop, UV_RUN_DEFAULT);
-    wt_stats[0].state = WT_NoExist;
+    WT_STAT_SET(wt_stats[0].state, WT_NoExist);
 
     // -- SHUTDOWN --
 

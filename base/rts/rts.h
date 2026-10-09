@@ -83,6 +83,18 @@ struct wt_stat {
 } __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
+// Only the worker that an entry belongs to writes it. Other threads read
+// entries while the workers run (stats_to_json on the monitor threads,
+// rts_stats in acton.rts, and wake_wt for the state), so once the workers run,
+// every write and every read by another thread of a field that the workers
+// write is a relaxed atomic load or store. idx and key are written only before
+// the workers start. The worker adds with a relaxed load and a relaxed store:
+// it is the only writer, so it needs no atomic read-modify-write.
+#define WT_STAT_ADD(f, d) \
+    __atomic_store_n(&(f), __atomic_load_n(&(f), __ATOMIC_RELAXED) + (d), __ATOMIC_RELAXED)
+#define WT_STAT_SET(f, v) __atomic_store_n(&(f), (v), __ATOMIC_RELAXED)
+#define WT_STAT_GET(f) __atomic_load_n(&(f), __ATOMIC_RELAXED)
+
 struct B_Msg;
 struct $ConstCont;
 
