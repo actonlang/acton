@@ -1,0 +1,50 @@
+import time
+
+# The server replies to a ping and then works for 500 ms on a job that was
+# queued behind the ping. The reply makes the main actor ready while the
+# server's worker handles the result of the ping, right before that worker
+# runs the job, so another worker must take the main actor. The reply must
+# arrive long before the job is done.
+
+JOB_MS = 500
+MAX_RTT_MS = 100
+ROUNDS = 5
+
+def now_ms() -> int:
+    s, ns = time.get_monotonic()
+    return s * 1000 + ns // 1000000
+
+
+actor Server():
+    def ping(t0: int, reply: action(int) -> None):
+        reply(t0)
+
+    def job(ms: int):
+        end = now_ms() + ms
+        x = 1
+        while now_ms() < end:
+            x = (x * 1103515245 + 12345) % 2147483648
+
+
+actor main(env):
+    server = Server()
+    var round = 0
+
+    def pong(t0: int):
+        rtt = now_ms() - t0
+        if rtt > MAX_RTT_MS and env.nr_wthreads > 1:
+            print("round", round, "reply took", rtt, "ms")
+            env.exit(1)
+            return
+        round += 1
+        if round == ROUNDS:
+            print("done")
+            env.exit(0)
+        else:
+            after 0.6: start()
+
+    def start():
+        server.ping(now_ms(), pong)
+        server.job(JOB_MS)
+
+    start()
