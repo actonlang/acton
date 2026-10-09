@@ -84,3 +84,25 @@ actor EnvTester(t: testing.EnvT):
         print("EnvTester.test() wthreads:", t.env.nr_wthreads)
         t.success()
     after 0: test()
+
+
+proc def _check_timeout_values(timeout: proc(float) -> None):
+    for seconds in [0.0, -1.0, float("nan"), float("inf"), float("-inf")]:
+        try:
+            timeout(seconds)
+            raise AssertionError("Expected invalid test timeout to raise ValueError")
+        except ValueError:
+            pass
+    timeout(0.001)
+    timeout(60.0)
+
+
+def _test_timeout_values(t: testing.EnvT):
+    # Manually constructed contexts keep their existing constructor defaults.
+    sync = testing.SyncT(t.log_handler, set())
+    asynchronous = testing.AsyncT(t.report_result, t.log_handler, set())
+    environment = testing.EnvT(t.report_result, t.env, t.log_handler, set())
+    _check_timeout_values(sync.timeout)
+    _check_timeout_values(asynchronous.timeout)
+    _check_timeout_values(environment.timeout)
+    t.success()
