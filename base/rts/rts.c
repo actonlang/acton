@@ -1188,7 +1188,7 @@ void $RAISE(B_BaseException e) {
     WorkerCtx wctx = GET_WCTX();
     JumpBuf jump = wctx->jump_top;
     jump->xval = e;
-    longjmp(jump->buf, 1);
+    $LONGJMP(jump->buf, 1);
 }
 
 #ifdef ACTON_DB
