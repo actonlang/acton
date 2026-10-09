@@ -1,0 +1,69 @@
+# An LRU cache with a hash table and an intrusive list of reusable slots.
+
+class LRU(object):
+    slots: dict[int, int]
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.slots = {}
+        self.keys = [0] * capacity
+        self.values = [0] * capacity
+        # The last slot is a sentinel: next is oldest, previous is newest.
+        self.previous = [capacity] * (capacity + 1)
+        self.next = [capacity] * (capacity + 1)
+
+    def touch(self, slot: int):
+        before = self.previous[slot]
+        following = self.next[slot]
+        self.next[before] = following
+        self.previous[following] = before
+        newest = self.previous[self.capacity]
+        self.next[newest] = slot
+        self.previous[slot] = newest
+        self.next[slot] = self.capacity
+        self.previous[self.capacity] = slot
+
+    def get(self, key: int) -> ?int:
+        if key not in self.slots:
+            return None
+        slot = self.slots[key]
+        self.touch(slot)
+        return self.values[slot]
+
+    def put(self, key: int, value: int):
+        if key in self.slots:
+            slot = self.slots[key]
+        elif len(self.slots) == self.capacity:
+            slot = self.next[self.capacity]
+            del self.slots[self.keys[slot]]
+            self.slots[key] = slot
+        else:
+            slot = len(self.slots)
+            self.slots[key] = slot
+            # Link a fresh slot before moving it to the newest end.
+            oldest = self.next[self.capacity]
+            self.next[self.capacity] = slot
+            self.previous[slot] = self.capacity
+            self.next[slot] = oldest
+            self.previous[oldest] = slot
+        self.keys[slot] = key
+        self.values[slot] = value
+        self.touch(slot)
+
+actor main(env):
+    capacity = int(env.argv[1]) if len(env.argv) > 1 else 100
+    n = int(env.argv[2]) if len(env.argv) > 2 else 1000
+    cache = LRU(capacity)
+    seed0 = 0
+    seed1 = 1
+    hits = 0
+    modulus = capacity * 10
+    for _ in range(n):
+        seed0 = (1103515245 * seed0 + 12345) & 0x7fffffff
+        seed1 = (1103515245 * seed1 + 12345) & 0x7fffffff
+        key = seed0 % modulus
+        cache.put(key, key)
+        if cache.get(seed1 % modulus) is not None:
+            hits += 1
+    print(hits)
+    print(n - hits)
+    env.exit(0)

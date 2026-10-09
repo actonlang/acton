@@ -89,6 +89,8 @@ test/**/*.log
 !test/**/snapshots/**/
 !test/**/snapshots/**/*
 test/**/snapshots/output/**
+!test/perf-benchgames/*/*_out
+!test/perf-benchgames/*/LICENSE
 
 snapshots/output/**
 

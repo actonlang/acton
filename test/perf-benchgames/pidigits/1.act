@@ -1,13 +1,13 @@
 # Acton port of https://github.com/actonlang/Programming-Language-Benchmarks/blob/main/bench/algorithm/pidigits/4.py
 actor main(env):
-    n=int(env.argv[1])
+    n = int(env.argv[1])
 
-    var tmp1 = 0
-    var tmp2 = 0
+    var tmp1 = bigint(0)
+    var tmp2 = bigint(0)
 
-    var acc = 0
-    var den = 1
-    var num = 1
+    var acc = bigint(0)
+    var den = bigint(1)
+    var num = bigint(1)
 
     def extract_Digit(nth):
         tmp1 = num * nth
@@ -22,11 +22,11 @@ actor main(env):
         num = num * 10
 
     def next_Term(k):
-        k2=k*2+1
+        k2=bigint(k*2+1)
         acc = acc + num * 2
         acc = acc * k2
         den = den * k2
-        num = num * k
+        num = num * bigint(k)
 
     var i=0
     var k=0
@@ -42,8 +42,16 @@ actor main(env):
         if d!=extract_Digit(4):
             continue
 
-        res += chr(48+d)
+        res += chr(48+int(d))
         i += 1
+        if i % 10 == 0:
+            print("%s\t:%d" % (res, i))
+            res = ""
         eliminate_Digit(d)
-    print("3." + res[1:])
-    await async env.exit(0)
+    remainder = i % 10
+    if remainder != 0:
+        spaces = ""
+        for j in range(0, (10-(len(res))), 1):
+            spaces += " "
+        print("%s%s\t:%d" % (res, spaces, i))
+    env.exit(0)

@@ -1,0 +1,66 @@
+# The Computer Language Benchmarks Game
+# Adapted from 1.py by Dominique Wahli, Ahmad Syukri, and Justin Peel.
+
+import file
+import re
+
+def scan(pattern: str, replacement: ?str, data: bytes, overlap: int=0, boundary: bytes=b"") -> (bytes, int):
+    # The current regex API validates UTF-8 on every match. Small ASCII
+    # windows keep that work bounded. Preserve possible boundary matches.
+    parts = []
+    start = 0
+    count = 0
+    while start < len(data):
+        end = min([start + 1024 + overlap, len(data)])
+        if boundary != b"" and end < len(data):
+            found = data.find(boundary, end)
+            end = found + 1 if found >= 0 else len(data)
+        window = data[start:end]
+        text = window.decode()
+        limit = len(text) if end == len(data) else len(text) - overlap
+        if boundary == b"|" and end < len(data):
+            limit = len(text) - 1
+        pos = 0
+        for match in re.matches(pattern, text):
+            if match.start_pos >= limit:
+                break
+            if replacement is not None:
+                parts.append(window[pos:match.start_pos])
+                parts.append(replacement.encode())
+            pos = match.end_pos
+            count += 1
+        consumed = max([pos, limit])
+        if replacement is not None:
+            parts.append(window[pos:consumed])
+        start += consumed
+    return b"".join(parts), count
+
+actor main(env):
+    path = env.argv[1] if len(env.argv) > 1 else "25000_in"
+    source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), path)
+    text = source.read()
+    source.close()
+    original_length = len(text)
+    text, _ = scan(">.*\n|\n", "", text, boundary=b"\n")
+    clean_length = len(text)
+    variants = [
+        "agggtaaa|tttaccct",
+        "[cgt]gggtaaa|tttaccc[acg]",
+        "a[act]ggtaaa|tttacc[agt]t",
+        "ag[act]gtaaa|tttac[agt]ct",
+        "agg[act]taaa|ttta[agt]cct",
+        "aggg[acg]aaa|ttt[cgt]ccct",
+        "agggt[cgt]aa|tt[acg]accct",
+        "agggta[cgt]a|t[acg]taccct",
+        "agggtaa[cgt]|[acg]ttaccct"
+    ]
+    for pattern in variants:
+        ignored, count = scan(pattern, None, text, overlap=7)
+        print("%s %d" % (pattern, count))
+    for pattern, replacement in [("tHa[Nt]", "<4>"), ("aND|caN|Ha[DS]|WaS", "<3>"),
+                                 ("a[NSt]|BY", "<2>"), ("<[^>]*>", "|")]:
+        # These substitutions only match bases or the three-byte tags above.
+        text, _ = scan(pattern, replacement, text, overlap=4)
+    text, _ = scan(r"\|[^|][^|]*\|", "-", text, boundary=b"|")
+    print("\n%d\n%d\n%d" % (original_length, clean_length, len(text)))
+    env.exit(0)

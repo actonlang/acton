@@ -1,53 +1,35 @@
-# Acton port of https://programtalk.com/vs2/?source=python/2753/cython/Demos/benchmarks/spectralnorm.py
+# The Computer Language Benchmarks Game
+# Adapted from 1.go.
+
 import math
 
-def eval_A(i, j):
-    ij = float(i) + float(j)
-    return 1.0 / (ij * (ij + 1) / 2 + float(i) + 1)
+def multiply(u: list[float], v: list[float], transpose: bool):
+    n = len(u)
+    for i in range(n):
+        total = 0.0
+        # Advancing the denominator avoids an integer multiply per element.
+        denominator = i * (i + 1) // 2 + (1 if transpose else i + 1)
+        for j in range(n):
+            total += u[j] / float(denominator)
+            denominator += i + j + (2 if transpose else 1)
+        v[i] = total
 
-def eval_A_times_u(u):
-    res = []
-    for i in range(len(u)):
-        res.append(part_A_times_u(i,u))
-    return res
-
-def eval_At_times_u(u):
-    res = []
-    for i in range(len(u)):
-        res.append(part_At_times_u(i,u))
-    return res
-
-def eval_AtA_times_u(u):
-    return eval_At_times_u(eval_A_times_u(u))
-
-def part_A_times_u(i, u):
-    partial_sum = 0.0
-    for j, u_j in enumerate(u, 0):
-        partial_sum += eval_A(i, j) * u_j
-    return partial_sum
-
-def part_At_times_u(i, u):
-    partial_sum = 0
-    for j, u_j in enumerate(u, 0):
-        partial_sum += eval_A(j, i) * u_j
-    return partial_sum
+def multiply_ata(u: list[float], v: list[float], scratch: list[float]):
+    multiply(u, scratch, False)
+    multiply(scratch, v, True)
 
 actor main(env):
-    var u = [1] * int(env.argv[1])
-    var v = []
-
-    for dummy in range(10):
-        v = eval_AtA_times_u(u)
-        u = eval_AtA_times_u(v)
-
-    vBv = vv = 0
-
-    for i in range(len(u)):
-        ue = u[i]
-        ve = v[i]
-        vBv += ue * ve
-        vv  += ve * ve
-    res = math.sqrt(vBv/vv)
-    print("%.9f" % res)
-
-    await async env.exit(0)
+    n = int(env.argv[1]) if len(env.argv) > 1 else 100
+    u = [1.0 for _ in range(n)]
+    v = [0.0 for _ in range(n)]
+    scratch = [0.0 for _ in range(n)]
+    for _ in range(10):
+        multiply_ata(u, v, scratch)
+        multiply_ata(v, u, scratch)
+    uv = 0.0
+    vv = 0.0
+    for i in range(n):
+        uv += u[i] * v[i]
+        vv += v[i] * v[i]
+    print("%.9f" % math.sqrt(uv / vv))
+    env.exit(0)

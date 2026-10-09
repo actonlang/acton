@@ -536,20 +536,22 @@ dist/deps/libyyjson: deps/libyyjson $(DIST_ZIG)
 	cp -a "$</"* "$(TD)/$@"
 
 # top level targets
-.PHONY: test test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
+.PHONY: test test-benchgames test-builtins test-compiler test-db test-examples test-lang test-regressions test-rts test-stdlib online-tests
 .PHONY: test-compiler-accept test-lib-accept test-acton-goldens-accept test-goldens-accept
 .PHONY: test-performance
 # These run stack against libacton/acton, which link liblmdb, so the bdeps
 # archives must exist first. (test, test-stdlib, test-incremental, online-tests
 # already pull it in transitively via dist/bin/acton[c].)
-test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
+test-benchgames test-builtins test-compiler test-lib-accept test-acton-goldens-accept test-cross-compile test-syntaxerrors test-syntaxerrors-accept test-typeerrors test-typeerrors-accept test-db test-examples test-lang test-regressions test-rts: $(BDEPS)
 test: dist/bin/acton
 	cd compiler && stack test libacton acton:incremental
 	# Exclude the cross-compilation group from the default run: it builds for
 	# many targets and bloats ~/.cache/acton. Run it via `make test-cross-compile`.
 	# Exclude stdlib here because `test-stdlib` below runs the same compiler
-	# stdlib group before the standalone stdlib_tests project.
-	cd compiler && stack test acton:test_acton --ta '-p "! /cross-compilation/ && ! /stdlib/"'
+	# stdlib group before the standalone stdlib_tests project. Exclude the
+	# benchmark programs too: `make test-benchgames` runs them, and CI runs that
+	# as a separate step.
+	cd compiler && stack test acton:test_acton --ta '-p "! /cross-compilation/ && ! /stdlib/ && ! /Benchmark programs/"'
 	$(MAKE) test-stdlib
 	$(MAKE) -C backend test
 	$(MAKE) test-rts-db
@@ -613,6 +615,9 @@ test-db:
 
 test-examples:
 	cd compiler && stack test acton --ta '-p "Examples"'
+
+test-benchgames:
+	cd compiler && stack test acton:test_acton --ta '-p "Benchmark programs"'
 
 test-lang:
 	cd compiler && stack test acton --ta '-p "Core language"'

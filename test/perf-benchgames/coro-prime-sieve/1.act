@@ -1,0 +1,25 @@
+# A chain of actors, with one divisibility filter for each discovered prime.
+# Pulling one value at a time bounds the number of outstanding messages.
+
+actor Generate():
+    var value = 1
+    def next() -> int:
+        value += 1
+        return value
+
+actor Filter(source: action() -> int, prime: int):
+    def next() -> int:
+        value = await async source()
+        while value % prime == 0:
+            value = await async source()
+        return value
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 100
+    var source = Generate().next
+    for i in range(n):
+        prime = await async source()
+        print(prime)
+        if i + 1 < n:
+            source = Filter(source, prime).next
+    env.exit(0)
