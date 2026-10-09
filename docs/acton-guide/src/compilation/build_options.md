@@ -61,6 +61,7 @@ its section below describes:
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 | The global mark stack [starts with 1048576 entries](#initial-size) instead of 4096 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
+| A collection starts after the program has allocated [67% of the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 
 ## GC mark layout
 
@@ -206,14 +207,14 @@ including database support.
 
 ## GC allocation budget
 
-By default the collector starts a collection after the program has allocated
-an amount derived from the previous collection: twice the pointer-containing
-live data, plus a quarter of the pointer-free live data, plus the roots (with
-thread stacks counted twice), all divided by the free space divisor (3 by
-default). A program whose live data is mostly strings, byte buffers or numbers
-therefore collects often compared with its heap size. The allocation budget
-instead makes the amount a percentage of all live data and roots, like Go's
-`GOGC`:
+BDWGC starts a collection after the program has allocated an amount derived
+from the previous collection: twice the pointer-containing live data, plus a
+quarter of the pointer-free live data, plus the roots (with thread stacks
+counted twice), all divided by the free space divisor (3 by default). A program
+whose live data is mostly strings, byte buffers or numbers therefore collects
+often compared with its heap size: pointer-free data counts an eighth as much as
+pointer-containing data. The allocation budget instead makes the amount a
+percentage of all live data and roots, like Go's `GOGC`:
 
 ```python
 build_options = {
@@ -234,9 +235,19 @@ it grows the heap a second time since the previous collection. When the budget
 exceeds the free heap plus one growth step, collections therefore come
 earlier.
 
-The default, `"0"`, keeps the free space divisor policy. The
-`GC_ALLOC_BUDGET_PERCENT` environment variable overrides the build setting
-when the program starts; `0` there restores the default policy. Under either
+Acton uses a budget of 67% by default. For live data that is all
+pointer-containing, that is the amount the free space divisor policy gives, so
+such programs collect as before. Pointer-free data, such as the contents of
+strings and byte buffers, counts like other data instead of an eighth as much.
+On an M1 with 8 worker threads, compared with the free space divisor policy,
+the `fleet` load benchmark collected 34% less often and took 9% less time, and
+`pidigits` collected 35% less often and took 19% less time, at up to 25% more
+peak memory. Programs whose large heaps hold mostly pointer-containing data
+were not affected.
+
+`"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
+environment variable overrides the build setting when the program starts; `0`
+there selects the free space divisor policy. Under either
 policy, `GC_MIN_BYTES_ALLOCD` sets the smallest amount allocated between
 collections, in bytes with an optional `K`, `M` or `G` suffix. This is a build
 setting shared by the application and its dependencies, including database

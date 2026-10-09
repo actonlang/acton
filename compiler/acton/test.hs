@@ -2602,7 +2602,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "0"), ("block_size", "4096"),
+    defaults = [("alloc_budget_percent", "67"), ("block_size", "4096"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "384"),
                 ("no_thread_local_warmup", "True"),
