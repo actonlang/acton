@@ -24,6 +24,13 @@ uint64_t $checked_uint_from_u64(uint64_t value, uint64_t max, const char *type_n
                                $t->$class->__init__($t, ##__VA_ARGS__); \
                                $t; })
 
+// For a type whose only pointer is $class. The memory is not zeroed, so
+// __init__ must write every other field.
+#define $NEWATOMIC($T, ...) ({ $T $t = acton_malloc_atomic(sizeof(struct $T)); \
+                               $t->$class = &$T ## G_methods; \
+                               $t->$class->__init__($t, ##__VA_ARGS__); \
+                               $t; })
+
 #define $NEWCC($X, $c, ...) ({ $X $x = acton_malloc(sizeof(struct $X)); \
                                $x->$class = &$X ## G_methods; \
                                $x->$class->__init__($x, ##__VA_ARGS__, $CONSTCONT($x,$c)); })
