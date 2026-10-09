@@ -8,15 +8,13 @@ fingerprint = 0x0f2654ba77f95769
 #   .zlib_upstream = .{ .url = "https://github.com/madler/zlib/.../v1.3.1.tar.gz",
 #                       .hash = "...", .lazy = false }
 #
-# Acton fetches acton-zlib itself through the proxy-aware http-client (fine), but
-# that nested zlib_upstream .url is never seen by acton -- it is resolved by *zig*
-# during "Final compilation". zig's HTTPS-over-CONNECT-proxy support is broken, so
-# the build fails fetching zlib_upstream. `acton build` (not just `acton fetch`)
-# is required to drive zig's transitive resolution.
+# Acton must fetch both acton-zlib and the nested zlib_upstream archive through
+# its proxy-aware HTTP client before invoking Zig. Building the project checks
+# that the prefetched transitive dependency is available during compilation.
 dependencies = {
     "zlib": (
-        url="https://github.com/actonlang/acton-zlib/archive/aad0c3fd2dab64b3c4728ac96cd9362c793fb932.tar.gz",
-        hash="N-V-__8AAF8XAAAaNtxndtX1uIB1vN-tsG6h7ZIPoDoCQ226",
+        url="https://github.com/actonlang/acton-zlib/archive/ef6fa1c75631b92ebee3cf01e9b6ace326a2db47.tar.gz",
+        hash="N-V-__8AANAWAADerAg0qsvk6lkPK5j6I59zQv_vbZ2WAOvy",
         repo_url="https://github.com/actonlang/acton-zlib"
     )
 }

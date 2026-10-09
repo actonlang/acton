@@ -8,14 +8,13 @@
 #   proxy  - tinyproxy, bridging the internal network to real egress.
 # The ONLY way out of the acton box is the proxy (a locked-down corporate host).
 #
-# It then runs `acton fetch` (one remote https zig dependency) with the proxy
-# env vars set. Because the acton box has no direct egress, a SUCCESSFUL fetch is
-# possible only if acton's HTTP client actually routed through the proxy. So:
+# It runs fetch, package update, package upgrade and a final build with the proxy
+# env vars set and clears Acton's cache before each scenario. With no direct
+# egress, a successful scenario must have downloaded through the proxy. So:
 #
-#   exit 0  => acton honoured http(s)_proxy  (PASS)
-#   exit !0 => acton ignored the proxy and went direct  (FAIL / reproduces the
-#              x86_64 -no-pie `environ` bug: getEnvironment() returns [] so
-#              http-client's proxyEnvironment never sees the proxy vars)
+#   exit 0 + expected marker => scenario completed through the proxy (PASS)
+#   otherwise => scenario failed; inspect download, hash and compiler diagnostics
+#                before attributing the failure to proxy routing
 #
 # Usage:
 #   make test-proxy
@@ -123,7 +122,7 @@ note "[3/4] acton pkg upgrade  (github ref resolve + archive re-hash)"
 o="$(run_in_proxy /work/pkgtest '/opt/acton/bin/acton pkg upgrade')"; c=$?
 check "acton pkg upgrade" "$c" "$o" 'Wrote changes to Build.act'
 
-note "[4/4] acton build  (transitive zig dependency resolved by zig)"
+note "[4/4] acton build  (transitive zig dependency pre-fetched by acton and compiled by zig)"
 o="$(run_in_proxy /work/zigdeptest '/opt/acton/bin/acton build')"; c=$?
 check "acton build"       "$c" "$o" 'Final compilation done'
 set -e
@@ -139,9 +138,11 @@ note "FAIL: $fails scenario(s) did not complete through the proxy"
 echo "    proxy CONNECT log:" >&2
 "${COMPOSE[@]}" logs --no-color proxy 2>/dev/null | grep -i 'CONNECT' | sed 's/^/      /' >&2 || true
 cat >&2 <<'EOF'
-    With no direct egress, a failure means acton did not route a request through
-    the proxy. Causes: GHC getEnvironment() empty on x86_64 -no-pie binaries (the
-    `environ` bug), or a download/hash step using zig's network stack instead of
-    the proxy-aware http-client.
+    A failed scenario can indicate a download or hash error, an incompatible
+    dependency, or a compilation failure. Inspect the command output above
+    before attributing the failure to proxy routing. Known routing causes include
+    an empty GHC getEnvironment() result on x86_64 -no-pie binaries (the `environ`
+    bug), or a download using zig's network stack instead of the proxy-aware
+    http-client.
 EOF
 exit 1

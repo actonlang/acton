@@ -21,8 +21,8 @@ COPY project /work/proxytest
 # command tests (pkg upgrade resolves a ref + re-hashes through the proxy).
 COPY pkgproject /work/pkgtest
 # A third project that depends on a real Acton package (acton-zlib) carrying a
-# *transitive* zig package dependency. `acton build` must drive zig's resolution
-# of that nested .url through the proxy (the lmdb/libssh field failure).
+# *transitive* zig package dependency. `acton build` must pre-fetch that nested
+# .url through the proxy and let zig compile it from the seeded package cache.
 COPY zigdepproject /work/zigdeptest
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
