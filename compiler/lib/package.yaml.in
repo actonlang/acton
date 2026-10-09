@@ -95,6 +95,7 @@ library:
     - Acton.Types
     - Acton.TypeEnv
     - Acton.WitKnots
+    - Acton.ZigFetch
     - Acton.Zon
     - Utils
     - Pretty

@@ -20,10 +20,14 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
 
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
-    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
+    // Normalize the serialized package root so C inputs and prefix maps agree.
+    if (b.root.root_dir.path) |path| {
+        b.root.root_dir.path = b.pathResolve(&.{path});
+    }
+    const buildroot_path = b.root.joinString(b.allocator, "") catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
@@ -85,7 +89,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    var iter_dir = b.build_root.handle.openDir(
+    b.dependOnDirectoryContents(b.path("out/types"));
+    var iter_dir = b.root.openDir(
         io,
         "out/types/",
         .{
@@ -110,6 +115,10 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         };
         if (next_result) |entry| {
+            if (entry.kind == .directory) {
+                const dir_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
+                b.dependOnDirectoryContents(b.path(dir_path));
+            }
             if (entry.kind == .file and std.mem.endsWith(u8, entry.basename, ".c")) {
                 if (std.mem.endsWith(u8, entry.basename, ".root.c")) continue;
                 if (std.mem.endsWith(u8, entry.basename, ".test_root.c")) continue;
@@ -129,12 +138,13 @@ pub fn build(b: *std.Build) void {
     }
 
     if (c_files.items.len == 0) {
+        b.graph.poisonCache();
         const dummy_rel = "out/types/acton_empty.c";
-        b.build_root.handle.createDirPath(io, "out/types") catch |err| {
+        b.root.createDirPath(io, "out/types") catch |err| {
             std.log.err("Error creating out/types directory: {}", .{err});
             std.process.exit(1);
         };
-        const dummy_file = b.build_root.handle.createFile(io, dummy_rel, .{}) catch |err| {
+        const dummy_file = iter_dir.createFile(io, "acton_empty.c", .{}) catch |err| {
             std.log.err("Error creating dummy C file: {}", .{err});
             std.process.exit(1);
         };
@@ -168,7 +178,7 @@ pub fn build(b: *std.Build) void {
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
     flags.append(b.allocator, file_prefix_map.items) catch unreachable;
 
-    if (optimize == .Debug) {
+    if (optimize == .debug) {
         print("Debug build\n", .{});
         flags.appendSlice(b.allocator, &.{
             "-DDEV",
@@ -193,8 +203,11 @@ pub fn build(b: *std.Build) void {
         };
     }
 
+    // Acton subtyping shares object layouts across distinct C struct pointers.
+    // Keep Clang 22's new error as a warning.
     flags.appendSlice(b.allocator, &.{
         "-fwrapv",
+        "-Wno-error=incompatible-pointer-types",
     }) catch unreachable;
 
     const libActonProject = b.addLibrary(.{
@@ -222,7 +235,7 @@ pub fn build(b: *std.Build) void {
 
     libActonProject.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 
-    var hiter_dir = b.build_root.handle.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
+    var hiter_dir = b.root.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
 

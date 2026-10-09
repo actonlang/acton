@@ -39,6 +39,7 @@ import qualified Repl
 import qualified WatchTests
 import qualified PerfTests
 import qualified TestOutputTests
+import qualified ZigProgressTests
 import qualified PerfScalingTests
 import qualified TestGolden
 
@@ -85,6 +86,7 @@ main = do
       , WatchTests.watchProcessTests
       , PerfTests.perfTests
       , TestOutputTests.testOutputTests
+      , ZigProgressTests.zigProgressTests
       , PerfScalingTests.scaleOptionTests
       , PerfScalingTests.scaleTests
       , PerfScalingTests.perfMemoryTests
@@ -680,7 +682,8 @@ compilerTests =
             ]
           writeFile (depProj </> "src" </> "dep.act") "def marker() -> int:\n    return 1\n"
           (tarCode, tarOut, tarErr) <- readCreateProcessWithExitCode
-            (proc "tar" ["-C", depProj, "-czf", depArchive, "."]) ""
+            (proc "tar" ["-C", depProj, "-czf", depArchive, "."])
+              { env = Just (("COPYFILE_DISABLE", "1") : filter ((/= "COPYFILE_DISABLE") . fst) env0) } ""
           assertEqual ("tar should create dependency archive\nstdout:\n" ++ tarOut ++ "\nstderr:\n" ++ tarErr)
             ExitSuccess tarCode
           writeFile (hashCwd </> "build.zig") $ unlines
@@ -688,7 +691,10 @@ compilerTests =
             , "pub fn build(b: *std.Build) void { _ = b; }"
             ]
           (hashCode, hashOut, hashErr) <- readCreateProcessWithExitCode
-            (proc zigExe ["fetch", "--global-cache-dir", hashCache, depArchive]) { cwd = Just hashCwd } ""
+            (proc zigExe ["fetch", depArchive])
+              { cwd = Just hashCwd
+              , env = Just (("ZIG_GLOBAL_CACHE_DIR", hashCache) : filter ((/= "ZIG_GLOBAL_CACHE_DIR") . fst) env0)
+              } ""
           assertEqual ("zig fetch should calculate dependency hash\nstdout:\n" ++ hashOut ++ "\nstderr:\n" ++ hashErr)
             ExitSuccess hashCode
           let depHash = dropWhileEnd isSpace (dropWhile isSpace hashOut)
@@ -710,6 +716,43 @@ compilerTests =
             ExitSuccess returnCode
           depBuild <- doesFileExist (homeDir </> ".cache" </> "acton" </> "deps" </> ("dep-" ++ depHash) </> "Build.act")
           assertBool "fetched dependency should be extracted into Acton deps cache" depBuild
+
+          -- Zig 0.16 could leave only an extracted global package directory.
+          -- Zig 0.17 consumes the recompressed archive, including for packages
+          -- reached through a local Zig dependency's manifest.
+          let packageCache = homeDir </> ".cache/acton/zig-global-cache/p"
+              legacyCache = packageCache </> depHash
+              cachedArchive = legacyCache ++ ".tar.gz"
+              wrapper = tmp </> "wrapper"
+              fetchZigDeps label zigDeps = do
+                writeFile (rootProj </> "Build.act") $ unlines
+                  [ "name = \"root\""
+                  , "fingerprint = " ++ mkFp "root"
+                  , "dependencies = {}"
+                  , "zig_dependencies = " ++ zigDeps
+                  ]
+                (code, out, err) <- readCreateProcessWithExitCode
+                  (proc actonExe ["fetch"]) { cwd = Just rootProj, env = Just envWithHome } ""
+                assertEqual (label ++ "\n" ++ out ++ err) ExitSuccess code
+                assertBool (label ++ " should materialize Zig's cached archive") =<< doesFileExist cachedArchive
+          createDirectoryIfMissing True (legacyCache </> "src")
+          copyFile (depProj </> "Build.act") (legacyCache </> "Build.act")
+          copyFile (depProj </> "src/dep.act") (legacyCache </> "src/dep.act")
+          removeFile cachedArchive
+          removeFile depArchive
+          fetchZigDeps "direct Zig dependency from a legacy cache"
+            ("{\"dep\": (url=" ++ show depArchive ++ ", hash=" ++ show depHash ++ ")}")
+          removeFile cachedArchive
+          createDirectoryIfMissing True wrapper
+          writeFile (wrapper </> "build.zig.zon") $ unlines
+            [ ".{"
+            , "    .dependencies = .{"
+            , "        .dep = .{ .url = " ++ show depArchive ++ ", .hash = " ++ show depHash ++ " },"
+            , "    },"
+            , "}"
+            ]
+          fetchZigDeps "transitive Zig dependency from a legacy cache"
+            ("{\"wrapper\": (path=" ++ show wrapper ++ ")}")
 
   , testCase "build.zig.zon uses canonical dep roots" $ do
         withSystemTempDirectory "acton-buildzig-zon-dedup" $ \tmp -> do
@@ -1769,6 +1812,14 @@ actonProjTests =
             (proc actonExe ["build", "--always-build", "--color", "never"]) { cwd = Just proj } ""
           assertEqual ("project importing std.json should build\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
             ExitSuccess returnCode
+          zon <- readFile (proj </> "out/zig/build.zig.zon")
+          buildZig <- readFile (proj </> "out/zig/build.zig")
+          assertBool "std should use an Acton package key"
+            (".acton_pkg_std = .{" `isInfixOf` zon)
+          assertBool "std should not shadow Zig's builtin module"
+            (not ("        .std = .{" `isInfixOf` zon))
+          assertBool "std lookup should match its package key"
+            ("b.dependency(\"acton_pkg_std\"" `isInfixOf` buildZig)
           (runCode, runOut, runErr) <- readCreateProcessWithExitCode
             (proc (proj </> "out/bin/main") []) ""
           assertEqual ("project importing std.json should run\nstdout:\n" ++ runOut ++ "\nstderr:\n" ++ runErr)
@@ -1801,8 +1852,8 @@ actonProjTests =
         (cRun, _outRun, _errRun) <- readCreateProcessWithExitCode (shell "./out/bin/main"){ cwd = Just proj } ""
         assertEqual "project binary should run" ExitSuccess cRun
         zon <- readFile (proj </> "out/zig/build.zig.zon")
-        assertBool "build.zig.zon should declare dep_a" (".dep_a" `isInfixOf` zon)
-        assertBool "build.zig.zon should declare dep_b" (".dep_b" `isInfixOf` zon)
+        assertBool "build.zig.zon should declare dep_a" (".acton_pkg_dep_a" `isInfixOf` zon)
+        assertBool "build.zig.zon should declare dep_b" (".acton_pkg_dep_b" `isInfixOf` zon)
         (cSig, outSig, _errSig) <- readCreateProcessWithExitCode (proc actonExe ["sig", "dep_a"]){ cwd = Just proj } ""
         assertEqual "acton sig dep_a should work" ExitSuccess cSig
         assertBool "acton sig dep_a should list answer_a" ("answer_a" `isInfixOf` outSig)
@@ -1830,18 +1881,18 @@ actonProjTests =
         runActon "build --dep dep_a=deps/dep_a --dep dep_b=deps/dep_b --dep ghost=deps/ghost" ExitSuccess False proj
         rootZon <- readFile (proj </> "out/zig/build.zig.zon")
         depAZon <- readFile (depA </> "out/zig/build.zig.zon")
-        expect ".dep_a = .{" rootZon "root build.zig.zon should declare dep_a"
+        expect ".acton_pkg_dep_a = .{" rootZon "root build.zig.zon should declare dep_a"
         expectAny ["dep_override/deps/dep_a", "dep_override\\deps\\dep_a"] rootZon "root build.zig.zon should use dep_a override path"
-        expect ".dep_b = .{" rootZon "root build.zig.zon should declare dep_b"
+        expect ".acton_pkg_dep_b = .{" rootZon "root build.zig.zon should declare dep_b"
         expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b"] rootZon "root build.zig.zon should use dep_b override path transitively"
         assertBool "root build.zig.zon should not use cached dep_b hash path" (not ("dep_b-" `isInfixOf` rootZon))
-        expect ".dep_c = .{" rootZon "root build.zig.zon should declare dep_c (non-overridden) transitively"
+        expect ".acton_pkg_dep_c = .{" rootZon "root build.zig.zon should declare dep_c (non-overridden) transitively"
         expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c"] rootZon "root build.zig.zon should keep dep_c path"
         assertBool "root build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` rootZon))
-        expect ".dep_b = .{" depAZon "dep_a build.zig.zon should declare dep_b"
+        expect ".acton_pkg_dep_b = .{" depAZon "dep_a build.zig.zon should declare dep_b"
         expectAny ["dep_override/deps/dep_b", "dep_override\\deps\\dep_b", "../dep_b", "..\\dep_b"] depAZon "dep_a build.zig.zon should use dep_b override path"
         assertBool "dep_a build.zig.zon should not use cached dep_b hash path" (not ("dep_b-" `isInfixOf` depAZon))
-        expect ".dep_c = .{" depAZon "dep_a build.zig.zon should declare dep_c"
+        expect ".acton_pkg_dep_c = .{" depAZon "dep_a build.zig.zon should declare dep_c"
         expectAny ["dep_override/deps/dep_c", "dep_override\\deps\\dep_c", "../dep_c", "..\\dep_c"] depAZon "dep_a build.zig.zon should keep dep_c path"
         assertBool "dep_a build.zig.zon should not include undeclared ghost override" (not ("ghost" `isInfixOf` depAZon))
   , testCase "zig deps do not collide with package deps in build.zig.zon" $ do
@@ -1908,7 +1959,7 @@ actonProjTests =
             , "    .name = .lmdb_zig,"
             , "    .version = \"0.0.0\","
             , "    .fingerprint = 0xd571f8beb86c413e,"
-            , "    .minimum_zig_version = \"0.16.0\","
+            , "    .minimum_zig_version = \"0.17.0\","
             , "    .dependencies = .{},"
             , "    .paths = .{\"\"},"
             , "}"
@@ -1921,17 +1972,17 @@ actonProjTests =
           assertBool "acton should not report the old dependency option collision" (not ("invalid option: -Dacton_modules" `isInfixOf` cmdErr))
           rootZon <- readFile (rootProj </> "out/zig/build.zig.zon")
           rootBuildZig <- readFile (rootProj </> "out/zig/build.zig")
-          assertBool "root build.zig.zon should keep the package dep key" ("        .lmdb = .{" `isInfixOf` rootZon)
+          assertBool "root build.zig.zon should namespace the package dep key" ("        .acton_pkg_lmdb = .{" `isInfixOf` rootZon)
           assertBool "root build.zig.zon should namespace the zig dep key" ("        .acton_zig_lmdb = .{" `isInfixOf` rootZon)
           assertEqual "root build.zig.zon should emit the package dep key only once"
             1
-            (length (filter (== "        .lmdb = .{") (lines rootZon)))
+            (length (filter (== "        .acton_pkg_lmdb = .{") (lines rootZon)))
           assertBool "root build.zig should keep the package dep lookup"
-            ("const actdep_lmdb = b.dependency(\"lmdb\"" `isInfixOf` rootBuildZig)
+            ("const actdep_lmdb = b.dependency(\"acton_pkg_lmdb\"" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should namespace the zig dep lookup"
             ("const dep_lmdb = b.dependency(\"acton_zig_lmdb\"" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should skip LTO for macOS targets"
-            ("const enable_lto = optimize != .Debug and target.result.os.tag != .macos;" `isInfixOf` rootBuildZig)
+            ("const enable_lto = optimize != .debug and target.result.os.tag != .macos;" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should enable LTO for the project library"
             ("if (enable_lto) libActonProject.lto = .thin;" `isInfixOf` rootBuildZig)
           assertBool "root build.zig should enable LTO for executables"
@@ -2028,7 +2079,7 @@ actonProjTests =
                   , "    .name = .lmdb_zig,"
                   , "    .version = \"0.0.0\","
                   , "    .fingerprint = 0xd571f8beb86c413e,"
-                  , "    .minimum_zig_version = \"0.16.0\","
+                  , "    .minimum_zig_version = \"0.17.0\","
                   , "    .dependencies = .{},"
                   , "    .paths = .{\"\"},"
                   , "}"
@@ -3008,16 +3059,16 @@ crossCompileTests =
   [
     testCase "build helloworld --target aarch64-macos-none --db" $ do
         runActon "build --target aarch64-macos-none --db" ExitSuccess False "../../test/compiler/hello/"
-  , testCase "build helloworld --target aarch64-windows-gnu" $ do
-        runActon "build --target aarch64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
+  , testCase "build helloworld --target aarch64-windows-gnu --no-threads" $ do
+        runActon "build --target aarch64-windows-gnu --no-threads" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-macos-none --db" $ do
         runActon "build --target x86_64-macos-none --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-linux-gnu.2.27 --db" $ do
         runActon "build --target x86_64-linux-gnu.2.27 --db" ExitSuccess False "../../test/compiler/hello/"
   , testCase "build helloworld --target x86_64-linux-musl --db" $ do
         runActon "build --target x86_64-linux-musl --db" ExitSuccess False "../../test/compiler/hello/"
-  , testCase "build helloworld --target x86_64-windows-gnu" $ do
-        runActon "build --target x86_64-windows-gnu" ExitSuccess False "../../test/compiler/hello/"
+  , testCase "build helloworld --target x86_64-windows-gnu --no-threads" $ do
+        runActon "build --target x86_64-windows-gnu --no-threads" ExitSuccess False "../../test/compiler/hello/"
   ]
 
 archiveDependencyTests =

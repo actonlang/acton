@@ -3,7 +3,7 @@ const std = @import("std");
 // Builds a static libgmp.a from the upstream GMP source tarball, pure C only
 // (assembly disabled), so the same build works for both x86_64 and aarch64
 // linux targets and we control the target glibc version. Adapted from
-// Rexicon226/zig-gmp, upgraded to zig 0.16 and stripped of asm / C++ (gmpxx).
+// Rexicon226/zig-gmp, updated for Zig 0.17 without asm / C++ (gmpxx).
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -139,7 +139,7 @@ fn genTable(
         .name = name,
         .root_module = b.createModule(.{
             .target = b.graph.host,
-            .optimize = .ReleaseSafe,
+            .optimize = .safe,
         }),
     });
     exe.root_module.link_libc = true;

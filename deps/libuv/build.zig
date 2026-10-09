@@ -1,31 +1,10 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const print = @import("std").debug.print;
-const tgt = @import("builtin").target;
-
-// Helper functions for Zig 0.13/0.14 compatibility
-fn targetIsDarwin(t: std.Target) bool {
-    const is_zig_0_14 = comptime builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) != .lt;
-    if (is_zig_0_14) {
-        return t.os.tag.isDarwin();
-    } else {
-        return t.isDarwin();
-    }
-}
-
-fn targetIsBSD(t: std.Target) bool {
-    const is_zig_0_14 = comptime builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) != .lt;
-    if (is_zig_0_14) {
-        return t.os.tag.isBSD();
-    } else {
-        return t.isBSD();
-    }
-}
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const t = target.result;
 
     const lib = b.addLibrary(.{
@@ -47,7 +26,7 @@ pub fn build(b: *std.Build) void {
             "-D_LARGEFILE_SOURCE",
             "-fno-sanitize=null",
         }) catch unreachable;
-        if (optimize == .Debug) {
+        if (optimize == .debug) {
             flags.appendSlice(b.allocator, &.{
                 "-U_DEBUG",
                 "-DNDEBUG",
@@ -62,7 +41,7 @@ pub fn build(b: *std.Build) void {
         }) catch unreachable;
     }
 
-    if (targetIsDarwin(t)) {
+    if (t.os.tag.isDarwin()) {
         flags.appendSlice(b.allocator, &.{
             "-D_DARWIN_UNLIMITED_SELECT=1",
             "-D_DARWIN_USE_64_BIT_INODE=1",
@@ -108,7 +87,7 @@ pub fn build(b: *std.Build) void {
         }, .flags = flags.items });
     }
 
-    if (t.os.tag == .linux or targetIsDarwin(t)) {
+    if (t.os.tag == .linux or t.os.tag.isDarwin()) {
         lib.root_module.addCSourceFiles(.{ .files = &.{
             "src/unix/proctitle.c",
         }, .flags = flags.items });
@@ -123,8 +102,8 @@ pub fn build(b: *std.Build) void {
         }, .flags = flags.items });
     }
 
-    if (targetIsDarwin(t) or
-        targetIsBSD(t))
+    if (t.os.tag.isDarwin() or
+        t.os.tag.isBSD())
     {
         lib.root_module.addCSourceFiles(.{ .files = &.{
             "src/unix/bsd-ifaddrs.c",
@@ -132,13 +111,13 @@ pub fn build(b: *std.Build) void {
         }, .flags = flags.items });
     }
 
-    if (targetIsDarwin(t) or t.os.tag == .openbsd) {
+    if (t.os.tag.isDarwin() or t.os.tag == .openbsd) {
         lib.root_module.addCSourceFiles(.{ .files = &.{
             "src/unix/random-getentropy.c",
         }, .flags = flags.items });
     }
 
-    if (targetIsDarwin(t)) {
+    if (t.os.tag.isDarwin()) {
         lib.root_module.addCSourceFiles(.{ .files = &.{
             "src/unix/darwin-proctitle.c",
             "src/unix/darwin.c",

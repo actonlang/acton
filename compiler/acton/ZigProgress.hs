@@ -51,7 +51,8 @@ parseZigProgressMessages bs = go [] bs
           in if len == 0xfe || len == 0xff
                 then go acc (BS.drop 1 buf)
                 else
-                  let msgLen = 1 + (len * 49)
+                  -- Zig 0.17 sends 128 bytes of storage and one parent byte per node.
+                  let msgLen = 1 + (len * 129)
                   in if BS.length buf < msgLen
                         then (reverse acc, buf)
                         else
@@ -62,17 +63,17 @@ parseZigProgressMessages bs = go [] bs
 
 decodeMessage :: Int -> BS.ByteString -> ZigProgress
 decodeMessage len msgBytes =
-    let nodeBytes = BS.take (len * 48) (BS.drop 1 msgBytes)
-        parentBytes = BS.drop (1 + len * 48) msgBytes
+    let nodeBytes = BS.take (len * 128) (BS.drop 1 msgBytes)
+        parentBytes = BS.drop (1 + len * 128) msgBytes
         nodes = [ decodeNode i nodeBytes parentBytes | i <- [0..len - 1] ]
     in ZigProgress { zpNodes = nodes }
 
 decodeNode :: Int -> BS.ByteString -> BS.ByteString -> ZigNode
 decodeNode ix nodeBytes parentBytes =
-    let base = ix * 48
+    let base = ix * 128
         completed = word32le nodeBytes base
         total = word32le nodeBytes (base + 4)
-        nameBytes = BS.take 40 (BS.drop (base + 8) nodeBytes)
+        nameBytes = BS.take 120 (BS.drop (base + 8) nodeBytes)
         name = BSC.unpack (BS.takeWhile (/= 0) nameBytes)
         parentRaw = if ix < BS.length parentBytes
                       then BS.index parentBytes ix

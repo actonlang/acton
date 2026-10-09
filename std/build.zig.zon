@@ -2,7 +2,7 @@
     .name = .actonstd,
     .version = "0.0.0",
     .fingerprint = 0xc42ec9f500000001,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .base = .{
             .path = "../base/",

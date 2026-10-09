@@ -10,6 +10,8 @@ static struct B_ValueError testingQ_loop_counters_error =
     STATIC_EXCEPTION(B_ValueError, "Runtime counters decreased during t.loop()");
 static struct B_ValueError testingQ_loop_completed_error =
     STATIC_EXCEPTION(B_ValueError, "t.loop() completed while being advanced");
+static struct B_ValueError testingQ_loop_report_error =
+    STATIC_EXCEPTION(B_ValueError, "No test result callback for this loop");
 
 enum {
     TESTING_LOOP_CLAIMED = 1,
@@ -208,7 +210,7 @@ B_Msg testingQ_PerfLoopD__report(testingQ_PerfLoop self, B_bool success,
     testingQ_PerfLoopD_close(self);
     $action report = self->_report_result;
     if (!report) {
-        testing_loop_invalid(self, "No test result callback for this loop");
+        testing_loop_invalid(self, &testingQ_loop_report_error);
         return NULL;
     }
     return ((B_Msg (*)($action, B_bool, B_Exception, B_str))report->$class->__asyn__)

@@ -4,12 +4,12 @@ const print = @import("std").debug.print;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
 
     const build_shared_libs = b.option(bool, "BUILD_SHARED_LIBS",
                 "Build shared libraries (otherwise static ones)") orelse true;
 
-    const linkage: std.builtin.LinkMode = if (build_shared_libs) .dynamic else .static;
+    const linkage: std.lang.LinkMode = if (build_shared_libs) .dynamic else .static;
     const lib = b.addLibrary(.{
         .name = "utf8proc",
         .linkage = linkage,
