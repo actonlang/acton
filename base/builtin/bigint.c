@@ -445,162 +445,89 @@ B_bigint B_IntegralD_bigintD___invert__(B_IntegralD_bigint wit,  B_bigint a) {
 
 // LogicalB_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
-// Converts src (which must be non-zero), to two's complement form, stored in dst.
-// src and dst may be the same address.
-void twocompl(unsigned long *dst, unsigned long *src, long len) {
-    unsigned long carry = 1;
-    for (int i = 0; i < len; i++) {
-        unsigned long t = src[i] ^ ULONG_MAX;
-        if (t < ULONG_MAX || carry == 0) {
-            dst[i] = t + carry;
-            carry = 0;
-        } else {
-            dst[i] = 0;
-        }
+// Returns the next limb of the two's complement form of a value, given
+// the next limb m of its magnitude (0 past the magnitude) and its sign mask
+// (0 for a value >= 0, all ones for a negative value). *carry starts as the
+// low bit of the sign mask and carries the +1 of ~m + 1 upwards.
+static inline word_t bigint_twocompl_limb(word_t m, word_t sign, word_t *carry) {
+    word_t w = (m ^ sign) + *carry;
+    *carry &= m == 0;
+    return w;
+}
+
+enum bigint_bitwise_op { BIGINT_AND, BIGINT_OR, BIGINT_XOR };
+
+static inline word_t bigint_bitwise_limb(enum bigint_bitwise_op op, word_t x, word_t y) {
+    return op == BIGINT_AND ? x & y : op == BIGINT_OR ? x | y : x ^ y;
+}
+
+// Applies op to the two's complement forms of a and b. Past its magnitude
+// an operand's limbs are all sign bits, so a non-negative operand of & or a
+// negative operand of | fixes every result limb from its size upwards. The
+// result is computed over the limbs that matter plus one, so its top limb
+// holds only sign bits. A negative result is negated back to a magnitude
+// over the same width; that magnitude is at most 2^(64*(n-1)), so it fits,
+// and normalising strips its zero top limbs. Inlined into each operator so
+// that op is a constant in the loops.
+static inline __attribute__((always_inline))
+B_bigint bigint_bitwise(B_bigint a, B_bigint b, enum bigint_bitwise_op op) {
+    long as = BSDNT_ABS(a->val.size), bs = BSDNT_ABS(b->val.size);
+    word_t asign = a->val.size < 0 ? ~(word_t)0 : 0;
+    word_t bsign = b->val.size < 0 ? ~(word_t)0 : 0;
+    long n = BSDNT_MAX(as, bs);
+    if (op == BIGINT_AND && !(asign && bsign))
+        n = asign ? bs : bsign ? as : BSDNT_MIN(as, bs);
+    if (op == BIGINT_OR && (asign || bsign))
+        n = !asign ? bs : !bsign ? as : BSDNT_MIN(as, bs);
+    n++;
+    B_bigint res = malloc_bigint();
+    zz_fit(&res->val, n);
+    word_t *r = res->val.n;
+    long i = 0;
+    if (!asign && !bsign) {
+        // Non-negative operands are their own two's complement forms. Past
+        // the shorter one, & gives 0 and | and ^ copy the longer one.
+        const word_t *longer = as > bs ? a->val.n : b->val.n;
+        for (; i < BSDNT_MIN(as, bs); i++)
+            r[i] = bigint_bitwise_limb(op, a->val.n[i], b->val.n[i]);
+        for (; i < n - 1; i++)
+            r[i] = longer[i];
+        res->val.size = nn_normalise(r, n - 1);
+        return res;
     }
+    word_t acarry = asign & 1, bcarry = bsign & 1;
+    for (; i < BSDNT_MIN(as, bs); i++)
+        r[i] = bigint_bitwise_limb(op, bigint_twocompl_limb(a->val.n[i], asign, &acarry),
+                                       bigint_twocompl_limb(b->val.n[i], bsign, &bcarry));
+    for (; i < n; i++)
+        r[i] = bigint_bitwise_limb(op, bigint_twocompl_limb(i < as ? a->val.n[i] : 0, asign, &acarry),
+                                       bigint_twocompl_limb(i < bs ? b->val.n[i] : 0, bsign, &bcarry));
+    bool neg = r[n-1] != 0;
+    if (neg)
+        nn_neg(r, r, n);
+    n = nn_normalise(r, n);
+    res->val.size = neg ? -n : n;
+    return res;
 }
 
 B_bigint B_LogicalD_IntegralD_bigintD___and__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
-    long aneg = a->val.size < 0;
-    long bneg = b->val.size < 0;
-    long asize = labs(a->val.size);
-    long bsize = labs(b->val.size);
-    if (bsize==0) return toB_bigint(0);
-    if (asize==0) return toB_bigint(0);
-    unsigned long  *a1, *b1;
-    if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
-        twocompl(a1, a->val.n, asize);
-    } else
-        a1 = a->val.n;
-    if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
-        twocompl(b1, b->val.n, bsize);
-    } else
-        b1 = b->val.n;
-    long rneg = aneg & bneg;
-    if (asize < bsize) {
-        unsigned long *t = a1; a1 = b1; b1 = t;
-        long tsize = asize; asize = bsize; bsize = tsize;
-        long tneg = aneg; aneg = bneg; bneg = tneg;
-    }
-    B_bigint res = malloc_bigint();
-    // if both are positive, rsize = bsize
-    // if one is positive, use that size
-    // if both are negative, rsize = asize
-    zz_fit(&res->val,bneg ? asize : bsize);
-    res->val.size = 0;
-    if (bneg) {
-        for (int i = asize-1; i >= bsize; i--) {
-            res->val.n[i] = a1[i];
-            if (res->val.size == 0 && res->val.n[i] != 0L)
-                res->val.size = i+1;
-        }
-    }
-    for (int i = bsize-1; i >= 0; i--) {
-        res->val.n[i] = a1[i] & b1[i];
-        if (res->val.size == 0 && res->val.n[i] != 0L)
-            res->val.size = i+1;
-    }
-    if (rneg) {
-        twocompl(res->val.n, res->val.n, res->val.size);
-        res->val.size = -res->val.size;
-    }
-    return res;
-}     
+    if (a->val.size == 0 || b->val.size == 0)
+        return toB_bigint(0);
+    return bigint_bitwise(a, b, BIGINT_AND);
+}
 
-                                                 
 B_bigint B_LogicalD_IntegralD_bigintD___or__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
-    long aneg = a->val.size < 0;
-    long bneg = b->val.size < 0;
-    long asize = labs(a->val.size);
-    long bsize = labs(b->val.size);
-    if (bsize==0) return a;
-    if (asize==0) return b;
-    unsigned long  *a1, *b1;
-    if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
-        twocompl(a1, a->val.n, asize);
-    } else
-        a1 = a->val.n;
-    if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
-        twocompl(b1, b->val.n, bsize);
-    } else
-        b1 = b->val.n;
-    long rneg = aneg | bneg;
-    if (asize < bsize) {
-        unsigned long *t = a1; a1 = b1; b1 = t;
-        long tsize = asize; asize = bsize; bsize = tsize;
-        long tneg = aneg; aneg = bneg; bneg = tneg;
-    }
-    B_bigint res = malloc_bigint();
-    zz_fit(&res->val,bneg ? bsize : asize);
-    res->val.size = 0;
-    if (!bneg) {
-        for (int i = asize-1; i >= bsize; i--) {
-            res->val.n[i] = a1[i];
-            if (res->val.size == 0 && res->val.n[i] != 0L)
-                res->val.size = i+1;
-        }
-    }
-    for (int i = bsize-1; i >= 0; i--) {
-        res->val.n[i] = a1[i] | b1[i];
-        if (res->val.size == 0 && res->val.n[i] != 0L)
-            res->val.size = i+1;
-    }
-    if (rneg) {
-        twocompl(res->val.n, res->val.n, res->val.size);
-        res->val.size = -res->val.size;
-    }
-    return res;
-}     
-
+    if (b->val.size == 0) return a;
+    if (a->val.size == 0) return b;
+    return bigint_bitwise(a, b, BIGINT_OR);
+}
 
 B_bigint B_LogicalD_IntegralD_bigintD___xor__(B_LogicalD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
-    long aneg = a->val.size < 0;
-    long bneg = b->val.size < 0;
-    long asize = labs(a->val.size);
-    long bsize = labs(b->val.size);
-    if (bsize==0) return a;
-    if (asize==0) return b;
-    unsigned long  *a1, *b1;
-    if (aneg) {
-        a1 = acton_malloc(asize*sizeof(long));
-        twocompl(a1, a->val.n, asize);
-    } else
-        a1 = a->val.n;
-    if (bneg) {
-        b1 = acton_malloc(bsize*sizeof(long));
-        twocompl(b1, b->val.n, bsize);
-    } else
-        b1 = b->val.n;
-    long rneg = aneg ^ bneg;
-    if (asize < bsize) {
-        unsigned long *t = a1; a1 = b1; b1 = t;
-        long tsize = asize; asize = bsize; bsize = tsize;
-        long tneg = aneg; aneg = bneg; bneg = tneg;
-    }
-    B_bigint res = malloc_bigint();
-    zz_fit(&res->val,asize);
-    res->val.size = 0;
-    for (int i = asize-1; i >= bsize; i--) {
-        res->val.n[i] = bneg ? (~a1[i]) : a1[i];
-        if (res->val.size == 0 && res->val.n[i] != 0L)
-            res->val.size = i+1;
-     }
-    for (int i = bsize-1; i >= 0; i--) {
-        res->val.n[i] = a1[i] ^ b1[i];
-        if (res->val.size == 0 && res->val.n[i] != 0L)
-            res->val.size = i+1;
-    }
-    if (rneg) {
-        twocompl(res->val.n, res->val.n, res->val.size);
-        res->val.size = -res->val.size;
-    }
-    return res;
-}     
- 
+    if (b->val.size == 0) return a;
+    if (a->val.size == 0) return b;
+    return bigint_bitwise(a, b, BIGINT_XOR);
+}
+
 // B_MinusD_IntegralD_bigint  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_bigint B_MinusD_IntegralD_bigintD___sub__(B_MinusD_IntegralD_bigint wit,  B_bigint a, B_bigint b) {
@@ -758,9 +685,11 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, unsigned char *res, in
 
 
 char * get_str(zz_ptr nval) {
-    if (nval->size == 0)
+    // The length estimate below takes log10 of the top limb, so skip any
+    // zero top limbs.
+    long nlen = nn_normalise(nval->n, BSDNT_ABS(nval->size));
+    if (nlen == 0)
         return "0";
-    long nlen = BSDNT_ABS(nval->size);
     zz_ptr npos = acton_malloc(sizeof(zz_struct));
     zz_init_fit(npos,nlen);
     nn_copy(npos->n, nval->n, nlen);
