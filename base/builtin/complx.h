@@ -10,5 +10,13 @@ struct B_complex {
     complex double val;
 };
 
-B_complex toB_complex(complex double c);
+static inline void B_complex_hash_parts(complex double value, double parts[2]) {
+    parts[0] = creal(value);
+    parts[1] = cimag(value);
+    if (parts[0] == 0.0)
+        parts[0] = 0.0;
+    if (parts[1] == 0.0)
+        parts[1] = 0.0;
+}
 
+B_complex toB_complex(complex double c);

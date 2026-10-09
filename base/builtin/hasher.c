@@ -58,6 +58,13 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
         return zig_hash_wyhash_hash_buffer(
             0, (const uint8_t *)&val, sizeof(val));
     }
+    if (wit == (B_Hashable)B_HashableD_complexG_witness) {
+        B_complex complex_value = (B_complex)value;
+        double parts[2];
+        B_complex_hash_parts(complex_value->val, parts);
+        return zig_hash_wyhash_hash_buffer(
+            0, (const uint8_t *)parts, sizeof(parts));
+    }
     HASH_SCALAR(bool)
     HASH_SCALAR(i32)
     HASH_SCALAR(i16)

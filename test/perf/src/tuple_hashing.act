@@ -56,6 +56,9 @@ def bools(size: int) -> list[bool]:
 def floats(size: int) -> list[float]:
     return [float(i) for i in range(size)]
 
+def complexes(size: int) -> list[complex]:
+    return [complex.from_real_imag(float(i), float(i + 1)) for i in range(size)]
+
 def int_isets(size: int) -> list[iset[int]]:
     # Distinct, overlapping sets keep the element count fixed while the number
     # of dictionary keys follows scale.
@@ -151,6 +154,9 @@ def _test_hash_bool(t: testing.SyncT):
 
 def _test_hash_float(t: testing.SyncT):
     hash_all(t, floats(t.scale()))
+
+def _test_hash_complex(t: testing.SyncT):
+    hash_all(t, complexes(t.scale()))
 
 def _test_hash_iset_int(t: testing.SyncT):
     hash_all(t, int_isets(t.scale()))

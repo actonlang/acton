@@ -148,13 +148,10 @@ bool B_EqD_complexD___ne__ (B_EqD_complex wit, B_complex a, B_complex b) {
 // B_HashableD_complex  ////////////////////////////////////////////////////////////////////////////////////////
 
 B_NoneType B_HashableD_complexD_hash(B_HashableD_complex wit, B_complex a, B_hasher h) {
-    double parts[2] = {creal(a->val), cimag(a->val)};
     // Complex equality treats positive and negative zero as equal in each
     // component, so their hash contributions must be identical as well.
-    if (parts[0] == 0.0)
-        parts[0] = 0.0;
-    if (parts[1] == 0.0)
-        parts[1] = 0.0;
+    double parts[2];
+    B_complex_hash_parts(a->val, parts);
     zig_hash_wyhash_update(h->_hasher, (const uint8_t *)parts, sizeof(parts));
     return B_None;
 }

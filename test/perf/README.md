@@ -277,9 +277,10 @@ but only the application's measured result establishes an application speedup.
 ## Tuple hashing
 
 `tuple_hashing` covers the hash path: single values (including all bounded
-integer types, bool and float), two- and three-component tuples, a nested
-tuple, immutable integer sets, and dict construction and update with those
-keys. Scale is the number of keys, and each loop body hashes every key once, so
+integer types, bool, float and complex), two- and three-component tuples, a
+nested tuple, immutable integer sets, and dict construction and update with
+those keys. Scale is the number of keys, and each loop body hashes every key
+once, so
 per-operation figures are per key hashed. Keys are prepared before `t.loop()`;
 only hashing, table work and output allocation are timed. The single-value
 cases hash the same payloads without a tuple around them, which separates a
