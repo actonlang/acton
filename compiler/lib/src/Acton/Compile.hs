@@ -5509,7 +5509,7 @@ dropProjPrefixOrLib paths mn
 -- Used to decide which roots to include in .tydb headers and root generation.
 rootEligible :: I.NameInfo -> Bool
 rootEligible (I.NAct [] p k _ _) = case (p,k) of
-                                      (A.TNil{}, A.TRow _ _ _ t A.TNil{}) ->
+                                      (A.TNil{}, A.TRow _ _ _ t _ A.TNil{}) ->
                                         prstr t == "Env" || prstr t == "None" ||
                                         prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
                                       _ -> False

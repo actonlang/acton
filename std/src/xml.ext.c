@@ -314,10 +314,10 @@ B_str stdQ_xmlQ_node2str(stdQ_xmlQ_Node node, bool pretty, int depth) {
         if (pretty) {
             // Join with newlines
             B_str separator = actStrFromCString("\n");
-            children_str = separator->$class->join(separator, B_SequenceD_listG_witness->W_Collection, children);
+            children_str = separator->$class->join(separator, (B_Iterable)B_SequenceD_listG_witness->W_Collection, children);
         } else {
             // Join with empty string
-            children_str = nul->$class->join(nul, B_SequenceD_listG_witness->W_Collection, children);
+            children_str = nul->$class->join(nul, (B_Iterable)B_SequenceD_listG_witness->W_Collection, children);
         }
     } else {
       children_str = nul;
@@ -493,9 +493,9 @@ static B_str stdQ_xmlQ_encode_attrs(B_list attrs) {
     return res;
 }
 
-B_str stdQ_xmlQ_NodeD_encode(stdQ_xmlQ_Node self, B_bool pretty) {
+B_str stdQ_xmlQ_NodeD_encode(stdQ_xmlQ_Node self, bool pretty) {
     // Use the internal function with depth 0 for the root node
-    return stdQ_xmlQ_node2str(self, pretty ? pretty->val != 0 : false, 0);
+    return stdQ_xmlQ_node2str(self, pretty, 0);
 }
 
 void stdQ_xmlQ___ext_init__() {

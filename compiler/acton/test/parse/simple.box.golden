@@ -2,7 +2,7 @@
 
 == box: simple ================================
 pure def main () -> None:
-    print@[(__builtin__.str,)](("\"Hello parse!\"",), None, None, None, None)
+    print@[(__builtin__.str,)](("\"Hello parse!\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
     return None
 ===============================================
 

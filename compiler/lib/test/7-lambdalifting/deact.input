@@ -10,15 +10,15 @@ W_Apa_308: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
 class Apa ($Actor, __builtin__.value):
     proc def __init__ (self : Self, C_cont : proc(None) -> $R) -> $R:
         proc def C_1cont (C_2res : None) -> $R:
-            print@[(__builtin__.str,)](("\"Apa\"",), None, None, None, None)
+            print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
             return $R_CONTc@[None](C_cont, None)
         return self.setupG_local(C_1cont, self.notice)
     proc def setupG_local (self : Self, C_cont : proc(None) -> $R, cb : action(__builtin__.int) -> __builtin__.int) -> $R:
-        print@[(__builtin__.str,)](("\"setup\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
         (async cb)(W_Apa_39.__fromatom__(0))
         return $R_CONTc@[None](C_cont, None)
     proc def computeG_local (self : Self, C_cont : proc(__builtin__.int) -> $R, cb : action(__builtin__.int) -> __builtin__.int) -> $R:
-        print@[(__builtin__.str,)](("\"compute\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"compute\"",), "\" \"", "\"\\n\"", False, False)
         proc def C_3cont (C_4res : __builtin__.int) -> $R:
             v: __builtin__.int = C_4res
             m: __builtin__.Msg[__builtin__.int] = (async cb)(W_Apa_39.__fromatom__(2))
@@ -26,7 +26,7 @@ class Apa ($Actor, __builtin__.value):
             return $R_CONTc@[__builtin__.int](C_cont, N_tmp)
         return $AWAITc@[__builtin__.int](C_3cont, (async cb)(W_Apa_39.__fromatom__(1)))
     proc def noticeG_local (self : Self, C_cont : proc(__builtin__.int) -> $R, i : __builtin__.int) -> $R:
-        print@[(__builtin__.str,)](("\"notice\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"notice\"",), "\" \"", "\"\\n\"", False, False)
         N_1tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return $R_CONTc@[__builtin__.int](C_cont, N_1tmp)
     action def setup (self : Self, cb : action(__builtin__.int) -> __builtin__.int) -> None:
@@ -37,10 +37,10 @@ class Apa ($Actor, __builtin__.value):
         return $ASYNCc@[__builtin__.int](self, proc lambda (C_cont : proc(__builtin__.int) -> $R): self.noticeG_local(C_cont, i))
 class Bepa ($Actor, __builtin__.value):
     proc def __init__ (self : Self, C_cont : proc(None) -> $R) -> $R:
-        print@[(__builtin__.str,)](("\"Bepa\"",), None, None, None, None)
+        print@[(__builtin__.str,)](("\"Bepa\"",), "\" \"", "\"\\n\"", False, False)
         return $R_CONTc@[None](C_cont, None)
     proc def callbackG_local (self : Self, C_cont : proc(__builtin__.int) -> $R, i : __builtin__.int) -> $R:
-        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"callback\"", i), "\" \"", "\"\\n\"", False, False)
         N_2tmp: __builtin__.int = W_Apa_140.__add__(i, W_Apa_39.__fromatom__(1))
         return $R_CONTc@[__builtin__.int](C_cont, N_2tmp)
     action def callback (self : Self, i : __builtin__.int) -> __builtin__.int:
@@ -62,20 +62,20 @@ class main ($Actor, __builtin__.value):
             self.a = C_6res
             proc def C_7cont (C_8res : Bepa) -> $R:
                 self.b = C_8res
-                print@[(__builtin__.str,)](("\"-----\"",), None, None, None, None)
+                print@[(__builtin__.str,)](("\"-----\"",), "\" \"", "\"\\n\"", False, False)
                 (async self.a.setup)(self.a.notice)
                 self.x = (async self.a.compute)(self.b.callback)
                 proc def C_9cont (C_10res : __builtin__.int) -> $R:
                     self.r = C_10res
-                    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), None, None, None, None)
+                    print@[(__builtin__.str, __builtin__.int)](("\"r =\"", self.r), "\" \"", "\"\\n\"", False, False)
                     (async self.a.compute)(self.myproc)
-                    print@[(__builtin__.str,)](("\"main\"",), None, None, None, None)
+                    print@[(__builtin__.str,)](("\"main\"",), "\" \"", "\"\\n\"", False, False)
                     return $R_CONTc@[None](C_cont, None)
                 return $AWAITc@[__builtin__.int](C_9cont, self.x)
             return BepaG_newact(C_7cont)
         return ApaG_newact(C_5cont)
     proc def myprocG_local (self : Self, C_cont : proc(__builtin__.int) -> $R, i : __builtin__.int) -> $R:
-        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), None, None, None, None)
+        print@[(__builtin__.str, __builtin__.int)](("\"myproc\"", i), "\" \"", "\"\\n\"", False, False)
         if W_Apa_308.__eq__(i, W_Apa_39.__fromatom__(2)):
             (async self.env.exit)(W_Apa_39.__fromatom__(0))
         return $R_CONTc@[__builtin__.int](C_cont, i)

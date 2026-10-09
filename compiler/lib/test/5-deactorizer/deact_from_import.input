@@ -4,7 +4,7 @@ W_Manager_124: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
 # recursive group:
 actor Manager ():
     proc def create_decoder () -> __builtin__.StringDecoder:
-        decoder: __builtin__.StringDecoder = StringDecoder(self.decode_callback, None, None)
+        decoder: __builtin__.StringDecoder = StringDecoder(self.decode_callback, "\"utf-8\"", None)
         return decoder
     proc def create_apa () -> deact.Apa:
         apa: deact.Apa = Apa()

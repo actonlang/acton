@@ -29,43 +29,43 @@ class atom (value):
     pass
 
 class int (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class i32 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class i16 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class i8 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class u64 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class u32 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class u16 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class u8 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class u1 (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class bigint (atom):
-    def __init__(self, val: atom, base: ?int) -> None:
+    def __init__(self, val: atom, base: ?int=None) -> None:
         NotImplemented
 
 class float (atom):
@@ -77,15 +77,15 @@ class bool (atom):
         NotImplemented
 
 class slice(value):
-    def __init__(self, start: ?int, stop: ?int, step: ?int) -> None:
+    def __init__(self, start: ?int=None, stop: ?int=None, step: ?int=None) -> None:
         NotImplemented
 
 class ilist[A](object):
-    def __init__(self, val: ?Iterable[A]) -> None:
+    def __init__(self, val: ?Iterable[A]=None) -> None:
         NotImplemented
 
 class list[A] (object):
-    def __init__(self, val: ?Iterable[A]) -> None:
+    def __init__(self, val: ?Iterable[A]=None) -> None:
         NotImplemented
     def clear(self) -> None:
         NotImplemented
@@ -93,13 +93,13 @@ class list[A] (object):
         NotImplemented
     def extend(self, other: list[A]) -> None:
         NotImplemented
-    def pop(self, n :?int) -> A:
+    def pop(self, n: ?int=None) -> A:
         NotImplemented
     # TODO: improve this, to like A(Eq) or something
     # generic type B should really just be A(Eq), but I don't think we can say
     # that A is a generic type without constraints in one place and then adds
     # constraints in another, so using B is a bit of a workaround.
-    def index[B(Eq)](self, val: B, start: int=0, stop: ?int) -> int:
+    def index[B(Eq)](self, val: B, start: int=0, stop: ?int=None) -> int:
         """Return the index of the first occurrence of val in the list
 
         The optional arguments start and stop are interpreted as in slice
@@ -141,29 +141,29 @@ class range(Iterator[int]):
     - `range(0, 3)` produces [0, 1, 2]
     - `range(3)` produces [0, 1, 2]
     """
-    def __init__(self, start: int, stop: ?int, step: int=1) -> None:
+    def __init__(self, start: int, stop: ?int=None, step: int=1) -> None:
         NotImplemented
     def __next__(self)->maybe[int]:
         NotImplemented
 
 class str (atom):
-    def __init__     (self, val: ?value) -> None:
+    def __init__     (self, val: ?value=None) -> None:
         NotImplemented
     def capitalize   (self) -> str:
         NotImplemented
-    def center       (self, width: int, fillchar: ?str) -> str:
+    def center       (self, width: int, fillchar: ?str=None) -> str:
         NotImplemented
-    def count        (self, sub: str, start: ?int, end: ?int) -> int:
+    def count        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def encode       (self) -> bytes:
         NotImplemented
-    def endswith     (self, suffix: str, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: str, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> str:
+    def expandtabs   (self, tabsize: ?int=None) -> str:
         NotImplemented
-    def find         (self, sub: str, start: ?int, end: ?int) -> int:
+    def find         (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def index        (self, sub: str, start: ?int, end: ?int) -> int:
+    def index        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -185,33 +185,33 @@ class str (atom):
         NotImplemented
     def join         (self, iterable: Iterable[str]) -> str:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?str) -> str:
+    def ljust        (self, width: int, fillchar: ?str=None) -> str:
         NotImplemented
     def lower        (self) -> str:
         NotImplemented
-    def lstrip       (self, chars: ?str) -> str:
+    def lstrip       (self, chars: ?str=None) -> str:
         NotImplemented
     def partition    (self, sep: str) -> (str,str,str):
         NotImplemented
-    def replace      (self, old: str, new: str, count: ?int) -> str:
+    def replace      (self, old: str, new: str, count: ?int=None) -> str:
         NotImplemented
-    def rfind        (self, sub: str, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: str, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: str, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?str) -> str:
+    def rjust        (self, width: int, fillchar: ?str=None) -> str:
         NotImplemented
     def rpartition   (self, sep: str) -> (str,str,str):
         NotImplemented
-    def rstrip       (self, chars: ?str) -> str:
+    def rstrip       (self, chars: ?str=None) -> str:
         NotImplemented
-    def split        (self, sep: str, maxsplit: ?int) -> list[str]:
+    def split        (self, sep: str, maxsplit: ?int=None) -> list[str]:
         NotImplemented
-    def splitlines   (self, keepends: ?bool) -> list[str]:
+    def splitlines   (self, keepends: ?bool=None) -> list[str]:
         NotImplemented
-    def startswith   (self, prefix: str, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: str, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def strip        (self, chars: ?str) -> str:
+    def strip        (self, chars: ?str=None) -> str:
         NotImplemented
     def upper        (self) -> str:
         NotImplemented
@@ -223,24 +223,24 @@ class bytes (atom):
         NotImplemented
     def capitalize   (self) -> bytes:
         NotImplemented
-    def center       (self, width: int, fillchar: ?bytes) -> bytes:
+    def center       (self, width: int, fillchar: ?bytes=None) -> bytes:
         NotImplemented
-    def count        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def count        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytes, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: bytes, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> bytes:
+    def expandtabs   (self, tabsize: ?int=None) -> bytes:
         NotImplemented
-    def find         (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def find         (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytes:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def index        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -260,33 +260,33 @@ class bytes (atom):
         NotImplemented
     def join         (self, iterable: Iterable[bytes]) -> bytes:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?bytes) -> bytes:
+    def ljust        (self, width: int, fillchar: ?bytes=None) -> bytes:
         NotImplemented
     def lower        (self) -> bytes:
         NotImplemented
-    def lstrip       (self, chars: ?bytes) -> bytes:
+    def lstrip       (self, chars: ?bytes=None) -> bytes:
         NotImplemented
     def partition    (self, sep: bytes) -> (bytes,bytes,bytes):
         NotImplemented
-    def replace      (self, old: bytes, new: bytes, count: ?int) -> bytes:
+    def replace      (self, old: bytes, new: bytes, count: ?int=None) -> bytes:
         NotImplemented
-    def rfind        (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: bytes, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: bytes, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?bytes) -> bytes:
+    def rjust        (self, width: int, fillchar: ?bytes=None) -> bytes:
         NotImplemented
     def rpartition   (self, sep: bytes) -> (bytes,bytes,bytes):
         NotImplemented
-    def rstrip       (self, chars: ?bytes) -> bytes:
+    def rstrip       (self, chars: ?bytes=None) -> bytes:
         NotImplemented
-    def split        (self, sep: bytes, maxsplit: ?int) -> list[bytes]:
+    def split        (self, sep: bytes, maxsplit: ?int=None) -> list[bytes]:
         NotImplemented
-    def splitlines   (self, keepends: ?bool) -> list[bytes]:
+    def splitlines   (self, keepends: ?bool=None) -> list[bytes]:
         NotImplemented
-    def startswith   (self, prefix: bytes, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: bytes, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def strip        (self, chars: ?bytes) -> bytes:
+    def strip        (self, chars: ?bytes=None) -> bytes:
         NotImplemented
     def upper        (self) -> bytes:
         NotImplemented
@@ -298,24 +298,24 @@ class bytearray (object):
         NotImplemented
     def capitalize   (self) -> bytearray:
         NotImplemented
-    def center       (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def center       (self, width: int, fillchar: ?bytearray=None) -> bytearray:
         NotImplemented
-    def count        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def count        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def decode       (self) -> str:
         NotImplemented
-    def endswith     (self, suffix: bytearray, start: ?int, end: ?int) -> bool:
+    def endswith     (self, suffix: bytearray, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def expandtabs   (self, tabsize: ?int) -> bytearray:
+    def expandtabs   (self, tabsize: ?int=None) -> bytearray:
         NotImplemented
-    def find         (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def find         (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     @staticmethod
     def from_hex     (s: str) -> bytearray:
         NotImplemented
     def hex          (self) -> str:
         NotImplemented
-    def index        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def index        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
     def isalnum      (self) -> bool:
         NotImplemented
@@ -335,33 +335,33 @@ class bytearray (object):
         NotImplemented
     def join         (self, iterable: Iterable[bytearray]) -> bytearray:
         NotImplemented
-    def ljust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def ljust        (self, width: int, fillchar: ?bytearray=None) -> bytearray:
         NotImplemented
     def lower        (self) -> bytearray:
         NotImplemented
-    def lstrip       (self, chars: ?bytearray) -> bytearray:
+    def lstrip       (self, chars: ?bytearray=None) -> bytearray:
         NotImplemented
     def partition    (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
         NotImplemented
-    def replace      (self, old: bytearray, new: bytearray, count: ?int) -> bytearray:
+    def replace      (self, old: bytearray, new: bytearray, count: ?int=None) -> bytearray:
         NotImplemented
-    def rfind        (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def rfind        (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rindex       (self, sub: bytearray, start: ?int, end: ?int) -> int:
+    def rindex       (self, sub: bytearray, start: int=0, end: int=9223372036854775807) -> int:
         NotImplemented
-    def rjust        (self, width: int, fillchar: ?bytearray) -> bytearray:
+    def rjust        (self, width: int, fillchar: ?bytearray=None) -> bytearray:
         NotImplemented
     def rpartition   (self, sep: bytearray) -> (bytearray,bytearray,bytearray):
         NotImplemented
-    def rstrip       (self, chars: ?bytearray) -> bytearray:
+    def rstrip       (self, chars: ?bytearray=None) -> bytearray:
         NotImplemented
-    def split        (self, sep: bytearray, maxsplit: ?int) -> list[bytearray]:
+    def split        (self, sep: bytearray, maxsplit: ?int=None) -> list[bytearray]:
         NotImplemented
-    def splitlines   (self, keepends: ?bool) -> list[bytearray]:
+    def splitlines   (self, keepends: ?bool=None) -> list[bytearray]:
         NotImplemented
-    def startswith   (self, prefix: bytearray, start: ?int, end: ?int) -> bool:
+    def startswith   (self, prefix: bytearray, start: int=0, end: int=9223372036854775807) -> bool:
         NotImplemented
-    def strip        (self, chars: ?bytearray) -> bytearray:
+    def strip        (self, chars: ?bytearray=None) -> bytearray:
         NotImplemented
     def upper        (self) -> bytearray:
         NotImplemented
@@ -380,7 +380,7 @@ class Msg[A] (value):
 # constructor, which can be used to override the default message.
 class BaseException (value):
     error_message: str
-    def __init__(self, msg: ?str) -> None:
+    def __init__(self, msg: ?str=None) -> None:
         self.error_message = msg if msg is not None else ""
 
     def __str__(self):
@@ -621,11 +621,11 @@ class complex (atom):
         NotImplemented
 
 class idict[A(Hashable),B] (object):
-    def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+    def __init__(self, iterable: ?Iterable[(A,B)]=None) -> None:
         NotImplemented
 
 class dict[A(Hashable),B] (object):
-    def __init__(self, iterable: ?Iterable[(A,B)]) -> None:
+    def __init__(self, iterable: ?Iterable[(A,B)]=None) -> None:
         NotImplemented
 # Code generation for calls to copy and clear becomes wrong, so we omit them for now
 #    def clear(self) -> None:
@@ -634,11 +634,11 @@ class dict[A(Hashable),B] (object):
 #        NotImplemented
 
 class set[A(Hashable)] (object):
-    def __init__(self, iterable: ?Iterable[A]) -> None:
+    def __init__(self, iterable: ?Iterable[A]=None) -> None:
         NotImplemented
 
 class iset[A(Hashable)] (object):
-    def __init__(self, iterable: ?Iterable[A]) -> None:
+    def __init__(self, iterable: ?Iterable[A]=None) -> None:
         NotImplemented
 
 ## Number protocols ################################################################################
@@ -1209,7 +1209,7 @@ def divmod [A(Integral)] (a : A, b : A) -> (A, A):
 #     NotImplemented
     
 class enumerate[A](Iterator[(int,A)]):
-    def __init__(self, it: Iterable[A], start: ?int):
+    def __init__(self, it: Iterable[A], start: ?int=None):
         self.itr = iter(it)
         if start is not None:
             self.start = start
@@ -1309,7 +1309,7 @@ class flatmap[A,B](Iterator[B]):
                 return nothing()
         return nothing()
 
-def max [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
+def max [A(Ord)] (it: Iterable[A], dflt: ?A=None) -> A:
     res: ?A = dflt
     for x in it:
         if res is not None:
@@ -1321,7 +1321,7 @@ def max [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
     else:
         raise _empty_max_error
 
-def min [A(Ord)] (it: Iterable[A], dflt: ?A) -> A:
+def min [A(Ord)] (it: Iterable[A], dflt: ?A=None) -> A:
     res: ?A = dflt
     for x in it:
         if res is not None:
@@ -1378,7 +1378,7 @@ def repr(x: ?value):
 def reversed[A](seq : Sequence[A]) -> Iterator[A]:
     return seq.__reversed__()
 
-def round [A(Real)] (x : A, n : ?int) -> A:
+def round [A(Real)] (x: A, n: ?int=None) -> A:
     return x.__round__(n)
 
 def serialize(obj: value) -> bytes:
@@ -1397,7 +1397,7 @@ def deserialize(data: bytes) -> value:
 def sorted [A(Ord)] (iter: Iterable[A]) -> list[A]:
     NotImplemented
 
-def sum [A(Plus)] (it: Iterable[A], start: ?A) -> A:
+def sum [A(Plus)] (it: Iterable[A], start: ?A=None) -> A:
     if start is not None:
         res = start
     else:
@@ -1446,7 +1446,7 @@ def type(a: ?value) -> str:
 def actorid() -> str:
     NotImplemented
 
-actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None):
+actor StringDecoder(cb_out: action(str) -> None, encoding: ?str="utf-8", on_error: ?action(str, bytes) -> None=None):
     """Bytes to string decoder
 
     Decodes bytes to string using the provided encoding. If no encoding is given
@@ -1549,7 +1549,7 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
     action def stdout_write(s: str) -> None:
         NotImplemented
 
-    action def stdin_install(on_stdin: ?action(str) -> None, encoding: ?str=None, on_error: ?action(str, bytes) -> None, on_stdin_bytes: ?action(bytes) -> None) -> None:
+    action def stdin_install(on_stdin: ?action(str) -> None=None, encoding: ?str=None, on_error: ?action(str, bytes) -> None=None, on_stdin_bytes: ?action(bytes) -> None=None) -> None:
         if on_stdin is None and on_stdin_bytes is None:
             raise _missing_stdin_callback_error
         elif on_stdin_bytes is not None:
@@ -1576,7 +1576,7 @@ actor Env (wc: WorldCap, sc: SysCap, args: list[str]):
             sd = StringDecoder(on_stdin, encoding, on_error)
             _on_stdin_bytes(sd.decode)
 
-    action def set_stdin(canonical: ?bool, echo: ?bool) -> None:
+    action def set_stdin(canonical: ?bool=None, echo: ?bool=None) -> None:
         NotImplemented
 
     action def is_tty() -> bool:

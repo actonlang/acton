@@ -28,14 +28,14 @@ addSelf t _                             = t
 
 dropSelf                                :: Type -> Deco -> Type
 dropSelf (TFun l x p k t) NoDec
-  | TRow _ _ _ _ p' <- p                = TFun l x p' k t
-  | TRow _ _ _ _ k' <- k                = TFun l x p k' t
+  | TRow _ _ _ _ _ p' <- p              = TFun l x p' k t
+  | TRow _ _ _ _ _ k' <- k              = TFun l x p k' t
 dropSelf t _                            = t
 
 selfType                                :: PosPar -> KwdPar -> Deco -> Type
 selfType p k NoDec
-  | TRow _ _ _ t _ <- prowOf p          = t
-  | TRow _ _ _ t _ <- krowOf k          = t
+  | TRow _ _ _ t _ _ <- prowOf p        = t
+  | TRow _ _ _ t _ _ <- krowOf k        = t
 selfType _ _ _                          = tSelf
 
 qualbound q                         = [ v | QBind v ps <- q, not $ null ps ]
@@ -61,10 +61,17 @@ instance VFree Type where
     vfree (TFun _ fx p k t)         = vfree fx ++ vfree p ++ vfree k ++ vfree t
     vfree (TTuple _ p k)            = vfree p ++ vfree k
     vfree (TOpt _ t)                = vfree t
-    vfree (TRow _ k n t r)          = vfree t ++ vfree r
+    -- A default is declaration metadata, not part of the row's type-variable
+    -- structure.  It is already checked at the definition site and is carried
+    -- along for call expansion; traversing its (typed) expression here can be
+    -- both misleading and very expensive.
+    vfree (TRow _ k n t _ r)        = vfree t ++ vfree r
     vfree (TStar _ k r)             = vfree r
     vfree (TUnboxed _ t)            = vfree t
     vfree _                         = []
+
+instance VFree DefaultSpec where
+    vfree (DfltExpr e v _)          = vfree e ++ vfree v
 
 instance VFree TCon where
     vfree (TC n ts)                 = vfree ts
@@ -225,13 +232,16 @@ instance VSubst Type where
     vsubst s (TOpt l t)             = case vsubst s t of
                                          t'@TOpt{} -> t'
                                          t' -> TOpt l t'
-    vsubst s (TRow l k n t r)       = TRow l k n (vsubst s t) (vsubst s r)
+    vsubst s (TRow l k n t d r)     = TRow l k n (vsubst s t) (vsubst s d) (vsubst s r)
     vsubst s (TStar l k r)          = TStar l k (vsubst s r)
     vsubst s (TNone l)              = TNone l
     vsubst s (TWild l)              = TWild l
     vsubst s (TNil l k)             = TNil l k
     vsubst s (TFX l fx)             = TFX l fx
     vsubst s (TUnboxed l t)         = TUnboxed l (vsubst s t)
+
+instance VSubst DefaultSpec where
+    vsubst s (DfltExpr e v r)       = DfltExpr (vsubst s e) (vsubst s v) r
 instance VSubst TCon where
     vsubst s (TC n ts)              = TC n (vsubst s ts)
 
@@ -425,9 +435,15 @@ instance UFree Type where
     ufree (TNone _)                 = []
     ufree (TWild _)                 = []
     ufree (TNil _ _)                = []
-    ufree (TRow _ _ _ t r)          = ufree t ++ ufree r
+    -- See VFree Type above.  In particular, unresolved variables occurring in
+    -- the stored expression belong to its definition-site derivation, not to
+    -- constraints over the function row that carries it.
+    ufree (TRow _ _ _ t _ r)        = ufree t ++ ufree r
     ufree (TStar _ _ r)             = ufree r
     ufree (TFX l fx)                = []
+
+instance UFree DefaultSpec where
+    ufree (DfltExpr e v _)          = ufree e ++ ufree v
 
 instance UFree PosPar where
     ufree (PosPar n t e p)          = ufree t ++ ufree p
@@ -579,7 +595,7 @@ instance Polarity Type where
     polvars (TNone _)               = polnil
     polvars (TWild _)               = polnil
     polvars (TNil _ _)              = polnil
-    polvars (TRow _ _ _ t r)        = polvars t `polcat` polvars r
+    polvars (TRow _ _ _ t _ r)      = polvars t `polcat` polvars r
     polvars (TStar _ _ r)           = polvars r
     polvars (TFX l fx)              = polnil
 
@@ -613,7 +629,7 @@ posself (TCon _ c)                  = any posself (tcargs c)
 posself (TFun _ fx p k t)           = any posself [fx,t] || any negself [p,k]
 posself (TTuple _ p k)              = any posself [p,k]
 posself (TOpt _ t)                  = posself t
-posself (TRow _ _ _ t r)            = any posself [t,r]
+posself (TRow _ _ _ t _ r)          = any posself [t,r]
 posself (TStar _ _ r)               = posself r
 posself _                           = False
 
@@ -622,7 +638,7 @@ negself (TCon _ c)                  = any negself (tcargs c)
 negself (TFun _ fx p k t)           = any negself [fx,t] || any posself [p,k]
 negself (TTuple _ p k)              = any negself [p,k]
 negself (TOpt _ t)                  = negself t
-negself (TRow _ _ _ t r)            = any negself [t,r]
+negself (TRow _ _ _ t _ r)          = any negself [t,r]
 negself (TStar _ _ r)               = negself r
 negself _                           = False
 
@@ -643,7 +659,7 @@ instance Tailvars Type where
     tailvars (TOpt _ t)             = tailvars t
     tailvars _                      = []
 
-tailvars' (TRow _ _ _ t r)          = tailvars t ++ tailvars' r
+tailvars' (TRow _ _ _ t _ r)        = tailvars t ++ tailvars' r
 tailvars' (TStar _ _ r)             = tailvars r
 tailvars' (TNil _ _)                = []
 tailvars' (TUni _ u)                = [u]
@@ -667,7 +683,9 @@ schematic (TCon _ tc)               = tCon (schematic' tc)
 schematic (TFun _ _ _ _ _)          = tFun tWild tWild tWild tWild
 schematic (TTuple _ _ _)            = tTuple tWild tWild
 schematic (TOpt _ _)                = tOpt tWild
-schematic (TRow _ k n _ r)          = tRow k n tWild (schematic r)
+-- A schematic row has forgotten the expression needed to expand an omitted
+-- argument, so expose the conservative required-argument view.
+schematic (TRow _ k n _ _ r)        = tRow k n tWild (schematic r)
 schematic (TStar _ k _)             = tStar k tWild
 schematic t                         = t
 
@@ -692,7 +710,7 @@ instance UWild Type where
     uwild (TFun l fx p k t)         = TFun l fx (uwild p) (uwild k) (uwild t)
     uwild (TTuple l p k)            = TTuple l (uwild p) (uwild k)
     uwild (TOpt l t)                = TOpt l (uwild t)
-    uwild (TRow l k n t r)          = TRow l k n (uwild t) (uwild r)
+    uwild (TRow l k n t d r)        = TRow l k n (uwild t) d (uwild r)
     uwild (TStar l k r)             = TStar l k (uwild r)
     uwild t                         = t
 

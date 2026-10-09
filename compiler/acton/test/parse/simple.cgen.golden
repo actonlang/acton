@@ -1,8 +1,8 @@
-/* Acton impl hash: 825dbf41f0ff0574e3676d5b6490e43d40409216d0ddb0a1a0f8f899c8e66317 */
+/* Acton impl hash: 6adb8c85fa15ed8b12fcd130b81e48fb48f194385700d851d8d2aaf51d4ebced */
 #include "rts/common.h"
 #include "out/types/simple.h"
 B_NoneType simpleQ_main () {
-    ((B_NoneType (*) (B_tuple, B_str, B_str, B_bool, B_bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("Hello parse!", 12)), B_None, B_None, B_None, B_None);
+    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("Hello parse!", 12)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
     return B_None;
 }
 int simpleQ_done$ = 0;

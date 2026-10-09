@@ -71,6 +71,7 @@ data EnvF x                 = EnvF {
                                 importedProtoAttrs  :: AttrMemo,                -- cached importedProtoAttr, rebuilt by cacheTransModules
                                 thismod             :: Maybe ModName,
                                 context             :: [EnvCtx],
+                                defaultLocalNames    :: [Name],
                                 qlevel              :: Int,
                                 envX                :: x
                               } deriving (Show)
@@ -99,7 +100,8 @@ setX env x                  = EnvF { activeNames = activeNames env, closedNames 
                                      modules = modules env, transModules = transModules env,
                                      importedConAttrs = importedConAttrs env, importedProtoAttrs = importedProtoAttrs env,
                                      thismod = thismod env,
-                                     context = context env, qlevel = qlevel env, envX = x }
+                                     context = context env, defaultLocalNames = defaultLocalNames env,
+                                     qlevel = qlevel env, envX = x }
 
 modX                        :: EnvF x -> (x -> x) -> EnvF x
 modX env f                  = env{ envX = f (envX env) }
@@ -114,6 +116,12 @@ setInDef env                = env{ context = CtxDef : context env }
 setInClass env              = env{ context = CtxClass : context env  }
 
 setInLoop env               = env{ context = CtxLoop : context env  }
+
+-- Defaults are copied into their call sites.  Names in an enclosing lexical
+-- scope cannot therefore be represented by a module-qualified reference.
+-- Keep those names separate from the ordinary type environment so checking a
+-- nested declaration can diagnose the unsupported capture before back passes.
+withDefaultLocalNames ns env= env{ defaultLocalNames = uniqueNames (ns ++ defaultLocalNames env) }
 
 onTop env                   = context env == []
 
@@ -392,9 +400,12 @@ instance Unalias Type where
     unalias env (TFun l e p r t)    = TFun l (unalias env e) (unalias env p) (unalias env r) (unalias env t)
     unalias env (TTuple l p k)      = TTuple l (unalias env p) (unalias env k)
     unalias env (TOpt l t)          = TOpt l (unalias env t)
-    unalias env (TRow l k n t r)    = TRow l k n (unalias env t) (unalias env r)
+    unalias env (TRow l k n t d r)  = TRow l k n (unalias env t) (unalias env d) (unalias env r)
     unalias env (TStar l k r)       = TStar l k (unalias env r)
     unalias env t                   = t
+
+instance Unalias DefaultSpec where
+    unalias env (DfltExpr e v r)    = DfltExpr e v (unalias env r)
 
 instance Unalias NameInfo where
     unalias env (NVar t)            = NVar (unalias env t)
@@ -447,6 +458,7 @@ initEnv path True          = return $ cacheTransModules $ EnvF{ activeNames = []
                                             importedProtoAttrs = AttrMemo (const []),
                                             thismod = Nothing,
                                             context = [],
+                                            defaultLocalNames = [],
                                             qlevel = 0,
                                             envX = () }
 initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
@@ -471,6 +483,7 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                                  importedProtoAttrs = AttrMemo (const []),
                                                  thismod = Nothing,
                                                  context = [],
+                                                 defaultLocalNames = [],
                                                  qlevel = 0,
                                                  envX = () }
                                     env = importAll mBuiltin (mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring) env0
@@ -1136,8 +1149,9 @@ castable env (TFX _ fx1) (TFX _ fx2)        = castable' fx1 fx2
 
 castable env (TNil _ k1) (TNil _ k2)
   | k1 == k2                                = True
-castable env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
-  | k1 == k2 && n1 == n2                    = castable env t1 t2 && castable env r1 r2
+castable env (TRow _ k1 n1 t1 d1 r1) (TRow _ k2 n2 t2 d2 r2)
+  | k1 == k2 && n1 == n2 && isJust d1 == isJust d2
+                                                = castable env t1 t2 && castable env r1 r2
 castable env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                                = castable env r1 r2
 
@@ -1217,7 +1231,10 @@ glb env t1@(TFX _ fx1) t2@(TFX _ fx2)
 
 glb env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-glb env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+-- A bound assembled from several rows cannot choose one declaration's
+-- default.  Keep the common required-argument view; a source declaration can
+-- reattach its checked default after inference.
+glb env (TRow _ k1 n1 t1 _ r1) (TRow _ k2 n2 t2 _ r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> glb env t1 t2 <*> glb env r1 r2
 glb env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> glb env r1 r2
@@ -1225,13 +1242,13 @@ glb env (TStar _ k1 r1) (TStar _ k2 r2)
 glb env t1 t2                           = Nothing
 
 
-glb2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2
+glb2 env (TRow _ _ _ t1 _ p1) k1 (TRow _ _ _ t2 _ p2) k2
                                         = do t <- glb env t1 t2
                                              (p,k) <- glb2 env p1 k1 p2 k2
                                              return (posRow t p, k)
-glb2 env p1@TRow{} k1 p2@TNil{} (TRow _ _ _ t2 k2)
+glb2 env p1@TRow{} k1 p2@TNil{} (TRow _ _ _ t2 _ k2)
                                         = glb2 env p1 k1 (posRow t2 p2) k2
-glb2 env p1@TNil{} (TRow _ _ _ t1 k1) p2@TRow{} k2
+glb2 env p1@TNil{} (TRow _ _ _ t1 _ k1) p2@TRow{} k2
                                         = glb2 env (posRow t1 p1) k1 p2 k2
 glb2 env p1 k1 p2 k2                    = do p <- glb env p1 p2
                                              k <- glb env k1 k2
@@ -1310,7 +1327,8 @@ lub env t1@(TFX _ fx1) t2@(TFX _ fx2)   = pure $ tTFX (lufx fx1 fx2)
 
 lub env (TNil _ k1) (TNil _ k2)
   | k1 == k2                            = pure $ tNil k1
-lub env (TRow _ k1 n1 t1 r1) (TRow _ k2 n2 t2 r2)
+-- As for glb, losing the particular expression also loses omittability.
+lub env (TRow _ k1 n1 t1 _ r1) (TRow _ k2 n2 t2 _ r2)
   | k1 == k2 && n1 == n2                = tRow k1 n1 <$> lub env t1 t2 <*> lub env r1 r2
 lub env (TStar _ k1 r1) (TStar _ k2 r2)
   | k1 == k2                            = tStar k1 <$> lub env r1 r2
@@ -1320,13 +1338,13 @@ lub env t1 t2                           = Nothing
 
 
 
-lub2 env (TRow _ _ _ t1 p1) k1 (TRow _ _ _ t2 p2) k2
+lub2 env (TRow _ _ _ t1 _ p1) k1 (TRow _ _ _ t2 _ p2) k2
                                         = do t <- lub env t1 t2
                                              (p,k) <- lub2 env p1 k1 p2 k2
                                              return (posRow t p, k)
-lub2 env (TRow _ _ _ t1 p1) k1 p2@TNil{} k2@TRow{}
+lub2 env (TRow _ _ _ t1 _ p1) k1 p2@TNil{} k2@TRow{}
                                         = lub2 env p1 (kwdRow (label k2) t1 k1) p2 k2
-lub2 env p1@TNil{} k1@TRow{} (TRow _ _ _ t2 p2) k2
+lub2 env p1@TNil{} k1@TRow{} (TRow _ _ _ t2 _ p2) k2
                                         = lub2 env p1 k1 p2 (kwdRow (label k1) t2 k2)
 lub2 env p1 k1 p2 k2                    = do p <- lub env p1 p2
                                              k <- lub env k1 k2
@@ -1649,9 +1667,12 @@ instance Simp Type where
     simp env (TFun l fx p k t)      = TFun l (simp env fx) (simp env p) (simp env k) (simp env t)
     simp env (TTuple l p k)         = TTuple l (simp env p) (simp env k)
     simp env (TOpt l t)             = TOpt l (simp env t)
-    simp env (TRow l k n t r)       = TRow l k n (simp env t) (simp env r)
+    simp env (TRow l k n t d r)     = TRow l k n (simp env t) d (simp env r)
     simp env (TStar l k r)          = TStar l k (simp env r)
     simp env t                      = t
+
+instance Simp DefaultSpec where
+    simp env (DfltExpr e v r)       = DfltExpr e v r
 
 instance Simp TCon where
     simp env (TC n ts)              = TC (simp env n) (simp env ts)                             -- Simplify constructor names

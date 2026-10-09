@@ -17,18 +17,18 @@ W__test_SimpleSyncTester_234: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD
 # recursive group:
 actor _test_SimpleSyncTester ():
     m: MathTester = MathTester()
-    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
 actor _SyncTester (t : testing.SyncT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     m: MathTester = MathTester()
     log.info(msg = "SyncTester.test()", data = None)
-    print@[(__builtin__.str,)](*("SyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    print@[(__builtin__.str,)](*("SyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
 actor _SyncTesterCore ():
     m: MathTester = MathTester()
-    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = None, end = None, err = None, flush = None)
-    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = None, print_diff = None)
+    print@[(__builtin__.str,)](*("SimpleSyncTester.test()",), sep = " ", end = "\\n", err = False, flush = False)
+    testing.assertEqual@[__builtin__.int](W__test_SimpleSyncTester_234, a = m.add(a = W__test_SimpleSyncTester_268.__fromatom__(1), b = W__test_SimpleSyncTester_268.__fromatom__(2)), b = W__test_SimpleSyncTester_268.__fromatom__(3), msg = "1 + 2 = 3", print_vals = True, print_diff = True)
 # (recursive group)
 
 proc def _test_simple_sync () -> None:
@@ -54,7 +54,7 @@ actor EnvTester (t : testing.EnvT):
     log: logging.Logger = logging.Logger(handler = t.log_handler)
     proc def test () -> None:
         log.info(msg = "EnvTester.test() wthreads:", data = $mkDict@[__builtin__.str, __builtin__.int](W_AsyncTester_125, {"nr_wthreads": t.env.nr_wthreads}))
-        print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = None, end = None, err = None, flush = None)
+        print@[(__builtin__.str, __builtin__.int)](*("EnvTester.test() wthreads:", t.env.nr_wthreads), sep = " ", end = "\\n", err = False, flush = False)
         t.success(output = None)
     after W_AsyncTester_183.__fromatom__(0): test()
 # (recursive group)

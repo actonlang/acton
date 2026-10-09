@@ -101,8 +101,9 @@ staticWitnessOf env (Call _ f p KwdNil)
         staticWitnessRoot' _ _ _ _  = Nothing
 
         builtinWitnessClass env qn  = case unalias env qn of
-                                        qn'@(GName m _)
+                                        qn'@(GName m n)
                                           | m == mBuiltin,
+                                            not (isInternal n),
                                             isClass env qn'
                                               -> Just qn'
                                         _ -> Nothing
@@ -367,7 +368,7 @@ matchTypes t@TCon{} t'@TCon{}
    | t == t'                        = if isUnboxable t then TUnboxed NoLoc t else t
 matchTypes (TFun _ fx p _ r) (TFun _ fx' p' _ r')
                                     = tFun fx (matchTypes p p') kwdNil (matchTypes r r')
-matchTypes (TRow _ _ _ t r) (TRow _ _ _ t' r')
+matchTypes (TRow _ _ _ t _ r) (TRow _ _ _ t' _ r')
                                     = posRow (matchTypes t t') (matchTypes r r')
 matchTypes TNil{} TNil{}            = posNil                                    
 matchTypes t (TUnboxed _ t')        = matchTypes t t'

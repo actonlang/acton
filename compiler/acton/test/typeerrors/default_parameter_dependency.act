@@ -1,0 +1,2 @@
+def invalid(x: int, y: int=x) -> int:
+    return y

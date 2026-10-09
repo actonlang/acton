@@ -1,5 +1,5 @@
-B_NoneType B_hasherD___init__ (B_hasher self, B_u64 seed) {  // seed is optional
-    self->_hasher = zig_hash_wyhash_init(seed ? fromB_u64(seed) : 0);
+B_NoneType B_hasherD___init__ (B_hasher self, uint64_t seed) {
+    self->_hasher = zig_hash_wyhash_init(seed);
     return B_None;
 }
 
@@ -25,7 +25,7 @@ B_str B_hasherD___repr__(B_hasher self) {
     return $FORMAT("<hasher object at %p>",self);
 }
 
-B_hasher B_hasherG_new(B_u64 seed) {
+B_hasher B_hasherG_new(uint64_t seed) {
     return $NEW(B_hasher, seed);
 }
 
@@ -53,7 +53,7 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
         return zig_hash_wyhash_hash_buffer(0, bytes_value->str, bytes_value->nbytes);
     }
 
-    B_hasher h = B_hasherG_new(NULL);
+    B_hasher h = B_hasherG_new(0);
     wit->$class->hash(wit, value, h);
     return B_hasherD_finalize(h);
 }
@@ -64,5 +64,5 @@ void B_hasherD___serialize__(B_hasher self, $Serial$state state) {
 
 B_hasher B_hasherD___deserialize__(B_hasher self, $Serial$state state) {
     // TODO
-    return B_hasherG_new(toB_u64(0));
+    return B_hasherG_new(0);
 }

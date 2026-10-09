@@ -15,7 +15,7 @@
 static struct B_ValueError B_range_zero_step_error =
     STATIC_EXCEPTION(B_ValueError, "range() step size must not be zero");
 
-B_range B_rangeG_new(int64_t start, B_int stop, B_int step) {
+B_range B_rangeG_new(int64_t start, B_int stop, int64_t step) {
     return $NEW(B_range, start, stop, step);
 }
 
@@ -39,7 +39,7 @@ B_range $rangeD_U_new(int64_t start, int64_t stop, int64_t step) {
     return self;
 }
 
-B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step) {
+B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, int64_t step) {
     int64_t ustart, ustop, ustep;
     if (stop) {
         ustart = start;
@@ -48,11 +48,7 @@ B_NoneType B_rangeD___init__(B_range self, int64_t start, B_int stop, B_int step
         ustart = 0;
         ustop = start;
     }
-    if (step) {
-        ustep = step->val;
-    } else {
-        ustep = 1;
-    }
+    ustep = step;
     $rangeD_U_init(self, ustart, ustop, ustep);
     return B_None;
 }
