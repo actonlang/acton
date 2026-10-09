@@ -1,0 +1,181 @@
+# Exits that leave a plain (non-CPS) try nested inside a CPS converted try. The
+# outer try holds a continuation call, so its catcher lives on the actor, while
+# the inner try keeps its jump buffer on the worker. Each exit must pop both
+# kinds correctly before reaching the finally clause.
+
+proc def force_cps(x: int) -> int:
+    return x
+
+
+# return from a plain inner try
+proc def fun1(n: int, out: list[str]) -> int:
+    try:
+        try:
+            if n > 0:
+                return 1
+        except ValueError:
+            out.append("X1")
+        out.append("A" + str(force_cps(n)))
+    except ValueError:
+        out.append("X2")
+    finally:
+        out.append("F")
+    return 0
+
+
+# return from the handler of a plain inner try
+proc def fun2(n: int, out: list[str]) -> int:
+    try:
+        try:
+            if n > 0:
+                raise ValueError("inner")
+        except ValueError:
+            out.append("X1")
+            return 1
+        out.append("A" + str(force_cps(n)))
+    except ValueError:
+        out.append("X2")
+    finally:
+        out.append("F")
+    return 0
+
+
+# continue and break from a plain inner try
+proc def fun3(out: list[str]):
+    for i in range(4):
+        try:
+            try:
+                if i == 1:
+                    continue
+                if i == 3:
+                    break
+            except ValueError:
+                out.append("X1")
+            out.append("A" + str(force_cps(i)))
+        except ValueError:
+            out.append("X2")
+        finally:
+            out.append("F" + str(i))
+    out.append("E")
+
+
+# return from the else clause of a plain inner try
+proc def fun4(n: int, out: list[str]) -> int:
+    try:
+        try:
+            out.append("B")
+        except ValueError:
+            out.append("X1")
+        else:
+            out.append("E")
+            if n > 0:
+                return 1
+        out.append("A" + str(force_cps(n)))
+    except ValueError:
+        out.append("X2")
+    finally:
+        out.append("F")
+    return 0
+
+
+# return through two plain inner tries
+proc def fun5(n: int, out: list[str]) -> int:
+    try:
+        try:
+            try:
+                if n > 0:
+                    return 1
+            except ValueError:
+                out.append("X1")
+        except KeyError:
+            out.append("X2")
+        out.append("A" + str(force_cps(n)))
+    except ValueError:
+        out.append("X3")
+    finally:
+        out.append("F")
+    return 0
+
+
+# return relayed by the finally clause of a plain inner try
+proc def fun6(n: int, out: list[str]) -> int:
+    try:
+        try:
+            try:
+                if n > 0:
+                    return 1
+            except ValueError:
+                out.append("X1")
+            finally:
+                out.append("F1")
+        except ValueError:
+            out.append("X2")
+        out.append("A" + str(force_cps(n)))
+    except ValueError:
+        out.append("X3")
+    finally:
+        out.append("F2")
+    return 0
+
+
+actor Runner():
+    def run() -> bool:
+        ok = True
+
+        out1 = []
+        res1 = [fun1(0, out1), fun1(1, out1), fun1(0, out1)]
+        if out1 != ["A0", "F", "F", "A0", "F"] or res1 != [0, 1, 0]:
+            print("Bad 1:", out1, res1)
+            ok = False
+
+        out2 = []
+        res2 = [fun2(0, out2), fun2(1, out2), fun2(0, out2)]
+        if out2 != ["A0", "F", "X1", "F", "A0", "F"] or res2 != [0, 1, 0]:
+            print("Bad 2:", out2, res2)
+            ok = False
+
+        out3 = []
+        fun3(out3)
+        if out3 != ["A0", "F0", "F1", "A2", "F2", "F3", "E"]:
+            print("Bad 3:", out3)
+            ok = False
+
+        out4 = []
+        res4 = [fun4(0, out4), fun4(1, out4), fun4(0, out4)]
+        if out4 != ["B", "E", "A0", "F", "B", "E", "F", "B", "E", "A0", "F"] or res4 != [0, 1, 0]:
+            print("Bad 4:", out4, res4)
+            ok = False
+
+        out5 = []
+        res5 = [fun5(0, out5), fun5(1, out5), fun5(0, out5)]
+        if out5 != ["A0", "F", "F", "A0", "F"] or res5 != [0, 1, 0]:
+            print("Bad 5:", out5, res5)
+            ok = False
+
+        out6 = []
+        res6 = [fun6(0, out6), fun6(1, out6), fun6(0, out6)]
+        if out6 != ["F1", "A0", "F2", "F1", "F2", "F1", "A0", "F2"] or res6 != [0, 1, 0]:
+            print("Bad 6:", out6, res6)
+            ok = False
+
+        return ok
+
+    def probe() -> int:
+        raise ValueError("probe")
+
+
+actor main(env):
+    r = Runner()
+    ok = r.run()
+
+    # A catcher that run() left behind on r would take the exception that
+    # probe() leaves unhandled, instead of letting it reach us. The result is
+    # used, so that the call waits for it rather than being sent async.
+    try:
+        v = r.probe()
+        print("Bad: probe() returned", v)
+        ok = False
+    except ValueError:
+        pass
+
+    env.exit(0 if ok else 1)

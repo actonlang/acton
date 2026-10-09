@@ -182,8 +182,8 @@ instance CPS [Stmt] where
     cps env s@[If _ [Branch e ss1] ss2]
       | isPUSH e                        = do k <- newName "try"
                                              x <- newName "res"
-                                             ss1 <- cps env (map convPOPDROP ss1)
-                                             ss2 <- cps env (map convPOPDROP ss2)
+                                             ss1 <- cps env (convPOPDROP 0 ss1)
+                                             ss2 <- cps env (convPOPDROP 0 ss2)
                                              let body = sIf1 (eVar x) ss1 ss2 : []
                                              --traceM ("## kDef PUSH " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tBool body :
@@ -305,15 +305,26 @@ mutFX _                                 = False
 inCont env                              = length (ctxt env) > 0
 
 
-convPOPDROP s@(If _ [Branch e _] _)
-  | isPUSH e                            = s
-convPOPDROP (If l bs els)               = If l [ Branch e (map convPOPDROP ss) | Branch e ss <- bs ] (map convPOPDROP els)
-convPOPDROP (While l e ss els)          = While l e (map convPOPDROP ss) (map convPOPDROP els)
-convPOPDROP (Expr l (Call l1 e ps ks))
-  | Var l2 x <- e, x == primDROP        = Expr l (Call l1 (Var l2 primDROP_C) ps ks)
-convPOPDROP (Assign l p (Call l1 e ps ks))
-  | Var l2 x <- e, x == primPOP         = Assign l p (Call l1 (Var l2 primPOP_C) ps ks)
-convPOPDROP s                           = s
+-- Turn the $DROP and $POP calls that pop a CPS converted try, or a try enclosing it (CPS converted as well), into
+-- $DROP_C and $POP_C. Tries are popped innermost first, so with n counting the tries pushed within it, a pop removes
+-- one of those as long as n > 0 (n may be off after an exit, but only in unreachable code). A nested try that is
+-- CPS converted itself gets a pass of its own.
+convPOPDROP n []                        = []
+convPOPDROP n (s : ss)
+  | Just s' <- popC s, n == 0           = s' : convPOPDROP 0 ss
+  | Just _ <- popC s                    = s : convPOPDROP (n-1) ss
+  | otherwise                           = nested s : convPOPDROP n ss
+  where nested (If l [Branch e b] els)
+          | isPUSH e                    = If l [Branch e (convPOPDROP (n+1) b)] (convPOPDROP (n+1) els)
+        nested (If l bs els)            = If l [ Branch e (convPOPDROP n b) | Branch e b <- bs ] (convPOPDROP n els)
+        nested (While l e b els)        = While l e (convPOPDROP n b) (convPOPDROP n els)
+        nested s                        = s
+
+popC (Expr l (Call l1 e ps ks))
+  | Var l2 x <- e, x == primDROP        = Just $ Expr l (Call l1 (Var l2 primDROP_C) ps ks)
+popC (Assign l p (Call l1 e ps ks))
+  | Var l2 x <- e, x == primPOP         = Just $ Assign l p (Call l1 (Var l2 primPOP_C) ps ks)
+popC s                                  = Nothing
 
 convPUSH (Call _ (Var _ x) _ _) arg
   | x == primPUSH                       = eCall (eQVar primPUSH_Cc) [arg]

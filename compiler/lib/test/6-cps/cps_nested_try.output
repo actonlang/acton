@@ -1,0 +1,108 @@
+proc def force_cps (C_cont : proc(__builtin__.int) -> $R, arg : __builtin__.int) -> $R:
+    return $R_CONTc@[__builtin__.int](C_cont, arg)
+
+W_ret_inner_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_ret_inner_7: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    proc def C_1cont (C_2res : None) -> $R:
+        N_4tmp: __builtin__.int = W_ret_inner_5.__fromatom__(0)
+        return $R_CONTc@[__builtin__.int](C_cont, N_4tmp)
+    proc def C_3try (C_4res : __builtin__.bool) -> $R:
+        if C_4res:
+            proc def C_5try (C_6res : __builtin__.bool) -> $R:
+                if C_6res:
+                    if $PUSH():
+                        if W_ret_inner_7.__gt__(x, W_ret_inner_5.__fromatom__(0)):
+                            N_tmp: __builtin__.int = W_ret_inner_5.__fromatom__(1)
+                            $DROP()
+                            $DROP_C()
+                            $RAISE($RET(N_tmp))
+                        $DROP()
+                    else:
+                        N_1x: __builtin__.BaseException = $POP()
+                        if isinstance(N_1x, ValueError):
+                            pass
+                        else:
+                            $RAISE(N_1x)
+                    proc def C_7cont (C_8res : __builtin__.int) -> $R:
+                        $DROP_C()
+                        $RAISE($SEQ())
+                        return $R_CONTc@[None](C_1cont, None)
+                    return force_cps(C_7cont, x)
+                else:
+                    N_2x: __builtin__.BaseException = $POP_C()
+                    if isinstance(N_2x, ValueError):
+                        pass
+                    else:
+                        $RAISE(N_2x)
+                    $RAISE($SEQ())
+                    return $R_CONTc@[None](C_1cont, None)
+            return $PUSH_Cc(C_5try)
+        else:
+            N_3xx: __builtin__.BaseException = $POP_C()
+            pass
+            if isinstance(N_3xx, $RET):
+                N_3xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_3xx)
+                return $R_CONTc@[__builtin__.int](C_cont, $CAST@[__builtin__.value, __builtin__.int](N_3xxG_RET.val))
+            elif isinstance(N_3xx, $SEQ):
+                pass
+                return $R_CONTc@[None](C_1cont, None)
+            else:
+                $RAISE(N_3xx)
+                return $R_CONTc@[None](C_1cont, None)
+    return $PUSHF_Cc(C_3try)
+
+W_ret_else_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_ret_else_7: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    proc def C_9cont (C_10res : None) -> $R:
+        N_9tmp: __builtin__.int = W_ret_else_5.__fromatom__(0)
+        return $R_CONTc@[__builtin__.int](C_cont, N_9tmp)
+    proc def C_11try (C_12res : __builtin__.bool) -> $R:
+        if C_12res:
+            proc def C_13try (C_14res : __builtin__.bool) -> $R:
+                if C_14res:
+                    if $PUSH():
+                        pass
+                        $DROP()
+                        if W_ret_else_7.__gt__(x, W_ret_else_5.__fromatom__(0)):
+                            N_5tmp: __builtin__.int = W_ret_else_5.__fromatom__(1)
+                            $DROP_C()
+                            $RAISE($RET(N_5tmp))
+                    else:
+                        N_6x: __builtin__.BaseException = $POP()
+                        if isinstance(N_6x, ValueError):
+                            pass
+                        else:
+                            $RAISE(N_6x)
+                    proc def C_15cont (C_16res : __builtin__.int) -> $R:
+                        $DROP_C()
+                        $RAISE($SEQ())
+                        return $R_CONTc@[None](C_9cont, None)
+                    return force_cps(C_15cont, x)
+                else:
+                    N_7x: __builtin__.BaseException = $POP_C()
+                    if isinstance(N_7x, ValueError):
+                        pass
+                    else:
+                        $RAISE(N_7x)
+                    $RAISE($SEQ())
+                    return $R_CONTc@[None](C_9cont, None)
+            return $PUSH_Cc(C_13try)
+        else:
+            N_8xx: __builtin__.BaseException = $POP_C()
+            pass
+            if isinstance(N_8xx, $RET):
+                N_8xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_8xx)
+                return $R_CONTc@[__builtin__.int](C_cont, $CAST@[__builtin__.value, __builtin__.int](N_8xxG_RET.val))
+            elif isinstance(N_8xx, $SEQ):
+                pass
+                return $R_CONTc@[None](C_9cont, None)
+            else:
+                $RAISE(N_8xx)
+                return $R_CONTc@[None](C_9cont, None)
+    return $PUSHF_Cc(C_11try)
