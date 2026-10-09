@@ -479,8 +479,9 @@ $R netQ_UDPConnectionD_writeG_local (netQ_UDPConnection self, $Cont c$cont, B_by
         return $R_CONT(c$cont, B_None);
     }
     req->data = state;
-    uv_buf_t buf = uv_buf_init(state->buf, state->len);
-    int r = uv_udp_send(req, udp, &buf, 1, NULL, udp_send_cb);
+    uv_buf_t bufs[io_nbufs(state->len)];
+    unsigned int nbufs = io_bufs(bufs, state->buf, state->len);
+    int r = uv_udp_send(req, udp, bufs, nbufs, NULL, udp_send_cb);
     if (r != 0) {
         char errmsg[1024] = "Failed to send UDP datagram: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -623,8 +624,9 @@ $R netQ_UDPListenerD_sendG_local (netQ_UDPListener self, $Cont c$cont, B_bytes d
         return $R_CONT(c$cont, B_None);
     }
     req->data = state;
-    uv_buf_t buf = uv_buf_init(state->buf, state->len);
-    r = uv_udp_send(req, udp, &buf, 1, (const struct sockaddr *)&dest, udp_send_cb);
+    uv_buf_t bufs[io_nbufs(state->len)];
+    unsigned int nbufs = io_bufs(bufs, state->buf, state->len);
+    r = uv_udp_send(req, udp, bufs, nbufs, (const struct sockaddr *)&dest, udp_send_cb);
     if (r != 0) {
         char errmsg[1024] = "Failed to send UDP datagram: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -796,9 +798,7 @@ $R netQ_TCPConnectionD_writeG_local (netQ_TCPConnection self, $Cont c$cont, B_by
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
-    int r = uv_write(req, stream, &buf, 1, NULL);
+    int r = io_stream_write(stream, (char *)data->str, data->nbytes);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -1082,9 +1082,7 @@ $R netQ_TCPListenConnectionD_writeG_local (netQ_TCPListenConnection self, $Cont 
     if ((intptr_t)stream == -1)
         return $R_CONT(c$cont, B_None);
 
-    uv_write_t *req = (uv_write_t *)acton_malloc(sizeof(uv_write_t));
-    uv_buf_t buf = uv_buf_init((char *)data->str, data->nbytes);
-    int r = uv_write(req, stream, &buf, 1, NULL);
+    int r = io_stream_write(stream, (char *)data->str, data->nbytes);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TCP socket: ";
         uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
@@ -1178,7 +1176,7 @@ static void tls_listener_server_state_retain(struct tls_listener_server_state *s
 static void tls_listener_server_state_release(struct tls_listener_server_state *state);
 static struct tls_client_state *tls_client_state_new(netQ_TLSConnection actor);
 static void tls_client_state_free(struct tls_client_state *state);
-static struct tls_write_req_state *tls_write_req_state_new(B_bytes data);
+static struct tls_write_req_state *tls_write_req_state_new(char *data, size_t len);
 static void tls_write_req_state_free(struct tls_write_req_state *state);
 
 static void close_uv_socket(uv_os_sock_t sock) {
@@ -1328,20 +1326,19 @@ static void tls_client_state_free(struct tls_client_state *state) {
     free(state);
 }
 
-static struct tls_write_req_state *tls_write_req_state_new(B_bytes data) {
+static struct tls_write_req_state *tls_write_req_state_new(char *data, size_t len) {
     struct tls_write_req_state *state = malloc(sizeof(*state));
     if (state == NULL) {
         return NULL;
     }
 
-    size_t len = data->nbytes;
     state->buf = malloc(len > 0 ? len : 1);
     if (state->buf == NULL) {
         free(state);
         return NULL;
     }
     if (len > 0) {
-        memcpy(state->buf, data->str, len);
+        memcpy(state->buf, data, len);
     }
     return state;
 }
@@ -1957,32 +1954,31 @@ $R netQ_TLSListenConnectionD__read_startG_local (netQ_TLSListenConnection self, 
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont c$cont, B_bytes data) {
-    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
-    if ((intptr_t)stream == -1)
-        return $R_CONT(c$cont, B_None);
-
+// Write one piece of at most IO_MAX_BUF_LEN bytes. It is copied, since tlsuv
+// can write it after this returns. Returns false, after reporting the error,
+// if it was not written.
+static bool tls_listen_write_piece(netQ_TLSListenConnection self, tlsuv_stream_t *stream, char *data, size_t len) {
     uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
     if (wreq == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
             f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listen write request"));
         }
-        return $R_CONT(c$cont, B_None);
+        return false;
     }
 
-    struct tls_write_req_state *write_state = tls_write_req_state_new(data);
+    struct tls_write_req_state *write_state = tls_write_req_state_new(data, len);
     if (write_state == NULL) {
         if (self->on_error != NULL) {
             $action2 f = ($action2)self->on_error;
             f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS listen write buffer"));
         }
         free(wreq);
-        return $R_CONT(c$cont, B_None);
+        return false;
     }
 
     wreq->data = write_state;
-    uv_buf_t buf = uv_buf_init(write_state->buf, data->nbytes);
+    uv_buf_t buf = uv_buf_init(write_state->buf, (unsigned int)len);
     int r = tlsuv_stream_write(wreq, stream, &buf, tls_listener_write_cb);
     if (r < 0) {
         char errmsg[1024] = "Failed to write to TLS listen socket: ";
@@ -1994,6 +1990,22 @@ $R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont 
         }
         tls_write_req_state_free(write_state);
         free(wreq);
+        return false;
+    }
+    return true;
+}
+
+$R netQ_TLSListenConnectionD_writeG_local (netQ_TLSListenConnection self, $Cont c$cont, B_bytes data) {
+    tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
+    if ((intptr_t)stream == -1)
+        return $R_CONT(c$cont, B_None);
+
+    // Write the pieces in order and stop at the first one that is not written
+    uv_buf_t bufs[io_nbufs(data->nbytes)];
+    unsigned int nbufs = io_bufs(bufs, (char *)data->str, data->nbytes);
+    for (unsigned int i = 0; i < nbufs; i++) {
+        if (!tls_listen_write_piece(self, stream, bufs[i].base, bufs[i].len))
+            break;
     }
     return $R_CONT(c$cont, B_None);
 }
@@ -2164,6 +2176,48 @@ $R netQ_TLSConnectionD_closeG_local (netQ_TLSConnection self, $Cont c$cont, $act
     return $R_CONT(c$cont, B_None);
 }
 
+// Write one piece of at most IO_MAX_BUF_LEN bytes. It is copied, since tlsuv
+// can write it after this returns. Returns false, after reporting the error,
+// if it was not written.
+static bool tls_write_piece(netQ_TLSConnection self, tlsuv_stream_t *stream, char *data, size_t len) {
+    uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
+    if (wreq == NULL) {
+        if (self->on_error != NULL) {
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write request"));
+        }
+        return false;
+    }
+
+    struct tls_write_req_state *write_state = tls_write_req_state_new(data, len);
+    if (write_state == NULL) {
+        if (self->on_error != NULL) {
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write buffer"));
+        }
+        free(wreq);
+        return false;
+    }
+
+    wreq->data = write_state;
+    uv_buf_t buf = uv_buf_init(write_state->buf, (unsigned int)len);
+    int r = tlsuv_stream_write(wreq, stream, &buf, tls_write_cb);
+    self->_bytes_out += len;
+    if (r < 0) {
+        char errmsg[1024] = "Failed to write to TLS TCP socket: ";
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_debug(errmsg);
+        if (self->on_error != NULL) {
+            $action2 f = ($action2)self->on_error;
+            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
+        }
+        tls_write_req_state_free(write_state);
+        free(wreq);
+        return false;
+    }
+    return true;
+}
+
 $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_bytes data) {
     tlsuv_stream_t *stream = (tlsuv_stream_t *)(intptr_t)self->_stream;
     // fd == -1 means invalid FD and can happen after __resume__
@@ -2181,40 +2235,13 @@ $R netQ_TLSConnectionD_writeG_local (netQ_TLSConnection self, $Cont c$cont, B_by
         return $R_CONT(c$cont, B_None);
     }
 
-    uv_write_t *wreq = (uv_write_t *)malloc(sizeof(uv_write_t));
-    if (wreq == NULL) {
-        if (self->on_error != NULL) {
-            $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write request"));
-        }
-        return $R_CONT(c$cont, B_None);
+    // Write the pieces in order and stop at the first one that is not written
+    uv_buf_t bufs[io_nbufs(data->nbytes)];
+    unsigned int nbufs = io_bufs(bufs, (char *)data->str, data->nbytes);
+    for (unsigned int i = 0; i < nbufs; i++) {
+        if (!tls_write_piece(self, stream, bufs[i].base, bufs[i].len))
+            break;
     }
-
-    struct tls_write_req_state *write_state = tls_write_req_state_new(data);
-    if (write_state == NULL) {
-        if (self->on_error != NULL) {
-            $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, actStrFromCString("Failed to allocate TLS write buffer"));
-        }
-        free(wreq);
-        return $R_CONT(c$cont, B_None);
-    }
-
-    wreq->data = write_state;
-    uv_buf_t buf = uv_buf_init(write_state->buf, data->nbytes);
-    int r = tlsuv_stream_write(wreq, stream, &buf, tls_write_cb);
-    if (r < 0) {
-        char errmsg[1024] = "Failed to write to TLS TCP socket: ";
-        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_debug(errmsg);
-        if (self->on_error != NULL) {
-            $action2 f = ($action2)self->on_error;
-            f->$class->__asyn__(f, self, actStrFromCStringCopy(errmsg));
-        }
-        tls_write_req_state_free(write_state);
-        free(wreq);
-    }
-    self->_bytes_out += data->nbytes;
     return $R_CONT(c$cont, B_None);
 }
 
