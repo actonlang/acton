@@ -142,6 +142,16 @@ void* acton_realloc(void* ptr, size_t size) {
     return acton__allocator.realloc(ptr, size);
 }
 
+// GC_realloc gives the new copy the kind of the old object, so growing a
+// pointer-free buffer keeps it pointer-free. Only realloc(NULL, n) has no
+// object to take the kind from and would return scanned memory, so a new
+// buffer comes from malloc_atomic instead.
+void* acton_realloc_atomic(void* ptr, size_t size) {
+    if (ptr == NULL)
+        return acton__allocator.malloc_atomic(size);
+    return acton__allocator.realloc(ptr, size);
+}
+
 
 void* acton_calloc(size_t count, size_t size) {
     return acton__allocator.calloc(count, size);
