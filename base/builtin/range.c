@@ -16,9 +16,7 @@ static struct B_ValueError B_range_zero_step_error =
     STATIC_EXCEPTION(B_ValueError, "range() step size must not be zero");
 
 B_range B_rangeG_new(int64_t start, B_int stop, B_int step) {
-    B_range self = acton_malloc_atomic(sizeof(struct B_range));
-    B_rangeD___init__(self, start, stop, step);
-    return self;
+    return $NEWATOMIC(B_range, start, stop, step);
 }
 
 // A range holds no heap pointers, so it is allocated pointer-free and not

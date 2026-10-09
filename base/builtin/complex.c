@@ -25,7 +25,7 @@ B_complex toB_complex(complex double c) {
 }
 
 B_complex B_complexG_new(B_Number wit, $WORD c) {
-    return toB_complex(wit->$class->__complx__(wit,c)->val);
+    return $NEWATOMIC(B_complex,wit,c);
 }
 
 B_complex B_complexD_from_real_imag (B_Real wit1, B_Real wit2, $WORD real, $WORD imag) {
