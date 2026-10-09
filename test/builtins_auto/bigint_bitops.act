@@ -1,0 +1,138 @@
+# &, | and ^ on bigint act on the infinite two's complement forms of their
+# operands, as in Python. Results must be normalised, with no zero top limbs,
+# so that ==, ordering, str(), hash() and arithmetic see the same value as
+# the one built any other way.
+
+# (a, b, a & b, a | b, a ^ b), computed with Python. A literal in
+# [2**63, 2**64) is typed u64, so those values go through bigint().
+cases: list[(bigint, bigint, bigint, bigint, bigint)] = [
+    (-18446744073709551616, 3, 0, -bigint(18446744073709551613), -bigint(18446744073709551613)),
+    (-bigint(9223372036854775808), -bigint(18446744073709551615), -18446744073709551616, -9223372036854775807, bigint(9223372036854775809)),
+    (-340282366920938463444927863358058659841, -1, -340282366920938463444927863358058659841, -1, 340282366920938463444927863358058659840),
+    (-340282366920938463444927863358058659841, 1, 1, -340282366920938463444927863358058659841, -340282366920938463444927863358058659842),
+    (-340282366920938463444927863358058659841, 18446744073709551616, 0, -340282366920938463426481119284349108225, -340282366920938463426481119284349108225),
+    (-1, -1, -1, -1, 0),
+    (-1, 18446744073709551616, 18446744073709551616, -1, -18446744073709551617),
+    (-18446744073709551616, -18446744073709551616, -18446744073709551616, -18446744073709551616, 0),
+    (-18446744073709551616, bigint(18446744073709551615), 0, -1, -1),
+    (-340282366920938463463374607431768211456, 340282366920938463463374607431768211455, 0, -1, -1),
+    (-340282366920938463463374607431768211456, -18446744073709551616, -340282366920938463463374607431768211456, -18446744073709551616, 340282366920938463444927863358058659840),
+    (340282366920938463463374607431768211456, -340282366920938463463374607431768211456, 340282366920938463463374607431768211456, -340282366920938463463374607431768211456, -680564733841876926926749214863536422912),
+    (-18446744073709551617, -bigint(18446744073709551615), -36893488147419103231, -1, 36893488147419103230),
+    (-bigint(18446744073709551615), 18446744073709551617, 18446744073709551617, -bigint(18446744073709551615), -36893488147419103232),
+    (-bigint(9223372036854775808), bigint(9223372036854775808), bigint(9223372036854775808), -bigint(9223372036854775808), -18446744073709551616),
+    (-6277101735386680763835789423207666416083908700390324961280, 92233720368547758087, 18446744073709551616, -6277101735386680763835789423207666416010121724095486754809, -6277101735386680763835789423207666416028568468169196306425),
+    (-170141183460469231731687303715884118073, -36893488147419103233, -170141183460469231768580791863303221305, -1, 170141183460469231768580791863303221304),
+    (-3, 1606938044258990275541962092341162602522202993782792835301376, 1606938044258990275541962092341162602522202993782792835301376, -3, -1606938044258990275541962092341162602522202993782792835301379),
+    (-1606938044258990275541962092341162602522202993782792835301376, 3, 0, -1606938044258990275541962092341162602522202993782792835301373, -1606938044258990275541962092341162602522202993782792835301373),
+    (12345676543456787654567898765456787654345676654, -34567545676545676567656765, 12345676543456787654547939678396455517105079874, -14608458616213539327059985, -12345676543456787654562548137012669056432139859),
+]
+
+def digit_op(x: int, y: int, op: str) -> int:
+    if op == "&":
+        return x & y
+    if op == "|":
+        return x | y
+    return x ^ y
+
+def ref_bitop(a: bigint, b: bigint, op: str) -> bigint:
+    """Return a op b for op "&", "|" or "^", one 16 bit digit at a time.
+
+    Floor division and modulo by 2**16 read the two's complement digits of a
+    negative value, so this needs no bitwise operation on bigint.
+    """
+    base: bigint = 65536
+    res: bigint = 0
+    scale: bigint = 1
+    x = a
+    y = b
+    while not ((x == 0 or x == -1) and (y == 0 or y == -1)):
+        res += scale * bigint(digit_op(int(x % base), int(y % base), op))
+        x //= base
+        y //= base
+        scale *= base
+    # All remaining digits of x and y are sign digits: 0 or -1.
+    return res + scale * bigint(digit_op(int(x), int(y), op))
+
+def check_value(fail: list[str], what: str, r: bigint, e: bigint):
+    """Check that r is e under every operation that reads the limbs."""
+    if r != e or not (r == e):
+        fail.append(what + " = " + str(r) + ", expected " + str(e))
+        return
+    if r < e or r > e or not (r <= e and r >= e):
+        fail.append(what + ": ordering against " + str(e))
+    if str(r) != str(e):
+        fail.append(what + ": str " + str(r) + " != " + str(e))
+    if hash(r) != hash(e):
+        fail.append(what + ": hash differs from " + str(e))
+    # abs() returns any Real, which would default to int
+    abs_r: bigint = abs(r)
+    abs_e: bigint = abs(e)
+    if (r + 1 != e + 1 or r - e != 0 or r * 3 != e * 3 or -r != -e
+        or abs_r != abs_e or r // 7 != e // 7 or r % 7 != e % 7
+        or ~r != -e - 1):
+        fail.append(what + ": arithmetic differs from " + str(e))
+
+def check_reported(fail: list[str]):
+    a = -(bigint(1) << 64) | bigint(3)
+    check_value(fail, "-(1 << 64) | 3", a, bigint(-18446744073709551613))
+    if str(a) != "-18446744073709551613":
+        fail.append("str(-(1 << 64) | 3) = " + str(a))
+
+def check_table(fail: list[str]):
+    for a, b, e_and, e_or, e_xor in cases:
+        sa = str(a)
+        sb = str(b)
+        check_value(fail, sa + " & " + sb, a & b, e_and)
+        check_value(fail, sa + " | " + sb, a | b, e_or)
+        check_value(fail, sa + " ^ " + sb, a ^ b, e_xor)
+        check_value(fail, "ref " + sa + " & " + sb, ref_bitop(a, b, "&"), e_and)
+        check_value(fail, "ref " + sa + " | " + sb, ref_bitop(a, b, "|"), e_or)
+        check_value(fail, "ref " + sa + " ^ " + sb, ref_bitop(a, b, "^"), e_xor)
+
+def values() -> list[bigint]:
+    t = bigint(1) << 64
+    h = bigint(1) << 63
+    odd = (t - 1) * t + 1
+    vs: list[bigint] = [0, 1, 3, -1, -2, -3,
+                        h - 1, h, -h, -h - 1,
+                        t - 1, t, t + 1, -t + 1, -t, -t - 1,
+                        odd, -odd, -3 * t, 5 * t + 7,
+                        t * t - 1, t * t, -t * t + 1, -t * t, -t * t - 1,
+                        -(t * t * t - t),
+                        12345676543456787654567898765456787654345676654,
+                        -34567545676545676567656765]
+    return vs
+
+def check_cross(fail: list[str]):
+    vs = values()
+    for a in vs:
+        for b in vs:
+            sa = str(a)
+            sb = str(b)
+            r_and = a & b
+            r_or = a | b
+            r_xor = a ^ b
+            check_value(fail, sa + " & " + sb, r_and, ref_bitop(a, b, "&"))
+            check_value(fail, sa + " | " + sb, r_or, ref_bitop(a, b, "|"))
+            check_value(fail, sa + " ^ " + sb, r_xor, ref_bitop(a, b, "^"))
+            check_value(fail, "(" + sa + " & " + sb + ") + (" + sa + " | " + sb + ")",
+                        r_and + r_or, a + b)
+            check_value(fail, "(" + sa + " | " + sb + ") - (" + sa + " & " + sb + ")",
+                        r_or - r_and, r_xor)
+        check_value(fail, "~" + str(a), ~a, ref_bitop(a, -1, "^"))
+
+actor main(env):
+    fail: list[str] = []
+    try:
+        check_reported(fail)
+        check_table(fail)
+        check_cross(fail)
+    except Exception as e:
+        fail.append("unexpected exception: " + str(e))
+    if fail:
+        print("Failed:", len(fail))
+        for f in fail[:40]:
+            print(f)
+        env.exit(1)
+    env.exit(0)
