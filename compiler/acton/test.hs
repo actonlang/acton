@@ -137,7 +137,7 @@ compilerTests =
         -- as C volatile so it survives the loop's StopIteration setjmp/longjmp.
         -- An optimized (--release=fast) build used to roll it back to its
         -- pre-loop value, which dropped explicitly-provided argparse options.
-        testBuildAndRun "--release=fast" "" ExitSuccess False "../../test/compiler/release_loop_volatile.act"
+        testBuildAndRun "--fast" "" ExitSuccess False "../../test/compiler/release_loop_volatile.act"
   , testCase "dynamic module library build" $ do
         withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
@@ -1035,7 +1035,20 @@ parseFlagTests =
   , flagGolden "cgen flag prints c" "test/parse/simple.cgen.golden" ["--quiet", "--dbg-no-lines", "--cgen"]
   , flagGolden "all flags combined" "test/parse/simple.all.golden"
         ["--quiet", "--parse", "--kinds", "--types", "--sigs", "--norm", "--deact", "--cps", "--llift", "--box", "--dbg-no-lines", "--hgen"]
-  , testCase "optimize parser accepts release aliases" $ do
+  , testCase "optimize parser accepts native modes" $ do
+      assertParsedBuildOptimize ["build"] C.Debug
+      forM_ [("debug", C.Debug), ("safe", C.ReleaseSafe),
+             ("fast", C.ReleaseFast), ("small", C.ReleaseSmall)] $ \(mode, expected) -> do
+        assertParsedBuildOptimize ["build", "--" ++ mode] expected
+        assertParsedBuildOptimize ["build", "--optimize=" ++ mode] expected
+        parsed <- parseArgs ["--" ++ mode, "sample.act"]
+        case parsed of
+          C.CompileOpt _ _ opts -> assertEqual "standalone optimization mode" expected (C.optimize opts)
+          _ -> assertFailure "expected standalone compilation"
+      assertParsedBuildOptimize ["build", "--optimize=SaFe"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--optimize=FaSt"] C.ReleaseFast
+      assertParsedBuildOptimize ["build", "--optimize=SmAlL"] C.ReleaseSmall
+  , testCase "optimize parser accepts release compatibility aliases" $ do
       assertParsedBuildOptimize ["build", "--release"] C.ReleaseFast
       assertParsedBuildOptimize ["build", "--release=safe"] C.ReleaseSafe
       assertParsedBuildOptimize ["build", "--release=SmAlL"] C.ReleaseSmall
@@ -1049,6 +1062,18 @@ parseFlagTests =
       assertParsedBuildOptimize ["build", "--release", "--optimize=releasesmall"] C.ReleaseSmall
       assertParsedBuildOptimize ["build", "--release=fast", "--optimize=debug"] C.Debug
       assertParsedBuildOptimize ["build", "--optimize=debug", "--release"] C.Debug
+  , testCase "explicit --optimize overrides native mode flags" $ do
+      forM_ ["--safe", "--fast", "--small"] $ \mode -> do
+        assertParsedBuildOptimize ["build", mode, "--optimize=debug"] C.Debug
+        assertParsedBuildOptimize ["build", "--optimize=debug", mode] C.Debug
+      assertParsedBuildOptimize ["build", "--debug", "--optimize=safe"] C.ReleaseSafe
+      assertParsedBuildOptimize ["build", "--optimize=safe", "--debug"] C.ReleaseSafe
+  , testCase "native mode flags are mutually exclusive" $
+      forM_ [[first, second] | first <- ["--debug", "--safe", "--fast", "--small"],
+                              second <- ["--debug", "--safe", "--fast", "--small"], first /= second] $ \modes ->
+        case OA.execParserPure C.cmdLinePrefs parserInfo ("build" : modes) of
+          OA.Failure _ -> return ()
+          _ -> assertFailure ("parser should reject conflicting modes: " ++ unwords modes)
   , testCase "build parser accepts --parse-serial" $ do
       parsed <- parseArgs ["build", "--parse-serial"]
       case parsed of
@@ -1063,11 +1088,13 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
-  , testCase "build parser help includes --release alias" $ do
+  , testCase "build parser help advertises native modes" $ do
       helpText <- renderParserHelp ["build", "--help"]
-      assertBool "help text should include --release" ("--release" `isInfixOf` helpText)
-      assertBool "help text should mention release variants" ("=safe or =small" `isInfixOf` helpText)
-      assertBool "help text should mention default release mode" ("same as --release=fast" `isInfixOf` helpText)
+      forM_ ["--debug", "--safe", "--fast", "--small"] $ \mode ->
+        assertBool ("help text should include " ++ mode) (mode `isInfixOf` helpText)
+      assertBool "compatibility alias should stay out of help" (not ("--release" `isInfixOf` helpText))
+      assertBool "generic optimization option uses native names"
+        ("debug, safe, fast, small" `isInfixOf` unwords (words helpText))
   , testCase "sig parser accepts target and project options" $ do
       parsed <- parseArgs ["sig", "--always-build", "--dep", "dep=../dep", "--searchpath", "out/types", "foo.bar"]
       case parsed of
@@ -2260,7 +2287,7 @@ mallocBuildOptionTests = testGroup "C allocator build option"
               assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
         -- Retain all generated outputs while changing allocator and build mode.
         forM_ [(Just "libc", []), (Just "mimalloc", []),
-               (Just "mimalloc", ["--release=fast"]), (Nothing, ["--release=fast"])] $ \(option, flags) -> do
+               (Just "mimalloc", ["--fast"]), (Nothing, ["--fast"])] $ \(option, flags) -> do
           writeOptions option
           expectSuccess "build selected allocator" =<< run option acton (["build", "--color", "never"] ++ flags)
           expectSuccess "application allocator ownership" =<< run option (proj </> "out/bin/main") ["--rts-wthreads", "2"]

@@ -3144,7 +3144,7 @@ int main(int argc, char **argv) {
      */
     static struct option long_options[] = {
         {"rts-bt-dbg", NULL, 'x', "Interactively debug on SIGILL / SIGSEGV"},
-        {"rts-debug", NULL, 'd', "RTS debug, requires program to be compiled with --optimize Debug"},
+        {"rts-debug", NULL, 'd', "RTS debug, requires program to be compiled with --debug"},
         {"rts-ddb-host", "HOST", 'h', "DDB hostname"},
         {"rts-ddb-port", "PORT", 'p', "DDB port [32000]"},
         {"rts-ddb-replication", "FACTOR", 'r', "DDB replication factor [3]"},
@@ -3217,7 +3217,7 @@ int main(int argc, char **argv) {
             case 'd':
                 #ifndef DEV
                 fprintf(stderr, "ERROR: RTS debug not supported.\n");
-                fprintf(stderr, "HINT: Recompile this program using: acton --optimize Debug ...\n");
+                fprintf(stderr, "HINT: Recompile this program using: acton --debug ...\n");
                 exit(1);
                 #endif
                 log_set_quiet(false);

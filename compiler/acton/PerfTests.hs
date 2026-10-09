@@ -83,6 +83,17 @@ perfTests = testGroup "performance baselines"
         assertEqual (unwords ("test" : mode) ++ " accepts a worker count") (Right (Just 3)) (workers ["--rts-wthreads", "3"])
         forM_ ["0", "-1", "1.5", "many"] $ \n ->
           assertBool (unwords ("test" : mode) ++ " must reject --rts-wthreads " ++ n) (isLeft (workers ["--rts-wthreads", n]))
+  , testCase "native optimization flags apply to every test mode" $
+      forM_ [[], ["list"], ["perf"], ["scale"], ["stress"]] $ \mode -> do
+        let optimization args = case parseOptions (["test"] ++ mode ++ args) of
+              O.Success (C.CmdOpt _ (C.Test cmd)) | Just opts <- testCommandOptions cmd -> Right (C.optimize (C.testCompile opts))
+              O.Failure failure -> Left (fst (O.renderFailure failure "acton"))
+              _ -> Left "expected test options"
+            defaultMode = if mode `elem` [["perf"], ["scale"]] then C.ReleaseFast else C.Debug
+        assertEqual (unwords ("test" : mode) ++ " keeps its default mode") (Right defaultMode) (optimization [])
+        forM_ [("--debug", C.Debug), ("--safe", C.ReleaseSafe),
+               ("--fast", C.ReleaseFast), ("--small", C.ReleaseSmall)] $ \(flag, expected) ->
+          assertEqual (unwords ("test" : mode) ++ " accepts " ++ flag) (Right expected) (optimization [flag])
   , testCase "performance comparison targets and options compose" $ do
       forM_ ["git:main", "before.perf_data", "./git:main", "main"] $ \target ->
         forM_ [["--compare", target, "--name", "sample", "--scale", "50", "--time", "10s", "--record"],

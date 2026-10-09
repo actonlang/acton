@@ -102,9 +102,9 @@ installCommand gopts opts = do
     archiveHash <- requireRight =<< zigFetchHash zigExe archiveUrl
     sourceDir <- prepareInstallSource appName repoUrl commitSha
     unless (C.quiet gopts) $
-      putStrLn ("Building " ++ appName ++ " with acton build --release")
+      putStrLn ("Building " ++ appName ++ " with acton build --fast")
     actonExe <- getExecutablePath
-    runProcessChecked (Just sourceDir) actonExe ["build", "--release"]
+    runProcessChecked (Just sourceDir) actonExe ["build", "--fast"]
     binaries <- discoverBuiltBinaries sourceDir
     installBuiltBinaries appName repoUrl repoRefArg commitSha archiveHash sourceDir binaries
     unless (C.quiet gopts) $ do
