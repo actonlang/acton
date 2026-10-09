@@ -276,15 +276,18 @@ but only the application's measured result establishes an application speedup.
 
 ## Tuple hashing
 
-`tuple_hashing` covers the hash path: single values, two- and three-component
-tuples, a nested tuple, and dict construction and update with those keys. Scale
-is the number of keys, and each loop body hashes every key once, so
+`tuple_hashing` covers the hash path: single values (including all bounded
+integer types, bool and float), two- and three-component tuples, a nested
+tuple, immutable integer sets, and dict construction and update with those
+keys. Scale is the number of keys, and each loop body hashes every key once, so
 per-operation figures are per key hashed. Keys are prepared before `t.loop()`;
 only hashing, table work and output allocation are timed. The single-value
 cases hash the same payloads without a tuple around them, which separates a
 composite hashing change from a change to the underlying str, int, u64 or float
 hash. The nested case hashes the triple's strings as `((str, str), str)`, so its
-difference from the triple is the cost of nesting.
+difference from the triple is the cost of nesting. Each immutable-set key
+contains 16 consecutive integers; the sets overlap but are distinct, and their
+construction is outside the timed loop.
 
 ```sh
 acton test perf --module tuple_hashing --scale 1024 --time 3s --record

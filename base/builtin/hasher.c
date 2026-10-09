@@ -34,16 +34,15 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
     // operation so these common dict/set paths do not allocate an Acton hasher
     // and its Zig state.  Other Hashable implementations retain the streaming
     // protocol.
-    if (wit == (B_Hashable)B_HashableD_intG_witness) {
-        B_int int_value = (B_int)value;
-        return zig_hash_wyhash_hash_buffer(
-            0, (const uint8_t *)&int_value->val, sizeof(int_value->val));
+#define HASH_SCALAR(type)                                                        \
+    if (wit == (B_Hashable)B_HashableD_##type##G_witness) {                     \
+        B_##type scalar = (B_##type)value;                                       \
+        return zig_hash_wyhash_hash_buffer(                                      \
+            0, (const uint8_t *)&scalar->val, sizeof(scalar->val));              \
     }
-    if (wit == (B_Hashable)B_HashableD_u64G_witness) {
-        B_u64 u64_value = (B_u64)value;
-        return zig_hash_wyhash_hash_buffer(
-            0, (const uint8_t *)&u64_value->val, sizeof(u64_value->val));
-    }
+
+    HASH_SCALAR(int)
+    HASH_SCALAR(u64)
     if (wit == (B_Hashable)B_HashableD_strG_witness) {
         B_str str_value = (B_str)value;
         return zig_hash_wyhash_hash_buffer(0, str_value->str, str_value->nbytes);
@@ -52,6 +51,23 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
         B_bytes bytes_value = (B_bytes)value;
         return zig_hash_wyhash_hash_buffer(0, bytes_value->str, bytes_value->nbytes);
     }
+    if (wit == (B_Hashable)B_HashableD_floatG_witness) {
+        B_float float_value = (B_float)value;
+        // Equal positive and negative zero must hash identically.
+        double val = float_value->val == 0.0 ? 0.0 : float_value->val;
+        return zig_hash_wyhash_hash_buffer(
+            0, (const uint8_t *)&val, sizeof(val));
+    }
+    HASH_SCALAR(bool)
+    HASH_SCALAR(i32)
+    HASH_SCALAR(i16)
+    HASH_SCALAR(i8)
+    HASH_SCALAR(u32)
+    HASH_SCALAR(u16)
+    HASH_SCALAR(u8)
+    HASH_SCALAR(u1)
+
+#undef HASH_SCALAR
 
     B_hasher h = B_hasherG_new(NULL);
     wit->$class->hash(wit, value, h);
