@@ -1218,6 +1218,43 @@ parseFlagTests =
       assertEqual "acton test --help stderr" "" cmdErr
       assertBool "acton test --help should include --no-cache" ("--no-cache" `isInfixOf` cmdOut)
       assertBool "acton test --help should include --tag" ("--tag" `isInfixOf` cmdOut)
+  , testCase "test contexts extend the watchdog without resetting its deadline" $ do
+      withSystemTempDirectory "acton-test-timeout" $ \proj -> do
+        acton <- canonicalizePath "../../dist/bin/acton"
+        let name = "test_timeout"
+            fp = Fingerprint.formatFingerprint
+              (Fingerprint.updateFingerprintPrefix
+                (Fingerprint.fingerprintPrefixForName name) 1)
+            srcDir = proj </> "src"
+            run args expected = do
+              (code, out, err) <- readCreateProcessWithExitCode
+                (proc acton (["test"] ++ args ++ ["--json", "--no-cache", "--rts-wthreads", "2", "--min-iter", "1", "--min-time", "1"]))
+                  { cwd = Just proj } ""
+              assertEqual ("acton test " ++ unwords args ++ " failed:\n" ++ out ++ err) expected code
+              return out
+            oneTest test maxTime expected = run
+              ["--name", test, "--max-time", maxTime, "--max-iter", "1"] expected
+        createDirectoryIfMissing True srcDir
+        writeFile (proj </> "Build.act") $ unlines
+          [ "name = " ++ show name
+          , "fingerprint = " ++ fp
+          ]
+        copyFile "test/project/test_timeout/src/test_timeout.act" (srcDir </> "test_timeout.act")
+        -- --iter would install a much longer watchdog and hide this regression.
+        extended <- run ["--name", "(sync|async|env)", "--max-time", "1", "--max-iter", "1"] ExitSuccess
+        assertBool "all three contexts can outlive the original three-second timer"
+          ("\"total\":3" `isInfixOf` extended)
+        ordinary <- oneTest "default" "1" (ExitFailure 2)
+        assertBool "unextended tests retain the default deadline"
+          ("\"duration_ms\":3000" `isInfixOf` ordinary && "Test timeout" `isInfixOf` ordinary)
+        deadline <- oneTest "deadline" "1" (ExitFailure 2)
+        assertBool "smaller and repeated requests preserve the original extended deadline"
+          ("\"duration_ms\":4000" `isInfixOf` deadline && "Test timeout" `isInfixOf` deadline)
+        _ <- oneTest "short_request" "6000" ExitSuccess
+        _ <- oneTest "short_request" "0" ExitSuccess
+        stress <- run ["stress", "--name", "budget", "--max-time", "20", "--max-iter", "2", "--stress-workers", "1"] ExitSuccess
+        assertBool "the stress repetition budget is independent of the watchdog"
+          ("\"iterations\":1" `isInfixOf` stress)
   , testCase "acton test compiles selected modules and their imports" $ do
       withSystemTempDirectory "acton-test-selection" $ \proj -> do
         acton <- canonicalizePath "../../dist/bin/acton"

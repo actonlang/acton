@@ -1,0 +1,42 @@
+import testing
+import time
+
+
+proc def _test_sync(t: testing.SyncT):
+    t.timeout(8.0)
+    # Block the executor so the request must go directly to the runner.
+    start = time.monotonic_ns()
+    while time.monotonic_ns() - start < 4000000000:
+        pass
+
+
+actor _test_async(t: testing.AsyncT):
+    t.timeout(8.0)
+    t.timeout(0.001)
+    after 4.0: t.success()
+
+
+actor _test_env(t: testing.EnvT):
+    t.timeout(8.0)
+    after 4.0: t.success()
+
+
+actor _test_default(t: testing.AsyncT):
+    after 4.0: t.success()
+
+
+actor _test_deadline(t: testing.AsyncT):
+    t.timeout(4.0)
+    t.timeout(0.001)
+    after 1.0: t.timeout(4.0)
+    after 4.5: t.success()
+
+
+actor _test_short_request(t: testing.AsyncT):
+    t.timeout(0.001)
+    after 4.0: t.success()
+
+
+actor _test_budget(t: testing.AsyncT):
+    t.timeout(60.0)
+    after 0.1: t.success()

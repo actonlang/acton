@@ -108,6 +108,35 @@ The option works the same way with `acton test perf`, `acton test scale` and
 `acton test stress`. A cached result is only reused by a run with the same
 number of worker threads.
 
+## Slow tests
+
+Tests that need more time can declare a timeout in seconds on their test context:
+
+```python
+import testing
+
+actor SlowTester(t: testing.AsyncT):
+    t.timeout(60.0)
+    after 5.0: t.success()
+```
+
+`timeout()` is available on `SyncT`, `AsyncT`, and `EnvT`. Call it at the start,
+before setup or launching work. It returns after the runner has applied the
+request. Unit tests normally take no context argument;
+a function that needs a timeout can take `t: testing.SyncT`.
+
+The deadline covers the whole run of that test, including setup and repeated
+invocations. Time is counted from the original test start. Requests only extend
+the deadline: repeated calls do not reset the clock or add time, and a longer
+runner timeout stays in effect. An unlimited run (`--max-time 0`) remains
+unlimited. The duration must be positive and finite; invalid values raise
+`ValueError`.
+
+This changes the watchdog deadline. Iteration limits, the repetition budget set
+by `--min-time` and `--max-time`, and the performance budget set by `--time` keep
+their existing behavior. A test can therefore allow 60 seconds to finish while
+ordinary tests continue using the default timeout.
+
 ## Capability-gated tests
 
 Some tests depend on external capabilities (for example network services, hardware, or system setup). In tests that receive a test context argument (`t`), use `t.require(...)` and pass available capabilities with `--tag`:
