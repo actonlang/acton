@@ -8,6 +8,15 @@ These protocols cover iteration, comparison, operators, hashing, and freezing.
   and can therefore be used in `for` loops and other iteration-based
   APIs
 
+`Iterator[A]` is the class that holds traversal state. It also implements
+`Iterable[A]`, so it can be used directly in a `for` loop. `next(iterator)`
+returns `just(value)` for the next item or `nothing()` when exhausted.
+Iterating an iterator continues from its current position rather than
+starting a new traversal.
+
+See [Generator expressions](../../collections/lists.md#generator-expressions)
+for lazy, single-pass iteration and `flatmap` examples.
+
 ## Identity and comparison
 
 - `Identity`: identity comparison with `is` and `is not`

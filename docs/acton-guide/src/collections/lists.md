@@ -157,6 +157,90 @@ List comprehensions are the compact way to build a new list from an
 existing iterable. Read them as "make a list of this expression for
 each item that matches the condition".
 
+## Generator expressions
+
+A generator expression uses parentheses to produce an `Iterator[A]`.
+It computes values as they are requested, while a list comprehension
+builds the whole list immediately.
+
+```python
+numbers = [1, 2, 3, 4, 5]
+squares = (n * n for n in numbers if n % 2 == 0)
+
+print(list(squares))    # [4, 16]
+print(list(squares))    # []
+```
+
+Generators are single-pass: a `for` loop or a consumer such as `list()`
+or `sum()` advances the iterator. Once exhausted, it produces no more
+values. Construct another generator if you need to repeat the traversal.
+
+When a generator is the only argument to a call, its extra parentheses
+can be omitted. Keep them when passing other arguments:
+
+```python
+print(sum(n * n for n in numbers))         # 55
+print(sum((n * n for n in numbers), 10))    # 65
+```
+
+Like comprehensions, generator expressions can have multiple `for` and
+`if` clauses. Clauses run from left to right, with each inner loop
+traversed for the current outer value:
+
+```python
+pairs = ((x, y) for x in range(2) for y in range(3) if x != y)
+print(list(pairs))    # [(0, 1), (0, 2), (1, 0), (1, 2)]
+```
+
+### Evaluation and captures
+
+The outermost source expression is evaluated and converted to an iterator
+when the generator is constructed. Filters, nested source expressions,
+and the result expression are evaluated as iteration advances. Errors in
+the outer source therefore occur at construction; errors in deferred
+expressions occur when those expressions are reached during iteration.
+
+The deferred expressions must be [pure](../types/effects.md). They can
+compute values and raise exceptions, but cannot call functions requiring
+`mut`, `proc`, or `action` effects. Use an explicit `for` loop when each
+step needs those effects.
+
+Local variables and actor state referenced from the surrounding scope
+are captured by value when the generator is constructed, as with Acton
+lambdas:
+
+```python
+factor = 2
+scaled = (factor * n for n in [1, 2, 3])
+factor = 3
+print(list(scaled))    # [2, 4, 6]
+```
+
+Capturing a mutable object keeps a reference to that object; it does not
+copy its contents. A generator does not take a snapshot of its source
+collection.
+
+The compiler can combine generator production and consumption into a
+single loop, avoiding an intermediate iterator pipeline while preserving
+these evaluation rules.
+
+### Flattening with `flatmap`
+
+`flatmap(f, items)` returns a lazy iterator that calls `f` for each input
+and yields all values from the returned iterator before moving to the
+next input. Empty inner iterators contribute no values.
+
+```python
+groups = [[1, 2], [], [3]]
+flattened = flatmap(lambda group: iter(group), groups)
+print(list(flattened))    # [1, 2, 3]
+```
+
+The input can be any `Iterable[A]`. The callback must be pure and return
+an `Iterator[B]`; wrap collections in `iter()` inside the callback. The
+result is a single-pass `Iterator[B]`, just like a generator expression
+with nested `for` clauses.
+
 ## Type safety
 
 All items in a list must be of the same type. Mixing types like
