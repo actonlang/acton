@@ -93,6 +93,31 @@ def test_complex() -> bool:
         print("Hash consistency failed - equal numbers have different hashes")
         return False
 
+    # IEEE equality identifies positive and negative zero. Check every sign
+    # combination both directly and through a dict large enough to use hashes.
+    pz = float("0.0")
+    nz = float("-0.0")
+    zeroes = [complex.from_real_imag(pz, pz),
+              complex.from_real_imag(nz, pz),
+              complex.from_real_imag(pz, nz),
+              complex.from_real_imag(nz, nz)]
+    zero_hash = hash(zeroes[0])
+    seeded_zero_hash = seed_hash(u64(17), zeroes[0])
+    for z in zeroes:
+        if z != zeroes[0] or hash(z) != zero_hash or seed_hash(u64(17), z) != seeded_zero_hash:
+            print("Complex signed-zero hash consistency failed")
+            return False
+
+    zero_dict = {zeroes[0]: "zero",
+                 complex.from_real_imag(1.0, 0.0): "one",
+                 complex.from_real_imag(2.0, 0.0): "two",
+                 complex.from_real_imag(3.0, 0.0): "three",
+                 complex.from_real_imag(4.0, 0.0): "four"}
+    for z in zeroes:
+        if zero_dict[z] != "zero":
+            print("Complex signed-zero dictionary lookup failed")
+            return False
+
     # Test division by zero
     try:
         zero = complex.from_real_imag(0.0, 0.0)

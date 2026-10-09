@@ -29,8 +29,40 @@ def int_pairs(size: int) -> list[(int, int)]:
 def u64s(size: int) -> list[u64]:
     return [u64(i) for i in range(size)]
 
+def i32s(size: int) -> list[i32]:
+    return [i32(i) for i in range(size)]
+
+def i16s(size: int) -> list[i16]:
+    return [i16(i % 32768) for i in range(size)]
+
+def i8s(size: int) -> list[i8]:
+    return [i8(i % 128) for i in range(size)]
+
+def u32s(size: int) -> list[u32]:
+    return [u32(i) for i in range(size)]
+
+def u16s(size: int) -> list[u16]:
+    return [u16(i % 65536) for i in range(size)]
+
+def u8s(size: int) -> list[u8]:
+    return [u8(i % 256) for i in range(size)]
+
+def u1s(size: int) -> list[u1]:
+    return [u1(i % 2) for i in range(size)]
+
+def bools(size: int) -> list[bool]:
+    return [i % 2 == 0 for i in range(size)]
+
 def floats(size: int) -> list[float]:
     return [float(i) for i in range(size)]
+
+def complexes(size: int) -> list[complex]:
+    return [complex.from_real_imag(float(i), float(i + 1)) for i in range(size)]
+
+def int_isets(size: int) -> list[iset[int]]:
+    # Distinct, overlapping sets keep the element count fixed while the number
+    # of dictionary keys follows scale.
+    return [iset(range(i, i + 16)) for i in range(size)]
 
 
 def hash_all[A(Hashable)](t: testing.SyncT, xs: list[A]):
@@ -96,8 +128,38 @@ def _test_hash_int_pair(t: testing.SyncT):
 def _test_hash_u64(t: testing.SyncT):
     hash_all(t, u64s(t.scale()))
 
+def _test_hash_i32(t: testing.SyncT):
+    hash_all(t, i32s(t.scale()))
+
+def _test_hash_i16(t: testing.SyncT):
+    hash_all(t, i16s(t.scale()))
+
+def _test_hash_i8(t: testing.SyncT):
+    hash_all(t, i8s(t.scale()))
+
+def _test_hash_u32(t: testing.SyncT):
+    hash_all(t, u32s(t.scale()))
+
+def _test_hash_u16(t: testing.SyncT):
+    hash_all(t, u16s(t.scale()))
+
+def _test_hash_u8(t: testing.SyncT):
+    hash_all(t, u8s(t.scale()))
+
+def _test_hash_u1(t: testing.SyncT):
+    hash_all(t, u1s(t.scale()))
+
+def _test_hash_bool(t: testing.SyncT):
+    hash_all(t, bools(t.scale()))
+
 def _test_hash_float(t: testing.SyncT):
     hash_all(t, floats(t.scale()))
+
+def _test_hash_complex(t: testing.SyncT):
+    hash_all(t, complexes(t.scale()))
+
+def _test_hash_iset_int(t: testing.SyncT):
+    hash_all(t, int_isets(t.scale()))
 
 def _test_dict_str(t: testing.SyncT):
     construct_dict(t, entries(strings(t.scale())))
@@ -110,3 +172,18 @@ def _test_dict_str_pair_update(t: testing.SyncT):
 
 def _test_dict_str_update(t: testing.SyncT):
     update_dict(t, entries(strings(t.scale())))
+
+def _test_dict_int(t: testing.SyncT):
+    construct_dict(t, entries(ints(t.scale())))
+
+def _test_dict_u64(t: testing.SyncT):
+    construct_dict(t, entries(u64s(t.scale())))
+
+def _test_dict_float(t: testing.SyncT):
+    construct_dict(t, entries(floats(t.scale())))
+
+def _test_dict_iset_int(t: testing.SyncT):
+    construct_dict(t, entries(int_isets(t.scale())))
+
+def _test_dict_iset_int_update(t: testing.SyncT):
+    update_dict(t, entries(int_isets(t.scale())))

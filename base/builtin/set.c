@@ -489,15 +489,15 @@ static B_iset B_iset_alloc(void) {
     return res;
 }
 
-static void B_set_hash_table(B_set_table *set, B_Hashable hashwit, B_hasher h) {
+static void B_set_hash_table(B_set_table *set, B_hasher h) {
     uint64_t sum = UINT64_C(0x1927868237a12d3b);
     uint64_t xors = UINT64_C(0x9e3779b97f4a7c15) ^ set->numelements;
     for (uint64_t i = 0; i <= set->mask; i++) {
         B_setentry *entry = &set->table[i];
         if (ACTIVE_ENTRY(entry)) {
-            B_hasher hi = B_hasherG_new(NULL);
-            hashwit->$class->hash(hashwit, entry->key, hi);
-            uint64_t d = B_hasherD_finalize(hi);
+            // Set entries retain the independent, seed-zero element hash used
+            // for lookup.  Reuse it instead of hashing every element again.
+            uint64_t d = entry->hash;
             sum += d;
             xors ^= d + UINT64_C(0x9e3779b97f4a7c15);
         }
@@ -887,7 +887,7 @@ B_iset B_LogicalD_ISetD_isetD___xor__(B_LogicalD_ISetD_iset wit, B_iset set, B_i
 }
 
 B_NoneType B_HashableD_isetD_hash(B_HashableD_iset wit, B_iset set, B_hasher h) {
-    B_set_hash_table(&set->data, wit->W_HashableD_AD_HashableD_iset, h);
+    B_set_hash_table(&set->data, h);
     return B_None;
 }
 
