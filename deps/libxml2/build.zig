@@ -6,7 +6,7 @@ const version_number = 21504;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const t = target.result;
 
     const lib = b.addLibrary(.{

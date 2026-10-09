@@ -17,13 +17,13 @@ pub fn build(b: *std.Build) void {
         .name = "gencaps",
         .root_module = b.createModule(.{
             .target = b.graph.host,
-            .optimize = .ReleaseSafe,
+            .optimize = .safe,
         }),
     });
     gencaps.root_module.link_libc = true;
     gencaps.root_module.addCSourceFile(.{ .file = b.path("gencaps.c") });
     const run = b.addRunArtifact(gencaps);
-    run.addFileArg(src.path("include/Caps"));
+    run.addFileArg2(src.path("include/Caps"), .{});
     const caps_h = run.captureStdOut(.{});
 
     const gen = b.addWriteFiles();

@@ -40,16 +40,18 @@ Two containers (`docker-compose.yml`):
    `acton fetch` (dependency archive download), `acton pkg update` (the package
    index over http-client), `acton pkg upgrade` (GitHub API ref resolution plus
    archive re-hash), and `acton build` (a dependency that itself carries a
-   *transitive* zig package dependency, which zig resolves during final
-   compilation).
+   *transitive* zig package dependency, which Acton pre-fetches before Zig uses
+   it during final compilation).
 
-Because the acton box has no direct egress, a scenario can only succeed if acton
-routed that request through the proxy:
+Each scenario starts with an empty Acton cache. Because the acton box has no
+direct egress, a scenario can only succeed if its downloads went through the
+proxy. A failure can also come from dependency hashes or compilation, so inspect
+the command output before treating it as a routing failure:
 
 | result | meaning |
 |--------|---------|
-| **exit 0** | acton honoured `http(s)_proxy` — **PASS** |
-| **exit ≠ 0** | acton ignored the proxy and went direct — **FAIL** |
+| **exit 0 + expected success marker** | scenario completed through the proxy — **PASS** |
+| **exit ≠ 0 or missing success marker** | scenario failed; inspect download, hash and compiler diagnostics — **FAIL** |
 
 ## The bugs this guards against
 
@@ -66,20 +68,19 @@ pass after.
 **2. The transitive zig-dependency bug (scenario 4).** A real Acton package can
 carry zig package dependencies, and those can have their own *transitive* `.url`
 dependencies (e.g. `actonlang/acton-zlib`'s `deps/zlib/build.zig.zon` pulls
-`zlib_upstream` from github). Acton fetches the Acton package itself through the
-proxy-aware http-client, but that nested `.url` is resolved by **zig** during
-final compilation — and zig's HTTPS-over-CONNECT-proxy support is broken (it
-writes an absolute-form request URI into the tunnel), so the fetch fails with
-`invalid HTTP response: HttpConnectionClosing`. This is the lmdb/libssh failure
-seen in the field, and it affects **all architectures**.
+`zlib_upstream` from github). Previously, Acton fetched the Acton package through
+the proxy-aware http-client but left that nested `.url` to **zig** during final
+compilation. Zig wrote an absolute-form request URI into the HTTPS tunnel, so
+the origin rejected it with `invalid HTTP response: HttpConnectionClosing`.
+This was the lmdb/libssh failure seen in the field on **all architectures**.
 
-> **Status:** scenario 4 currently **fails on purpose** — it reproduces the
-> still-unfixed transitive-dependency bug. The fix (Acton pre-seeding zig's cache
-> for transitive `.url` deps through the proxy-aware http-client) is a follow-up;
-> once it lands, this scenario passes too.
+Acton now pre-fetches non-lazy transitive `.url` dependencies through its
+proxy-aware HTTP client and seeds Zig's package cache. Scenario 4 requires the
+final build to succeed too, proving Zig can consume those cached archives and
+compile the dependency.
 
 The fixtures: `project/` (a `zig_dependency`) and `pkgproject/` (a github
 `dependency`) use zlib v1.3.1, downloaded + hashed through Acton's HTTP path
 without needing to be a full Acton package. `zigdepproject/` depends on the real
 `actonlang/acton-zlib` package and **builds** it, forcing zig to resolve the
-transitive `zlib_upstream` `.url` through the proxy.
+transitive `zlib_upstream` dependency from the cache Acton seeds through the proxy.

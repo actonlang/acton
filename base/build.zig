@@ -67,14 +67,18 @@ fn cSourceFlags(lib: *std.Build.Step.Compile) []const []const u8 {
 
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
-    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
+    // Normalize the serialized package root so C inputs and prefix maps agree.
+    if (b.root.root_dir.path) |path| {
+        b.root.root_dir.path = b.pathResolve(&.{path});
+    }
+    const buildroot_path = b.root.joinString(b.allocator, "") catch unreachable;
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     // Must match the collector options in backend/build.zig, so that both
     // resolve to the same libgc. The collector has parallel markers and
     // thread-local allocation wherever it has threads.
     const gc_enable_threads = !target.result.cpu.arch.isWasm();
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const cpedantic = b.option(bool, "cpedantic", "") orelse false;
     const use_db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
@@ -314,7 +318,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    var iter_dir = b.build_root.handle.openDir(
+    b.dependOnDirectoryContents(b.path("out/types"));
+    var iter_dir = b.root.openDir(
         io,
         "out/types/",
         .{
@@ -342,6 +347,10 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         };
         if (next_result) |entry| {
+            if (entry.kind == .directory) {
+                const dir_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
+                b.dependOnDirectoryContents(b.path(dir_path));
+            }
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".c")) {
                     const fPath = b.allocator.create(FilePath) catch |err| {
@@ -408,11 +417,15 @@ pub fn build(b: *std.Build) void {
     flags.append(b.allocator, file_prefix_map.items) catch unreachable;
     flags.append(b.allocator, "-Wno-error=parentheses-equality") catch unreachable;
     flags.append(b.allocator, "-Wno-parentheses-equality") catch unreachable;
+    // Acton subtyping shares object layouts across distinct C struct pointers.
+    // Keep Clang 22's new error as a warning unless strict C checks are requested.
     if (cpedantic) {
         flags.append(b.allocator, "-Werror") catch unreachable;
+    } else {
+        flags.append(b.allocator, "-Wno-error=incompatible-pointer-types") catch unreachable;
     }
 
-    if (optimize == .Debug) {
+    if (optimize == .debug) {
         print("Debug build\n", .{});
         flags.appendSlice(b.allocator, &.{
             "-DDEV",
@@ -472,7 +485,7 @@ pub fn build(b: *std.Build) void {
     // investigate further, find the root cause and address it.
     libActon.installHeadersDirectory(b.path("out/types"), "out/types", .{});
 
-    var hiter_dir = b.build_root.handle.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
+    var hiter_dir = b.root.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
 
@@ -498,7 +511,7 @@ pub fn build(b: *std.Build) void {
     libActon.installHeader(b.path("rts/log.h"), "rts/log.h");
     libActon.installHeader(b.path("rts/perf.h"), "rts/perf.h");
 
-    libActon.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
+    libActon.root_module.addIncludePath(b.path("."));
     libActon.root_module.addIncludePath(dep_libtlsuv.path("include"));
     libActon.root_module.addIncludePath(gc_config_files.getDirectory());
     libActon.root_module.addObject(gc_config);
@@ -556,7 +569,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     if (enable_lto) base_tests.lto = .thin;
-    base_tests.root_module.addIncludePath(.{ .cwd_relative = buildroot_path });
+    base_tests.root_module.addIncludePath(b.path("."));
     base_tests.root_module.linkLibrary(dep_libbsdnt.artifact("bsdnt"));
     base_tests.root_module.linkLibrary(libgc);
     base_tests.root_module.link_libc = true;

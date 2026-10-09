@@ -27,6 +27,7 @@ import Acton.HttpFetch (httpGetBytes, isHttpUrl, newProxyManager)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.Compile (loadBuildSpec, throwProjectError)
+import Acton.ZigFetch (fetchZigPackage)
 
 import Control.Exception (IOException, SomeException, try, displayException, evaluate)
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -48,7 +49,6 @@ import System.Environment (getExecutablePath, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), takeDirectory)
 import System.IO (IOMode(ReadMode, WriteMode), hClose, hGetContents, hPutStr, hPutStrLn, hSetEncoding, openFile, stderr, utf8)
-import System.IO.Temp (withSystemTempDirectory)
 import System.Process (CreateProcess(cwd), proc, readCreateProcessWithExitCode)
 import qualified Text.Regex.TDFA as TDFA
 
@@ -102,9 +102,9 @@ installCommand gopts opts = do
     archiveHash <- requireRight =<< zigFetchHash zigExe archiveUrl
     sourceDir <- prepareInstallSource appName repoUrl commitSha
     unless (C.quiet gopts) $
-      putStrLn ("Building " ++ appName ++ " with acton build --release")
+      putStrLn ("Building " ++ appName ++ " with acton build --fast")
     actonExe <- getExecutablePath
-    runProcessChecked (Just sourceDir) actonExe ["build", "--release"]
+    runProcessChecked (Just sourceDir) actonExe ["build", "--fast"]
     binaries <- discoverBuiltBinaries sourceDir
     installBuiltBinaries appName repoUrl repoRefArg commitSha archiveHash sourceDir binaries
     unless (C.quiet gopts) $ do
@@ -935,22 +935,8 @@ zigFetchLocalHash :: FilePath -> String -> IO (Either String String)
 zigFetchLocalHash zigExe target = do
     home <- getHomeDirectory
     let globalCache = home </> ".cache" </> "acton" </> "zig-global-cache"
-    createDirectoryIfMissing True globalCache
-    createDirectoryIfMissing True (globalCache </> "tmp")
-    withSystemTempDirectory "acton-zig-fetch" $ \tmp -> do
-      writeFile (tmp </> "build.zig") zigFetchBuildZig
-      let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, target]) { cwd = Just tmp }
-      res <- try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-      case res of
-        Left err -> return (Left ("Error hashing archive: " ++ displayException err))
-        Right (ExitSuccess, out, _) -> return (Right (trim out))
-        Right (ExitFailure _, _, err) -> return (Left ("Error hashing archive: " ++ trim err))
-
-zigFetchBuildZig :: String
-zigFetchBuildZig = unlines
-    [ "const std = @import(\"std\");"
-    , "pub fn build(b: *std.Build) void { _ = b; }"
-    ]
+    res <- fetchZigPackage zigExe globalCache target
+    return (either (Left . ("Error hashing archive: " ++) . trim) Right res)
 
 runProcessChecked :: Maybe FilePath -> FilePath -> [String] -> IO ()
 runProcessChecked cwdOpt exe args = do

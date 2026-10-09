@@ -272,11 +272,14 @@ optimizeReader :: ReadM OptimizeMode
 optimizeReader = eitherReader $ \s ->
     case map toLower s of
         "debug"        -> Right Debug
+        "safe"         -> Right ReleaseSafe
+        "small"        -> Right ReleaseSmall
+        "fast"         -> Right ReleaseFast
         "release"      -> Right ReleaseFast
         "releasesafe"  -> Right ReleaseSafe
         "releasesmall" -> Right ReleaseSmall
         "releasefast"  -> Right ReleaseFast
-        _              -> Left $ "Invalid optimize option: " ++ s ++ " (expected: Debug, Release, ReleaseSafe, ReleaseSmall, ReleaseFast)"
+        _              -> Left $ "Invalid optimize option: " ++ s ++ " (expected: debug, safe, fast, small)"
 
 releaseModeReader :: ReadM OptimizeMode
 releaseModeReader = eitherReader $ \s ->
@@ -490,26 +493,27 @@ optimizeOption = fromMaybe Debug <$> requestedOptimizeOption
 
 requestedOptimizeOption :: Parser (Maybe OptimizeMode)
 requestedOptimizeOption = resolveOptimizeOption
-    <$> optional releaseOption
+    <$> optional modeOption
     <*> optional
         (option optimizeReader
             (long "optimize"
              <> metavar "MODE"
-             <> help "Optimization mode (case-insensitive: Debug, Release/ReleaseFast, ReleaseSafe, ReleaseSmall)"
+             <> help "Optimization mode (case-insensitive: debug, safe, fast, small)"
             ))
   where
-    releaseOption =
-        flag' ReleaseFast
-            (long "release"
-             <> help "Release build mode; same as --release=fast and also accepts =safe or =small"
-            )
+    modeOption =
+        flag' Debug (long "debug" <> help "Development build with debug information and RTS diagnostics")
+        <|> flag' ReleaseSafe (long "safe" <> help "Optimized build with backend safety checks")
+        <|> flag' ReleaseFast (long "fast" <> help "Optimize for execution speed")
+        <|> flag' ReleaseSmall (long "small" <> help "Optimize for binary size")
+        <|> flag' ReleaseFast (long "release" <> internal)
         <|> option releaseModeReader
             (long "release"
              <> internal
             )
 
     resolveOptimizeOption _ (Just mode) = Just mode
-    resolveOptimizeOption release Nothing = release
+    resolveOptimizeOption mode Nothing = mode
 
 testCommand :: Parser TestCommand
 testCommand =

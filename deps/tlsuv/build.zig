@@ -1,21 +1,10 @@
 const std = @import("std");
-const builtin = @import("builtin");
-
-// Helper for Zig 0.13/0.14 API differences.
-fn targetIsDarwin(t: std.Target) bool {
-    const is_zig_0_14 = comptime builtin.zig_version.order(std.SemanticVersion.parse("0.14.0") catch unreachable) != .lt;
-    if (is_zig_0_14) {
-        return t.os.tag.isDarwin();
-    } else {
-        return t.isDarwin();
-    }
-}
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const t = target.result;
     const optimize = b.standardOptimizeOption(.{});
-    const enable_lto = optimize != .Debug and t.os.tag != .macos;
+    const enable_lto = optimize != .debug and t.os.tag != .macos;
 
     const enable_http = b.option(bool, "http", "enable HTTP/websocket support") orelse true;
     const enable_keychain = b.option(bool, "keychain", "enable keychain support on platforms that support it") orelse true;
@@ -73,7 +62,7 @@ pub fn build(b: *std.Build) void {
     });
 
     if (enable_keychain) {
-        if (targetIsDarwin(t)) {
+        if (t.os.tag.isDarwin()) {
             lib.root_module.addCSourceFile(.{
                 .file = b.path("src/apple/keychain.c"),
                 .flags = cflags.items,
@@ -88,7 +77,7 @@ pub fn build(b: *std.Build) void {
             lib.root_module.linkSystemLibrary("crypt32", .{});
             lib.root_module.linkSystemLibrary("ncrypt", .{});
         }
-    } else if (targetIsDarwin(t) or t.os.tag == .windows) {
+    } else if (t.os.tag.isDarwin() or t.os.tag == .windows) {
         // The generic keychain API expects a platform provider on these OSes.
         const disabled_keychain = b.addWriteFiles().add("keychain_disabled.c",
             \\#include <tlsuv/keychain.h>

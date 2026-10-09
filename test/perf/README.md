@@ -507,7 +507,7 @@ requires the normal Acton build tools on Linux or macOS; it adds no compiler
 options.
 
 From `utils/perf_compare`, build the utility with `../../dist/bin/acton build
---release`, then run its checks with `../../dist/bin/acton test --release
+--fast`, then run its checks with `../../dist/bin/acton test --fast
 --jobs 1`. These use temporary Git repositories and fake compiler commands,
 without live benchmarks.
 

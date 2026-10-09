@@ -200,10 +200,10 @@ ensureCapabilities gopts = do
 -- Auxiliary functions ---------------------------------------------------------------------------------------
 
 optimizeModeToZig :: C.OptimizeMode -> String
-optimizeModeToZig C.Debug        = "Debug"
-optimizeModeToZig C.ReleaseSafe  = "ReleaseSafe"
-optimizeModeToZig C.ReleaseSmall = "ReleaseSmall"
-optimizeModeToZig C.ReleaseFast  = "ReleaseFast"
+optimizeModeToZig C.Debug        = "debug"
+optimizeModeToZig C.ReleaseSafe  = "safe"
+optimizeModeToZig C.ReleaseSmall = "small"
+optimizeModeToZig C.ReleaseFast  = "fast"
 
 zig :: Paths -> FilePath
 zig paths = sysPath paths ++ "/zig/zig"
@@ -2564,8 +2564,10 @@ isWindowsOS targetTriple = case splitOn "-" targetTriple of
 -- | Run a process and capture output, canceling on exceptions.
 readProcessWithExitCodeCancelable :: CreateProcess -> (ProcessHandle -> IO ()) -> IO (ExitCode, String, String)
 readProcessWithExitCodeCancelable cp onStart = mask $ \restore -> do
-    let cp' = cp { std_in = NoStream, std_out = CreatePipe, std_err = CreatePipe, create_group = True }
-    withCreateProcess cp' $ \_ mOut mErr ph -> do
+    let cp' = cp { std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe, create_group = True }
+    withCreateProcess cp' $ \mIn mOut mErr ph -> do
+      -- Zig's maker process inherits stdin, so keep the descriptor open at EOF.
+      mapM_ hClose mIn
       pid <- getPid ph
       groupOwned <- newIORef True
       let stop = mask $ \_ -> do
@@ -2705,7 +2707,7 @@ genBuildZigFiles spec paths depModuleOpts depPathOverrides = do
         mergedSpec0 = normalizedSpec { BuildSpec.dependencies = BuildSpec.dependencies normalizedSpec `M.union` transPkgs }
         mergedSpec1 = applyPkgDepPathOverrides projAbs depPathOverrides mergedSpec0
         mergedSpec = addImplicitStdDependency absSys mergedSpec1
-        resolvedZigs = resolveZigDepRefs (M.keys (BuildSpec.dependencies mergedSpec)) (directZigs ++ transZigs)
+        resolvedZigs = resolveZigDepRefs (directZigs ++ transZigs)
         zonWithFp = replace "{{fingerprint}}" fp . replace "{{name}}" zonName
     createDirectoryIfMissing True buildDir
     writeFileIfChanged (buildDir </> "build.zig") (genBuildZig buildZigTemplate absSys mergedSpec resolvedZigs depModuleOpts)
@@ -2793,18 +2795,17 @@ nextAvailableName usedNames baseName = go 0
            then go (n + 1)
            else candidate
 
--- | Zig and Acton package dependencies share one Zig package namespace at
--- generation time. Keep generated zig package keys disjoint from package deps
--- and reserved builder deps so a wrapper package and its underlying zig pkg can
--- reuse the same logical dependency name.
-resolveZigDepRefs :: [String] -> [ZigDepRef] -> [ZigDepResolved]
-resolveZigDepRefs pkgDepNames refs =
+pkgDepName :: String -> String
+pkgDepName name = "acton_pkg_" ++ name
+
+-- | Acton and Zig dependencies use separate package key prefixes. Distinct
+-- Zig packages with the same logical name still need distinct keys.
+resolveZigDepRefs :: [ZigDepRef] -> [ZigDepResolved]
+resolveZigDepRefs refs =
     reverse resolvedRev
   where
-    reservedNames =
-      Data.Set.fromList (["actondb", "base"] ++ pkgDepNames)
     uniqueRefs = dedupZigDepRefs refs
-    (_, _, resolvedRev) = foldl' assign (reservedNames, Data.Set.empty, []) uniqueRefs
+    (_, _, resolvedRev) = foldl' assign (Data.Set.empty, Data.Set.empty, []) uniqueRefs
 
     assign (usedPkgNames, usedVarNames, acc) (depName, dep) =
       let pkgName = nextAvailableName usedPkgNames ("acton_zig_" ++ depName)
@@ -2855,7 +2856,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
             | otherwise = [ "        .acton_modules = " ++ show selectedCsv ++ ","
                           , "        .acton_root_stubs = \"\","
                           ]
-      in unlines $ [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ name ++ "\", .{"
+      in unlines $ [ "    const actdep_" ++ name ++ " = b.dependency(\"" ++ pkgDepName name ++ "\", .{"
                    , "        .target = target,"
                    , "        .optimize = optimize,"
                    , "        .no_threads = no_threads,"
@@ -2941,7 +2942,7 @@ genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint z
                         then normalise rawPath
                         else normalise (rebasePath projRoot rawPath)
           path = relativeViaRoot buildDir (zigBuildDir sysAbs pathAbs)
-      in unlines [ "        ." ++ name ++ " = .{"
+      in unlines [ "        ." ++ pkgDepName name ++ " = .{"
                  , "            .path = \"" ++ Zon.escapeString path ++ "\","
                  , "        },"
                  ]
@@ -2997,10 +2998,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         -- Clean old binaries from out/bin
         removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
 
-    homeDir <- getHomeDirectory
-    let local_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-local-cache" ]
-        global_cache_dir = joinPath [ homeDir, ".cache", "acton", "zig-global-cache" ]
-        no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
+    let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
     sysAbs  <- normalizePathSafe (sysPath paths)
 
@@ -3010,9 +3008,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
 
     let zigExe = zig paths
         buildFile = zigBuildDir sysAbs projAbs </> "build.zig"
-        baseArgs = ["build","--build-file", buildFile,
-                            "--cache-dir", local_cache_dir,
-                            "--global-cache-dir", global_cache_dir] ++
+        baseArgs = ["build","--build-file", buildFile] ++
                    (if (C.verboseZig gopts) then ["--verbose"] else []) ++
                    (if C.timing gopts && not (quiet gopts opts) then ["--summary", "all", "--color", "off"] else [])
         prefixArgs = ["--prefix", projOut paths, "--prefix-exe-dir", "bin"] ++

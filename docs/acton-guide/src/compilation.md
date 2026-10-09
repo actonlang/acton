@@ -10,15 +10,25 @@ see [Application build options](compilation/build_options.md).
 
 ## Optimization modes
 
-Acton defaults to `Debug` builds. Debug builds compile fast and include
-debug symbols, which makes them the right default during development.
+Use these flags to select an optimization mode:
 
-For release builds, use `acton build --release` to better optimize the
-final executable. For standalone files, use `acton --release foo.act`.
+- `--debug` compiles quickly and includes debug symbols.
+- `--safe` selects an optimized build with backend safety checks enabled.
+- `--fast` optimizes for execution speed.
+- `--small` optimizes for a smaller binary size.
 
-`--release` and `--release=fast` select the fastest release mode.
-`--release=safe` enables release optimizations with safety checks.
-`--release=small` optimizes for a smaller binary size.
+Ordinary builds and tests, including stress tests, default to `--debug`.
+Performance and scaling tests (`acton test perf` and `acton test scale`)
+default to `--fast`.
+
+For an optimized project build, use `acton build --fast`. For standalone
+files, use `acton --fast foo.act`.
+
+The compatibility aliases `--release` and `--release=fast` select `--fast`.
+`--release=safe` selects `--safe`, and `--release=small` selects `--small`.
+
+The mode flags are mutually exclusive. `--optimize MODE` accepts the same
+mode names and takes precedence over a mode flag or compatibility alias.
 
 ## Optimized for native CPU features
 

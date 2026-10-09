@@ -13,16 +13,8 @@ const std = @import("std");
 // is consulted, tripping its "Ambiguous shared-lock implementation" guard
 // when building with -DMDB_USE_POSIX_MUTEX. Rather than carrying a fork or a
 // vendored copy for one line, keep the fetched tarball pristine and guard
-// that selection at build time; the exact-match replacement fails the build
-// loudly if upstream ever changes the block.
-const sem_selection =
-    "#elif defined(__APPLE__) || defined (BSD) || defined(__FreeBSD_kernel__)\n" ++
-    "# define MDB_USE_POSIX_SEM\t1\n";
-const sem_selection_guarded =
-    "#elif defined(__APPLE__) || defined (BSD) || defined(__FreeBSD_kernel__)\n" ++
-    "# ifndef MDB_USE_POSIX_MUTEX\n" ++
-    "#  define MDB_USE_POSIX_SEM\t1\n" ++
-    "# endif\n";
+// that selection at build time. Applying the patch without fuzz fails the
+// build loudly if upstream ever changes the block.
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
@@ -64,10 +56,10 @@ pub fn build(b: *std.Build) void {
 }
 
 fn patchedMdbC(b: *std.Build, source: *std.Build.Dependency) std.Build.LazyPath {
-    const raw = source.builder.build_root.handle.readFileAlloc(b.graph.io, "libraries/liblmdb/mdb.c", b.allocator, .limited(1 << 22)) catch |err|
-        std.debug.panic("lmdb: reading upstream mdb.c: {}", .{err});
-    if (std.mem.count(u8, raw, sem_selection) != 1)
-        @panic("lmdb: upstream mdb.c changed its lock-implementation selection; update the patch in build.zig");
-    const patched = std.mem.replaceOwned(u8, b.allocator, raw, sem_selection, sem_selection_guarded) catch @panic("OOM");
-    return b.addWriteFiles().add("mdb.c", patched);
+    const patch = b.addSystemCommand(&.{ "patch", "-f", "-F", "0", "-o" });
+    const patched = patch.addOutputFileArg2("mdb.c", .{});
+    patch.addArg("-i");
+    patch.addFileArg2(b.path("mdb.patch"), .{});
+    patch.addFileArg2(source.path("libraries/liblmdb/mdb.c"), .{});
+    return patched;
 }

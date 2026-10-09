@@ -27,7 +27,19 @@ import Test.Tasty.HUnit
 
 watchProcessTests :: TestTree
 watchProcessTests = testGroup "watch subprocesses"
-  [ testCase "stopping build watch stops Zig descendants" $
+  [ testCase "Zig inherits open stdin at EOF" $
+      withProcessProject $ \acton proj system -> do
+        writeExecutable (system </> "zig/zig")
+          [ "if ! true 3<&0; then exit 1; fi"
+          , "if read -r line; then exit 1; fi"
+          , "touch stdin-checked"
+          ]
+        withActon acton proj ["build", "--syspath", system] $ \ph _ output -> do
+          code <- await "build exit" (getProcessExitCode ph)
+          logText <- output
+          assertEqual logText ExitSuccess code
+          assertBool "Zig should receive a valid stdin descriptor at EOF" =<< doesFileExist (proj </> "stdin-checked")
+  , testCase "stopping build watch stops Zig descendants" $
       withProcessProject $ \acton proj system -> do
         writeExecutable (system </> "zig/zig") (childProcess True ++ waitingParent)
         withActon acton proj ["build", "--watch", "--syspath", system] $ \ph _ output -> do

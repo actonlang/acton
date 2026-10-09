@@ -22,12 +22,12 @@ pub fn build(b: *std.Build) void {
         .name = "mimalloc",
         .root_module = module,
     });
-    if (optimize != .Debug and target.result.os.tag != .macos) lib.lto = .thin;
+    if (optimize != .debug and target.result.os.tag != .macos) lib.lto = .thin;
 
     var flags = std.ArrayList([]const u8).empty;
     defer flags.deinit(b.allocator);
     flags.appendSlice(b.allocator, &.{ "-DMI_MALLOC_OVERRIDE", "-fno-builtin-malloc" }) catch unreachable;
-    if (optimize != .Debug) flags.appendSlice(b.allocator, &.{ "-DNDEBUG", "-DMI_DEBUG=0" }) catch unreachable;
+    if (optimize != .debug) flags.appendSlice(b.allocator, &.{ "-DNDEBUG", "-DMI_DEBUG=0" }) catch unreachable;
     if (target.result.os.tag == .macos) {
         // Register the allocator with Darwin's malloc zones as well, so
         // allocations exchanged with system libraries use compatible frees.

@@ -4,7 +4,7 @@ const print = @import("std").debug.print;
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
 
     const lib = b.addLibrary(.{
         .name = "uuid",

@@ -1,0 +1,9 @@
+--- a/mdb.c
++++ b/mdb.c
+@@ -129,3 +129,5 @@
+ #elif defined(__APPLE__) || defined (BSD) || defined(__FreeBSD_kernel__)
+-# define MDB_USE_POSIX_SEM	1
++# ifndef MDB_USE_POSIX_MUTEX
++#  define MDB_USE_POSIX_SEM	1
++# endif
+ # if defined(__APPLE__)

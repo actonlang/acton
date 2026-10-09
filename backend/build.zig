@@ -3,9 +3,13 @@ const print = @import("std").debug.print;
 const ArrayList = std.ArrayList;
 
 pub fn build(b: *std.Build) void {
+    // Normalize the serialized package root so C inputs and prefix maps agree.
+    if (b.root.root_dir.path) |path| {
+        b.root.root_dir.path = b.pathResolve(&.{path});
+    }
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const only_actondb = b.option(bool, "only_actondb", "") orelse false;
     const gc_use_mark_bits = b.option(bool, "gc_use_mark_bits", "Use packed GC mark bits") orelse false;
@@ -99,7 +103,7 @@ pub fn build(b: *std.Build) void {
 
     var file_prefix_map = std.ArrayList(u8).empty;
     defer file_prefix_map.deinit(b.allocator);
-    const buildroot_path = b.build_root.join(b.allocator, &.{}) catch unreachable;
+    const buildroot_path = b.root.joinString(b.allocator, "") catch unreachable;
     const file_prefix_path_path = std.fs.path.dirname(buildroot_path) orelse buildroot_path;
     file_prefix_map.appendSlice(b.allocator, "-ffile-prefix-map=") catch unreachable;
     file_prefix_map.appendSlice(b.allocator, file_prefix_path_path) catch unreachable;

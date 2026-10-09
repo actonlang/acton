@@ -2,7 +2,7 @@
     .name = .ncurses,
     .version = "6.5.0",
     .fingerprint = 0xbfb0fbf7716da869,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .ncurses_src = .{
             .url = "https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz",

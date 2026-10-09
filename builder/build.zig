@@ -31,15 +31,48 @@ fn joinPath(allocator: std.mem.Allocator, base: []const u8, relative: []const u8
     return path;
 }
 
+fn selectedSourceExists(b: *std.Build, project_dir: std.Io.Dir, project_path: std.Build.LazyPath, source: []const u8) !bool {
+    const io = b.graph.io;
+    project_dir.access(io, source, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            // Configure dependencies must exist. Track the nearest existing
+            // parent so creating the source or its directories invalidates it.
+            var parent = std.fs.path.dirname(source) orelse ".";
+            while (true) {
+                if (project_dir.openDir(io, parent, .{})) |dir| {
+                    dir.close(io);
+                    b.dependOnDirectoryContents(project_path.path(b, parent));
+                    return false;
+                } else |parent_err| switch (parent_err) {
+                    error.FileNotFound, error.NotDir => {
+                        const next_parent = std.fs.path.dirname(parent) orelse ".";
+                        if (std.mem.eql(u8, parent, next_parent)) return parent_err;
+                        parent = next_parent;
+                    },
+                    else => return parent_err,
+                }
+            }
+        },
+        else => return err,
+    };
+    b.dependOnFileContents(project_path.path(b, source));
+    return true;
+}
+
 pub fn build(b: *std.Build) void {
     const io = b.graph.io;
+    // Normalize the serialized package root so C inputs and prefix maps agree.
+    if (b.root.root_dir.path) |path| {
+        b.root.root_dir.path = b.pathResolve(&.{path});
+    }
     // Acton generates this file into <project>/out/zig, so the project root,
     // which holds the generated C sources under out/types, is two levels up
     // from the build root. Resolve it lexically so the paths we hand to the C
     // compiler carry no out/zig/../.. segments; -ffile-prefix-map below only
     // matches the normalized form.
-    const project_root = b.pathResolve(&.{ b.build_root.path orelse ".", "..", ".." });
-    const project_path: std.Build.LazyPath = .{ .cwd_relative = project_root };
+    const buildroot_path = b.root.joinString(b.allocator, "") catch unreachable;
+    const project_root = b.pathResolve(&.{ buildroot_path, "..", ".." });
+    const project_path = b.graph.cwdRelativePath(project_root);
     const project_dir = std.Io.Dir.cwd().openDir(io, project_root, .{}) catch |err| {
         std.log.err("Error opening project root {s}: {}", .{ project_root, err });
         std.process.exit(1);
@@ -48,7 +81,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
     // LTO = ThinLTO, set in all packages explicitly
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
     const db = b.option(bool, "db", "") orelse false;
     const no_threads = b.option(bool, "no_threads", "") orelse false;
     const malloc = b.option(enum { libc, mimalloc }, "malloc", "Allocator for C malloc/free: libc, mimalloc") orelse .libc;
@@ -118,16 +151,14 @@ pub fn build(b: *std.Build) void {
         if (!std.mem.endsWith(u8, item, ".c")) continue;
         if (std.mem.endsWith(u8, item, ".root.c")) continue;
         if (std.mem.endsWith(u8, item, ".test_root.c")) continue;
-        project_dir.access(io, item, .{}) catch |err| switch (err) {
-            error.FileNotFound => {
-                std.log.warn("Skipping missing selected C source: {s}", .{item});
-                continue;
-            },
-            else => {
-                std.log.err("Error checking selected C source ({s}): {}", .{ item, err });
-                std.process.exit(1);
-            },
+        const exists = selectedSourceExists(b, project_dir, project_path, item) catch |err| {
+            std.log.err("Error checking selected C source ({s}): {}", .{ item, err });
+            std.process.exit(1);
         };
+        if (!exists) {
+            std.log.warn("Skipping missing selected C source: {s}", .{item});
+            continue;
+        }
         const rel = b.allocator.dupe(u8, item) catch |err| {
             std.log.err("Error allocating selected C source path: {}", .{err});
             std.process.exit(1);
@@ -149,16 +180,14 @@ pub fn build(b: *std.Build) void {
             std.log.err("Invalid root stub path (expected under out/types): {s}", .{item});
             std.process.exit(1);
         }
-        project_dir.access(io, item, .{}) catch |err| switch (err) {
-            error.FileNotFound => {
-                std.log.warn("Skipping missing selected root stub: {s}", .{item});
-                continue;
-            },
-            else => {
-                std.log.err("Error checking selected root stub ({s}): {}", .{ item, err });
-                std.process.exit(1);
-            },
+        const exists = selectedSourceExists(b, project_dir, project_path, item) catch |err| {
+            std.log.err("Error checking selected root stub ({s}): {}", .{ item, err });
+            std.process.exit(1);
         };
+        if (!exists) {
+            std.log.warn("Skipping missing selected root stub: {s}", .{item});
+            continue;
+        }
         const fPath = b.allocator.create(FilePath) catch |err| {
             std.log.err("Error allocating root FilePath entry: {}", .{err});
             std.process.exit(1);
@@ -182,6 +211,7 @@ pub fn build(b: *std.Build) void {
     }
 
     if (c_files.items.len == 0) {
+        b.graph.poisonCache();
         const dummy_rel = "out/types/acton_empty.c";
         const dummy_abs = joinPath(b.allocator, project_root, dummy_rel);
         project_dir.createDirPath(io, "out/types") catch |err| {
@@ -232,7 +262,7 @@ pub fn build(b: *std.Build) void {
     file_prefix_map.appendSlice(b.allocator, "/=") catch unreachable;
     flags.append(b.allocator, file_prefix_map.items) catch unreachable;
 
-    if (optimize == .Debug) {
+    if (optimize == .debug) {
         print("Debug build\n", .{});
         flags.appendSlice(b.allocator, &.{
             "-DDEV",
@@ -257,8 +287,11 @@ pub fn build(b: *std.Build) void {
         };
     }
 
+    // Acton subtyping shares object layouts across distinct C struct pointers.
+    // Keep Clang 22's new error as a warning.
     flags.appendSlice(b.allocator, &.{
         "-fwrapv",
+        "-Wno-error=incompatible-pointer-types",
     }) catch unreachable;
 
     for (c_files.items) |entry| {
@@ -366,6 +399,7 @@ pub fn build(b: *std.Build) void {
     // investigate further, find the root cause and address it.
     libActonProject.installHeadersDirectory(project_path.path(b, "out/types"), "out/types", .{});
 
+    b.dependOnDirectoryContents(project_path.path(b, "out/types"));
     var hiter_dir = project_dir.openDir(io, "out/types/", .{ .iterate = true }) catch unreachable;
     var hwalker = hiter_dir.walk(b.allocator) catch unreachable;
     defer hwalker.deinit();
@@ -374,6 +408,10 @@ pub fn build(b: *std.Build) void {
     while (true) {
         const next_result = hwalker.next(io) catch unreachable;
         if (next_result) |entry| {
+            if (entry.kind == .directory) {
+                const dir_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
+                b.dependOnDirectoryContents(project_path.path(b, dir_path));
+            }
             if (entry.kind == .file) {
                 if (std.mem.endsWith(u8, entry.basename, ".h")) {
                     const file_path = std.fs.path.join(b.allocator, &.{ "out/types", entry.path }) catch unreachable;
@@ -416,7 +454,7 @@ pub fn build(b: *std.Build) void {
             };
             if (entry.test_root) {
                 // Write '.test_' to start of binname
-                const buf = std.fmt.allocPrint(b.allocator, ".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
+                const buf = b.allocator.print(".test_{s}", .{entry.file_path[1..entry.file_path.len - ".test_root.c".len]}) catch |err| {
                     std.log.err("Error allocating binname: {}", .{err});
                     std.process.exit(1);
                 };

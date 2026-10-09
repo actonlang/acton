@@ -33,14 +33,14 @@ process per body of operations. `xlang summary` shows medians over runs.
 From `test/perf`, with Go 1.22 or later and Rust 1.71 or later:
 
 ```sh
-../../dist/bin/acton build --release
+../../dist/bin/acton build --fast
 out/bin/xlang build
 out/bin/xlang run results.jsonl --reps 3 --threads "4 8 14" --label "main abc1234"
 out/bin/xlang summary results.jsonl
 out/bin/xlang page results.jsonl other-machine.jsonl --output xlang.html
 ```
 
-`xlang build` builds Acton's scheduling test binary in release mode for this
+`xlang build` builds Acton's scheduling test binary in fast mode for this
 machine's CPU (`acton test perf --cpu native`), the Go port with `go build` and
 the Tokio port with `cargo build --release` and `-C target-cpu=native`; Tokio
 comes from crates.io as pinned in `tokio/Cargo.lock`. `xlang run` refuses an

@@ -266,6 +266,7 @@ import Error.Diagnose (Diagnostic)
 import GHC.Conc (getNumCapabilities)
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
+import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 import System.Clock
 import System.Directory
@@ -276,10 +277,10 @@ import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.Exit (ExitCode(..))
 import System.IO hiding (readFile, writeFile)
-import System.IO.Temp (createTempDirectory, withSystemTempDirectory)
+import System.IO.Temp (createTempDirectory)
 import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
-import System.Process (CreateProcess(cwd), readCreateProcessWithExitCode, proc)
+import System.Process (readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
@@ -5257,7 +5258,7 @@ fetchDependencies gopts paths depOverrides = do
           , Just h <- Zon.zdHash dep                = do
               fresh <- claimVisited zigSeen ("h:" ++ h)
               when fresh $ do
-                present <- cacheEntryExists cacheDir h
+                present <- cacheEntryExists "zig" cacheDir h
                 unless present $ do
                   res <- fetchOne "zig" name u (Just h) cacheDir zigExe globalCache
                   case res of
@@ -5279,13 +5280,17 @@ fetchDependencies gopts paths depOverrides = do
     fetchOne kind name url mh cacheDir zigExe globalCache = do
       case mh of
         Just h -> do
-          present <- cacheEntryExists cacheDir h
+          present <- cacheEntryExists kind cacheDir h
           if present
             then do
               unless (C.quiet gopts) $
                 putStrLn ("Using cached " ++ kind ++ " dependency " ++ name ++ " (" ++ h ++ ")")
               return (Right h)
-            else runFetch kind name url mh cacheDir zigExe globalCache
+            else do
+              -- Zig 0.16 stored extracted packages in the global cache. Repack
+              -- them locally so upgrading preserves offline cache reuse.
+              legacy <- if kind == "zig" then doesDirectoryExist (cacheDir h) else return False
+              runFetch kind name (if legacy then cacheDir h else url) mh cacheDir zigExe globalCache
         Nothing ->
           runFetch kind name url mh cacheDir zigExe globalCache
 
@@ -5295,45 +5300,28 @@ fetchDependencies gopts paths depOverrides = do
       if isHttpUrl url
         then fetchViaDownloadedArchive kind name url mh cacheDir zigExe globalCache
         else do -- other URLs, like file:// - not very common, maybe we want to constrain this somehow?
-          res <- runZigFetch zigExe globalCache url
+          res <- fetchZigPackage zigExe globalCache url
           case res of
-            Left ex -> return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
-            Right (ExitSuccess, out, _) ->
-              validateFetchOutput name mh cacheDir out
-            Right (ExitFailure _, _, err) ->
-              return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+            Left err -> return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+            Right hashVal -> validateFetchedHash kind name mh cacheDir hashVal
 
-    runZigFetch :: FilePath -> FilePath -> FilePath -> IO (Either SomeException (ExitCode, String, String))
-    runZigFetch zigExe globalCache target = do
-      createDirectoryIfMissing True (globalCache </> "tmp")
-      withSystemTempDirectory "acton-zig-fetch" $ \tmp -> do
-        writeFile (tmp </> "build.zig") zigFetchBuildZig
-        let cmd = (proc zigExe ["fetch", "--global-cache-dir", globalCache, target]) { cwd = Just tmp }
-        try (readCreateProcessWithExitCode cmd "") :: IO (Either SomeException (ExitCode, String, String))
-
-    zigFetchBuildZig :: String
-    zigFetchBuildZig = unlines
-      [ "const std = @import(\"std\");"
-      , "pub fn build(b: *std.Build) void { _ = b; }"
-      ]
-
-    validateFetchOutput :: String -> Maybe String -> (String -> FilePath) -> String -> IO (Either String String)
-    validateFetchOutput name mh cacheDir out = do
-      let hashVal = trim out
+    validateFetchedHash :: String -> String -> Maybe String -> (String -> FilePath) -> String -> IO (Either String String)
+    validateFetchedHash kind name mh cacheDir hashVal = do
       case mh of
         Just h | h /= hashVal ->
           return (Left ("Hash mismatch for dependency " ++ name ++ " (expected " ++ h ++ ", got " ++ hashVal ++ ")"))
         _ -> do
-          exists <- cacheEntryExists cacheDir hashVal
+          exists <- cacheEntryExists kind cacheDir hashVal
           if exists
             then return (Right hashVal)
             else return (Left ("Dependency " ++ name ++ " not present in Zig cache after fetch: " ++ cacheDir hashVal))
 
-    cacheEntryExists :: (String -> FilePath) -> String -> IO Bool
-    cacheEntryExists cacheDir hashVal = do
-      dirExists <- doesDirectoryExist (cacheDir hashVal)
+    cacheEntryExists :: String -> (String -> FilePath) -> String -> IO Bool
+    cacheEntryExists kind cacheDir hashVal = do
       archiveExists <- doesFileExist (cacheArchivePath cacheDir hashVal)
-      return (dirExists || archiveExists)
+      if archiveExists || kind == "zig"
+        then return archiveExists
+        else doesDirectoryExist (cacheDir hashVal)
 
     cacheArchivePath :: (String -> FilePath) -> String -> FilePath
     cacheArchivePath cacheDir hashVal = cacheDir hashVal ++ ".tar.gz"
@@ -5359,15 +5347,12 @@ fetchDependencies gopts paths depOverrides = do
         Left dlErr ->
           return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ dlErr))
         Right localArchive -> do
-          fetched <- runZigFetch zigExe globalCache localArchive
+          fetched <- fetchZigPackage zigExe globalCache localArchive
           _ <- try (removeFile localArchive) :: IO (Either IOException ())
           case fetched of
-            Left ex ->
-              return (Left ("Failed to fetch dependency " ++ name ++ ": " ++ displayException ex))
-            Right (ExitSuccess, out, _) ->
-              validateFetchOutput name mh cacheDir out
-            Right (ExitFailure _, _, err) ->
+            Left err ->
               return (Left ("Failed to fetch dependency " ++ name ++ ":\n" ++ err))
+            Right hashVal -> validateFetchedHash kind name mh cacheDir hashVal
 
     copyTree :: FilePath -> FilePath -> IO ()
     copyTree src dst = do

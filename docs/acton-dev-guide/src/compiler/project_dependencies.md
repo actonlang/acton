@@ -111,14 +111,13 @@ Acton emits separate local names:
 
 ```zig
 .dependencies = .{
-    .lmdb = .{ ... },             // Acton package dep
+    .acton_pkg_lmdb = .{ ... },   // Acton package dep
     .acton_zig_lmdb = .{ ... },   // underlying zig dep
 },
 ```
 
-The Acton package keeps the user-facing name `lmdb`. The zig package gets a
-generated local alias because both entries live in the same Zig dependency
-table.
+The Acton package keeps the user-facing name `lmdb` in `Build.act` and imports.
+Both entries get internal aliases in the generated Zig dependency table.
 
 ## Local Zig names
 
@@ -126,10 +125,9 @@ Zig dependency names are only local aliases inside one generated
 `build.zig.zon`. They are not global identities across the whole dependency
 tree.
 
-Acton therefore keeps package dependency names unchanged and assigns internal
-names to zig dependencies when rendering build metadata:
+Acton assigns separate internal names when rendering build metadata:
 
-- package dependencies keep their declared names
+- package dependencies get generated names with an `acton_pkg_` prefix
 - zig dependencies get generated names with an `acton_zig_` prefix
 - if multiple distinct zig dependencies would reuse the same local name, Acton
   appends a numeric suffix
@@ -137,7 +135,8 @@ names to zig dependencies when rendering build metadata:
 This means an Acton package dependency named `lmdb` can coexist with a zig
 dependency also declared as `lmdb`, and two different transitive zig packages
 that both use the local name `shared` can still appear together in one
-generated manifest.
+generated manifest. The prefixes also prevent packages such as Acton's `std`
+from shadowing Zig's builtin modules.
 
 ### Example: colliding transitive zig names
 
@@ -160,9 +159,9 @@ The generated root `build.zig.zon` therefore looks conceptually like:
 
 ```zig
 .dependencies = .{
-    .dep_a = .{ ... },
-    .dep_b = .{ ... },
-    .dep_c = .{ ... },
+    .acton_pkg_dep_a = .{ ... },
+    .acton_pkg_dep_b = .{ ... },
+    .acton_pkg_dep_c = .{ ... },
     .acton_zig_shared = .{ ... },     // zig_common
     .acton_zig_shared_2 = .{ ... },   // zig_other
 },
@@ -207,8 +206,8 @@ the Zig build instances are not interchangeable:
 
 ```zig
 .dependencies = .{
-    .tls_a = .{ ... },
-    .tls_b = .{ ... },
+    .acton_pkg_tls_a = .{ ... },
+    .acton_pkg_tls_b = .{ ... },
     .acton_zig_mbedtls = .{ ... },     // options { .pic = true }
     .acton_zig_mbedtls_2 = .{ ... },   // options { .pic = false }
 },

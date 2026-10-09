@@ -1,6 +1,6 @@
 --- a/lib/compiler_rt.zig
 +++ b/lib/compiler_rt.zig
-@@ -302,10 +302,20 @@
+@@ -156,9 +156,19 @@
          _ = @import("compiler_rt/memcpy.zig");
          if (!ofmt_c) {
 -            symbol(&memset, "memset");
@@ -10,7 +10,6 @@
 +                builtin.target.isMuslLibC() or
 +                builtin.target.isWasiLibC())
 +                symbol(&memset, "memset");
-             symbol(&__memset, "__memset");
          }
          _ = @import("compiler_rt/memmove.zig");
 -        symbol(&memcmp, "memcmp");

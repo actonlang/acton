@@ -4,15 +4,25 @@ const testing = std.testing;
 const mem = std.mem;
 const Allocator = std.mem.Allocator;
 
-const gc = @cImport({
-    @cInclude("gc.h");
-});
+extern fn GC_is_init_called() c_int;
+extern fn GC_init() void;
+extern fn GC_set_all_interior_pointers(c_int) void;
+extern fn GC_get_heap_size() usize;
+extern fn GC_disable() void;
+extern fn GC_enable() void;
+extern fn GC_gcollect() void;
+extern fn GC_collect_a_little() c_int;
+extern fn GC_set_find_leak(c_int) void;
+extern fn GC_malloc(usize) ?*anyopaque;
+extern fn GC_malloc_atomic(usize) ?*anyopaque;
+extern fn GC_free(?*anyopaque) void;
+extern fn GC_size(?*const anyopaque) usize;
 
 /// Returns the Allocator used for APIs in Zig
 pub fn allocator() Allocator {
     // Initialize libgc
-    if (gc.GC_is_init_called() == 0) {
-        gc.GC_init();
+    if (GC_is_init_called() == 0) {
+        GC_init();
     }
 
     return Allocator{
@@ -24,8 +34,8 @@ pub fn allocator() Allocator {
 /// Returns an Allocator for pointer-free data. Its memory is not scanned by
 /// the collector and not zeroed, so it must never hold pointers to GC memory.
 pub fn atomicAllocator() Allocator {
-    if (gc.GC_is_init_called() == 0) {
-        gc.GC_init();
+    if (GC_is_init_called() == 0) {
+        GC_init();
     }
 
     return Allocator{
@@ -37,39 +47,39 @@ pub fn atomicAllocator() Allocator {
 /// Enable or disable interior pointers.
 /// If used, this must be called before the first allocator() call.
 pub fn setAllInteriorPointers(enable_interior_pointers: bool) void {
-    gc.GC_set_all_interior_pointers(@intFromBool(enable_interior_pointers));
+    GC_set_all_interior_pointers(@intFromBool(enable_interior_pointers));
 }
 
 /// Returns the current heap size of used memory.
 pub fn getHeapSize() u64 {
-    return gc.GC_get_heap_size();
+    return GC_get_heap_size();
 }
 
 /// Disable garbage collection.
 pub fn disable() void {
-    gc.GC_disable();
+    GC_disable();
 }
 
 /// Enables garbage collection. GC is enabled by default so this is
 /// only useful if you called disable earlier.
 pub fn enable() void {
-    gc.GC_enable();
+    GC_enable();
 }
 
 // Performs a full, stop-the-world garbage collection. With leak detection
 // enabled this will output any leaks as well.
 pub fn collect() void {
-    gc.GC_gcollect();
+    GC_gcollect();
 }
 
 /// Perform some garbage collection. Returns zero when work is done.
 pub fn collectLittle() u8 {
-    return @as(u8, @intCast(gc.GC_collect_a_little()));
+    return @as(u8, @intCast(GC_collect_a_little()));
 }
 
 /// Enables leak-finding mode. See the libgc docs for more details.
 pub fn setFindLeak(v: bool) void {
-    return gc.GC_set_find_leak(@intFromBool(v));
+    return GC_set_find_leak(@intFromBool(v));
 }
 
 // TODO(mitchellh): there are so many more functions to add here
@@ -152,7 +162,7 @@ pub const GcAllocator = struct {
         // Thin wrapper around regular malloc, overallocate to account for
         // alignment padding and store the orignal malloc()'ed pointer before
         // the aligned address.
-        const raw_ptr = if (atomic) gc.GC_malloc_atomic(size) else gc.GC_malloc(size);
+        const raw_ptr = if (atomic) GC_malloc_atomic(size) else GC_malloc(size);
         const unaligned_ptr = @as([*]u8, @ptrCast(raw_ptr orelse return null));
         const unaligned_addr = @intFromPtr(unaligned_ptr);
         const aligned_addr = mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
@@ -164,13 +174,13 @@ pub const GcAllocator = struct {
 
     fn alignedFree(ptr: [*]u8) void {
         const unaligned_ptr = getHeader(ptr).*;
-        gc.GC_free(unaligned_ptr);
+        GC_free(unaligned_ptr);
     }
 
     fn alignedAllocSize(ptr: [*]u8) usize {
         const unaligned_ptr = getHeader(ptr).*;
         const delta = @intFromPtr(ptr) - @intFromPtr(unaligned_ptr);
-        return gc.GC_size(unaligned_ptr) - delta;
+        return GC_size(unaligned_ptr) - delta;
     }
 
     fn remap(

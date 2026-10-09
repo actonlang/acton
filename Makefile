@@ -16,7 +16,7 @@ export ZIG_GLOBAL_CACHE_DIR
 
 ACTON=$(TD)/dist/bin/acton
 ACTONC=dist/bin/actonc
-ZIG_VERSION:=0.16.0
+ZIG_VERSION:=0.17.0
 ZIG=$(TD)/dist/zig/zig
 CURL:=curl --fail --location --retry 5 --retry-delay 2 --retry-max-time 120 --retry-connrefused
 AR=$(ZIG) ar
@@ -311,26 +311,26 @@ endif
 
 # /bdeps/zlib --------------------------------------------
 bdeps/out/lib/libz.a: bdeps/zlib/build.zig bdeps/zlib/build.zig.zon $(DIST_ZIG)
-	cd bdeps/zlib && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+	cd bdeps/zlib && "$(ZIG)" build -Doptimize=fast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 	$(call bdeps_align_macho,$(abspath $@))
 
 # /bdeps/gmp ---------------------------------------------
 bdeps/out/lib/libgmp.a: bdeps/gmp/build.zig bdeps/gmp/build.zig.zon $(DIST_ZIG)
-	cd bdeps/gmp && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+	cd bdeps/gmp && "$(ZIG)" build -Doptimize=fast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 	$(call bdeps_align_macho,$(abspath $@))
 
 # /bdeps/ncurses (libtinfo) ------------------------------
 bdeps/out/lib/libtinfo.a: bdeps/ncurses/build.zig bdeps/ncurses/build.zig.zon \
 		bdeps/ncurses/gencaps.c bdeps/ncurses/tinfo.c $(DIST_ZIG)
-	cd bdeps/ncurses && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+	cd bdeps/ncurses && "$(ZIG)" build -Doptimize=fast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 	$(call bdeps_align_macho,$(abspath $@))
 
 # /bdeps/lmdb (compiler .tydb interface cache) -----------
-bdeps/out/lib/liblmdb.a: bdeps/lmdb/build.zig bdeps/lmdb/build.zig.zon $(DIST_ZIG)
-	cd bdeps/lmdb && "$(ZIG)" build -Doptimize=ReleaseFast --prefix "$(TD)/bdeps/out" \
+bdeps/out/lib/liblmdb.a: bdeps/lmdb/build.zig bdeps/lmdb/build.zig.zon bdeps/lmdb/mdb.patch $(DIST_ZIG)
+	cd bdeps/lmdb && "$(ZIG)" build -Doptimize=fast --prefix "$(TD)/bdeps/out" \
 		$(if $(ACTON_ZIG_TARGET),-Dtarget=$(ACTON_ZIG_TARGET))
 	$(call bdeps_align_macho,$(abspath $@))
 
@@ -373,10 +373,11 @@ deps-download/$(LIBGC_REF).tar.gz:
 	mkdir -p deps-download
 	$(CURL) -o $@ https://github.com/actonlang/bdwgc/archive/$(LIBGC_REF).tar.gz
 
-dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz
+dist/deps/libgc: deps-download/$(LIBGC_REF).tar.gz deps/libgc-zig.patch
 	rm -rf "$@"
 	mkdir -p "$@"
 	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && patch -p1 < "$(TD)/deps/libgc-zig.patch"
 	rm -rf "$@/.github" "$@/autogen.sh" "$@/docs" "$@/tools"
 	touch "$(TD)/$@"
 

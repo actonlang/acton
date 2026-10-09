@@ -9,8 +9,8 @@ pub const CodeUnitWidth = enum {
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const enable_lto = optimize != .Debug and target.result.os.tag != .macos;
-    const linkage = b.option(std.builtin.LinkMode, "linkage", "whether to statically or dynamically link the library") orelse @as(std.builtin.LinkMode, if (target.result.isGnuLibC()) .dynamic else .static);
+    const enable_lto = optimize != .debug and target.result.os.tag != .macos;
+    const linkage = b.option(std.lang.LinkMode, "linkage", "whether to statically or dynamically link the library") orelse @as(std.lang.LinkMode, if (target.result.isGnuLibC()) .dynamic else .static);
     const codeUnitWidth = b.option(CodeUnitWidth, "code-unit-width", "Sets the code unit width") orelse .@"8";
 
     const copyFiles = b.addWriteFiles();

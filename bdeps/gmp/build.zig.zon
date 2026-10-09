@@ -2,7 +2,7 @@
     .name = .gmp,
     .version = "6.3.0",
     .fingerprint = 0x328f606142c2788c,
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .gmp_src = .{
             .url = "https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz",

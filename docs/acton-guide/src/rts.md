@@ -19,7 +19,7 @@ other parameters are passed verbatim to the Acton application. Option
 arguments can be passed either with --rts-option=ARG or --rts-option ARG
 
   --rts-bt-dbg                      Interactively debug on SIGILL / SIGSEGV
-  --rts-debug                       RTS debug, requires program to be compiled with --optimize Debug
+  --rts-debug                       RTS debug, requires program to be compiled with --debug
   --rts-ddb-host=HOST               DDB hostname
   --rts-ddb-port=PORT               DDB port [32000]
   --rts-ddb-replication=FACTOR      DDB replication factor [3]
