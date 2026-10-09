@@ -2033,9 +2033,7 @@ static void expand_bytearray(B_bytearray b, int64_t n) {
     // Doubling can pass the limit on lengths
     if (newcapacity > MAX_STR_LEN)
         newcapacity = MAX_STR_LEN;
-    unsigned char *newstr = b->str == NULL
-        ? acton_malloc_atomic(newcapacity)
-        : acton_realloc(b->str, newcapacity);
+    unsigned char *newstr = acton_realloc_atomic(b->str, newcapacity);
     if (newstr == NULL) {
         RAISE_EXC(&B_str_allocation_failed_error);
     }

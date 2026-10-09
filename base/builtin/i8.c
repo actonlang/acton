@@ -52,7 +52,9 @@ B_NoneType B_i8D___init__(B_i8 self, B_atom a, B_int base){
 }
 
 void B_i8D___serialize__(B_i8 n, $Serial$state state) {
-    $val_serialize(I8_ID,&n->val,state);
+    // Widen val: $val_serialize copies a whole word and the box padding is not zeroed
+    uint64_t v = (uint8_t)n->val;
+    $val_serialize(I8_ID,&v,state);
 }
 
 B_i8 B_i8D___deserialize__(B_i8 n, $Serial$state state) {
@@ -72,7 +74,7 @@ B_str B_i8D___repr__(B_i8 n) {
 }
 
 B_i8 toB_i8(int8_t i) {
-    B_i8 res = acton_malloc(sizeof(struct B_i8));
+    B_i8 res = acton_malloc_atomic(sizeof(struct B_i8));
     res->$class = &B_i8G_methods;
     res->val = i;
     return res;

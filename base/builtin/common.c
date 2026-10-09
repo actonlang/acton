@@ -66,7 +66,7 @@ char *unmangle_name(char *input) {
     if (input == NULL) {
         return NULL;
     }
-    char *output = GC_malloc(strlen(input) + 1);
+    char *output = GC_malloc_atomic(strlen(input) + 1);
     // Check for allocation failure
     if (output == NULL) {
         return NULL;

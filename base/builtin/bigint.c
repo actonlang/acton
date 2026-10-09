@@ -671,7 +671,9 @@ int get_str0(bool ishead, zz_ptr n, zz_ptr dens[], int d, unsigned char *res, in
         }
     } else {
         char buf[POW10INWORD + 1];
-        sprintf(buf, "%lu", (unsigned long)n->n[0]);
+        // zz_divrem does not write the limbs of a zero result, and bsdnt
+        // limbs are not zeroed (atomic), so check size before reading
+        sprintf(buf, "%lu", n->size == 0 ? 0UL : (unsigned long)n->n[0]);
         int len = strlen(buf);
         if (ishead) {
             memcpy(&res[pos], buf, len);

@@ -24,7 +24,7 @@ B_bytes snappyQ_compress (B_bytes data) {
     input_len = (size_t)data->nbytes;
 
     compressed_len = snappy_max_compressed_length(input_len);
-    compressed = acton_malloc(compressed_len);
+    compressed = acton_malloc_atomic(compressed_len);
     status = snappy_compress(input, input_len, compressed, &compressed_len);
 
     if (SNAPPY_OK == status) {
@@ -58,8 +58,9 @@ B_bytes snappyQ_decompress (B_bytes data) {
             : &snappyQ_small_buffer_error);
     }
 
-    uncompressed = acton_malloc(uncompressed_len);
-    snappy_uncompress(input, input_len, uncompressed, &uncompressed_len);
+    // Not zeroed, so a failed uncompress must not return the buffer
+    uncompressed = acton_malloc_atomic(uncompressed_len);
+    status = snappy_uncompress(input, input_len, uncompressed, &uncompressed_len);
 
     if (SNAPPY_OK == status) {
 	ret = actBytesFromCStringLengthCopy(uncompressed, (int)uncompressed_len);

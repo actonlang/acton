@@ -91,14 +91,14 @@ B_str B_floatD___repr__(B_float x) {
 }
 
 B_float to$float(double x) {
-    B_float res = acton_malloc(sizeof(struct B_float));
+    B_float res = acton_malloc_atomic(sizeof(struct B_float));
     res->$class = &B_floatG_methods;
     res->val = x;
     return res;
 }
 
 B_float toB_float(double x) {
-    B_float res = acton_malloc(sizeof(struct B_float));
+    B_float res = acton_malloc_atomic(sizeof(struct B_float));
     res->$class = &B_floatG_methods;
     res->val = x;
     return res;

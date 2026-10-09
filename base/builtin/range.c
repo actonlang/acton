@@ -16,9 +16,13 @@ static struct B_ValueError B_range_zero_step_error =
     STATIC_EXCEPTION(B_ValueError, "range() step size must not be zero");
 
 B_range B_rangeG_new(int64_t start, B_int stop, B_int step) {
-    return $NEW(B_range, start, stop, step);
+    B_range self = acton_malloc_atomic(sizeof(struct B_range));
+    B_rangeD___init__(self, start, stop, step);
+    return self;
 }
 
+// A range holds no heap pointers, so it is allocated pointer-free and not
+// zeroed: this must write every field.
 void $rangeD_U_init(B_range self, int64_t start, int64_t stop, int64_t step) {
     if (step == 0) {
         RAISE_EXC(&B_range_zero_step_error);
@@ -34,7 +38,7 @@ void $rangeD_U_init(B_range self, int64_t start, int64_t stop, int64_t step) {
 }
 
 B_range $rangeD_U_new(int64_t start, int64_t stop, int64_t step) {
-    B_range self = acton_malloc(sizeof(struct B_range));
+    B_range self = acton_malloc_atomic(sizeof(struct B_range));
     $rangeD_U_init(self, start, stop, step);
     return self;
 }

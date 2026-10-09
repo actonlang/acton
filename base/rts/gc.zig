@@ -21,6 +21,19 @@ pub fn allocator() Allocator {
     };
 }
 
+/// Returns an Allocator for pointer-free data. Its memory is not scanned by
+/// the collector and not zeroed, so it must never hold pointers to GC memory.
+pub fn atomicAllocator() Allocator {
+    if (gc.GC_is_init_called() == 0) {
+        gc.GC_init();
+    }
+
+    return Allocator{
+        .ptr = undefined,
+        .vtable = &gc_atomic_allocator_vtable,
+    };
+}
+
 /// Enable or disable interior pointers.
 /// If used, this must be called before the first allocator() call.
 pub fn setAllInteriorPointers(enable_interior_pointers: bool) void {
@@ -82,7 +95,18 @@ pub const GcAllocator = struct {
     ) ?[*]u8 {
         _ = return_address;
         assert(len > 0);
-        return alignedAlloc(len, alignment);
+        return alignedAlloc(len, alignment, false);
+    }
+
+    fn allocAtomic(
+        _: *anyopaque,
+        len: usize,
+        alignment: mem.Alignment,
+        return_address: usize,
+    ) ?[*]u8 {
+        _ = return_address;
+        assert(len > 0);
+        return alignedAlloc(len, alignment, true);
     }
 
     fn resize(
@@ -121,13 +145,15 @@ pub const GcAllocator = struct {
         return @as(*[*]u8, @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize)));
     }
 
-    fn alignedAlloc(len: usize, alignment: mem.Alignment) ?[*]u8 {
+    fn alignedAlloc(len: usize, alignment: mem.Alignment, comptime atomic: bool) ?[*]u8 {
         const alignment_bytes = alignment.toByteUnits();
+        const size = len + alignment_bytes - 1 + @sizeOf(usize);
 
         // Thin wrapper around regular malloc, overallocate to account for
         // alignment padding and store the orignal malloc()'ed pointer before
         // the aligned address.
-        const unaligned_ptr = @as([*]u8, @ptrCast(gc.GC_malloc(len + alignment_bytes - 1 + @sizeOf(usize)) orelse return null));
+        const raw_ptr = if (atomic) gc.GC_malloc_atomic(size) else gc.GC_malloc(size);
+        const unaligned_ptr = @as([*]u8, @ptrCast(raw_ptr orelse return null));
         const unaligned_addr = @intFromPtr(unaligned_ptr);
         const aligned_addr = mem.alignForward(usize, unaligned_addr + @sizeOf(usize), alignment_bytes);
         const aligned_ptr = unaligned_ptr + (aligned_addr - unaligned_addr);
@@ -160,6 +186,13 @@ pub const GcAllocator = struct {
 
 const gc_allocator_vtable = Allocator.VTable{
     .alloc = GcAllocator.alloc,
+    .resize = GcAllocator.resize,
+    .remap = GcAllocator.remap,
+    .free = GcAllocator.free,
+};
+
+const gc_atomic_allocator_vtable = Allocator.VTable{
+    .alloc = GcAllocator.allocAtomic,
     .resize = GcAllocator.resize,
     .remap = GcAllocator.remap,
     .free = GcAllocator.free,

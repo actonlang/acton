@@ -30,6 +30,9 @@ int acton_replace_allocator(acton_malloc_func malloc_func,
 void *acton_malloc(size_t size);
 void *acton_malloc_atomic(size_t size);
 void *acton_realloc(void* ptr, size_t size);
+// Like acton_realloc, for a buffer that holds no pointers to GC memory: a new
+// buffer (ptr NULL) is allocated pointer-free
+void *acton_realloc_atomic(void* ptr, size_t size);
 void *acton_calloc(size_t count, size_t size);
 void acton_free(void* ptr);
 char *acton_strdup(const char *s);

@@ -9,6 +9,10 @@ Acton processes contain two heaps with fundamentally different rules:
   into the middle of an object keeps the whole object alive. Conservatism cuts
   both ways: an `int64_t` actor field holding a cast pointer value pins the
   object it points to, even though the type system thinks it is an integer.
+  Objects allocated pointer-free (`acton_malloc_atomic`) are not scanned at
+  all: boxed scalars (`int`, `float`, `complex`, the fixed-width integers),
+  ranges, slice bounds, bigint digits and string and byte data. A pointer
+  stored as the value of a boxed `int` does not keep its object alive.
 - **The libc heap**, managed by `malloc`/`free`. The collector never scans
   libc memory. A GC-heap object whose only reference is stored inside a
   libc-heap allocation is unreachable as far as the collector is concerned and

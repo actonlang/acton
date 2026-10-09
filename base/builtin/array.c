@@ -259,9 +259,7 @@ B_array B_ContainerD_arrayD___fromiter__(B_ContainerD_array wit,
                 new_capacity *= 2;
             }
             size_t nbytes = new_capacity * sizeof(uint64_t);
-            result->data = result->data == NULL
-                ? acton_malloc_atomic(nbytes)
-                : acton_realloc(result->data, nbytes);
+            result->data = acton_realloc_atomic(result->data, nbytes);
             if (result->data == NULL)
                 RAISE_EXC(&B_array_allocation_failed_error);
             capacity = new_capacity;

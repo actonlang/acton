@@ -2752,7 +2752,7 @@ void *$mon_socket_loop() {
 
                 if (memcmp(str, "actors", len) == 0) {
                     const char *json = actors_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc_atomic(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
                     //free((void *)json);
@@ -2766,7 +2766,7 @@ void *$mon_socket_loop() {
 #ifdef ACTON_DB
                 if (memcmp(str, "membership", len) == 0) {
                     const char *json = db_membership_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc_atomic(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
                     //free((void *)json);
@@ -2780,7 +2780,7 @@ void *$mon_socket_loop() {
 
                 if (memcmp(str, "WTS", len) == 0) {
                     const char *json = stats_to_json();
-                    char *send_buf = GC_malloc(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
+                    char *send_buf = GC_malloc_atomic(strlen(json)+14); // 14 = maximum digits for length is 9 (999999999) + : + ; + \0
                     sprintf(send_buf, "%lu:%s,", strlen(json), json);
                     int send_res = send(client_sock, send_buf, strlen(send_buf), 0);
                     //free((void *)json);
