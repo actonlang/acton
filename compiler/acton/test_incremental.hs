@@ -501,19 +501,19 @@ rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.Na
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
   (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') roots tests mdoc nmod tmod
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') [] roots tests mdoc nmod tmod
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
 rewriteTySourceMeta tyPath sourceMeta' = do
   (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' roots tests mdoc nmod tmod
+  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' [] roots tests mdoc nmod tmod
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = do
   (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' roots tests mdoc nmod tmod
+  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' [] roots tests mdoc nmod tmod
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do

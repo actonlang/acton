@@ -46,6 +46,7 @@
 --     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
 --     "stmt-has-not-impl" :: Bool                     -- any statement contains NotImplemented
+--     "escape-summaries" :: EscapeSummaries          -- optional internal parameter summaries
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
 --
@@ -89,6 +90,7 @@
 
 module InterfaceFiles
   ( NameHashInfo(..)
+  , EscapeSummaries
   , DepModuleInfo(..)
   , DepNameInfo(..)
   , DepUsers(..)
@@ -135,6 +137,7 @@ module InterfaceFiles
   , readInterfaceDBDescendants
   , readInterfaceDBExtByProto
   , readInterfaceDBExtByType
+  , readInterfaceDBEscapeSummaries
   , readSelectedModule
   , TyDbWriteProgress(..)
   , writeFile
@@ -202,6 +205,13 @@ data NameHashInfo = NameHashInfo
 
 instance Persist.Persist NameHashInfo
 instance NFData NameHashInfo
+
+-- | Internal per-function parameter escape summaries.  The path is
+-- relative to its module (for example @[f]@ or @[C, method]@); the Boolean is
+-- True for MayEscape and False for NoEscape.  This remains an optional
+-- sidecar rather than part of Type so older interface databases remain
+-- readable and ordinary public type hashes are unaffected.
+type EscapeSummaries = [([A.Name], [(A.Name, Bool)])]
 
 data DepModuleInfo = DepModuleInfo
   { dmiModule   :: A.ModName
@@ -447,7 +457,7 @@ encodeStrict = Persist.encode
 key :: String -> BS.ByteString
 key = B.pack
 
-keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyModuleHeader :: BS.ByteString
+keyVersion, keyMeta, keyImports, keyDeps, keyRoots, keyTests, keyDoc, keyNameCount, keyPublicNames, keyConstructors, keyActors, keyStmtCount, keyStmtHasNotImpl, keyEscapeSummaries, keyModuleHeader :: BS.ByteString
 keyVersion      = key "version"
 keyMeta         = key "meta"
 keyImports      = key "imports"
@@ -461,6 +471,7 @@ keyConstructors = key "constructors"
 keyActors       = key "actors"
 keyStmtCount    = key "stmt-count"
 keyStmtHasNotImpl = key "stmt-has-not-impl"
+keyEscapeSummaries = key "escape-summaries"
 keyModuleHeader = key "module-header"
 
 padIndex :: Int -> String
@@ -977,6 +988,17 @@ readInterfaceDBModuleInfo db =
       doc <- getValue "doc" txn dbi keyDoc
       return (A.importsOf (A.Module tmn timps tdoc []), doc)
 
+-- | Read internal escape summaries.  Their absence is expected for old
+-- caches and therefore means that every external parameter must be treated
+-- conservatively.
+readInterfaceDBEscapeSummaries :: InterfaceDB -> IO EscapeSummaries
+readInterfaceDBEscapeSummaries db =
+    withInterfaceDBReadTxn db $ \txn dbi -> do
+      summaries <- getMaybeValue "escape-summaries" txn dbi keyEscapeSummaries
+      return $ case summaries of
+        Nothing -> []
+        Just ss -> ss
+
 readInterfaceDBNameInfoMaybe :: InterfaceDB -> A.Name -> IO (Maybe (A.Name, I.NameInfo))
 readInterfaceDBNameInfoMaybe db@(InterfaceDB path) n = do
     mi <- withInterfaceDBReadTxn db $ \txn dbi ->
@@ -1310,8 +1332,8 @@ stmtTopNames stmt =
       A.VarAssign _ ps _   -> Data.List.nub (Names.bound ps)
       _                    -> []
 
-interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
-interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
+interfaceEntries :: (String -> Double -> IO ()) -> [Int] -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO [(BS.ByteString, BS.ByteString)]
+interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
     caps <- getNumCapabilities
     let header =
           [ (keyVersion, encodeStrict version)
@@ -1323,6 +1345,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
           , (keyNameCount, encodeStrict (length te))
           , (keyStmtCount, encodeStrict (length body))
           , (keyStmtHasNotImpl, encodeStrict (A.hasNotImpl body))
+          , (keyEscapeSummaries, encodeStrict escapeSummaries)
           , (keyModuleHeader, encodeStrict (tmn, timps, tdoc))
           ]
         nameChunks = entryChunks caps (zip [0..] te)
@@ -1359,7 +1382,7 @@ interfaceEntries onProgress version moduleSrcBytesHash modulePubHash moduleImplH
     nameHashEntry nh = [(keyNameHash (nhName nh), encodeStrict (stripExternalDeps nh))]
     stmtEntry (i, stmt) = [(keyStmt i, encodeStrict stmt)]
 
-writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFile :: FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
 writeFile = writeFileWithVersion A.version
 
 -- | Update only the cached source-file metadata in the header, leaving every
@@ -1415,13 +1438,13 @@ putValueIfChanged txn dbi k v = do
       Just old -> (/= v) <$> copyVal old
     when changed (putValue txn dbi k v)
 
-writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked =
-    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
+writeFileWithVersion :: [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFileWithVersion version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked =
+    writeFileWithProgress (\_ -> return ()) version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
 
-writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
-writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked = do
-    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes roots tests mdoc nmod tchecked
+writeFileWithProgress :: (TyDbWriteProgress -> IO ()) -> [Int] -> FilePath -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Maybe SourceFileMeta -> [(A.ModName, BS.ByteString)] -> [DepModuleInfo] -> [NameHashInfo] -> EscapeSummaries -> [A.Name] -> [String] -> Maybe String -> I.NModule -> A.Module -> IO ()
+writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked = do
+    entries <- interfaceEntries prepProgress version moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta imps depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
     writeProgress 0
     writeEntriesWithProgress writeProgress f entries
   where
