@@ -54,7 +54,6 @@ debian/files
 
 deps/*
 !deps/zig-compiler-rt.patch
-!deps/libgc-zig.patch
 !deps/*/
 deps-download
 
