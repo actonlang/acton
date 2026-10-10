@@ -365,7 +365,7 @@ localTypes = M.unions . map stmtTypes
 moduleWitnessTypes :: Suite -> M.Map Name Type
 moduleWitnessTypes = M.unions . map stmtWitnessTypes
   where
-    keepWitnesses = M.filterWithKey (\n _ -> isWitness n)
+    keepWitnesses = M.filterWithKey (\n _ -> isWitnessBinding n)
 
     stmtWitnessTypes (Assign _ ps _) = keepWitnesses $ M.unions (map patternTypes ps)
     stmtWitnessTypes (VarAssign _ ps _) = keepWitnesses $ M.unions (map patternTypes ps)
@@ -380,7 +380,7 @@ moduleWitnessTypes = M.unions . map stmtWitnessTypes
     stmtWitnessTypes (Data _ mbp b) = maybe M.empty (keepWitnesses . patternTypes) mbp `M.union`
                                           moduleWitnessTypes b
     stmtWitnessTypes (Signature _ ns sc _) = M.fromList
-        [ (n, sctype sc) | n <- ns, isWitness n ]
+        [ (n, sctype sc) | n <- ns, isWitnessBinding n ]
     stmtWitnessTypes (Decl _ ds) = M.unions (map declWitnessTypes ds)
     stmtWitnessTypes _ = M.empty
 
@@ -394,6 +394,14 @@ moduleWitnessTypes = M.unions . map stmtWitnessTypes
     declWitnessTypes (Protocol _ _ _ _ b _) = moduleWitnessTypes b
     declWitnessTypes (Extension _ _ _ _ b _) = moduleWitnessTypes b
     declWitnessTypes Typedef{} = M.empty
+
+    -- Generic protocol constraints stored on converted witness classes use a
+    -- derived property name whose leftmost component is an internal witness.
+    -- These signatures carry the exact resolved protocol type needed below.
+    isWitnessBinding n
+      | isWitness n = True
+    isWitnessBinding (Derived n _) = isWitnessBinding n
+    isWitnessBinding _ = False
 
 patternTypes :: Pattern -> M.Map Name Type
 patternTypes (PWild _ _) = M.empty
@@ -679,9 +687,15 @@ unwrapCallTarget (Call _ (Var _ qn) (PosArg e PosNil) KwdNil)
 unwrapCallTarget e = e
 
 isHashableReceiver :: Context -> Expr -> Bool
-isHashableReceiver c receiver = any isHashableName (S.toList $ aliasNames receiver)
+isHashableReceiver c receiver =
+    any isHashableName (S.toList $ aliasNames receiver) || projectedHashableWitness receiver
   where
     isHashableName n = maybe False isHashableType $ M.lookup n (contextTypes c)
+    projectedHashableWitness (Dot _ _ attr) =
+        maybe False isHashableType $ M.lookup attr (contextTypes c)
+    projectedHashableWitness (Paren _ e) = projectedHashableWitness e
+    projectedHashableWitness (TApp _ e _) = projectedHashableWitness e
+    projectedHashableWitness _ = False
 
 isHashableType :: Type -> Bool
 isHashableType (TCon _ tc) = tcname tc == qnHashable

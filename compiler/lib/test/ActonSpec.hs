@@ -2260,6 +2260,32 @@ main = do
           [Escape.NoEscape, Escape.NoEscape]
         Escape.reportContractViolations report `shouldBe` []
 
+      it "recognizes Hashable calls through projected generic witnesses" $ do
+        let src = unlines
+              [ "class GenericBox[X](object):"
+              , "    item: X"
+              , "    def __init__(self, item: X):"
+              , "        self.item = item"
+              , "extension GenericBox[A(Ord)] (Ord):"
+              , "    def __eq__(a: GenericBox[A], b: GenericBox[A]) -> bool:"
+              , "        return a.item == b.item"
+              , "    def __lt__(a: GenericBox[A], b: GenericBox[A]) -> bool:"
+              , "        return a.item < b.item"
+              , "extension GenericBox[A(Ord,Hashable)] (Hashable):"
+              , "    def hash(self, h):"
+              , "        self.item.hash(h)"
+              ]
+        tchecked <- typecheckSource env0 "escape_generic_hashable_witness" src
+        let report = Escape.analyzeModule tchecked
+            contractParams =
+              [ p
+              | (_, ps) <- Escape.reportFunctions report
+              , p <- ps
+              , Escape.parameterContract p
+              ]
+        map Escape.parameterEscape contractParams `shouldBe` [Escape.NoEscape]
+        Escape.reportContractViolations report `shouldBe` []
+
       it "trusts only builtin native implementations of the Hashable.hash contract" $ do
         let src = unlines
               [ "class NativeHash(object):"
