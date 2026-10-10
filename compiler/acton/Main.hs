@@ -482,6 +482,7 @@ buildFiles gopts opts files =
       _ -> do
         when (C.watch opts) $
           printErrorAndExit "Cannot use --watch with multiple files. Use `acton build --watch` for projects or `acton build FILE --watch` (or `acton FILE --watch`) for a single file."
+        mapM_ requireSourceFile (filter ((== ".act") . takeExtension) files)
         absFiles <- mapM canonicalizePath files
         let onlyAct = all ((== ".act") . takeExtension) files
         projDirs <- mapM findProjectDir absFiles
@@ -897,11 +898,20 @@ watchProjectAt gopts opts projDir = do
                             return (not hadErrors)
                     runWatchProject gopts (projPath paths) (srcDir paths) sched runOnce
 
+-- | Exit with an error unless a source file named on the command line exists.
+requireSourceFile :: FilePath -> IO ()
+requireSourceFile file = do
+    exists <- doesFileExist file
+    unless exists $
+      printErrorAndExit ("File does not exist: " ++ file)
+
 -- | Build a single file, optionally running in watch mode.
 buildFile :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
-buildFile gopts opts file
-    | C.watch opts = watchFile gopts opts file
-    | otherwise = buildFileOnce gopts opts file
+buildFile gopts opts file = do
+    requireSourceFile file
+    if C.watch opts
+      then watchFile gopts opts file
+      else buildFileOnce gopts opts file
 
 -- | Compile one file in project or scratch mode with locking.
 buildFileOnce :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
