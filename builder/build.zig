@@ -108,6 +108,12 @@ pub fn build(b: *std.Build) void {
         std.log.err("Missing required build option -Dacton_root_stubs=...", .{});
         std.process.exit(1);
     };
+    // Zig caches the configuration made here keyed on the -D options and on
+    // input paths relative to the build root, not on where the build root is.
+    // The configuration holds absolute paths into the project though, so
+    // acton passes the project root to give each project directory a cache
+    // entry of its own.
+    _ = b.option([]const u8, "acton_project_root", "Absolute project root, only keys the configure cache");
 
     print("Acton Project Builder - building {s}\n", .{project_root});
 
