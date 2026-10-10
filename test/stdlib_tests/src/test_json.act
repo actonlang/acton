@@ -193,3 +193,123 @@ def _test_json_escaped_nul_roundtrip():
     # Every value kind must retain the complete object key when encoding.
     object_source = r"""{"n\u0000":null,"i\u0000":1,"f\u0000":1.5,"b\u0000":true,"s\u0000":"text","a\u0000":[],"o\u0000":{},"big\u0000":18446744073709551616}"""
     assert json.encode(json.decode(object_source)).encode() == object_source.encode()
+
+
+def _test_json_encode_nan_inf():
+    expected = "JSON encoding error: nan or inf number is not allowed"
+    for value in [float("nan"), float("inf"), float("-inf")]:
+        for encode in [lambda: json.encode({"a": [1, 2], "b": value}),
+                       lambda: json.encode_list(["x", value]),
+                       lambda: std_json.encode({"a": [1, 2], "b": value}),
+                       lambda: std_json.encode_list(["x", value])]:
+            try:
+                encode()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for a NaN or infinite JSON number")
+
+
+def _nested_document(depth: int, width: int) -> dict[str, ?value]:
+    items: list[?value] = []
+    for i in range(width):
+        item: dict[str, ?value] = {
+            "id": i,
+            "name": "item " + str(i) + " åäö \"quoted\"",
+            "score": float(i) / 4.0,
+            "even": i % 2 == 0,
+            "none": None,
+            "big": bigint("100000000000000000000") * bigint(i + 1),
+            "tags": ["t" + str(i), "u" + str(depth)],
+        }
+        items.append(item)
+    doc: dict[str, ?value] = {"depth": depth, "items": items}
+    if depth > 0:
+        doc["child"] = _nested_document(depth - 1, width)
+    return doc
+
+def _test_json_large_nested_roundtrip():
+    doc = _nested_document(30, 150)
+    for encode, decode in [(lambda d: json.encode(d), lambda s: json.decode(s)),
+                           (lambda d: std_json.encode(d), lambda s: std_json.decode(s))]:
+        encoded = encode(doc)
+        decoded = decode(encoded)
+        testing.assertEqual(encode(decoded), encoded, "large JSON document round trip does not match")
+        child = decoded["child"]
+        if isinstance(child, dict):
+            depth = child["depth"]
+            if isinstance(depth, int):
+                testing.assertEqual(depth, 29)
+            else:
+                testing.error("nested JSON integer was decoded with the wrong type")
+        else:
+            testing.error("nested JSON object was decoded with the wrong type")
+
+    deep: list[?value] = ["bottom", 1, 2.5]
+    for i in range(200):
+        deep = [i, deep, {"level": i}]
+    for encode_list, decode_list in [(lambda l: json.encode_list(l), lambda s: json.decode_list(s)),
+                                     (lambda l: std_json.encode_list(l), lambda s: std_json.decode_list(s))]:
+        encoded = encode_list(deep)
+        testing.assertEqual(encode_list(decode_list(encoded)), encoded, "deeply nested JSON array round trip does not match")
+
+
+def _test_json_encode_many_bigints():
+    # Formatting each bigint allocates its digits on the GC heap, so
+    # collections run while the document is built. The output must still hold
+    # the digits of every value.
+    values: list[?value] = []
+    digits = []
+    for i in range(10000):
+        b = bigint("100000000000000000000") * bigint(i + 1) + bigint(i)
+        values.append(b)
+        digits.append(str(b))
+    as_numbers = "[" + ",".join(digits) + "]"
+    as_strings = "[\"" + "\",\"".join(digits) + "\"]"
+    testing.assertEqual(json.encode_list(values), as_numbers)
+    testing.assertEqual(json.encode_list(values, bigint_as_string=True), as_strings)
+    testing.assertEqual(std_json.encode_list(values), as_numbers)
+    testing.assertEqual(std_json.encode_list(values, bigint_as_string=True), as_strings)
+
+
+def _test_json_encode_error_mid_document():
+    # The unsupported value comes after most of the document has been built,
+    # and encoding fails the same way every time it is repeated.
+    items: list[?value] = []
+    for i in range(500):
+        item: dict[str, ?value] = {"id": i, "name": "item " + str(i), "score": float(i) / 2.0}
+        items.append(item)
+    bad_item: dict[str, ?value] = {"ok": 1, "bad": ValueError("unsupported")}
+    bad_doc: dict[str, ?value] = {"items": items, "last": bad_item}
+    bad_list: list[?value] = [items, ValueError("unsupported")]
+    for encode, expected in [(lambda: json.encode(bad_doc), "jsonQ_encode_dict: for key bad unknown type: B_ValueError"),
+                             (lambda: std_json.encode(bad_doc), "stdQ_jsonQ_encode_dict: for key bad unknown type: B_ValueError"),
+                             (lambda: json.encode_list(bad_list), "jsonQ_encode_list: unknown type: B_ValueError"),
+                             (lambda: std_json.encode_list(bad_list), "stdQ_jsonQ_encode_list: unknown type: B_ValueError")]:
+        for _ in range(50):
+            try:
+                encode()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for an unsupported JSON value")
+    good_doc: dict[str, ?value] = {"items": items}
+    testing.assertEqual(json.encode(good_doc), std_json.encode(good_doc))
+
+
+def _test_json_decode_error_mid_document():
+    numbers = ",".join([str(i) for i in range(5000)])
+    array_source = "[" + numbers + ",[1e999]]"
+    object_source = r"""{"numbers":[""" + numbers + r"""],"bad":{"x":-1e999}}"""
+    expected = "JSON floating-point number is out of range"
+    for decode in [lambda: json.decode_list(array_source),
+                   lambda: std_json.decode_list(array_source),
+                   lambda: json.decode(object_source),
+                   lambda: std_json.decode(object_source)]:
+        for _ in range(20):
+            try:
+                decode()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for an out-of-range JSON number")
