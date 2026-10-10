@@ -1,0 +1,76 @@
+# Concurrent JSON POST requests to a local HTTP server.
+
+import http
+import json
+import net
+import random
+
+actor Requests(cap: net.TCPConnectCap, port: int, first: int, stride: int, n: int,
+               done: action(int) -> None, fail: action(str) -> None):
+    var current = first
+    var total = 0
+
+    def send(client: http.Client):
+        body = json.encode({"value": current}).encode()
+        client.post("/api", body, receive, {"Content-Type": "application/json"})
+
+    def receive(client: http.Client, response: http.Response):
+        if response.status != 200:
+            fail("HTTP status %d" % response.status)
+            return
+        total += int(response.body.decode())
+        current += stride
+        if current <= n:
+            send(client)
+        else:
+            client.close()
+            done(total)
+
+    def error(client: http.Client, message: str):
+        fail(message)
+
+    client = http.Client(cap, "127.0.0.1", send, error, scheme="http", port=port)
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 10
+    tcp = net.TCPCap(net.NetCap(env.cap))
+    connect = net.TCPConnectCap(tcp)
+    port = random.randint(20000, 50000)
+    workers = min([64, n])
+    var remaining = workers
+    var total = 0
+
+    def fail(message: str):
+        print(message, err=True)
+        env.exit(1)
+
+    def done(value: int):
+        total += value
+        remaining -= 1
+        if remaining == 0:
+            print(total)
+            env.exit(0)
+
+    def request(server: http.Server, req: http.Request, respond: action(int, dict[str, str], str) -> None):
+        obj = json.decode(req.body.decode())
+        respond(200, {"Content-Type": "application/json"}, str(obj["value"]))
+
+    def server_error(server: http.Server, message: str):
+        fail(message)
+
+    def accepted(server: http.Server):
+        await async server.cb_install(request, server_error)
+
+    def accept(connection: net.TCPListenConnection):
+        server = http.Server(connection, accepted, None)
+        await async server.cb_install(request, server_error)
+        await async connection.cb_install(server.on_conn_receive, server.on_conn_error, None)
+
+    def listening(listener: net.TCPListener, error: ?str):
+        if error is not None:
+            fail(error)
+        else:
+            for first in range(1, workers + 1):
+                Requests(connect, port, first, workers, n, done, fail)
+
+    listener = net.TCPListener(net.TCPListenCap(tcp), "127.0.0.1", port, listening, accept)

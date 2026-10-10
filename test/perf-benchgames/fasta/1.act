@@ -1,0 +1,45 @@
+# The Computer Language Benchmarks Game
+# Adapted from 1.py by Ian Osgood, Heinrich Acker, and Justin Peel.
+
+alu = ("GGCCGGGCGCGGTGGCTCACGCCTGTAATCCCAGCACTTTGG"
+       "GAGGCCGAGGCGGGCGGATCACCTGAGGTCAGGAGTTCGAGA"
+       "CCAGCCTGGCCAACATGGTGAAACCCCGTCTCTACTAAAAAT"
+       "ACAAAAATTAGCCGGGCGTGGTGGCGCGCGCCTGTAATCCCA"
+       "GCTACTCGGGAGGCTGAGGCAGGAGAATCGCTTGAACCCGGG"
+       "AGGCGGAGGTTGCAGTGAGCCGAGATCGCGCCACTGCACTCC"
+       "AGCCTGGGCGACAGAGCGAGACTCCGTCTCAAAAA")
+
+def random_fasta(chars: str, probabilities: list[float], n: int, seed: int) -> int:
+    cumulative = []
+    total = 0.0
+    for p in probabilities:
+        total += p
+        cumulative.append(total)
+    # The generator has only 139968 possible outputs. Resolve each once.
+    lookup = []
+    j = 0
+    for i in range(139968):
+        while float(i) / 139968.0 >= cumulative[j]:
+            j += 1
+        lookup.append(chars[j])
+    for start in range(0, n, 60):
+        line = []
+        for _ in range(min([60, n - start])):
+            seed = (seed * 3877 + 29573) % 139968
+            line.append(lookup[seed])
+        print("".join(line))
+    return seed
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 1000
+    print(">ONE Homo sapiens alu")
+    repeated = alu + alu
+    for start in range(0, n * 2, 60):
+        offset = start % len(alu)
+        width = min([60, n * 2 - start])
+        print(repeated[offset:offset + width])
+    print(">TWO IUB ambiguity codes")
+    seed = random_fasta("acgtBDHKMNRSVWY", [0.27, 0.12, 0.12, 0.27] + [0.02] * 11, n * 3, 42)
+    print(">THREE Homo sapiens frequency")
+    random_fasta("acgt", [0.3029549426680, 0.1979883004921, 0.1975473066391, 0.3015094502008], n * 5, seed)
+    env.exit(0)

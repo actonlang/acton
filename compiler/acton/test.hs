@@ -74,6 +74,7 @@ main = do
       , actonProjTests
       , actonRootArgTests
       , exampleTests
+      , benchgameTests
       , regressionTests
       , regressionSegfaultTests
       , rtsAutoTests
@@ -109,6 +110,77 @@ coreLangTests =
         assertEqual "should compile" ExitSuccess returnCode
         assertEqual "should see 2 pongs" "pong\npong\n" cmdOut
   ]
+
+-- The programs in test/perf-benchgames are the Acton programs of
+-- actonlang/Programming-Language-Benchmarks, every .act file in a problem's
+-- directory. Each case is one of the unit tests in that repository's
+-- bench/bench.yaml: the program arguments and the file with the expected
+-- output. Every program of the problem runs every case. As in that
+-- repository, the output matches when it equals the expected output apart
+-- from trailing whitespace. The input of knucleotide and regex-redux is the
+-- output of fasta, as in that repository's in.zip.
+benchgameTests =
+  testGroup "Benchmark programs"
+  [ benchgame "binarytrees"      noInput [("6", "6_out"), ("10", "10_out")]
+  , benchgame "coro-prime-sieve" noInput [("100", "100_out"), ("200", "200_out")]
+  , benchgame "edigits"          noInput [("227", "227_out"), ("1000", "1000_out")]
+  , benchgame "fannkuch-redux"   noInput [("7", "7_out"), ("10", "10_out")]
+  , benchgame "helloworld"       noInput [("T_T", "T_T_out"), ("QwQ", "QwQ_out")]
+  , benchgame "http-server"      noInput [("10", "10_out"), ("50", "50_out")]
+  , benchgame "json-serde"       (copyInput "json-serde" "sample.json")
+                                 [("sample 10", "sample_10_out")]
+  , benchgame "lru"              noInput [("10 1000", "10_1000_out"), ("77 7777", "77_7777_out"),
+                                          ("100 10000", "100_10000_out")]
+  , benchgame "mandelbrot"       noInput [("1", "1_out"), ("200", "200_out"), ("500", "500_out")]
+  , benchgame "merkletrees"      noInput [("9", "9_out"), ("10", "10_out")]
+  , benchgame "nbody"            noInput [("1000", "1000_out"), ("10000", "10000_out")]
+  , benchgame "nsieve"           noInput [("4", "4_out"), ("5", "5_out")]
+  , benchgame "pidigits"         noInput [("27", "27_out"), ("30", "30_out")]
+  , benchgame "secp256k1"        noInput [("1", "1_out"), ("10", "10_out")]
+  , benchgame "spectral-norm"    noInput [("100", "100_out")]
+  , sequentialTestGroup "fasta and its readers" AllSucceed
+    [ benchgame "fasta"          noInput [("1000", "1000_out")]
+    , benchgame "knucleotide"    (fastaInput "25000") [("25000_in", "25000_out")]
+    , benchgame "regex-redux"    (fastaInput "25000") [("25000_in", "25000_out")]
+    ]
+  ]
+  where
+    dir name = "../../test/perf-benchgames" </> name
+
+    programs name = sort . filter ((== ".act") . takeExtension) <$> listDirectory (dir name)
+
+    -- Build each program once, then run each case in a fresh directory that
+    -- holds only the input files the program reads.
+    benchgame name prepare cases =
+      testCase name $ do
+        srcs <- programs name
+        assertBool (dir name ++ " should hold at least one .act program") (not (null srcs))
+        forM_ srcs $ \src -> do
+          testBuildThing "" ExitSuccess False (dir name </> src)
+          exe <- canonicalizePath (dir name </> dropExtension src)
+          forM_ cases $ \(args, outFile) -> do
+            expected <- readFile (dir name </> outFile)
+            withSystemTempDirectory ("benchgame-" ++ name) $ \wd -> do
+              prepare wd
+              (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc exe (words args)){ cwd = Just wd } ""
+              let run = name </> src ++ " " ++ args
+              assertEqual (run ++ " should exit with 0, stderr:\n" ++ cmdErr) ExitSuccess returnCode
+              assertEqual (run ++ " output should match " ++ outFile) (trimEnd expected) (trimEnd cmdOut)
+
+    trimEnd = dropWhileEnd isSpace
+
+    noInput _ = return ()
+
+    copyInput name file wd = copyFile (dir name </> file) (wd </> file)
+
+    -- The input comes from the first fasta program. The fasta case checks
+    -- every fasta program against the expected output.
+    fastaInput n wd = do
+      src : _ <- programs "fasta"
+      fasta <- canonicalizePath (dir "fasta" </> dropExtension src)
+      (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc fasta [n]) ""
+      assertEqual ("fasta " ++ n ++ " should exit with 0, stderr:\n" ++ cmdErr) ExitSuccess returnCode
+      writeFile (wd </> (n ++ "_in")) cmdOut
 
 compilerTests =
   testGroup "compiler tests"

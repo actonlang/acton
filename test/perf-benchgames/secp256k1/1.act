@@ -1,0 +1,175 @@
+# Adapted from 1.py and 1.ts, using Jacobian coordinates and the
+# secp256k1 endomorphism to halve the scalar bit length.
+
+def hexadecimal(number: bigint) -> str:
+    digits = []
+    while number > bigint(0):
+        digits.append("0123456789abcdef"[int(number % bigint(16))])
+        number //= bigint(16)
+    return "".join(reversed(digits)) if digits else "0"
+
+field_prime = bigint("2") ** bigint("256") - bigint("2") ** bigint("32") - bigint("977")
+group_order = bigint("2") ** bigint("256") - bigint("432420386565659656852420866394968145599")
+GX = bigint("55066263022277343669578718895168534326250603453777594175500187360389116729240")
+GY = bigint("32670510020758816978083085130507043184471273380659243275938904335757337482424")
+BETA = bigint("55594575648329892869085402983802832744385952214688224221778511981742606582254")
+POW_2_128 = bigint("2") ** bigint("128")
+
+
+class JacobianPoint(object):
+    def __init__(self, x: bigint, y: bigint, z: bigint):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    @staticmethod
+    def zero():
+        return JacobianPoint(bigint(0), bigint(1), bigint(0))
+
+    @staticmethod
+    def from_affine(p: Point):
+        return JacobianPoint(p.x, p.y, bigint(1))
+
+    def to_affine(self):
+        inv_z = invert(self.z)
+        inv_z_pow = inv_z * inv_z
+        x = mod(self.x * inv_z_pow)
+        y = mod(self.y * inv_z * inv_z_pow)
+        return Point(x, y)
+
+    def negate(self):
+        return JacobianPoint(self.x, mod(-self.y), self.z)
+
+    def double(self):
+        x1 = self.x
+        y1 = self.y
+        z1 = self.z
+        a = mod(x1 * x1)
+        b = mod(y1 * y1)
+        c = mod(b * b)
+        xb = x1 + b
+        d = mod(bigint(2) * (xb * xb - a - c))
+        e = mod(bigint(3) * a)
+        f = mod(e * e)
+        x3 = mod(f - bigint(2) * d)
+        y3 = mod(e * (d - x3) - bigint(8) * c)
+        z3 = mod(bigint(2) * y1 * z1)
+        return JacobianPoint(x3, y3, z3)
+
+    def add(self, other: JacobianPoint):
+        x1 = self.x
+        y1 = self.y
+        z1 = self.z
+        x2 = other.x
+        y2 = other.y
+        z2 = other.z
+        if x2 == bigint(0) or y2 == bigint(0):
+            return self
+        if x1 == bigint(0) or y1 == bigint(0):
+            return other
+        z1z1 = mod(z1 * z1)
+        z2z2 = mod(z2 * z2)
+        u1 = mod(x1 * z2z2)
+        u2 = mod(x2 * z1z1)
+        s1 = mod(y1 * z2 * z2z2)
+        s2 = mod(y2 * z1 * z1z1)
+        h = mod(u2 - u1)
+        r = mod(s2 - s1)
+        if h == bigint(0):
+            if r == bigint(0):
+                return self.double()
+            else:
+                return JacobianPoint.zero()
+        hh = mod(h * h)
+        hhh = mod(h * hh)
+        v = mod(u1 * hh)
+        x3 = mod(r * r - hhh - bigint(2) * v)
+        y3 = mod(r * (v - x3) - s1 * hhh)
+        z3 = mod(z1 * z2 * h)
+        return JacobianPoint(x3, y3, z3)
+
+    def multiply_unsafe(self, n: bigint):
+        (k1neg, k1, k2neg, k2) = split_scalar_endo(n)
+        k1p = JacobianPoint.zero()
+        k2p = JacobianPoint.zero()
+        d = self
+        while k1 > bigint(0) or k2 > bigint(0):
+            if k1 & bigint(1):
+                k1p = k1p.add(d)
+            if k2 & bigint(1):
+                k2p = k2p.add(d)
+            d = d.double()
+            k1 = k1 >> 1
+            k2 = k2 >> 1
+        if k1neg:
+            k1p = k1p.negate()
+        if k2neg:
+            k2p = k2p.negate()
+        k2p = JacobianPoint(mod(k2p.x * BETA), k2p.y, k2p.z)
+        return k1p.add(k2p)
+
+
+class Point(object):
+    def __init__(self, x: bigint, y: bigint):
+        self.x = x
+        self.y = y
+
+    @staticmethod
+    def base():
+        return Point(GX, GY)
+
+    def multiply(self, scalar: bigint):
+        return JacobianPoint.from_affine(self).multiply_unsafe(scalar).to_affine()
+
+
+def mod(a: bigint, b: bigint=field_prime) -> bigint:
+    r = a % b
+    if r < bigint(0):
+        return r + b
+    return r
+
+
+def invert(number: bigint, modulo: bigint=field_prime) -> bigint:
+    a = mod(number, modulo)
+    b = modulo
+    x, u = bigint(0), bigint(1)
+    while a != bigint(0):
+        q = b // a
+        r = b % a
+        m = x - u * q
+        b, a = a, r
+        x, u = u, m
+    return mod(x, modulo)
+
+
+def div_nearest(a: bigint, b: bigint) -> bigint:
+    return (a + b // bigint(2)) // b
+
+
+def split_scalar_endo(k: bigint):
+    n = group_order
+    a1 = bigint("64502973549206556628585045361533709077")
+    b1 = -bigint("303414439467246543595250775667605759171")
+    a2 = bigint("367917413016453100223835821029139468248")
+    b2 = a1
+    c1 = div_nearest(b2 * k, n)
+    c2 = div_nearest(-b1 * k, n)
+    k1 = mod(k - c1 * a1 - c2 * a2, n)
+    k2 = mod(-c1 * b1 - c2 * b2, n)
+    k1neg = k1 > POW_2_128
+    k2neg = k2 > POW_2_128
+    if k1neg:
+        k1 = n - k1
+    if k2neg:
+        k2 = n - k2
+    return (k1neg, k1, k2neg, k2)
+
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 1
+    private_key = bigint("20775598474904240222758871485654738649026525153462921990999819694398496339603")
+    point = Point.base()
+    for _ in range(n):
+        point = point.multiply(private_key)
+    print(hexadecimal(point.x) + "," + hexadecimal(point.y))
+    env.exit(0)

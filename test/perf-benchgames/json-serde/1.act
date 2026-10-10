@@ -1,0 +1,23 @@
+# Parse one object, then independently parse n objects and serialize the array.
+
+import crypto.hash.md5
+import file
+import json
+
+def checksum(data: bytes) -> str:
+    # TODO: Use bytes.hex() once stable Acton includes its string terminator fix.
+    return "".join([hex(b)[2:].zfill(2) for b in crypto.hash.md5.hash(data)])
+
+actor main(env):
+    name = env.argv[1] if len(env.argv) > 1 else "sample"
+    n = int(env.argv[2]) if len(env.argv) > 2 else 3
+    source = file.ReadFile(file.ReadFileCap(file.FileCap(env.cap)), name + ".json")
+    text = source.read().decode().lstrip("\ufeff")
+    source.close()
+    obj = json.decode(text)
+    print(checksum(json.encode(obj).encode()))
+    objects: list[?value] = []
+    for _ in range(n):
+        objects.append(json.decode(text))
+    print(checksum(json.encode_list(objects).encode()))
+    env.exit(0)

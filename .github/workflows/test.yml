@@ -182,6 +182,8 @@ jobs:
           ulimit -c unlimited
           make -C ${{ github.workspace }} test
           make -C ${{ github.workspace }} online-tests
+      - name: "Run benchmark program tests"
+        run: make -C ${{ github.workspace }} test-benchgames
       # Nightly only: save the freshly-built, complete compile cache as the day's
       # canonical snapshot. Runs even if tests flake so a flaky test doesn't deny
       # PRs a warm cache, but requires the build/release steps to have succeeded so
@@ -375,6 +377,8 @@ jobs:
           ulimit -c unlimited
           make -C ${GITHUB_WORKSPACE} test
           make -C ${GITHUB_WORKSPACE} online-tests
+      - name: "Run benchmark program tests"
+        run: make -C ${GITHUB_WORKSPACE} test-benchgames
       # Disk visibility: print usage after the build+test phase (the peak) so we
       # can see how much headroom these containers actually have. Runs even on
       # failure to help diagnose a suspected out-of-space death. Never fails.

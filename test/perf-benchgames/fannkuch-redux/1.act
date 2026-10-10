@@ -1,0 +1,65 @@
+# The Computer Language Benchmarks Game
+# Adapted from the permutation traversal in 1.go by Oleg Mazurov.
+# Skip known flips and copy a permutation only when further reversals remain.
+
+def fannkuch(n: int) -> (int, int):
+    permutation = list(range(n))
+    count = [0] * n
+    total = 1
+    for i in range(2, n + 1):
+        total *= i
+    checksum = 0
+    maximum = 0
+    for index in range(total):
+        first = permutation[0]
+        flips = 0
+        if first != 0:
+            flips = 1
+            if permutation[first] != 0:
+                scratch = permutation.copy()
+                while True:
+                    flips += 1
+                    lo = 1
+                    hi = first - 1
+                    while lo < hi:
+                        tmp = scratch[lo]
+                        scratch[lo] = scratch[hi]
+                        scratch[hi] = tmp
+                        lo += 1
+                        hi -= 1
+                    following = scratch[first]
+                    scratch[first] = first
+                    first = following
+                    if scratch[first] == 0:
+                        break
+        checksum += flips if index % 2 == 0 else -flips
+        if flips > maximum:
+            maximum = flips
+        if index + 1 == total:
+            break
+        first = permutation[0]
+        if index % 2 == 0:
+            permutation[0] = permutation[1]
+            permutation[1] = first
+        else:
+            tmp = permutation[1]
+            permutation[1] = permutation[2]
+            permutation[2] = tmp
+            k = 2
+            while True:
+                count[k] += 1
+                if count[k] <= k:
+                    break
+                count[k] = 0
+                for j in range(k + 1):
+                    permutation[j] = permutation[j + 1]
+                permutation[k + 1] = first
+                first = permutation[0]
+                k += 1
+    return checksum, maximum
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 7
+    checksum, maximum = fannkuch(n)
+    print("%d\nPfannkuchen(%d) = %d" % (checksum, n, maximum))
+    env.exit(0)

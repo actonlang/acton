@@ -1,13 +1,16 @@
+#!/usr/bin/env runacton
+
 # port of 1.py
+
 import math
 
 ln_tau = math.log(6.283185307179586)
 ln_10 = math.log(float(10))
 
 
-def sum_terms(a: int, b: int) -> (int, int):
+def sum_terms(a: int, b: int) -> (bigint, bigint):
     if b == a + 1:
-        return 1, b
+        return bigint(1), bigint(b)
     mid = (a + b) // 2
     p_left, q_left = sum_terms(a, mid)
     p_right, q_right = sum_terms(mid, b)
@@ -42,15 +45,15 @@ actor main(env):
     k = binary_search(n)
     p, q = sum_terms(0, k - 1)
     p += q
-    answer = p * (10 ** (n - 1)) // q
+    answer = p * (bigint(10) ** bigint(n - 1)) // q
     s = str(answer)
     for i in range(0, n, 10):
         if i+10 <= n:
             print(s[i:i+10] + "\t:" + str(i+10))
         else:
             spaces = ""
-            for j in range(10-len(str(s[i:]))):
+            for j in range(0, (10-(len(str(s[i:])))), 1):
                 spaces += " "
             print(s[i:] + spaces + "\t:" + str(n))
             #print(f'{s[i:]}{" "*(10-n%10)}\t:{n}')
-    await async env.exit(0)
+    env.exit(0)
