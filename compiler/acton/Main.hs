@@ -3030,6 +3030,9 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
         moduleArgs = [ "-Dacton_modules=" ++ rootModulesCsv
                      , "-Dacton_root_stubs=" ++ rootStubsCsv
                      , "-Dacton_libraries=" ++ buildLibrariesSpec
+                     -- Zig keys the configure cache on -D options and on
+                     -- build root relative paths, see builder/build.zig
+                     , "-Dacton_project_root=" ++ projAbs
                      ]
         featureArgs = concat [ if C.db opts then ["-Ddb"] else []
                              , if no_threads then ["-Dno_threads"] else []
