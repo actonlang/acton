@@ -76,7 +76,18 @@ uint64_t B_hash(B_Hashable wit, $WORD value) {
 
 #undef HASH_SCALAR
 
-    B_hasher h = B_hasherG_new(NULL);
+    // Hashable.hash has a compiler-checked non-escape contract for its hasher
+    // parameter.  That makes both the small Acton wrapper and Wyhash's private
+    // state valid automatic objects for exactly this dynamic call.  Public
+    // hasher(seed) construction still uses B_hasherG_new and remains heap
+    // allocated because such a hasher may escape its creating function.
+    size_t state_size = zig_hash_wyhash_size();
+    max_align_t state_storage[(state_size + sizeof(max_align_t) - 1) /
+                              sizeof(max_align_t)];
+    struct B_hasher h_storage;
+    B_hasher h = &h_storage;
+    h->$class = &B_hasherG_methods;
+    h->_hasher = zig_hash_wyhash_init_in_place(state_storage, 0);
     wit->$class->hash(wit, value, h);
     return B_hasherD_finalize(h);
 }

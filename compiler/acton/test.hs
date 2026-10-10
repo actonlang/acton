@@ -1088,6 +1088,13 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
+  , testCase "build parser accepts --escape-analysis" $ do
+      parsed <- parseArgs ["build", "--escape-analysis"]
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          assertBool "escape-analysis option should be set" (C.escape_analysis (C.buildCompile buildOpts))
+        _ ->
+          assertFailure "expected build command"
   , testCase "build parser help advertises native modes" $ do
       helpText <- renderParserHelp ["build", "--help"]
       forM_ ["--debug", "--safe", "--fast", "--small"] $ \mode ->
@@ -1852,6 +1859,41 @@ actonProjTests =
           assertEqual ("project importing std.json should run\nstdout:\n" ++ runOut ++ "\nstderr:\n" ++ runErr)
             ExitSuccess runCode
           assertEqual "std.json output" "{\"answer\":42}\n" runOut
+
+  , testCase "Hashable.hash may not retain its hasher" $ do
+        withSystemTempDirectory "acton-hashable-hasher-escape" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "hashable_hasher_escape"
+              projectName = "hashable_hasher_escape"
+              fingerprint = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName projectName) 1)
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ projectName ++ "\""
+            , "fingerprint = " ++ fingerprint
+            ]
+          writeFile (proj </> "src" </> "main.act") $ unlines
+            [ "class Bad(object):"
+            , "    value: int"
+            , "    def __init__(self, value: int):"
+            , "        self.value = value"
+            , "extension Bad(Hashable):"
+            , "    def __eq__(self, other):"
+            , "        return self.value == other.value"
+            , "    def hash(self, h):"
+            , "        retained = lambda: h"
+            , "actor main(env):"
+            , "    print(hash(Bad(1)))"
+            , "    env.exit(0)"
+            ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--always-build", "--skip-build", "--color", "never"])
+              { cwd = Just proj } ""
+          assertEqual ("escaping hasher should fail\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
+            (ExitFailure 1) returnCode
+          assertBool ("failure should explain the Hashable.hash contract\n" ++ cmdOut ++ cmdErr)
+            ("Hashable.hash must consume the hasher only during the call" `isInfixOf` (cmdOut ++ cmdErr))
 
   , testCase "with missing src/ dir" $ do
         testBuild "" (ExitFailure 1) False "test/project/missing_src"

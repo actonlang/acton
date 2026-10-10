@@ -164,6 +164,7 @@ normalizeReplCompileOptions opts =
          , C.parse_ast = False
          , C.kinds = False
          , C.types = False
+         , C.escape_analysis = False
          , C.sigs = False
          , C.norm = False
          , C.deact = False

@@ -82,6 +82,22 @@ export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
     return hasher_ptr;
 }
 
+/// Size of the private Wyhash state used by the C runtime.  The ordinary
+/// hasher constructor keeps allocating this state on the GC heap because the
+/// resulting Acton object may escape.  B_hash uses this size to reserve
+/// suitably aligned automatic storage for its non-escaping hasher.
+export fn zig_hash_wyhash_size() callconv(.c) usize {
+    return @sizeOf(std.hash.Wyhash);
+}
+
+/// Initialize Wyhash in caller-owned storage.  The pointer must have the
+/// alignment of std.hash.Wyhash; B_hash supplies max_align_t storage.
+export fn zig_hash_wyhash_init_in_place(storage: *anyopaque, seed: u64) callconv(.c) *std.hash.Wyhash {
+    const hasher_ptr: *std.hash.Wyhash = @ptrCast(@alignCast(storage));
+    hasher_ptr.* = std.hash.Wyhash.init(seed);
+    return hasher_ptr;
+}
+
 export fn zig_hash_wyhash_update(hasher: *std.hash.Wyhash, ptr: [*]const u8, len: usize) callconv(.c) void {
     hasher.update(ptr[0..len]);
 }
