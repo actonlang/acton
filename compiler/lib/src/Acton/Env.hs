@@ -169,7 +169,8 @@ data ModuleInfo             = ModuleInfo {
                                 moduleDescendants :: QName -> [TCon],
                                 moduleProtoDescendants :: QName -> [TCon],
                                 moduleWitnessesByProto :: QName -> [Witness],
-                                moduleWitnessesByType  :: QName -> [Witness]
+                                moduleWitnessesByType  :: QName -> [Witness],
+                                moduleEscapeSummary :: [Name] -> Maybe [(Name, Bool)]
                               }
 
 instance Show ModuleInfo where
@@ -193,7 +194,8 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
                                 moduleDescendants = qkeyed descendants,
                                 moduleProtoDescendants = qkeyed protodescs,
                                 moduleWitnessesByProto = qkeyed witprotos,
-                                moduleWitnessesByType = qkeyed wittypes
+                                moduleWitnessesByType = qkeyed wittypes,
+                                moduleEscapeSummary = const Nothing
                               }
   where pte                 = publicTEnv te
         hte                 = M.fromList pte
@@ -221,6 +223,14 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
         isCon NAct{}        = True
         isCon _             = False
 
+-- | Attach internal parameter escape summaries to an in-memory module
+-- interface. Name equality ignores source locations, so paths originating in
+-- the typed tree also match their location-free cached representation.
+withEscapeSummaries        :: InterfaceFiles.EscapeSummaries -> ModuleInfo -> ModuleInfo
+withEscapeSummaries summaries mi
+                            = mi { moduleEscapeSummary = (`Map.lookup` summaryMap) }
+  where summaryMap          = Map.fromList summaries
+
 -- | Build a ModuleInfo backed by selective .tydb reads. Lookups run keyed
 -- LMDB reads on demand (behind pure-looking functions) and memoize results;
 -- a failed or corrupt read aborts compilation like any other interface cache
@@ -240,7 +250,8 @@ mkTyFileModuleInfo m ms mdoc db
                                 moduleDescendants = memoLookup descendants,
                                 moduleProtoDescendants = memoLookup protoDescendants,
                                 moduleWitnessesByProto = memoLookup witsByProto,
-                                moduleWitnessesByType = memoLookup witsByType
+                                moduleWitnessesByType = memoLookup witsByType,
+                                moduleEscapeSummary = (`Map.lookup` escapeSummaryMap)
                               }
   where lookupName n
           | not (isPublicName n) = Nothing
@@ -248,6 +259,8 @@ mkTyFileModuleInfo m ms mdoc db
                                   mi <- InterfaceFiles.readInterfaceDBNameInfoMaybe db n
                                   return $ snd <$> mi
         publicNames          = unsafePerformIO $ InterfaceFiles.readInterfaceDBPublicNames db
+        escapeSummaries      = unsafePerformIO $ InterfaceFiles.readInterfaceDBEscapeSummaries db
+        escapeSummaryMap     = Map.fromList escapeSummaries
         constructors         = unsafePerformIO $ InterfaceFiles.readInterfaceDBConstructors db
         actors               = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBActors db
         conAttr n            = map (moduleTCon m) $ unsafePerformIO $ InterfaceFiles.readInterfaceDBConAttr db n
@@ -429,7 +442,16 @@ publicTEnv                 :: TEnv -> TEnv
 publicTEnv                 = filter (isPublicName . fst)
 
 initEnv                    :: FilePath -> Bool -> IO Env0
-initEnv path True          = return $ cacheTransModules $ EnvF{ activeNames = [],
+initEnv                    = initEnvWithEscapeSummaries False
+
+-- | Initialize the base environment and, when requested, retain the escape
+-- summaries stored alongside the builtin interface.  Ordinary project
+-- compilation requests them because Hashable.hash contract checking can use
+-- direct imported-call summaries; callers that do not run compilation may
+-- still omit the extra interface read.
+initEnvWithEscapeSummaries :: Bool -> FilePath -> Bool -> IO Env0
+initEnvWithEscapeSummaries _ path True
+                            = return $ cacheTransModules $ EnvF{ activeNames = [],
                                             closedNames = [],
                                             hnames = hnamesFrom [],
                                             closedHNames = hnamesFrom [],
@@ -449,9 +471,22 @@ initEnv path True          = return $ cacheTransModules $ EnvF{ activeNames = []
                                             context = [],
                                             qlevel = 0,
                                             envX = () }
-initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (InterfaceFiles.interfacePath path (modName ["__builtin__"]))
+initEnvWithEscapeSummaries includeEscape path False
+                            = do
+                                let ifacePath = InterfaceFiles.interfacePath path (modName ["__builtin__"])
+                                (_,nmod) <- InterfaceFiles.readModuleIface ifacePath
+                                escapeSummaries <-
+                                  if includeEscape
+                                    then do db <- InterfaceFiles.openInterfaceDB ifacePath
+                                            InterfaceFiles.readInterfaceDBEscapeSummaries db
+                                    else return []
                                 let NModule _ envBuiltin builtinDocstring = nmod
                                     envBuiltinPublic = publicTEnv envBuiltin
+                                    attachEscape
+                                      | includeEscape = withEscapeSummaries escapeSummaries
+                                      | otherwise = id
+                                    builtinInfo = attachEscape $ mkModuleInfo mBuiltin [] envBuiltin builtinDocstring
+                                    builtinPublicInfo = attachEscape $ mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring
                                     initialNames = []
                                     env0 = cacheTransModules $ EnvF{ activeNames = [],
                                                  closedNames = initialNames,
@@ -465,7 +500,7 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                                  activeTypeVars = [],
                                                  imports = [],
                                                  qualifiers = [],
-                                                 modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, mkModuleInfo mBuiltin [] envBuiltin builtinDocstring)],
+                                                 modules = Map.fromList [(mPrim, mkModuleInfo mPrim [] primEnv Nothing), (mBuiltin, builtinInfo)],
                                                  transModules = [],
                                                  importedConAttrs = AttrMemo (const []),
                                                  importedProtoAttrs = AttrMemo (const []),
@@ -473,7 +508,7 @@ initEnv path False         = do (_,nmod) <- InterfaceFiles.readModuleIface (Inte
                                                  context = [],
                                                  qlevel = 0,
                                                  envX = () }
-                                    env = importAll mBuiltin (mkModuleInfo mBuiltin [] envBuiltinPublic builtinDocstring) env0
+                                    env = importAll mBuiltin builtinPublicInfo env0
                                 return env
 
 withModulesFrom             :: EnvF x -> EnvF x -> EnvF x
