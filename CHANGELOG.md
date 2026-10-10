@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+### Compiler & Build
+- Upgrade the bundled Zig toolchain to 0.17.0 and add native optimization-mode
+  flags: `--debug`, `--safe`, `--fast`, and `--small`. The existing
+  `--release`, `--release=fast`, `--release=safe`, and `--release=small` forms
+  remain as compatibility aliases. [#3249]
+- Correct cleanup for `return`, `break`, and `continue` that leave a plain
+  nested `try` inside a continuation-converted `try`, preventing crashes when
+  an enclosing `finally` clause runs. [#3241]
+
+### Runtime & Standard Library
+- Reduce garbage-collection work for numeric-heavy programs by allocating
+  boxed scalars, ranges, and `bigint` digits as pointer-free objects and by
+  prefetching only objects that the collector will scan. [#3248] [#3250]
+  [#3251]
+- Use an allocation budget of 67% of live data by default, counting
+  pointer-free data fully so programs with large string, byte, or numeric
+  heaps collect less often. Setting `gc_alloc_budget_percent` or
+  `GC_ALLOC_BUDGET_PERCENT` to `0` restores the previous policy. [#3243]
+- Fix parsing negative integer strings whose digit count exactly matches the
+  parser's chunk size, including fixed-width integer constructors, and fix
+  `bigint` `&`, `|`, and `^` results for negative operands. [#3246] [#3247]
+- Hash bounded numeric types, complex values, and immutable sets directly,
+  avoiding most of the allocation and runtime overhead of stateful hashing.
+  [#3244]
+- Speed up exception handling on macOS by avoiding unnecessary signal-mask
+  saves and restores around `try` blocks and raised exceptions. [#3240]
+- Access runtime worker statistics atomically, removing data races between
+  worker updates and monitoring through `acton.rts.rts_stats()`. [#3234]
+
+### Documentation
+- Document generator expressions and `flatmap()`, including lazy evaluation,
+  capture timing, purity requirements, and callback behavior. [#3242]
+
+### Testing & CI
+- Allow slow unit, asynchronous, and environment tests to extend their
+  watchdog deadline with `t.timeout(seconds)` while keeping the deadline
+  anchored to the original test start. [#3245]
+
+### Compatibility Notes
+- Boxed scalars are now allocated in pointer-free memory, so a pointer cast to
+  an integer and stored in a boxed `int` no longer keeps its target alive. C
+  extensions must retain such references in collector-scanned storage.
+  [#3250]
+
 ## [0.31.0] - 2026-10-08
 
 This release brings major performance improvements across the compiler,
@@ -5353,7 +5399,20 @@ then, this second incarnation has been in focus and 0.2.0 was its first version.
 [#3231]: https://github.com/actonlang/acton/pull/3231
 [#3232]: https://github.com/actonlang/acton/pull/3232
 [#3233]: https://github.com/actonlang/acton/pull/3233
+[#3234]: https://github.com/actonlang/acton/pull/3234
 [#3236]: https://github.com/actonlang/acton/pull/3236
+[#3240]: https://github.com/actonlang/acton/pull/3240
+[#3241]: https://github.com/actonlang/acton/pull/3241
+[#3242]: https://github.com/actonlang/acton/pull/3242
+[#3243]: https://github.com/actonlang/acton/pull/3243
+[#3244]: https://github.com/actonlang/acton/pull/3244
+[#3245]: https://github.com/actonlang/acton/pull/3245
+[#3246]: https://github.com/actonlang/acton/pull/3246
+[#3247]: https://github.com/actonlang/acton/pull/3247
+[#3248]: https://github.com/actonlang/acton/pull/3248
+[#3249]: https://github.com/actonlang/acton/pull/3249
+[#3250]: https://github.com/actonlang/acton/pull/3250
+[#3251]: https://github.com/actonlang/acton/pull/3251
 
 
 [0.3.0]: https://github.com/actonlang/acton/releases/tag/v0.3.0
