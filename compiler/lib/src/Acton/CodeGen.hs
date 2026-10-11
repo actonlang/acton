@@ -17,6 +17,7 @@ module Acton.CodeGen where
 import qualified Data.Set
 import qualified Data.HashSet as HashSet
 import qualified Data.List
+import qualified Data.Map.Strict as Map
 import qualified Acton.Env
 import Utils
 import Pretty
@@ -29,6 +30,7 @@ import Acton.NameInfo
 import Acton.Env
 import Acton.QuickType
 import Acton.Subst
+import Acton.Transform (termsubst)
 import qualified Acton.Boxing as B
 import Control.Monad.State.Lazy
 import Prelude hiding ((<>))
@@ -40,12 +42,29 @@ import Data.Word (Word8)
 import qualified Data.IntMap.Strict as IM
 
 generate                            :: Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String)
-generate env srcbase srcText emitLines m hash = do return (n, h, c)
+generate env srcbase srcText emitLines m hash = do
+    (n,h,c,_) <- generateCode False env srcbase srcText emitLines m hash
+    return (n,h,c)
+
+supportFile outbase                 = takeDirectory outbase </> "generated" </> takeFileName outbase <.> "inc"
+
+-- Recover ownership for pruning; other .inc files are not generated artifacts.
+supportOwner path
+  | takeExtension path == ".inc", takeFileName (takeDirectory path) == "generated"
+                                    = Just (takeDirectory (takeDirectory path) </> dropExtension (takeFileName path))
+  | otherwise                       = Nothing
+
+-- File builds keep mechanical support in an included fragment; diagnostics and
+-- golden tests request a complete listing with split=False.
+generateCode                        :: Bool -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
+generateCode split env srcbase srcText emitLines m hash = return (n,h,c,support)
 
   where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
         hashComment                 = text "/* Acton impl hash:" <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
-        c                           = render $ hashComment $+$ cModule env0 srcbase srcText emitLines m
+        (cDoc,supportDoc)            = cModuleParts split env0 srcbase srcText emitLines m
+        c                           = render $ hashComment $+$ cDoc
+        support                     = render $ hashComment $+$ supportDoc
         env0                        = genEnv $ setMod (modname m) env
 
 genRoot                            :: Acton.Env.Env0 -> QName -> IO String
@@ -111,7 +130,10 @@ builtinStaticKey gn                 = case gn of
 genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       localX = HashSet.empty,
                                                       retX = tNone, maybeOutX = Nothing, localRepX = [],
-                                                      volVarsX = [], lineEmitX = Nothing }
+                                                      volVarsX = [], lineEmitX = Nothing,
+                                                      closureFieldsX = Map.empty,
+                                                      closureAdaptersX = Map.empty,
+                                                      closureAdapterDocsX = [] }
 
 type GenEnv                         = EnvF GenX
 
@@ -139,6 +161,9 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , localRepX :: [(Name, LocalRep)]
                                            , volVarsX :: [Name]
                                            , lineEmitX :: Maybe (SrcLoc -> Doc)
+                                           , closureFieldsX :: Map.Map Name (Name, [Name])
+                                           , closureAdaptersX :: Map.Map (Name, Name) Name
+                                           , closureAdapterDocsX :: [Doc]
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -289,6 +314,127 @@ maybeOutArgs env args               = repParams env args <> comma' maybeOutParam
 
 storageType env t                   = rawType env t
 
+-- Only lambda-lifter classes use the closure backend. User classes with similar
+-- names or bases must retain ordinary construction and serialization behavior.
+isClosureName (Internal LLiftPass s _) = s `elem` ["Cont", "proc", "action", "mut", "pure"]
+isClosureName _                     = False
+
+-- Proc.__exec__ is an exact forwarding adapter. Reuse __call__ only when its
+-- actual C slot signature agrees, including the representation of all args.
+closureMethod env c q n
+  | Internal LLiftPass "proc" _ <- c,
+    n == attr_exec_,
+    render (methodCast env c q attr_call_) == render (methodCast env c q attr_exec_)
+                                    = attr_call_
+  | otherwise                       = n
+
+emitClosureMethod env c q n         = n /= initKW && closureMethod env c q n == n &&
+                                      Map.notMember (c,n) (closureAdaptersX $ envX env)
+
+-- These adapters never inspect captures. Give their receiver the instantiated
+-- primitive base type and canonical parameter names. Boxed pointers use the
+-- RTS's existing $WORD calling convention; raw values keep their exact types.
+-- Share only identical emitted signatures AND bodies. This retains result
+-- conversions, effect families, and Action's AWAIT/R_CONT distinction.
+closureAdapter                     :: GenEnv -> Name -> QBinds -> Decl -> Maybe Decl
+closureAdapter env c q d@Def{dname=n, pos=p@(PosPar receiver _ Nothing (PosPar cont _ Nothing _)),
+                            dbody=[Return _ (Just (Call l f (PosArg (Var _ (NoQ k)) (PosArg result PosNil)) KwdNil))]}
+  | n `elem` [attr_call_,attr_exec_], k == cont, adapterPars p,
+    Just baseName <- adapterBase c,
+    Just (_,TC _ [_,_]) <- findAncestor env tc baseName,
+    Just primitive <- adapterPrimitive f,
+    primitive == (if baseName == primAction && n == attr_call_ then primAWAIT else primRCont),
+    adapterResult receiver target (drop 2 $ bound p) result,
+    all (`elem` bound p) (free result)
+                                    = Just d{ dloc=NoLoc, dname=methodname c n, pos=p',
+                                        dbody=[sReturn (termsubst ren (Call l f (PosArg (eVar cont) (PosArg result' PosNil)) KwdNil))] }
+  where tc                          = TC (NoQ c) (map tVar $ qbound q)
+        target                      = if adapterBase c == Just primAction then attr_asyn_ else attr_eval_
+        names                       = map (Internal Tempvar "adapter") [0..]
+        ren                         = zip (bound p) (map eVar names)
+        targetABI                   = B.rtypeOf env tc target
+        base                        = TC (fromJust $ adapterBase c)
+                                        [adapterRow (posrow targetABI), adapterRep (restype targetABI)]
+        p'                          = renamePars names p
+        renamePars (n:ns) (PosPar _ (Just t) Nothing rest)
+                                    = PosPar n (Just t') Nothing (renamePars ns rest)
+          where t' | n == head names = tCon base
+                   | n == names !! 1 = tCont tValue
+                   | otherwise      = adapterRep t
+        renamePars _ PosNIL         = PosNIL
+        renamePars _ _              = error "Internal error CodeGen.closureAdapter: non-positional adapter"
+        localEnv                    = ldefine (envOf p) (defineTVars q env)
+        -- Boxing adds a Box around concrete scalar results even though the
+        -- inherited generic evaluation ABI already returns a boxed value.
+        result'                     = case result of
+                                        Box t e | boxedExpr localEnv e,
+                                                  boxedRepType (typeOf localEnv e) == boxedRepType t -> e
+                                        _ -> result
+closureAdapter _ _ _ _              = Nothing
+
+adapterRep t@TUnboxed{}             = t
+adapterRep _                        = tWild
+
+adapterRow (TRow l k n t rest)       = TRow l k n (adapterRep t) (adapterRow rest)
+adapterRow row                      = row
+
+adapterBase (Internal LLiftPass "pure" _) = Just primPure
+adapterBase (Internal LLiftPass "mut" _) = Just primMut
+adapterBase (Internal LLiftPass "action" _) = Just primAction
+adapterBase _                       = Nothing
+
+adapterPrimitive (TApp _ (Var _ n) _) = Just n
+adapterPrimitive _                  = Nothing
+
+adapterPars (PosPar _ (Just _) Nothing rest) = adapterPars rest
+adapterPars PosNIL                  = True
+adapterPars _                       = False
+
+adapterResult receiver target args (Box _ e) = adapterResult receiver target args e
+adapterResult receiver target args (Call _ (Dot _ (Var _ (NoQ self)) method) p KwdNil)
+                                    = self == receiver && method == target &&
+                                      map adapterArgName (posargs p) == map Just args
+adapterResult _ _ _ _               = False
+
+adapterArgName (Var _ (NoQ n))       = Just n
+adapterArgName (Box _ e)             = adapterArgName e
+adapterArgName (UnBox _ e)           = adapterArgName e
+adapterArgName _                    = Nothing
+
+shareClosureAdapters env stmts      = modX env $ \x -> x{ closureAdaptersX=methods, closureAdapterDocsX=reverse docs }
+  where (_,methods,docs)            = Data.List.foldl' add (Map.empty,Map.empty,[])
+                                        [ (n,q,d) | Decl _ ds <- stmts, Class _ n q _ b _ <- ds, isClosureName n,
+                                          Decl _ ms <- b, d@Def{} <- vsubst [(tvSelf,tCon (TC (NoQ n) (map tVar $ qbound q)))] ms ]
+        add acc@(seen,methods,docs) (c,q,d)
+          | Just adapter <- closureAdapter env c q d,
+            let key = render $ declFunction env1 (text "$adapter") adapter
+                                    = case Map.lookup key seen of
+                                        Just owner -> (seen,Map.insert (c,dname d) owner methods,docs)
+                                        Nothing -> (Map.insert key helper seen,Map.insert (c,dname d) helper methods,
+                                                    declFunctionWithStorage env1 (text "static") (genTopName env helper) adapter : docs)
+          | otherwise               = acc
+          where env1                = setInClass (defineTVars q env)
+                helper              = Internal Tempvar "closure_adapter" (Map.size seen + 1)
+
+closureProps env n q                = [ (i,sctype sc) | (i,NSig sc Property _) <- fullAttrEnv env tc ]
+  where tc                          = TC (NoQ n) (map tVar $ qbound q)
+
+closureFieldId t
+  | B.isUnboxable t                 = class_id t
+  | otherwise                       = "$CLOSURE_REF"
+
+-- Share only the field walk, in capture order. Scalar IDs remain distinct even
+-- when their C widths agree. Reference types and capture names may differ; the
+-- generated C checks their actual offsets and widths before reusing an array.
+shareClosureFields env stmts        = modX env $ \x -> x{ closureFieldsX = owners }
+  where (_,owners)                  = Data.List.foldl' add (Map.empty, Map.empty)
+                                        [ (n, closureProps (defineTVars q env) n q)
+                                          | Decl _ ds <- stmts, Class _ n q _ _ _ <- ds, isClosureName n ]
+        add tables (_,[])           = tables
+        add (shapes,owners) (n,props) = (Map.insert key owner shapes, Map.insert n owner owners)
+          where key                 = map (closureFieldId . snd) props
+                owner               = Map.findWithDefault (n, map fst props) key shapes
+
 -- Header -------------------------------------------------------------------------------------------
 
 hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
@@ -300,7 +446,7 @@ hModule env (Module m imps _ stmts) = text "#pragma" <+> text "once" $+$
                                       hSuite 1 env1 stmts $+$
                                       hSuite 2 env1 stmts $+$
                                       text "void" <+> genTopName env initKW <+> parens empty <> semi
-  where env1                        = classdefine stmts env
+  where env1                        = shareClosureAdapters (classdefine stmts env) stmts
 
 
 hSuite phase env []                 = empty
@@ -339,7 +485,8 @@ decl env (Def _ n q p _ (Just t) _ _ fx ddoc)
 decl env Typedef{}                  = empty
 methstub env (Class _ n q a b ddoc) = text "extern" <+> text "struct" <+> classname env n <+> methodtable env n <> semi $+$
                                       constub env t n r b $+$
-                                      vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ]
+                                      vcat [ methodDefStub env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds,
+                                             not (isClosureName n) || emitClosureMethod env1 n q (dname d) ]
   where TFun _ _ r _ t              = sctype $ fst $ schemaOf env (eVar n)
         b'                          = vsubst [(tvSelf, tCon c)] b
         c                           = TC (NoQ n) (map tVar $ qbound q)
@@ -502,23 +649,36 @@ primNEWTUPLE0                       = gPrim "NEWTUPLE0"
 
 -- Implementation -----------------------------------------------------------------------------------
 
-cModule env srcbase srcText emitLines (Module m imps _ stmts)
-                                    = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
+cModule env srcbase srcText emitLines m = fst $ cModuleParts False env srcbase srcText emitLines m
+
+cModuleParts split env srcbase srcText emitLines (Module m imps _ stmts)
+                                    = (mainDoc,supportDoc)
+  where mainDoc                     = (if inBuiltin env then text "#include \"builtin/builtin.c\"" else empty) $+$
                                       text "#include \"rts/common.h\"" $+$
                                       include env (if inBuiltin env then "" else "out/types") m $+$
                                       ext_include $+$
-                                      declModule envWithLine stmts $+$
-                                      globalChunkDefs $+$
+                                      (if split then empty else adapterDocs) $+$
+                                      declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
+                                      (if split then text "#include" <+> doubleQuotes (text (joinPath ["generated",last (modPath m) ++ ".inc"]))
+                                                else globalChunkDefs) $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$
                                       nest 4 (text "if" <+> parens (genTopName env initFlag) <+> text "return" <> semi $+$
                                               genTopName env initFlag <+> equals <+> text "1" <> semi $+$
                                               ext_init $+$
                                               initImports $+$
-                                              initTables env1 stmts $+$
+                                              (if split then supportInitName <> parens empty <> semi else initTables envWithFields stmts) $+$
                                               globalChunkCalls) $+$
                                       char '}'
-  where initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
+        supportDoc                  = text "/* Generated closure support and module initialization. */" $+$
+                                      adapterDocs $+$
+                                      declModuleSelect closureDecl False envWithLine stmts $+$ globalChunkDefs $+$
+                                      text "static void" <+> supportInitName <> parens empty <+> char '{' $+$
+                                      nest 4 (initTables envWithFields stmts) $+$ char '}'
+        supportInitName             = genTopName env initKW <> text "$support"
+        closureDecl (Class _ n _ _ _ _) = isClosureName n
+        closureDecl _               = False
+        initImports                 = vcat [ gen env (GName m initKW) <> parens empty <> semi | m <- modNames imps ]
         (globalChunkDefs, globalChunkCalls) = initGlobalChunks env1 stmts
         external                    = notImpl && not (inBuiltin env)
         ext_include                 = if notImpl then text "#include" <+> doubleQuotes (text srcbase <> text ".ext.c") else empty
@@ -541,16 +701,24 @@ cModule env srcbase srcText emitLines (Module m imps _ stmts)
         emitLine NoLoc              = empty
         emitLine (Loc startOffset _) =
             text "#line" <+> pretty (offsetToLine startOffset) <+> doubleQuotes (text actFile)
-        envWithLine                 = if emitLines then setLineEmit emitLine env1 else env1
+        envWithFields               = shareClosureFields (shareClosureAdapters env1 stmts) stmts
+        adapterDocs                 = vcat (closureAdapterDocsX $ envX envWithFields)
+        envWithLine                 = if emitLines then setLineEmit emitLine envWithFields else envWithFields
 
 
-declModule env []                   = empty
-declModule env (Decl _ ds : ss)     = vcat [ declDecl env1 d | d <- ds ] $+$
-                                      declModule env1 ss
+declModule                         = declModuleSelect (const True) True
+
+-- Thread the complete environment through both partitions, even for omitted
+-- declarations. Fragments share the main translation unit and header.
+declModuleSelect select globals env [] = empty
+declModuleSelect select globals env (Decl _ ds : ss)
+                                    = vcat [ declDecl env1 d | d <- ds, select d ] $+$
+                                      declModuleSelect select globals env1 ss
   where env1                        = gdefine (envOf ds) env
-declModule env (Signature{} : ss)   = declModule env ss
-declModule env (s : ss)             = vcat [ genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- te ] $+$
-                                      declModule env1 ss
+declModuleSelect select globals env (Signature{} : ss) = declModuleSelect select globals env ss
+declModuleSelect select globals env (s : ss)
+                                    = (if globals then vcat [ genTypeDecl env n t <+> genTopName env n <> semi | (n,NVar t) <- te ] else empty) $+$
+                                      declModuleSelect select globals env1 ss
   where te                          = excludeDefined env (envOf s)
         env1                        = gdefine te env
 
@@ -577,8 +745,32 @@ genPosPar env n d t p
           isInit (Derived _ n)      = n == initKW 
           isInit n                  = n == initKW
         
-declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
-  | hasNotImpl b                    = t3 <+> genTopName env n <+> parens (genPosPar env n d t1 p) <> semi $+$
+declDecl env d@Def{}                = declFunction env (genTopName env (dname d)) d
+
+declDecl env (Class _ n q as b ddoc)
+    | isClosureName n               = declClosure env1 n q b'
+    | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+    | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
+                                      declSerialize env1 n c props sup_c $+$
+                                      declDeserialize env1 n c props sup_c $+$
+                                      declCleanup env1 n sup_c $+$
+                                      declCon env1 n q b $+$
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+  where b'                          = vsubst [(tvSelf, tCon c)] b
+        c                           = TC (NoQ n) (map tVar $ qbound q)
+        env1                        = setInClass (defineTVars q env)
+        props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
+        sup_c                       = filter ((`elem` special_repr) . tcname) as
+        special_repr                = [primActor] -- To be extended...
+        cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
+
+declDecl env Typedef{}              = empty
+
+declFunction env symbol            = declFunctionWithStorage env empty symbol
+
+declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
+  | hasNotImpl b                    = storage <+> t3 <+> symbol <+> parens (genPosPar env n d t1 p) <> semi $+$
                                       text "/*" $+$ 
                                       decl $+$
                                       text "*/"
@@ -606,7 +798,7 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
                                     = (genGetAttr env1 c, [])
           | otherwise               = genSuite env1 b
         decl                        = emit dloc $+$
-                                      t3 <+> genTopName env n <+> parens (genPosPar (setVolVars vs env) n d t1 p) <+> char '{' $+$
+                                      storage <+> t3 <+> symbol <+> parens (genPosPar (setVolVars vs env) n d t1 p) <+> char '{' $+$
                                       nest 4 ss' $+$ 
                                       char '}'
         env1                        = setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
@@ -620,24 +812,76 @@ declDecl env (Def dloc n q p KwdNIL (Just t) b d fx ddoc)
         rawReturn _                 = False
         emit                        = getLineEmit env
 
-declDecl env (Class _ n q as b ddoc)
-    | cDefinedClass                 = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      text "struct" <+> classname env n <+> methodtable env n <> semi
-    | otherwise                     = vcat [ declDecl env1 d{ dname = methodname n (dname d) } | Decl _ ds <- b', d@Def{} <- ds ] $+$
-                                      declSerialize env1 n c props sup_c $+$
-                                      declDeserialize env1 n c props sup_c $+$
-                                      declCleanup env1 n sup_c $+$
-                                      declCon env1 n q b $+$
-                                      text "struct" <+> classname env n <+> methodtable env n <> semi
-  where b'                          = vsubst [(tvSelf, tCon c)] b
-        c                           = TC (NoQ n) (map tVar $ qbound q)
-        env1                        = setInClass (defineTVars q env)
-        props                       = [ (n,sctype sc) | (n, NSig sc Property _) <- fullAttrEnv env c ]
-        sup_c                       = filter ((`elem` special_repr) . tcname) as
-        special_repr                = [primActor] -- To be extended...
-        cDefinedClass               = inBuiltin env && any hasNotImpl [b' | Decl _ ds <- b, Def{dname=n',dbody=b'} <- ds, n' == initKW ]
 
-declDecl env Typedef{}              = empty
+
+-- Keep named, typed capture fields and per-body class identity. Share the cold
+-- serialization walk and effect adapters; invocation has no extra indirection or
+-- per-instance descriptor pointer.
+declClosure env n q b               = vcat [ declDecl env d{ dname = methodname n (dname d) }
+                                            | Decl _ ds <- b, d@Def{} <- ds, emitClosureMethod env n q (dname d) ] $+$
+                                      adapterGuard $+$ layout $+$ serializer $+$ deserializer $+$ constructor $+$
+                                      text "struct" <+> classname env n <+> methodtable env n <> semi
+  where tc                          = TC (NoQ n) (map tVar $ qbound q)
+        props                       = closureProps env n q
+        -- Shared adapters dispatch through the primitive method-table prefix.
+        -- Check the target slot before using it with another arity/signature.
+        adapterGuard
+          | Just base <- adapterBase n,
+            Map.member (n,attr_call_) (closureAdaptersX $ envX env)
+                                    = text "_Static_assert" <> parens
+                                        (slotOffset (genTopName env n) ==: slotOffset (gen env base) <+> text "&&" <+>
+                                         slotSize (genTopName env n) ==: slotSize (gen env base) <> comma <+>
+                                         doubleQuotes (text "Closure adapter slot mismatch")) <> semi
+          | otherwise               = empty
+        target                      = if adapterBase n == Just primAction then attr_asyn_ else attr_eval_
+        slotOffset c                = text "offsetof" <> parens (text "struct" <+> c <> text "G_class" <> comma <+> gen env target)
+        slotSize c                  = text "sizeof" <> parens (parens (parens c <> text "0") <> text "->$class->" <> gen env target)
+        a ==: b                     = a <+> text "==" <+> b
+        layoutName                  = genTopName env (Derived n (name "layout"))
+        (fieldsOwner,ownerCaptures)  = Map.findWithDefault (n, map fst props) n (closureFieldsX $ envX env)
+        fieldsName                  = genTopName env (Derived fieldsOwner (name "fields"))
+        layout                      = (if null props || fieldsOwner /= n then empty else
+                                        text "static const struct $ClosureField" <+> fieldsName <> text "[] = {" $+$
+                                        nest 4 (vcat [ field i t <> comma | (i,t) <- props ]) $+$ text "};") $+$
+                                      -- No runtime check or extra object state is needed.
+                                      (if null props || fieldsOwner == n then empty else
+                                        text "_Static_assert" <> parens
+                                          (hcat (punctuate (text " && ")
+                                            [ text "$CLOSURE_FIELD_EQ" <> parens (hsep $ punctuate comma
+                                                [ genTopName env n, gen env i, genTopName env fieldsOwner, gen env j ])
+                                              | ((i,_),j) <- zip props ownerCaptures ]) <>
+                                           comma <+> doubleQuotes (text "Closure capture layout mismatch")) <> semi) $+$
+                                      text "static const struct $ClosureLayout" <+> layoutName <+> text "= {" $+$
+                                      nest 4 (hsep $ punctuate comma
+                                        [ text "sizeof" <> parens (text "struct" <+> genTopName env n),
+                                          text "($SerializableG_class)&" <> methodtable env n,
+                                          pretty (length props), if null props then text "NULL" else fieldsName ]) $+$ text "};"
+        field i t                   = braces $ hsep $ punctuate comma
+                                        [ fieldOffset n i, fieldSize n i, text (closureFieldId t) ]
+        fieldOffset c i             = text "offsetof" <> parens (text "struct" <+> genTopName env c <> comma <+> gen env i)
+        fieldSize c i               = text "sizeof" <> parens (parens (parens (genTopName env c) <> text "0") <> text "->" <> gen env i)
+        self                        = name "self"
+        st                          = name "state"
+        pars                        = PosPar self (Just $ tCon tc) Nothing $ PosPar st (Just tSerialstate) Nothing PosNIL
+        codecArgs                   = hsep $ punctuate comma [gen env self, char '&' <> layoutName, gen env st]
+        serializer                  = text "void" <+> genTopName env (methodname n serializeKW) <> parens (gen env pars) <+> char '{' $+$
+                                      nest 4 (text "$closure_serialize" <> parens codecArgs <> semi) $+$ char '}'
+        deserializer                = gen env (tCon tc) <+> genTopName env (methodname n deserializeKW) <> parens (gen env pars) <+> char '{' $+$
+                                      nest 4 (text "return" <+> text "$closure_deserialize" <> parens codecArgs <> semi) $+$ char '}'
+        TFun _ _ r _ _              = sctype $ fst $ schemaOf env (eVar n)
+        conPars                     = pPar paramNames r
+        captures                    = concat [ drop 1 (bound p) | Decl _ ds <- b, Def{dname=i,pos=p} <- ds, i == initKW ]
+        captureArgs                 = zip captures (bound conPars)
+        assignments
+          | Data.List.sort captures == Data.List.sort (map fst props), length captures == length (bound conPars)
+                                    = vcat [ gen env tmpV <> text "->" <> gen env i <+> equals <+> gen env arg <> semi
+                                             | (i,arg) <- captureArgs ]
+          | otherwise               = error "Internal error CodeGen.declClosure: capture/constructor mismatch"
+        constructor                 = gen env (tCon tc) <+> newcon env n <> parens (gen env conPars) <+> char '{' $+$
+                                      nest 4 (gen env (tCon tc) <+> gen env tmpV <+> equals <+> acton_malloc env (gname env n) <> semi $+$
+                                              gen env tmpV <> text "->$class = &" <> methodtable env n <> semi $+$
+                                              assignments $+$
+                                              text "return" <+> gen env tmpV <> semi) $+$ char '}'
 
 declCleanup env n sup_c
   -- TODO: only match if this is an actor, or even better if this actor has a __cleanup__ method defined (not empty!?)
@@ -791,7 +1035,12 @@ initClass env c q (s : ss) b
 -- A direct method implementation can have a more specific C signature than the
 -- class-table slot, for example when a method returns Self.  The table slot is
 -- the public ABI, so cast the generated function pointer to that shape.
-methodAssign env c q n              = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (methodname c n) <> semi
+methodAssign env c q n
+  | isClosureName c, n == initKW    = methodtable env c <> dot <> gen env n <+> text "= NULL;"
+  | Just helper <- Map.lookup (c,n) (closureAdaptersX $ envX env)
+                                    = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env helper <> semi
+  | otherwise                       = methodtable env c <> dot <> gen env n <+> equals <+> methodCast env c q n <> genTopName env (methodname c impl) <> semi
+  where impl                        = if isClosureName c then closureMethod env c q n else n
 
 methodCast env c q n                = case lookup n (fullAttrEnv env tc) of
                                         Just (NDef _ Static _) -> parens (funsig2 env Nothing rt)

@@ -1,0 +1,161 @@
+# Invoke restored closures: matching serialized bytes alone cannot establish
+# that the correct body, effect adapters, and capture representations survived.
+def round_trip[A](value: A) -> A:
+    NotImplemented
+
+def round_trip_alloc[A](value: A) -> A:
+    NotImplemented
+
+proc def exec_proc(callback: proc(int) -> int, value: int) -> int:
+    NotImplemented
+
+def pure_adapter_probe(callback: pure() -> int) -> bool:
+    NotImplemented
+
+def pure_three_probe(callback: pure(int, str, float) -> (int, str, float)) -> bool:
+    NotImplemented
+
+def mut_two_probe(callback: mut(str, float) -> float) -> bool:
+    NotImplemented
+
+def action_three_probe(callback: action(int, str, float) -> int) -> bool:
+    NotImplemented
+
+proc def exec_pure(callback: pure(int) -> int, value: int) -> int:
+    NotImplemented
+
+proc def exec_mut(callback: mut(int) -> int, value: int) -> int:
+    NotImplemented
+
+proc def snapshot(value: int) -> int:
+    NotImplemented
+
+class Node(object):
+    next: ?Node
+    callback: ?pure() -> Node
+    def __init__(self):
+        self.next = None
+        self.callback = None
+
+def mixed(n: int, small: i8, medium: u16, large: u64, f: float, flag: bool, text: str) -> pure(int) -> int:
+    return lambda x: n + x + int(small) + int(medium) + int(large) + int(f) + (1 if flag else 0) + len(text)
+
+# A different body and different capture names share the mixed field walk.
+def mixed_renamed(total: int, byte: i8, half: u16, wide: u64, decimal: float, enabled: bool, label: str) -> pure(int) -> int:
+    return lambda x: total + x + int(byte) + int(half) + int(wide) + int(decimal) + (2 if enabled else 0) + len(label)
+
+# Capture order changes padding and must remain part of the layout key.
+def packed(small: i8, large: int) -> pure() -> (i8, int):
+    return lambda: (small, large)
+
+def packed_reverse(large: int, small: i8) -> pure() -> (int, i8):
+    return lambda: (large, small)
+
+def signed_byte(value: i8) -> pure() -> i8:
+    return lambda: value
+
+def unsigned_byte(value: u8) -> pure() -> u8:
+    return lambda: value
+
+def boolean(value: bool) -> pure() -> bool:
+    return lambda: value
+
+def add(n: int) -> pure(int) -> int:
+    return lambda x: n + x
+
+def subtract(n: int) -> pure(int) -> int:
+    return lambda x: n - x
+
+def repeated(value: int) -> (pure() -> int, pure() -> int):
+    return (lambda: value, lambda: value)
+
+def shared_class(first: pure() -> int, second: pure() -> int) -> bool:
+    NotImplemented
+
+def capture[A](value: A) -> pure() -> A:
+    return lambda: value
+
+def cycle(node: Node) -> pure() -> Node:
+    return lambda: node
+
+def has_cycle(node: Node, callback: pure() -> Node) -> bool:
+    NotImplemented
+
+mut def mutable(left: list[int], right: list[int]) -> mut(int) -> int:
+    mut def update(x: int) -> int:
+        left[0] = left[0] + x
+        return right[0]
+    return update
+
+mut def floating(values: list[int]) -> mut(str, float) -> float:
+    mut def pair(text: str, f: float) -> float:
+        values[0] = values[0] + len(text)
+        return f
+    return pair
+
+def procedural(n: int) -> proc(int) -> int:
+    proc def call(x: int) -> int:
+        return n + x
+    return call
+
+actor Sample(base: int):
+    def plus(x: int) -> int:
+        return base + x
+    def three(x: int, label: str, factor: float) -> int:
+        return base + x + len(label) + int(factor)
+
+def round_trip_actor[A](value: A, actor_ref: Sample) -> A:
+    NotImplemented
+
+actor main(env):
+    assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
+    assert round_trip(mixed_renamed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 282
+    assert round_trip(packed(i8(-15), 12345))() == (i8(-15), 12345)
+    assert round_trip(packed_reverse(12345, i8(-15)))() == (12345, i8(-15))
+    assert round_trip(signed_byte(i8(-15)))() == i8(-15)
+    assert round_trip(unsigned_byte(u8(241)))() == u8(241)
+    assert not round_trip(boolean(False))()
+    # Same capture layout, different code identities.
+    assert round_trip(add(10))(3) == 13
+    assert round_trip(subtract(10))(3) == 7
+    empty: pure(int) -> int = lambda x: x
+    assert round_trip(empty)(8) == 8
+    first, second = repeated(42)
+    assert shared_class(first, second)
+    assert pure_adapter_probe(round_trip(first))
+    assert round_trip(first)() == 42
+    assert round_trip(second)() == 42
+    assert round_trip(capture(42))() == 42
+    assert round_trip(capture("hello"))() == "hello"
+    node = Node()
+    node.next = node
+    cyclic = cycle(node)
+    node.callback = cyclic
+    restored_cycle = round_trip(cyclic)
+    assert has_cycle(restored_cycle(), restored_cycle)
+    recovered_cycle = round_trip_alloc(cyclic)
+    assert has_cycle(recovered_cycle(), recovered_cycle)
+    values = [0]
+    original: mut(int) -> int = mutable(values, values)
+    restored: mut(int) -> int = round_trip(original)
+    assert restored(3) == 3
+    assert restored(4) == 7
+    assert exec_mut(restored, 5) == 12
+    assert exec_pure(round_trip(add(10)), 9) == 19
+    assert original(1) == 1
+    assert round_trip(procedural(20))(5) == 25
+    assert exec_proc(round_trip(procedural(20)), 7) == 27
+    sample = Sample(30)
+    callback = round_trip_actor(sample.plus, sample)
+    assert callback(6) == 36
+    triple: pure(int, str, float) -> (int, str, float) = lambda x, text, f: (x, text, f)
+    assert pure_three_probe(round_trip(triple))
+    assert round_trip(triple)(5, "abc", 2.5) == (5, "abc", 2.5)
+    restored_pair: mut(str, float) -> float = round_trip(floating(values))
+    assert mut_two_probe(restored_pair)
+    assert restored_pair("abc", 2.5) == 2.5
+    three: action(int, str, float) -> int = round_trip_actor(sample.three, sample)
+    assert action_three_probe(three)
+    assert three(5, "abc", 2.5) == 40
+    assert snapshot(7) + 1 == 8
+    env.exit(0)

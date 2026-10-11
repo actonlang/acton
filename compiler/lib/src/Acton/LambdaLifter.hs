@@ -15,6 +15,7 @@
 module Acton.LambdaLifter(liftModule) where
 
 import Control.Monad.State.Strict
+import qualified Data.HashMap.Strict as M
 import Utils
 import Acton.Syntax
 import Acton.Names
@@ -74,19 +75,19 @@ liftModule env0 (Module m imp mdoc stmts) = return $ (Module m imp mdoc stmts', 
 
 type LiftM a                    = State LiftState a
 
-type LiftState                  = ([Decl],[Int])        -- lifted defs, name supply
+type LiftState                  = ([Decl],[Int],M.HashMap String [(Decl,Name)]) -- lifted defs, name supply, shared closures
 
 runL                            :: LiftM a -> a
-runL m                          = evalState m ([],[1..])
+runL m                          = evalState m ([],[1..],M.empty)
 
 newName                         :: String -> LiftM Name
-newName s                       = state (\(totop,uniq:supply) -> (Internal LLiftPass s uniq, (totop,supply)))
+newName s                       = state (\(totop,uniq:supply,closures) -> (Internal LLiftPass s uniq, (totop,supply,closures)))
 
 liftToTop                       :: [Decl] -> LiftM ()
-liftToTop ds                    = state (\(totop,supply) -> ((), (totop++ds,supply)))
+liftToTop ds                    = state (\(totop,supply,closures) -> ((), (totop++ds,supply,closures)))
 
 liftedToTop                     :: LiftM [Decl]
-liftedToTop                     = state (\(totop,supply) -> (totop, ([],supply)))
+liftedToTop                     = state (\(totop,supply,closures) -> (totop, ([],supply,closures)))
 
 
 llCont                          = Internal LLiftPass "cont" 0
@@ -103,7 +104,8 @@ data LiftX                      = LiftX {
                                     localsX   :: [(Name,Type)],
                                     freemapX  :: [(Name,[Name])],
                                     quantmapX :: [(Name,[TVar])],
-                                    namemapX  :: [(Name,Name)]
+                                    namemapX  :: [(Name,Name)],
+                                    constcontX :: [(Name,(Expr,Expr))]
                                   }
                                   deriving (Eq,Show)
 
@@ -113,7 +115,7 @@ instance Pretty (Name, [Name]) where
     pretty (n,ns)               = pretty n <+> braces (commaSep pretty ns)
 
 
-liftEnv env0                    = setX env0 LiftX{ ctxtX = OnTop, localsX = [], freemapX = [], quantmapX = [], namemapX = [] }
+liftEnv env0                    = setX env0 LiftX{ ctxtX = OnTop, localsX = [], freemapX = [], quantmapX = [], namemapX = [], constcontX = [] }
 
 ctxt env                        = ctxtX $ envX env
 
@@ -144,6 +146,23 @@ liftedName env n                = case lookup n (namemap env) of
 extraArgs env n                 = case findFree n env of
                                     Just vts -> vts
                                     _        -> []
+
+-- CPS introduces named continuations that ignore a None result and return a
+-- captured value to a captured continuation. Both captures must be local
+-- variables: eagerly reading a property or mutable global would change when
+-- it is evaluated. Keep the lifted function available for direct calls.
+extConstConts outer ds env       = modX env $ \x -> x{ constcontX = matches ++ constcontX x }
+  where matches                 = [ (n,(val,cont))
+                                  | Def _ n [] (PosPar arg (Just t) Nothing PosNIL) KwdNIL (Just rt)
+                                      [Return _ (Just (Call _ f (PosArg cont (PosArg val PosNil)) KwdNil))] NoDec fx _ <- ds
+                                  , t == tNone, rt == tR, fx == fxProc
+                                  , rcont f, captured cont, captured val
+                                  , arg `notElem` free [cont,val] ]
+        rcont (TApp _ f _)      = rcont f
+        rcont (Var _ n)         = n == primRContc || n == primRCont
+        rcont _                 = False
+        captured (Var _ (NoQ n)) = n `elem` dom (locals outer)
+        captured _              = False
 
 
 -- Helpers ------------------------------------------------------------------------------------------------------------------
@@ -191,7 +210,7 @@ llSuite env (Decl l ds : ss)
                                              ds2 <- liftedToTop
                                              ss' <- llSuite env1 ss
                                              return $ Decl l (ds2++ds1) : ss'
-  where env'                            = extFree funfree $ define (envOf ds) env
+  where env'                            = extConstConts env ds $ extFree funfree $ define (envOf ds) env
         funfree                         = [ (n, vs \\ bound p) | (n,vs) <- funfree1, let p = [ pos d | d <- ds, dname d == n ] ]
         funfree1                        = expand (freemap env) $ iterexpand funfree0
         funfree0                        = [ (dname d, nub $ free d) | d@Def{} <- ds ]
@@ -258,9 +277,16 @@ freefun env (TApp l (Var l' n) ts)
   | isDefOrClass env n                  = Just (TApp l (Var l' (primSubst n)) (conv ts), [])
 freefun env e                           = Nothing
 
-closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
-                                             --traceM ("## closureConvert " ++ prstr lambda ++ "  as  " ++ prstr n)
-                                             liftToTop [Class l0 n q bases body Nothing]
+-- Share the class, not the object: every construction still allocates its own
+-- captured state. Structural equality ignores source locations but includes
+-- effects, quantification, capture names/types, and the complete method bodies.
+closureConvert env lambda t0 vts0 es    = do (_,_,closures) <- get
+                                             n <- case M.lookup (prstr key) closures >>= lookup key of
+                                               Just n -> return n
+                                               Nothing -> do n <- newName (nstr $ noq basename)
+                                                             liftToTop [Class l0 n q bases body Nothing]
+                                                             modify (\(ds,supply,cs) -> (ds,supply,M.insertWith (++) (prstr key) [(key,n)] cs))
+                                                             return n
                                              return $ eCall (tApp (eVar n) (map tVar $ qbound q)) es
   where q                               = quantScope env
         s                               = selfScopeSubst env
@@ -271,6 +297,7 @@ closureConvert env lambda t0 vts0 es    = do n <- newName (nstr $ noq basename)
         bases                           = map snd $ findAncestry env cBase
         vts                             = conv $ vsubst s vts0
         body                            = props ++ [Decl l0 [initDef], Decl l0 defs]
+        key                             = Class l0 llSelf q bases body Nothing
         props                           = [ Signature l0 [v] (monotype t) Property | (v,t) <- vsubst s vts ]
         initDef                         = Def l0 initKW [] initPars KwdNIL (Just tNone) (initBody++[sReturn eNone]) NoDec fxPure Nothing
         initPars                        = PosPar llSelf (Just tSelf) Nothing $ pospar vts
@@ -320,6 +347,10 @@ isCont _                                = False
 instance Lift Expr where
     ll env e@(Var l (NoQ n))
       | n `elem` dom (locals env)       = pure e
+      | Just (val,cont) <- lookup n (constcontX $ envX env)
+                                        = do val' <- llSub env val
+                                             cont' <- llSub env cont
+                                             return $ eCall (tApp (eQVar primCONSTCONT) [conv $ typeOf env val]) [val',cont']
     ll env e
       | Just (e',vts) <- freefun env e  = closureConvert env (Lambda l0 par KwdNIL (call e' vts) fx) t vts (map (eVar . fst) vts )
       where par                         = pPar paramNames p

@@ -1175,6 +1175,7 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
       src = casesSrcDir
       modB = modLabel proj "b"
       bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
+      bSupport = takeDirectory bC </> "generated" </> "b.inc"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "def foo() -> int:"
@@ -1199,6 +1200,13 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
   assertBool "expected codegen stale message" (T.isInfixOf "generated code out of date" out)
   assertBool "expected b.act to compile codegen" (compiled out modB)
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
+  -- A stale support fragment alone must refresh generated code without
+  -- repeating the front passes, just as a stale main C file does.
+  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
+  supportOut <- buildOutIn proj
+  assertBool "expected stale support message" (T.isInfixOf "generated code out of date" supportOut)
+  assertBool "expected stale support to compile codegen" (compiled supportOut modB)
+  assertBool "did not expect stale support to type check" (not (typechecked supportOut modB))
 
 p24_codegen_equal_hash :: TestTree
 p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single delta" $ do
@@ -1206,6 +1214,7 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
       src = casesSrcDir
       modB = modLabel proj "b"
       bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
+      bSupport = takeDirectory bC </> "generated" </> "b.inc"
       bH = proj </> "out" </> "types" </> "incremental_cases" </> "b.h"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1230,6 +1239,7 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   _ <- buildOutInArgs proj ["--no-dbp"]
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
   rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
+  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
   out <- buildOutInArgs proj ["--no-dbp"]
   assertBool "expected single-delta codegen message"
     (T.isInfixOf "generated code out of date {impl deadbeef ->" out)

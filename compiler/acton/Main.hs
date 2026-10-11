@@ -2372,11 +2372,14 @@ removeOrphanFiles paths tasks roots = do
             bext = takeExtension (takeBaseName absFile)
             isRootStub = isC && (bext == ".root" || bext == ".test_root")
             base = dropExtension absFile
-            modBase = if isRootStub then dropExtension base else base
+            supportBase = Acton.CodeGen.supportOwner absFile
+            modBase = case supportBase of
+              Just owner -> owner
+              Nothing -> if isRootStub then dropExtension base else base
         if isRootStub
           then when (not (absFile `elem` roots) || not (modBase `elem` allowedBases)) (removeIfExists absFile)
-          else when (isC || isH) $ do
-                 unless (base `elem` allowedBases) (removeIfExists absFile)
+          else when (isC || isH || isJust supportBase) $ do
+                 unless (modBase `elem` allowedBases) (removeIfExists absFile)
     tyDbs <- InterfaceFiles.listInterfaceDirsRecursive dir
     forM_ tyDbs $ \tyDb -> do
       let base = dropExtension tyDb

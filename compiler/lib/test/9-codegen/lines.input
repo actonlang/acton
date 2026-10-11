@@ -333,90 +333,51 @@ class L_25proc ($proc[(), None], __builtin__.value):
     # (recursive group)
 proc def L_26C_11cont (C_cont : $Cont[Apa], G_act : Apa, C_12res : None) -> $R:
     return $R_CONT@[Apa](C_cont, G_act)
-class L_27Cont ($Cont[None], __builtin__.value):
-    @property
-    C_cont : $Cont[Apa]
+class L_27proc ($proc[(), None], __builtin__.value):
     @property
     G_act : Apa
-    pure def __init__ (L_self : L_27Cont, C_cont : $Cont[Apa], G_act : Apa) -> None:
-        L_self.C_cont = C_cont
-        L_self.G_act = G_act
-        return None
-    proc def __call__ (L_self : L_27Cont, G_1 : None) -> $R:
-        C_cont: $Cont[Apa] = L_self.C_cont
-        G_act: Apa = L_self.G_act
-        return L_26C_11cont(C_cont, G_act, G_1)
-class L_28proc ($proc[(), None], __builtin__.value):
-    @property
-    G_act : Apa
-    pure def __init__ (L_self : L_28proc, G_act : Apa) -> None:
+    pure def __init__ (L_self : L_27proc, G_act : Apa) -> None:
         L_self.G_act = G_act
         return None
     # recursive group:
-    proc def __call__ (L_self : L_28proc, C_cont : $Cont[None]) -> $R:
+    proc def __call__ (L_self : L_27proc, C_cont : $Cont[None]) -> $R:
         G_act: Apa = L_self.G_act
         return G_act.__init__(C_cont)
-    proc def __exec__ (L_self : L_28proc, C_cont : $Cont[None]) -> $R:
+    proc def __exec__ (L_self : L_27proc, C_cont : $Cont[None]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
-proc def L_29C_13cont (C_cont : $Cont[Bepa], G_act : Bepa, C_14res : None) -> $R:
+proc def L_28C_13cont (C_cont : $Cont[Bepa], G_act : Bepa, C_14res : None) -> $R:
     return $R_CONT@[Bepa](C_cont, G_act)
-class L_30Cont ($Cont[None], __builtin__.value):
-    @property
-    C_cont : $Cont[Bepa]
+class L_29proc ($proc[(), None], __builtin__.value):
     @property
     G_act : Bepa
-    pure def __init__ (L_self : L_30Cont, C_cont : $Cont[Bepa], G_act : Bepa) -> None:
-        L_self.C_cont = C_cont
-        L_self.G_act = G_act
-        return None
-    proc def __call__ (L_self : L_30Cont, G_1 : None) -> $R:
-        C_cont: $Cont[Bepa] = L_self.C_cont
-        G_act: Bepa = L_self.G_act
-        return L_29C_13cont(C_cont, G_act, G_1)
-class L_31proc ($proc[(), None], __builtin__.value):
-    @property
-    G_act : Bepa
-    pure def __init__ (L_self : L_31proc, G_act : Bepa) -> None:
+    pure def __init__ (L_self : L_29proc, G_act : Bepa) -> None:
         L_self.G_act = G_act
         return None
     # recursive group:
-    proc def __call__ (L_self : L_31proc, C_cont : $Cont[None]) -> $R:
+    proc def __call__ (L_self : L_29proc, C_cont : $Cont[None]) -> $R:
         G_act: Bepa = L_self.G_act
         return G_act.__init__(C_cont)
-    proc def __exec__ (L_self : L_31proc, C_cont : $Cont[None]) -> $R:
+    proc def __exec__ (L_self : L_29proc, C_cont : $Cont[None]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
-proc def L_32C_15cont (C_cont : $Cont[main], G_act : main, C_16res : None) -> $R:
+proc def L_30C_15cont (C_cont : $Cont[main], G_act : main, C_16res : None) -> $R:
     return $R_CONT@[main](C_cont, G_act)
-class L_33Cont ($Cont[None], __builtin__.value):
-    @property
-    C_cont : $Cont[main]
-    @property
-    G_act : main
-    pure def __init__ (L_self : L_33Cont, C_cont : $Cont[main], G_act : main) -> None:
-        L_self.C_cont = C_cont
-        L_self.G_act = G_act
-        return None
-    proc def __call__ (L_self : L_33Cont, G_1 : None) -> $R:
-        C_cont: $Cont[main] = L_self.C_cont
-        G_act: main = L_self.G_act
-        return L_32C_15cont(C_cont, G_act, G_1)
-class L_34proc ($proc[(), None], __builtin__.value):
+class L_31proc ($proc[(), None], __builtin__.value):
     @property
     G_act : main
     @property
     env : __builtin__.Env
-    pure def __init__ (L_self : L_34proc, G_act : main, env : __builtin__.Env) -> None:
+    pure def __init__ (L_self : L_31proc, G_act : main, env : __builtin__.Env) -> None:
         L_self.G_act = G_act
         L_self.env = env
         return None
     # recursive group:
-    proc def __call__ (L_self : L_34proc, C_cont : $Cont[None]) -> $R:
+    proc def __call__ (L_self : L_31proc, C_cont : $Cont[None]) -> $R:
         G_act: main = L_self.G_act
         env: __builtin__.Env = L_self.env
         return G_act.__init__(C_cont, env)
-    proc def __exec__ (L_self : L_34proc, C_cont : $Cont[None]) -> $R:
+    proc def __exec__ (L_self : L_31proc, C_cont : $Cont[None]) -> $R:
         return L_self.__call__(C_cont)
     # (recursive group)
 class Apa ($Actor, __builtin__.value):
@@ -493,13 +454,13 @@ class main ($Actor, __builtin__.value):
 proc def ApaG_newact (C_cont : $Cont[Apa]) -> $R:
     G_act: Apa = $NEWACTOR@[Apa]()
     $InstallFinalizer@[Apa](G_act)
-    return $AWAIT@[None](L_27Cont(C_cont, G_act), $ASYNC@[None](G_act, L_28proc(G_act)))
+    return $AWAIT@[None]($CONSTCONT@[Apa](G_act, C_cont), $ASYNC@[None](G_act, L_27proc(G_act)))
 proc def BepaG_newact (C_cont : $Cont[Bepa]) -> $R:
     G_act: Bepa = $NEWACTOR@[Bepa]()
     $InstallFinalizer@[Bepa](G_act)
-    return $AWAIT@[None](L_30Cont(C_cont, G_act), $ASYNC@[None](G_act, L_31proc(G_act)))
+    return $AWAIT@[None]($CONSTCONT@[Bepa](G_act, C_cont), $ASYNC@[None](G_act, L_29proc(G_act)))
 proc def mainG_newact (C_cont : $Cont[main], env : __builtin__.Env) -> $R:
     G_act: main = $NEWACTOR@[main]()
     $InstallFinalizer@[main](G_act)
-    return $AWAIT@[None](L_33Cont(C_cont, G_act), $ASYNC@[None](G_act, L_34proc(G_act, env)))
+    return $AWAIT@[None]($CONSTCONT@[main](G_act, C_cont), $ASYNC@[None](G_act, L_31proc(G_act, env)))
 # (recursive group)
