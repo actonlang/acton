@@ -1339,6 +1339,7 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
       src = casesSrcDir
       modB = modLabel proj "b"
       bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
+      bSupport = takeDirectory bC </> "generated" </> "b.inc"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
     [ "def foo() -> int:"
@@ -1363,6 +1364,13 @@ p23_codegen_mismatch = testCase "23-codegen hash mismatch triggers rebuild" $ do
   assertBool "expected codegen stale message" (T.isInfixOf "generated code out of date" out)
   assertBool "expected b.act to compile codegen" (compiled out modB)
   assertBool "did not expect b.act to type check" (not (typechecked out modB))
+  -- A stale support fragment alone must refresh generated code without
+  -- repeating the front passes, just as a stale main C file does.
+  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
+  supportOut <- buildOutIn proj
+  assertBool "expected stale support message" (T.isInfixOf "generated code out of date" supportOut)
+  assertBool "expected stale support to compile codegen" (compiled supportOut modB)
+  assertBool "did not expect stale support to type check" (not (typechecked supportOut modB))
 
 p24_codegen_equal_hash :: TestTree
 p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single delta" $ do
@@ -1370,6 +1378,7 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
       src = casesSrcDir
       modB = modLabel proj "b"
       bC = proj </> "out" </> "types" </> "incremental_cases" </> "b.c"
+      bSupport = takeDirectory bC </> "generated" </> "b.inc"
       bH = proj </> "out" </> "types" </> "incremental_cases" </> "b.h"
   ensureCasesProject
   writeFileUtf8 (src </> "a.act") $ T.unlines
@@ -1394,6 +1403,7 @@ p24_codegen_equal_hash = testCase "24-codegen equal hash mismatch formats single
   _ <- buildOutInArgs proj ["--no-dbp"]
   rewriteFirstLine bC "/* Acton impl hash: deadbeef */"
   rewriteFirstLine bH "/* Acton impl hash: deadbeef */"
+  rewriteFirstLine bSupport "/* Acton impl hash: deadbeef */"
   out <- buildOutInArgs proj ["--no-dbp"]
   assertBool "expected single-delta codegen message"
     (T.isInfixOf "generated code out of date {impl deadbeef ->" out)
@@ -2975,8 +2985,9 @@ p56_changed_path_prunes_removed_module =
         typesDir = proj </> "out" </> "types"
         -- Root stubs sit at the module path without the project prefix.
         outsA = [ typesDir </> casesProjName </> ("a" ++ ext) | ext <- [".tydb", ".c", ".h"] ] ++
-                [ typesDir </> "a.root.c" ]
+                [ typesDir </> "a.root.c", typesDir </> casesProjName </> "generated" </> "a.inc" ]
         rootMain = typesDir </> "main.root.c"
+        supportMain = typesDir </> casesProjName </> "generated" </> "main.inc"
         rootActor = T.unlines
           [ "actor main(env: Env):"
           , "    env.exit(0)"
@@ -2996,7 +3007,7 @@ p56_changed_path_prunes_removed_module =
     writeFileUtf8 actA rootActor
     writeFileUtf8 actMain rootActor
     _ <- buildOutIn proj
-    assertArtifactsExist (rootMain : outsA)
+    assertArtifactsExist (rootMain : supportMain : outsA)
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler gopts 1
@@ -3007,7 +3018,7 @@ p56_changed_path_prunes_removed_module =
     plan <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [actAAbs])
     assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
     assertArtifactsGone outsA
-    assertArtifactsExist [rootMain]
+    assertArtifactsExist [rootMain, supportMain]
 
 p57_dotted_module_name_keeps_outputs :: TestTree
 p57_dotted_module_name_keeps_outputs =
@@ -3016,7 +3027,8 @@ p57_dotted_module_name_keeps_outputs =
         src = casesSrcDir
         -- y.root.c also looks like the root stub of a module y.
         dotted = ["z.dot", "y.root"]
-        outs m = [ proj </> "out" </> "types" </> casesProjName </> (m ++ ext) | ext <- [".tydb", ".c", ".h"] ]
+        outs m = [ proj </> "out" </> "types" </> casesProjName </> (m ++ ext) | ext <- [".tydb", ".c", ".h"] ] ++
+                 [ proj </> "out" </> "types" </> casesProjName </> "generated" </> m <.> "inc" ]
         cFiles = filter ((/= ".tydb") . takeExtension) (concatMap outs dotted)
         stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
     ensureCasesProject
@@ -3029,7 +3041,7 @@ p57_dotted_module_name_keeps_outputs =
     forM_ dotted $ \m ->
       assertBool ("expected " ++ m ++ " fresh\n" ++ T.unpack out) (fresh out (modLabel proj m))
     stamps' <- mapM stamp cFiles
-    assertEqual "expected the second build to keep the generated .c and .h files" stamps stamps'
+    assertEqual "expected the second build to keep the generated .c, .h and support files" stamps stamps'
     forM_ dotted $ \m -> removeFile (src </> m <.> "act")
     _ <- buildOutInArgs proj ["--skip-build"]
     assertArtifactsGone (concatMap outs dotted)

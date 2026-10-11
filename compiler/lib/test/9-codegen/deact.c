@@ -1,76 +1,59 @@
 /* Acton impl hash: test-hash */
 #include "rts/common.h"
 #include "out/types/deact.h"
+static $R deactQ_V_1closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
+    return $AWAIT(V_1adapter, ((B_Msg)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
+}
+static $R deactQ_V_2closure_adapter ($action V_adapter, $Cont V_1adapter, $WORD V_2adapter) {
+    return $R_CONT(V_1adapter, ((B_value)((B_Msg (*) ($WORD, $WORD))(($action)(V_adapter))->$class->__asyn__)(V_adapter, V_2adapter)));
+}
 $R deactQ_L_1C_1cont ($Cont C_cont, B_NoneType C_2res) {
     #line 15 "test/src/deact.act"
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("Apa", 3)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
     return $R_CONT(C_cont, B_None);
 }
-B_NoneType deactQ_L_2ContD___init__ (deactQ_L_2Cont L_self, $Cont C_cont) {
-    ((deactQ_L_2Cont)(L_self))->C_cont = C_cont;
-    return B_None;
-}
 $R deactQ_L_2ContD___call__ (deactQ_L_2Cont L_self, B_NoneType G_1) {
     $Cont C_cont = ((deactQ_L_2Cont)(L_self))->C_cont;
     return deactQ_L_1C_1cont(C_cont, G_1);
 }
-void deactQ_L_2ContD___serialize__ (deactQ_L_2Cont self, $Serial$state state) {
-    $step_serialize(self->C_cont, state);
+static const struct $ClosureField deactQ_L_2ContD_fields[] = {
+    {offsetof(struct deactQ_L_2Cont, C_cont), sizeof(((deactQ_L_2Cont)0)->C_cont), $CLOSURE_REF},
+};
+static const struct $ClosureLayout deactQ_L_2ContD_layout = {
+    sizeof(struct deactQ_L_2Cont), ($SerializableG_class)&deactQ_L_2ContG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_2ContD___serialize__(deactQ_L_2Cont self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_2ContD_layout, state);
 }
-deactQ_L_2Cont deactQ_L_2ContD___deserialize__ (deactQ_L_2Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_2Cont));
-            self->$class = &deactQ_L_2ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_2Cont, state);
-    }
-    self->C_cont = $step_deserialize(state);
-    return self;
+deactQ_L_2Cont deactQ_L_2ContD___deserialize__(deactQ_L_2Cont self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_2ContD_layout, state);
 }
 deactQ_L_2Cont deactQ_L_2ContG_new($Cont G_1) {
     deactQ_L_2Cont $tmp = acton_malloc(sizeof(struct deactQ_L_2Cont));
     $tmp->$class = &deactQ_L_2ContG_methods;
-    deactQ_L_2ContG_methods.__init__($tmp, G_1);
+    $tmp->C_cont = G_1;
     return $tmp;
 }
 struct deactQ_L_2ContG_class deactQ_L_2ContG_methods;
-B_NoneType deactQ_L_4actionD___init__ (deactQ_L_4action L_self, deactQ_Apa L_3obj) {
-    ((deactQ_L_4action)(L_self))->L_3obj = L_3obj;
-    return B_None;
-}
-$R deactQ_L_4actionD___call__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
-$R deactQ_L_4actionD___exec__ (deactQ_L_4action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_4action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
 B_Msg deactQ_L_4actionD___asyn__ (deactQ_L_4action L_self, B_int G_1) {
     deactQ_Apa L_3obj = ((deactQ_L_4action)(L_self))->L_3obj;
     return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Apa)(L_3obj))->$class->notice)(L_3obj, ((B_int)G_1)->val));
 }
-void deactQ_L_4actionD___serialize__ (deactQ_L_4action self, $Serial$state state) {
-    $step_serialize(self->L_3obj, state);
+_Static_assert(offsetof(struct deactQ_L_4actionG_class, __asyn__) == offsetof(struct $actionG_class, __asyn__) && sizeof(((deactQ_L_4action)0)->$class->__asyn__) == sizeof((($action)0)->$class->__asyn__), "Closure adapter slot mismatch");
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_4action, L_3obj, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_4actionD_layout = {
+    sizeof(struct deactQ_L_4action), ($SerializableG_class)&deactQ_L_4actionG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_4actionD___serialize__(deactQ_L_4action self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_4actionD_layout, state);
 }
-deactQ_L_4action deactQ_L_4actionD___deserialize__ (deactQ_L_4action self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_4action));
-            self->$class = &deactQ_L_4actionG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_4action, state);
-    }
-    self->L_3obj = $step_deserialize(state);
-    return self;
+deactQ_L_4action deactQ_L_4actionD___deserialize__(deactQ_L_4action self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_4actionD_layout, state);
 }
 deactQ_L_4action deactQ_L_4actionG_new(deactQ_Apa G_1) {
     deactQ_L_4action $tmp = acton_malloc(sizeof(struct deactQ_L_4action));
     $tmp->$class = &deactQ_L_4actionG_methods;
-    deactQ_L_4actionG_methods.__init__($tmp, G_1);
+    $tmp->L_3obj = G_1;
     return $tmp;
 }
 struct deactQ_L_4actionG_class deactQ_L_4actionG_methods;
@@ -82,303 +65,190 @@ $R deactQ_L_5C_3cont ($action cb, $Cont C_cont, int64_t C_4res) {
     int64_t N_tmp = (((int64_t)(v * 10LL)));
     return $R_CONT(C_cont, toB_int(N_tmp));
 }
-B_NoneType deactQ_L_6ContD___init__ (deactQ_L_6Cont L_self, $action cb, $Cont C_cont) {
-    ((deactQ_L_6Cont)(L_self))->cb = cb;
-    ((deactQ_L_6Cont)(L_self))->C_cont = C_cont;
-    return B_None;
-}
 $R deactQ_L_6ContD___call__ (deactQ_L_6Cont L_self, B_int G_1) {
     $action cb = ((deactQ_L_6Cont)(L_self))->cb;
     $Cont C_cont = ((deactQ_L_6Cont)(L_self))->C_cont;
     return deactQ_L_5C_3cont(cb, C_cont, ((B_int)G_1)->val);
 }
-void deactQ_L_6ContD___serialize__ (deactQ_L_6Cont self, $Serial$state state) {
-    $step_serialize(self->cb, state);
-    $step_serialize(self->C_cont, state);
+static const struct $ClosureField deactQ_L_6ContD_fields[] = {
+    {offsetof(struct deactQ_L_6Cont, cb), sizeof(((deactQ_L_6Cont)0)->cb), $CLOSURE_REF},
+    {offsetof(struct deactQ_L_6Cont, C_cont), sizeof(((deactQ_L_6Cont)0)->C_cont), $CLOSURE_REF},
+};
+static const struct $ClosureLayout deactQ_L_6ContD_layout = {
+    sizeof(struct deactQ_L_6Cont), ($SerializableG_class)&deactQ_L_6ContG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_6ContD___serialize__(deactQ_L_6Cont self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_6ContD_layout, state);
 }
-deactQ_L_6Cont deactQ_L_6ContD___deserialize__ (deactQ_L_6Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_6Cont));
-            self->$class = &deactQ_L_6ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_6Cont, state);
-    }
-    self->cb = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
+deactQ_L_6Cont deactQ_L_6ContD___deserialize__(deactQ_L_6Cont self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_6ContD_layout, state);
 }
 deactQ_L_6Cont deactQ_L_6ContG_new($action G_1, $Cont G_2) {
     deactQ_L_6Cont $tmp = acton_malloc(sizeof(struct deactQ_L_6Cont));
     $tmp->$class = &deactQ_L_6ContG_methods;
-    deactQ_L_6ContG_methods.__init__($tmp, G_1, G_2);
+    $tmp->cb = G_1;
+    $tmp->C_cont = G_2;
     return $tmp;
 }
 struct deactQ_L_6ContG_class deactQ_L_6ContG_methods;
-B_NoneType deactQ_L_7procD___init__ (deactQ_L_7proc L_self, deactQ_Apa self, $action cb) {
-    ((deactQ_L_7proc)(L_self))->self = self;
-    ((deactQ_L_7proc)(L_self))->cb = cb;
-    return B_None;
-}
 $R deactQ_L_7procD___call__ (deactQ_L_7proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_7proc)(L_self))->self;
     $action cb = ((deactQ_L_7proc)(L_self))->cb;
     return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, C_cont, cb);
 }
-$R deactQ_L_7procD___exec__ (deactQ_L_7proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_7proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_7proc, self, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_7proc, cb, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_7procD_layout = {
+    sizeof(struct deactQ_L_7proc), ($SerializableG_class)&deactQ_L_7procG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_7procD___serialize__(deactQ_L_7proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_7procD_layout, state);
 }
-void deactQ_L_7procD___serialize__ (deactQ_L_7proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->cb, state);
-}
-deactQ_L_7proc deactQ_L_7procD___deserialize__ (deactQ_L_7proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_7proc));
-            self->$class = &deactQ_L_7procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_7proc, state);
-    }
-    self->self = $step_deserialize(state);
-    self->cb = $step_deserialize(state);
-    return self;
+deactQ_L_7proc deactQ_L_7procD___deserialize__(deactQ_L_7proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_7procD_layout, state);
 }
 deactQ_L_7proc deactQ_L_7procG_new(deactQ_Apa G_1, $action G_2) {
     deactQ_L_7proc $tmp = acton_malloc(sizeof(struct deactQ_L_7proc));
     $tmp->$class = &deactQ_L_7procG_methods;
-    deactQ_L_7procG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->cb = G_2;
     return $tmp;
 }
 struct deactQ_L_7procG_class deactQ_L_7procG_methods;
-B_NoneType deactQ_L_8procD___init__ (deactQ_L_8proc L_self, deactQ_Apa self, $action cb) {
-    ((deactQ_L_8proc)(L_self))->self = self;
-    ((deactQ_L_8proc)(L_self))->cb = cb;
-    return B_None;
-}
 $R deactQ_L_8procD___call__ (deactQ_L_8proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_8proc)(L_self))->self;
     $action cb = ((deactQ_L_8proc)(L_self))->cb;
     return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->computeG_local)(self, C_cont, cb);
 }
-$R deactQ_L_8procD___exec__ (deactQ_L_8proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_8proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_8proc, self, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_8proc, cb, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_8procD_layout = {
+    sizeof(struct deactQ_L_8proc), ($SerializableG_class)&deactQ_L_8procG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_8procD___serialize__(deactQ_L_8proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_8procD_layout, state);
 }
-void deactQ_L_8procD___serialize__ (deactQ_L_8proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->cb, state);
-}
-deactQ_L_8proc deactQ_L_8procD___deserialize__ (deactQ_L_8proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_8proc));
-            self->$class = &deactQ_L_8procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_8proc, state);
-    }
-    self->self = $step_deserialize(state);
-    self->cb = $step_deserialize(state);
-    return self;
+deactQ_L_8proc deactQ_L_8procD___deserialize__(deactQ_L_8proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_8procD_layout, state);
 }
 deactQ_L_8proc deactQ_L_8procG_new(deactQ_Apa G_1, $action G_2) {
     deactQ_L_8proc $tmp = acton_malloc(sizeof(struct deactQ_L_8proc));
     $tmp->$class = &deactQ_L_8procG_methods;
-    deactQ_L_8procG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->cb = G_2;
     return $tmp;
 }
 struct deactQ_L_8procG_class deactQ_L_8procG_methods;
-B_NoneType deactQ_L_9procD___init__ (deactQ_L_9proc L_self, deactQ_Apa self, int64_t i) {
-    ((deactQ_L_9proc)(L_self))->self = self;
-    ((deactQ_L_9proc)(L_self))->i = i;
-    return B_None;
-}
 $R deactQ_L_9procD___call__ (deactQ_L_9proc L_self, $Cont C_cont) {
     deactQ_Apa self = ((deactQ_L_9proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_9proc)(L_self))->i);
     return (($R (*) ($WORD, $Cont, int64_t))((deactQ_Apa)(self))->$class->noticeG_local)(self, C_cont, i);
 }
-$R deactQ_L_9procD___exec__ (deactQ_L_9proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_9proc)(L_self))->$class->__call__)(L_self, C_cont);
+static const struct $ClosureField deactQ_L_9procD_fields[] = {
+    {offsetof(struct deactQ_L_9proc, self), sizeof(((deactQ_L_9proc)0)->self), $CLOSURE_REF},
+    {offsetof(struct deactQ_L_9proc, i), sizeof(((deactQ_L_9proc)0)->i), I64_ID},
+};
+static const struct $ClosureLayout deactQ_L_9procD_layout = {
+    sizeof(struct deactQ_L_9proc), ($SerializableG_class)&deactQ_L_9procG_methods, 2, deactQ_L_9procD_fields
+};
+void deactQ_L_9procD___serialize__(deactQ_L_9proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_9procD_layout, state);
 }
-void deactQ_L_9procD___serialize__ (deactQ_L_9proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $val_serialize(I64_ID, &self->i, state);
-}
-deactQ_L_9proc deactQ_L_9procD___deserialize__ (deactQ_L_9proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_9proc));
-            self->$class = &deactQ_L_9procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_9proc, state);
-    }
-    self->self = $step_deserialize(state);
-    $tmp = $val_deserialize(state);
-    memcpy(&self->i, &$tmp, sizeof(self->i));
-    return self;
+deactQ_L_9proc deactQ_L_9procD___deserialize__(deactQ_L_9proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_9procD_layout, state);
 }
 deactQ_L_9proc deactQ_L_9procG_new(deactQ_Apa G_1, int64_t G_2) {
     deactQ_L_9proc $tmp = acton_malloc(sizeof(struct deactQ_L_9proc));
     $tmp->$class = &deactQ_L_9procG_methods;
-    deactQ_L_9procG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->i = G_2;
     return $tmp;
 }
 struct deactQ_L_9procG_class deactQ_L_9procG_methods;
-B_NoneType deactQ_L_10procD___init__ (deactQ_L_10proc L_self, deactQ_Bepa self, int64_t i) {
-    ((deactQ_L_10proc)(L_self))->self = self;
-    ((deactQ_L_10proc)(L_self))->i = i;
-    return B_None;
-}
 $R deactQ_L_10procD___call__ (deactQ_L_10proc L_self, $Cont C_cont) {
     deactQ_Bepa self = ((deactQ_L_10proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_10proc)(L_self))->i);
     return (($R (*) ($WORD, $Cont, int64_t))((deactQ_Bepa)(self))->$class->callbackG_local)(self, C_cont, i);
 }
-$R deactQ_L_10procD___exec__ (deactQ_L_10proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_10proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_10proc, self, deactQ_L_9proc, self) && $CLOSURE_FIELD_EQ(deactQ_L_10proc, i, deactQ_L_9proc, i), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_10procD_layout = {
+    sizeof(struct deactQ_L_10proc), ($SerializableG_class)&deactQ_L_10procG_methods, 2, deactQ_L_9procD_fields
+};
+void deactQ_L_10procD___serialize__(deactQ_L_10proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_10procD_layout, state);
 }
-void deactQ_L_10procD___serialize__ (deactQ_L_10proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $val_serialize(I64_ID, &self->i, state);
-}
-deactQ_L_10proc deactQ_L_10procD___deserialize__ (deactQ_L_10proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_10proc));
-            self->$class = &deactQ_L_10procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_10proc, state);
-    }
-    self->self = $step_deserialize(state);
-    $tmp = $val_deserialize(state);
-    memcpy(&self->i, &$tmp, sizeof(self->i));
-    return self;
+deactQ_L_10proc deactQ_L_10procD___deserialize__(deactQ_L_10proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_10procD_layout, state);
 }
 deactQ_L_10proc deactQ_L_10procG_new(deactQ_Bepa G_1, int64_t G_2) {
     deactQ_L_10proc $tmp = acton_malloc(sizeof(struct deactQ_L_10proc));
     $tmp->$class = &deactQ_L_10procG_methods;
-    deactQ_L_10procG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->i = G_2;
     return $tmp;
 }
 struct deactQ_L_10procG_class deactQ_L_10procG_methods;
-B_NoneType deactQ_L_14actionD___init__ (deactQ_L_14action L_self, deactQ_Apa L_13obj) {
-    ((deactQ_L_14action)(L_self))->L_13obj = L_13obj;
-    return B_None;
-}
-$R deactQ_L_14actionD___call__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
-$R deactQ_L_14actionD___exec__ (deactQ_L_14action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_14action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
 B_Msg deactQ_L_14actionD___asyn__ (deactQ_L_14action L_self, B_int G_1) {
     deactQ_Apa L_13obj = ((deactQ_L_14action)(L_self))->L_13obj;
     return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Apa)(L_13obj))->$class->notice)(L_13obj, ((B_int)G_1)->val));
 }
-void deactQ_L_14actionD___serialize__ (deactQ_L_14action self, $Serial$state state) {
-    $step_serialize(self->L_13obj, state);
+_Static_assert(offsetof(struct deactQ_L_14actionG_class, __asyn__) == offsetof(struct $actionG_class, __asyn__) && sizeof(((deactQ_L_14action)0)->$class->__asyn__) == sizeof((($action)0)->$class->__asyn__), "Closure adapter slot mismatch");
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_14action, L_13obj, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_14actionD_layout = {
+    sizeof(struct deactQ_L_14action), ($SerializableG_class)&deactQ_L_14actionG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_14actionD___serialize__(deactQ_L_14action self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_14actionD_layout, state);
 }
-deactQ_L_14action deactQ_L_14actionD___deserialize__ (deactQ_L_14action self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_14action));
-            self->$class = &deactQ_L_14actionG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_14action, state);
-    }
-    self->L_13obj = $step_deserialize(state);
-    return self;
+deactQ_L_14action deactQ_L_14actionD___deserialize__(deactQ_L_14action self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_14actionD_layout, state);
 }
 deactQ_L_14action deactQ_L_14actionG_new(deactQ_Apa G_1) {
     deactQ_L_14action $tmp = acton_malloc(sizeof(struct deactQ_L_14action));
     $tmp->$class = &deactQ_L_14actionG_methods;
-    deactQ_L_14actionG_methods.__init__($tmp, G_1);
+    $tmp->L_13obj = G_1;
     return $tmp;
 }
 struct deactQ_L_14actionG_class deactQ_L_14actionG_methods;
-B_NoneType deactQ_L_16actionD___init__ (deactQ_L_16action L_self, deactQ_Bepa L_15obj) {
-    ((deactQ_L_16action)(L_self))->L_15obj = L_15obj;
-    return B_None;
-}
-$R deactQ_L_16actionD___call__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
-$R deactQ_L_16actionD___exec__ (deactQ_L_16action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_16action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
 B_Msg deactQ_L_16actionD___asyn__ (deactQ_L_16action L_self, B_int G_1) {
     deactQ_Bepa L_15obj = ((deactQ_L_16action)(L_self))->L_15obj;
     return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_Bepa)(L_15obj))->$class->callback)(L_15obj, ((B_int)G_1)->val));
 }
-void deactQ_L_16actionD___serialize__ (deactQ_L_16action self, $Serial$state state) {
-    $step_serialize(self->L_15obj, state);
+_Static_assert(offsetof(struct deactQ_L_16actionG_class, __asyn__) == offsetof(struct $actionG_class, __asyn__) && sizeof(((deactQ_L_16action)0)->$class->__asyn__) == sizeof((($action)0)->$class->__asyn__), "Closure adapter slot mismatch");
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_16action, L_15obj, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_16actionD_layout = {
+    sizeof(struct deactQ_L_16action), ($SerializableG_class)&deactQ_L_16actionG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_16actionD___serialize__(deactQ_L_16action self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_16actionD_layout, state);
 }
-deactQ_L_16action deactQ_L_16actionD___deserialize__ (deactQ_L_16action self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_16action));
-            self->$class = &deactQ_L_16actionG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_16action, state);
-    }
-    self->L_15obj = $step_deserialize(state);
-    return self;
+deactQ_L_16action deactQ_L_16actionD___deserialize__(deactQ_L_16action self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_16actionD_layout, state);
 }
 deactQ_L_16action deactQ_L_16actionG_new(deactQ_Bepa G_1) {
     deactQ_L_16action $tmp = acton_malloc(sizeof(struct deactQ_L_16action));
     $tmp->$class = &deactQ_L_16actionG_methods;
-    deactQ_L_16actionG_methods.__init__($tmp, G_1);
+    $tmp->L_15obj = G_1;
     return $tmp;
 }
 struct deactQ_L_16actionG_class deactQ_L_16actionG_methods;
-B_NoneType deactQ_L_19actionD___init__ (deactQ_L_19action L_self, deactQ_main L_18obj) {
-    ((deactQ_L_19action)(L_self))->L_18obj = L_18obj;
-    return B_None;
-}
-$R deactQ_L_19actionD___call__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $AWAIT(L_cont, ((B_Msg)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
-$R deactQ_L_19actionD___exec__ (deactQ_L_19action L_self, $Cont L_cont, B_int G_1) {
-    return $R_CONT(L_cont, ((B_value)((B_Msg (*) ($WORD, B_int))((deactQ_L_19action)(L_self))->$class->__asyn__)(L_self, G_1)));
-}
 B_Msg deactQ_L_19actionD___asyn__ (deactQ_L_19action L_self, B_int G_1) {
     deactQ_main L_18obj = ((deactQ_L_19action)(L_self))->L_18obj;
     return ((B_Msg)((B_Msg (*) ($WORD, int64_t))((deactQ_main)(L_18obj))->$class->myproc)(L_18obj, ((B_int)G_1)->val));
 }
-void deactQ_L_19actionD___serialize__ (deactQ_L_19action self, $Serial$state state) {
-    $step_serialize(self->L_18obj, state);
+_Static_assert(offsetof(struct deactQ_L_19actionG_class, __asyn__) == offsetof(struct $actionG_class, __asyn__) && sizeof(((deactQ_L_19action)0)->$class->__asyn__) == sizeof((($action)0)->$class->__asyn__), "Closure adapter slot mismatch");
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_19action, L_18obj, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_19actionD_layout = {
+    sizeof(struct deactQ_L_19action), ($SerializableG_class)&deactQ_L_19actionG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_19actionD___serialize__(deactQ_L_19action self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_19actionD_layout, state);
 }
-deactQ_L_19action deactQ_L_19actionD___deserialize__ (deactQ_L_19action self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_19action));
-            self->$class = &deactQ_L_19actionG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_19action, state);
-    }
-    self->L_18obj = $step_deserialize(state);
-    return self;
+deactQ_L_19action deactQ_L_19actionD___deserialize__(deactQ_L_19action self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_19actionD_layout, state);
 }
 deactQ_L_19action deactQ_L_19actionG_new(deactQ_main G_1) {
     deactQ_L_19action $tmp = acton_malloc(sizeof(struct deactQ_L_19action));
     $tmp->$class = &deactQ_L_19actionG_methods;
-    deactQ_L_19actionG_methods.__init__($tmp, G_1);
+    $tmp->L_18obj = G_1;
     return $tmp;
 }
 struct deactQ_L_19actionG_class deactQ_L_19actionG_methods;
@@ -393,38 +263,26 @@ $R deactQ_L_17C_9cont (deactQ_main self, $Cont C_cont, int64_t C_10res) {
     ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("main", 4)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
     return $R_CONT(C_cont, B_None);
 }
-B_NoneType deactQ_L_20ContD___init__ (deactQ_L_20Cont L_self, deactQ_main self, $Cont C_cont) {
-    ((deactQ_L_20Cont)(L_self))->self = self;
-    ((deactQ_L_20Cont)(L_self))->C_cont = C_cont;
-    return B_None;
-}
 $R deactQ_L_20ContD___call__ (deactQ_L_20Cont L_self, B_int G_1) {
     deactQ_main self = ((deactQ_L_20Cont)(L_self))->self;
     $Cont C_cont = ((deactQ_L_20Cont)(L_self))->C_cont;
     return deactQ_L_17C_9cont(self, C_cont, ((B_int)G_1)->val);
 }
-void deactQ_L_20ContD___serialize__ (deactQ_L_20Cont self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->C_cont, state);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_20Cont, self, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_20Cont, C_cont, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_20ContD_layout = {
+    sizeof(struct deactQ_L_20Cont), ($SerializableG_class)&deactQ_L_20ContG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_20ContD___serialize__(deactQ_L_20Cont self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_20ContD_layout, state);
 }
-deactQ_L_20Cont deactQ_L_20ContD___deserialize__ (deactQ_L_20Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_20Cont));
-            self->$class = &deactQ_L_20ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_20Cont, state);
-    }
-    self->self = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
+deactQ_L_20Cont deactQ_L_20ContD___deserialize__(deactQ_L_20Cont self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_20ContD_layout, state);
 }
 deactQ_L_20Cont deactQ_L_20ContG_new(deactQ_main G_1, $Cont G_2) {
     deactQ_L_20Cont $tmp = acton_malloc(sizeof(struct deactQ_L_20Cont));
     $tmp->$class = &deactQ_L_20ContG_methods;
-    deactQ_L_20ContG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->C_cont = G_2;
     return $tmp;
 }
 struct deactQ_L_20ContG_class deactQ_L_20ContG_methods;
@@ -439,38 +297,26 @@ $R deactQ_L_12C_7cont (deactQ_main self, $Cont C_cont, deactQ_Bepa C_8res) {
     ((deactQ_main)(self))->x = ((B_Msg (*) ($WORD, $action))((deactQ_Apa)(((deactQ_main)(self))->a))->$class->compute)(((deactQ_main)(self))->a, (($action)deactQ_L_16actionG_new(((deactQ_main)(self))->b)));
     return $AWAIT((($Cont)deactQ_L_20ContG_new(self, C_cont)), ((deactQ_main)(self))->x);
 }
-B_NoneType deactQ_L_21ContD___init__ (deactQ_L_21Cont L_self, deactQ_main self, $Cont C_cont) {
-    ((deactQ_L_21Cont)(L_self))->self = self;
-    ((deactQ_L_21Cont)(L_self))->C_cont = C_cont;
-    return B_None;
-}
 $R deactQ_L_21ContD___call__ (deactQ_L_21Cont L_self, deactQ_Bepa G_1) {
     deactQ_main self = ((deactQ_L_21Cont)(L_self))->self;
     $Cont C_cont = ((deactQ_L_21Cont)(L_self))->C_cont;
     return deactQ_L_12C_7cont(self, C_cont, G_1);
 }
-void deactQ_L_21ContD___serialize__ (deactQ_L_21Cont self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->C_cont, state);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_21Cont, self, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_21Cont, C_cont, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_21ContD_layout = {
+    sizeof(struct deactQ_L_21Cont), ($SerializableG_class)&deactQ_L_21ContG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_21ContD___serialize__(deactQ_L_21Cont self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_21ContD_layout, state);
 }
-deactQ_L_21Cont deactQ_L_21ContD___deserialize__ (deactQ_L_21Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_21Cont));
-            self->$class = &deactQ_L_21ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_21Cont, state);
-    }
-    self->self = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
+deactQ_L_21Cont deactQ_L_21ContD___deserialize__(deactQ_L_21Cont self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_21ContD_layout, state);
 }
 deactQ_L_21Cont deactQ_L_21ContG_new(deactQ_main G_1, $Cont G_2) {
     deactQ_L_21Cont $tmp = acton_malloc(sizeof(struct deactQ_L_21Cont));
     $tmp->$class = &deactQ_L_21ContG_methods;
-    deactQ_L_21ContG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->C_cont = G_2;
     return $tmp;
 }
 struct deactQ_L_21ContG_class deactQ_L_21ContG_methods;
@@ -479,300 +325,126 @@ $R deactQ_L_11C_5cont (deactQ_main self, $Cont C_cont, deactQ_Apa C_6res) {
     ((deactQ_main)(self))->a = C_6res;
     return deactQ_BepaG_newact((($Cont)deactQ_L_21ContG_new(self, C_cont)));
 }
-B_NoneType deactQ_L_22ContD___init__ (deactQ_L_22Cont L_self, deactQ_main self, $Cont C_cont) {
-    ((deactQ_L_22Cont)(L_self))->self = self;
-    ((deactQ_L_22Cont)(L_self))->C_cont = C_cont;
-    return B_None;
-}
 $R deactQ_L_22ContD___call__ (deactQ_L_22Cont L_self, deactQ_Apa G_1) {
     deactQ_main self = ((deactQ_L_22Cont)(L_self))->self;
     $Cont C_cont = ((deactQ_L_22Cont)(L_self))->C_cont;
     return deactQ_L_11C_5cont(self, C_cont, G_1);
 }
-void deactQ_L_22ContD___serialize__ (deactQ_L_22Cont self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $step_serialize(self->C_cont, state);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_22Cont, self, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_22Cont, C_cont, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_22ContD_layout = {
+    sizeof(struct deactQ_L_22Cont), ($SerializableG_class)&deactQ_L_22ContG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_22ContD___serialize__(deactQ_L_22Cont self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_22ContD_layout, state);
 }
-deactQ_L_22Cont deactQ_L_22ContD___deserialize__ (deactQ_L_22Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_22Cont));
-            self->$class = &deactQ_L_22ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_22Cont, state);
-    }
-    self->self = $step_deserialize(state);
-    self->C_cont = $step_deserialize(state);
-    return self;
+deactQ_L_22Cont deactQ_L_22ContD___deserialize__(deactQ_L_22Cont self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_22ContD_layout, state);
 }
 deactQ_L_22Cont deactQ_L_22ContG_new(deactQ_main G_1, $Cont G_2) {
     deactQ_L_22Cont $tmp = acton_malloc(sizeof(struct deactQ_L_22Cont));
     $tmp->$class = &deactQ_L_22ContG_methods;
-    deactQ_L_22ContG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->C_cont = G_2;
     return $tmp;
 }
 struct deactQ_L_22ContG_class deactQ_L_22ContG_methods;
-B_NoneType deactQ_L_23procD___init__ (deactQ_L_23proc L_self, deactQ_main self, int64_t i) {
-    ((deactQ_L_23proc)(L_self))->self = self;
-    ((deactQ_L_23proc)(L_self))->i = i;
-    return B_None;
-}
 $R deactQ_L_23procD___call__ (deactQ_L_23proc L_self, $Cont C_cont) {
     deactQ_main self = ((deactQ_L_23proc)(L_self))->self;
     int64_t i = ((int64_t)((deactQ_L_23proc)(L_self))->i);
     return (($R (*) ($WORD, $Cont, int64_t))((deactQ_main)(self))->$class->myprocG_local)(self, C_cont, i);
 }
-$R deactQ_L_23procD___exec__ (deactQ_L_23proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_23proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_23proc, self, deactQ_L_9proc, self) && $CLOSURE_FIELD_EQ(deactQ_L_23proc, i, deactQ_L_9proc, i), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_23procD_layout = {
+    sizeof(struct deactQ_L_23proc), ($SerializableG_class)&deactQ_L_23procG_methods, 2, deactQ_L_9procD_fields
+};
+void deactQ_L_23procD___serialize__(deactQ_L_23proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_23procD_layout, state);
 }
-void deactQ_L_23procD___serialize__ (deactQ_L_23proc self, $Serial$state state) {
-    $step_serialize(self->self, state);
-    $val_serialize(I64_ID, &self->i, state);
-}
-deactQ_L_23proc deactQ_L_23procD___deserialize__ (deactQ_L_23proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_23proc));
-            self->$class = &deactQ_L_23procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_23proc, state);
-    }
-    self->self = $step_deserialize(state);
-    $tmp = $val_deserialize(state);
-    memcpy(&self->i, &$tmp, sizeof(self->i));
-    return self;
+deactQ_L_23proc deactQ_L_23procD___deserialize__(deactQ_L_23proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_23procD_layout, state);
 }
 deactQ_L_23proc deactQ_L_23procG_new(deactQ_main G_1, int64_t G_2) {
     deactQ_L_23proc $tmp = acton_malloc(sizeof(struct deactQ_L_23proc));
     $tmp->$class = &deactQ_L_23procG_methods;
-    deactQ_L_23procG_methods.__init__($tmp, G_1, G_2);
+    $tmp->self = G_1;
+    $tmp->i = G_2;
     return $tmp;
 }
 struct deactQ_L_23procG_class deactQ_L_23procG_methods;
 $R deactQ_L_24C_11cont ($Cont C_cont, deactQ_Apa G_act, B_NoneType C_12res) {
     return $R_CONT(C_cont, G_act);
 }
-B_NoneType deactQ_L_25ContD___init__ (deactQ_L_25Cont L_self, $Cont C_cont, deactQ_Apa G_act) {
-    ((deactQ_L_25Cont)(L_self))->C_cont = C_cont;
-    ((deactQ_L_25Cont)(L_self))->G_act = G_act;
-    return B_None;
-}
-$R deactQ_L_25ContD___call__ (deactQ_L_25Cont L_self, B_NoneType G_1) {
-    $Cont C_cont = ((deactQ_L_25Cont)(L_self))->C_cont;
-    deactQ_Apa G_act = ((deactQ_L_25Cont)(L_self))->G_act;
-    return deactQ_L_24C_11cont(C_cont, G_act, G_1);
-}
-void deactQ_L_25ContD___serialize__ (deactQ_L_25Cont self, $Serial$state state) {
-    $step_serialize(self->C_cont, state);
-    $step_serialize(self->G_act, state);
-}
-deactQ_L_25Cont deactQ_L_25ContD___deserialize__ (deactQ_L_25Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_25Cont));
-            self->$class = &deactQ_L_25ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_25Cont, state);
-    }
-    self->C_cont = $step_deserialize(state);
-    self->G_act = $step_deserialize(state);
-    return self;
-}
-deactQ_L_25Cont deactQ_L_25ContG_new($Cont G_1, deactQ_Apa G_2) {
-    deactQ_L_25Cont $tmp = acton_malloc(sizeof(struct deactQ_L_25Cont));
-    $tmp->$class = &deactQ_L_25ContG_methods;
-    deactQ_L_25ContG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-struct deactQ_L_25ContG_class deactQ_L_25ContG_methods;
-B_NoneType deactQ_L_26procD___init__ (deactQ_L_26proc L_self, deactQ_Apa G_act) {
-    ((deactQ_L_26proc)(L_self))->G_act = G_act;
-    return B_None;
-}
-$R deactQ_L_26procD___call__ (deactQ_L_26proc L_self, $Cont C_cont) {
-    deactQ_Apa G_act = ((deactQ_L_26proc)(L_self))->G_act;
+$R deactQ_L_25procD___call__ (deactQ_L_25proc L_self, $Cont C_cont) {
+    deactQ_Apa G_act = ((deactQ_L_25proc)(L_self))->G_act;
     return (($R (*) ($WORD, $Cont))((deactQ_Apa)(G_act))->$class->__init__)(G_act, C_cont);
 }
-$R deactQ_L_26procD___exec__ (deactQ_L_26proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_26proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_25proc, G_act, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_25procD_layout = {
+    sizeof(struct deactQ_L_25proc), ($SerializableG_class)&deactQ_L_25procG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_25procD___serialize__(deactQ_L_25proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_25procD_layout, state);
 }
-void deactQ_L_26procD___serialize__ (deactQ_L_26proc self, $Serial$state state) {
-    $step_serialize(self->G_act, state);
+deactQ_L_25proc deactQ_L_25procD___deserialize__(deactQ_L_25proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_25procD_layout, state);
 }
-deactQ_L_26proc deactQ_L_26procD___deserialize__ (deactQ_L_26proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_26proc));
-            self->$class = &deactQ_L_26procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_26proc, state);
-    }
-    self->G_act = $step_deserialize(state);
-    return self;
-}
-deactQ_L_26proc deactQ_L_26procG_new(deactQ_Apa G_1) {
-    deactQ_L_26proc $tmp = acton_malloc(sizeof(struct deactQ_L_26proc));
-    $tmp->$class = &deactQ_L_26procG_methods;
-    deactQ_L_26procG_methods.__init__($tmp, G_1);
+deactQ_L_25proc deactQ_L_25procG_new(deactQ_Apa G_1) {
+    deactQ_L_25proc $tmp = acton_malloc(sizeof(struct deactQ_L_25proc));
+    $tmp->$class = &deactQ_L_25procG_methods;
+    $tmp->G_act = G_1;
     return $tmp;
 }
-struct deactQ_L_26procG_class deactQ_L_26procG_methods;
-$R deactQ_L_27C_13cont ($Cont C_cont, deactQ_Bepa G_act, B_NoneType C_14res) {
+struct deactQ_L_25procG_class deactQ_L_25procG_methods;
+$R deactQ_L_26C_13cont ($Cont C_cont, deactQ_Bepa G_act, B_NoneType C_14res) {
     return $R_CONT(C_cont, G_act);
 }
-B_NoneType deactQ_L_28ContD___init__ (deactQ_L_28Cont L_self, $Cont C_cont, deactQ_Bepa G_act) {
-    ((deactQ_L_28Cont)(L_self))->C_cont = C_cont;
-    ((deactQ_L_28Cont)(L_self))->G_act = G_act;
-    return B_None;
-}
-$R deactQ_L_28ContD___call__ (deactQ_L_28Cont L_self, B_NoneType G_1) {
-    $Cont C_cont = ((deactQ_L_28Cont)(L_self))->C_cont;
-    deactQ_Bepa G_act = ((deactQ_L_28Cont)(L_self))->G_act;
-    return deactQ_L_27C_13cont(C_cont, G_act, G_1);
-}
-void deactQ_L_28ContD___serialize__ (deactQ_L_28Cont self, $Serial$state state) {
-    $step_serialize(self->C_cont, state);
-    $step_serialize(self->G_act, state);
-}
-deactQ_L_28Cont deactQ_L_28ContD___deserialize__ (deactQ_L_28Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_28Cont));
-            self->$class = &deactQ_L_28ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_28Cont, state);
-    }
-    self->C_cont = $step_deserialize(state);
-    self->G_act = $step_deserialize(state);
-    return self;
-}
-deactQ_L_28Cont deactQ_L_28ContG_new($Cont G_1, deactQ_Bepa G_2) {
-    deactQ_L_28Cont $tmp = acton_malloc(sizeof(struct deactQ_L_28Cont));
-    $tmp->$class = &deactQ_L_28ContG_methods;
-    deactQ_L_28ContG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-struct deactQ_L_28ContG_class deactQ_L_28ContG_methods;
-B_NoneType deactQ_L_29procD___init__ (deactQ_L_29proc L_self, deactQ_Bepa G_act) {
-    ((deactQ_L_29proc)(L_self))->G_act = G_act;
-    return B_None;
-}
-$R deactQ_L_29procD___call__ (deactQ_L_29proc L_self, $Cont C_cont) {
-    deactQ_Bepa G_act = ((deactQ_L_29proc)(L_self))->G_act;
+$R deactQ_L_27procD___call__ (deactQ_L_27proc L_self, $Cont C_cont) {
+    deactQ_Bepa G_act = ((deactQ_L_27proc)(L_self))->G_act;
     return (($R (*) ($WORD, $Cont))((deactQ_Bepa)(G_act))->$class->__init__)(G_act, C_cont);
 }
-$R deactQ_L_29procD___exec__ (deactQ_L_29proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_29proc)(L_self))->$class->__call__)(L_self, C_cont);
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_27proc, G_act, deactQ_L_2Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_27procD_layout = {
+    sizeof(struct deactQ_L_27proc), ($SerializableG_class)&deactQ_L_27procG_methods, 1, deactQ_L_2ContD_fields
+};
+void deactQ_L_27procD___serialize__(deactQ_L_27proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_27procD_layout, state);
 }
-void deactQ_L_29procD___serialize__ (deactQ_L_29proc self, $Serial$state state) {
-    $step_serialize(self->G_act, state);
+deactQ_L_27proc deactQ_L_27procD___deserialize__(deactQ_L_27proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_27procD_layout, state);
 }
-deactQ_L_29proc deactQ_L_29procD___deserialize__ (deactQ_L_29proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_29proc));
-            self->$class = &deactQ_L_29procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_29proc, state);
-    }
-    self->G_act = $step_deserialize(state);
-    return self;
+deactQ_L_27proc deactQ_L_27procG_new(deactQ_Bepa G_1) {
+    deactQ_L_27proc $tmp = acton_malloc(sizeof(struct deactQ_L_27proc));
+    $tmp->$class = &deactQ_L_27procG_methods;
+    $tmp->G_act = G_1;
+    return $tmp;
 }
-deactQ_L_29proc deactQ_L_29procG_new(deactQ_Bepa G_1) {
+struct deactQ_L_27procG_class deactQ_L_27procG_methods;
+$R deactQ_L_28C_15cont ($Cont C_cont, deactQ_main G_act, B_NoneType C_16res) {
+    return $R_CONT(C_cont, G_act);
+}
+$R deactQ_L_29procD___call__ (deactQ_L_29proc L_self, $Cont C_cont) {
+    deactQ_main G_act = ((deactQ_L_29proc)(L_self))->G_act;
+    B_Env env = ((deactQ_L_29proc)(L_self))->env;
+    return (($R (*) ($WORD, $Cont, B_Env))((deactQ_main)(G_act))->$class->__init__)(G_act, C_cont, env);
+}
+_Static_assert($CLOSURE_FIELD_EQ(deactQ_L_29proc, G_act, deactQ_L_6Cont, cb) && $CLOSURE_FIELD_EQ(deactQ_L_29proc, env, deactQ_L_6Cont, C_cont), "Closure capture layout mismatch");
+static const struct $ClosureLayout deactQ_L_29procD_layout = {
+    sizeof(struct deactQ_L_29proc), ($SerializableG_class)&deactQ_L_29procG_methods, 2, deactQ_L_6ContD_fields
+};
+void deactQ_L_29procD___serialize__(deactQ_L_29proc self, $Serial$state state) {
+    $closure_serialize(self, &deactQ_L_29procD_layout, state);
+}
+deactQ_L_29proc deactQ_L_29procD___deserialize__(deactQ_L_29proc self, $Serial$state state) {
+    return $closure_deserialize(self, &deactQ_L_29procD_layout, state);
+}
+deactQ_L_29proc deactQ_L_29procG_new(deactQ_main G_1, B_Env G_2) {
     deactQ_L_29proc $tmp = acton_malloc(sizeof(struct deactQ_L_29proc));
     $tmp->$class = &deactQ_L_29procG_methods;
-    deactQ_L_29procG_methods.__init__($tmp, G_1);
+    $tmp->G_act = G_1;
+    $tmp->env = G_2;
     return $tmp;
 }
 struct deactQ_L_29procG_class deactQ_L_29procG_methods;
-$R deactQ_L_30C_15cont ($Cont C_cont, deactQ_main G_act, B_NoneType C_16res) {
-    return $R_CONT(C_cont, G_act);
-}
-B_NoneType deactQ_L_31ContD___init__ (deactQ_L_31Cont L_self, $Cont C_cont, deactQ_main G_act) {
-    ((deactQ_L_31Cont)(L_self))->C_cont = C_cont;
-    ((deactQ_L_31Cont)(L_self))->G_act = G_act;
-    return B_None;
-}
-$R deactQ_L_31ContD___call__ (deactQ_L_31Cont L_self, B_NoneType G_1) {
-    $Cont C_cont = ((deactQ_L_31Cont)(L_self))->C_cont;
-    deactQ_main G_act = ((deactQ_L_31Cont)(L_self))->G_act;
-    return deactQ_L_30C_15cont(C_cont, G_act, G_1);
-}
-void deactQ_L_31ContD___serialize__ (deactQ_L_31Cont self, $Serial$state state) {
-    $step_serialize(self->C_cont, state);
-    $step_serialize(self->G_act, state);
-}
-deactQ_L_31Cont deactQ_L_31ContD___deserialize__ (deactQ_L_31Cont self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_31Cont));
-            self->$class = &deactQ_L_31ContG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_31Cont, state);
-    }
-    self->C_cont = $step_deserialize(state);
-    self->G_act = $step_deserialize(state);
-    return self;
-}
-deactQ_L_31Cont deactQ_L_31ContG_new($Cont G_1, deactQ_main G_2) {
-    deactQ_L_31Cont $tmp = acton_malloc(sizeof(struct deactQ_L_31Cont));
-    $tmp->$class = &deactQ_L_31ContG_methods;
-    deactQ_L_31ContG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-struct deactQ_L_31ContG_class deactQ_L_31ContG_methods;
-B_NoneType deactQ_L_32procD___init__ (deactQ_L_32proc L_self, deactQ_main G_act, B_Env env) {
-    ((deactQ_L_32proc)(L_self))->G_act = G_act;
-    ((deactQ_L_32proc)(L_self))->env = env;
-    return B_None;
-}
-$R deactQ_L_32procD___call__ (deactQ_L_32proc L_self, $Cont C_cont) {
-    deactQ_main G_act = ((deactQ_L_32proc)(L_self))->G_act;
-    B_Env env = ((deactQ_L_32proc)(L_self))->env;
-    return (($R (*) ($WORD, $Cont, B_Env))((deactQ_main)(G_act))->$class->__init__)(G_act, C_cont, env);
-}
-$R deactQ_L_32procD___exec__ (deactQ_L_32proc L_self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont))((deactQ_L_32proc)(L_self))->$class->__call__)(L_self, C_cont);
-}
-void deactQ_L_32procD___serialize__ (deactQ_L_32proc self, $Serial$state state) {
-    $step_serialize(self->G_act, state);
-    $step_serialize(self->env, state);
-}
-deactQ_L_32proc deactQ_L_32procD___deserialize__ (deactQ_L_32proc self, $Serial$state state) {
-    $WORD $tmp;
-    if (!self) {
-        if (!state) {
-            self = acton_malloc(sizeof(struct deactQ_L_32proc));
-            self->$class = &deactQ_L_32procG_methods;
-            return self;
-        }
-        self = $DNEW(deactQ_L_32proc, state);
-    }
-    self->G_act = $step_deserialize(state);
-    self->env = $step_deserialize(state);
-    return self;
-}
-deactQ_L_32proc deactQ_L_32procG_new(deactQ_main G_1, B_Env G_2) {
-    deactQ_L_32proc $tmp = acton_malloc(sizeof(struct deactQ_L_32proc));
-    $tmp->$class = &deactQ_L_32procG_methods;
-    deactQ_L_32procG_methods.__init__($tmp, G_1, G_2);
-    return $tmp;
-}
-struct deactQ_L_32procG_class deactQ_L_32procG_methods;
 $R deactQ_ApaD___init__ (deactQ_Apa self, $Cont C_cont) {
     return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)deactQ_L_2ContG_new(C_cont))), (($action)deactQ_L_4actionG_new(self)));
 }
@@ -931,17 +603,17 @@ struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_ApaG_newact ($Cont C_cont) {
     deactQ_Apa G_act = $NEWACTOR(deactQ_Apa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_ApaD_GCfinalizer);
-    return $AWAIT($SKIPRES((($Cont)deactQ_L_25ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_26procG_new(G_act))));
+    return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_25procG_new(G_act))));
 }
 $R deactQ_BepaG_newact ($Cont C_cont) {
     deactQ_Bepa G_act = $NEWACTOR(deactQ_Bepa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_BepaD_GCfinalizer);
-    return $AWAIT($SKIPRES((($Cont)deactQ_L_28ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_29procG_new(G_act))));
+    return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_27procG_new(G_act))));
 }
 $R deactQ_mainG_newact ($Cont C_cont, B_Env env) {
     deactQ_main G_act = $NEWACTOR(deactQ_main);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_mainD_GCfinalizer);
-    return $AWAIT($SKIPRES((($Cont)deactQ_L_31ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_32procG_new(G_act, env))));
+    return $AWAIT($SKIPRES($CONSTCONT(G_act, C_cont)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_29procG_new(G_act, env))));
 }
 int deactQ_done$ = 0;
 void deactQ___init__ () {
@@ -953,7 +625,7 @@ void deactQ___init__ () {
         deactQ_L_2ContG_methods.__bool__ = (bool (*) (deactQ_L_2Cont))B_valueG_methods.__bool__;
         deactQ_L_2ContG_methods.__str__ = (B_str (*) (deactQ_L_2Cont))B_valueG_methods.__str__;
         deactQ_L_2ContG_methods.__repr__ = (B_str (*) (deactQ_L_2Cont))B_valueG_methods.__repr__;
-        deactQ_L_2ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_2Cont, $Cont))deactQ_L_2ContD___init__;
+        deactQ_L_2ContG_methods.__init__ = NULL;
         deactQ_L_2ContG_methods.__call__ = ($R (*) (deactQ_L_2Cont, B_NoneType))deactQ_L_2ContD___call__;
         deactQ_L_2ContG_methods.__serialize__ = deactQ_L_2ContD___serialize__;
         deactQ_L_2ContG_methods.__deserialize__ = deactQ_L_2ContD___deserialize__;
@@ -965,9 +637,9 @@ void deactQ___init__ () {
         deactQ_L_4actionG_methods.__bool__ = (bool (*) (deactQ_L_4action))B_valueG_methods.__bool__;
         deactQ_L_4actionG_methods.__str__ = (B_str (*) (deactQ_L_4action))B_valueG_methods.__str__;
         deactQ_L_4actionG_methods.__repr__ = (B_str (*) (deactQ_L_4action))B_valueG_methods.__repr__;
-        deactQ_L_4actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_4action, deactQ_Apa))deactQ_L_4actionD___init__;
-        deactQ_L_4actionG_methods.__call__ = ($R (*) (deactQ_L_4action, $Cont, B_int))deactQ_L_4actionD___call__;
-        deactQ_L_4actionG_methods.__exec__ = ($R (*) (deactQ_L_4action, $Cont, B_int))deactQ_L_4actionD___exec__;
+        deactQ_L_4actionG_methods.__init__ = NULL;
+        deactQ_L_4actionG_methods.__call__ = ($R (*) (deactQ_L_4action, $Cont, B_int))deactQ_V_1closure_adapter;
+        deactQ_L_4actionG_methods.__exec__ = ($R (*) (deactQ_L_4action, $Cont, B_int))deactQ_V_2closure_adapter;
         deactQ_L_4actionG_methods.__asyn__ = (B_Msg (*) (deactQ_L_4action, B_int))deactQ_L_4actionD___asyn__;
         deactQ_L_4actionG_methods.__serialize__ = deactQ_L_4actionD___serialize__;
         deactQ_L_4actionG_methods.__deserialize__ = deactQ_L_4actionD___deserialize__;
@@ -979,7 +651,7 @@ void deactQ___init__ () {
         deactQ_L_6ContG_methods.__bool__ = (bool (*) (deactQ_L_6Cont))B_valueG_methods.__bool__;
         deactQ_L_6ContG_methods.__str__ = (B_str (*) (deactQ_L_6Cont))B_valueG_methods.__str__;
         deactQ_L_6ContG_methods.__repr__ = (B_str (*) (deactQ_L_6Cont))B_valueG_methods.__repr__;
-        deactQ_L_6ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_6Cont, $action, $Cont))deactQ_L_6ContD___init__;
+        deactQ_L_6ContG_methods.__init__ = NULL;
         deactQ_L_6ContG_methods.__call__ = ($R (*) (deactQ_L_6Cont, B_int))deactQ_L_6ContD___call__;
         deactQ_L_6ContG_methods.__serialize__ = deactQ_L_6ContD___serialize__;
         deactQ_L_6ContG_methods.__deserialize__ = deactQ_L_6ContD___deserialize__;
@@ -991,9 +663,9 @@ void deactQ___init__ () {
         deactQ_L_7procG_methods.__bool__ = (bool (*) (deactQ_L_7proc))B_valueG_methods.__bool__;
         deactQ_L_7procG_methods.__str__ = (B_str (*) (deactQ_L_7proc))B_valueG_methods.__str__;
         deactQ_L_7procG_methods.__repr__ = (B_str (*) (deactQ_L_7proc))B_valueG_methods.__repr__;
-        deactQ_L_7procG_methods.__init__ = (B_NoneType (*) (deactQ_L_7proc, deactQ_Apa, $action))deactQ_L_7procD___init__;
+        deactQ_L_7procG_methods.__init__ = NULL;
         deactQ_L_7procG_methods.__call__ = ($R (*) (deactQ_L_7proc, $Cont))deactQ_L_7procD___call__;
-        deactQ_L_7procG_methods.__exec__ = ($R (*) (deactQ_L_7proc, $Cont))deactQ_L_7procD___exec__;
+        deactQ_L_7procG_methods.__exec__ = ($R (*) (deactQ_L_7proc, $Cont))deactQ_L_7procD___call__;
         deactQ_L_7procG_methods.__serialize__ = deactQ_L_7procD___serialize__;
         deactQ_L_7procG_methods.__deserialize__ = deactQ_L_7procD___deserialize__;
         $register(&deactQ_L_7procG_methods);
@@ -1004,9 +676,9 @@ void deactQ___init__ () {
         deactQ_L_8procG_methods.__bool__ = (bool (*) (deactQ_L_8proc))B_valueG_methods.__bool__;
         deactQ_L_8procG_methods.__str__ = (B_str (*) (deactQ_L_8proc))B_valueG_methods.__str__;
         deactQ_L_8procG_methods.__repr__ = (B_str (*) (deactQ_L_8proc))B_valueG_methods.__repr__;
-        deactQ_L_8procG_methods.__init__ = (B_NoneType (*) (deactQ_L_8proc, deactQ_Apa, $action))deactQ_L_8procD___init__;
+        deactQ_L_8procG_methods.__init__ = NULL;
         deactQ_L_8procG_methods.__call__ = ($R (*) (deactQ_L_8proc, $Cont))deactQ_L_8procD___call__;
-        deactQ_L_8procG_methods.__exec__ = ($R (*) (deactQ_L_8proc, $Cont))deactQ_L_8procD___exec__;
+        deactQ_L_8procG_methods.__exec__ = ($R (*) (deactQ_L_8proc, $Cont))deactQ_L_8procD___call__;
         deactQ_L_8procG_methods.__serialize__ = deactQ_L_8procD___serialize__;
         deactQ_L_8procG_methods.__deserialize__ = deactQ_L_8procD___deserialize__;
         $register(&deactQ_L_8procG_methods);
@@ -1017,9 +689,9 @@ void deactQ___init__ () {
         deactQ_L_9procG_methods.__bool__ = (bool (*) (deactQ_L_9proc))B_valueG_methods.__bool__;
         deactQ_L_9procG_methods.__str__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__str__;
         deactQ_L_9procG_methods.__repr__ = (B_str (*) (deactQ_L_9proc))B_valueG_methods.__repr__;
-        deactQ_L_9procG_methods.__init__ = (B_NoneType (*) (deactQ_L_9proc, deactQ_Apa, int64_t))deactQ_L_9procD___init__;
+        deactQ_L_9procG_methods.__init__ = NULL;
         deactQ_L_9procG_methods.__call__ = ($R (*) (deactQ_L_9proc, $Cont))deactQ_L_9procD___call__;
-        deactQ_L_9procG_methods.__exec__ = ($R (*) (deactQ_L_9proc, $Cont))deactQ_L_9procD___exec__;
+        deactQ_L_9procG_methods.__exec__ = ($R (*) (deactQ_L_9proc, $Cont))deactQ_L_9procD___call__;
         deactQ_L_9procG_methods.__serialize__ = deactQ_L_9procD___serialize__;
         deactQ_L_9procG_methods.__deserialize__ = deactQ_L_9procD___deserialize__;
         $register(&deactQ_L_9procG_methods);
@@ -1030,9 +702,9 @@ void deactQ___init__ () {
         deactQ_L_10procG_methods.__bool__ = (bool (*) (deactQ_L_10proc))B_valueG_methods.__bool__;
         deactQ_L_10procG_methods.__str__ = (B_str (*) (deactQ_L_10proc))B_valueG_methods.__str__;
         deactQ_L_10procG_methods.__repr__ = (B_str (*) (deactQ_L_10proc))B_valueG_methods.__repr__;
-        deactQ_L_10procG_methods.__init__ = (B_NoneType (*) (deactQ_L_10proc, deactQ_Bepa, int64_t))deactQ_L_10procD___init__;
+        deactQ_L_10procG_methods.__init__ = NULL;
         deactQ_L_10procG_methods.__call__ = ($R (*) (deactQ_L_10proc, $Cont))deactQ_L_10procD___call__;
-        deactQ_L_10procG_methods.__exec__ = ($R (*) (deactQ_L_10proc, $Cont))deactQ_L_10procD___exec__;
+        deactQ_L_10procG_methods.__exec__ = ($R (*) (deactQ_L_10proc, $Cont))deactQ_L_10procD___call__;
         deactQ_L_10procG_methods.__serialize__ = deactQ_L_10procD___serialize__;
         deactQ_L_10procG_methods.__deserialize__ = deactQ_L_10procD___deserialize__;
         $register(&deactQ_L_10procG_methods);
@@ -1043,9 +715,9 @@ void deactQ___init__ () {
         deactQ_L_14actionG_methods.__bool__ = (bool (*) (deactQ_L_14action))B_valueG_methods.__bool__;
         deactQ_L_14actionG_methods.__str__ = (B_str (*) (deactQ_L_14action))B_valueG_methods.__str__;
         deactQ_L_14actionG_methods.__repr__ = (B_str (*) (deactQ_L_14action))B_valueG_methods.__repr__;
-        deactQ_L_14actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_14action, deactQ_Apa))deactQ_L_14actionD___init__;
-        deactQ_L_14actionG_methods.__call__ = ($R (*) (deactQ_L_14action, $Cont, B_int))deactQ_L_14actionD___call__;
-        deactQ_L_14actionG_methods.__exec__ = ($R (*) (deactQ_L_14action, $Cont, B_int))deactQ_L_14actionD___exec__;
+        deactQ_L_14actionG_methods.__init__ = NULL;
+        deactQ_L_14actionG_methods.__call__ = ($R (*) (deactQ_L_14action, $Cont, B_int))deactQ_V_1closure_adapter;
+        deactQ_L_14actionG_methods.__exec__ = ($R (*) (deactQ_L_14action, $Cont, B_int))deactQ_V_2closure_adapter;
         deactQ_L_14actionG_methods.__asyn__ = (B_Msg (*) (deactQ_L_14action, B_int))deactQ_L_14actionD___asyn__;
         deactQ_L_14actionG_methods.__serialize__ = deactQ_L_14actionD___serialize__;
         deactQ_L_14actionG_methods.__deserialize__ = deactQ_L_14actionD___deserialize__;
@@ -1057,9 +729,9 @@ void deactQ___init__ () {
         deactQ_L_16actionG_methods.__bool__ = (bool (*) (deactQ_L_16action))B_valueG_methods.__bool__;
         deactQ_L_16actionG_methods.__str__ = (B_str (*) (deactQ_L_16action))B_valueG_methods.__str__;
         deactQ_L_16actionG_methods.__repr__ = (B_str (*) (deactQ_L_16action))B_valueG_methods.__repr__;
-        deactQ_L_16actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_16action, deactQ_Bepa))deactQ_L_16actionD___init__;
-        deactQ_L_16actionG_methods.__call__ = ($R (*) (deactQ_L_16action, $Cont, B_int))deactQ_L_16actionD___call__;
-        deactQ_L_16actionG_methods.__exec__ = ($R (*) (deactQ_L_16action, $Cont, B_int))deactQ_L_16actionD___exec__;
+        deactQ_L_16actionG_methods.__init__ = NULL;
+        deactQ_L_16actionG_methods.__call__ = ($R (*) (deactQ_L_16action, $Cont, B_int))deactQ_V_1closure_adapter;
+        deactQ_L_16actionG_methods.__exec__ = ($R (*) (deactQ_L_16action, $Cont, B_int))deactQ_V_2closure_adapter;
         deactQ_L_16actionG_methods.__asyn__ = (B_Msg (*) (deactQ_L_16action, B_int))deactQ_L_16actionD___asyn__;
         deactQ_L_16actionG_methods.__serialize__ = deactQ_L_16actionD___serialize__;
         deactQ_L_16actionG_methods.__deserialize__ = deactQ_L_16actionD___deserialize__;
@@ -1071,9 +743,9 @@ void deactQ___init__ () {
         deactQ_L_19actionG_methods.__bool__ = (bool (*) (deactQ_L_19action))B_valueG_methods.__bool__;
         deactQ_L_19actionG_methods.__str__ = (B_str (*) (deactQ_L_19action))B_valueG_methods.__str__;
         deactQ_L_19actionG_methods.__repr__ = (B_str (*) (deactQ_L_19action))B_valueG_methods.__repr__;
-        deactQ_L_19actionG_methods.__init__ = (B_NoneType (*) (deactQ_L_19action, deactQ_main))deactQ_L_19actionD___init__;
-        deactQ_L_19actionG_methods.__call__ = ($R (*) (deactQ_L_19action, $Cont, B_int))deactQ_L_19actionD___call__;
-        deactQ_L_19actionG_methods.__exec__ = ($R (*) (deactQ_L_19action, $Cont, B_int))deactQ_L_19actionD___exec__;
+        deactQ_L_19actionG_methods.__init__ = NULL;
+        deactQ_L_19actionG_methods.__call__ = ($R (*) (deactQ_L_19action, $Cont, B_int))deactQ_V_1closure_adapter;
+        deactQ_L_19actionG_methods.__exec__ = ($R (*) (deactQ_L_19action, $Cont, B_int))deactQ_V_2closure_adapter;
         deactQ_L_19actionG_methods.__asyn__ = (B_Msg (*) (deactQ_L_19action, B_int))deactQ_L_19actionD___asyn__;
         deactQ_L_19actionG_methods.__serialize__ = deactQ_L_19actionD___serialize__;
         deactQ_L_19actionG_methods.__deserialize__ = deactQ_L_19actionD___deserialize__;
@@ -1085,7 +757,7 @@ void deactQ___init__ () {
         deactQ_L_20ContG_methods.__bool__ = (bool (*) (deactQ_L_20Cont))B_valueG_methods.__bool__;
         deactQ_L_20ContG_methods.__str__ = (B_str (*) (deactQ_L_20Cont))B_valueG_methods.__str__;
         deactQ_L_20ContG_methods.__repr__ = (B_str (*) (deactQ_L_20Cont))B_valueG_methods.__repr__;
-        deactQ_L_20ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_20Cont, deactQ_main, $Cont))deactQ_L_20ContD___init__;
+        deactQ_L_20ContG_methods.__init__ = NULL;
         deactQ_L_20ContG_methods.__call__ = ($R (*) (deactQ_L_20Cont, B_int))deactQ_L_20ContD___call__;
         deactQ_L_20ContG_methods.__serialize__ = deactQ_L_20ContD___serialize__;
         deactQ_L_20ContG_methods.__deserialize__ = deactQ_L_20ContD___deserialize__;
@@ -1097,7 +769,7 @@ void deactQ___init__ () {
         deactQ_L_21ContG_methods.__bool__ = (bool (*) (deactQ_L_21Cont))B_valueG_methods.__bool__;
         deactQ_L_21ContG_methods.__str__ = (B_str (*) (deactQ_L_21Cont))B_valueG_methods.__str__;
         deactQ_L_21ContG_methods.__repr__ = (B_str (*) (deactQ_L_21Cont))B_valueG_methods.__repr__;
-        deactQ_L_21ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_21Cont, deactQ_main, $Cont))deactQ_L_21ContD___init__;
+        deactQ_L_21ContG_methods.__init__ = NULL;
         deactQ_L_21ContG_methods.__call__ = ($R (*) (deactQ_L_21Cont, deactQ_Bepa))deactQ_L_21ContD___call__;
         deactQ_L_21ContG_methods.__serialize__ = deactQ_L_21ContD___serialize__;
         deactQ_L_21ContG_methods.__deserialize__ = deactQ_L_21ContD___deserialize__;
@@ -1109,7 +781,7 @@ void deactQ___init__ () {
         deactQ_L_22ContG_methods.__bool__ = (bool (*) (deactQ_L_22Cont))B_valueG_methods.__bool__;
         deactQ_L_22ContG_methods.__str__ = (B_str (*) (deactQ_L_22Cont))B_valueG_methods.__str__;
         deactQ_L_22ContG_methods.__repr__ = (B_str (*) (deactQ_L_22Cont))B_valueG_methods.__repr__;
-        deactQ_L_22ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_22Cont, deactQ_main, $Cont))deactQ_L_22ContD___init__;
+        deactQ_L_22ContG_methods.__init__ = NULL;
         deactQ_L_22ContG_methods.__call__ = ($R (*) (deactQ_L_22Cont, deactQ_Apa))deactQ_L_22ContD___call__;
         deactQ_L_22ContG_methods.__serialize__ = deactQ_L_22ContD___serialize__;
         deactQ_L_22ContG_methods.__deserialize__ = deactQ_L_22ContD___deserialize__;
@@ -1121,49 +793,38 @@ void deactQ___init__ () {
         deactQ_L_23procG_methods.__bool__ = (bool (*) (deactQ_L_23proc))B_valueG_methods.__bool__;
         deactQ_L_23procG_methods.__str__ = (B_str (*) (deactQ_L_23proc))B_valueG_methods.__str__;
         deactQ_L_23procG_methods.__repr__ = (B_str (*) (deactQ_L_23proc))B_valueG_methods.__repr__;
-        deactQ_L_23procG_methods.__init__ = (B_NoneType (*) (deactQ_L_23proc, deactQ_main, int64_t))deactQ_L_23procD___init__;
+        deactQ_L_23procG_methods.__init__ = NULL;
         deactQ_L_23procG_methods.__call__ = ($R (*) (deactQ_L_23proc, $Cont))deactQ_L_23procD___call__;
-        deactQ_L_23procG_methods.__exec__ = ($R (*) (deactQ_L_23proc, $Cont))deactQ_L_23procD___exec__;
+        deactQ_L_23procG_methods.__exec__ = ($R (*) (deactQ_L_23proc, $Cont))deactQ_L_23procD___call__;
         deactQ_L_23procG_methods.__serialize__ = deactQ_L_23procD___serialize__;
         deactQ_L_23procG_methods.__deserialize__ = deactQ_L_23procD___deserialize__;
         $register(&deactQ_L_23procG_methods);
     }
     {
-        deactQ_L_25ContG_methods.$GCINFO = "deactQ_L_25Cont";
-        deactQ_L_25ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_25ContG_methods.__bool__ = (bool (*) (deactQ_L_25Cont))B_valueG_methods.__bool__;
-        deactQ_L_25ContG_methods.__str__ = (B_str (*) (deactQ_L_25Cont))B_valueG_methods.__str__;
-        deactQ_L_25ContG_methods.__repr__ = (B_str (*) (deactQ_L_25Cont))B_valueG_methods.__repr__;
-        deactQ_L_25ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_25Cont, $Cont, deactQ_Apa))deactQ_L_25ContD___init__;
-        deactQ_L_25ContG_methods.__call__ = ($R (*) (deactQ_L_25Cont, B_NoneType))deactQ_L_25ContD___call__;
-        deactQ_L_25ContG_methods.__serialize__ = deactQ_L_25ContD___serialize__;
-        deactQ_L_25ContG_methods.__deserialize__ = deactQ_L_25ContD___deserialize__;
-        $register(&deactQ_L_25ContG_methods);
+        deactQ_L_25procG_methods.$GCINFO = "deactQ_L_25proc";
+        deactQ_L_25procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        deactQ_L_25procG_methods.__bool__ = (bool (*) (deactQ_L_25proc))B_valueG_methods.__bool__;
+        deactQ_L_25procG_methods.__str__ = (B_str (*) (deactQ_L_25proc))B_valueG_methods.__str__;
+        deactQ_L_25procG_methods.__repr__ = (B_str (*) (deactQ_L_25proc))B_valueG_methods.__repr__;
+        deactQ_L_25procG_methods.__init__ = NULL;
+        deactQ_L_25procG_methods.__call__ = ($R (*) (deactQ_L_25proc, $Cont))deactQ_L_25procD___call__;
+        deactQ_L_25procG_methods.__exec__ = ($R (*) (deactQ_L_25proc, $Cont))deactQ_L_25procD___call__;
+        deactQ_L_25procG_methods.__serialize__ = deactQ_L_25procD___serialize__;
+        deactQ_L_25procG_methods.__deserialize__ = deactQ_L_25procD___deserialize__;
+        $register(&deactQ_L_25procG_methods);
     }
     {
-        deactQ_L_26procG_methods.$GCINFO = "deactQ_L_26proc";
-        deactQ_L_26procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_26procG_methods.__bool__ = (bool (*) (deactQ_L_26proc))B_valueG_methods.__bool__;
-        deactQ_L_26procG_methods.__str__ = (B_str (*) (deactQ_L_26proc))B_valueG_methods.__str__;
-        deactQ_L_26procG_methods.__repr__ = (B_str (*) (deactQ_L_26proc))B_valueG_methods.__repr__;
-        deactQ_L_26procG_methods.__init__ = (B_NoneType (*) (deactQ_L_26proc, deactQ_Apa))deactQ_L_26procD___init__;
-        deactQ_L_26procG_methods.__call__ = ($R (*) (deactQ_L_26proc, $Cont))deactQ_L_26procD___call__;
-        deactQ_L_26procG_methods.__exec__ = ($R (*) (deactQ_L_26proc, $Cont))deactQ_L_26procD___exec__;
-        deactQ_L_26procG_methods.__serialize__ = deactQ_L_26procD___serialize__;
-        deactQ_L_26procG_methods.__deserialize__ = deactQ_L_26procD___deserialize__;
-        $register(&deactQ_L_26procG_methods);
-    }
-    {
-        deactQ_L_28ContG_methods.$GCINFO = "deactQ_L_28Cont";
-        deactQ_L_28ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_28ContG_methods.__bool__ = (bool (*) (deactQ_L_28Cont))B_valueG_methods.__bool__;
-        deactQ_L_28ContG_methods.__str__ = (B_str (*) (deactQ_L_28Cont))B_valueG_methods.__str__;
-        deactQ_L_28ContG_methods.__repr__ = (B_str (*) (deactQ_L_28Cont))B_valueG_methods.__repr__;
-        deactQ_L_28ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_28Cont, $Cont, deactQ_Bepa))deactQ_L_28ContD___init__;
-        deactQ_L_28ContG_methods.__call__ = ($R (*) (deactQ_L_28Cont, B_NoneType))deactQ_L_28ContD___call__;
-        deactQ_L_28ContG_methods.__serialize__ = deactQ_L_28ContD___serialize__;
-        deactQ_L_28ContG_methods.__deserialize__ = deactQ_L_28ContD___deserialize__;
-        $register(&deactQ_L_28ContG_methods);
+        deactQ_L_27procG_methods.$GCINFO = "deactQ_L_27proc";
+        deactQ_L_27procG_methods.$superclass = ($SuperG_class)&$procG_methods;
+        deactQ_L_27procG_methods.__bool__ = (bool (*) (deactQ_L_27proc))B_valueG_methods.__bool__;
+        deactQ_L_27procG_methods.__str__ = (B_str (*) (deactQ_L_27proc))B_valueG_methods.__str__;
+        deactQ_L_27procG_methods.__repr__ = (B_str (*) (deactQ_L_27proc))B_valueG_methods.__repr__;
+        deactQ_L_27procG_methods.__init__ = NULL;
+        deactQ_L_27procG_methods.__call__ = ($R (*) (deactQ_L_27proc, $Cont))deactQ_L_27procD___call__;
+        deactQ_L_27procG_methods.__exec__ = ($R (*) (deactQ_L_27proc, $Cont))deactQ_L_27procD___call__;
+        deactQ_L_27procG_methods.__serialize__ = deactQ_L_27procD___serialize__;
+        deactQ_L_27procG_methods.__deserialize__ = deactQ_L_27procD___deserialize__;
+        $register(&deactQ_L_27procG_methods);
     }
     {
         deactQ_L_29procG_methods.$GCINFO = "deactQ_L_29proc";
@@ -1171,37 +832,12 @@ void deactQ___init__ () {
         deactQ_L_29procG_methods.__bool__ = (bool (*) (deactQ_L_29proc))B_valueG_methods.__bool__;
         deactQ_L_29procG_methods.__str__ = (B_str (*) (deactQ_L_29proc))B_valueG_methods.__str__;
         deactQ_L_29procG_methods.__repr__ = (B_str (*) (deactQ_L_29proc))B_valueG_methods.__repr__;
-        deactQ_L_29procG_methods.__init__ = (B_NoneType (*) (deactQ_L_29proc, deactQ_Bepa))deactQ_L_29procD___init__;
+        deactQ_L_29procG_methods.__init__ = NULL;
         deactQ_L_29procG_methods.__call__ = ($R (*) (deactQ_L_29proc, $Cont))deactQ_L_29procD___call__;
-        deactQ_L_29procG_methods.__exec__ = ($R (*) (deactQ_L_29proc, $Cont))deactQ_L_29procD___exec__;
+        deactQ_L_29procG_methods.__exec__ = ($R (*) (deactQ_L_29proc, $Cont))deactQ_L_29procD___call__;
         deactQ_L_29procG_methods.__serialize__ = deactQ_L_29procD___serialize__;
         deactQ_L_29procG_methods.__deserialize__ = deactQ_L_29procD___deserialize__;
         $register(&deactQ_L_29procG_methods);
-    }
-    {
-        deactQ_L_31ContG_methods.$GCINFO = "deactQ_L_31Cont";
-        deactQ_L_31ContG_methods.$superclass = ($SuperG_class)&$ContG_methods;
-        deactQ_L_31ContG_methods.__bool__ = (bool (*) (deactQ_L_31Cont))B_valueG_methods.__bool__;
-        deactQ_L_31ContG_methods.__str__ = (B_str (*) (deactQ_L_31Cont))B_valueG_methods.__str__;
-        deactQ_L_31ContG_methods.__repr__ = (B_str (*) (deactQ_L_31Cont))B_valueG_methods.__repr__;
-        deactQ_L_31ContG_methods.__init__ = (B_NoneType (*) (deactQ_L_31Cont, $Cont, deactQ_main))deactQ_L_31ContD___init__;
-        deactQ_L_31ContG_methods.__call__ = ($R (*) (deactQ_L_31Cont, B_NoneType))deactQ_L_31ContD___call__;
-        deactQ_L_31ContG_methods.__serialize__ = deactQ_L_31ContD___serialize__;
-        deactQ_L_31ContG_methods.__deserialize__ = deactQ_L_31ContD___deserialize__;
-        $register(&deactQ_L_31ContG_methods);
-    }
-    {
-        deactQ_L_32procG_methods.$GCINFO = "deactQ_L_32proc";
-        deactQ_L_32procG_methods.$superclass = ($SuperG_class)&$procG_methods;
-        deactQ_L_32procG_methods.__bool__ = (bool (*) (deactQ_L_32proc))B_valueG_methods.__bool__;
-        deactQ_L_32procG_methods.__str__ = (B_str (*) (deactQ_L_32proc))B_valueG_methods.__str__;
-        deactQ_L_32procG_methods.__repr__ = (B_str (*) (deactQ_L_32proc))B_valueG_methods.__repr__;
-        deactQ_L_32procG_methods.__init__ = (B_NoneType (*) (deactQ_L_32proc, deactQ_main, B_Env))deactQ_L_32procD___init__;
-        deactQ_L_32procG_methods.__call__ = ($R (*) (deactQ_L_32proc, $Cont))deactQ_L_32procD___call__;
-        deactQ_L_32procG_methods.__exec__ = ($R (*) (deactQ_L_32proc, $Cont))deactQ_L_32procD___exec__;
-        deactQ_L_32procG_methods.__serialize__ = deactQ_L_32procD___serialize__;
-        deactQ_L_32procG_methods.__deserialize__ = deactQ_L_32procD___deserialize__;
-        $register(&deactQ_L_32procG_methods);
     }
     {
         deactQ_ApaG_methods.$GCINFO = "deactQ_Apa";
