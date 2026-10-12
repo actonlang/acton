@@ -210,6 +210,38 @@ compilerTests =
         -- An optimized (--release=fast) build used to roll it back to its
         -- pre-loop value, which dropped explicitly-provided argparse options.
         testBuildAndRun "--fast" "" ExitSuccess False "../../test/compiler/release_loop_volatile.act"
+  , testCase "missing source file" $ do
+        -- The check runs before a scratch directory or the project lock is
+        -- taken, so nothing is printed on stdout and nothing is built.
+        withSystemTempDirectory "acton-missing-file" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "proj"
+              missing = tmp </> "does_not_exist.act"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+              assertMissing label wd args file = do
+                (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe args){ cwd = Just wd } ""
+                let ctx = label ++ "\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr
+                assertEqual ctx (ExitFailure 1) returnCode
+                assertEqual ctx ("acton: File does not exist: " ++ file ++ "\n") cmdErr
+                assertEqual ctx "" cmdOut
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"missing_file\""
+            , "fingerprint = " ++ mkFp "missing_file"
+            ]
+          writeFile (proj </> "src" </> "main.act") $ unlines
+            [ "actor main(env):"
+            , "    env.exit(0)"
+            ]
+          assertMissing "acton FILE outside a project" tmp [missing] missing
+          assertMissing "acton build FILE outside a project" tmp ["build", missing] missing
+          assertMissing "acton FILE in a project" proj ["src/missing.act"] "src/missing.act"
+          assertMissing "acton build FILE in a project" proj ["build", "src/missing.act"] "src/missing.act"
+          assertMissing "acton build FILE FILE in a project" proj ["build", "src/main.act", "src/missing.act"] "src/missing.act"
+          outExists <- doesDirectoryExist (proj </> "out")
+          assertBool "a missing file should not build the project" (not outExists)
   , testCase "dynamic module library build" $ do
         withSystemTempDirectory "acton-dynamic-module-build" $ \proj -> do
           actonExe <- canonicalizePath "../../dist/bin/acton"
