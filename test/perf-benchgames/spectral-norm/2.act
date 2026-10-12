@@ -1,0 +1,37 @@
+# The Computer Language Benchmarks Game
+# Adapted from 1.go.
+
+import math
+
+def multiply(u: array[float], v: array[float], transpose: bool):
+    # An array can store unboxed floats (in contrast to a list)
+    n = len(u)
+    for i in range(n):
+        total = 0.0
+        # Advancing the denominator avoids an integer multiply per element.
+        denominator = i * (i + 1) // 2 + (1 if transpose else i + 1)
+        for j in range(n):
+            total += u[j] / float(denominator)
+            denominator += i + j + (2 if transpose else 1)
+        v[i] = total
+
+def multiply_ata(u, v, scratch):
+    multiply(u, scratch, False)
+    multiply(scratch, v, True)
+
+actor main(env):
+    n = int(env.argv[1]) if len(env.argv) > 1 else 100
+    u = array(n,1.0)
+    v = array(n)
+    scratch = array(n)
+    for _ in range(10):
+        multiply_ata(u, v, scratch)
+        multiply_ata(v, u, scratch)
+    uv = 0.0
+    vv = 0.0
+    for i in range(n):
+        uv += u[i] * v[i]
+        vv += v[i] * v[i]
+    print("%.9f" % math.sqrt(uv / vv))
+    env.exit(0)
+    

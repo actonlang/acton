@@ -1,0 +1,21 @@
+# Sieve of Eratostenes
+# Note: Below, j should really be in range(i*i, n, i)
+# which is faster, but maybe that is another algorithm...
+
+def nsieve(n: int):
+    primes = bitset.full(n)               # Initially, assume all numbers are primes.
+    primes.discard(0)                     # But 0 is not,
+    primes.discard(1)                     # neither is 1.
+    for i in range(2, n):
+        if i in primes:                   # If i is not yet discarded, it is prime,
+             for j in range(2*i, n, i):
+                primes.discard(j)         # so discard all multiples of i.
+
+    print('Primes up to {n:>8} {len(primes):>8}')  # A bitset stores its length (number of elements)
+
+
+actor main(env):
+    n = 4 if len(env.argv) < 2 else int(env.argv[1])
+    for i in range(3):
+        nsieve(10000 << (n - i))
+    env.exit(0)
