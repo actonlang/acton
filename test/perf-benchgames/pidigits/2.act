@@ -1,0 +1,52 @@
+digits = ["0","1","2","3","4","5","6","7","8","9"]
+
+# Iterator to generate digits of pi one at a time as strings
+class pidigits (Iterator[str]):
+    def __init__(self):
+        self.num = 1
+        self.acc = 0
+        self.den = 1
+        self.k = 0
+       
+    def __next__(self):
+        while True:
+            self.k += 1
+
+            k2  = bigint(self.k * 2 + 1)                   # next_Term(k)
+            self.acc = (self.acc + self.num * 2) * k2      #
+            self.den = self.den * k2                       #
+            self.num = self.num * bigint(self.k)           #
+
+            if self.num > self.acc:
+                continue
+
+            d = (self.num * 3 + self.acc) // self.den      # extract_Digit(3)
+            if d != (self.num * 4 + self.acc) // self.den: # extract_Digit(4)
+                continue
+                                                           # digit d found
+            if self.k % 300 == 0:                          # 300 empirically tuned
+                g = gcd(self.acc, gcd(self.num, self.den))
+                if g > 1:                               
+                    self.acc //= g                         # reduce state
+                    self.num //= g                         #
+                    self.den //= g                         #
+
+            self.acc = (self.acc - self.den * d) * 10      # eliminate_Digit(d)
+            self.num = self.num * 10                       #
+            return just(digits[int(d)])
+        return nothing()                                   # unreachable
+        
+actor main(env):
+    n = int(env.argv[1])
+    k = 0
+    ds = [""] * 10
+    for s in pidigits():
+        i = k % 10
+        ds[i] = s
+        k += 1
+        if k == n:
+            print("".join(ds[:i+1]) + (" " * (10 - i)) + "   :" + str(n))
+            break
+        if i == 9:
+            print("".join(ds) + "    :" + str(k))
+    env.exit(0)

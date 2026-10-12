@@ -1,0 +1,35 @@
+def bitmap_row(size: int, ci: float, real: list[float]) -> bytes:
+    row = []
+    for x in range(0, size, 8):
+        bits = 0
+        for offset in range(8):
+            cr = real[x + offset]
+            zr = 0.0
+            zi = 0.0
+            tr = 0.0
+            ti = 0.0
+            iteration = 0
+            while iteration < 50 and tr + ti <= 4.0:
+                zr, zi = tr - ti + cr, 2 * zr * zi + ci
+                tr = zr * zr 
+                ti = zi * zi
+                iteration += 1
+            bits = (bits << 1) | (1 if tr + ti <= 4.0 else 0)
+        row.append(bits)
+    return bytes(row)
+
+def write_stdout(data: bytes)->None:
+    NotImplemented
+
+actor main(env: Env):
+    size = int(env.argv[1]) if len(env.argv) > 1 else 200
+    size = (size + 7) // 8 * 8
+    inv = 2.0 / float(size)
+    real = [float(x) * inv - 1.5 for x in range(size)]
+    imaginary = [float(y) * inv -1 for y in range(size)]
+    pixels = []
+    for y in range(size):
+        pixels.append(bitmap_row(size, imaginary[y], real))
+    image = ("P4\n%d %d\n" % (size, size)).encode() + b"".join(pixels)
+    write_stdout(image)
+    env.exit(0)
