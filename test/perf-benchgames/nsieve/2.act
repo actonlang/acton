@@ -11,7 +11,7 @@ def nsieve(n: int):
              for j in range(2*i, n, i):
                 primes.discard(j)         # so discard all multiples of i.
 
-    print('Primes up to {n:>8}: {len(primes):>8}')  # A bitset stores its length (number of elements)
+    print('Primes up to {n:>8} {len(primes):>8}')  # A bitset stores its length (number of elements)
 
 
 actor main(env):
