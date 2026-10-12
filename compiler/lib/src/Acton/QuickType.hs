@@ -99,7 +99,7 @@ qGeneratedCallableType _ _          = Nothing
 -- Generated direct protocol calls carry the selected witness as their first
 -- argument.  Some static witness objects only exist as C names, so keep that
 -- argument at the expected witness type instead of resolving it through Env.
-qTypeGeneratedPos env f (TRow _ _ _ t r) (PosArg e p)
+qTypeGeneratedPos env f (TRow _ _ _ t _ r) (PosArg e p)
                                     = (posRow t r', fxp, PosArg e p')
   where (r', fxp, p')               = qType env f p
 qTypeGeneratedPos env f _ p         = qType env f p
@@ -140,7 +140,7 @@ qSchema env f e0@(Dot l e n)        = case expanded env t of
                                         t -> error ("### qSchema Dot unexpected " ++ prstr e0 ++ "  ::  " ++ prstr t)
   where (t, fx, e')                 = qType env f e
         addE e1 (sc, dec)           = (vsubst [(tvSelf,t)] sc, fx, dec, Dot l e1 n)
-        pick n (TRow l k x t r)     = if x == n then t else pick n r
+        pick n (TRow l k x t _ r)   = if x == n then t else pick n r
         pick n (TStar l k r)
           | n == attrKW             = tTupleK r
         pick n (TNil l k)
@@ -226,16 +226,16 @@ instance QType Expr where
     qType env f (DotI l e i)        = case expanded env t of
                                         TTuple _ p _ -> (pick i p, fx, DotI l e' i)
       where (t, fx, e')             = qType env f e
-            pick i (TRow _ _ _ t' p) = if i == 0 then t' else pick (i-1) p
+            pick i (TRow _ _ _ t' _ p) = if i == 0 then t' else pick (i-1) p
     qType env f (RestI l e i)       = case expanded env t of
                                         TTuple _ p _ -> (TTuple NoLoc (pick i p) kwdNil, fx, RestI l e' i)
       where (t, fx, e')             = qType env f e
-            pick i (TRow l k x t r) = if i == 0 then r else TRow l k x t (pick (i-1) r)
+            pick i (TRow l k x t d r) = if i == 0 then r else TRow l k x t d (pick (i-1) r)
             pick i (TNil l k)       = TNil l k
     qType env f (Rest l e n)        = case expanded env t of
                                         TTuple _ p k -> (TTuple NoLoc posNil (pick n k), fx, Rest l e' n)
       where (t, fx, e')             = qType env f e
-            pick n (TRow l k x t r) = if x == n then r else TRow l k x t (pick n r)
+            pick n (TRow l k x t d r) = if x == n then r else TRow l k x t d (pick n r)
             pick n (TNil l k)       = TNil l k
     qType env f (Lambda l p k e fx) = (TFun NoLoc fx (prowOf p) (krowOf k) t, fxPure, Lambda l p k e' fx)
       where (t, _, e')              = qType env1 f e
@@ -301,8 +301,8 @@ instance QType PosArg where
     qMatch f TVar{} r p             = p
     qMatch f r TVar{} p             = p
     qMatch f r r' (PosArg e p)
-      | TRow{} <- r,
-        TRow{} <- r'                = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
+      | isRowEntry r,
+        isRowEntry r'               = PosArg (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') p)
       | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (PosArg e p))
     qMatch f _ _ PosNil             = PosNil
 
@@ -317,10 +317,13 @@ instance QType KwdArg where
     qMatch f TVar{} r k             = k
     qMatch f r TVar{} k             = k
     qMatch f r r' (KwdArg n e k)
-      | TRow{} <- r,
-        TRow{} <- r'                = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
+      | isRowEntry r,
+        isRowEntry r'               = KwdArg n (qMatch f (rtype r) (rtype r') e) (qMatch f (rtail r) (rtail r') k)
       | otherwise                   = error ("#### rtail " ++ prstr r ++ " < " ++ prstr r' ++ " for " ++ prstr (KwdArg n e k))
     qMatch f _ _ KwdNil             = KwdNil
+
+isRowEntry TRow{}                   = True
+isRowEntry _                        = False
 
 instance QType Pattern where
     qType env f (PWild l (Just t))  = (t, fxPure, PWild l (Just t))

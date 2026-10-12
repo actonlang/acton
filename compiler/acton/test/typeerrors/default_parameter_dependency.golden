@@ -1,0 +1,9 @@
+Building file test/typeerrors/default_parameter_dependency.act using temporary scratch directory
+   default_parameter_dependency  Parse done                                                               0.000 s
+[error Compilation error]: Default value may not depend on parameter x
+     +--> default_parameter_dependency.act@1:28-1:29
+     |
+   1 | def invalid(x: int, y: int=x) -> int:
+     :                            ^ 
+     :                            `- Default value may not depend on parameter x
+-----+

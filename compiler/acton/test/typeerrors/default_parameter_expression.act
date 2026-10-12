@@ -1,0 +1,4 @@
+answer = 41
+
+def invalid(value: int=answer + 1) -> int:
+    return value

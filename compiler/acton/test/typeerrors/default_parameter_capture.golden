@@ -1,0 +1,9 @@
+Building file test/typeerrors/default_parameter_capture.act using temporary scratch directory
+   default_parameter_capture  Parse done                                                               0.000 s
+[error Compilation error]: Default value may not capture enclosing name captured
+     +--> default_parameter_capture.act@3:26-3:34
+     |
+   3 |     def inner(value: int=captured) -> int:
+     :                          ^------- 
+     :                          `- Default value may not capture enclosing name captured
+-----+

@@ -31,7 +31,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,35]
+version = [0,37]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -251,6 +251,18 @@ type CCon       = TCon
 
 type KUni       = Int
 
+-- Keep the source expression visible in the type while carrying a separately
+-- checked expansion for the compiler.  The latter may contain elaborated
+-- protocol witnesses and fully qualified definition-site names; exposing it
+-- as the written default would make an otherwise useful public signature
+-- unreadable.  The optional reference is only an internal scan-phase
+-- placeholder used while a recursive declaration group is being checked; it
+-- is resolved before the interface is exported.  A present DefaultSpec always
+-- contains the expression that can be copied into an omitted argument; when
+-- inference loses that expression, the row becomes required instead.
+data DefaultSpec = DfltExpr { dexpr::Expr, dvalue::Expr, dref::Maybe QName }
+                 deriving (Show,Read,Generic,NFData)
+
 data Type       = TUni      { tloc::SrcLoc, uvar::TUni }
                 | TVar      { tloc::SrcLoc, tvar::TVar }
                 | TCon      { tloc::SrcLoc, tcon::TCon }
@@ -260,7 +272,8 @@ data Type       = TUni      { tloc::SrcLoc, uvar::TUni }
                 | TNone     { tloc::SrcLoc }
                 | TWild     { tloc::SrcLoc }
                 | TNil      { tloc::SrcLoc, rkind::Kind }
-                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type, rtail::TRow }
+                | TRow      { tloc::SrcLoc, rkind::Kind, label::Name, rtype::Type,
+                              dflt::Maybe DefaultSpec, rtail::TRow }
                 | TStar     { tloc::SrcLoc, rkind::Kind, rtail::TRow }
                 | TFX       { tloc::SrcLoc, tfx::FX }
                 | TUnboxed  { tloc::SrcLoc, utp::Type }
@@ -365,7 +378,8 @@ tOpt t          = TOpt NoLoc t
 tNone           = TNone NoLoc
 tWild           = TWild NoLoc
 tNil k          = TNil NoLoc k
-tRow k          = TRow NoLoc k
+tRow k n t      = TRow NoLoc k n t Nothing
+tDefRow k n t d = TRow NoLoc k n t (Just d)
 tStar k         = TStar NoLoc k
 tTFX fx         = TFX NoLoc fx
 
@@ -398,16 +412,16 @@ kwdRow          = tRow KRow
 kwdStar         = tStar KRow
 kwdStar'        = kwdStar . maybe tWild tVar
 
-prowOf (PosPar n a d p) = posRow (dflt d $ case a of Just t -> t; _ -> tWild) (prowOf p)
-  where dflt Nothing    = id
-        dflt (Just e)   = tOpt
+prowOf (PosPar n a d p) = row d (case a of Just t -> t; _ -> tWild) (prowOf p)
+  where row Nothing t r = posRow t r
+        row (Just e) t r= tDefRow PRow n t (DfltExpr e e Nothing) r
 prowOf (PosSTAR n a)    = posStar (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 --prowOf (PosSTAR n a)    = (case a of Just (TTuple _ r _) -> r; _ -> tWild)
 prowOf PosNIL           = posNil
 
-krowOf (KwdPar n a d k) = kwdRow n (dflt d $ case a of Just t -> t; _ -> tWild) (krowOf k)
-  where dflt Nothing    = id
-        dflt (Just e)   = tOpt
+krowOf (KwdPar n a d k) = row d (case a of Just t -> t; _ -> tWild) (krowOf k)
+  where row Nothing t r = kwdRow n t r
+        row (Just e) t r= tDefRow KRow n t (DfltExpr e e Nothing) r
 krowOf (KwdSTAR n a)    = kwdStar (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 --krowOf (KwdSTAR n a)    = (case a of Just (TTuple _ _ r) -> r; _ -> tWild)
 krowOf KwdNIL           = kwdNil
@@ -424,15 +438,15 @@ chop 0 _                = PosNIL
 chop i (PosPar n a d p) = PosPar n a d (chop (i-1) p)
 chop _ p                = p
 
-arity (TRow _ _ _ _ r)  = 1 + arity r
+arity (TRow _ _ _ _ _ r)= 1 + arity r
 arity _                 = 0
 
-pPar ns (TRow _ PRow n t p)
+pPar ns (TRow _ PRow n t _ p)
                         = PosPar (head ns) (Just t) Nothing (pPar (tail ns) p)
 pPar ns (TNil _ PRow)   = PosNIL
 pPar ns (TStar _ PRow r)= PosSTAR (head ns) (Just $ tTupleP r)
 
-kPar kw (TRow _ KRow n t r)
+kPar kw (TRow _ KRow n t _ r)
                         = KwdPar n (Just t) Nothing (kPar kw r)
 kPar kw (TNil _ KRow)   = KwdNIL
 kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
@@ -441,7 +455,7 @@ kPar kw (TStar _ KRow r)= KwdSTAR kw (Just $ tTupleK r)
 -- with a star tail bundled as one nested tuple, or Nothing if a row tail is still open.
 -- Must mirror the component layout Normalizer.joinRow establishes in generated code.
 tupleComponents p k     = (++) <$> comps p <*> comps k
-  where comps (TRow _ _ _ t r)
+  where comps (TRow _ _ _ t _ r)
                         = (t :) <$> comps r
         comps (TStar _ PRow r)
                         = Just [tTupleP r]
@@ -451,6 +465,8 @@ tupleComponents p k     = (++) <$> comps p <*> comps k
         comps _         = Nothing
 
 tRowLoc t@TRow{}        = getLoc [tloc t, loc (rtype t)]
+
+defaultExpr (DfltExpr _ e _) = e
 
 tvarSupply              = [ TV KType $ name (c:tl) | tl <- "" : map show [1..], c <- "ABCDEFGHIJKLMNOPQRSTUVW" ]
 
@@ -493,7 +509,7 @@ instance Leaves Type where
     leaves (TFun _ x p k t) = leaves [x,p,k,t]
     leaves (TTuple _ p k)   = leaves [p,k]
     leaves (TOpt _ t)       = leaves t
-    leaves (TRow _ _ _ t r) = leaves [t,r]
+    leaves (TRow _ _ _ t _ r) = leaves [t,r]
     leaves (TStar _ _ r)    = leaves r
     leaves _                = []
 
@@ -524,6 +540,8 @@ instance Data.Binary.Binary TCon
 instance Persist TCon
 instance Data.Binary.Binary QBind
 instance Persist QBind
+instance Data.Binary.Binary DefaultSpec
+instance Persist DefaultSpec
 instance Data.Binary.Binary Type
 instance Persist Type
 instance Data.Binary.Binary Kind
@@ -811,7 +829,12 @@ instance Eq Type where
     TNone _             == TNone _              = True
     TWild _             == TWild _              = True
     TNil _ k1           == TNil _ k2            = k1 == k2
-    TRow _ k1 n1 t1 r1  == TRow _ k2 n2 t2 r2   = k1 == k2 && n1 == n2 && t1 == t2 && r1 == r2
+    -- Whether an argument may be omitted is part of the callable type.  The
+    -- particular default expression is declaration metadata, however, and
+    -- must not participate in structural equality.
+    TRow _ k1 n1 t1 d1 r1 == TRow _ k2 n2 t2 d2 r2
+                                                = k1 == k2 && n1 == n2 && isJust d1 == isJust d2
+                                                  && t1 == t2 && r1 == r2
     TStar _ k1 r1       == TStar _ k2 r2        = k1 == k2 && r1 == r2
     TFX _ fx1           == TFX _ fx2            = fx1 == fx2
     TUnboxed _ t1       == TUnboxed _ t2        = t1 == t2

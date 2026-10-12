@@ -214,14 +214,14 @@ actor Tester(env, verbose, port_chunk, app_wthreads=4):
             if data is not None:
                 log_process_output(p, "OUT: state " + str(state), data)
                 if state == 0:
-                    if data.find(b"NOW LISTENING", None, None) > -1:
+                    if data.find(b"NOW LISTENING") > -1:
                         log("Server app listening in state %d, starting TCP client" % state)
                         state = 1
                         tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
                     else:
                         log("In state " + str(state) + ", read unexpected output from server app:" + str(data))
                 elif state == 6:
-                    if data.find(b"NOW LISTENING", None, None) > -1:
+                    if data.find(b"NOW LISTENING") > -1:
                         log("Server app listening in state %d, starting TCP client" % state)
                         state = 7
                         tcp_client = net.TCPConnection(connect_cap, "127.0.0.1", port, tcpc_on_connect, tcpc_on_receive, tcpc_on_error)
