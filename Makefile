@@ -395,16 +395,18 @@ dist/deps/mimalloc: deps-download/mimalloc-v$(MIMALLOC_VERSION).tar.gz $(MIMALLO
 	touch "$(TD)/$@"
 
 # /deps/libmbedtls --------------------------------------------
-LIBMBEDTLS_REF=c7d83538d3d359b05a9331bb2c9217977b5856ac
+LIBMBEDTLS_VERSION=3.6.7
 LIBMBEDTLS_BUILD_ZIG=deps/mbedtls/build.zig
-deps-download/$(LIBMBEDTLS_REF).tar.gz:
+LIBMBEDTLS_CONFIG_PATCH=deps/mbedtls/mbedtls_config.patch
+deps-download/mbedtls-$(LIBMBEDTLS_VERSION).tar.bz2:
 	mkdir -p deps-download
-	$(CURL) -o $@ https://github.com/actonlang/mbedtls/archive/$(LIBMBEDTLS_REF).tar.gz
+	$(CURL) -o $@ https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-$(LIBMBEDTLS_VERSION)/mbedtls-$(LIBMBEDTLS_VERSION).tar.bz2
 
-dist/deps/mbedtls: deps-download/$(LIBMBEDTLS_REF).tar.gz $(LIBMBEDTLS_BUILD_ZIG)
+dist/deps/mbedtls: deps-download/mbedtls-$(LIBMBEDTLS_VERSION).tar.bz2 $(LIBMBEDTLS_BUILD_ZIG) $(LIBMBEDTLS_CONFIG_PATCH)
 	rm -rf "$@"
 	mkdir -p "$@"
-	cd "$@" && tar zx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && tar jx --strip-components=1 -f "$(TD)/$<"
+	cd "$@" && patch -p1 < "$(TD)/$(LIBMBEDTLS_CONFIG_PATCH)"
 	cp "$(TD)/$(LIBMBEDTLS_BUILD_ZIG)" "$@/build.zig"
 	rm -rf "$@/.github" "$@/cmake" "$@/docs" "$@/doxygen" "$@/programs" "$@/scripts" "$@/visualc"
 	# The TLS test server builds against mbed TLS' certificate fixtures.
