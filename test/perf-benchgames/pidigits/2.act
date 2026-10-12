@@ -45,7 +45,7 @@ actor main(env):
         ds[i] = s
         k += 1
         if k == n:
-            print("".join(ds[:i+1]) + (" " * (10 - i)) + "\t:" + str(n))
+            print("".join(ds[:i+1]) + (" " * (9 - i)) + "\t:" + str(n))
             break
         if i == 9:
             print("".join(ds) + "\t:" + str(k))
