@@ -1,0 +1,33 @@
+--- a/include/mbedtls/mbedtls_config.h
++++ b/include/mbedtls/mbedtls_config.h
+@@ -205,7 +205,7 @@
+  *
+  * Enable this layer to allow use of alternative memory allocators.
+  */
+-//#define MBEDTLS_PLATFORM_MEMORY
++#define MBEDTLS_PLATFORM_MEMORY
+
+ /**
+  * \def MBEDTLS_PLATFORM_NO_STD_FUNCTIONS
+@@ -2193,7 +2193,9 @@
+  *
+  * Uncomment this to enable pthread mutexes.
+  */
+-//#define MBEDTLS_THREADING_PTHREAD
++#if !defined(_WIN32)
++#define MBEDTLS_THREADING_PTHREAD
++#endif
+
+ /**
+  * \def MBEDTLS_USE_PSA_CRYPTO
+@@ -3784,7 +3786,9 @@
+  *
+  * Enable this layer to allow use of mutexes within Mbed TLS
+  */
+-//#define MBEDTLS_THREADING_C
++#if !defined(_WIN32)
++#define MBEDTLS_THREADING_C
++#endif
+
+ /**
+  * \def MBEDTLS_TIMING_C
