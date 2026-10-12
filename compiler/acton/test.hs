@@ -2726,7 +2726,7 @@ gcHeapGrowthBuildOptionTests = testGroup "GC heap growth"
               expectSuccess "heap growth divisor and retained objects" result
               assertEqual "application completes" "GC heap growth OK\n" out
         -- Reuse generated outputs to exercise rebuilding between settings.
-        forM_ [([], 0), ([("gc_heap_growth_divisor", "16")], 16),
+        forM_ [([], 4), ([("gc_heap_growth_divisor", "16")], 16),
                ([("gc_heap_growth_divisor", "0")], 0)] $ \(selected, expected) -> do
           writeOptions selected
           expectSuccess "build selected heap growth" =<< build
