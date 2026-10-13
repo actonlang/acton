@@ -2821,7 +2821,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "67"), ("block_size", "16384"),
+    defaults = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "384"),
                 ("no_thread_local_warmup", "True"),
@@ -2829,14 +2829,14 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("mark_range_stealing", "True"),
                 ("initial_mark_stack_size", "1048576")]
     -- Build.act settings and the fields they should report.
-    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "4096"),
+    tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048"),
              ("gc_realloc_no_free", "false"),
              ("gc_no_thread_local_warmup", "false")]
-    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "4096"),
+    tunedReports = [("alloc_budget_percent", "200"), ("block_size", "4096"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
                     ("no_thread_local_warmup", "False"),

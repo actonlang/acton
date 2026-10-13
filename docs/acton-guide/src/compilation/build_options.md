@@ -61,7 +61,7 @@ its section below describes:
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 | The global mark stack [starts with 1048576 entries](#initial-size) instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
-| A collection starts after the program has allocated [67% of the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
+| A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
 
@@ -198,14 +198,14 @@ the logarithm of the heap size instead. Building a 1 GiB list of small
 objects took 78 collections with the fixed increment, 53 with 16 and 39 with
 8.
 
-The cost is a larger heap. On macOS, with 4 the fleetmgr load of 50,000
-devices used 45% less CPU time and settled 30% sooner, at 32% more peak memory
-(4.1 to 5.5 GiB). The fleet load benchmark used 7% less CPU time at 63% more
-peak memory (316 MiB with the fixed increment). Larger divisors are not much
-cheaper in memory: 16 still cost 28% more peak memory on fleetmgr. The free
-space divisor bounds each expansion, so divisors at or below it (3 by default)
-all behave alike. The setting has no effect until the heap is larger than `N`
-times the fixed amount (64 MiB for 4).
+The cost is a larger heap. On macOS, with an allocation budget of 67%, the
+divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU time and
+settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet load
+benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the fixed
+increment). Larger divisors are not much cheaper in memory: 16 still cost 28%
+more peak memory on fleetmgr. The free space divisor bounds each expansion, so
+divisors at or below it (3 by default) all behave alike. The setting has no
+effect until the heap is larger than `N` times the fixed amount (64 MiB for 4).
 
 `"0"` keeps the fixed increment. Values must be non-negative integers. The
 `GC_HEAP_GROWTH_DIVISOR` environment variable overrides the build setting when
@@ -221,20 +221,22 @@ counted twice), all divided by the free space divisor (3 by default). A program
 whose live data is mostly strings, byte buffers or numbers therefore collects
 often compared with its heap size: pointer-free data counts an eighth as much as
 pointer-containing data. The allocation budget instead makes the amount a
-percentage of all live data and roots, like Go's `GOGC`:
+percentage of all live data and roots, like Go's `GOGC`. Acton uses a budget of
+100% by default, and the build setting changes it:
 
 ```python
 build_options = {
-    "gc_alloc_budget_percent": "100",
+    "gc_alloc_budget_percent": "200",
 }
 ```
 
-With `"100"`, a collection starts after the program has allocated as much as
+With 100%, a collection starts after the program has allocated as much as
 survived the previous collection, so the heap settles at about twice the live
-data. Larger values collect less often and use more memory. In incremental and
-generational mode the amount is halved, as with the default policy. On the
-`gc_heap` benchmark on macOS, 100 used 26-30% less CPU time and 28% more heap
-than the default.
+data. Larger values collect less often and use more memory, smaller values
+collect more often and use less. Pointer-free data, such as the contents of
+strings and byte buffers, counts like other data instead of an eighth as much.
+In incremental and generational mode the amount is halved, as with the default
+policy.
 
 The budget is an upper bound. The heap still grows in steps set by the free
 space divisor and `gc_heap_growth_divisor`, and the collector collects before
@@ -242,15 +244,27 @@ it grows the heap a second time since the previous collection. When the budget
 exceeds the free heap plus one growth step, collections therefore come
 earlier.
 
-Acton uses a budget of 67% by default. For live data that is all
-pointer-containing, that is the amount the free space divisor policy gives, so
-such programs collect as before. Pointer-free data, such as the contents of
-strings and byte buffers, counts like other data instead of an eighth as much.
-On an M1 with 8 worker threads, compared with the free space divisor policy,
-the `fleet` load benchmark collected 34% less often and took 9% less time, and
-`pidigits` collected 35% less often and took 19% less time, at up to 25% more
-peak memory. Programs whose large heaps hold mostly pointer-containing data
-were not affected.
+Compared with 67%, which collects as often as the free space divisor policy
+when the live data is all pointer-containing, 100% gave these medians of 12
+interleaved rounds on an Apple M4 Pro, with the heap growth divisor at 4 and
+all 14 markers in every mark phase:
+
+| Workload | CPU | Wall | Peak memory |
+|---|---|---|---|
+| Fleet manager, 50,000 devices | -11% | -8% | +23% |
+| GC heap updates, a million records | -28% | -12% | +25% |
+| GC heap build, 4 million records | -16% | -4% | +25% |
+| GC heap cold inventory, 14,000 records | -31% | -15% | +25% |
+| Fleet load, 50,000 devices | -3% | -2% | +0% |
+| Actor message passing, 8 workers | -1% | -4% | +11% |
+
+Fleet load and upgrade with 10,000 devices did not get faster, and the
+upgrade used 2% more CPU time. With one marker per 8 MiB of mark work, 200%
+against 100% saved the fleet manager another 17% CPU time and 10% wall time,
+and its peak memory grew from 6.7 to 10.4 GiB. The other programs saved 3 to
+28% CPU time and up to 13% wall time for 21 to 61% more peak memory, except
+the actor message passing, which used 2% more CPU time for 2% less wall time,
+and the fleet upgrade, whose peak memory did not change.
 
 `"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
 environment variable overrides the build setting when the program starts; `0`
