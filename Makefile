@@ -469,7 +469,7 @@ dist/deps/libuuid: deps/libuuid
 	cp -a "$</"* "$(TD)/$@"
 
 # /deps/libuv --------------------------------------------
-LIBUV_REF=d760a3f23511ebe7b1935fe1429147d4fca27bb4
+LIBUV_REF=5b04ec0ec0e62ab7f353dd2d353115c727cd815a
 LIBUV_BUILD_ZIG=deps/libuv/build.zig
 deps-download/$(LIBUV_REF).tar.gz:
 	mkdir -p deps-download

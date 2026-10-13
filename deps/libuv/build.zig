@@ -55,6 +55,7 @@ pub fn build(b: *std.Build) void {
         "src/random.c",
         "src/strscpy.c",
         "src/strtok.c",
+        "src/thread-common.c",
         "src/threadpool.c",
         "src/timer.c",
         "src/uv-common.c",
@@ -129,6 +130,7 @@ pub fn build(b: *std.Build) void {
     lib.root_module.addIncludePath(b.path("include"));
     if (t.os.tag == .windows) {
         lib.root_module.linkSystemLibrary("psapi", .{});
+        lib.root_module.linkSystemLibrary("api-ms-win-core-synch-l1-2-0", .{});
         lib.root_module.linkSystemLibrary("user32", .{});
         lib.root_module.linkSystemLibrary("advapi32", .{});
         lib.root_module.linkSystemLibrary("iphlpapi", .{});
@@ -136,6 +138,7 @@ pub fn build(b: *std.Build) void {
         lib.root_module.linkSystemLibrary("ws2_32", .{});
         lib.root_module.linkSystemLibrary("dbghelp", .{});
         lib.root_module.linkSystemLibrary("ole32", .{});
+        lib.root_module.linkSystemLibrary("shell32", .{});
         lib.root_module.linkSystemLibrary("uuid", .{});
     }
     lib.root_module.link_libc = true;

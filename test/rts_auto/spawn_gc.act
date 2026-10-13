@@ -1,0 +1,7 @@
+def check_spawn_gc() -> bool:
+    NotImplemented
+
+
+actor main(env):
+    assert check_spawn_gc()
+    env.exit(0)
