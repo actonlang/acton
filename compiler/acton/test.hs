@@ -2823,7 +2823,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- Reported get_gc_info fields for a build without settings.
     defaults = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                 ("end_padding", "True"), ("small_object_size", "32"),
-                ("thread_local_size_limit", "384"),
+                ("thread_local_size_limit", "2048"),
                 ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
@@ -2855,9 +2855,12 @@ gcCollectorOptionTests = testGroup "GC collector options"
               -- the global free lists, which the collector sets up on demand.
               ([("gc_thread_local_size_limit", "16")],
                [("thread_local_size_limit", "16")]),
-              -- With 0, the collector's own block size.
+              -- With 0, the collector's own block size, and with blocks
+              -- smaller than 16 KiB the collector's own limit.
               ([("gc_block_size", "0")],
-               [("block_size", "4096")])]
+               [("block_size", "4096"), ("thread_local_size_limit", "384")]),
+              ([("gc_thread_local_size_limit", "0")],
+               [("block_size", "16384"), ("thread_local_size_limit", "384")])]
     -- The environment turns the modes that are on by default off in the
     -- default build, and on in the tuned build, which turned them off.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),

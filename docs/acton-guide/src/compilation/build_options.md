@@ -64,6 +64,7 @@ its section below describes:
 | A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
+| Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
 
 ## GC mark layout
 
@@ -430,24 +431,37 @@ application and its dependencies, including database support.
 Each thread allocates small objects from its own free lists, one list per size
 step (16 bytes on 64-bit targets), and takes the collector's allocator lock
 only to refill a list. Objects above a size limit do not use these lists:
-every allocation of one takes the lock. By default the limit is 384 bytes on
-64-bit targets. When several threads allocate many objects above it, they wait
-for the lock. The limit can be raised:
+every allocation of one takes the lock. BDWGC's limit is 384 bytes on 64-bit
+targets. When several threads allocate many objects above it, they wait for
+the lock. With blocks of 16 KiB or more, Acton raises the limit to 2048 bytes
+by default. The limit can be changed:
 
 ```python
 build_options = {
-    "gc_thread_local_size_limit": "2048",
+    "gc_thread_local_size_limit": "4096",
 }
 ```
 
 The value is an object size in bytes, including the end padding byte, so with
 padding on a limit of 2048 covers allocations of up to 2047 bytes. It must be
 a multiple of 16 and at most half the heap block size: 8192 with the default
-16 KiB blocks, 2048 with 4 KiB blocks. `"0"` (the default) keeps the
-collector's limit. A higher limit makes each thread's table of free lists
-larger (by about 3 KB at 2048 and 64 KB at 32768), and each thread can hold
-partly used blocks of more sizes. This is a build setting shared by the
-application and its dependencies, including database support.
+16 KiB blocks, 2048 with 4 KiB blocks. `"0"` keeps the collector's limit,
+which is also the default with blocks smaller than 16 KiB. A higher limit
+makes each thread's table of free lists larger (by about 3 KB at 2048 and 64
+KB at 32768), and each thread can hold partly used blocks of more sizes: with
+the default blocks, up to 4 MiB per thread at 2048 against 800 KiB at 384.
+
+On an M1 with 8 worker threads and 16 KiB blocks, 2048 bytes against 384 took 8
+to 9% of the CPU time off the `fleet` load benchmark and 13% off `pidigits`,
+which peaked at 43% more memory. The `gc_heap` benchmark and the fleetmgr load
+of 50,000 devices changed by less than 1.5%. Limits of 4096 and 8192 saved no
+more CPU time on the `fleet` load and `gc_heap` benchmarks, and `pidigits`
+peaked at 77% and 127% more memory than with 384. With 4 KiB blocks, 2048 bytes
+made the `fleet` load benchmark with 400 and 10,000 devices take 6 to 14% more
+wall time on the M1 and on an M6, so the default follows the block size.
+
+This is a build setting shared by the application and its dependencies,
+including database support.
 
 ## GC thread-local warm-up
 
@@ -466,8 +480,8 @@ size at its first allocation of that size, which takes the lock once. The cost
 is memory: each thread can hold up to a heap block of free objects of every
 size it has allocated at least once, separately for objects with and without
 pointers. With the default blocks and [size limit](#gc-thread-local-allocation-size)
-that is at most 800 KiB per thread, and more with larger blocks or a higher
-limit. The warm-up can be turned back on:
+that is at most about 4 MiB per thread, and more with larger blocks or a
+higher limit. The warm-up can be turned back on:
 
 ```python
 build_options = {
