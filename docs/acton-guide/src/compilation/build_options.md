@@ -60,9 +60,11 @@ its section below describes:
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
-| The global mark stack [starts with 1048576 entries](#initial-size) instead of 4096 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
-| A collection starts after the program has allocated [67% of the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
+| The global mark stack [starts with 1048576 entries](#initial-size) instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
+| A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
+| The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
+| Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
 
 ## GC mark layout
 
@@ -165,12 +167,13 @@ This is a build setting and is shared by all application dependencies,
 including database support.
 
 In Acton's 64-bit large-heap configuration the default is 21: 256 KiB per table.
-With 4 KiB collector blocks, addresses 8 GiB apart share an entry. Setting 23
-uses 1 MiB per table and moves that address interval to 32 GiB. Larger tables
-can reduce unnecessary rescanning when clean pages share entries with dirty
-pages. They cost more memory and clearing/copying work. Several tables exist,
-including conservative-pointer blacklisting tables, so this also affects
-ordinary collection. It is independent of object mark-bit layout.
+With Acton's 16 KiB collector blocks, addresses 32 GiB apart share an entry (8
+GiB with 4 KiB blocks). Setting 23 uses 1 MiB per table and moves that address
+interval to 128 GiB. Larger tables can reduce unnecessary rescanning when clean
+pages share entries with dirty pages. They cost more memory and clearing/copying
+work. Several tables exist, including conservative-pointer blacklisting tables,
+so this also affects ordinary collection. It is independent of object mark-bit
+layout.
 
 Measure the application's workload before choosing a larger table. Increasing
 this value does not remove dirty-tracking faults or guarantee fewer collections.
@@ -196,14 +199,14 @@ the logarithm of the heap size instead. Building a 1 GiB list of small
 objects took 78 collections with the fixed increment, 53 with 16 and 39 with
 8.
 
-The cost is a larger heap. On macOS, with 4 the fleetmgr load of 50,000
-devices used 45% less CPU time and settled 30% sooner, at 32% more peak memory
-(4.1 to 5.5 GiB). The fleet load benchmark used 7% less CPU time at 63% more
-peak memory (316 MiB with the fixed increment). Larger divisors are not much
-cheaper in memory: 16 still cost 28% more peak memory on fleetmgr. The free
-space divisor bounds each expansion, so divisors at or below it (3 by default)
-all behave alike. The setting has no effect until the heap is larger than `N`
-times the fixed amount (64 MiB for 4).
+The cost is a larger heap. On macOS, with an allocation budget of 67%, the
+divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU time and
+settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet load
+benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the fixed
+increment). Larger divisors are not much cheaper in memory: 16 still cost 28%
+more peak memory on fleetmgr. The free space divisor bounds each expansion, so
+divisors at or below it (3 by default) all behave alike. The setting has no
+effect until the heap is larger than `N` times the fixed amount (64 MiB for 4).
 
 `"0"` keeps the fixed increment. Values must be non-negative integers. The
 `GC_HEAP_GROWTH_DIVISOR` environment variable overrides the build setting when
@@ -219,20 +222,22 @@ counted twice), all divided by the free space divisor (3 by default). A program
 whose live data is mostly strings, byte buffers or numbers therefore collects
 often compared with its heap size: pointer-free data counts an eighth as much as
 pointer-containing data. The allocation budget instead makes the amount a
-percentage of all live data and roots, like Go's `GOGC`:
+percentage of all live data and roots, like Go's `GOGC`. Acton uses a budget of
+100% by default, and the build setting changes it:
 
 ```python
 build_options = {
-    "gc_alloc_budget_percent": "100",
+    "gc_alloc_budget_percent": "200",
 }
 ```
 
-With `"100"`, a collection starts after the program has allocated as much as
+With 100%, a collection starts after the program has allocated as much as
 survived the previous collection, so the heap settles at about twice the live
-data. Larger values collect less often and use more memory. In incremental and
-generational mode the amount is halved, as with the default policy. On the
-`gc_heap` benchmark on macOS, 100 used 26-30% less CPU time and 28% more heap
-than the default.
+data. Larger values collect less often and use more memory, smaller values
+collect more often and use less. Pointer-free data, such as the contents of
+strings and byte buffers, counts like other data instead of an eighth as much.
+In incremental and generational mode the amount is halved, as with the default
+policy.
 
 The budget is an upper bound. The heap still grows in steps set by the free
 space divisor and `gc_heap_growth_divisor`, and the collector collects before
@@ -240,15 +245,27 @@ it grows the heap a second time since the previous collection. When the budget
 exceeds the free heap plus one growth step, collections therefore come
 earlier.
 
-Acton uses a budget of 67% by default. For live data that is all
-pointer-containing, that is the amount the free space divisor policy gives, so
-such programs collect as before. Pointer-free data, such as the contents of
-strings and byte buffers, counts like other data instead of an eighth as much.
-On an M1 with 8 worker threads, compared with the free space divisor policy,
-the `fleet` load benchmark collected 34% less often and took 9% less time, and
-`pidigits` collected 35% less often and took 19% less time, at up to 25% more
-peak memory. Programs whose large heaps hold mostly pointer-containing data
-were not affected.
+Compared with 67%, which collects as often as the free space divisor policy
+when the live data is all pointer-containing, 100% gave these medians of 12
+interleaved rounds on an Apple M4 Pro, with the heap growth divisor at 4 and
+all 14 markers in every mark phase:
+
+| Workload | CPU | Wall | Peak memory |
+|---|---|---|---|
+| Fleet manager, 50,000 devices | -11% | -8% | +23% |
+| GC heap updates, a million records | -28% | -12% | +25% |
+| GC heap build, 4 million records | -16% | -4% | +25% |
+| GC heap cold inventory, 14,000 records | -31% | -15% | +25% |
+| Fleet load, 50,000 devices | -3% | -2% | +0% |
+| Actor message passing, 8 workers | -1% | -4% | +11% |
+
+Fleet load and upgrade with 10,000 devices did not get faster, and the
+upgrade used 2% more CPU time. With one marker per 8 MiB of mark work, 200%
+against 100% saved the fleet manager another 17% CPU time and 10% wall time,
+and its peak memory grew from 6.7 to 10.4 GiB. The other programs saved 3 to
+28% CPU time and up to 13% wall time for 21 to 61% more peak memory, except
+the actor message passing, which used 2% more CPU time for 2% less wall time,
+and the fleet upgrade, whose peak memory did not change.
 
 `"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
 environment variable overrides the build setting when the program starts; `0`
@@ -263,26 +280,42 @@ support.
 The collector manages its heap in blocks. Each block holds objects of one size,
 and a thread refilling its free list of a size takes the allocator lock once
 per block. Larger blocks mean fewer lock acquisitions and fewer blocks to visit
-in each collection:
+in each collection. Acton uses 16 KiB blocks by default, where BDWGC uses 4
+KiB. The size can be changed:
 
 ```python
 build_options = {
-    "gc_block_size": "16384",
+    "gc_block_size": "4096",
 }
 ```
 
-Valid values are powers of two from `"4096"` to `"65536"`; `"0"` (the default)
-keeps the collector's 4 KiB blocks. Heap growth steps stay the same in bytes.
-On Apple silicon, 16 KiB is the page size. On the `gc_heap` benchmark on macOS,
-16 KiB blocks used 13% less CPU time with the same heap size, and 64 KiB blocks
-13-18% less.
+Valid values are powers of two from `"4096"` to `"65536"`; `"0"` also keeps
+the collector's 4 KiB blocks. Heap growth steps stay the same in bytes. On
+Apple silicon, 16 KiB is the page size.
+
+On an M1 with 8 worker threads, compared with 4 KiB blocks, 16 KiB blocks took
+12 to 31% of the CPU time off the `gc_heap` benchmark and 13 to 18% off the
+`fleet` load benchmark, which also ran in half the wall time. The fleetmgr
+load of 50,000 devices used 37% less CPU time and settled 53% sooner. An M4
+Pro and an M6 gave similar results, except that the `fleet` load benchmark
+used about the same CPU time on the M6, in half the wall time. Actor message
+passing used 21% more CPU time on the M1, in 8% less wall time, and 1 to 9%
+less on the other two.
+
+The cost is memory where heaps are small. Every program starts with about 1
+MiB more (a hello world program 3.5 to 4.6 MiB on the M1), the tests of the
+standard library peaked at 15% more each, and benchmarks with heaps of 6 to 20
+MiB at 23 to 42% more. Larger heaps changed less: the `gc_heap` benchmark's
+shrank by 1.5% and the `fleet` load benchmark's by 1 to 24%, and fleetmgr
+peaked at 12% more (5.5 to 6.1 GiB).
 
 Objects larger than half a block get whole blocks, so larger blocks round
-large objects up more coarsely: with 64 KiB blocks, a 40 KiB array occupies
-64 KiB. A conservative false pointer into a free block also keeps more memory
-from reuse. When blocks are larger than pages, incremental and generational
-collection track dirty memory per block instead of per page. Measure memory
-use as well as time before choosing a size.
+large objects up more coarsely: with 16 KiB blocks, a 9 KiB array occupies 16
+KiB, and with 64 KiB blocks a 40 KiB array occupies 64 KiB. A conservative
+false pointer into a free block also keeps more memory from reuse. When blocks
+are larger than pages, incremental and generational collection track dirty
+memory per block instead of per page. Measure memory use as well as time
+before choosing a size.
 
 `"65536"` cannot be combined with `gc_mark_bit_per_object`. This is a build
 setting shared by the application and its dependencies, including database
@@ -334,7 +367,7 @@ stood for: it scans the whole heap again for marked objects, on one thread,
 while normal marking runs on all marker threads. One overflow can therefore
 make a collection several times longer. Range stealing makes overflows in
 the first collections more frequent. BDWGC starts the stack with as many
-entries as a heap block has bytes, 4096 with the default blocks; Acton
+entries as a heap block has bytes, 16384 with Acton's default blocks; Acton
 starts it with 1048576 entries by default. The size can be changed:
 
 ```python
@@ -347,10 +380,12 @@ The value is a number of entries: a power of two of at least 4096 whose size
 fills whole heap blocks, which holds for every power of two from 4096 on
 64-bit targets. `"0"` gives BDWGC's initial size. Each entry takes 16 bytes
 on 64-bit targets, so 1048576 entries take 16 MiB for the life of the
-process, and 262144 entries take 4 MiB. The pages of the stack become
-resident only when marking uses them: a program with a small heap has the
-same resident size with either default. No environment variable changes the
-size: the setting changes how the collector is compiled.
+process, and 262144 entries take 4 MiB. Each marker thread also has a local
+stack of as many entries as a heap block has bytes: 256 KiB with the default
+blocks. The pages of the stack become resident only when marking uses them: a
+program with a small heap has the same resident size with either default. No
+environment variable changes the size: the setting changes how the collector is
+compiled.
 
 In a multi-actor service on a 32-thread Linux machine, 262144 entries
 removed the collections that overflowed the stack with initial heaps of 1
@@ -396,24 +431,37 @@ application and its dependencies, including database support.
 Each thread allocates small objects from its own free lists, one list per size
 step (16 bytes on 64-bit targets), and takes the collector's allocator lock
 only to refill a list. Objects above a size limit do not use these lists:
-every allocation of one takes the lock. By default the limit is 384 bytes on
-64-bit targets. When several threads allocate many objects above it, they wait
-for the lock. The limit can be raised:
+every allocation of one takes the lock. BDWGC's limit is 384 bytes on 64-bit
+targets. When several threads allocate many objects above it, they wait for
+the lock. With blocks of 16 KiB or more, Acton raises the limit to 2048 bytes
+by default. The limit can be changed:
 
 ```python
 build_options = {
-    "gc_thread_local_size_limit": "2048",
+    "gc_thread_local_size_limit": "4096",
 }
 ```
 
 The value is an object size in bytes, including the end padding byte, so with
 padding on a limit of 2048 covers allocations of up to 2047 bytes. It must be
-a multiple of 16 and at most half the heap block size: 2048 with the default
-4 KiB blocks, 8192 with 16 KiB blocks. `"0"` (the default) keeps the
-collector's limit. A higher limit makes each thread's table of free lists
-larger (by about 3 KB at 2048 and 64 KB at 32768), and each thread can hold
-partly used blocks of more sizes. This is a build setting shared by the
-application and its dependencies, including database support.
+a multiple of 16 and at most half the heap block size: 8192 with the default
+16 KiB blocks, 2048 with 4 KiB blocks. `"0"` keeps the collector's limit,
+which is also the default with blocks smaller than 16 KiB. A higher limit
+makes each thread's table of free lists larger (by about 3 KB at 2048 and 64
+KB at 32768), and each thread can hold partly used blocks of more sizes: with
+the default blocks, up to 4 MiB per thread at 2048 against 800 KiB at 384.
+
+On an M1 with 8 worker threads and 16 KiB blocks, 2048 bytes against 384 took 8
+to 9% of the CPU time off the `fleet` load benchmark and 13% off `pidigits`,
+which peaked at 43% more memory. The `gc_heap` benchmark and the fleetmgr load
+of 50,000 devices changed by less than 1.5%. Limits of 4096 and 8192 saved no
+more CPU time on the `fleet` load and `gc_heap` benchmarks, and `pidigits`
+peaked at 77% and 127% more memory than with 384. With 4 KiB blocks, 2048 bytes
+made the `fleet` load benchmark with 400 and 10,000 devices take 6 to 14% more
+wall time on the M1 and on an M6, so the default follows the block size.
+
+This is a build setting shared by the application and its dependencies,
+including database support.
 
 ## GC thread-local warm-up
 
@@ -432,8 +480,8 @@ size at its first allocation of that size, which takes the lock once. The cost
 is memory: each thread can hold up to a heap block of free objects of every
 size it has allocated at least once, separately for objects with and without
 pointers. With the default blocks and [size limit](#gc-thread-local-allocation-size)
-that is at most 200 KiB per thread, and more with larger blocks or a higher
-limit. The warm-up can be turned back on:
+that is at most about 4 MiB per thread, and more with larger blocks or a
+higher limit. The warm-up can be turned back on:
 
 ```python
 build_options = {
@@ -461,7 +509,7 @@ its work. Leaving the old copies to the collector cut the acquisitions 3 and
 
 By default, Acton leaves a small old copy to the collector, which reclaims it
 like any other unreachable object. Old copies larger than half a heap block
-(2 KiB with the default blocks) are still freed at once: such a copy occupies
+(8 KiB with the default blocks) are still freed at once: such a copy occupies
 whole heap blocks, which freeing returns to the heap right away, at the cost of
 one acquisition of the allocator lock. The behaviour can be turned off, so that
 every old copy is freed:

@@ -2821,22 +2821,22 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "67"), ("block_size", "4096"),
+    defaults = [("alloc_budget_percent", "100"), ("block_size", "16384"),
                 ("end_padding", "True"), ("small_object_size", "32"),
-                ("thread_local_size_limit", "384"),
+                ("thread_local_size_limit", "2048"),
                 ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
                 ("initial_mark_stack_size", "1048576")]
     -- Build.act settings and the fields they should report.
-    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "16384"),
+    tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048"),
              ("gc_realloc_no_free", "false"),
              ("gc_no_thread_local_warmup", "false")]
-    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "16384"),
+    tunedReports = [("alloc_budget_percent", "200"), ("block_size", "4096"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
                     ("no_thread_local_warmup", "False"),
@@ -2854,7 +2854,13 @@ gcCollectorOptionTests = testGroup "GC collector options"
               -- The smallest limit. Objects of every larger size come from
               -- the global free lists, which the collector sets up on demand.
               ([("gc_thread_local_size_limit", "16")],
-               [("thread_local_size_limit", "16")])]
+               [("thread_local_size_limit", "16")]),
+              -- With 0, the collector's own block size, and with blocks
+              -- smaller than 16 KiB the collector's own limit.
+              ([("gc_block_size", "0")],
+               [("block_size", "4096"), ("thread_local_size_limit", "384")]),
+              ([("gc_thread_local_size_limit", "0")],
+               [("block_size", "16384"), ("thread_local_size_limit", "384")])]
     -- The environment turns the modes that are on by default off in the
     -- default build, and on in the tuned build, which turned them off.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
@@ -2884,13 +2890,15 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_initial_mark_stack_size", "invalid"),
                         ("gc_no_end_padding", "maybe"),
                         ("gc_thread_local_size_limit", "100"),
-                        ("gc_thread_local_size_limit", "4096"),
+                        ("gc_thread_local_size_limit", "16384"),
                         ("gc_thread_local_size_limit", "invalid"),
                         ("gc_realloc_no_free", "maybe"),
                         ("gc_no_thread_local_warmup", "maybe")]
       ] ++
       [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
          "gc_block_size")
+      , ([("gc_block_size", "4096"), ("gc_thread_local_size_limit", "4096")],
+         "gc_thread_local_size_limit")
       ]
     expectSuccess label (code, out, err) =
       assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code

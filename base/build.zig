@@ -87,12 +87,12 @@ pub fn build(b: *std.Build) void {
     const gc_dirty_tracking_backend = b.option([]const u8, "gc_dirty_tracking_backend", "GC dirty tracking backend: auto, soft_dirty, userfaultfd") orelse "auto";
     const gc_page_hash_table_log2 = b.option(u8, "gc_page_hash_table_log2", "Log2 of GC page-hash entries (0 keeps the default)") orelse 0;
     const gc_heap_growth_divisor = b.option(u32, "gc_heap_growth_divisor", "Limit automatic GC heap growth to the heap size divided by this (default 4; 0 keeps the fixed increment)") orelse 4;
-    const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 67; 0 selects the free space divisor policy)") orelse 67;
-    const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (0 keeps the default)") orelse 0;
+    const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 100; 0 selects the free space divisor policy)") orelse 100;
+    const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (default 16384; 0 keeps the collector's 4096)") orelse 16384;
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse gc_enable_threads;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 1048576; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse 1048576;
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
-    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (0 keeps the default)") orelse 0;
+    const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (default 2048 with blocks of 16384 bytes or more, else the collector's default, 384 on 64-bit targets; 0 keeps the collector's default)") orelse @as(u32, if (gc_block_size >= 16384) 2048 else 0);
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
     const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse gc_enable_threads;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
@@ -109,7 +109,7 @@ pub fn build(b: *std.Build) void {
         std.process.exit(1);
     }
     if (gc_block_size != 0 and (gc_block_size < 4096 or gc_block_size > 65536 or !std.math.isPowerOfTwo(gc_block_size))) {
-        std.log.err("gc_block_size must be a power of two from 4096 to 65536, or 0 for the default", .{});
+        std.log.err("gc_block_size must be a power of two from 4096 to 65536, or 0 for the collector's 4096", .{});
         std.process.exit(1);
     }
     if (gc_block_size > 32768 and gc_mark_bit_per_object) {
@@ -140,7 +140,7 @@ pub fn build(b: *std.Build) void {
         // Objects of more than half a block are allocated in whole blocks.
         const max_limit: u32 = (if (gc_block_size != 0) gc_block_size else 4096) / 2;
         if (gc_thread_local_size_limit % 16 != 0 or gc_thread_local_size_limit > max_limit) {
-            std.log.err("gc_thread_local_size_limit must be a multiple of 16 from 16 to {d} (half the heap block size), or 0 for the default", .{max_limit});
+            std.log.err("gc_thread_local_size_limit must be a multiple of 16 from 16 to {d} (half the heap block size), or 0 for the collector's default", .{max_limit});
             std.process.exit(1);
         }
     }
