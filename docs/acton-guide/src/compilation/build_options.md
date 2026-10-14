@@ -60,7 +60,7 @@ its section below describes:
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
-| The global mark stack [starts with 1048576 entries](#initial-size) instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
+| The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
 | A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
@@ -199,13 +199,13 @@ the logarithm of the heap size instead. Building a 1 GiB list of small
 objects took 78 collections with the fixed increment, 53 with 16 and 39 with
 8.
 
-The cost is a larger heap. On macOS, with an allocation budget of 67%, the
-divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU time and
-settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet load
-benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the fixed
-increment). Larger divisors are not much cheaper in memory: 16 still cost 28%
-more peak memory on fleetmgr. The free space divisor bounds each expansion, so
-divisors at or below it (3 by default) all behave alike. The setting has no
+The cost is a larger heap. On macOS, with 4 KiB blocks and an allocation budget
+of 67%, the divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU
+time and settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet
+load benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the
+fixed increment). Larger divisors are not much cheaper in memory: 16 still cost
+28% more peak memory on fleetmgr. The free space divisor bounds each expansion,
+so divisors at or below it (3 by default) all behave alike. The setting has no
 effect until the heap is larger than `N` times the fixed amount (64 MiB for 4).
 
 `"0"` keeps the fixed increment. Values must be non-negative integers. The
@@ -247,8 +247,8 @@ earlier.
 
 Compared with 67%, which collects as often as the free space divisor policy
 when the live data is all pointer-containing, 100% gave these medians of 12
-interleaved rounds on an Apple M4 Pro, with the heap growth divisor at 4 and
-all 14 markers in every mark phase:
+interleaved rounds on an Apple M4 Pro, with 4 KiB blocks, the heap growth
+divisor at 4 and all 14 markers in every mark phase:
 
 | Workload | CPU | Wall | Peak memory |
 |---|---|---|---|
@@ -259,13 +259,10 @@ all 14 markers in every mark phase:
 | Fleet load, 50,000 devices | -3% | -2% | +0% |
 | Actor message passing, 8 workers | -1% | -4% | +11% |
 
-Fleet load and upgrade with 10,000 devices did not get faster, and the
-upgrade used 2% more CPU time. With one marker per 8 MiB of mark work, 200%
-against 100% saved the fleet manager another 17% CPU time and 10% wall time,
-and its peak memory grew from 6.7 to 10.4 GiB. The other programs saved 3 to
-28% CPU time and up to 13% wall time for 21 to 61% more peak memory, except
-the actor message passing, which used 2% more CPU time for 2% less wall time,
-and the fleet upgrade, whose peak memory did not change.
+Fleet load with 400 and with 10,000 devices did not change, and fleet upgrade
+(480 devices) used 2% more CPU time. With the same settings, 200% against 100%
+saved the fleet manager another 15% CPU time and 9% wall time, and its peak
+memory grew from 6.7 to 10.3 GiB.
 
 `"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
 environment variable overrides the build setting when the program starts; `0`
@@ -293,14 +290,14 @@ Valid values are powers of two from `"4096"` to `"65536"`; `"0"` also keeps
 the collector's 4 KiB blocks. Heap growth steps stay the same in bytes. On
 Apple silicon, 16 KiB is the page size.
 
-On an M1 with 8 worker threads, compared with 4 KiB blocks, 16 KiB blocks took
-12 to 31% of the CPU time off the `gc_heap` benchmark and 13 to 18% off the
-`fleet` load benchmark, which also ran in half the wall time. The fleetmgr
-load of 50,000 devices used 37% less CPU time and settled 53% sooner. An M4
-Pro and an M6 gave similar results, except that the `fleet` load benchmark
-used about the same CPU time on the M6, in half the wall time. Actor message
-passing used 21% more CPU time on the M1, in 8% less wall time, and 1 to 9%
-less on the other two.
+On an M1 with 8 worker threads, an allocation budget of 67% and the heap growth
+divisor at 4, compared with 4 KiB blocks, 16 KiB blocks took 12 to 31% of the
+CPU time off the `gc_heap` benchmark and 13 to 18% off the `fleet` load
+benchmark, which also ran in half the wall time. The fleetmgr load of 50,000
+devices used 37% less CPU time and settled 53% sooner. An M4 Pro and an M6 gave
+similar results, except that the `fleet` load benchmark used about the same CPU
+time on the M6, in half the wall time. Actor message passing used 21% more CPU
+time on the M1, in 8% less wall time, and 1 to 9% less on the other two.
 
 The cost is memory where heaps are small. Every program starts with about 1
 MiB more (a hello world program 3.5 to 4.6 MiB on the M1), the tests of the
@@ -368,24 +365,27 @@ while normal marking runs on all marker threads. One overflow can therefore
 make a collection several times longer. Range stealing makes overflows in
 the first collections more frequent. BDWGC starts the stack with as many
 entries as a heap block has bytes, 16384 with Acton's default blocks; Acton
-starts it with 1048576 entries by default. The size can be changed:
+starts it with 4194304 entries by default, and with 1048576 on Windows. The
+size can be changed:
 
 ```python
 build_options = {
-    "gc_initial_mark_stack_size": "262144",
+    "gc_initial_mark_stack_size": "16777216",
 }
 ```
 
 The value is a number of entries: a power of two of at least 4096 whose size
 fills whole heap blocks, which holds for every power of two from 4096 on
-64-bit targets. `"0"` gives BDWGC's initial size. Each entry takes 16 bytes
-on 64-bit targets, so 1048576 entries take 16 MiB for the life of the
-process, and 262144 entries take 4 MiB. Each marker thread also has a local
-stack of as many entries as a heap block has bytes: 256 KiB with the default
-blocks. The pages of the stack become resident only when marking uses them: a
-program with a small heap has the same resident size with either default. No
-environment variable changes the size: the setting changes how the collector is
-compiled.
+64-bit targets. `"0"` gives BDWGC's initial size. Each entry takes 16 bytes on
+64-bit targets, so 4194304 entries take 64 MiB and 1048576 entries 16 MiB, for
+the life of the process. On Linux and macOS this is address space: a page of
+the stack becomes resident only when marking first writes it, although under
+strict overcommit (`vm.overcommit_memory=2`) Linux counts the whole stack
+against the commit limit. Windows commits the whole stack when the program
+starts, against the system's commit limit, which is why the default is smaller
+there. Each marker thread also has a local stack of as many entries as a heap
+block has bytes: 256 KiB with the default blocks. No environment variable
+changes the size: the setting changes how the collector is compiled.
 
 In a multi-actor service on a 32-thread Linux machine, 262144 entries
 removed the collections that overflowed the stack with initial heaps of 1
@@ -398,6 +398,32 @@ them spent rescanning the heap on one thread, against 1.4 seconds for the
 other collections. With 1048576 entries and no other change, the overflow
 did not happen, and the load took 197 to 202 seconds instead of 211 to
 227.
+
+How many entries a collection uses depends on the shape of the live data and,
+with parallel markers, on how much work the markers pass through the global
+stack in one mark phase: the stack holds all of it, including the entries that
+markers have already taken. Programs with heaps of up to 3.4 GiB, the
+benchmarks among them, used at most 9001 entries. The service used up to
+290917 entries while it loaded 50,000 devices and up to 731573, 70% of
+1048576, while it loaded 100,000. With 262144 entries, 8 markers and the other
+settings at their defaults, it overflowed: an overflowing collection took 2.3
+to 4.2 seconds against 0.4 to 0.8 seconds for the others, and at 100,000
+devices the stack, with less than half the entries it needed, overflowed twice
+before it fit. 4194304 entries leave 5.7 times the service's deepest use. They
+cost nothing measurable but address space: against 1048576 entries, 4194304,
+16777216 and 67108864 entries added 48, 240 and 1008 MiB to the virtual size
+of a process, while peak resident memory, page faults, startup time and CPU
+time stayed within the noise, on Linux and on macOS.
+
+A larger stack moves the point where a program overflows it, but no size
+removes it. A linked list whose payload field comes before its link field
+needs one entry per node: a list of 1,000,000 such nodes used 995603 entries,
+and a list of 5,000,000 nodes, 455 MiB at its peak, overflowed 4194304
+entries. With the link field first, a list of 2,000,000 nodes used 59 entries.
+After an overflow the stack keeps its doubled size, and the pages that marking
+wrote stay resident, for the life of the process. A program with a very large
+heap can set a larger size; on Linux and macOS it costs address space until
+marking needs the entries.
 
 Both are build settings shared by the application and its dependencies,
 including database support.
