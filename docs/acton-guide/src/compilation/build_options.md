@@ -199,13 +199,13 @@ the logarithm of the heap size instead. Building a 1 GiB list of small
 objects took 78 collections with the fixed increment, 53 with 16 and 39 with
 8.
 
-The cost is a larger heap. On macOS, with an allocation budget of 67%, the
-divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU time and
-settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet load
-benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the fixed
-increment). Larger divisors are not much cheaper in memory: 16 still cost 28%
-more peak memory on fleetmgr. The free space divisor bounds each expansion, so
-divisors at or below it (3 by default) all behave alike. The setting has no
+The cost is a larger heap. On macOS, with 4 KiB blocks and an allocation budget
+of 67%, the divisor 4 made the fleetmgr load of 50,000 devices use 45% less CPU
+time and settle 30% sooner, at 32% more peak memory (4.1 to 5.5 GiB). The fleet
+load benchmark used 7% less CPU time at 63% more peak memory (316 MiB with the
+fixed increment). Larger divisors are not much cheaper in memory: 16 still cost
+28% more peak memory on fleetmgr. The free space divisor bounds each expansion,
+so divisors at or below it (3 by default) all behave alike. The setting has no
 effect until the heap is larger than `N` times the fixed amount (64 MiB for 4).
 
 `"0"` keeps the fixed increment. Values must be non-negative integers. The
@@ -247,8 +247,8 @@ earlier.
 
 Compared with 67%, which collects as often as the free space divisor policy
 when the live data is all pointer-containing, 100% gave these medians of 12
-interleaved rounds on an Apple M4 Pro, with the heap growth divisor at 4 and
-all 14 markers in every mark phase:
+interleaved rounds on an Apple M4 Pro, with 4 KiB blocks, the heap growth
+divisor at 4 and all 14 markers in every mark phase:
 
 | Workload | CPU | Wall | Peak memory |
 |---|---|---|---|
@@ -259,13 +259,10 @@ all 14 markers in every mark phase:
 | Fleet load, 50,000 devices | -3% | -2% | +0% |
 | Actor message passing, 8 workers | -1% | -4% | +11% |
 
-Fleet load and upgrade with 10,000 devices did not get faster, and the
-upgrade used 2% more CPU time. With one marker per 8 MiB of mark work, 200%
-against 100% saved the fleet manager another 17% CPU time and 10% wall time,
-and its peak memory grew from 6.7 to 10.4 GiB. The other programs saved 3 to
-28% CPU time and up to 13% wall time for 21 to 61% more peak memory, except
-the actor message passing, which used 2% more CPU time for 2% less wall time,
-and the fleet upgrade, whose peak memory did not change.
+Fleet load with 400 and with 10,000 devices did not change, and fleet upgrade
+(480 devices) used 2% more CPU time. With the same settings, 200% against 100%
+saved the fleet manager another 15% CPU time and 9% wall time, and its peak
+memory grew from 6.7 to 10.3 GiB.
 
 `"0"` selects the free space divisor policy. The `GC_ALLOC_BUDGET_PERCENT`
 environment variable overrides the build setting when the program starts; `0`
@@ -293,14 +290,14 @@ Valid values are powers of two from `"4096"` to `"65536"`; `"0"` also keeps
 the collector's 4 KiB blocks. Heap growth steps stay the same in bytes. On
 Apple silicon, 16 KiB is the page size.
 
-On an M1 with 8 worker threads, compared with 4 KiB blocks, 16 KiB blocks took
-12 to 31% of the CPU time off the `gc_heap` benchmark and 13 to 18% off the
-`fleet` load benchmark, which also ran in half the wall time. The fleetmgr
-load of 50,000 devices used 37% less CPU time and settled 53% sooner. An M4
-Pro and an M6 gave similar results, except that the `fleet` load benchmark
-used about the same CPU time on the M6, in half the wall time. Actor message
-passing used 21% more CPU time on the M1, in 8% less wall time, and 1 to 9%
-less on the other two.
+On an M1 with 8 worker threads, an allocation budget of 67% and the heap growth
+divisor at 4, compared with 4 KiB blocks, 16 KiB blocks took 12 to 31% of the
+CPU time off the `gc_heap` benchmark and 13 to 18% off the `fleet` load
+benchmark, which also ran in half the wall time. The fleetmgr load of 50,000
+devices used 37% less CPU time and settled 53% sooner. An M4 Pro and an M6 gave
+similar results, except that the `fleet` load benchmark used about the same CPU
+time on the M6, in half the wall time. Actor message passing used 21% more CPU
+time on the M1, in 8% less wall time, and 1 to 9% less on the other two.
 
 The cost is memory where heaps are small. Every program starts with about 1
 MiB more (a hello world program 3.5 to 4.6 MiB on the M1), the tests of the
