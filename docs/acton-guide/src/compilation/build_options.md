@@ -61,6 +61,7 @@ its section below describes:
 | A mark phase gets [one marker per 4 MiB](#gc-markers-per-mark-phase) it is estimated to scan instead of all of them | `"gc_bytes_per_marker": "0"` | `GC_BYTES_PER_MARKER=0` |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
+| A refill of a thread's free list takes [up to 16 heap blocks](#gc-thread-local-refills) under the allocator lock instead of one | `"gc_thread_local_refill_blocks": "1"` | `GC_TL_REFILL_MAX=1` |
 | The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
 | A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
@@ -277,9 +278,9 @@ support.
 
 The collector manages its heap in blocks. Each block holds objects of one size,
 and a thread refilling its free list of a size takes the allocator lock once
-per block. Larger blocks mean fewer lock acquisitions and fewer blocks to visit
-in each collection. Acton uses 16 KiB blocks by default, where BDWGC uses 4
-KiB. The size can be changed:
+per [refill](#gc-thread-local-refills) of one block or more. Larger blocks mean
+fewer lock acquisitions and fewer blocks to visit in each collection. Acton uses
+16 KiB blocks by default, where BDWGC uses 4 KiB. The size can be changed:
 
 ```python
 build_options = {
@@ -557,6 +558,75 @@ wall time on the M1 and on an M6, so the default follows the block size.
 This is a build setting shared by the application and its dependencies,
 including database support.
 
+## GC thread-local refills
+
+A thread refills its free list of a size, when the list is empty, under the
+collector's allocator lock. In BDWGC one refill takes at most one heap block
+of objects, so a thread that allocates many small objects takes the lock
+often, and with many allocating threads the lock decides how fast they
+allocate. Acton lets one refill take up to 16 blocks under one acquisition of
+the lock, and the collector builds their free lists after releasing it. A free
+list gets one block at its first refill after a collection, and twice as many
+at each further refill before the next collection, up to 16, so a size that a
+thread allocates only now and then still takes one block at a time. The value
+can be changed:
+
+```python
+build_options = {
+    "gc_thread_local_refill_blocks": "4",
+}
+```
+
+The value is from 1 to 32. `"1"` takes one block per refill, as BDWGC does.
+The `GC_TL_REFILL_MAX` environment variable overrides the setting when the
+program starts:
+
+```sh
+GC_TL_REFILL_MAX=1 ./out/bin/myapp
+```
+
+The cost is memory. A thread can hold up to that many blocks of free objects on
+each of its free lists: 256 KiB per list with 16 of the default [16 KiB
+blocks](#gc-heap-block-size), and 64 KiB with 4 KiB blocks. With the default
+blocks and [size limit](#gc-thread-local-allocation-size), a thread that
+allocates much of every size between two collections could hold up to 64 MiB,
+16 times as much as with one block per refill. The objects on a thread's lists
+count as live data at every collection. The first refill by a thread after a
+collection empties its lists that it has not refilled since the collection
+before the latest one, so that the next collection reclaims their objects. A
+thread that stops allocating keeps its lists until it allocates again or exits.
+
+On an AMD Ryzen 9 5950X (16 cores, 32 threads, 16 markers) and an Apple M6
+(6 workers, 6 markers), with 16 KiB blocks, a thread-local size limit of 2048
+bytes, an allocation budget of 100%, a heap growth divisor of 4 and all
+markers in every mark phase, 16 blocks per refill gave these medians of 12
+interleaved rounds (fleet manager: 6) against 1 block per refill:
+
+| Workload | CPU | Wall |
+|---|---|---|
+| Fleet manager loading 50,000 devices, 8 workers, Ryzen | -2.4% | -4.3% |
+| Fleet load, 8 / 16 / 32 workers, Ryzen | +0.5 / -1.3 / -3.1% | -0.1 / +0.5 / +0.4% |
+| Fleet load, 6 workers, M6 | +1.4% | +1.5% |
+| Fleet upgrade, 32 workers, Ryzen | -5.2% | -0.1% |
+| GC heap cold inventory, a million records, Ryzen / M6 | -2.8 / -10.0% | -0.9 / -4.9% |
+| GC heap cold inventory, 14,000 records, M6 | -14.8% | -8.0% |
+| GC heap build of 4 million records, Ryzen | -0.9% | -2.5% |
+| Scheduling pairs, Ryzen / M6 | +0.1 / -0.4% | -0.1 / -1.2% |
+| `binarytrees` 18, Ryzen / M6 | -5.2 / -3.7% | -2.7 / -2.8% |
+| `secp256k1`, Ryzen / M6 | -14.8 / -6.4% | -6.2 / -5.8% |
+
+The fleet upgrade's wall time is fixed by the workload. With the fewest
+workers the fleet load collected 10 to 11% more often (8 workers on the
+Ryzen, 4 on the M6). Heaps of up to about 40 MB peaked 8 to 44% higher and
+collected 23 to 48% less often: the scheduling pairs, the fleet load of 400
+devices, the small cold inventory, `coro-prime-sieve`, `secp256k1` and
+`fasta`. On larger heaps the peak did not change beyond its spread between
+runs.
+
+The setting has no effect on a target without threads, where `get_gc_info`
+reports 0. This is a build setting shared by the application and its
+dependencies, including database support.
+
 ## GC thread-local warm-up
 
 In BDWGC, a new thread does not use its own free list of a size until it has
@@ -654,15 +724,16 @@ backend is `none`. `supported_backends` lists compiled capabilities, not a
 promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
-`thread_local_size_limit`, `no_thread_local_warmup`, `realloc_no_free`,
-available `markers` (including the initiating thread), `bytes_per_marker`,
-`mark_range_stealing`, `initial_mark_stack_size`, `pause_target_ms`,
-`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
-`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
-pause target is `None` for ordinary and unlimited generational collection, and
-is not a guaranteed maximum pause. Available markers need not participate in
-every incremental marking attempt. Settings that an environment variable can
-override are reported as in effect, after the override.
+`thread_local_size_limit`, `no_thread_local_warmup`,
+`thread_local_refill_blocks`, `realloc_no_free`, available `markers` (including
+the initiating thread), `bytes_per_marker`, `mark_range_stealing`,
+`initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
+`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
+`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
+unlimited generational collection, and is not a guaranteed maximum pause.
+Available markers need not participate in every incremental marking attempt.
+Settings that an environment variable can override are reported as in effect,
+after the override.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory

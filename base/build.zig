@@ -98,6 +98,7 @@ pub fn build(b: *std.Build) void {
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (default 2048 with blocks of 16384 bytes or more, else the collector's default, 384 on 64-bit targets; 0 keeps the collector's default)") orelse @as(u32, if (gc_block_size >= 16384) 2048 else 0);
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
     const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse gc_enable_threads;
+    const gc_thread_local_refill_blocks = b.option(u32, "gc_thread_local_refill_blocks", "Largest number of GC heap blocks that one refill of a thread-local free list takes under the allocator lock, from 1 to 32 (default 16)") orelse 16;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
@@ -153,6 +154,11 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         }
     }
+    // The collector takes at most 32 blocks in one refill.
+    if (gc_thread_local_refill_blocks < 1 or gc_thread_local_refill_blocks > 32) {
+        std.log.err("gc_thread_local_refill_blocks must be from 1 to 32", .{});
+        std.process.exit(1);
+    }
     if (gc_mark_range_stealing and !gc_enable_threads) {
         std.log.err("gc_mark_range_stealing requires a target with threads", .{});
         std.process.exit(1);
@@ -193,6 +199,7 @@ pub fn build(b: *std.Build) void {
         .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
         .disable_realloc_free = gc_realloc_no_free,
         .disable_thread_local_warmup = gc_no_thread_local_warmup,
+        .tl_refill_max = gc_thread_local_refill_blocks,
         .enable_mprotect_vdb = gc_enable_mprotect_vdb,
     });
     const libgc = dep_libgc.artifact("gc");
@@ -545,6 +552,7 @@ pub fn build(b: *std.Build) void {
             .gc_thread_local_size_limit = gc_thread_local_size_limit,
             .gc_realloc_no_free = gc_realloc_no_free,
             .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
+            .gc_thread_local_refill_blocks = gc_thread_local_refill_blocks,
         });
         libActon.root_module.linkLibrary(libactondb_dep.artifact("ActonDB"));
     }

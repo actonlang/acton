@@ -2825,6 +2825,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "2048"),
                 ("no_thread_local_warmup", "True"),
+                ("thread_local_refill_blocks", "16"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
                 ("bytes_per_marker", "4194304"),
@@ -2837,12 +2838,14 @@ gcCollectorOptionTests = testGroup "GC collector options"
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048"),
+             ("gc_thread_local_refill_blocks", "1"),
              ("gc_realloc_no_free", "false"),
              ("gc_no_thread_local_warmup", "false")]
     tunedReports = [("alloc_budget_percent", "200"), ("block_size", "4096"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
                     ("no_thread_local_warmup", "False"),
+                    ("thread_local_refill_blocks", "1"),
                     ("realloc_no_free", "False"),
                     ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
@@ -2857,8 +2860,11 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("thread_local_size_limit", "32768")]),
               -- The smallest limit. Objects of every larger size come from
               -- the global free lists, which the collector sets up on demand.
-              ([("gc_thread_local_size_limit", "16")],
-               [("thread_local_size_limit", "16")]),
+              -- The largest refill.
+              ([("gc_thread_local_size_limit", "16"),
+                ("gc_thread_local_refill_blocks", "32")],
+               [("thread_local_size_limit", "16"),
+                ("thread_local_refill_blocks", "32")]),
               -- With 0, the collector's own block size, and with blocks
               -- smaller than 16 KiB the collector's own limit.
               ([("gc_block_size", "0")],
@@ -2869,20 +2875,23 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- default build, and on in the tuned build, which turned them off.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
                  ("GC_NO_THREAD_LOCAL_WARMUP", "0"),
-                 ("GC_BYTES_PER_MARKER", "0")]
+                 ("GC_BYTES_PER_MARKER", "0"), ("GC_TL_REFILL_MAX", "4")]
     overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
                   ("realloc_frees_moved", "True"),
                   ("no_thread_local_warmup", "False"),
-                  ("bytes_per_marker", "0")]
+                  ("bytes_per_marker", "0"),
+                  ("thread_local_refill_blocks", "4")]
     tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
                       ("GC_REALLOC_NO_FREE", "1"),
                       ("GC_NO_THREAD_LOCAL_WARMUP", "1"),
-                      ("GC_BYTES_PER_MARKER", "1M")]
+                      ("GC_BYTES_PER_MARKER", "1M"),
+                      ("GC_TL_REFILL_MAX", "8")]
     tunedOverridden = [("alloc_budget_percent", "50"),
                        ("realloc_no_free", "True"),
                        ("realloc_frees_moved", "False"),
                        ("no_thread_local_warmup", "True"),
-                       ("bytes_per_marker", "1048576")]
+                       ("bytes_per_marker", "1048576"),
+                       ("thread_local_refill_blocks", "8")]
     -- Invalid settings, build flags and the text the diagnostic should
     -- contain.
     invalid =
@@ -2903,6 +2912,10 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_thread_local_size_limit", "100"),
                         ("gc_thread_local_size_limit", "16384"),
                         ("gc_thread_local_size_limit", "invalid"),
+                        ("gc_thread_local_refill_blocks", "0"),
+                        ("gc_thread_local_refill_blocks", "33"),
+                        ("gc_thread_local_refill_blocks", "-1"),
+                        ("gc_thread_local_refill_blocks", "invalid"),
                         ("gc_realloc_no_free", "maybe"),
                         ("gc_no_thread_local_warmup", "maybe")]
       ] ++
