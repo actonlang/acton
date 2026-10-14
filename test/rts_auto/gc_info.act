@@ -39,6 +39,7 @@ actor main(env):
         assert info.no_thread_local_warmup == before.no_thread_local_warmup
         assert info.realloc_no_free == before.realloc_no_free
         assert info.mark_range_stealing == before.mark_range_stealing
+        assert info.bytes_per_marker == before.bytes_per_marker
         assert info.initial_mark_stack_size == before.initial_mark_stack_size
         assert info.heap_growth_divisor == before.heap_growth_divisor
         assert info.alloc_budget_percent == before.alloc_budget_percent

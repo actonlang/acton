@@ -32,6 +32,7 @@ actor main(env):
     print("realloc_no_free=" + str(info.realloc_no_free))
     print("realloc_frees_moved=" + str(realloc_frees_moved()))
     print("mark_range_stealing=" + str(info.mark_range_stealing))
+    print("bytes_per_marker=" + str(info.bytes_per_marker))
     print("initial_mark_stack_size=" + str(info.initial_mark_stack_size))
     print("alloc_budget_percent=" + str(info.alloc_budget_percent))
 

@@ -90,6 +90,7 @@ pub fn build(b: *std.Build) void {
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 100; 0 selects the free space divisor policy)") orelse 100;
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (default 16384; 0 keeps the collector's 4096)") orelse 16384;
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse gc_enable_threads;
+    const gc_bytes_per_marker = b.option(u64, "gc_bytes_per_marker", "Give a parallel GC mark phase one marker per this many bytes it is estimated to scan (default 4194304; 0 gives every phase all the markers)") orelse 4194304;
     // Windows commits the whole mark stack when the collector starts. On Linux
     // and macOS its pages become resident only when marking writes them.
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 4194304, 1048576 on Windows; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse @as(u32, if (target.result.os.tag == .windows) 1048576 else 4194304);
@@ -138,6 +139,12 @@ pub fn build(b: *std.Build) void {
             std.process.exit(1);
         }
     }
+    // The collector keeps the value in size_t.
+    const max_bytes_per_marker = std.math.shl(u64, 1, target.result.ptrBitWidth()) -% 1;
+    if (gc_bytes_per_marker > max_bytes_per_marker) {
+        std.log.err("gc_bytes_per_marker must be at most {d} on this target", .{max_bytes_per_marker});
+        std.process.exit(1);
+    }
     if (gc_thread_local_size_limit != 0) {
         // Objects of more than half a block are allocated in whole blocks.
         const max_limit: u32 = (if (gc_block_size != 0) gc_block_size else 4096) / 2;
@@ -180,6 +187,7 @@ pub fn build(b: *std.Build) void {
         .alloc_budget_percent = gc_alloc_budget_percent,
         .block_size = gc_block_size,
         .enable_mark_range_stealing = gc_mark_range_stealing,
+        .bytes_per_marker = gc_bytes_per_marker,
         .initial_mark_stack_size = gc_initial_mark_stack_size,
         .enable_end_padding = !gc_no_end_padding,
         .tiny_freelists = gcTinyFreelists(target.result, gc_thread_local_size_limit),
@@ -531,6 +539,7 @@ pub fn build(b: *std.Build) void {
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
             .gc_block_size = gc_block_size,
             .gc_mark_range_stealing = gc_mark_range_stealing,
+            .gc_bytes_per_marker = gc_bytes_per_marker,
             .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
             .gc_no_end_padding = gc_no_end_padding,
             .gc_thread_local_size_limit = gc_thread_local_size_limit,

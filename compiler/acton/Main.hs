@@ -2879,6 +2879,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_alloc_budget_percent = gc_alloc_budget_percent,"
                    , "        .gc_block_size = gc_block_size,"
                    , "        .gc_mark_range_stealing = gc_mark_range_stealing,"
+                   , "        .gc_bytes_per_marker = gc_bytes_per_marker,"
                    , "        .gc_initial_mark_stack_size = gc_initial_mark_stack_size,"
                    , "        .gc_no_end_padding = gc_no_end_padding,"
                    , "        .gc_thread_local_size_limit = gc_thread_local_size_limit,"

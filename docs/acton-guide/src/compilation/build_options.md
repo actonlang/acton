@@ -58,6 +58,7 @@ its section below describes:
 | Behaviour | Turn off in `build_options` | Turn off when starting the program |
 |---|---|---|
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
+| A mark phase gets [one marker per 4 MiB](#gc-markers-per-mark-phase) it is estimated to scan instead of all of them | `"gc_bytes_per_marker": "0"` | `GC_BYTES_PER_MARKER=0` |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
 | The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
@@ -428,6 +429,73 @@ marking needs the entries.
 Both are build settings shared by the application and its dependencies,
 including database support.
 
+## GC markers per mark phase
+
+With parallel marking, BDWGC marks every mark phase with all its marker
+threads, by default one per logical processor and at most 16. Waking up and
+coordinating them costs more than they save when the phase has little to scan,
+and in a phase of medium size most of them add CPU time without shortening the
+pause much. Acton gives a mark phase one marker per 4 MiB it is estimated to
+scan, rounded up: a phase estimated at under 4 MiB is marked by the collecting
+thread alone, one estimated at 10 MiB by three markers, and a phase of a large
+heap by all of them. The estimate is the pointer-containing data found live by
+the previous collection, plus all that the program allocated since then, plus
+the roots and the thread stacks, so it also grows with the allocation budget
+and the initial heap size. The value can be changed:
+
+```python
+build_options = {
+    "gc_bytes_per_marker": "8388608",
+}
+```
+
+The value is a number of bytes that fits in the target's `size_t`. `"0"`
+gives every mark phase all the markers, as BDWGC does. The
+`GC_BYTES_PER_MARKER` environment variable overrides the setting when the
+program starts, and accepts a `k`, `M` or `G` suffix:
+
+```sh
+GC_BYTES_PER_MARKER=0 ./out/bin/myapp
+```
+
+On a Linux machine with an AMD Ryzen 9 5950X and 16 markers, with
+Acton's default 16 KiB blocks, heap growth divisor 4 and allocation
+budget 100, 4 MiB per marker against all the markers gave these medians
+of 12 interleaved rounds:
+
+| Workload | Mark estimate | Markers | CPU | Wall |
+|---|---|---|---|---|
+| GC heap cold inventory, 14,000 records, 8 workers | 15 MiB | 4 | -34% | +1% |
+| Fleet load, 400 devices, 8 workers | 19 MiB | 5 | -2% | +1% |
+| Actor message passing, 16 workers | 7 MiB | 2.5 | 0% | 0% |
+
+The mark estimate is the median per phase and the markers the mean per phase.
+The wall times are within the noise: the cold inventory took more wall time
+than with all the markers in 7 of 12 rounds. Larger values save a little more
+CPU time and cost wall time: with 8 MiB the cold inventory used 38% less CPU
+time and 8% more wall time (more in 11 of 12 rounds), and with 16 MiB, where
+one thread marks it, 45% less CPU time and 16% more wall time. Fleet load with
+10,000 devices, fleet upgrade, cold inventory of a million records, a GC heap
+build of 4 million records and a fleet manager loading 10,000 devices marked
+with fewer markers only in their first collections, while the heap was small,
+and with 12 to 14 of the 16 on average. They changed by 1% or less, except the
+CPU time of the fleet upgrade, which was 3% lower, with single rounds from 7%
+lower to 8% higher. Peak memory did not depend on the setting.
+
+The CPU saving grows with the number of markers. On an Apple M4 Pro with 14
+markers, 4 KiB blocks, heap growth divisor 4, allocation budget 100 and 8
+workers, 4 MiB per marker took 46% of the CPU time and 10% of the wall time off
+the cold inventory in 6 rounds, 7% of the CPU time off the fleet load and 6%
+off the actor message passing. On an Apple M6 with 6 markers, 4 KiB blocks,
+heap growth divisor 4, allocation budget 67, 6 workers and a collector that
+refills thread-local free lists from up to 16 blocks, it took 5% of the CPU
+time off the cold inventory at the same wall time, and 8 MiB took 11% for 5%
+more wall time.
+
+The setting has no effect on a target without threads, where
+`get_gc_info` reports 0. This is a build setting shared by the application
+and its dependencies, including database support.
+
 ## GC object end padding
 
 The collector treats a pointer into the interior of an object as a reference
@@ -587,14 +655,14 @@ promise that the host kernel permits them.
 
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 `thread_local_size_limit`, `no_thread_local_warmup`, `realloc_no_free`,
-available `markers` (including the initiating thread), `mark_range_stealing`,
-`initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
-`full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
-`free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
-unlimited generational collection, and is not a guaranteed maximum pause.
-Available markers need not participate in every incremental marking attempt.
-Settings that an environment variable can override are reported as in effect,
-after the override.
+available `markers` (including the initiating thread), `bytes_per_marker`,
+`mark_range_stealing`, `initial_mark_stack_size`, `pause_target_ms`,
+`free_space_divisor`, `full_frequency`, `heap_growth_divisor`,
+`alloc_budget_percent`, `heap_size`, `free_bytes` and `unmapped_bytes`. The
+pause target is `None` for ordinary and unlimited generational collection, and
+is not a guaranteed maximum pause. Available markers need not participate in
+every incremental marking attempt. Settings that an environment variable can
+override are reported as in effect, after the override.
 
 Heap sizes are bytes; both `heap_size` and `free_bytes` include unmapped
 capacity. Their difference approximates occupied GC heap, not resident memory
