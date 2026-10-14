@@ -60,6 +60,7 @@ struct acton_gc_info {
     GC_word alloc_budget_percent;
     int realloc_no_free;
     int no_thread_local_warmup;
+    unsigned tl_refill_max;
 };
 
 static void *GC_CALLBACK read_gc_info(void *data) {
@@ -84,6 +85,7 @@ static void *GC_CALLBACK read_gc_info(void *data) {
     info->alloc_budget_percent = GC_get_alloc_budget_percent();
     info->realloc_no_free = GC_get_realloc_no_free();
     info->no_thread_local_warmup = GC_get_no_thread_local_warmup();
+    info->tl_refill_max = GC_get_tl_refill_max();
     return NULL;
 }
 
@@ -124,15 +126,15 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
             sequence->$class->append(sequence, supported,
                                     actStrFromCString(gc_backends[i].name));
     }
-    // The warm-up setting has no effect without thread-local allocation,
-    // which a zero limit tells.
+    // The warm-up and refill settings have no effect without thread-local
+    // allocation, which a zero limit tells.
     unsigned thread_local_size_limit = acton_gc_get_thread_local_size_limit();
     B_float pause_target = (B_float)B_None;
     if (info.incremental && info.time_limit.tv_ms != GC_TIME_UNLIMITED)
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(22,
+    return $NEWTUPLE(23,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
@@ -140,6 +142,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         toB_bool(acton_gc_get_end_padding()),
         toB_u64(thread_local_size_limit),
         toB_bool(thread_local_size_limit != 0 && info.no_thread_local_warmup),
+        toB_u64(thread_local_size_limit != 0 ? info.tl_refill_max : 0),
         toB_bool(info.realloc_no_free),
         toB_u64(info.stats.markers_m1 + 1), toB_u64(bytes_per_marker),
         toB_bool(acton_gc_get_mark_range_stealing()),

@@ -44,6 +44,7 @@ pub fn build(b: *std.Build) void {
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (default 2048 with blocks of 16384 bytes or more, else the collector's default, 384 on 64-bit targets; 0 keeps the collector's default)") orelse @as(u32, if (gc_block_size >= 16384) 2048 else 0);
     const gc_realloc_no_free = b.option(bool, "gc_realloc_no_free", "Leave a small collectable object moved by GC_realloc to the collector instead of freeing it (default: true)") orelse true;
     const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
+    const gc_thread_local_refill_blocks = b.option(u32, "gc_thread_local_refill_blocks", "Largest number of GC heap blocks that one refill of a thread-local free list takes under the allocator lock, from 1 to 32 (default 16)") orelse 16;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
 
     print("Acton Standard Library Builder\nBuilding in {s}\n", .{buildroot_path});
@@ -67,6 +68,7 @@ pub fn build(b: *std.Build) void {
         .gc_thread_local_size_limit = gc_thread_local_size_limit,
         .gc_realloc_no_free = gc_realloc_no_free,
         .gc_no_thread_local_warmup = gc_no_thread_local_warmup,
+        .gc_thread_local_refill_blocks = gc_thread_local_refill_blocks,
         .gc_disable_thp = gc_disable_thp,
     });
 
