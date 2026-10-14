@@ -93,6 +93,7 @@ pub fn build(b: *std.Build) void {
     const gc_alloc_budget_percent = b.option(u32, "gc_alloc_budget_percent", "Collect after allocating this percentage of the live data (default 100; 0 selects the free space divisor policy)") orelse 100;
     const gc_block_size = b.option(u32, "gc_block_size", "GC heap block size in bytes: a power of two from 4096 to 65536 (default 16384; 0 keeps the collector's 4096)") orelse 16384;
     const gc_mark_range_stealing = b.option(bool, "gc_mark_range_stealing", "Let parallel GC markers claim ranges of the global mark stack (default: true on targets with threads)") orelse !target.result.cpu.arch.isWasm();
+    const gc_bytes_per_marker = b.option(u64, "gc_bytes_per_marker", "Give a parallel GC mark phase one marker per this many bytes it is estimated to scan (default 4194304; 0 gives every phase all the markers)") orelse 4194304;
     const gc_initial_mark_stack_size = b.option(u32, "gc_initial_mark_stack_size", "Initial number of GC mark stack entries: a power of two, 4096 at least (default: 4194304, 1048576 on Windows; 0 keeps the collector's default of as many entries as a heap block has bytes)") orelse @as(u32, if (target.result.os.tag == .windows) 1048576 else 4194304);
     const gc_no_end_padding = b.option(bool, "gc_no_end_padding", "Do not pad GC objects by a byte to keep them alive through pointers just past their end") orelse false;
     const gc_thread_local_size_limit = b.option(u32, "gc_thread_local_size_limit", "Largest GC object size in bytes served from thread-local free lists: a multiple of 16 up to half the block size (default 2048 with blocks of 16384 bytes or more, else the collector's default, 384 on 64-bit targets; 0 keeps the collector's default)") orelse @as(u32, if (gc_block_size >= 16384) 2048 else 0);
@@ -130,6 +131,7 @@ pub fn build(b: *std.Build) void {
         .gc_alloc_budget_percent = gc_alloc_budget_percent,
         .gc_block_size = gc_block_size,
         .gc_mark_range_stealing = gc_mark_range_stealing,
+        .gc_bytes_per_marker = gc_bytes_per_marker,
         .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
         .gc_no_end_padding = gc_no_end_padding,
         .gc_thread_local_size_limit = gc_thread_local_size_limit,
@@ -441,6 +443,7 @@ pub fn build(b: *std.Build) void {
             .gc_alloc_budget_percent = gc_alloc_budget_percent,
             .gc_block_size = gc_block_size,
             .gc_mark_range_stealing = gc_mark_range_stealing,
+            .gc_bytes_per_marker = gc_bytes_per_marker,
             .gc_initial_mark_stack_size = gc_initial_mark_stack_size,
             .gc_no_end_padding = gc_no_end_padding,
             .gc_thread_local_size_limit = gc_thread_local_size_limit,

@@ -2808,15 +2808,15 @@ gcCollectorOptionTests = testGroup "GC collector options"
         assertReports "default collector again" defaults []
   , testCase "invalid values fail clearly" $
       withFixture $ \acton proj runEnv writeOptions ->
-        forM_ invalid $ \(selected, key) -> do
+        forM_ invalid $ \(selected, flags, key) -> do
           writeOptions selected
           (code, out, err) <- readCreateProcessWithExitCode
-            (proc acton ["build", "--color", "never"])
+            (proc acton (["build", "--color", "never"] ++ flags))
               { cwd = Just proj, env = Just runEnv } ""
           assertBool ("invalid setting should fail: " ++ show selected
                       ++ "\n" ++ out ++ err)
             (code /= ExitSuccess)
-          assertBool ("diagnostic should name " ++ key ++ "\n" ++ out ++ err)
+          assertBool ("diagnostic should contain " ++ key ++ "\n" ++ out ++ err)
             (key `isInfixOf` (out ++ err))
   ]
   where
@@ -2827,11 +2827,13 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
+                ("bytes_per_marker", "4194304"),
                 ("initial_mark_stack_size",
                  if System.Info.os == "mingw32" then "1048576" else "4194304")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
+             ("gc_bytes_per_marker", "0"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
              ("gc_thread_local_size_limit", "2048"),
@@ -2844,6 +2846,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("realloc_no_free", "False"),
                     ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
+                    ("bytes_per_marker", "0"),
                     ("initial_mark_stack_size", "65536")]
     -- With 0, the initial mark stack has the collector's default size: as
     -- many entries as a block has bytes.
@@ -2865,22 +2868,29 @@ gcCollectorOptionTests = testGroup "GC collector options"
     -- The environment turns the modes that are on by default off in the
     -- default build, and on in the tuned build, which turned them off.
     overrides = [("GC_ALLOC_BUDGET_PERCENT", "50"), ("GC_REALLOC_NO_FREE", "0"),
-                 ("GC_NO_THREAD_LOCAL_WARMUP", "0")]
+                 ("GC_NO_THREAD_LOCAL_WARMUP", "0"),
+                 ("GC_BYTES_PER_MARKER", "0")]
     overridden = [("alloc_budget_percent", "50"), ("realloc_no_free", "False"),
                   ("realloc_frees_moved", "True"),
-                  ("no_thread_local_warmup", "False")]
+                  ("no_thread_local_warmup", "False"),
+                  ("bytes_per_marker", "0")]
     tunedOverrides = [("GC_ALLOC_BUDGET_PERCENT", "50"),
                       ("GC_REALLOC_NO_FREE", "1"),
-                      ("GC_NO_THREAD_LOCAL_WARMUP", "1")]
+                      ("GC_NO_THREAD_LOCAL_WARMUP", "1"),
+                      ("GC_BYTES_PER_MARKER", "1M")]
     tunedOverridden = [("alloc_budget_percent", "50"),
                        ("realloc_no_free", "True"),
                        ("realloc_frees_moved", "False"),
-                       ("no_thread_local_warmup", "True")]
-    -- Invalid settings and the option the diagnostic should name.
+                       ("no_thread_local_warmup", "True"),
+                       ("bytes_per_marker", "1048576")]
+    -- Invalid settings, build flags and the text the diagnostic should
+    -- contain.
     invalid =
-      [ ([(key, value)], key)
+      [ ([(key, value)], [], key)
       | (key, value) <- [("gc_alloc_budget_percent", "-1"),
                         ("gc_alloc_budget_percent", "invalid"),
+                        ("gc_bytes_per_marker", "-1"),
+                        ("gc_bytes_per_marker", "invalid"),
                         ("gc_block_size", "2048"),
                         ("gc_block_size", "12288"),
                         ("gc_block_size", "131072"),
@@ -2896,10 +2906,14 @@ gcCollectorOptionTests = testGroup "GC collector options"
                         ("gc_realloc_no_free", "maybe"),
                         ("gc_no_thread_local_warmup", "maybe")]
       ] ++
-      [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")],
-         "gc_block_size")
-      , ([("gc_block_size", "4096"), ("gc_thread_local_size_limit", "4096")],
-         "gc_thread_local_size_limit")
+      [ ([("gc_mark_bit_per_object", "true"), ("gc_block_size", "65536")], [],
+         "gc_block_size"),
+        ([("gc_block_size", "4096"), ("gc_thread_local_size_limit", "4096")], [],
+         "gc_thread_local_size_limit"),
+        -- The collector keeps the value in size_t, 32 bits on this target.
+        ([("gc_bytes_per_marker", "4294967296")],
+         ["--target", "x86-linux-musl", "--cpu", "baseline"],
+         "gc_bytes_per_marker must be at most 4294967295")
       ]
     expectSuccess label (code, out, err) =
       assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code

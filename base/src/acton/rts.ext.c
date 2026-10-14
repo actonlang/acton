@@ -107,6 +107,8 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
 #else
     read_gc_info(&info);
 #endif
+    // The getter takes the allocator lock itself.
+    size_t bytes_per_marker = GC_get_bytes_per_marker();
 
     // Construct Acton values only after releasing the collector lock.
     const char *mode = !info.incremental ? "ordinary"
@@ -130,7 +132,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         pause_target = to$float((double)info.time_limit.tv_ms
                                + (double)info.time_limit.tv_nsec / 1000000.0);
 
-    return $NEWTUPLE(21,
+    return $NEWTUPLE(22,
         actStrFromCString(mode), actStrFromCString(ACTON_GC_DIRTY_TRACKING_BACKEND),
         actStrFromCString(backend), supported,
         toB_u64(acton_gc_get_page_hash_table_log2()),
@@ -139,7 +141,7 @@ B_tuple actonQ_rtsQ_get_gc_info (B_SysCap cap) {
         toB_u64(thread_local_size_limit),
         toB_bool(thread_local_size_limit != 0 && info.no_thread_local_warmup),
         toB_bool(info.realloc_no_free),
-        toB_u64(info.stats.markers_m1 + 1),
+        toB_u64(info.stats.markers_m1 + 1), toB_u64(bytes_per_marker),
         toB_bool(acton_gc_get_mark_range_stealing()),
         toB_u64(acton_gc_get_initial_mark_stack_size()), pause_target,
         toB_u64(info.free_space_divisor), toB_u64(info.full_frequency),
