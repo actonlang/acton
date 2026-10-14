@@ -1,6 +1,7 @@
 import testing
 
 import re
+import std.re as std_re
 
 def _test_match_basic():
     """Basic regexp matching
@@ -214,3 +215,89 @@ def _test_split_with_named_groups():
     # the order in group matches is determined by their group number, not their name.
     res = re.split("(?P<number>[0-9]+)", "abc123def")
     testing.assertEqual(res, ["abc", "123", "def"])
+
+def _test_match_backslash_c():
+    """\\C matches a single byte: a whole ASCII character, but only part of a
+    multi-byte one. A match or group that splits a character is an error."""
+    m = re.match(r"a\C", "xab")
+    testing.assertNotNone(m, "\\C did not match an ASCII character")
+    if m is not None:
+        testing.assertEqual(m.group[0], "ab")
+    expected = "matched substring starts or ends inside a character"
+    for split in [lambda: re.match(r"a\C", "aé") is not None,
+                  lambda: re.match(r"(\C)\C", "é") is not None,
+                  lambda: std_re.match(r"a\C", "aé") is not None,
+                  lambda: std_re.match(r"(\C)\C", "é") is not None]:
+        for _ in range(100):
+            try:
+                split()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for a match that splits a character")
+
+def _test_match_long_subject():
+    """A repeated group over a long subject needs much more than pcre2's
+    initial 20 KiB of backtracking frames"""
+    s = "a" * 100000 + "x"
+    m = re.match("(.)*x", s)
+    testing.assertNotNone(m, "no match in a long subject")
+    if m is not None:
+        testing.assertEqual(m.end_pos, 100001)
+        testing.assertEqual(m.group[1], "a")
+    n = std_re.match("(.)*x", s)
+    testing.assertNotNone(n, "no match in a long subject")
+    if n is not None:
+        testing.assertEqual(n.end_pos, 100001)
+        testing.assertEqual(n.group[1], "a")
+
+def _test_match_many_groups():
+    """300 groups, 30 of them named"""
+    pattern = "(a)" * 270 + "".join(["(?P<g" + str(i) + ">b)" for i in range(30)])
+    subject = "x" + "a" * 270 + "b" * 30
+    m = re.match(pattern, subject)
+    testing.assertNotNone(m, "no match with 300 groups")
+    if m is not None:
+        testing.assertEqual(len(m.group), 301)
+        testing.assertEqual(m.group[270], "a")
+        testing.assertEqual(m.group[300], "b")
+        testing.assertEqual(len(m.named), 30)
+        testing.assertEqual(m.named["g29"], "b")
+    n = std_re.match(pattern, subject)
+    testing.assertNotNone(n, "no match with 300 groups")
+    if n is not None:
+        testing.assertEqual(len(n.group), 301)
+        testing.assertEqual(n.named["g29"], "b")
+
+def _test_match_errors():
+    """Invalid patterns and start positions raise ValueError. Exceeding the
+    match or heap limit set in the pattern raises RuntimeError."""
+    s = "a" * 1000 + "x"
+    value_errors = [
+        (lambda: re.match("(", "a") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: std_re.match("(", "a") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: re.match("a", "abc", -1) is not None, "PCRE2 matching failed: negative start_pos"),
+        (lambda: re.match("a", "abc", 4) is not None, "start position is greater than string length"),
+    ]
+    for f, expected in value_errors:
+        for _ in range(100):
+            try:
+                f()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError: " + expected)
+    runtime_errors = [
+        (lambda: re.match("(*LIMIT_MATCH=10)(.)*x", s) is not None, "PCRE2 matching error: -47"),
+        (lambda: std_re.match("(*LIMIT_MATCH=10)(.)*x", s) is not None, "PCRE2 matching error: -47"),
+        (lambda: re.match("(*LIMIT_HEAP=1)(.)*x", s) is not None, "PCRE2 matching error: -63"),
+        (lambda: std_re.match("(*LIMIT_HEAP=1)(.)*x", s) is not None, "PCRE2 matching error: -63"),
+    ]
+    for f, expected in runtime_errors:
+        for _ in range(100):
+            try:
+                f()
+            except RuntimeError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected RuntimeError: " + expected)

@@ -8,26 +8,33 @@ static struct B_ValueError reQ_start_too_large_error =
     STATIC_EXCEPTION(B_ValueError, "start position is greater than string length");
 static struct B_RuntimeError reQ_small_ovector_error =
     STATIC_EXCEPTION(B_RuntimeError, "ovector was not big enough for all captured substrings");
+static struct B_ValueError reQ_split_char_error =
+    STATIC_EXCEPTION(B_ValueError, "matched substring starts or ends inside a character");
+static struct B_MemoryError reQ_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
 
-static void *pcre2_malloc(size_t size, void *data) {
-    (void)data;
-    return acton_malloc(size);
-}
-
-static void pcre2_free(void *ptr, void *data) {}
-
-pcre2_compile_context *compile_context;
-pcre2_general_context *general_context;
+// pcre2 allocates the compiled pattern, the match data and the backtracking
+// frames of pcre2_match (at least 20 KiB per call with the default heap limit)
+// with malloc, its default allocator, which is selected by compiling without a
+// compile context. The match data takes its allocator from the pattern. None
+// of pcre2's memory is on the GC heap. _match frees all of it before it
+// returns, and an exception handler pushed before the first allocation frees
+// it when anything raises in between: a pcre2 error, a group that starts or
+// ends inside a character, or a failed allocation while the result is built.
+//
+// The match data and the frames point into the bytes of the subject str. The
+// GC does not scan malloc memory, but arg_text keeps those bytes reachable
+// for the whole call, and pcre2's memory does not outlive the call.
 
 void reQ___ext_init__() {
-    general_context = pcre2_general_context_create(pcre2_malloc, pcre2_free, NULL);
-    if (general_context == NULL) {
-        // Handle error
-        assert(0);
-    }
-    compile_context = pcre2_compile_context_create(general_context);
 }
 
+// An offset where a substring of valid UTF-8 text may start or end. Matched
+// offsets are on character boundaries unless the pattern uses \C, which
+// matches a single byte.
+static bool reQ_char_boundary(PCRE2_SPTR text, size_t text_length, PCRE2_SIZE offset) {
+    return offset == text_length || (text[offset] & 0xC0) != 0x80;
+}
 
 // TODO: use u64 instead of int for arg_start_pos
 reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
@@ -52,108 +59,133 @@ reQ_Match reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) 
     // start_pos is a code point index; PCRE2 takes a byte offset
     start_offset = $byte_no(arg_text, start_offset);
 
-    int errornumber;
-    PCRE2_SIZE erroroffset;
-    pcre2_code *re = pcre2_compile(
-        pattern,
-        arg_pattern->nbytes,
-        PCRE2_UTF,
-        &errornumber,
-        &erroroffset,
-        compile_context
-    );
+    // The handler is pushed before pcre2 allocates anything, so that every
+    // raise after the first allocation lands in it. Its frame is a local of
+    // _match, which pops it with $DROP or $POP before it returns or raises
+    // again. re and match_data are assigned after the setjmp of $PUSH and read
+    // in the handler, thus volatile.
+    pcre2_code *volatile re = NULL;
+    pcre2_match_data *volatile match_data = NULL;
+    reQ_Match result = (reQ_Match)B_None;
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
+        int errornumber;
+        PCRE2_SIZE erroroffset;
+        re = pcre2_compile(
+            pattern,
+            arg_pattern->nbytes,
+            PCRE2_UTF,
+            &errornumber,
+            &erroroffset,
+            NULL
+        );
+        if (re == NULL) {
+            PCRE2_UCHAR buffer[256];
+            pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
+            char errmsg[1024] = "regex compilation failed at offset ";
+            snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
+            RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
+        }
 
-    if (re == NULL) {
-        PCRE2_UCHAR buffer[256];
-        pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
-        char errmsg[1024] = "regex compilation failed at offset ";
-        snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
-        RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
-    }
-
-    pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(re, NULL);
-    int rc = pcre2_match(
-        re,
-        text,
-        text_length,
-        (PCRE2_SIZE)start_offset,
-        0,
-        match_data,
-        NULL
-    );
-
-    if (rc < 0) {
-        pcre2_match_data_free(match_data);
-        pcre2_code_free(re);
+        match_data = pcre2_match_data_create_from_pattern(re, NULL);
+        if (match_data == NULL)
+            RAISE_EXC(&reQ_allocation_failed_error);
+        int rc = pcre2_match(
+            re,
+            text,
+            text_length,
+            (PCRE2_SIZE)start_offset,
+            0,
+            match_data,
+            NULL
+        );
 
         if (rc == PCRE2_ERROR_NOMATCH) {
-            return B_None;
-        } else {
-            // Some other error
+            // result stays None
+        } else if (rc == PCRE2_ERROR_NOMEMORY) {
+            RAISE_EXC(&reQ_allocation_failed_error);
+        } else if (rc < 0) {
             char errmsg[256];
             snprintf(errmsg, sizeof(errmsg), "PCRE2 matching error: %d", rc);
             RAISE(B_RuntimeError, actStrFromCStringCopy(errmsg));
-        }
-    }
-
-    PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
-    if (rc == 0) {
-        pcre2_match_data_free(match_data);
-        pcre2_code_free(re);
-        RAISE_EXC(&reQ_small_ovector_error);
-    }
-
-    // Extract all unnamed groups
-    // group 0 is the entire match, group 1... are subgroups
-    for (int i = 0; i < rc; i++) {
-        PCRE2_SIZE ss_start = ovector[2*i];
-        PCRE2_SIZE ss_end = ovector[2*i+1];
-        if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
-            swit->$class->append(swit, groups, B_None);
+        } else if (rc == 0) {
+            RAISE_EXC(&reQ_small_ovector_error);
         } else {
-            B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
-            swit->$class->append(swit, groups, substring);
-        }
-    }
+            PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
 
-    // Named groups
-    int namecount;
-    pcre2_pattern_info(re, PCRE2_INFO_NAMECOUNT, &namecount);
-
-    if (namecount > 0) {
-        PCRE2_SPTR name_table;
-        int name_entry_size;
-        pcre2_pattern_info(re, PCRE2_INFO_NAMETABLE, &name_table);
-        pcre2_pattern_info(re, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
-
-        PCRE2_SPTR tabptr = name_table;
-        for (int i = 0; i < namecount; i++) {
-            int n = (tabptr[0] << 8) | tabptr[1]; // group number for this name
-            // The name itself starts at tabptr+2 and has length (name_entry_size-2)
-            int namelen = name_entry_size - 2;
-            char *group_name = acton_malloc_atomic(namelen + 1);
-            memcpy(group_name, tabptr+2, namelen);
-            group_name[namelen] = '\0';
-
-            PCRE2_SIZE ss_start = ovector[2*n];
-            PCRE2_SIZE ss_end = ovector[2*n+1];
-            if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
-                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), B_None);
-            } else {
-                B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
-                B_dictD_setitem(named_groups, hwit, actStrFromCString(group_name), substring);
+            // Groups at or above rc are unset, so this checks every group, also
+            // the named ones.
+            for (int i = 0; i < rc; i++) {
+                PCRE2_SIZE ss_start = ovector[2*i];
+                PCRE2_SIZE ss_end = ovector[2*i+1];
+                if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET)
+                    continue;
+                if (!reQ_char_boundary(text, text_length, ss_start) ||
+                    !reQ_char_boundary(text, text_length, ss_end))
+                    RAISE_EXC(&reQ_split_char_error);
             }
 
-            tabptr += name_entry_size;
-        }
-    }
+            // Extract all unnamed groups
+            // group 0 is the entire match, group 1... are subgroups
+            for (int i = 0; i < rc; i++) {
+                PCRE2_SIZE ss_start = ovector[2*i];
+                PCRE2_SIZE ss_end = ovector[2*i+1];
+                if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
+                    swit->$class->append(swit, groups, B_None);
+                } else {
+                    B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
+                    swit->$class->append(swit, groups, substring);
+                }
+            }
 
-    // Entire match offsets, as code point indexes
-    int64_t match_start = $char_no(arg_text, ovector[0]);
-    int64_t match_end = $char_no(arg_text, ovector[1]);
+            // Named groups
+            int namecount;
+            pcre2_pattern_info(re, PCRE2_INFO_NAMECOUNT, &namecount);
+
+            if (namecount > 0) {
+                PCRE2_SPTR name_table;
+                int name_entry_size;
+                pcre2_pattern_info(re, PCRE2_INFO_NAMETABLE, &name_table);
+                pcre2_pattern_info(re, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
+
+                PCRE2_SPTR tabptr = name_table;
+                for (int i = 0; i < namecount; i++) {
+                    int n = (tabptr[0] << 8) | tabptr[1]; // group number for this name
+                    // The name starts at tabptr+2. pcre2 pads every entry with zero
+                    // bytes to the size of the longest name, so the name ends at the
+                    // first zero byte.
+                    size_t namelen = strnlen((const char *)tabptr + 2, name_entry_size - 2);
+                    B_str group_name = actStrFromCStringLengthCopy((const char *)tabptr + 2, namelen);
+
+                    PCRE2_SIZE ss_start = ovector[2*n];
+                    PCRE2_SIZE ss_end = ovector[2*n+1];
+                    if (ss_start == PCRE2_UNSET || ss_end == PCRE2_UNSET) {
+                        B_dictD_setitem(named_groups, hwit, group_name, B_None);
+                    } else {
+                        B_str substring = actStrFromCStringLengthCopy((const char *)text + ss_start, ss_end - ss_start);
+                        B_dictD_setitem(named_groups, hwit, group_name, substring);
+                    }
+
+                    tabptr += name_entry_size;
+                }
+            }
+
+            // Entire match offsets, as code point indexes
+            int64_t match_start = $char_no(arg_text, ovector[0]);
+            int64_t match_end = $char_no(arg_text, ovector[1]);
+
+            result = reQ_MatchG_new(arg_pattern, arg_text, match_start, match_end, groups, named_groups);
+        }
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        // Both free functions do nothing given NULL.
+        pcre2_match_data_free(match_data);
+        pcre2_code_free(re);
+        $RAISE(ex);
+    }
 
     pcre2_match_data_free(match_data);
     pcre2_code_free(re);
-
-    return reQ_MatchG_new(arg_pattern, arg_text, match_start, match_end, groups, named_groups);
+    return result;
 }
