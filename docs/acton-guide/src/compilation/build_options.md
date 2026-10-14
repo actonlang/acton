@@ -60,7 +60,7 @@ its section below describes:
 | [Range stealing](#range-stealing) by parallel markers | `"gc_mark_range_stealing": "false"` | not possible |
 | [Old copies of objects moved by `GC_realloc`](#gc-objects-moved-by-realloc) are left to the collector | `"gc_realloc_no_free": "false"` | `GC_REALLOC_NO_FREE=0` |
 | A new thread uses its own free lists [without a warm-up](#gc-thread-local-warm-up) | `"gc_no_thread_local_warmup": "false"` | `GC_NO_THREAD_LOCAL_WARMUP=0` |
-| The global mark stack [starts with 1048576 entries](#initial-size) instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
+| The global mark stack [starts with 4194304 entries](#initial-size), 1048576 on Windows, instead of 16384 with the default blocks | `"gc_initial_mark_stack_size": "0"` | not possible |
 | A collection starts after the program has allocated [as much as the live data](#gc-allocation-budget), pointer-free data included | `"gc_alloc_budget_percent": "0"` | `GC_ALLOC_BUDGET_PERCENT=0` |
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
@@ -365,24 +365,27 @@ while normal marking runs on all marker threads. One overflow can therefore
 make a collection several times longer. Range stealing makes overflows in
 the first collections more frequent. BDWGC starts the stack with as many
 entries as a heap block has bytes, 16384 with Acton's default blocks; Acton
-starts it with 1048576 entries by default. The size can be changed:
+starts it with 4194304 entries by default, and with 1048576 on Windows. The
+size can be changed:
 
 ```python
 build_options = {
-    "gc_initial_mark_stack_size": "262144",
+    "gc_initial_mark_stack_size": "16777216",
 }
 ```
 
 The value is a number of entries: a power of two of at least 4096 whose size
 fills whole heap blocks, which holds for every power of two from 4096 on
-64-bit targets. `"0"` gives BDWGC's initial size. Each entry takes 16 bytes
-on 64-bit targets, so 1048576 entries take 16 MiB for the life of the
-process, and 262144 entries take 4 MiB. Each marker thread also has a local
-stack of as many entries as a heap block has bytes: 256 KiB with the default
-blocks. The pages of the stack become resident only when marking uses them: a
-program with a small heap has the same resident size with either default. No
-environment variable changes the size: the setting changes how the collector is
-compiled.
+64-bit targets. `"0"` gives BDWGC's initial size. Each entry takes 16 bytes on
+64-bit targets, so 4194304 entries take 64 MiB and 1048576 entries 16 MiB, for
+the life of the process. On Linux and macOS this is address space: a page of
+the stack becomes resident only when marking first writes it, although under
+strict overcommit (`vm.overcommit_memory=2`) Linux counts the whole stack
+against the commit limit. Windows commits the whole stack when the program
+starts, against the system's commit limit, which is why the default is smaller
+there. Each marker thread also has a local stack of as many entries as a heap
+block has bytes: 256 KiB with the default blocks. No environment variable
+changes the size: the setting changes how the collector is compiled.
 
 In a multi-actor service on a 32-thread Linux machine, 262144 entries
 removed the collections that overflowed the stack with initial heaps of 1
@@ -395,6 +398,32 @@ them spent rescanning the heap on one thread, against 1.4 seconds for the
 other collections. With 1048576 entries and no other change, the overflow
 did not happen, and the load took 197 to 202 seconds instead of 211 to
 227.
+
+How many entries a collection uses depends on the shape of the live data and,
+with parallel markers, on how much work the markers pass through the global
+stack in one mark phase: the stack holds all of it, including the entries that
+markers have already taken. Programs with heaps of up to 3.4 GiB, the
+benchmarks among them, used at most 9001 entries. The service used up to
+290917 entries while it loaded 50,000 devices and up to 731573, 70% of
+1048576, while it loaded 100,000. With 262144 entries, 8 markers and the other
+settings at their defaults, it overflowed: an overflowing collection took 2.3
+to 4.2 seconds against 0.4 to 0.8 seconds for the others, and at 100,000
+devices the stack, with less than half the entries it needed, overflowed twice
+before it fit. 4194304 entries leave 5.7 times the service's deepest use. They
+cost nothing measurable but address space: against 1048576 entries, 4194304,
+16777216 and 67108864 entries added 48, 240 and 1008 MiB to the virtual size
+of a process, while peak resident memory, page faults, startup time and CPU
+time stayed within the noise, on Linux and on macOS.
+
+A larger stack moves the point where a program overflows it, but no size
+removes it. A linked list whose payload field comes before its link field
+needs one entry per node: a list of 1,000,000 such nodes used 995603 entries,
+and a list of 5,000,000 nodes, 455 MiB at its peak, overflowed 4194304
+entries. With the link field first, a list of 2,000,000 nodes used 59 entries.
+After an overflow the stack keeps its doubled size, and the pages that marking
+wrote stay resident, for the life of the process. A program with a very large
+heap can set a larger size; on Linux and macOS it costs address space until
+marking needs the entries.
 
 Both are build settings shared by the application and its dependencies,
 including database support.

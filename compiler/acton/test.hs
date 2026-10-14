@@ -2827,7 +2827,8 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("no_thread_local_warmup", "True"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
                 ("mark_range_stealing", "True"),
-                ("initial_mark_stack_size", "1048576")]
+                ("initial_mark_stack_size",
+                 if System.Info.os == "mingw32" then "1048576" else "4194304")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
