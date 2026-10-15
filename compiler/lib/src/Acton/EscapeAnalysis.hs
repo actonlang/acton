@@ -32,7 +32,7 @@ import qualified Data.Set as S
 import Utils
 import Acton.Syntax
 import Acton.Builtin (mBuiltin, qnHashable)
-import Acton.Names (assigned, free, isWitness)
+import Acton.Names (assigned, bound, free, isWitness)
 
 
 data Escape = NoEscape | MayEscape
@@ -321,8 +321,16 @@ collectFunctions trustedBuiltin path parents = concatMap stmt
 -- belongs to the compiler-distributed __builtin__ module.
 hashableHasherContract :: [TCon] -> Decl -> [Parameter] -> S.Set Name
 hashableHasherContract parents d params
+          -- B_hash passes the hasher as the only argument after self, so it
+          -- binds to the first parameter after self, skipping the witness
+          -- parameters that type checking adds.  Later parameters keep their
+          -- defaults.  An annotation such as h: value or *args still
+          -- type-checks as an implementation, so the contract cannot be
+          -- selected by the declared type.
           | nstr (dname d) == "hash" && any isHashable parents =
-              S.fromList [ paramName p | p <- params, maybe False isHasherType (paramType p) ]
+              case drop 1 [ p | p <- params, not (isWitness (paramName p)) ] of
+                p:_ -> S.singleton (paramName p)
+                []  -> S.empty
           | otherwise = S.empty
 
 isHashable :: TCon -> Bool
@@ -536,7 +544,7 @@ scanExpr c expression = case expression of
         mapM_ (scanExpr c) (posArgExpressions p)
         mapM_ (scanExpr c . snd) (kwdArgExpressions k)
         scanCall c l f p k
-    Let _ ss e -> scanSuite c ss >> scanExpr c e
+    Let _ ss e -> let c' = withBound (bound ss) c in scanSuite c' ss >> scanExpr c' e
     TApp _ e _ -> scanExpr c e
     Async l e -> scanExpr c e >> addEscapeNames c (Asynchronous l) (free e)
     Await _ e -> scanExpr c e
@@ -560,14 +568,15 @@ scanExpr c expression = case expression of
     YieldFrom l e -> scanExpr c e >> addEscapeExpr c (Yielded l) e
     Tuple _ p k -> mapM_ (scanExpr c) (posArgExpressions p) >> mapM_ (scanExpr c . snd) (kwdArgExpressions k)
     List _ es -> mapM_ (scanElem c) es
-    ListComp _ e comp -> scanElem c e >> scanComp c comp
+    ListComp _ e comp -> let c' = withBound (bound comp) c in scanElem c' e >> scanComp c' comp
     Dict _ as -> mapM_ (scanAssoc c) as
-    DictComp _ a comp -> scanAssoc c a >> scanComp c comp
+    DictComp _ a comp -> let c' = withBound (bound comp) c in scanAssoc c' a >> scanComp c' comp
     Set _ es -> mapM_ (scanElem c) es
-    SetComp _ e comp -> scanElem c e >> scanComp c comp
+    SetComp _ e comp -> let c' = withBound (bound comp) c in scanElem c' e >> scanComp c' comp
     GeneratorExpr l e comp -> do
-        scanElem c e
-        scanComp c comp
+        let c' = withBound (bound comp) c
+        scanElem c' e
+        scanComp c' comp
         addEscapeNames c (Captured l) (free expression)
     Paren _ e -> scanExpr c e
     Box _ e -> scanExpr c e
@@ -595,6 +604,8 @@ scanComp c (CompIf _ e rest) = scanExpr c e >> scanComp c rest
 
 scanCall :: Context -> SrcLoc -> Expr -> PosArg -> KwdArg -> State Facts ()
 scanCall c l f p k
+  -- A splatted argument can land in any parameter, so no summary applies.
+  | hasStarArg p k = unknownCall
   | Just callee <- directCallee c target = connectCall c l callee p k
   | Just summary <- importedCallee c target =
       countImportedSummarized >> connectImportedCall c l summary p k
@@ -627,6 +638,24 @@ scanCall c l f p k
         { factImportedSummarized = factImportedSummarized facts + 1 }
     countImportedUnknown = modify' $ \facts -> facts
         { factImportedUnknown = factImportedUnknown facts + 1 }
+
+hasStarArg :: PosArg -> KwdArg -> Bool
+hasStarArg p k = posStar p || kwdStar k
+  where
+    posStar (PosArg _ rest) = posStar rest
+    posStar (PosStar _) = True
+    posStar PosNil = False
+    kwdStar (KwdArg _ _ rest) = kwdStar rest
+    kwdStar (KwdStar _) = True
+    kwdStar KwdNil = False
+
+-- Names bound by a comprehension or a let expression are local to it.  They
+-- shadow top-level and imported functions of the same name, and the type of
+-- an outer name of the same name does not apply to them.
+withBound :: [Name] -> Context -> Context
+withBound ns c = c { contextBound = contextBound c `S.union` bs
+                   , contextTypes = contextTypes c `M.withoutKeys` bs }
+  where bs = S.fromList ns
 
 safeInit :: [a] -> [a]
 safeInit [] = []
@@ -792,6 +821,8 @@ aliasNames expression = case expression of
     Slice _ e _ -> aliasNames e
     Cond _ e _ e' -> aliasNames e `S.union` aliasNames e'
     IsInstance{} -> S.empty
+    -- and/or evaluate to one of their operands.
+    BinOp _ e op e' | op `elem` [And, Or] -> aliasNames e `S.union` aliasNames e'
     BinOp{} -> S.empty
     CompOp{} -> S.empty
     UnOp{} -> S.empty

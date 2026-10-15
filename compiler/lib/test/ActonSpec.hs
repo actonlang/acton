@@ -2663,6 +2663,150 @@ main = do
         Escape.reportImportedNoEscapeArgs report `shouldBe` 2
         Escape.reportImportedMayEscapeArgs report `shouldBe` 2
 
+      it "binds the Hashable.hash contract by position, not by annotation" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: value):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "class AsValue(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension AsValue(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h: value):"
+              , "        raise Kept(h)"
+              , "class KeptTuple(Exception):"
+              , "    def __init__(self, h: (hasher,)):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "class AsStar(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension AsStar(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, *args):"
+              , "        raise KeptTuple(args)"
+              ]
+        tchecked <- typecheckSource env0 "escape_contract_by_position" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 2
+
+      it "binds the Hashable.hash contract to the parameter after self" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: hasher):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "class Pt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h, extra: int = 0):"
+              , "        raise Kept(h)"
+              ]
+        tchecked <- typecheckSource env0 "escape_contract_trailing_default" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 1
+
+      it "lets and/or results alias their operands" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: hasher):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "class Pt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        y = h or h"
+              , "        raise Kept(y)"
+              ]
+        tchecked <- typecheckSource env0 "escape_or_alias" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 1
+
+      it "treats comprehension-bound names as local" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: hasher):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "def keep(x: hasher) -> None:"
+              , "    pass"
+              , "def leak(x: hasher) -> None:"
+              , "    raise Kept(x)"
+              , "class Pt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        fs = [lambda y: leak(y)]"
+              , "        r = [keep(h) for keep in fs]"
+              ]
+        tchecked <- typecheckSource env0 "escape_comprehension_shadow" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 1
+
+      it "gives comprehension-bound names no outer type" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: hasher):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "class Keeper(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "    def update(self, x: hasher) -> None:"
+              , "        raise Kept(x)"
+              , "class Pt(object):"
+              , "    ks: list[Keeper]"
+              , "    def __init__(self, ks: list[Keeper]):"
+              , "        self.ks = ks"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        k = hasher(0)"
+              , "        r = [k.update(h) for k in self.ks]"
+              ]
+        tchecked <- typecheckSource env0 "escape_comprehension_type_shadow" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 1
+
+      it "treats a call with a splatted argument as unknown" $ do
+        let src = unlines
+              [ "def stash(*xs) -> None:"
+              , "    pass"
+              , "class Pt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        t = (1, h)"
+              , "        stash(*t)"
+              ]
+        tchecked <- typecheckSource env0 "escape_splat_call" src
+        let report = Escape.analyzeModule tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 1
+
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]
       testNorm env0 ["norm_comprehension_condition"]
