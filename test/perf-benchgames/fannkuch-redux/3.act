@@ -1,0 +1,107 @@
+mut def firstPerm(n: int, facs: array[int], perm: array[int], count: array[int], scratch: array[int], idx: int) -> None:
+   for i in range(n):
+       perm[i] = i
+   for i in range(n-1,0,-1):
+       d = idx // facs[i]
+       count[i] = d 
+       idx %= facs[i]
+       for j in range(i+1):
+           scratch[j] = perm[j]
+       for j in range(i+1):
+           perm[j] = scratch[j+d] if j+d <= i else scratch[j+d-i-1]
+mut def nextPerm(perm: array[int], count: array[int]) -> None:
+    first = perm[1]
+    perm[1] = perm[0]
+    perm[0] = first
+    i = 1
+    count[i] += 1
+    while count[i] > i:
+        count[i] = 0
+        i += 1
+        next = perm[1]
+        perm[0] = perm[1]
+        for j in range(1,i):
+            perm[j] = perm[j+1]
+        perm[i] = first
+        first = next
+        count[i] += 1
+mut def countFlips(n: int, perm: array[int], scratch: array[int]) -> int:
+    flips = 1
+    first = perm[0]
+    if perm[first] != 0:
+        for i in range(n):
+            scratch[i] = perm[i]
+        while True:
+            flips += 1
+            lo = 1
+            hi = first-1
+            while lo < hi:
+                t = scratch[lo]
+                scratch[lo] = scratch[hi]
+                scratch[hi] = t
+                lo += 1
+                hi -= 1
+            t = scratch[first]
+            scratch[first] = first
+            first = t
+            if scratch[first] == 0:
+                break
+    return flips
+
+actor worker(id: int, n: int, facs: array[int]):
+
+    var perm = array(n)
+    var count = array(n)
+    var scratch = array(n)
+
+    action def doWork(fstIndex: int, chunkSize: int, done: action(int, int, int)->None):
+       maxFlips = 0
+       checksum = 0
+       firstPerm(n, facs, perm, count, scratch, fstIndex)
+       for f in range(chunkSize):
+           flips = countFlips(n, perm, scratch)
+           if flips > maxFlips:
+               maxFlips = flips
+           checksum += flips if f % 2 == 0 else -flips
+           if f + 1 < chunkSize:
+               nextPerm(perm, count)
+       done(id,maxFlips,checksum)
+       
+actor main(env):
+
+    var maxflips = 0
+    var checksum = 0
+    var reported = 0
+    var started = 0
+    var chunks = 0
+    var nChunk = 0
+    var n = 7
+    var workers: list[worker] = []
+
+    action def done(wId, flips, chk):
+        if flips > maxflips:
+            maxflips = flips
+        checksum += chk
+        reported += 1
+        if reported == chunks:
+            print("%d\nPfannkuchen(%d) = %d" % (checksum, n, maxflips))
+            env.exit(0)
+        if started < chunks:
+            workers[wId].doWork(started*nChunk, nChunk, done)
+            started += 1
+
+    n = int(env.argv[1]) if len(env.argv) > 1 else 7
+    if n>12:
+        print("Command line argument can be at most 12")
+        env.exit(1)
+    facs = array(n+1,1)
+    for i in range(1,n+1):
+        facs[i] = i * facs[i-1]
+    nChunk = facs[8] if n > 7 else facs[n]
+    chunks = facs[n]//nChunk
+    for i in range(env.nr_wthreads):
+        w = worker(i, n, facs)
+        workers.append(w)
+        if started < chunks:
+            w.doWork(started*nChunk, nChunk, done)
+            started += 1
