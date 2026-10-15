@@ -993,6 +993,55 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
   assertBool "did not expect main to type check" (not (typechecked out2 modMain))
   assertBool "expected main to compile codegen" (compiled out2 modMain)
 
+p17b_dep_escape_change :: TestTree
+p17b_dep_escape_change = testCase "17b-dependency escape change rechecks Hashable.hash" $ do
+  let keepContent = T.unlines
+        [ "def keep(x: hasher) -> None:"
+        , "    pass"
+        ]
+      leakContent = T.unlines
+        [ "def keep(x: hasher) -> None:"
+        , "    f = lambda: x"
+        ]
+  ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+  depDir <- ensureDepProject casesProjDir "libfoo"
+  let depSrc = depDir </> "src" </> "lib.act"
+  writeFileUtf8 depSrc keepContent
+  writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
+    [ "import libfoo.lib"
+    , ""
+    , "class Point(object):"
+    , "    x: int"
+    , ""
+    , "    def __init__(self, x: int):"
+    , "        self.x = x"
+    , ""
+    , "extension Point(Eq):"
+    , "    def __eq__(p1, p2):"
+    , "        return p1.x == p2.x"
+    , ""
+    , "extension Point(Hashable):"
+    , "    def hash(self, h):"
+    , "        libfoo.lib.keep(h)"
+    , "        self.x.hash(h)"
+    , ""
+    , "actor main(env: Env):"
+    , "    print(hash(Point(3)))"
+    , "    env.exit(0)"
+    ]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
+  assertExitSuccess "initial build" res1
+  -- Only the body changes, so the signature and the type-level public hash
+  -- stay the same, but keep's parameter now escapes.
+  writeFileUtf8 depSrc leakContent
+  (ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose"]
+  assertBool "expected the rebuild to fail" (ec2 /= ExitSuccess)
+  assertBool "expected the Hashable.hash contract error"
+    (T.isInfixOf "may let its hasher parameter 'h' escape" out2)
+  writeFileUtf8 depSrc keepContent
+  res3 <- runActonIn casesProjDir ["build", "--color", "never"]
+  assertExitSuccess "rebuild after restoring keep" res3
+
 -- Incremental/hash case coverage --------------------------------------------
 
 p18_type_only_deps :: TestTree
@@ -2949,6 +2998,7 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p15_rebuild_import
       , p16_dep_api_change
       , p17_dep_impl_change
+      , p17b_dep_escape_change
       , p18_type_only_deps
       , p19_unused_import
       , p20_add_remove_names

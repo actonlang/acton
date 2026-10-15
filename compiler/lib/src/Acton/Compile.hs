@@ -2699,6 +2699,18 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               (hashProgress afterImplHashes)
               nameInfoMap
           evaluate (rnf selfPubHashes)
+          -- Importers rely on a top-level function's escape summary when they
+          -- check their own Hashable.hash implementations, so the summary is
+          -- part of that function's public interface.  Folding it into the
+          -- name's public hash turns a summary change into a public delta for
+          -- exactly the dependents that use the name.
+          let escapeBits = M.fromList
+                [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ])
+                | ([n], ps) <- escapeSummaries ]
+              selfPubHashesEsc = M.mapWithKey
+                (\n h -> maybe h (\bits -> SHA256.hash (h <> B.pack "escape:" <> bits)) (M.lookup n escapeBits))
+                selfPubHashes
+          evaluate (rnf selfPubHashesEsc)
           -- Split deps into local (same module) vs external (qualified) names.
           (pubSigLocalDeps, pubSigExtDeps) <-
             Hashing.pubSigSplitDepsFromNameInfoMapWithProgress
@@ -2735,7 +2747,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   -- The pub and impl passes are independent, and so are the
                   -- module hashes and the assembly that both use them.
                   (pubHashes, implHashes) <- concurrently
-                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes)))
+                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashesEsc pubSigLocalDeps pubSigExtHashes)))
                     (evaluate (force (Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes)))
                   let nameHashes0 =
                         Hashing.assembleNameHashes

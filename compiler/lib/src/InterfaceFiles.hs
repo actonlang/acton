@@ -210,8 +210,8 @@ instance NFData NameHashInfo
 
 -- | Internal per-function parameter escape summaries.  The path is
 -- relative to its module (for example @[f]@ or @[C, method]@); the Boolean is
--- True for MayEscape and False for NoEscape.  The summaries are stored in a
--- row of their own, so ordinary public type hashes do not depend on them.
+-- True for MayEscape and False for NoEscape.  Compile.hs folds the escape
+-- bits of each top-level function into that name's public hash.
 type EscapeSummaries = [([A.Name], [(A.Name, Bool)])]
 
 data DepModuleInfo = DepModuleInfo
