@@ -261,42 +261,31 @@ void $DROP_C();
 #define $PUSHF_C $PUSH_C
 #define $RAISE_C $RAISE
 
-/*
-struct JumpBuf;
-typedef struct JumpBuf *JumpBuf;
-struct JumpBuf {
-    jmp_buf buf;
-    B_BaseException xval;
-    JumpBuf prev;
-};
-*/
-
 struct WorkerCtx;
 typedef struct WorkerCtx *WorkerCtx;
 // A worker writes its context for every new message and actor, and whenever
-// it enters or leaves a try block, so each context gets a cache line of its
-// own (see struct mpmcq).
+// it enters or leaves a try block, so no two contexts share a cache line (see
+// struct mpmcq).
 struct WorkerCtx {
     long id;
     uv_loop_t *uv_loop;
     volatile JumpBuf jump_top;
-    volatile JumpBuf jump0;
     // The next key this worker hands out, and the distance to the one after
     // it (see get_next_key())
     int64_t key_next;
     int64_t key_step;
+    // The worker loop's exception frame, at the bottom of the frame stack.
+    // The first continuation on the worker pushes it, with a setjmp in that
+    // call of wt_work_cb(). It stays pushed, and a raise that no try catches
+    // longjmps to it also from later calls, which relies on uv running
+    // wt_work_cb() at the same stack depth every time. It outlives each call,
+    // so it cannot live on the stack.
+    struct JumpBuf jump0;
 } __attribute__((aligned(128)));
 extern WorkerCtx wctxs[MAX_WTHREADS];
 
 WorkerCtx get_wctx();
 int get_wtid();
-
-JumpBuf $PUSH_BUF();
-B_BaseException $POP();
-void $DROP();
-void $RAISE(B_BaseException e);
-#define $PUSH()             (!$SETJMP($PUSH_BUF()->buf))
-#define $PUSHF $PUSH
 
 extern pid_t pid;
 

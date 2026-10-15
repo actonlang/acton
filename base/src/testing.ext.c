@@ -154,10 +154,10 @@ bool testingQ_PerfLoopD___next__(testingQ_PerfLoop self, $WORD *out) {
     }
 
     uint64_t completed = (state & TESTING_LOOP_STARTED) ? self->_batch_size : 0;
-    // $PUSH allocates its exception frame, so stop measurement before it.
     bool counters_valid = completed ? testing_loop_end(self) : true;
     B_int scale = NULL;
-    if ($PUSH()) {
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
         if (!counters_valid)
             testing_loop_invalid(self, &testingQ_loop_counters_error);
         if (completed)

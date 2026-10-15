@@ -1,9 +1,9 @@
 import testing
 
 
-# Catch-frame allocation remains part of these measurements. The fixed
-# exceptions and their messages are shared; the formatted diagnostic carries
-# the invalid input and therefore still needs a separate instance.
+# The fixed exceptions and their messages are shared; the formatted
+# diagnostic carries the invalid input and therefore still needs a separate
+# instance.
 def _test_fixed_builtin_exception(t: testing.SyncT):
     text = "abc"
     missing = "z"

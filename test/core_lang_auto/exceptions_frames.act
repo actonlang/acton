@@ -1,0 +1,380 @@
+import acton.rts
+
+# A plain (not CPS converted) try keeps its exception frame in a local of the
+# C function that runs it. These tests leave tries in every possible way, with
+# a try in every level of deep recursions, raise across calls without tries,
+# collect garbage while exceptions are on their way to a handler, and let
+# exceptions reach the worker loop's frame.
+
+class Payload(Exception):
+    def __init__(self, depth: int, items: list[str]):
+        self.error_message = "payload"
+        self.depth = depth
+        self.items = items
+
+
+def make_items(n: int, tag: str) -> list[str]:
+    return [tag + str(i) for i in range(n)]
+
+
+def check_items(items: list[str], n: int, tag: str) -> bool:
+    if len(items) != n:
+        return False
+    for i in range(n):
+        if items[i] != tag + str(i):
+            return False
+    return True
+
+
+# Allocates n small lists, so that collections run
+def garbage(n: int) -> int:
+    total = 0
+    for i in range(n):
+        total += len([str(j) for j in range(20)])
+    return total
+
+
+# 1. A raise at the bottom passes through the finally clause of every level
+# and is caught at level catch_at.
+def deep(level: int, bottom: int, catch_at: int, out: list[int]) -> int:
+    try:
+        if level == bottom:
+            raise Payload(level, make_items(10, "d"))
+        return deep(level + 1, bottom, catch_at, out)
+    except Payload as e:
+        if level != catch_at:
+            raise e
+        out.append(-e.depth)
+        return level
+    finally:
+        out.append(level)
+
+
+def test_deep(bottom: int, catch_at: int) -> bool:
+    out = []
+    res = deep(0, bottom, catch_at, out)
+    expected = list(range(bottom, catch_at, -1)) + [-bottom] + list(range(catch_at, -1, -1))
+    if res != catch_at or out != expected:
+        print("Bad deep:", bottom, catch_at, res, len(out))
+        return False
+    return True
+
+
+# 2. Every level loops with a try in the loop body and recurses from inside
+# the try. Each iteration leaves the try differently: normally, by continue,
+# by a caught raise, through the recursive call and by break. With fail set,
+# the bottom raises an exception that no level catches.
+def deep_loops(level: int, bottom: int, fail: bool) -> int:
+    if level == bottom:
+        if fail:
+            raise KeyError("bottom")
+        return 0
+    total = 0
+    for i in [0, 1, 2, 3, 4]:
+        try:
+            if i == 1:
+                continue
+            if i == 2:
+                raise ValueError("skip")
+            if i == 4:
+                break
+            if i == 3:
+                total += deep_loops(level + 1, bottom, fail)
+            else:
+                total += 1
+        except ValueError:
+            total += 10
+    return total
+
+
+def test_deep_loops(bottom: int) -> bool:
+    res = deep_loops(0, bottom, False)
+    if res != 11 * bottom:
+        print("Bad deep_loops:", bottom, res)
+        return False
+    try:
+        res = deep_loops(0, bottom, True)
+        print("Bad deep_loops: no KeyError", res)
+        return False
+    except KeyError:
+        pass
+    return True
+
+
+# 3. A raise crosses functions without tries and is caught two tries up,
+# after a finally clause on the way.
+def raiser(n: int) -> int:
+    if n == 0:
+        raise KeyError("k")
+    return raiser(n - 1) + 1
+
+
+def middle(n: int, out: list[str]) -> int:
+    try:
+        return raiser(n)
+    except ValueError:
+        out.append("wrong")
+        return -1
+    finally:
+        out.append("mf")
+
+
+def outer(n: int, out: list[str]) -> int:
+    try:
+        try:
+            return middle(n, out)
+        except IndexError:
+            out.append("wrong")
+    except KeyError:
+        out.append("ok")
+    return 7
+
+
+def test_across_calls() -> bool:
+    out = []
+    res = outer(20, out)
+    if res != 7 or out != ["mf", "ok"]:
+        print("Bad across calls:", res, out)
+        return False
+    return True
+
+
+# 4. Many iterations that leave nested tries by continue from the outer try,
+# by continue and break through the inner try's finally clause, by a caught
+# raise and normally. churn_expected() computes the same count without tries.
+# In debug builds the worker checks after each continuation that it popped
+# every frame it pushed. Section 7 also lets an exception escape after this
+# loop, which must then reach the worker loop's frame.
+def churn(n: int) -> int:
+    count = 0
+    for i in range(n):
+        try:
+            if i % 3 == 0:
+                continue
+            try:
+                if i % 5 == 0:
+                    raise ValueError("v")
+                if i % 7 == 0:
+                    continue
+                if i == n - 8:
+                    break
+                count += 1
+            finally:
+                count += 2
+        except ValueError:
+            count += 100
+    return count
+
+
+def churn_expected(n: int) -> int:
+    count = 0
+    for i in range(n):
+        if i % 3 == 0:
+            continue
+        if i % 5 == 0:
+            count += 102
+        elif i % 7 == 0:
+            count += 2
+        elif i == n - 8:
+            count += 2
+            break
+        else:
+            count += 3
+    return count
+
+
+def test_churn() -> bool:
+    n = 100000
+    res = churn(n)
+    if res != churn_expected(n):
+        print("Bad churn:", res, churn_expected(n))
+        return False
+    try:
+        raise Payload(1, make_items(3, "c"))
+    except Payload as e:
+        if not check_items(e.items, 3, "c"):
+            print("Bad churn payload")
+            return False
+    return True
+
+
+# 5. Collections run while exceptions are on their way to their handlers: in
+# finally clauses, in handlers that re-raise, and at the bottom of a deep
+# recursion with an active try in every level.
+def gc_in_flight(cap: SysCap, rounds: int) -> bool:
+    for r in range(rounds):
+        tag = "p" + str(r)
+        try:
+            try:
+                try:
+                    raise Payload(r, make_items(50, tag))
+                finally:
+                    garbage(2000)
+                    acton.rts.gc(cap)
+            except Payload as e:
+                garbage(2000)
+                acton.rts.gc(cap)
+                raise e
+        except Payload as e:
+            acton.rts.gc(cap)
+            if e.depth != r or not check_items(e.items, 50, tag):
+                print("Bad gc_in_flight payload:", r)
+                return False
+    return True
+
+
+def deep_gc(cap: SysCap, level: int, bottom: int) -> int:
+    try:
+        if level == bottom:
+            acton.rts.gc(cap)
+            raise Payload(level, make_items(20, "g"))
+        return deep_gc(cap, level + 1, bottom)
+    finally:
+        if level % 100 == 0:
+            garbage(200)
+            acton.rts.gc(cap)
+
+
+def test_gc(cap: SysCap) -> bool:
+    if not gc_in_flight(cap, 20):
+        return False
+    try:
+        res = deep_gc(cap, 0, 1000)
+        print("Bad deep_gc: no exception", res)
+        return False
+    except Payload as e:
+        acton.rts.gc(cap)
+        if e.depth != 1000 or not check_items(e.items, 20, "g"):
+            print("Bad deep_gc payload")
+            return False
+    return True
+
+
+# 6. An iterator whose __next__ runs a try, and loop bodies that raise out of
+# the loop through a finally clause, including StopIteration.
+class Lookup(Iterator[int]):
+    def __init__(self, d: dict[int, int], n: int):
+        self.d = d
+        self.n = n
+        self.i = 0
+
+    def __next__(self):
+        if self.i >= self.n:
+            return nothing()
+        k = self.i
+        self.i += 1
+        try:
+            return just(self.d[k])
+        except KeyError:
+            return just(-1)
+
+
+def sum_lookup(d: dict[int, int], n: int, stop_at: int, out: list[str]) -> int:
+    total = 0
+    try:
+        for v in Lookup(d, n):
+            if v == stop_at:
+                raise StopIteration("stop")
+            total += v
+    finally:
+        out.append("f" + str(total))
+    return total
+
+
+def test_iterators() -> bool:
+    d = {0: 5, 2: 7, 3: 9}
+    out = []
+    res = sum_lookup(d, 5, 100, out)
+    if res != 5 - 1 + 7 + 9 - 1 or out != ["f19"]:
+        print("Bad iterator sum:", res, out)
+        return False
+    try:
+        res = sum_lookup(d, 5, 7, out)
+        print("Bad iterator: no StopIteration", res)
+        return False
+    except StopIteration:
+        pass
+    if out != ["f19", "f4"]:
+        print("Bad iterator finally:", out)
+        return False
+    return True
+
+
+# 7. Actors. raise_deep() raises from inside a plain try and lets the
+# exception reach the worker loop's frame, and so does churn_then_raise()
+# after many tries. The caller's try is CPS converted because it awaits.
+actor Callee(cap: SysCap):
+    def raise_deep(n: int) -> int:
+        try:
+            return raiser(n)
+        except ValueError:
+            return -1
+
+    def plain(n: int) -> int:
+        out = []
+        res = outer(n, out)
+        garbage(1000)
+        acton.rts.gc(cap)
+        return res if out == ["mf", "ok"] else -1
+
+    def payload(r: int) -> int:
+        try:
+            raise ValueError("inner")
+        except ValueError:
+            raise Payload(r, make_items(30, "a" + str(r)))
+
+    def churn_then_raise(n: int) -> int:
+        if churn(n) != churn_expected(n):
+            return -1
+        raise KeyError("after churn")
+
+
+actor Caller(cap: SysCap):
+    callee = Callee(cap)
+
+    def run() -> bool:
+        ok = True
+        # The results are used, so that the calls wait for them rather than
+        # being sent async.
+        try:
+            v = callee.raise_deep(10)
+            print("Bad actor: raise_deep returned", v)
+            ok = False
+        except KeyError:
+            pass
+        if callee.plain(5) != 7:
+            print("Bad actor: plain")
+            ok = False
+        try:
+            v = callee.churn_then_raise(1000)
+            print("Bad actor: churn_then_raise returned", v)
+            ok = False
+        except KeyError:
+            pass
+        for r in range(10):
+            try:
+                v = callee.payload(r)
+                print("Bad actor: payload returned", v)
+                ok = False
+            except Payload as e:
+                garbage(1000)
+                acton.rts.gc(cap)
+                if e.depth != r or not check_items(e.items, 30, "a" + str(r)):
+                    print("Bad actor payload:", r)
+                    ok = False
+        return ok
+
+
+actor main(env):
+    ok = True
+    ok = test_deep(2000, 0) and ok
+    ok = test_deep(2000, 1000) and ok
+    ok = test_deep(2000, 1999) and ok
+    ok = test_deep_loops(2000) and ok
+    ok = test_across_calls() and ok
+    ok = test_churn() and ok
+    ok = test_gc(env.syscap) and ok
+    ok = test_iterators() and ok
+    c = Caller(env.syscap)
+    ok = c.run() and ok
+    env.exit(0 if ok else 1)

@@ -14,6 +14,16 @@
 #define $LONGJMP(buf, val)  longjmp(buf, val)
 #endif
 
+// An exception frame. $PUSH(frame) links a frame that the caller owns, so
+// pushing allocates nothing. A try keeps its frame in a local variable of the
+// function that runs it, and that function pops the frame with $DROP or $POP
+// before it returns, as setjmp requires. Each active try therefore takes
+// sizeof(struct JumpBuf) of C stack: 208 bytes on macOS arm64, 216 on x86_64
+// Linux and 328 on aarch64 Linux. $RAISE writes the exception in flight
+// (xval) and $POP reads it only through jump_top, never through the local
+// variable, which keeps it valid after the longjmp without volatile. The GC
+// finds it when it scans the thread's stack. The one frame that outlives the
+// function that pushed it is the worker loop's (see jump0 in WorkerCtx).
 struct JumpBuf;
 typedef struct JumpBuf *JumpBuf;
 struct JumpBuf {
@@ -23,10 +33,11 @@ struct JumpBuf {
 };
 
 void $RAISE(B_BaseException e);
-JumpBuf $PUSH_BUF();
+JumpBuf $PUSH_BUF(JumpBuf frame);
 void $DROP();
 B_BaseException $POP();
-#define $PUSH()             (!$SETJMP($PUSH_BUF()->buf))
+#define $PUSH(frame)        (!$SETJMP($PUSH_BUF(frame)->buf))
+#define $PUSHF $PUSH
 
 // File-scope initializer for an exception with a fixed ASCII string literal.
 // The exception and its string have static storage; raising only updates the catch
