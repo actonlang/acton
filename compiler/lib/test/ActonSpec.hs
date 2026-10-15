@@ -2200,7 +2200,7 @@ main = do
       -- Non-throwing iteration lowers for-loops to a bool/out __next__ call, so
       -- locals live across the loop no longer need StopIteration longjmp protection.
       testCodeGenContains env0 "forloop_volatile" ["N_1maybeG_next_iter->$class->__next__(N_1maybeG_next_iter, &N_1maybe.val)", "B_str marker = B_None;"]
-      testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "if ($PUSH())"]
+      testCodeGenDoesNotContain env0 "forloop_volatile" ["volatile B_str marker", "$PUSH("]
       testCodeGenContains env0 "next_peephole"
         [ "$MaybeWord item;"
         , "itemG_next_iter->$class->__next__(itemG_next_iter, &item.val)"

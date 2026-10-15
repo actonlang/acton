@@ -515,43 +515,49 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
         }
     }
     B_BaseException N_8xx;
-    if ($PUSHF()) {
-        if ($PUSH()) {
-            #line 80 "test/src/lines.act"
-            if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
-                #line 81 "test/src/lines.act"
-                $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCStringLength("boom", 4))));
-                __builtin_unreachable();
+    {
+        struct JumpBuf $frame;
+        if ($PUSHF(&$frame)) {
+            {
+                struct JumpBuf $frame;
+                if ($PUSH(&$frame)) {
+                    #line 80 "test/src/lines.act"
+                    if (((bool (*) ($WORD, B_int, B_int))((B_Eq)(linesQ_W_Apa_785))->$class->__eq__)(linesQ_W_Apa_785, toB_int(((int64_t)((linesQ_main)(self))->v)), toB_int(0LL))) {
+                        #line 81 "test/src/lines.act"
+                        $RAISE(((B_BaseException)B_ValueErrorG_new(actStrFromCStringLength("boom", 4))));
+                        __builtin_unreachable();
+                    }
+                    #line 82 "test/src/lines.act"
+                    ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("unreached", 9)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
+                    $DROP();
+                }
+                else {
+                    B_BaseException N_7x = $POP();
+                    B_ValueError e;
+                    if ($ISINSTANCE0(N_7x, B_ValueError)) {
+                        e = ((B_ValueError)N_7x);
+                        #line 84 "test/src/lines.act"
+                        ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromCStringLength("caught", 6), actStrFromCStringLength("ValueError", 10)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
+                    }
+                    else {
+                        $RAISE(N_7x);
+                        __builtin_unreachable();
+                    }
+                }
             }
-            #line 82 "test/src/lines.act"
-            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("unreached", 9)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
-            $DROP();
+            $RAISE(((B_BaseException)$SEQG_new()));
+            __builtin_unreachable();
         }
         else {
-            B_BaseException N_7x = $POP();
-            B_ValueError e;
-            if ($ISINSTANCE0(N_7x, B_ValueError)) {
-                e = ((B_ValueError)N_7x);
-                #line 84 "test/src/lines.act"
-                ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(2, actStrFromCStringLength("caught", 6), actStrFromCStringLength("ValueError", 10)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
+            N_8xx = $POP();
+            #line 86 "test/src/lines.act"
+            ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("finally", 7)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
+            if ($ISINSTANCE0(N_8xx, $SEQ)) {
             }
             else {
-                $RAISE(N_7x);
+                $RAISE(N_8xx);
                 __builtin_unreachable();
             }
-        }
-        $RAISE(((B_BaseException)$SEQG_new()));
-        __builtin_unreachable();
-    }
-    else {
-        N_8xx = $POP();
-        #line 86 "test/src/lines.act"
-        ((B_NoneType (*) (B_tuple, B_str, B_str, bool, bool))B_print)($NEWTUPLE(1, actStrFromCStringLength("finally", 7)), actStrFromCStringLength(" ", 1), actStrFromCStringLength("\n", 1), false, false);
-        if ($ISINSTANCE0(N_8xx, $SEQ)) {
-        }
-        else {
-            $RAISE(N_8xx);
-            __builtin_unreachable();
         }
     }
     #line 89 "test/src/lines.act"

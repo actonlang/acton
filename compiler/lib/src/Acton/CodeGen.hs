@@ -206,7 +206,7 @@ isVolVar a env                      = a `elem` volVarsX (envX env)
 -- The Boxing pass wraps a condition's value in a single Box/UnBox node; its
 -- combinators collapse adjacent ones, so they never nest. Strip that one layer
 -- so structural checks like isPUSH can still recognize the underlying primitive call
--- (e.g. a for-loop's $PUSH() reaches CodeGen as `Box tBool (PUSH())`).
+-- (e.g. a try's $PUSH() reaches CodeGen as `Box tBool (PUSH())`).
 stripBoxing (Box _ e)               = e
 stripBoxing (UnBox _ e)             = e
 stripBoxing e                       = e
@@ -273,6 +273,8 @@ rawParams env t@TVar{}              = gen env t
 rawParams env t                     = error ("codegen unexpected row: " ++ prstr t)
 
 maybeOutParamName                   = text "$next_out"
+
+tryFrameName                        = text "$frame"
 
 maybeOutParam                       = word <+> char '*' <> maybeOutParamName
 
@@ -1389,7 +1391,7 @@ instance Gen Stmt where
     genV _ (If _ (Branch (Bool _ True) [Pass _] : _) _)
                                     = (empty, [])
     genV env (If  _ [b@(Branch e ss)] fin)
-      | isPUSH (stripBoxing e)      = (b' $+$ fin', v1 ++ v2 ++ volatiles)
+      | isPUSH (stripBoxing e)      = (genTryFrame (b' $+$ fin'), v1 ++ v2 ++ volatiles)
       where (b',v1)                 = genBranch env "if" b
             (fin',v2)               = genElse env fin
             volatiles               = filterDefined env (bound ss)
@@ -1404,6 +1406,11 @@ genBranch env kw (Branch e b)       = ((text kw <+> parens(genBool env (B.unbox 
    where (b',vs)                    = genSuite env b
          t | containsGeneratedMethodCall env e = tBool
            | otherwise              = typeOf env e
+
+-- A try that CPS left as a plain $PUSH keeps its exception frame in a C local,
+-- declared in a block around the try. Every way out of the try pops the frame,
+-- with $DROP or $POP, before it leaves the block.
+genTryFrame d                       = lbrace $+$ nest 4 (text "struct JumpBuf" <+> tryFrameName <> semi $+$ d) $+$ rbrace
 
 genElse env []                      = (empty, [])
 genElse env b                       = ((text "else" <+> char '{') $+$ nest 4 b' $+$ char '}', vs)
@@ -1852,6 +1859,8 @@ genCall env [t] (Var _ n) PosNil
   | n == primNEWACTOR               = gen env n <> parens (gen env t)
 genCall env ts (Var _ n) (PosArg e (PosArg ix PosNil))
   | n == primUGetItem               = gen env n <> parens (gen env e <> comma <+> genRawExprAs env tInt ix)
+genCall env [] (Var _ n) PosNil
+  | n `elem` [primPUSH,primPUSHF]   = gen env n <> parens (char '&' <> tryFrameName)
 -- Only install GCfinalizer if one is defined, i.e. we don't have the default
 -- $ActorD___cleanup__
 -- TODO: would be even better to determine this in the compiler and not emit
@@ -2295,7 +2304,7 @@ instance Gen Expr where
         | f == primISNONE           = genCall env [] (Var NoLoc primISNONE0) p
         | f == primUNext            = genCall env [] e p
         | f `elem` [primPUSH,primPUSHF]
-                                    = gen env f <> parens(empty)
+                                    = genCall env [] e p
   --      | f `elem` B.mathfuns       = genCall env [] e p
         | tCon (TC (gBuiltin (noq f)) []) `elem` B.integralTypes   -- f is the constructor for an integer type, so check if argument e is a literal
                                     = genUnboxedInt env (posargs p) e

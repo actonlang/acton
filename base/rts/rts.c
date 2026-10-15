@@ -1155,14 +1155,12 @@ void $DROP_C() {
     POP_catcher(self);
 }
 
-JumpBuf $PUSH_BUF() {
+JumpBuf $PUSH_BUF(JumpBuf frame) {
     WorkerCtx wctx = GET_WCTX();
     assert(wctx != NULL);
-    JumpBuf current = wctx->jump_top;
-    JumpBuf new = (JumpBuf)GC_malloc(sizeof(struct JumpBuf));
-    new->prev = current;
-    wctx->jump_top = new;
-    return new;
+    frame->prev = wctx->jump_top;
+    wctx->jump_top = frame;
+    return frame;
 }
 
 B_BaseException $POP() {
@@ -1170,7 +1168,7 @@ B_BaseException $POP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
-    assert(current != wctx->jump0);     // jump0 belongs to the worker loop, never to a try
+    assert(current != &wctx->jump0);    // jump0 belongs to the worker loop, never to a try
     //    assert(current->prev != NULL);
     wctx->jump_top = current->prev;
     return current->xval;
@@ -1181,7 +1179,7 @@ void $DROP() {
     assert(wctx != NULL);
     JumpBuf current = wctx->jump_top;
     assert(current != NULL);
-    assert(current != wctx->jump0);     // jump0 belongs to the worker loop, never to a try
+    assert(current != &wctx->jump0);    // jump0 belongs to the worker loop, never to a try
     //   (current->prev != NULL);
     wctx->jump_top = current->prev;
 }
@@ -2094,8 +2092,8 @@ void wt_work_cb(uv_check_t *ev) {
     // We read the time before and after each continuation. The time between
     // continuations, and from the start of this call to the first one, is
     // bookkeeping. Like the variables above, these are volatile so that they
-    // keep their values when a continuation raises and we longjmp back to
-    // $PUSH().
+    // keep their values when a continuation raises and we longjmp back to the
+    // setjmp of jump0 (see struct WorkerCtx).
     volatile long long int start_ns = now_ns();
     volatile long long int end_ns = start_ns;
     while (true) {
@@ -2168,13 +2166,12 @@ void wt_work_cb(uv_check_t *ev) {
         }
 
         $R r;
-        if (wctx->jump0 || $PUSH()) {                         // Normal path
-            if (!wctx->jump0) {
-                wctx->jump0 = wctx->jump_top;
-            }
+        // The first continuation on this worker pushes jump0, which then
+        // stays at the bottom of the frame stack.
+        if (wctx->jump_top == &wctx->jump0 || $PUSH(&wctx->jump0)) {   // Normal path
             rtsd_printf("## Running actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
             r = cont->$class->__call__(cont, val);
-            assert(wctx->jump_top == wctx->jump0);      // the continuation popped every try it pushed
+            assert(wctx->jump_top == &wctx->jump0);     // the continuation popped every try it pushed
 
             end_ns = now_ns();
             long long int diff = end_ns - cont_start_ns;
@@ -2193,11 +2190,11 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < (long long int)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_10s, 1); }
             else if (diff < (long long int)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_100s, 1); }
             else                              { WT_STAT_ADD(wt_stats[wctx->id].conts_inf, 1); }
-        } else {                                        // Exceptional path
+        } else {                                                       // Exceptional path
             end_ns = now_ns();
-            assert(wctx->jump0 != NULL);
-            assert(wctx->jump0->xval != NULL);
-            B_BaseException ex = wctx->jump0->xval;
+            assert(wctx->jump_top == &wctx->jump0);
+            assert(wctx->jump0.xval != NULL);
+            B_BaseException ex = wctx->jump0.xval;
             rtsd_printf("## (%d) Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
@@ -2368,7 +2365,6 @@ void *main_loop(void *idx) {
     wctx->id = (long)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
-    wctx->jump0 = NULL;
     start_worker_keys(wctx);
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
@@ -3445,7 +3441,6 @@ int main(int argc, char **argv) {
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
-    wctx->jump0 = NULL;
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif

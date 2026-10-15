@@ -1,9 +1,9 @@
 import testing
 
 
-# Catch-frame allocation remains part of these measurements. The fixed
-# exceptions and their messages are shared; the formatted diagnostic carries
-# the invalid input and therefore still needs a separate instance.
+# The fixed exceptions and their messages are shared; the formatted
+# diagnostic carries the invalid input and therefore still needs a separate
+# instance.
 def _test_fixed_builtin_exception(t: testing.SyncT):
     text = "abc"
     missing = "z"
@@ -42,3 +42,31 @@ def _test_formatted_exception(t: testing.SyncT):
         except ValueError:
             caught += 1
     testing.assertEqual(caught, repeats)
+
+
+# A try that is left without a raise
+def _test_try_without_raise(t: testing.SyncT):
+    values = [1, 2, 3]
+    total = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        try:
+            total += values[1]
+        except IndexError:
+            total -= 1
+    testing.assertEqual(total, 2 * repeats)
+
+
+# A try without a raise whose finally clause runs on the way out
+def _test_finally_without_raise(t: testing.SyncT):
+    values = [1, 2, 3]
+    total = 0
+    repeats = 0
+    for _ in t.loop():
+        repeats += 1
+        try:
+            total += values[1]
+        finally:
+            total += 1
+    testing.assertEqual(total, 3 * repeats)
