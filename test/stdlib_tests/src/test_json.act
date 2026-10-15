@@ -313,3 +313,46 @@ def _test_json_decode_error_mid_document():
                 testing.assertEqual(error.error_message, expected)
             else:
                 testing.error("Expected ValueError for an out-of-range JSON number")
+
+
+def _test_json_decode_errors():
+    # The parser rejects a malformed document before there is a result. The
+    # wrong root type and a number out of range for a float raise after the
+    # document has been parsed, the number after part of the result has been
+    # built.
+    decode_cases = [
+        (r'{"a":1,}', "JSON parsing error: trailing comma is not allowed (7) at position 6"),
+        (r'{"a":', "JSON parsing error: unexpected end of data (5) at position 5"),
+        (r'{"a":tru}', "JSON parsing error: invalid literal, expected 'true' (11) at position 5"),
+        (r'{"a":01}', "JSON parsing error: number with leading zero is not allowed (9) at position 5"),
+        (r'{"a":"\ud800"}', "JSON parsing error: no low surrogate in string (10) at position 6"),
+        (r'{"a":1}x', "JSON parsing error: unexpected content after document (4) at position 7"),
+        ("", "JSON parsing error: input length is 0 (1) at position 0"),
+        ("[1,2]", "JSON root is not an object"),
+        (r'{"a":"x","b":[1,{"c":-1E400}]}', "JSON floating-point number is out of range"),
+    ]
+    list_cases = [
+        ("[1,2", "JSON parsing error: unexpected end of data (5) at position 4"),
+        ("[1,]", "JSON parsing error: trailing comma is not allowed (7) at position 2"),
+        (r'{"a":[1]}', "JSON root is not an array"),
+        (r'["x",{"a":[1e999]}]', "JSON floating-point number is out of range"),
+    ]
+    for source, expected in decode_cases:
+        for decode in [lambda: json.decode(source), lambda: std_json.decode(source)]:
+            try:
+                decode()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for " + source)
+    for source, expected in list_cases:
+        for decode_list in [lambda: json.decode_list(source), lambda: std_json.decode_list(source)]:
+            try:
+                decode_list()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError for " + source)
+    source = r'{"a":[1,{"b":null}]}'
+    testing.assertEqual(json.encode(json.decode(source)), source)
+    testing.assertEqual(std_json.encode(std_json.decode(source)), source)

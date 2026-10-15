@@ -1,6 +1,7 @@
 import testing
 
 import xml
+import std.xml as std_xml
 
 def _test_xml1():
     a = xml.Node("a", children=[
@@ -335,3 +336,40 @@ def _test_xml_comment():
     e = xml.encode(d)
     expected = r"""<data>b</data>"""
     testing.assertEqual(e, expected, "comment should be removed but node text preserved")
+
+def _xml_error(doc: str) -> str:
+    """The error that xml.decode raises for doc, with its position"""
+    try:
+        xml.decode(doc)
+    except xml.XmlParseError as e:
+        return e.error_message + " @" + str(e.line) + ":" + str(e.column)
+    return "no error"
+
+def _std_xml_error(doc: str) -> str:
+    """The error that std.xml.decode raises for doc, with its position"""
+    try:
+        std_xml.decode(doc)
+    except std_xml.XmlParseError as e:
+        return e.error_message + " @" + str(e.line) + ":" + str(e.column)
+    return "no error"
+
+def _test_xml_decode_errors():
+    """Errors from parsing and from converting the parsed document
+
+    libxml2 limits nesting to 256 elements. The unsupported node comes after
+    attributes and elements have been converted.
+    """
+    cases = [
+        ("<a>" * 257 + "</a>" * 257, "Excessive depth in document: 256, use XML_PARSE_HUGE option @1:771"),
+        ('<a k="1" k="2"/>', "Attribute k redefined @1:15"),
+        ("<a>&foo;</a>", "Entity 'foo' not defined @1:9"),
+        ("<a>garbage", "Premature end of data in tag a line 1 @1:11"),
+        ("", "Document is empty @1:1"),
+        ('<a x="1"><b y="2">text<c z="3">x<?pi d?></c></b></a>', "Unsupported XML node type 7 @None:None"),
+    ]
+    for doc, expected in cases:
+        testing.assertEqual(_xml_error(doc), expected)
+        testing.assertEqual(_std_xml_error(doc), expected)
+    deepest = "<a>" * 255 + "<a/>" + "</a>" * 255
+    testing.assertEqual(xml.encode(xml.decode("<a>" * 256 + "</a>" * 256)), deepest)
+    testing.assertEqual(std_xml.encode(std_xml.decode("<a>" * 256 + "</a>" * 256)), deepest)

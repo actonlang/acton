@@ -6,6 +6,8 @@ static struct xmlQ_XmlParseError xmlQ_no_root_error =
     STATIC_EXCEPTION(xmlQ_XmlParseError, "Document has no root element");
 static struct xmlQ_XmlParseError xmlQ_parse_error =
     STATIC_EXCEPTION(xmlQ_XmlParseError, "XML parse error");
+static struct B_MemoryError xmlQ_allocation_failed_error =
+    STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
 
 // TODO: The macro below is from builtin/str.c. We should not duplicate it...
 #define NEW_UNFILLED_STR(nm, nchrs, nbtes)      \
@@ -76,8 +78,7 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
 // Collect character data (text and CDATA) starting at *cur_ptr, up to but not
 // including the next element node. Comments are skipped over transparently, so
 // text on either side of a comment is concatenated (including whitespace).
-// Unsupported node types are rejected: *error is set to a message and NULL
-// returned.
+// Unsupported node types raise XmlParseError.
 // On return *cur_ptr points at the next element node, or NULL if the siblings
 // are exhausted; callers can therefore resume iterating element children
 // directly.
@@ -87,7 +88,7 @@ static unsigned char* copy_with_xml_escape(unsigned char *dst, B_str src, int es
 //
 // Note: cur_ptr is passed by reference (pointer to pointer) so we can advance
 //       the caller's cursor past everything we consumed.
-static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr, B_str *error) {
+static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr) {
     // First pass: sum the length of all text/CDATA content and locate the
     // element node (or end of siblings) where collection stops.
     size_t text_len = 0;
@@ -102,7 +103,7 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr, B_str *error) {
             case XML_COMMENT_NODE:
                 break;
             default:
-                *error = $FORMAT("Unsupported XML node type %d", cur->type);
+                RAISE(xmlQ_XmlParseError, $FORMAT("Unsupported XML node type %d", cur->type), NULL, NULL);
                 return NULL;
         }
         cur = cur->next;
@@ -116,6 +117,8 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr, B_str *error) {
 
     // Second pass: concatenate the text/CDATA content into a single string.
     char *combined = acton_malloc_atomic(text_len + 1);
+    if (!combined)
+        RAISE_EXC(&xmlQ_allocation_failed_error);
     char *p = combined;
     for (cur = *cur_ptr; cur != stop; cur = cur->next) {
         if ((cur->type == XML_TEXT_NODE || cur->type == XML_CDATA_SECTION_NODE) && cur->content) {
@@ -136,12 +139,14 @@ static B_str collect_text_cdata_nodes(xmlNodePtr *cur_ptr, B_str *error) {
 // following it, up to its next sibling element) belongs to the parent's child
 // sequence, so it is filled in by the caller while iterating siblings.
 //
-// Returns NULL with *error set to a message if the node or one of its
-// descendants cannot be represented.
-xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
+// Raises XmlParseError if the node or one of its descendants cannot be
+// represented. libxml2 copies each attribute value with malloc. The copy is
+// kept in *value while it is converted, so that the exception handler of
+// xmlQ_decode frees it when the conversion raises.
+xmlQ_Node $NodePtr2Node(xmlNodePtr node, xmlChar *volatile *value) {
     B_SequenceD_list wit = B_SequenceD_listG_witness;
     if (node->type != XML_ELEMENT_NODE) {
-        *error = $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content);
+        RAISE(xmlQ_XmlParseError, $FORMAT("Unexpected nodetype %d, content is %s", node->type, node->content), NULL, NULL);
         return NULL;
     }
 
@@ -175,9 +180,14 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
             // Use name as-is (either unprefixed or undefined prefix already in name)
             attr_name = actStrFromCStringCopy((const char *)attr->name);
         }
-        xmlChar *value = xmlGetProp(node, attr->name);
-        B_str value_str = actStrFromCStringCopy((const char *)value);
-        xmlFree(value);
+        // The attribute exists, so xmlGetProp returns NULL only when malloc
+        // fails.
+        *value = xmlGetProp(node, attr->name);
+        if (!*value)
+            RAISE_EXC(&xmlQ_allocation_failed_error);
+        B_str value_str = actStrFromCStringCopy((const char *)*value);
+        xmlFree(*value);
+        *value = NULL;
         wit->$class->append(wit,attributes, $NEWTUPLE(2, attr_name, value_str));
         attr = attr->next;
     }
@@ -186,22 +196,16 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
     xmlNodePtr cur = node->xmlChildrenNode;
 
     // Character data before the first child element becomes this node's text.
-    B_str text = collect_text_cdata_nodes(&cur, error);
-    if (*error)
-        return NULL;
+    B_str text = collect_text_cdata_nodes(&cur);
 
     // collect_text_cdata_nodes stops only at element nodes (cur is updated), so
     // every node seen here is an element. Recurse into it, then collect the
     // character data that follows it (up to the next element) as that child's
     // tail.
     while (cur != NULL) {
-        xmlQ_Node child = $NodePtr2Node(cur, error);
-        if (child == NULL)
-            return NULL;
+        xmlQ_Node child = $NodePtr2Node(cur, value);
         cur = cur->next;
-        child->tail = collect_text_cdata_nodes(&cur, error);
-        if (*error)
-            return NULL;
+        child->tail = collect_text_cdata_nodes(&cur);
         wit->$class->append(wit, children, child);
     }
 
@@ -209,80 +213,69 @@ xmlQ_Node $NodePtr2Node(xmlNodePtr node, B_str *error) {
 }
 
 xmlQ_Node xmlQ_decode(B_str data) {
-    // Parse with a context of our own and take a failure's error from it:
-    // the context holds this parse's last diagnostic, whatever else libxml2
-    // does. For an empty document that is "Document is empty".
-    // XML_PARSE_NO_GLOBAL_ERROR keeps errors out of libxml2's global last
-    // error record, so parsing writes no state shared between threads.
-    xmlParserCtxtPtr ctxt = xmlNewParserCtxt();
-    if (!ctxt)
-        RAISE_EXC(&xmlQ_parse_error);
-    // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
-    xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
-    // Parse the str's bytes where they are instead of copying them: str
-    // memory never changes and ends in a NUL byte. libxml2 keeps the only
-    // pointer to it in memory the GC doesn't scan, so data must stay
-    // reachable until parsing is done.
-    xmlParserInputFlags flags = XML_INPUT_BUF_STATIC;
-    if (data->str[data->nbytes] == 0)
-        flags |= XML_INPUT_BUF_ZERO_TERMINATED;
-    xmlParserInputPtr input = xmlNewInputFromMemory(NULL, data->str, data->nbytes, flags);
-    xmlDocPtr doc = xmlCtxtParseDocument(ctxt, input);
-    GC_reachable_here(data);
-    if (!doc) {
-        const xmlError *err = xmlCtxtGetLastError(ctxt);
-        B_str errmsg;
-        B_int line = NULL;
-        B_int column = NULL;
-
-        if (err && err->message) {
+    // libxml2 allocates with malloc/free. ctxt, doc and value are assigned
+    // after the setjmp of $PUSH and read in the handler, thus volatile. The
+    // frees accept NULL.
+    xmlParserCtxtPtr volatile ctxt = NULL;
+    xmlDocPtr volatile doc = NULL;
+    xmlChar *volatile value = NULL;
+    xmlQ_Node res = NULL;
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
+        // Parse with a context of our own and take a failure's error from it:
+        // the context holds this parse's last diagnostic, whatever else libxml2
+        // does. For an empty document that is "Document is empty".
+        // XML_PARSE_NO_GLOBAL_ERROR keeps errors out of libxml2's global last
+        // error record, so parsing writes no state shared between threads.
+        ctxt = xmlNewParserCtxt();
+        if (!ctxt)
+            RAISE_EXC(&xmlQ_parse_error);
+        // With XML_PARSE_NOERROR we suppress printing error and warning reports to stderr
+        xmlCtxtUseOptions(ctxt, XML_PARSE_NOERROR | XML_PARSE_NO_GLOBAL_ERROR);
+        // Parse the str's bytes where they are instead of copying them: str
+        // memory never changes and ends in a NUL byte. libxml2 keeps the only
+        // pointer to it in memory the GC doesn't scan, so data must stay
+        // reachable until parsing is done.
+        xmlParserInputFlags flags = XML_INPUT_BUF_STATIC;
+        if (data->str[data->nbytes] == 0)
+            flags |= XML_INPUT_BUF_ZERO_TERMINATED;
+        xmlParserInputPtr input = xmlNewInputFromMemory(NULL, data->str, data->nbytes, flags);
+        doc = xmlCtxtParseDocument(ctxt, input);
+        GC_reachable_here(data);
+        if (!doc) {
+            const xmlError *err = xmlCtxtGetLastError(ctxt);
+            if (!err || !err->message)
+                RAISE_EXC(&xmlQ_parse_error);
+            B_int line = NULL;
+            B_int column = NULL;
             if (err->line > 0) {
                 line = toB_int(err->line);
             }
             if (err->int2 > 0) {  // int2 contains the column in libxml2
                 column = toB_int(err->int2);
             }
-
-            // Strip trailing whitespace from error message if needed
-            int orig_len = strlen(err->message);
-            int len = orig_len;
+            // Strip trailing whitespace from the error message
+            size_t len = strlen(err->message);
             while (len > 0 && isspace((unsigned char)err->message[len-1])) {
                 len--;
             }
-
-            if (len < orig_len) {
-                // Only copy if we actually stripped something
-                char msg_clean[len + 1];
-                strncpy(msg_clean, err->message, len);
-                msg_clean[len] = '\0';
-                errmsg = actStrFromCStringCopy(msg_clean);
-            } else {
-                // Use original message as-is
-                errmsg = actStrFromCStringCopy(err->message);
-            }
-        } else {
-            xmlFreeParserCtxt(ctxt);
-            RAISE_EXC(&xmlQ_parse_error);
+            RAISE(xmlQ_XmlParseError, actStrFromCStringLengthCopy(err->message, len), line, column);
         }
-        xmlFreeParserCtxt(ctxt);
-        RAISE(xmlQ_XmlParseError, errmsg, line, column);
-    }
-    xmlFreeParserCtxt(ctxt);
-    xmlNodePtr root = xmlDocGetRootElement(doc);
-    if (!root) {
+        xmlNodePtr root = xmlDocGetRootElement(doc);
+        if (!root)
+            RAISE_EXC(&xmlQ_no_root_error);
+        res = $NodePtr2Node(root, &value);
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        xmlFree(value);
         xmlFreeDoc(doc);
-        RAISE_EXC(&xmlQ_no_root_error);
+        xmlFreeParserCtxt(ctxt);
+        $RAISE(ex);
     }
-    // libxml2 allocates with malloc/free, so the document must be freed
-    // whatever the outcome. The conversion therefore returns its error instead
-    // of raising; nothing else in it raises for a document libxml2 parsed
-    // (its strings are valid UTF-8), short of running out of memory.
-    B_str error = NULL;
-    xmlQ_Node t = $NodePtr2Node(root, &error);
     xmlFreeDoc(doc);
-    if (t == NULL)
-        RAISE(xmlQ_XmlParseError, error, NULL, NULL);
-    return t;
+    xmlFreeParserCtxt(ctxt);
+    return res;
 }
 
 
