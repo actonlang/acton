@@ -121,83 +121,87 @@ def round_trip_actor[A](value: A, actor_ref: Sample) -> A:
     NotImplemented
 
 actor main(env):
-    assert constcont_step_probe()
-    assert saved_result(23) == 23
-    assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
-    assert round_trip(mixed_renamed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 282
-    assert round_trip(packed(i8(-15), 12345))() == (i8(-15), 12345)
-    assert round_trip(packed_reverse(12345, i8(-15)))() == (12345, i8(-15))
-    assert round_trip(signed_byte(i8(-15)))() == i8(-15)
-    assert round_trip(unsigned_byte(u8(241)))() == u8(241)
-    assert not round_trip(boolean(False))()
-    # Same capture layout, different code identities.
-    assert round_trip(add(10))(3) == 13
-    assert round_trip(subtract(10))(3) == 7
-    empty: pure(int) -> int = lambda x: x
-    assert round_trip(empty)(8) == 8
-    # Every unboxed scalar family must reuse its incoming box after restoration.
-    same_int: pure(int) -> int = lambda x: x
-    assert identity_probe(round_trip(same_int), 1234567)
-    same_float: pure(float) -> float = lambda x: x
-    assert identity_probe(round_trip(same_float), 1.25)
-    same_i32: pure(i32) -> i32 = lambda x: x
-    assert identity_probe(round_trip(same_i32), i32(-1234567))
-    same_i16: pure(i16) -> i16 = lambda x: x
-    assert identity_probe(round_trip(same_i16), i16(-1234))
-    same_i8: pure(i8) -> i8 = lambda x: x
-    assert identity_probe(round_trip(same_i8), i8(-123))
-    same_u64: pure(u64) -> u64 = lambda x: x
-    assert identity_probe(round_trip(same_u64), u64(18446744073709551615))
-    same_u32: pure(u32) -> u32 = lambda x: x
-    assert identity_probe(round_trip(same_u32), u32(4000000000))
-    same_u16: pure(u16) -> u16 = lambda x: x
-    assert identity_probe(round_trip(same_u16), u16(60000))
-    same_u8: pure(u8) -> u8 = lambda x: x
-    assert identity_probe(round_trip(same_u8), u8(241))
-    same_u1: pure(u1) -> u1 = lambda x: x
-    assert identity_probe(round_trip(same_u1), u1(1))
-    same_bool: pure(bool) -> bool = lambda x: x
-    assert identity_probe(round_trip(same_bool), True)
-    computed: pure(int) -> int = lambda x: x + 1
-    converted: pure(int) -> float = lambda x: float(x)
-    assert round_trip(computed)(41) == 42
-    assert round_trip(converted)(-3) == -3.0
-    first, second = repeated(42)
-    assert shared_class(first, second)
-    assert pure_adapter_probe(round_trip(first))
-    assert round_trip(first)() == 42
-    assert round_trip(second)() == 42
-    assert round_trip(capture(42))() == 42
-    assert round_trip(capture("hello"))() == "hello"
-    node = Node()
-    node.next = node
-    cyclic = cycle(node)
-    node.callback = cyclic
-    restored_cycle = round_trip(cyclic)
-    assert has_cycle(restored_cycle(), restored_cycle)
-    recovered_cycle = round_trip_alloc(cyclic)
-    assert has_cycle(recovered_cycle(), recovered_cycle)
-    values = [0]
-    original: mut(int) -> int = mutable(values, values)
-    restored: mut(int) -> int = round_trip(original)
-    assert restored(3) == 3
-    assert restored(4) == 7
-    assert exec_mut(restored, 5) == 12
-    assert exec_pure(round_trip(add(10)), 9) == 19
-    assert original(1) == 1
-    assert round_trip(procedural(20))(5) == 25
-    assert exec_proc(round_trip(procedural(20)), 7) == 27
-    sample = Sample(30)
-    callback = round_trip_actor(sample.plus, sample)
-    assert callback(6) == 36
-    triple: pure(int, str, float) -> (int, str, float) = lambda x, text, f: (x, text, f)
-    assert pure_three_probe(round_trip(triple))
-    assert round_trip(triple)(5, "abc", 2.5) == (5, "abc", 2.5)
-    restored_pair: mut(str, float) -> float = round_trip(floating(values))
-    assert mut_two_probe(restored_pair)
-    assert restored_pair("abc", 2.5) == 2.5
-    three: action(int, str, float) -> int = round_trip_actor(sample.three, sample)
-    assert action_three_probe(three)
-    assert three(5, "abc", 2.5) == 40
-    assert snapshot(7) + 1 == 8
-    env.exit(0)
+    try:
+        assert constcont_step_probe()
+        assert saved_result(23) == 23
+        assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
+        assert round_trip(mixed_renamed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 282
+        assert round_trip(packed(i8(-15), 12345))() == (i8(-15), 12345)
+        assert round_trip(packed_reverse(12345, i8(-15)))() == (12345, i8(-15))
+        assert round_trip(signed_byte(i8(-15)))() == i8(-15)
+        assert round_trip(unsigned_byte(u8(241)))() == u8(241)
+        assert not round_trip(boolean(False))()
+        # Same capture layout, different code identities.
+        assert round_trip(add(10))(3) == 13
+        assert round_trip(subtract(10))(3) == 7
+        empty: pure(int) -> int = lambda x: x
+        assert round_trip(empty)(8) == 8
+        # Every unboxed scalar family must reuse its incoming box after restoration.
+        same_int: pure(int) -> int = lambda x: x
+        assert identity_probe(round_trip(same_int), 1234567)
+        same_float: pure(float) -> float = lambda x: x
+        assert identity_probe(round_trip(same_float), 1.25)
+        same_i32: pure(i32) -> i32 = lambda x: x
+        assert identity_probe(round_trip(same_i32), i32(-1234567))
+        same_i16: pure(i16) -> i16 = lambda x: x
+        assert identity_probe(round_trip(same_i16), i16(-1234))
+        same_i8: pure(i8) -> i8 = lambda x: x
+        assert identity_probe(round_trip(same_i8), i8(-123))
+        same_u64: pure(u64) -> u64 = lambda x: x
+        assert identity_probe(round_trip(same_u64), u64(18446744073709551615))
+        same_u32: pure(u32) -> u32 = lambda x: x
+        assert identity_probe(round_trip(same_u32), u32(4000000000))
+        same_u16: pure(u16) -> u16 = lambda x: x
+        assert identity_probe(round_trip(same_u16), u16(60000))
+        same_u8: pure(u8) -> u8 = lambda x: x
+        assert identity_probe(round_trip(same_u8), u8(241))
+        same_u1: pure(u1) -> u1 = lambda x: x
+        assert identity_probe(round_trip(same_u1), u1(1))
+        same_bool: pure(bool) -> bool = lambda x: x
+        assert identity_probe(round_trip(same_bool), True)
+        computed: pure(int) -> int = lambda x: x + 1
+        converted: pure(int) -> float = lambda x: float(x)
+        assert round_trip(computed)(41) == 42
+        assert round_trip(converted)(-3) == -3.0
+        first, second = repeated(42)
+        assert shared_class(first, second)
+        assert pure_adapter_probe(round_trip(first))
+        assert round_trip(first)() == 42
+        assert round_trip(second)() == 42
+        assert round_trip(capture(42))() == 42
+        assert round_trip(capture("hello"))() == "hello"
+        node = Node()
+        node.next = node
+        cyclic = cycle(node)
+        node.callback = cyclic
+        restored_cycle = round_trip(cyclic)
+        assert has_cycle(restored_cycle(), restored_cycle)
+        recovered_cycle = round_trip_alloc(cyclic)
+        assert has_cycle(recovered_cycle(), recovered_cycle)
+        values = [0]
+        original: mut(int) -> int = mutable(values, values)
+        restored: mut(int) -> int = round_trip(original)
+        assert restored(3) == 3
+        assert restored(4) == 7
+        assert exec_mut(restored, 5) == 12
+        assert exec_pure(round_trip(add(10)), 9) == 19
+        assert original(1) == 1
+        assert round_trip(procedural(20))(5) == 25
+        assert exec_proc(round_trip(procedural(20)), 7) == 27
+        sample = Sample(30)
+        callback = round_trip_actor(sample.plus, sample)
+        assert callback(6) == 36
+        triple: pure(int, str, float) -> (int, str, float) = lambda x, text, f: (x, text, f)
+        assert pure_three_probe(round_trip(triple))
+        assert round_trip(triple)(5, "abc", 2.5) == (5, "abc", 2.5)
+        restored_pair: mut(str, float) -> float = round_trip(floating(values))
+        assert mut_two_probe(restored_pair)
+        assert restored_pair("abc", 2.5) == 2.5
+        three: action(int, str, float) -> int = round_trip_actor(sample.three, sample)
+        assert action_three_probe(three)
+        assert three(5, "abc", 2.5) == 40
+        assert snapshot(7) + 1 == 8
+    except Exception as e:
+        print("closure serialization check failed:", e)
+        await async env.exit(1)
+    await async env.exit(0)
