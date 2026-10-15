@@ -34,11 +34,12 @@ CPUs.
 The public hash (**modulePubHash**) is derived from the module's public-name
 `pubHash` values (which already include any external signature dependencies).
 The implementation hash (**moduleImplHash**) is derived from per-name
-`implHash` values; it is stored in the `.tydb` header. Normal generated
-`.c`/`.h` files are tagged with this module implementation hash as an "Acton
-impl hash". DBP generated files reuse the same tag but write a DBP codegen hash
-that also includes the selected top-level names. If the tag is missing or
-mismatched, we rerun back passes even if no other hashes changed.
+`implHash` values; it is stored in the `.tydb` header. Normal generated `.c`,
+`.h` and `.closures.inc` files are tagged with this module implementation hash
+as an "Acton impl hash". DBP generated files reuse the same tag but write a DBP
+codegen hash that also includes the selected top-level names. If the tag of any
+of the three files is missing or mismatched, we rerun back passes even if no
+other hashes changed.
 
 Hashing within a module is done per top-level name. A hashable unit is a `Def`,
 `Actor`, `Class`, `Protocol`, `Extension`, or any top-level value introduced by
@@ -166,21 +167,22 @@ the parser rejects them before type checking.
 
 Before decoding the full typed module, DBP computes a codegen hash from the
 module implementation hash and the sorted selected top-level names. If the
-existing `.c` and `.h` files already carry that hash in their generated "Acton
-impl hash" tag, the deferred job is skipped. Otherwise DBP reads the full typed
-module with `readFile`, prunes it to the selected top-level declarations, runs
-the normal back-pass chain, and writes `.c`/`.h` tagged with that DBP codegen
-hash. A later consumer change that selects a different provider name therefore
-makes the provider's DBP output stale even when the provider source did not
-change.
+existing `.c`, `.h` and `.closures.inc` files already carry that hash in their
+generated "Acton impl hash" tag, the deferred job is skipped. Otherwise DBP
+reads the full typed module with `readFile`, prunes it to the selected
+top-level declarations, runs the normal back-pass chain, and writes all three
+files tagged with that DBP codegen hash. A later consumer change that selects a
+different provider name therefore makes the provider's DBP output stale even
+when the provider source did not change.
 
 A source change always re-runs front passes for that module. Downstream modules
 compare recorded `pubDeps` against current provider hashes; any delta triggers
 re-typechecking. Separately, `implDeps` changes cause back passes and tests to
-rerun even when public hashes are stable. Missing or stale `.c`/`.h` outputs
-also force back passes so codegen can recover. To see the decisions, run
-`acton build --verbose`; it prints stale reasons and per-name hash deltas. The
-snippets below abbreviate hashes to 8 hex digits for readability.
+rerun even when public hashes are stable. Missing or stale `.c`, `.h` or
+`.closures.inc` outputs also force back passes so codegen can recover. To see
+the decisions, run `acton build --verbose`; it prints stale reasons and
+per-name hash deltas. The snippets below abbreviate hashes to 8 hex digits for
+readability.
 
 **Implementation-only change.** Before:
 
@@ -266,14 +268,16 @@ Resolving dependencies (fetching if missing)...
 
 **Codegen-only staleness.** If generated output is missing or mismatched, we
 rerun back passes even when hashes are unchanged. For example, deleting the
-outputs forces codegen to refresh:
+outputs forces codegen to refresh. This build uses `--no-dbp`. With DBP, the
+default, the deferred back job reports `DBP b: ..., generated code out of date`
+instead:
 
 ```text
-$ rm out/types/b.c out/types/b.h
-$ acton build --verbose
+$ rm out/types/proj/b.c out/types/proj/b.h out/types/proj/b.closures.inc
+$ acton build --verbose --no-dbp
 Building project in /path/proj
 Resolving dependencies (fetching if missing)...
-  Stale b: generated code out of date {impl c missing -> 7aa13f90, h missing -> 7aa13f90}
+  Stale b: generated code out of date {impl c missing -> 7aa13f90, h missing -> 7aa13f90, support missing -> 7aa13f90}
    Finished compilation of    /path/proj/b      0.003 s
 ```
 
