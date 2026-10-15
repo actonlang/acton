@@ -360,15 +360,19 @@ markers, the default is `"false"`, and `"true"` fails the build.
 
 ### Initial size
 
-When marking overflows the global mark stack, the collector drops entries
-and doubles the stack, but it cannot tell which objects the dropped entries
-stood for: it scans the whole heap again for marked objects, on one thread,
-while normal marking runs on all marker threads. One overflow can therefore
-make a collection several times longer. Range stealing makes overflows in
-the first collections more frequent. BDWGC starts the stack with as many
-entries as a heap block has bytes, 16384 with Acton's default blocks; Acton
-starts it with 4194304 entries by default, and with 1048576 on Windows. The
-size can be changed:
+When the global mark stack overflows while the collecting thread marks alone
+(from the roots, in a mark phase with one marker, or from the objects that are
+about to be finalized), the collector moves its entries to a larger stack and
+goes on, without dropping any. In a parallel mark phase with range stealing the
+global stack is a ring: the slots of entries that markers have taken are
+reused, so it overflows only when the entries waiting at one time do not fit. A
+marker that then finds no room drops its local stack, and after the phase the
+collector doubles the stack and scans the whole heap again for marked objects,
+on one thread, while normal marking runs on all marker threads. One such
+overflow can make a collection several times longer. BDWGC starts the stack
+with as many entries as a heap block has bytes, 16384 with Acton's default
+blocks; Acton starts it with 4194304 entries by default, and with 1048576 on
+Windows. The size can be changed:
 
 ```python
 build_options = {
