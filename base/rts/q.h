@@ -22,14 +22,14 @@
 struct mpmcq {
     $Actor  head;
     $Actor tail;
-    unsigned long long count;
+    uint64_t count;
     $Lock lock;
 } __attribute__((aligned(128)));
 #else
 struct mpmcq {
     $Actor head;
     $Actor tail;
-    unsigned long long count;
+    uint64_t count;
     $Lock lock;
 } __attribute__((aligned(128)));
 #endif
