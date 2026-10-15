@@ -214,6 +214,7 @@ extern void $ROOTINIT();
 extern $Actor $ROOT();
 
 struct mpmcq rqs[NUM_RQS];
+struct mpmcq lrqs[MAX_WTHREADS];
 
 $Actor root_actor = NULL;
 B_Env env_actor = NULL;
@@ -483,31 +484,18 @@ static inline void wake_loop(uv_async_t *ev) {
     uv_async_send(ev);
 }
 
-void wake_wt(int wtid) {
-    // We are sometimes optimistically called, i.e. the caller sometimes does
-    // not really know whether there is new work or not. We check and if there
-    // is not, then there is no need to wake anyone up.
-    if (!__atomic_load_n(&rqs[wtid].head, __ATOMIC_RELAXED))
-        return;
+#ifdef ACTON_THREADS
+static void wake_searcher(void);
+#endif
 
+// For SHARED_RQ, wake a parked worker to take from the injection queue or
+// steal, unless a thread already holds the searching role (wake_searcher).
+// For any other wtid, wake that worker's loop to take from its queues.
+void wake_wt(int wtid) {
 #ifdef ACTON_THREADS
     // wake up corresponding worker threads....
     if (wtid == SHARED_RQ) {
-        // When the caller has just put an actor on the shared queue,
-        // releasing the queue lock does not order that store before our
-        // reads of wt_stats[].state below: on Arm those reads may complete
-        // before the actor is visible to other threads. This fence orders
-        // the enqueue before those reads. It pairs with the fence a worker
-        // issues after storing WT_Idle and before it reads the queues for
-        // the last time (wt_work_cb()): either that worker finds the actor,
-        // or we read WT_Idle and wake it.
-        atomic_thread_fence(memory_order_seq_cst);
-        for (int i = 1; i <= num_wthreads; i++) {
-            if (WT_STAT_GET(wt_stats[i].state) == WT_Idle) {
-                uv_async_send(&wake_ev[i]);
-                return;
-            }
-        }
+        wake_searcher();
     } else {
         // thread specific queue
         wake_loop(&wake_ev[wtid]);
@@ -2023,10 +2011,11 @@ void wt_wake_cb(uv_async_t *ev) {
 }
 
 // When a worker takes an actor from a ready queue, it keeps running the
-// actor's continuations while the actor has work: up to KEEP_CONTS of them,
-// or until KEEP_NS has passed, whichever comes first. Then the actor goes to
-// the end of the queue if another actor is waiting. If no other actor is
-// waiting, the worker keeps running it.
+// actor's continuations while the actor has work and one of these holds: it
+// has run fewer than KEEP_CONTS of them and less than KEEP_NS has passed
+// since it took the actor, or no other actor waits for the worker and it is
+// not due to look at the injection queue first (look_due). Then the actor
+// goes to the end of its queue.
 #define KEEP_CONTS 8
 #define KEEP_NS (10 * 1000)
 
@@ -2123,13 +2112,214 @@ static inline void note_wait(struct wt_stat *s, int64_t d) {
     else                           { WT_STAT_ADD(s->wait_inf, 1); }
 }
 
-// Whether another actor is waiting in this worker's queue or in the shared
-// queue. Worker 0 never takes actors from the shared queue, so for worker 0
-// only its own queue counts.
+// Whether another actor waits for this worker: pinned to it or in its local
+// queue. The injection queue is left out: the worker takes from it only when
+// it is due to look (look_due) or has nothing else.
 static inline bool others_waiting(int64_t wtid) {
-    return __atomic_load_n(&rqs[wtid].head, __ATOMIC_RELAXED) != NULL
-           || (wtid != 0 && __atomic_load_n(&rqs[SHARED_RQ].head, __ATOMIC_RELAXED) != NULL);
+    return !rq_empty(&rqs[wtid]) || !rq_empty(&lrqs[wtid]);
 }
+
+#ifdef ACTON_THREADS
+// Waking workers. A worker other than the main thread that finds no work
+// parks: it announces this in wt_park and then sleeps in its libuv loop until
+// uv_async_send wakes it. Work that another worker should take is injected
+// work and any actor in a local queue: the owner of that queue runs one
+// continuation at a time, so while it runs one, its actors wait for as long as
+// that takes. For such work one parked worker is woken, unless a thread
+// already holds the searching role: the worker that holds it, or that gets it
+// from the waker that holds it, finds the work, and a searcher that finds work
+// wakes the next one if more work is visible, so a burst spreads out one
+// worker at a time.
+//
+// A worker woken by wake_searcher has the searching role: it searches until it
+// takes an actor (found_work) or parks, and park gives the role back to it if
+// work appeared and no other thread holds the role. Only one thread holds the
+// searching role at a time: wake_ctl.searching is 1 while a waker or a worker
+// holds it, and only the holder sets it back to 0. A waker sets searching from
+// 0 to 1 and hands the role to the worker it claims, or sets it back to 0 if
+// it finds none to claim, and then tries again while work is visible and a
+// worker reads as parked. A waker claims a parked worker by moving its wt_park
+// state from WT_PARKED to WT_CLAIMED, so that only this waker wakes it.
+//
+// A parking worker stores WT_PARKED in wt_park and increments parked, fences
+// (seq_cst), and then looks once more at its pinned queue and at the work that
+// other workers should take (surplus_visible), which includes its own local
+// queue. A worker that makes such work visible fences (seq_cst) after the
+// stores that do so and before it reads parked and searching: wake_searcher
+// fences on entry. So either the waker sees the parked worker and wakes it, or
+// the parking worker sees the work, or the waker reads searching as 1 and
+// leaves the work to the searching role. The thread that next sets searching
+// to 0 fences after it, in park, found_work or wake_searcher, and then sees
+// the work.
+//
+// wake_wt calls wake_searcher after an actor went to the injection queue. A
+// worker adds actors to its own local queue without waking another worker:
+// when it makes an actor ready (ENQ_ready) and when it moves actors there from
+// another queue (deq_injected, lrq_steal). It does so only between
+// continuations: it moves actors in DEQ_ready, right before it starts a
+// continuation, and it makes actors ready while it handles a continuation's
+// result, since the messages that a continuation sends wait in $outgoing until
+// then, and in libuv callbacks on its loop, which run outside its work
+// callback. When it starts its next continuation and its local queue holds
+// actors, it calls wake_searcher (offer_local), whose fence comes after every
+// store that put those actors there. Until then, a worker that parks can miss
+// them, and so can a thread that gives up the searching role, in found_work,
+// park or wake_searcher, but only when that thread's fence comes before the
+// owner's, and then the owner reads what that thread stored in parked and
+// searching. If the queue is empty, the owner neither fences nor reads parked
+// and searching, so a worker that runs one actor at a time with no actor
+// waiting behind it, as in a ring of actors that pass one message around,
+// wakes no other worker. A worker without work still sees the next actor of
+// the ring as work and can steal it before its owner does, and a searcher that
+// takes an actor can wake a parked worker for it (found_work). After a result,
+// the next continuation starts right away, unless the worker yields to its
+// loop after 20 ms. Then it starts after the libuv callbacks of one loop
+// iteration. A libuv callback delivers messages with $ASYNC, which calls
+// wake_wt with the queue that ENQ_ready returned: for an actor that went to
+// the worker's own local queue, the worker's own id, so this wakes only its
+// own loop. After timer and I/O callbacks, the work callback runs later in the
+// same loop iteration, and after close callbacks, this wake makes it run in
+// the next one without waiting for another event.
+enum { WT_AWAKE = 0, WT_PARKED = 1, WT_CLAIMED = 2 };
+
+static struct {
+    _Atomic int32_t state;
+} __attribute__((aligned(128))) wt_park[MAX_WTHREADS];
+
+static struct {
+    _Atomic int32_t parked;     // workers in WT_PARKED
+    _Atomic int32_t searching;  // 1 while a thread holds the searching role
+    _Atomic uint32_t next;      // where the next scan for parked workers starts
+} __attribute__((aligned(128))) wake_ctl;
+
+// Whether there is work for a worker other than its owner: injected, or in
+// a local queue that holds actors
+static bool surplus_visible(void) {
+    if (!rq_empty(&rqs[SHARED_RQ]))
+        return true;
+    for (int64_t v = 1; v <= num_wthreads; v++) {
+        if (!rq_empty(&lrqs[v]))
+            return true;
+    }
+    return false;
+}
+
+// Whether a worker reads as parked (WT_PARKED in wt_park)
+static bool parked_visible(void) {
+    for (int64_t i = 1; i <= num_wthreads; i++) {
+        if (atomic_load_explicit(&wt_park[i].state, memory_order_relaxed) == WT_PARKED)
+            return true;
+    }
+    return false;
+}
+
+// Wake a parked worker to search, unless none is parked or a thread already
+// holds the searching role. The caller is not parked: it is a worker in
+// WT_AWAKE or a thread that is not a worker, so it never claims itself.
+static void wake_searcher(void) {
+    atomic_thread_fence(memory_order_seq_cst);
+    while (atomic_load(&wake_ctl.searching) == 0 && atomic_load(&wake_ctl.parked) != 0) {
+        int32_t zero = 0;
+        if (!atomic_compare_exchange_strong(&wake_ctl.searching, &zero, 1))
+            return;
+        int64_t n = num_wthreads;
+        uint32_t start = atomic_fetch_add(&wake_ctl.next, 1);
+        for (int64_t k = 0; k < n; k++) {
+            int64_t i = 1 + (int64_t)((start + k) % n);
+            int32_t parked = WT_PARKED;
+            if (atomic_load_explicit(&wt_park[i].state, memory_order_relaxed) == WT_PARKED
+                && atomic_compare_exchange_strong(&wt_park[i].state, &parked, WT_CLAIMED)) {
+                atomic_fetch_sub(&wake_ctl.parked, 1);
+                uv_async_send(&wake_ev[i]);
+                return;
+            }
+        }
+        // No parked worker to claim after all. Give the searching role back.
+        // A waker that read searching as 1 while we held it left its work to
+        // us, and a worker that parked before that work was visible sleeps
+        // without it. After our fence such a worker reads as parked, so we
+        // try again while work is visible and a worker reads as parked. A
+        // worker counted in parked that no longer reads as parked is awake,
+        // or claimed by a waker, which wakes it and hands it the searching
+        // role.
+        atomic_store(&wake_ctl.searching, 0);
+        atomic_thread_fence(memory_order_seq_cst);
+        if (!surplus_visible() || !parked_visible())
+            return;
+    }
+}
+
+// Worker w starts a continuation. The actors in its local queue wait for as
+// long as that takes, so if the queue holds actors, we call wake_searcher,
+// which wakes a searcher if a worker is parked and no thread holds the
+// searching role. It fences (seq_cst) before it reads parked and searching,
+// and the fence pairs with the one in park. Only we add to our queue, so every
+// store that put the actors there comes before our fence. A worker that parks
+// increments parked, fences and then looks at every local queue
+// (surplus_visible): if its fence comes after ours, it sees the actors unless
+// a worker took them since, and if its fence comes before ours, we read it
+// counted in parked. If the queue is empty, we neither fence nor read parked
+// and searching.
+static inline void offer_local(int64_t w) {
+    if (!rq_empty(&lrqs[w]))
+        wake_searcher();
+}
+
+// Mark worker w awake, when it enters its work callback or when park finds
+// work. Return whether a waker claimed it, which gives it the searching role.
+static bool unpark(int64_t w) {
+    int32_t st = atomic_exchange(&wt_park[w].state, WT_AWAKE);
+    if (st != WT_AWAKE)
+        WT_STAT_SET(wt_stats[w].state, WT_Idle);
+    if (st == WT_CLAIMED)
+        return true;
+    if (st == WT_PARKED)
+        atomic_fetch_sub(&wake_ctl.parked, 1);
+    return false;
+}
+
+// The searching worker found work. It gives up the searching role and, if
+// more work is visible, wakes another worker. The fence pairs with the one
+// in wake_searcher, after which a waker that read searching as 1 left its
+// work to us.
+static void found_work(void) {
+    atomic_store(&wake_ctl.searching, 0);
+    atomic_thread_fence(memory_order_seq_cst);
+    if (surplus_visible())
+        wake_searcher();
+}
+
+// Worker w found no work. Announce that it parks, then look once more at
+// every queue it takes from and at the surplus that enqueuers wake for.
+// Return true if it may sleep, or false if work appeared. *searching says
+// whether w holds the searching role, before and after.
+static bool park(int64_t w, volatile bool *searching) {
+    bool was_searching = *searching;
+    if (was_searching) {
+        *searching = false;
+        atomic_store(&wake_ctl.searching, 0);
+    }
+    atomic_store(&wt_park[w].state, WT_PARKED);
+    atomic_fetch_add(&wake_ctl.parked, 1);
+    atomic_thread_fence(memory_order_seq_cst);
+    if (rq_empty(&rqs[w]) && !surplus_visible()) {
+        WT_STAT_SET(wt_stats[w].state, WT_Sleeping);
+        WT_STAT_ADD(wt_stats[w].sleeps, 1);
+        return true;
+    }
+    // Work appeared. A waker that claimed us meanwhile gave us the searching
+    // role. Otherwise, if we were the searcher, take the role back unless
+    // another thread holds it: wakers that read searching as 1 left their work
+    // to the holder, and found_work wakes the next worker for the rest.
+    if (unpark(w)) {
+        *searching = true;
+    } else if (was_searching) {
+        int32_t zero = 0;
+        *searching = atomic_compare_exchange_strong(&wake_ctl.searching, &zero, 1);
+    }
+    return false;
+}
+#endif
 
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)ev->data;
@@ -2144,12 +2334,19 @@ void wt_work_cb(uv_check_t *ev) {
     volatile $Actor current = NULL;
     volatile int64_t taken_ns = 0;
     volatile int conts = 0;
+#ifdef ACTON_THREADS
+    volatile bool searching = false;
+    if (wctx->id > 0)
+        searching = unpark(wctx->id);
+#endif
 
     // We read the time before and after each continuation. The time between
     // continuations, and from the start of this call to the first one, is
     // bookkeeping. Like the variables above, these are volatile so that they
     // keep their values when a continuation raises and we longjmp back to the
-    // setjmp of jump0 (see struct WorkerCtx).
+    // setjmp of jump0 (see struct WorkerCtx). end_ns is also when this worker
+    // last finished a continuation, or start_ns if it has finished none in
+    // this call.
     volatile int64_t start_ns = now_ns();
     volatile int64_t end_ns = start_ns;
     while (true) {
@@ -2158,47 +2355,41 @@ void wt_work_cb(uv_check_t *ev) {
             return;
         }
         bool continued = current != NULL;
-        if (!continued)
-            current = DEQ_ready(wctx->id);
-        if (!current) {
-            // Both queues looked empty, so we are about to return to the
-            // event loop and sleep until another thread wakes us. A thread
-            // that puts an actor on the shared queue then calls
-            // wake_wt(SHARED_RQ), which wakes a worker only if it reads that
-            // worker's wt_stats[].state as WT_Idle. We stored WT_Idle after
-            // our previous continuation, but DEQ_ready() reads the queue
-            // heads without taking the queue locks, so without a fence the
-            // CPU may read them before our WT_Idle store is visible to other
-            // threads. An enqueuer could then read our state as WT_Working
-            // and wake no one, while we read its queue as empty and sleep,
-            // leaving its actor queued.
-            // This fence makes our WT_Idle store visible to all threads
-            // before we read the queues again, and wake_wt() has the
-            // matching fence between the enqueue and its reads of the
-            // worker states. With both fences, at least one side sees the
-            // other's store: we find the actor here, or the enqueuer reads
-            // WT_Idle and wakes us. A worker that finds an actor on its
-            // first look skips the fence.
-            atomic_thread_fence(memory_order_seq_cst);
-            current = DEQ_ready(wctx->id);
-            if (!current)
-                return;
-        }
         if (!continued) {
-            // Putting an actor on the queue wakes one idle worker, but
-            // several actors queued in a row can all wake the same worker.
-            // So when we take an actor and more are waiting, we wake another
-            // worker. We mark ourselves as working first, so that this wake
-            // goes to a sleeping worker and not to ourselves.
+            current = DEQ_ready(wctx, end_ns);
+            if (!current) {
+#ifdef ACTON_THREADS
+                if (wctx->id > 0) {
+                    if (park(wctx->id, &searching))
+                        return;
+                    continue;
+                }
+#endif
+                // Actors pinned to this thread come with a wake of their
+                // own. A full fence before looking once more means that
+                // either the enqueuer's wake reaches us or we see its actor.
+                atomic_thread_fence(memory_order_seq_cst);
+                current = DEQ_ready(wctx, end_ns);
+                if (!current)
+                    return;
+            }
+#ifdef ACTON_THREADS
+            if (searching) {
+                searching = false;
+                found_work();
+            }
+#endif
             WT_STAT_SET(ws->state, WT_Working);
-            wake_wt(SHARED_RQ);
         }
-
         SET_SELF(current);
         volatile B_Msg m = current->B_Msg;
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
+#ifdef ACTON_THREADS
+        if (wctx->id > 0)
+            offer_local(wctx->id);
+#endif
         int64_t cont_start_ns = now_ns();
         if (!continued) {
             taken_ns = cont_start_ns;
@@ -2375,20 +2566,19 @@ void wt_work_cb(uv_check_t *ev) {
         }
         }
         // If the actor still has work, run it again here instead of putting
-        // it back on the queue. Putting it back would cost a push, a pop and
-        // a wake of another worker. It would also usually move the actor to
-        // another core, and make it wait behind every actor in the queue.
-        // KEEP_CONTS and KEEP_NS limit how long it runs while other actors
-        // wait. An actor that was pinned to another worker during this
-        // continuation, for example by set_actor_affinity, goes to that
-        // worker's queue instead.
+        // it back on the queue. Putting it back would cost a push and a pop,
+        // make the actor wait behind every actor in our queue, and could move
+        // it to another core. It runs again while one of the conditions at
+        // KEEP_CONTS holds. An actor that was pinned to another worker
+        // during this continuation, for example by set_actor_affinity, goes
+        // to that worker's queue instead.
         bool keep = false;
         if (more) {
             conts++;
             bool runs_here = current->$affinity == SHARED_RQ
                              || current->$affinity == wctx->id;
             keep = runs_here
-                   && (!others_waiting(wctx->id)
+                   && ((!others_waiting(wctx->id) && !look_due(wctx, end_ns))
                        || (conts < KEEP_CONTS && end_ns - taken_ns < KEEP_NS));
             if (!keep)
                 ENQ_ready(current, end_us);
@@ -2397,9 +2587,7 @@ void wt_work_cb(uv_check_t *ev) {
             current = NULL;
         SET_SELF(NULL);
 
-        // Stay marked as working while we keep running the same actor. We
-        // will not take anything from a queue until we are done with it, so
-        // wake_wt() should wake some other worker.
+        // The state is for statistics only: working while we hold an actor
         if (!current)
             WT_STAT_SET(ws->state, WT_Idle);
 
@@ -2427,6 +2615,8 @@ void *main_loop(void *idx) {
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     start_worker_keys(wctx);
+    wctx->inject_due = 0;
+    wctx->steal_seed = 2654435761u * (uint32_t)(wctx->id + 1);
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
@@ -2542,7 +2732,8 @@ const char* stats_to_json () {
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
 #define WT(f) WT_STAT_GET(wt_stats[i].f)
     for (unsigned int i = 1; i < NUM_THREADS; i++) {
-        uint64_t qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED);
+        uint64_t qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED)
+                        + __atomic_load_n(&lrqs[i].count, __ATOMIC_RELAXED);
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[WT(state)]);
@@ -2585,6 +2776,8 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_int(doc, j_wt, "wait_100ms",  WT(wait_100ms));
         yyjson_mut_obj_add_int(doc, j_wt, "wait_1s",     WT(wait_1s));
         yyjson_mut_obj_add_int(doc, j_wt, "wait_inf",    WT(wait_inf));
+        yyjson_mut_obj_add_int(doc, j_wt, "steal_ops",   WT(steal_ops));
+        yyjson_mut_obj_add_int(doc, j_wt, "steal_actors", WT(steal_actors));
     }
 #undef WT
 
@@ -3477,6 +3670,9 @@ int main(int argc, char **argv) {
         wt_stats[i].wait_100ms = 0;
         wt_stats[i].wait_1s = 0;
         wt_stats[i].wait_inf = 0;
+
+        wt_stats[i].steal_ops = 0;
+        wt_stats[i].steal_actors = 0;
     }
 #ifdef ACTON_DB
     init_dbc_stats();
@@ -3504,6 +3700,11 @@ int main(int argc, char **argv) {
         __atomic_store_n(&rqs[i].head, NULL, __ATOMIC_RELAXED);
         rqs[i].tail = NULL;
         __atomic_store_n(&rqs[i].count, 0, __ATOMIC_RELAXED);
+    }
+    for (int64_t i = 0; i < MAX_WTHREADS; i++) {
+        __atomic_store_n(&lrqs[i].head, NULL, __ATOMIC_RELAXED);
+        lrqs[i].tail = NULL;
+        __atomic_store_n(&lrqs[i].count, 0, __ATOMIC_RELAXED);
     }
 
 #if defined(_WIN32) || defined(_WIN64)

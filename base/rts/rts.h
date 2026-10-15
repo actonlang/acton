@@ -98,16 +98,19 @@ struct wt_stat {
     uint64_t wait_100ms;  // bucket for <100ms
     uint64_t wait_1s;     // bucket for <1s
     uint64_t wait_inf;    // bucket for <+Inf
+    // Actors this worker took from other workers' local queues
+    uint64_t steal_ops;   // steals by this worker while it had no work
+    uint64_t steal_actors;
 } __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
 // Only the worker that an entry belongs to writes it. Other threads read
 // entries while the workers run (stats_to_json on the monitor threads,
-// rts_stats in acton.rts, and wake_wt for the state), so once the workers run,
-// every write and every read by another thread of a field that the workers
-// write is a relaxed atomic load or store. idx and key are written only before
-// the workers start. The worker adds with a relaxed load and a relaxed store:
-// it is the only writer, so it needs no atomic read-modify-write.
+// rts_stats in acton.rts), so once the workers run, every write and every
+// read by another thread of a field that the workers write is a relaxed
+// atomic load or store. idx and key are written only before the workers
+// start. The worker adds with a relaxed load and a relaxed store: it is the
+// only writer, so it needs no atomic read-modify-write.
 #define WT_STAT_ADD(f, d) \
     __atomic_store_n(&(f), __atomic_load_n(&(f), __ATOMIC_RELAXED) + (d), __ATOMIC_RELAXED)
 #define WT_STAT_SET(f, v) __atomic_store_n(&(f), (v), __ATOMIC_RELAXED)
@@ -297,6 +300,10 @@ struct WorkerCtx {
     // it (see get_next_key())
     int64_t key_next;
     int64_t key_step;
+    // When this worker next looks at the injection queue first (look_due),
+    // and the state of its random choice of a worker to steal from
+    int64_t inject_due;
+    uint32_t steal_seed;
     // The worker loop's exception frame, at the bottom of the frame stack.
     // The first continuation on the worker pushes it, with a setjmp in that
     // call of wt_work_cb(). It stays pushed, and a raise that no try catches
