@@ -13,20 +13,79 @@ static struct B_ValueError stdQ_reQ_split_char_error =
 static struct B_MemoryError stdQ_reQ_allocation_failed_error =
     STATIC_EXCEPTION(B_MemoryError, "memory allocation failed");
 
-// pcre2 allocates the compiled pattern, the match data and the backtracking
-// frames of pcre2_match (at least 20 KiB per call with the default heap limit)
-// with malloc, its default allocator, which is selected by compiling without a
-// compile context. The match data takes its allocator from the pattern. None
-// of pcre2's memory is on the GC heap. _match frees all of it before it
-// returns, and an exception handler pushed before the first allocation frees
-// it when anything raises in between: a pcre2 error, a group that starts or
-// ends inside a character, or a failed allocation while the result is built.
+// The compiled code of a Pattern is pointer-free memory on the GC heap.
+// _compile compiles through a general context that allocates with
+// acton_malloc_atomic. The code holds no pointer to GC memory: its memory
+// control fields are the two functions below, its character tables are
+// pcre2's static default ones, and there is no JIT code. The Pattern keeps
+// the code reachable through _code, so the GC frees it with the Pattern, and
+// pcre2_code_free is never called. pcre2_compile allocates temporaries only
+// for large patterns, through the same context, and frees them with
+// acton_free.
 //
-// The match data and the frames point into the bytes of the subject str. The
-// GC does not scan malloc memory, but arg_text keeps those bytes reachable
-// for the whole call, and pcre2's memory does not outlive the call.
+// _match, behind the module function match, compiles its pattern for the one
+// call with malloc, pcre2's default allocator, which is selected by compiling
+// without a compile context. It frees the code before it returns, and an
+// exception handler pushed after compiling frees it when the match raises.
+//
+// pcre2 does not change compiled code while it matches, so actors on several
+// threads can match with one Pattern at once.
+//
+// The match data and the backtracking frames of pcre2_match (at least 20 KiB
+// per call with the default heap limit) are on malloc:
+// pcre2_match_data_create without a general context uses malloc for both,
+// while pcre2_match_data_create_from_pattern would take the allocator of the
+// code. stdQ_reQ_match_code frees them before it returns, and an exception handler
+// pushed before they are allocated frees them when anything raises in
+// between: a pcre2 error, a group that starts or ends inside a character, or
+// a failed allocation while the result is built.
+//
+// The match data and the frames point into the bytes of the subject str and
+// into the code. The GC does not scan malloc memory, but arg_text keeps the
+// subject's bytes reachable, and GC_reachable_here(self) keeps the Pattern,
+// and with it the code, reachable until pcre2's memory is freed.
 
 void stdQ_reQ___ext_init__() {
+}
+
+static void *stdQ_reQ_code_malloc(size_t size, void *data) {
+    return acton_malloc_atomic(size);
+}
+
+static void stdQ_reQ_code_free(void *ptr, void *data) {
+    acton_free(ptr);
+}
+
+static void stdQ_reQ_raise_compile_error(int errornumber, PCRE2_SIZE erroroffset) {
+    PCRE2_UCHAR buffer[256];
+    pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
+    char errmsg[1024] = "regex compilation failed at offset ";
+    snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
+    RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
+}
+
+uint64_t stdQ_reQ__compile (B_str arg_pattern) {
+    pcre2_general_context *gcontext = pcre2_general_context_create(stdQ_reQ_code_malloc, stdQ_reQ_code_free, NULL);
+    if (gcontext == NULL)
+        RAISE_EXC(&stdQ_reQ_allocation_failed_error);
+    pcre2_compile_context *ccontext = pcre2_compile_context_create(gcontext);
+    if (ccontext == NULL)
+        RAISE_EXC(&stdQ_reQ_allocation_failed_error);
+    int errornumber;
+    PCRE2_SIZE erroroffset;
+    pcre2_code *re = pcre2_compile(
+        (PCRE2_SPTR)fromB_str(arg_pattern),
+        arg_pattern->nbytes,
+        PCRE2_UTF,
+        &errornumber,
+        &erroroffset,
+        ccontext
+    );
+    pcre2_compile_context_free(ccontext);
+    pcre2_general_context_free(gcontext);
+    if (re == NULL)
+        stdQ_reQ_raise_compile_error(errornumber, erroroffset);
+    return (uint64_t)(uintptr_t)re;
 }
 
 // An offset where a substring of valid UTF-8 text may start or end. Matched
@@ -36,65 +95,49 @@ static bool stdQ_reQ_char_boundary(PCRE2_SPTR text, size_t text_length, PCRE2_SI
     return offset == text_length || (text[offset] & 0xC0) != 0x80;
 }
 
-// TODO: use u64 instead of int for arg_start_pos
-stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
+// The byte offset of start_pos, a code point index, in arg_text.
+// TODO: use u64 instead of int to eradicate possibility of < 0
+static PCRE2_SIZE stdQ_reQ_start_offset(B_str arg_text, int64_t arg_start_pos) {
+    if (arg_start_pos < 0) {
+        RAISE_EXC(&stdQ_reQ_negative_start_error);
+    }
+    if (arg_start_pos > arg_text->nchars) {
+        RAISE_EXC(&stdQ_reQ_start_too_large_error);
+    }
+    return (PCRE2_SIZE)$byte_no(arg_text, arg_start_pos);
+}
+
+// Match the compiled code re against arg_text from start_offset, a byte
+// offset. arg_pattern is the pattern of the returned Match.
+static stdQ_reQ_Match stdQ_reQ_match_code(pcre2_code *re, B_str arg_pattern, B_str arg_text, PCRE2_SIZE start_offset) {
     B_Hashable hwit = (B_Hashable)B_HashableD_strG_witness;
     B_SequenceD_list swit = B_SequenceD_listG_witness;
     B_list groups = B_listG_new(NULL, NULL);
     B_dict named_groups = $NEW(B_dict, hwit, NULL, NULL);
 
-    PCRE2_SPTR pattern = (PCRE2_SPTR)fromB_str(arg_pattern);
     PCRE2_SPTR text = (PCRE2_SPTR)fromB_str(arg_text);
     size_t text_length = arg_text->nbytes;
-    // TODO: use u64 instead of int to eradicate possibility of < 0
 
-    // Validate start_pos
-    int64_t start_offset = arg_start_pos;
-    if (start_offset < 0) {
-        RAISE_EXC(&stdQ_reQ_negative_start_error);
-    }
-    if (start_offset > arg_text->nchars) {
-        RAISE_EXC(&stdQ_reQ_start_too_large_error);
-    }
-    // start_pos is a code point index; PCRE2 takes a byte offset
-    start_offset = $byte_no(arg_text, start_offset);
+    uint32_t capture_count;
+    pcre2_pattern_info(re, PCRE2_INFO_CAPTURECOUNT, &capture_count);
 
     // The handler is pushed before pcre2 allocates anything, so that every
     // raise after the first allocation lands in it. Its frame is a local of
-    // _match, which pops it with $DROP or $POP before it returns or raises
-    // again. re and match_data are assigned after the setjmp of $PUSH and read
-    // in the handler, thus volatile.
-    pcre2_code *volatile re = NULL;
+    // stdQ_reQ_match_code, which pops it with $DROP or $POP before it returns or
+    // raises again. match_data is assigned after the setjmp of $PUSH and read in the
+    // handler, thus volatile.
     pcre2_match_data *volatile match_data = NULL;
     stdQ_reQ_Match result = (stdQ_reQ_Match)B_None;
     struct JumpBuf frame;
     if ($PUSH(&frame)) {
-        int errornumber;
-        PCRE2_SIZE erroroffset;
-        re = pcre2_compile(
-            pattern,
-            arg_pattern->nbytes,
-            PCRE2_UTF,
-            &errornumber,
-            &erroroffset,
-            NULL
-        );
-        if (re == NULL) {
-            PCRE2_UCHAR buffer[256];
-            pcre2_get_error_message(errornumber, buffer, sizeof(buffer));
-            char errmsg[1024] = "regex compilation failed at offset ";
-            snprintf(errmsg + strlen(errmsg), sizeof(errmsg) - strlen(errmsg), "%d: %s", (int)erroroffset, buffer);
-            RAISE(B_ValueError, actStrFromCStringCopy(errmsg));
-        }
-
-        match_data = pcre2_match_data_create_from_pattern(re, NULL);
+        match_data = pcre2_match_data_create(capture_count + 1, NULL);
         if (match_data == NULL)
             RAISE_EXC(&stdQ_reQ_allocation_failed_error);
         int rc = pcre2_match(
             re,
             text,
             text_length,
-            (PCRE2_SIZE)start_offset,
+            start_offset,
             0,
             match_data,
             NULL
@@ -179,13 +222,50 @@ stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_s
         $DROP();
     } else {
         B_BaseException ex = $POP();
-        // Both free functions do nothing given NULL.
+        // pcre2_match_data_free does nothing given NULL.
         pcre2_match_data_free(match_data);
-        pcre2_code_free(re);
         $RAISE(ex);
     }
 
     pcre2_match_data_free(match_data);
+    return result;
+}
+
+stdQ_reQ_Match stdQ_reQ_PatternD__match (stdQ_reQ_Pattern self, B_str arg_text, int64_t arg_start_pos) {
+    PCRE2_SIZE start_offset = stdQ_reQ_start_offset(arg_text, arg_start_pos);
+    stdQ_reQ_Match result = stdQ_reQ_match_code((pcre2_code *)(uintptr_t)self->_code, self->pattern, arg_text, start_offset);
+    GC_reachable_here(self);
+    return result;
+}
+
+stdQ_reQ_Match stdQ_reQ__match (B_str arg_pattern, B_str arg_text, int64_t arg_start_pos) {
+    PCRE2_SIZE start_offset = stdQ_reQ_start_offset(arg_text, arg_start_pos);
+    int errornumber;
+    PCRE2_SIZE erroroffset;
+    pcre2_code *re = pcre2_compile(
+        (PCRE2_SPTR)fromB_str(arg_pattern),
+        arg_pattern->nbytes,
+        PCRE2_UTF,
+        &errornumber,
+        &erroroffset,
+        NULL
+    );
+    if (re == NULL)
+        stdQ_reQ_raise_compile_error(errornumber, erroroffset);
+
+    // The handler frees the code when the match raises. Its frame is a local
+    // of _match, which pops it with $DROP or $POP before it returns or raises
+    // again.
+    stdQ_reQ_Match result;
+    struct JumpBuf frame;
+    if ($PUSH(&frame)) {
+        result = stdQ_reQ_match_code(re, arg_pattern, arg_text, start_offset);
+        $DROP();
+    } else {
+        B_BaseException ex = $POP();
+        pcre2_code_free(re);
+        $RAISE(ex);
+    }
     pcre2_code_free(re);
     return result;
 }

@@ -301,3 +301,214 @@ def _test_match_errors():
                 testing.assertEqual(error.error_message, expected)
             else:
                 testing.error("Expected RuntimeError: " + expected)
+
+def _test_match_start_pos_before_pattern():
+    """re.match checks start_pos before it compiles the pattern"""
+    for f in [lambda: re.match("(", "a", -1) is not None, lambda: std_re.match("(", "a", -1) is not None]:
+        try:
+            f()
+        except ValueError as error:
+            testing.assertEqual(error.error_message, "PCRE2 matching failed: negative start_pos")
+        else:
+            testing.error("Expected ValueError for a negative start_pos")
+
+def _desc(m: ?re.Match) -> str:
+    if m is not None:
+        return m.pattern + " | " + m.string + " | " + str(m.start_pos) + " | " + str(m.end_pos) + " | " + str(m.group) + " | " + str(m.named)
+    return "None"
+
+def _std_desc(m: ?std_re.Match) -> str:
+    if m is not None:
+        return m.pattern + " | " + m.string + " | " + str(m.start_pos) + " | " + str(m.end_pos) + " | " + str(m.group) + " | " + str(m.named)
+    return "None"
+
+_compile_cases = [
+    ("foo[a-z]+", "åbc123 foobar åbc123", 0),
+    ("foo((Z?)[A-Z]+)", "åbc123 fooBAR åbc123", 0),
+    ("(?P<mypattern>foo((?P<inner>AAA)|[a-z]+))", "åbc123 foobar åbc123", 0),
+    ("([0-9]+).*(?P<mypattern>foo[a-z]+) *(?P<myotherpattern>bar[A-Za-z0-9]+)", "åbc123 foobar barEX4MPLE åbc123", 0),
+    ("def", "åäö def ghi def", 5),
+    ("x*", "éa", 1),
+    ("(a)|(b)", "xb", 0),
+    ("nomatch", "åäö def ghi", 0),
+    ("", "abc", 3),
+]
+
+def _test_compile_match():
+    """A compiled pattern matches as the module functions do"""
+    for c in _compile_cases:
+        p = re.compile(c.0)
+        sp = std_re.compile(c.0)
+        testing.assertEqual(p.pattern, c.0)
+        expected = _desc(re.match(c.0, c.1, c.2))
+        testing.assertEqual(_desc(p.match(c.1, c.2)), expected)
+        testing.assertEqual(_std_desc(sp.match(c.1, c.2)), expected)
+        testing.assertEqual(_std_desc(std_re.match(c.0, c.1, c.2)), expected)
+        if c.2 == 0:
+            testing.assertEqual(_desc(p.match(c.1)), expected)
+            testing.assertEqual(_std_desc(sp.match(c.1)), expected)
+
+def _test_compile_matches_split():
+    """matches and split of a compiled pattern give the module functions' results"""
+    cases = [
+        (r"foo[0-9]+", "åbc123 foo1 foo2 foo3 åbc123 foo4"),
+        ("x*", "éa"),
+        (",", "a,b,,c"),
+        ("(,)", "a,b,c"),
+        ("(?P<sep>[;,])", "a;b,c"),
+        ("^", "abc"),
+        ("q", "abc"),
+    ]
+    for c in cases:
+        p = re.compile(c.0)
+        sp = std_re.compile(c.0)
+        expected = [_desc(m) for m in re.matches(c.0, c.1)]
+        testing.assertEqual([_desc(m) for m in p.matches(c.1)], expected)
+        testing.assertEqual([_std_desc(m) for m in sp.matches(c.1)], expected)
+        for max_split in [0, 1, 2]:
+            parts = re.split(c.0, c.1, max_split)
+            testing.assertEqual(p.split(c.1, max_split), parts)
+            testing.assertEqual(sp.split(c.1, max_split), parts)
+            testing.assertEqual(std_re.split(c.0, c.1, max_split), parts)
+    testing.assertEqual(re.compile(",").split("a,b"), ["a", "b"])
+
+def _test_compile_reuse():
+    """One compiled pattern matches many subjects"""
+    p = re.compile(r"(?P<y>[0-9]{4})-(?P<m>[0-9]{2})")
+    sp = std_re.compile(r"(?P<y>[0-9]{4})-(?P<m>[0-9]{2})")
+    for i in range(10000):
+        y = str(1000 + i % 9000)
+        mo = str(10 + i % 90)
+        s = "date " + y + "-" + mo + " é"
+        m = p.match(s)
+        testing.assertNotNone(m)
+        if m is not None:
+            testing.assertEqual(m.group, [y + "-" + mo, y, mo])
+            testing.assertEqual(m.named, {"y": y, "m": mo})
+            testing.assertEqual(m.start_pos, 5)
+        n = sp.match(s)
+        testing.assertNotNone(n)
+        if n is not None:
+            testing.assertEqual(n.named, {"y": y, "m": mo})
+        testing.assertNone(p.match("date " + y + "/" + mo))
+
+def _test_compile_survives_collections():
+    """A Pattern keeps its code while many other Patterns are collected"""
+    p = re.compile("(b+)c")
+    sp = std_re.compile("(b+)c")
+    for i in range(20000):
+        q = re.compile("x" + str(i) + "(y+)z")
+        m = q.match("ax" + str(i) + "yyz")
+        testing.assertNotNone(m)
+        if m is not None:
+            testing.assertEqual(m.group[1], "yy")
+        if i % 1000 == 0:
+            n = p.match("abbbc")
+            testing.assertNotNone(n)
+            if n is not None:
+                testing.assertEqual(n.group, ["bbbc", "bbb"])
+            testing.assertEqual(_std_desc(sp.match("abbbc")), _desc(n))
+
+def _test_compile_many_groups():
+    """A compiled pattern with 300 groups, 30 of them named, matches twice"""
+    pattern = "(a)" * 270 + "".join(["(?P<g" + str(i) + ">b)" for i in range(30)])
+    subject = "x" + "a" * 270 + "b" * 30
+    p = re.compile(pattern)
+    sp = std_re.compile(pattern)
+    for _ in range(2):
+        m = p.match(subject)
+        testing.assertNotNone(m, "no match with 300 groups")
+        if m is not None:
+            testing.assertEqual(len(m.group), 301)
+            testing.assertEqual(m.group[300], "b")
+            testing.assertEqual(m.named["g29"], "b")
+        n = sp.match(subject)
+        testing.assertNotNone(n, "no match with 300 groups")
+        if n is not None:
+            testing.assertEqual(len(n.named), 30)
+    testing.assertNone(p.match("x"))
+
+def _test_compile_errors():
+    """re.compile raises ValueError for an invalid pattern. A compiled
+    pattern raises the errors of the module functions."""
+    s = "a" * 1000 + "x"
+    p = re.compile("a")
+    sp = std_re.compile("a")
+    limit_match = re.compile("(*LIMIT_MATCH=10)(.)*x")
+    std_limit_heap = std_re.compile("(*LIMIT_HEAP=1)(.)*x")
+    split_char = re.compile(r"a\C")
+    std_split_char = std_re.compile(r"(\C)\C")
+    value_errors = [
+        (lambda: re.compile("(") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: std_re.compile("(") is not None, "regex compilation failed at offset 1: missing closing parenthesis"),
+        (lambda: p.match("abc", -1) is not None, "PCRE2 matching failed: negative start_pos"),
+        (lambda: sp.match("abc", 4) is not None, "start position is greater than string length"),
+        (lambda: split_char.match("aé") is not None, "matched substring starts or ends inside a character"),
+        (lambda: std_split_char.match("é") is not None, "matched substring starts or ends inside a character"),
+        (lambda: len(re.compile("").split("abc")) > 0, "empty pattern"),
+        (lambda: len(std_re.compile("").split("abc")) > 0, "empty pattern"),
+    ]
+    for f, expected in value_errors:
+        for _ in range(100):
+            try:
+                f()
+            except ValueError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected ValueError: " + expected)
+    runtime_errors = [
+        (lambda: limit_match.match(s) is not None, "PCRE2 matching error: -47"),
+        (lambda: std_limit_heap.match(s) is not None, "PCRE2 matching error: -63"),
+    ]
+    for f, expected in runtime_errors:
+        for _ in range(100):
+            try:
+                f()
+            except RuntimeError as error:
+                testing.assertEqual(error.error_message, expected)
+            else:
+                testing.error("Expected RuntimeError: " + expected)
+    # The patterns still match after their errors
+    testing.assertEqual(_desc(p.match("xa")), _desc(re.match("a", "xa")))
+    testing.assertNotNone(split_char.match("xab"))
+
+actor _PatternUser(p: re.Pattern, sp: std_re.Pattern, first: int, n: int, done: action(int) -> None):
+    """Match n subjects with patterns shared with other actors, count wrong results"""
+    def run():
+        wrong = 0
+        for i in range(first, first + n):
+            s = "id " + str(i) + " é" + str(i % 7)
+            m = p.match(s)
+            if m is not None:
+                if m.named["num"] != str(i) or m.group[2] != str(i % 7):
+                    wrong += 1
+            else:
+                wrong += 1
+            k = sp.match(s)
+            if k is not None:
+                if k.named["num"] != str(i) or k.end_pos != len(s):
+                    wrong += 1
+            else:
+                wrong += 1
+        done(wrong)
+
+actor _test_compile_shared_between_actors(t: testing.AsyncT):
+    """Actors on several threads match with the same Patterns at once"""
+    p = re.compile(r"id (?P<num>[0-9]+) é([0-9])")
+    sp = std_re.compile(r"id (?P<num>[0-9]+) é([0-9])$")
+    workers = 8
+    var pending = workers
+    var wrong = 0
+
+    def done(w: int):
+        pending -= 1
+        wrong += w
+        if pending == 0:
+            if wrong == 0:
+                t.success()
+            else:
+                t.failure(AssertionError(str(wrong) + " matches gave a wrong result"))
+
+    for i in range(workers):
+        u = _PatternUser(p, sp, i * 3000, 3000, done)
+        u.run()
