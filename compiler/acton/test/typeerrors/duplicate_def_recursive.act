@@ -1,0 +1,9 @@
+def f(x: int) -> int:
+    return f(x)
+
+def f(x: int) -> str:
+    return str(x)
+
+actor main(env):
+    print(f(1))
+    env.exit(0)

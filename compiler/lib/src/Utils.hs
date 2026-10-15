@@ -17,6 +17,7 @@ module Utils(module Utils, module SrcLocation, module Data.List, module Data.May
 import Debug.Trace
 import Data.List hiding ((\\))
 import Data.Maybe
+import qualified Data.Map as Map
 import qualified Data.Binary
 import Data.Persist (Persist)
 import qualified Control.Exception
@@ -75,9 +76,13 @@ instance (HasLoc a, HasLoc b) => HasLoc (a,b) where
 
 xs \\ ys                        = [ x | x <- xs, x `notElem` ys ]       -- remove *all* occurrences of xs elements from ys
 
-duplicates []                   = []
-duplicates (x:xs)               = eqs ++ duplicates others
-  where (eqs,others)            = partition (==x) xs
+-- Every occurrence of an element after its first, grouped per element in order of first occurrence
+duplicates                      :: Ord a => [a] -> [a]
+duplicates xs                   = concat [ reverse (later Map.! x) | x <- reverse firsts ]
+  where (firsts,later)          = foldl' add ([], Map.empty) xs
+        add (fs,m) x
+          | Map.member x m      = (fs, Map.adjust (x:) x m)
+          | otherwise           = (x:fs, Map.insert x [] m)
 
 chunksOf                        :: Int -> [a] -> [[a]]
 chunksOf _ []                   = []
