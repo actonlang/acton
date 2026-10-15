@@ -1962,13 +1962,15 @@ p34_removed_import_module = testCase "34-removed imported module fails before Zi
     , "    env.exit(0)"
     ]
   _ <- buildOutIn proj
+  supportExists <- artifactExists (outA ++ ".closures.inc")
+  assertBool "expected closure support for a before deleting it" supportExists
   removeFile (src </> "a.act")
   res@(ec, out) <- runActonIn proj ["build", "--color", "never", "--verbose"]
   assertExitFailure "build after deleting imported module" 1 res
   mapM_ (\ext -> do
     exists <- artifactExists (outA ++ ext)
     assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-    [".tydb", ".c", ".h"]
+    [".tydb", ".c", ".h", ".closures.inc"]
   assertBool "expected missing import diagnostic"
     (T.isInfixOf "Type interface file not found or unreadable for incremental_cases.a" out)
   assertBool "did not expect Zig build to run" (not (T.isInfixOf "zigCmd:" out))
@@ -2323,7 +2325,7 @@ p41_stale_header_missing_import_reparses_source =
     mapM_ (\ext -> do
       exists <- artifactExists (outA ++ ext)
       assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-      [".tydb", ".c", ".h"]
+      [".tydb", ".c", ".h", ".closures.inc"]
     assertBool "expected b.act to type check after stale header reparse"
       (typechecked out modB)
     assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
@@ -2407,7 +2409,7 @@ p43_equal_act_ty_mtime_hashes_source =
     mapM_ (\ext -> do
       exists <- artifactExists (outA ++ ext)
       assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-      [".tydb", ".c", ".h"]
+      [".tydb", ".c", ".h", ".closures.inc"]
     assertBool "expected b.act to type check after equal-mtime hash check"
       (typechecked out modB)
     assertBool ("did not expect stale import diagnostic\n" ++ T.unpack out)
