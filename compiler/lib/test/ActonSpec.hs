@@ -472,6 +472,46 @@ main = do
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
+    describe "Names" $ do
+      it "orders names as the <=-based instance did" $ do
+        let plain = S.Name (Loc 1 2)
+            names =
+              [ plain "", plain "a", plain "ab", plain "abc", plain "b"
+              , plain "_breaker1", plain "_breaker10"
+              , plain "junos_conf_root__configuration__system"
+              , plain "junos_conf_root__configuration__system__login"
+              , plain "junos_conf_root__configuration__systen"
+              , plain "\220n\239code", plain "x\0y", S.Name NoLoc "a"
+              , S.Derived (plain "a") (plain "b"), S.Derived (plain "a") (plain "c")
+              , S.Derived (plain "b") (plain "a")
+              , S.Derived (S.Derived (plain "a") (plain "b")) (plain "c")
+              , S.Derived (plain "a") (S.Internal S.Witness "" 1)
+              , S.Internal S.Witness "x" 1, S.Internal S.Witness "x" 2
+              , S.Internal S.Witness "y" 0, S.Internal S.Globvar "x" 1
+              , S.Internal S.BoxPass "" 0
+              ]
+            -- The previous instance defined only <=, so compare was the
+            -- class default built from == and <=.
+            oldLe a b = case (a, b) of
+              (S.Name _ s1, S.Name _ s2) -> s1 <= s2
+              (S.Derived n1 s1, S.Derived n2 s2) -> case oldCompare n1 n2 of
+                LT -> True
+                EQ -> oldLe s1 s2
+                GT -> False
+              (S.Internal p1 s1 i1, S.Internal p2 s2 i2) -> (p1, s1, i1) <= (p2, s2, i2)
+              (S.Name{}, S.Derived{}) -> True
+              (S.Name{}, S.Internal{}) -> True
+              (S.Derived{}, S.Internal{}) -> True
+              _ -> False
+            oldCompare a b
+              | a == b = EQ
+              | oldLe a b = LT
+              | otherwise = GT
+            mods = [ S.ModName ns | ns <- [ [], [plain "a"], [plain "a", plain "b"], [plain "ab"]
+                                          , [plain "b"], [S.Derived (plain "a") (plain "b")] ] ]
+        [ (a, b, compare a b) | a <- names, b <- names, compare a b /= oldCompare a b ] `shouldBe` []
+        [ (a, b) | a <- mods, b <- mods, compare a b /= compare (S.modPath a) (S.modPath b) ] `shouldBe` []
+
     describe "Hashing" $ do
       it "keeps public hashes independent of docs and source locations" $ do
         let infoA = I.NDef (S.TSchema (Loc 1 3) [] (locatedType (Loc 4 5))) S.NoDec (Just "old docs")

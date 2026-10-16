@@ -175,8 +175,9 @@ modPath (ModName ns) = map nstr ns
 
 modCat (ModName ns) n = ModName (ns++[n])
 
+-- rawstr gives the same strings as nstr without copying plain names.
 instance Ord ModName where
-    compare a b = compare (modPath a) (modPath b)
+    compare (ModName a) (ModName b) = compare (map rawstr a) (map rawstr b)
 
 instance Data.Hashable.Hashable ModName where
     hashWithSalt s (ModName ns) = Data.Hashable.hashWithSalt s ns
@@ -770,14 +771,23 @@ instance Eq Name where
     Internal p1 s1 i1   == Internal p2 s2 i2    = p1 == p2 && s1 == s2 && i1 == i2
     _                   == _                    = False
 
+-- One walk over the strings per comparison.  Generated modules have long
+-- names that share most of their prefix, so Map and Set operations keyed by
+-- Name spend their time here.
 instance Ord Name where
-    Name _ s1           <= Name _ s2            = s1 <= s2
-    Derived n1 s1       <= Derived n2 s2        = (n1,s1) <= (n2,s2)
-    Internal p1 s1 i1   <= Internal p2 s2 i2    = (p1,s1,i1) <= (p2,s2,i2)
-    Name{}              <= Derived{}            = True
-    Name{}              <= Internal{}           = True
-    Derived{}           <= Internal{}           = True
-    _                   <= _                    = False
+    compare (Name _ s1) (Name _ s2)                 = compare s1 s2
+    compare (Derived n1 s1) (Derived n2 s2)         = case compare n1 n2 of
+                                                        EQ -> compare s1 s2
+                                                        o  -> o
+    compare (Internal p1 s1 i1) (Internal p2 s2 i2) = case compare p1 p2 of
+                                                        EQ -> case compare s1 s2 of
+                                                                EQ -> compare i1 i2
+                                                                o  -> o
+                                                        o  -> o
+    compare Name{} _                                = LT
+    compare _ Name{}                                = GT
+    compare Derived{} Internal{}                    = LT
+    compare Internal{} Derived{}                    = GT
 
 instance Eq Except where
     ExceptAll _         ==  ExceptAll _         = True
