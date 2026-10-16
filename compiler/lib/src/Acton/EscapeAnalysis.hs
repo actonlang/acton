@@ -6,9 +6,10 @@
 -- within that module are connected when their target is unambiguous; direct
 -- imported calls can use interface summaries.  Dynamically dispatched calls
 -- remain conservative unless they have one of the explicitly checked
--- contracts below.  The summaries are still an internal experiment, but the
--- Hashable.hash non-escape contract is enforced because B_hash relies on it
--- for automatic hasher storage.
+-- contracts below. General analysis is an opt-in experiment. Normal builds
+-- use checkHashableModule instead: it checks only Hashable.hash bodies, with
+-- no interprocedural graph or imported parameter summaries, because B_hash
+-- relies on their non-escape contract for automatic hasher storage.
 
 module Acton.EscapeAnalysis
     ( Escape(..)
@@ -18,6 +19,7 @@ module Acton.EscapeAnalysis
     , EscapeReport(..)
     , analyzeModule
     , analyzeModuleWithImports
+    , checkHashableModule
     , interfaceSummaries
     , renderEscapeReport
     ) where
@@ -117,21 +119,35 @@ analyzeModule = analyzeModuleWithImports (const Nothing)
 -- | Analyze a module using summaries for direct calls into imported modules.
 -- A missing summary means unknown and is therefore handled conservatively.
 analyzeModuleWithImports :: (QName -> Maybe [(Name, Escape)]) -> Module -> EscapeReport
-analyzeModuleWithImports imported m = EscapeReport summaries violations nodeCount edgeCount
+analyzeModuleWithImports imported m = reportFromFacts functions facts
+  where
+    functions = collectFunctions (modname m == mBuiltin) [] [] (mbody m)
+    callees = uniqueFunctions functions
+    moduleTypes = moduleWitnessTypes (mbody m)
+    facts = execState (mapM_ (scanFunction moduleTypes callees imported) functions) emptyFacts
+
+-- | The mandatory hashing check is deliberately intraprocedural. Only
+-- Hashable.hash bodies are scanned; passing a hasher to an arbitrary helper
+-- is conservative even when general escape analysis could prove it safe.
+-- Local aliases are tracked, and resolved Hashable.hash forwarding and the
+-- builtin hasher operations retain their checked contracts.
+checkHashableModule :: Module -> EscapeReport
+checkHashableModule m = reportFromFacts functions facts
+  where
+    functions = collectHashFunctions (modname m == mBuiltin) [] [] (mbody m)
+    -- This shared metadata is needed for witnesses injected into a different
+    -- declaration of a recursive group. It stays unevaluated when there are
+    -- no hash implementations, so ordinary function bodies are not visited.
+    moduleTypes = moduleWitnessTypes (mbody m)
+    facts = execState (mapM_ (scanFunction moduleTypes M.empty (const Nothing)) functions) emptyFacts
+
+reportFromFacts :: [FunctionInfo] -> Facts -> EscapeReport
+reportFromFacts functions facts = EscapeReport summaries violations nodeCount edgeCount
                                                     (factImportedSummarized facts)
                                                     (factImportedUnknown facts)
                                                     (factImportedNoEscapeArgs facts)
                                                     (factImportedMayEscapeArgs facts)
   where
-    functions = collectFunctions (modname m == mBuiltin) [] [] (mbody m)
-    callees = uniqueFunctions functions
-    -- Witnesses introduced by type reconstruction are not necessarily local
-    -- to the function that uses them.  A recursive declaration group may
-    -- place a shared binding in one declaration body and use it from another,
-    -- so retain those internal bindings in every function context as well as
-    -- the parameters and locals below.
-    moduleTypes = moduleWitnessTypes (mbody m)
-    facts = execState (mapM_ (scanFunction moduleTypes callees imported) functions) emptyFacts
     escaping = escapingNodes facts
     summaries = map (summarize facts escaping) functions
     violations =
@@ -266,6 +282,39 @@ uniqueFunctions fs = M.mapMaybe one $ M.fromListWith (++) [ (functionName f, [f]
     one _   = Nothing
 
 
+-- Classes, protocols and extensions can only be declared at module scope.
+-- In particular, do not descend into unrelated function/actor bodies merely
+-- to discover contracts. Their size must not determine the cost of checking
+-- a module with no hash implementations.
+collectHashFunctions :: Bool -> [Name] -> [TCon] -> Suite -> [FunctionInfo]
+collectHashFunctions trustedBuiltin path parents = concatMap stmt
+  where
+    stmt (Decl _ ds) = concatMap decl ds
+    stmt _ = []
+
+    decl d@Def{}
+      | not (S.null $ functionContract f) = [f]
+      | otherwise = []
+      where f = functionInfo trustedBuiltin path parents d
+    decl (Class _ n _ bs b _) = collectHashFunctions trustedBuiltin (path ++ [n]) bs b
+    decl (Protocol _ n _ bs b _) = collectHashFunctions trustedBuiltin (path ++ [n]) bs b
+    decl (Extension _ _ _ bs b _) = collectHashFunctions trustedBuiltin (path ++ [extensionSegment bs]) bs b
+    decl _ = []
+
+functionInfo :: Bool -> [Name] -> [TCon] -> Decl -> FunctionInfo
+functionInfo trustedBuiltin path parents d =
+    FunctionInfo (FunctionId $ path ++ [dname d]) (dname d) params (dbody d) contracts trustedContracts
+  where
+    params = parameters (pos d) (kwd d)
+    contracts = hashableHasherContract parents d params
+    trustedContracts
+      | trustedBuiltin && hasNotImpl (dbody d) = contracts
+      | otherwise = S.empty
+
+extensionSegment :: [TCon] -> Name
+extensionSegment (p:_) = Name NoLoc ("extension_" ++ nstr (qnameName $ tcname p))
+extensionSegment [] = Name NoLoc "extension"
+
 collectFunctions :: Bool -> [Name] -> [TCon] -> Suite -> [FunctionInfo]
 collectFunctions trustedBuiltin path parents = concatMap stmt
   where
@@ -278,27 +327,16 @@ collectFunctions trustedBuiltin path parents = concatMap stmt
     stmt (Data _ _ b) = collectFunctions trustedBuiltin path parents b
     stmt _ = []
 
-    decl d@Def{} = function d : collectFunctions trustedBuiltin (path ++ [dname d]) [] (dbody d)
+    decl d@Def{} = functionInfo trustedBuiltin path parents d : collectFunctions trustedBuiltin (path ++ [dname d]) [] (dbody d)
     decl d@Actor{} = actorFunction d : collectFunctions trustedBuiltin (path ++ [dname d]) [] (dbody d)
     decl (Class _ n _ bs b _) = collectFunctions trustedBuiltin (path ++ [n]) bs b
     decl (Protocol _ n _ bs b _) = collectFunctions trustedBuiltin (path ++ [n]) bs b
     decl (Extension _ _ _ bs b _) = collectFunctions trustedBuiltin (path ++ [extensionSegment bs]) bs b
     decl Typedef{} = []
 
-    function d = FunctionInfo fid (dname d) params (dbody d) contracts trustedContracts
-      where
-        fid = FunctionId (path ++ [dname d])
-        params = parameters (pos d) (kwd d)
-        contracts = hashableHasherContract parents d params
-        trustedContracts
-          | trustedBuiltin && hasNotImpl (dbody d) = contracts
-          | otherwise = S.empty
-
     actorFunction d = FunctionInfo (FunctionId (path ++ [dname d])) (dname d)
                                      (parameters (pos d) (kwd d)) (dbody d) S.empty S.empty
 
-    extensionSegment (p:_) = Name NoLoc ("extension_" ++ nstr (qnameName $ tcname p))
-    extensionSegment [] = Name NoLoc "extension"
     branchBody (Branch _ b) = b
     handlerBody (Handler _ b) = b
 

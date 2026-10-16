@@ -383,7 +383,7 @@ compileOptionsWith optimization = CompileOptions
         <*> switch (long "parse-ast"    <> help "Show the raw AST (Haskell Show)")
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
-        <*> switch (long "escape-analysis" <> help "Show experimental parameter escape analysis")
+        <*> switch (long "escape-analysis" <> help "Run and show experimental whole-module parameter escape analysis")
         <*> switch (long "sigs"         <> help "Show the inferred type signatures")
         <*> switch (long "norm"         <> help "Show the result after syntactic normalization")
         <*> switch (long "deact"        <> help "Show the result after deactorization")
