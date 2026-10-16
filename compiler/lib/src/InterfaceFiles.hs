@@ -159,6 +159,7 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.List
 import qualified Data.Set
 import Data.List (foldl')
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.IntSet as IntSet
 import qualified Data.Map.Strict as Map
 import qualified Data.Persist as Persist
@@ -1195,12 +1196,17 @@ depIndexEntries depModules nameHashes =
       where
         addToEntry Nothing =
           if isPub
-            then (Just h, Nothing, Set.singleton owner, Set.empty)
-            else (Nothing, Just h, Set.empty, Set.singleton owner)
+            then (Just h, Nothing, [owner], [])
+            else (Nothing, Just h, [], [owner])
         addToEntry (Just (pubH, implH, pubUsers, implUsers)) =
           if isPub
-            then (Just h, implH, Set.insert owner pubUsers, implUsers)
-            else (pubH, Just h, pubUsers, Set.insert owner implUsers)
+            then let us = consUser owner pubUsers in us `seq` (Just h, implH, us, implUsers)
+            else let us = consUser owner implUsers in us `seq` (pubH, Just h, pubUsers, us)
+
+    -- Users are collected as lists, newest first.  The owners arrive one
+    -- name at a time, so a repeat of the same owner is always at the head.
+    consUser owner us@(u:_) | u == owner = us
+    consUser owner us = owner : us
 
     depMap =
       foldl' addInfo Map.empty nameHashes
@@ -1225,7 +1231,10 @@ depIndexEntries depModules nameHashes =
             ]
       ]
 
-    cleanNames = Data.List.sortOn nameKey . Set.toList
+    -- The lists are in reverse arrival order, which is nameText order.  For
+    -- plain names that is Ord Name order, so Set.fromList builds the set in
+    -- one pass instead of comparing each owner against the whole set.
+    cleanNames = Data.List.sortOn nameKey . Set.toList . Set.fromList . reverse
 
     userRows =
       sortUserRows
@@ -1294,13 +1303,12 @@ queryIndexEntries nmod =
 -- the stmt/<NNN> rows for a selected name set.
 addStmtIndices :: [A.Stmt] -> [NameHashInfo] -> [NameHashInfo]
 addStmtIndices body nameHashes =
-    [ nh { nhStmtIndices = Map.findWithDefault [] (nhName nh) owners }
+    [ nh { nhStmtIndices = HashMap.lookupDefault [] (nhName nh) owners }
     | nh <- nameHashes
     ]
   where
-    owners = Map.map (Data.List.sort . Data.List.nub) $
-             foldl' addStmt Map.empty (zip [0..] body)
-    addStmt acc (i, stmt) = foldl' (\m n -> Map.insertWith (++) n [i] m) acc (stmtTopNames stmt)
+    owners = HashMap.map (Data.List.sort . Data.List.nub) $
+             HashMap.fromListWith (++) [ (n, [i]) | (i, stmt) <- zip [0..] body, n <- stmtTopNames stmt ]
 
 stmtTopNames :: A.Stmt -> [A.Name]
 stmtTopNames stmt =
