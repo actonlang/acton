@@ -1,0 +1,11 @@
+protocol Proto:
+    a : () -> int
+
+    def a(self) -> int:
+        return 1
+
+    def a(self) -> int:
+        return 2
+
+actor main(env):
+    env.exit(0)

@@ -1244,7 +1244,11 @@ wrapped l kw env cs ts args             = do tvx <- newUnivarOfKind KFX env
 instance (InfEnv a) => InfEnv [a] where
     infEnv env []                       = return ([], [], [])
     infEnv env (s : ss)                 = do (cs1,te1,s1) <- infEnv env s
-                                             let te1' = if inDecl env then noDefs te1 else te1      -- TODO: also stop class instantiation!
+                                             -- While a declaration group is scanned, its defs and actors are hidden
+                                             -- from the later members of the group.  The methods of a class, protocol
+                                             -- or extension body stay visible, so a repeated method name is caught as
+                                             -- a redefinition.
+                                             let te1' = if inDecl env && not (inClass env) then noDefs te1 else te1      -- TODO: also stop class instantiation!
                                                  env' = tydefine te1' env
                                              (cs2,te2,ss2) <- infEnv env' ss
                                              return (cs1++cs2, te1++te2, s1:ss2)
