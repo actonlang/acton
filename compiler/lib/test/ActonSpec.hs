@@ -2401,7 +2401,22 @@ main = do
         escapeOf report "through_leaf" "x" `shouldBe` Just Escape.NoEscape
         escapeOf report "through_returned" "x" `shouldBe` Just Escape.MayEscape
         escapeOf report "captured" "x" `shouldBe` Just Escape.MayEscape
-        Escape.reportEdgeCount report `shouldSatisfy` (> 0)
+
+      it "analyzes methods that nothing in the module calls" $ do
+        let src = unlines
+              [ "class Box(object):"
+              , "    y: int"
+              , "    def __init__(self):"
+              , "        self.y = 0"
+              , "    def keep(self, x: int):"
+              , "        self.y = x"
+              , "    def use(self, x: int):"
+              , "        pass"
+              ]
+        tchecked <- typecheckSource env0 "escape_methods" src
+        let report = Escape.analyzeModule tchecked
+        escapeOf report "keep" "x" `shouldBe` Just Escape.MayEscape
+        escapeOf report "use" "x" `shouldBe` Just Escape.NoEscape
 
       it "resolves bare call targets only to top-level functions of the module" $ do
         let src = unlines
@@ -2652,16 +2667,11 @@ main = do
         let conservative = Escape.analyzeModule consumerTyped
             report = Escape.analyzeModuleWithImports (lookupImported providerMI) consumerTyped
         escapeOf conservative "through_leaf" "x" `shouldBe` Just Escape.MayEscape
-        Escape.reportImportedSummarized conservative `shouldBe` 0
-        Escape.reportImportedUnknown conservative `shouldBe` 2
+        escapeOf conservative "through_leaf_unqualified" "x" `shouldBe` Just Escape.MayEscape
         escapeOf report "through_leaf" "x" `shouldBe` Just Escape.NoEscape
         escapeOf report "through_returned" "x" `shouldBe` Just Escape.MayEscape
         escapeOf report "through_leaf_unqualified" "x" `shouldBe` Just Escape.NoEscape
         escapeOf report "through_returned_unqualified" "x" `shouldBe` Just Escape.MayEscape
-        Escape.reportImportedSummarized report `shouldBe` 4
-        Escape.reportImportedUnknown report `shouldBe` 0
-        Escape.reportImportedNoEscapeArgs report `shouldBe` 2
-        Escape.reportImportedMayEscapeArgs report `shouldBe` 2
 
       it "binds the Hashable.hash contract by position, not by annotation" $ do
         let src = unlines

@@ -10,6 +10,8 @@
 -- Hashable.hash non-escape contract is enforced because B_hash relies on it
 -- for automatic hasher storage.
 
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
+
 module Acton.EscapeAnalysis
     ( Escape(..)
     , EscapeReason(..)
@@ -22,12 +24,14 @@ module Acton.EscapeAnalysis
     , renderEscapeReport
     ) where
 
+import Control.DeepSeq (NFData)
 import Control.Monad (forM_, when)
 import Control.Monad.State.Strict
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
+import GHC.Generics (Generic)
 
 import Utils
 import Acton.Syntax
@@ -36,7 +40,7 @@ import Acton.Names (assigned, bound, free, isWitness)
 
 
 data Escape = NoEscape | MayEscape
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Generic, NFData)
 
 data EscapeReason
     = Returned SrcLoc
@@ -48,10 +52,10 @@ data EscapeReason
     | ImportedCall SrcLoc
     | UnknownCall SrcLoc
     | UnavailableBody SrcLoc
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Generic, NFData)
 
 newtype FunctionId = FunctionId [Name]
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Generic, NFData)
 
 data ParameterSummary = ParameterSummary
     { parameterName       :: Name
@@ -59,18 +63,12 @@ data ParameterSummary = ParameterSummary
     , parameterContract   :: Bool
     , parameterTrustedNative :: Bool
     , parameterDirectUses :: [EscapeReason]
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Generic, NFData)
 
 data EscapeReport = EscapeReport
     { reportFunctions          :: [(FunctionId, [ParameterSummary])]
     , reportContractViolations :: [(FunctionId, Name)]
-    , reportNodeCount          :: Int
-    , reportEdgeCount          :: Int
-    , reportImportedSummarized :: Int
-    , reportImportedUnknown    :: Int
-    , reportImportedNoEscapeArgs :: Int
-    , reportImportedMayEscapeArgs :: Int
-    } deriving (Eq, Show)
+    } deriving (Eq, Show, Generic, NFData)
 
 
 data Parameter = Parameter
@@ -79,7 +77,8 @@ data Parameter = Parameter
     }
 
 data FunctionInfo = FunctionInfo
-    { functionId       :: FunctionId
+    { functionIndex    :: !Int
+    , functionId       :: FunctionId
     , functionName     :: Name
     , functionParams   :: [Parameter]
     , functionBody     :: Suite
@@ -87,20 +86,19 @@ data FunctionInfo = FunctionInfo
     , functionTrustedNative :: S.Set Name
     }
 
-data Node = Node FunctionId Name
+-- A graph node is the position of a function in the collected list and
+-- one of its parameter or local names, so map operations on nodes compare
+-- an Int and a short name.
+data Node = Node !Int !Name
     deriving (Eq, Ord, Show)
 
 data Facts = Facts
-    { factEdges   :: M.Map Node (S.Set Node)
-    , factEscapes :: M.Map Node (S.Set EscapeReason)
-    , factImportedSummarized :: Int
-    , factImportedUnknown :: Int
-    , factImportedNoEscapeArgs :: Int
-    , factImportedMayEscapeArgs :: Int
+    { factEdges   :: !(M.Map Node (S.Set Node))
+    , factEscapes :: !(M.Map Node (S.Set EscapeReason))
     }
 
 emptyFacts :: Facts
-emptyFacts = Facts M.empty M.empty 0 0 0 0
+emptyFacts = Facts M.empty M.empty
 
 data Context = Context
     { contextFunction :: FunctionInfo
@@ -118,13 +116,10 @@ analyzeModule = analyzeModuleWithImports (const Nothing)
 -- | Analyze a module using summaries for direct calls into imported modules.
 -- A missing summary means unknown and is therefore handled conservatively.
 analyzeModuleWithImports :: (QName -> Maybe [(Name, Escape)]) -> Module -> EscapeReport
-analyzeModuleWithImports imported m = EscapeReport summaries violations nodeCount edgeCount
-                                                    (factImportedSummarized facts)
-                                                    (factImportedUnknown facts)
-                                                    (factImportedNoEscapeArgs facts)
-                                                    (factImportedMayEscapeArgs facts)
+analyzeModuleWithImports imported m = EscapeReport summaries violations
   where
-    functions = collectFunctions (modname m == mBuiltin) [] [] (mbody m)
+    functions = zipWith (\i f -> f { functionIndex = i }) [0..]
+                        (collectFunctions (modname m == mBuiltin) [] [] (mbody m))
     -- A bare call target names a top-level function or actor.  Methods are
     -- reached through attribute calls and nested defs are bound locally, so
     -- neither may stand in for a bare name.
@@ -148,22 +143,15 @@ analyzeModuleWithImports imported m = EscapeReport summaries violations nodeCoun
         , parameterContract p
         , parameterEscape p == MayEscape
         ]
-    allNodes = S.fromList
-        ([ Node (functionId f) (paramName p) | f <- functions, p <- functionParams f ] ++
-         M.keys (factEdges facts) ++
-         concatMap S.toList (M.elems (factEdges facts)) ++
-         M.keys (factEscapes facts))
-    nodeCount = S.size allNodes
-    edgeCount = sum (map S.size (M.elems (factEdges facts)))
 
--- | Summaries for the module's interface file. The names keep their source
--- locations, which Name equality and ordering ignore. True means MayEscape.
--- Absence of a function or parameter is deliberately interpreted as unknown
--- by callers.
+-- | Summaries of the module's top-level functions and actors, for its
+-- interface file. The names keep their source locations, which Name
+-- equality and ordering ignore. True means MayEscape. Absence of a function
+-- or parameter is deliberately interpreted as unknown by callers.
 interfaceSummaries :: EscapeReport -> [([Name], [(Name, Bool)])]
 interfaceSummaries report =
     [ (path, [ (parameterName p, parameterEscape p == MayEscape) | p <- ps ])
-    | (FunctionId path, ps) <- reportFunctions report
+    | (FunctionId path@[_], ps) <- reportFunctions report
     ]
 
 
@@ -189,16 +177,10 @@ renderEscapeReport report = unlines (header ++ concatMap renderFunction interest
           ", parameters: " ++ show (length params) ++
           ", noescape: " ++ show noesc ++
           ", mayescape: " ++ show mayesc
-        , "graph nodes: " ++ show (reportNodeCount report) ++
-          ", edges: " ++ show (reportEdgeCount report)
         , "Hashable.hash contracts: " ++ show contracts ++
           " (verified Acton " ++ show verifiedContracts ++
           ", trusted builtin native " ++ show trustedContracts ++
           ", violations " ++ show violatedContracts ++ ")"
-        , "imported direct calls: summarized " ++ show (reportImportedSummarized report) ++
-          ", conservative " ++ show (reportImportedUnknown report)
-        , "imported summary arguments: noescape " ++ show (reportImportedNoEscapeArgs report) ++
-          ", mayescape " ++ show (reportImportedMayEscapeArgs report)
         , "showing functions with a noescape parameter or a Hashable.hash contract: " ++
           show (length interestingFunctions) ++ " of " ++ show (length $ reportFunctions report)
         , ""
@@ -262,7 +244,7 @@ summarize facts escaping f = (functionId f, map one (functionParams f))
         , parameterTrustedNative = paramName p `S.member` functionTrustedNative f
         , parameterDirectUses = S.toList $ M.findWithDefault S.empty (node p) (factEscapes facts)
         }
-    node p = Node (functionId f) (paramName p)
+    node p = Node (functionIndex f) (paramName p)
 
 
 isTopLevel :: FunctionInfo -> Bool
@@ -298,7 +280,7 @@ collectFunctions trustedBuiltin path parents = concatMap stmt
     decl (Extension _ _ _ bs b _) = collectFunctions trustedBuiltin (path ++ [extensionSegment bs]) bs b
     decl Typedef{} = []
 
-    function d = FunctionInfo fid (dname d) params (dbody d) contracts trustedContracts
+    function d = FunctionInfo 0 fid (dname d) params (dbody d) contracts trustedContracts
       where
         fid = FunctionId (path ++ [dname d])
         params = parameters (pos d) (kwd d)
@@ -307,7 +289,7 @@ collectFunctions trustedBuiltin path parents = concatMap stmt
           | trustedBuiltin && hasNotImpl (dbody d) = contracts
           | otherwise = S.empty
 
-    actorFunction d = FunctionInfo (FunctionId (path ++ [dname d])) (dname d)
+    actorFunction d = FunctionInfo 0 (FunctionId (path ++ [dname d])) (dname d)
                                      (parameters (pos d) (kwd d)) (dbody d) S.empty S.empty
 
     extensionSegment (p:_) = name ("extension_" ++ nstr (qnameName $ tcname p))
@@ -607,13 +589,11 @@ scanCall c l f p k
   -- A splatted argument can land in any parameter, so no summary applies.
   | hasStarArg p k = unknownCall
   | Just callee <- directCallee c target = connectCall c l callee p k
-  | Just summary <- importedCallee c target =
-      countImportedSummarized >> connectImportedCall c l summary p k
+  | Just summary <- importedCallee c target = connectImportedCall c l summary p k
   | Just (receiver, attr) <- methodTarget target,
     nstr attr == "hash", isHashableReceiver c receiver = hashCall
   | Just (receiver, attr) <- methodTarget target,
     nstr attr `elem` ["update", "finalize"], isHasherReceiver c receiver = return ()
-  | Just _ <- importedTarget target = countImportedUnknown >> unknownCall
   | otherwise = unknownCall
   where
     target = unwrapCallTarget f
@@ -633,11 +613,6 @@ scanCall c l f p k
         case methodTarget target of
           Just (receiver, _) -> addEscapeExpr c (UnknownCall l) receiver
           Nothing -> return ()
-
-    countImportedSummarized = modify' $ \facts -> facts
-        { factImportedSummarized = factImportedSummarized facts + 1 }
-    countImportedUnknown = modify' $ \facts -> facts
-        { factImportedUnknown = factImportedUnknown facts + 1 }
 
 hasStarArg :: PosArg -> KwdArg -> Bool
 hasStarArg p k = posStar p || kwdStar k
@@ -677,8 +652,7 @@ connectImportedCall :: Context -> SrcLoc -> [(Name, Escape)] -> PosArg -> KwdArg
 connectImportedCall c l summary p k = do
     let positional = posArgExpressions p
         paired = zip positional summary
-        applySummary (e,(_,status)) = do
-          countImportedArgument status
+        applySummary (e,(_,status)) =
           when (status == MayEscape) (addEscapeExpr c (ImportedCall l) e)
     mapM_ applySummary paired
     -- An arity mismatch should not occur after type checking, but treating any
@@ -686,15 +660,9 @@ connectImportedCall c l summary p k = do
     mapM_ (addEscapeExpr c (UnknownCall l)) (drop (length summary) positional)
     forM_ (kwdArgExpressions k) $ \(n,e) ->
         case lookup n summary of
-          Just NoEscape -> countImportedArgument NoEscape
-          Just MayEscape -> countImportedArgument MayEscape >> addEscapeExpr c (ImportedCall l) e
+          Just NoEscape -> return ()
+          Just MayEscape -> addEscapeExpr c (ImportedCall l) e
           Nothing -> addEscapeExpr c (UnknownCall l) e
-
-countImportedArgument :: Escape -> State Facts ()
-countImportedArgument status = modify' $ \facts ->
-    case status of
-      NoEscape -> facts { factImportedNoEscapeArgs = factImportedNoEscapeArgs facts + 1 }
-      MayEscape -> facts { factImportedMayEscapeArgs = factImportedMayEscapeArgs facts + 1 }
 
 directCallee :: Context -> Expr -> Maybe FunctionInfo
 directCallee c (Var _ (NoQ n))
@@ -711,11 +679,6 @@ importedCallee c (Var _ qn@(NoQ n))
   | otherwise = Nothing
 importedCallee c (Var _ qn) = contextImported c qn
 importedCallee _ _ = Nothing
-
-importedTarget :: Expr -> Maybe QName
-importedTarget (Var _ qn@GName{}) = Just qn
-importedTarget (Var _ qn@QName{}) = Just qn
-importedTarget _ = Nothing
 
 methodTarget :: Expr -> Maybe (Expr, Name)
 methodTarget (Dot _ receiver attr) = Just (receiver, attr)
@@ -785,7 +748,7 @@ addFlows c e dst = forM_ (S.toList $ aliasNames e) $ \src -> addEdge (localNode 
 
 addCallFlows :: Context -> Expr -> FunctionInfo -> Name -> State Facts ()
 addCallFlows c e callee dst = forM_ (S.toList $ aliasNames e) $ \src ->
-    addEdge (localNode c src) (Node (functionId callee) dst)
+    addEdge (localNode c src) (Node (functionIndex callee) dst)
 
 addEscapeExpr :: Context -> EscapeReason -> Expr -> State Facts ()
 addEscapeExpr c reason e = addEscapeNames c reason (S.toList $ aliasNames e)
@@ -794,7 +757,7 @@ addEscapeNames :: Context -> EscapeReason -> [Name] -> State Facts ()
 addEscapeNames c reason = mapM_ (\n -> addSink (localNode c n) reason)
 
 localNode :: Context -> Name -> Node
-localNode c = Node (functionId $ contextFunction c)
+localNode c = Node (functionIndex $ contextFunction c)
 
 addEdge :: Node -> Node -> State Facts ()
 addEdge from to = modify' $ \facts -> facts

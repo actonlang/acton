@@ -2598,20 +2598,10 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               _ -> Nothing
           escapeReport = Acton.EscapeAnalysis.analyzeModuleWithImports importedEscapeSummary tchecked
           escapeSummaries = Acton.EscapeAnalysis.interfaceSummaries escapeReport
-          -- Force the graph solution for every compiled module.  This makes
-          -- contract failures deterministic here rather than during a later
-          -- interface write or diagnostic rendering.
-          escapeWork =
-            Acton.EscapeAnalysis.reportNodeCount escapeReport +
-            Acton.EscapeAnalysis.reportEdgeCount escapeReport +
-            Acton.EscapeAnalysis.reportImportedSummarized escapeReport +
-            Acton.EscapeAnalysis.reportImportedUnknown escapeReport +
-            Acton.EscapeAnalysis.reportImportedNoEscapeArgs escapeReport +
-            Acton.EscapeAnalysis.reportImportedMayEscapeArgs escapeReport +
-            length (Acton.EscapeAnalysis.reportContractViolations escapeReport) +
-            sum [ length ps + length [ () | p <- ps, Acton.EscapeAnalysis.parameterEscape p == Acton.EscapeAnalysis.MayEscape ]
-                | (_,ps) <- Acton.EscapeAnalysis.reportFunctions escapeReport ]
-      evaluate escapeWork
+      -- Run the analysis to completion for every function of every module,
+      -- here rather than in whatever later reads a result, such as the
+      -- interface write.
+      evaluate (rnf escapeReport)
       evaluate (rnf escapeSummaries)
       when (C.escape_analysis opts && isRoot) $
         dump mn "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport escapeReport)

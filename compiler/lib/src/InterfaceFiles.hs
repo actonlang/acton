@@ -46,7 +46,7 @@
 --     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
 --     "stmt-has-not-impl" :: Bool                     -- any statement contains NotImplemented
---     "escape-summaries" :: EscapeSummaries          -- parameter escape summaries
+--     "escape-summaries" :: EscapeSummaries          -- escape summaries of top-level functions and actors
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
 --
@@ -208,10 +208,11 @@ data NameHashInfo = NameHashInfo
 instance Persist.Persist NameHashInfo
 instance NFData NameHashInfo
 
--- | Internal per-function parameter escape summaries.  The path is
--- relative to its module (for example @[f]@ or @[C, method]@); the Boolean is
--- True for MayEscape and False for NoEscape.  Compile.hs folds the escape
--- bits of each top-level function into that name's public hash.
+-- | Internal parameter escape summaries of a module's top-level functions
+-- and actors.  The path is the one-element path of the function (for
+-- example @[f]@).  The Boolean is True for MayEscape and False for
+-- NoEscape.  Compile.hs folds each function's escape bits into that
+-- name's public hash.
 type EscapeSummaries = [([A.Name], [(A.Name, Bool)])]
 
 data DepModuleInfo = DepModuleInfo
