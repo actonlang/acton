@@ -2801,6 +2801,76 @@ p54_unused_import_reads_no_names =
     assertEqual ("did not expect any broad or name reads from unused incremental_cases/big.tydb\ntrace:\n" ++ T.unpack (T.unlines traceLines))
       [] bigForbiddenLines
 
+p56_changed_path_prunes_removed_module :: TestTree
+p56_changed_path_prunes_removed_module =
+  testCase "56-changed-path plan prunes outputs of a deleted module" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actA = src </> "a.act"
+        actMain = src </> "main.act"
+        outA = proj </> "out" </> "types" </> casesProjName </> "a"
+        gopts = C.GlobalOptions
+          { C.color = C.Never
+          , C.quiet = True
+          , C.noProgress = False
+          , C.timing = False
+          , C.tty = False
+          , C.verbose = False
+          , C.verboseZig = False
+          , C.jobs = 1
+          }
+        opts = Compile.defaultCompileOptions
+    ensureCasesProject
+    writeFileUtf8 actA "aaa = 1\n"
+    writeFileUtf8 actMain $ T.unlines
+      [ "actor main(env: Env):"
+      , "    env.exit(0)"
+      ]
+    _ <- buildOutInArgs proj ["--skip-build"]
+    mapM_ (\ext -> do
+      exists <- artifactExists (outA ++ ext)
+      assertBool ("expected generated " ++ outA ++ ext) exists)
+      [".tydb", ".c", ".h"]
+    actAAbs <- canonicalizePath actA
+    actMainAbs <- canonicalizePath actMain
+    sched <- Compile.newCompileScheduler gopts 1
+    -- The first plan records the build spec, so the next plan follows the
+    -- changed paths, as in watch mode and the LSP server.
+    _ <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [])
+    removeFile actA
+    plan <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [actAAbs])
+    assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
+    mapM_ (\ext -> do
+      exists <- artifactExists (outA ++ ext)
+      assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
+      [".tydb", ".c", ".h"]
+
+p57_dotted_module_name_keeps_outputs :: TestTree
+p57_dotted_module_name_keeps_outputs =
+  testCase "57-module with a dot in its file name keeps outputs until deleted" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actDot = src </> "z.dot.act"
+        modDot = modLabel proj "z.dot"
+        outDot = proj </> "out" </> "types" </> casesProjName </> "z.dot"
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") "aaa = 1\n"
+    writeFileUtf8 actDot "zzz = 1\n"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    mapM_ (\ext -> do
+      exists <- artifactExists (outDot ++ ext)
+      assertBool ("expected generated " ++ outDot ++ ext) exists)
+      [".tydb", ".c", ".h"]
+    out <- buildOutInArgs proj ["--skip-build"]
+    assertBool ("expected z.dot fresh\n" ++ T.unpack out) (fresh out modDot)
+    assertBool ("did not expect z.dot to type check\n" ++ T.unpack out) (not (typechecked out modDot))
+    removeFile actDot
+    _ <- buildOutInArgs proj ["--skip-build"]
+    mapM_ (\ext -> do
+      exists <- artifactExists (outDot ++ ext)
+      assertBool ("did not expect stale generated " ++ outDot ++ ext) (not exists))
+      [".tydb", ".c", ".h"]
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2880,5 +2950,9 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p53_imported_attr_inference_stays_selective
       , p54_unused_import_reads_no_names
       , p55_dbp_reads_selected_statements
+      ]
+  , sequentialTestGroup "incremental-prune-cases" AllSucceed
+      [ p56_changed_path_prunes_removed_module
+      , p57_dotted_module_name_keeps_outputs
       ]
   ]

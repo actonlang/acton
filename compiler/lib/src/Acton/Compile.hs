@@ -4825,7 +4825,7 @@ pruneMissingModuleOutputs ctx = do
 
     proj = BuildSpec.specName $ projBuildSpec ctx
 
-    dropProjDir rel = case splitDirectories $ normalise (dropExtension rel) of
+    dropProjDir base = case splitDirectories $ normalise base of
                         [n] -> n
                         n:ns | n == proj -> joinPath ns
                         ns -> joinPath ns
@@ -4848,8 +4848,8 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
       let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
           actPath' = normalise actPath
       when (Data.List.isPrefixOf srcRoot' actPath') $ do
-        let modBase = normalise (dropExtension (makeRelative srcRoot actPath'))
-            outBase = projTypesDir ctx </> modBase
+        mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath'
+        let outBase = joinPath (projTypesDir ctx : A.modPath mn)
         removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
         mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
 
