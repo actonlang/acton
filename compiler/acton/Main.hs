@@ -2317,9 +2317,6 @@ selectedRootStubEntriesForBins paths bins =
       [ collapseDots (makeRelativeOrAbsolute (projPath paths) (binTaskRoot paths b))
       | b <- bins
       ]
-  where binTaskRoots = [ binTaskRoot paths b | b <- bins ]
-        absOrRel = map (makeRelativeOrAbsolute (projPath paths)) binTaskRoots
-        collapsed = map collapseDots absOrRel
 
 -- | For each consuming project, map dep name to selected C-source CSV.
 depModuleOptionsByProj :: M.Map FilePath [GlobalTask] -> M.Map FilePath ProjCtx -> M.Map FilePath (M.Map String String)
@@ -2355,60 +2352,23 @@ projectDepPathOverrides projMap rootProj = snd (go Data.Set.empty rootProj M.emp
       let acc' = M.insertWith (\_ old -> old) depName depProj acc
       in go seen depProj acc'
 
--- | Remove orphaned files in out/types.
--- Non-root files are removed if their module isn’t part of this build (i.e.
--- no corresponding source .act in this build). The 'roots' argument lists the
--- exact set of root stub files (*.root.c, *.test_root.c) to keep; others are
--- removed.
-removeOrphanFiles :: Paths -> [CompileTask] -> [FilePath] -> IO ()
-removeOrphanFiles paths tasks roots = do
-    let dir = projTypes paths
-    absOutFiles <- getFilesRecursive dir
-    let allowedBases = [ outBase paths (name t) | t <- tasks ] ++
-                       [ outBase paths (dropProjPrefix paths (name t)) | t <- tasks ]
-    forM_ absOutFiles $ \absFile -> do
-        let isC  = takeExtension absFile == ".c"
-            isH  = takeExtension absFile == ".h"
-            bext = takeExtension (takeBaseName absFile)
-            isRootStub = isC && (bext == ".root" || bext == ".test_root")
-            base = dropExtension absFile
-            modBase = if isRootStub then dropExtension base else base
-        if isRootStub
-          then when (not (absFile `elem` roots) || not (modBase `elem` allowedBases)) (removeIfExists absFile)
-          else when (isC || isH) $ do
-                 unless (base `elem` allowedBases) (removeIfExists absFile)
-    tyDbs <- InterfaceFiles.listInterfaceDirsRecursive dir
-    forM_ tyDbs $ \tyDb -> do
-      let base = dropExtension tyDb
-      unless (base `elem` allowedBases) (removeDirIfExists tyDb)
+-- | Remove root stubs that their module no longer declares. The .tydb headers
+-- written by this build list each module's roots, so a module that loses its
+-- root actor loses its stub, while stubs of other build modes stay (e.g. the
+-- .root.c during `acton test`). Stubs built in this run stay too.
+removeUndeclaredRootStubs :: Paths -> [CompileTask] -> [BinTask] -> IO ()
+removeUndeclaredRootStubs paths tasks bins = do
+    declared <- concat <$> mapM headerRootStubs tasks
+    let keep = Data.Set.fromList (declared ++ map (binTaskRoot paths) bins)
+        stubs = [ rootStubPath paths test (name t) | t <- tasks, test <- [False, True] ]
+    mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) stubs)
   where
-    removeIfExists f = removeFile f `catch` handleNotExists
-    removeDirIfExists f = removePathForcibly f `catch` handleNotExists
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
-
--- | Determine which root stub files should be preserved for the current build.
--- We read the freshly written .tydb headers (post-compile) for each task to keep
--- whichever roots are still declared. This lets us drop stale root stubs when
--- a module loses its root actor while still retaining stubs that belong to
--- other build modes (e.g. keeping .root.c when running `acton test`).
-expectedRootStubs :: Paths -> [CompileTask] -> IO [FilePath]
-expectedRootStubs paths tasks = do
-    roots <- forM tasks $ \t -> do
-        let mn      = name t
-            mn'     = dropProjPrefix paths mn
-            outbase = outBase paths mn'
-            tyPath  = tyDbPath paths mn
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyPath
-        case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) -> return (map (mkStub outbase) rs)
-          _ -> return []
-    return (concat roots)
-  where
-    mkStub outbase n =
-      if nameToString n == "test_main"
-        then outbase ++ ".test_root.c"
-        else outbase ++ ".root.c"
+    headerRootStubs t = do
+      hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
+      return $ case hdrE of
+        Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) ->
+          [ rootStubPath paths (nameToString n == "test_main") (name t) | n <- rs ]
+        Left _ -> []
 
 data BinTask = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
@@ -2421,11 +2381,8 @@ encodeBuildLibraries libs =
                     ]
 
 binTaskRoot :: Paths -> BinTask -> FilePath
-binTaskRoot paths binTask =
-    let A.GName m _ = rootActor binTask
-        m' = dropProjPrefix paths m
-        outbase = outBase paths m'
-    in if isTest binTask then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+binTaskRoot paths binTask = rootStubPath paths (isTest binTask) m
+  where A.GName m _ = rootActor binTask
 
 {-
 ================================================================================
@@ -2535,9 +2492,7 @@ printDiagnostics gopts opts diags =
 writeRootC :: Acton.Env.Env0 -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> BinTask -> IO (Maybe BinTask)
 writeRootC env gopts opts paths tasks binTask = do
     let qn@(A.GName mn n) = rootActor binTask
-        mn' = dropProjPrefix paths mn
-        outbase = outBase paths mn'
-        rootFile = if (isTest binTask) then outbase ++ ".test_root.c" else outbase ++ ".root.c"
+        rootFile = binTaskRoot paths binTask
     -- In --only-build mode, reuse existing root stubs; generate only if missing.
     existing <- if C.only_build opts then doesFileExist rootFile else return False
     if C.only_build opts && existing
@@ -2549,7 +2504,7 @@ writeRootC env gopts opts paths tasks binTask = do
         tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
                          Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) <- InterfaceFiles.readHeaderSummary ty; return roots
-                         Nothing -> throwProjectError ("Root module " ++ prstr mn' ++ " not found")
+                         Nothing -> throwProjectError ("Root module " ++ prstr (dropProjPrefix paths mn) ++ " not found")
         let rootsEnv = case Acton.Env.lookupModuleInfo mn env of
                          Nothing -> []
                          Just mi -> [ n' | (n', i) <- Acton.Env.modulePublicTEnv mi, rootEligible i ]
@@ -2999,13 +2954,7 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
 
     let pruningAllowed = allowPrune && not (C.only_build opts)
     when pruningAllowed $ do
-      -- Clean out/types: drop stray outputs and stale root stubs based on the
-      -- current headers. Also keep the roots we attempted to build in this run
-      -- so they survive even if a header failed to list them (defensive).
-      let requestedRoots = map (binTaskRoot paths) realBinTasks
-      headerRoots <- expectedRootStubs paths tasks
-      let roots = nub (headerRoots ++ requestedRoots)
-      removeOrphanFiles paths tasks roots
+      removeUndeclaredRootStubs paths tasks realBinTasks
       unless (isTmp paths) $
         -- Clean old binaries from out/bin
         removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
