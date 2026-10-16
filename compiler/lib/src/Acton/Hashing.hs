@@ -45,7 +45,7 @@ import qualified Data.ByteString.Unsafe as BU
 import qualified Data.ByteString.Short as SBS
 import qualified Data.ByteString.Short.Internal as SBSI
 import qualified Data.Text.Short as TS
-import Control.Monad (foldM, when)
+import Control.Monad (foldM, forM, when)
 import Data.Bits (shiftR, (.&.), (.|.))
 import Data.Char (ord)
 import Data.Graph (SCC(..), stronglyConnComp)
@@ -871,7 +871,7 @@ pubSigSplitDepsFromNameInfoMap :: A.ModName
                                -> M.Map A.Name I.NameInfo
                                -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 pubSigSplitDepsFromNameInfoMap mn env localNames =
-  finishHashSplitDeps . M.map (pubSigSplitDepsFromNameInfo mn env localNames)
+  finishHashSplitDeps . M.map (pubSigSplitDepsFromNameInfo mn env (toHashSet localNames))
 
 pubSigSplitDepsFromNameInfoMapWithProgress :: (Int -> IO ())
                                            -> A.ModName
@@ -880,19 +880,18 @@ pubSigSplitDepsFromNameInfoMapWithProgress :: (Int -> IO ())
                                            -> M.Map A.Name I.NameInfo
                                            -> IO (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 pubSigSplitDepsFromNameInfoMapWithProgress onProgress mn env localNames infos = do
-  (deps, _) <- foldM addDeps (M.empty, 0) (M.toAscList infos)
-  pure (finishHashSplitDeps deps)
+  -- Each name's deps depend only on its NameInfo, so split them in
+  -- parallel; the results come back in ascending name order.
+  deps <- parMapChunks onProgress (\(_, d) -> depSplitSize d `seq` ())
+            (\(n, info) -> (n, pubSigSplitDepsFromNameInfo mn env localSet info))
+            (M.toAscList infos)
+  pure (finishHashSplitDeps (M.fromDistinctAscList deps))
   where
-    addDeps (acc, done) (n, info) = do
-      let deps = pubSigSplitDepsFromNameInfo mn env localNames info
-          acc' = M.insert n deps acc
-          done' = done + 1
-      depSplitSize deps `seq` onProgress done'
-      pure (acc', done')
+    localSet = toHashSet localNames
 
 pubSigSplitDepsFromNameInfo :: A.ModName
                             -> Env.Env0
-                            -> Data.Set.Set A.Name
+                            -> HashSet.HashSet A.Name
                             -> I.NameInfo
                             -> DepSplit
 pubSigSplitDepsFromNameInfo mn env localNames info =
@@ -1146,7 +1145,7 @@ unionDepSplit :: DepSplit -> DepSplit -> DepSplit
 unionDepSplit (ls, es) (ls', es') =
   (HashSet.union ls ls', HashSet.union es es')
 
-insertQNameDep :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> NameSet -> A.QName -> DepSplit -> DepSplit
+insertQNameDep :: A.ModName -> Env.Env0 -> HashSet.HashSet A.Name -> NameSet -> A.QName -> DepSplit -> DepSplit
 insertQNameDep mn env localNames bound qn@(A.NoQ n) acc
   | Data.Set.member n bound = acc
   | otherwise = addSplitDepHash mn env localNames acc qn
@@ -1166,9 +1165,9 @@ implSplitDepsFromItems :: A.ModName
                        -> [TopLevelItem]
                        -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 implSplitDepsFromItems mn env localNames items =
-  finishHashSplitDeps (foldl' addDeps M.empty (map (implItemSplitDeps mn env localNames) items))
+  finishHashSplitDeps (collectItemSplitDeps localNames localSet (map (implItemSplitDeps mn env localSet) items))
   where
-    addDeps acc (n, deps) = M.insertWith unionDepSplit n deps acc
+    localSet = toHashSet localNames
 
 implSplitDepsFromItemsWithProgress :: (Int -> IO ())
                                    -> A.ModName
@@ -1177,16 +1176,46 @@ implSplitDepsFromItemsWithProgress :: (Int -> IO ())
                                    -> [TopLevelItem]
                                    -> IO (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
 implSplitDepsFromItemsWithProgress onProgress mn env localNames items = do
-  (deps, _) <- foldM addDeps (M.empty, 0) (map (implItemSplitDeps mn env localNames) items)
-  pure (finishHashSplitDeps deps)
+  -- Each item's deps depend only on the item, so split them in parallel.
+  deps <- parMapChunks onProgress (\(_, d) -> depSplitSize d `seq` ())
+            (implItemSplitDeps mn env localSet) items
+  pure (finishHashSplitDeps (collectItemSplitDeps localNames localSet deps))
   where
-    addDeps (acc, done) (n, deps) = do
-      let acc' = M.insertWith unionDepSplit n deps acc
-          done' = done + 1
-      depSplitSize deps `seq` onProgress done'
-      pure (acc', done')
+    localSet = toHashSet localNames
 
-implItemSplitDeps :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> TopLevelItem -> (A.Name, DepSplit)
+-- | Merge the deps of a name's items into a Map.  Item names normally are
+-- local names, so the Map is built in ascending order from localNames
+-- without comparing names; any other name is inserted the ordinary way.
+collectItemSplitDeps :: Data.Set.Set A.Name -> HashSet.HashSet A.Name -> [(A.Name, DepSplit)] -> M.Map A.Name DepSplit
+collectItemSplitDeps localNames localSet deps =
+  M.union (M.fromDistinctAscList [ (n, d) | n <- Data.Set.toAscList localNames, Just d <- [HashMap.lookup n merged] ])
+          (M.fromListWith unionDepSplit [ (n, d) | (n, d) <- HashMap.toList merged, not (HashSet.member n localSet) ])
+  where
+    merged = HashMap.fromListWith unionDepSplit deps
+
+toHashSet :: Data.Set.Set A.Name -> HashSet.HashSet A.Name
+toHashSet = HashSet.fromList . Data.Set.toList
+
+-- | Map a pure function over a list in one chunk per capability.  The
+-- force function runs on each result inside the worker, so the work is
+-- not left to whoever consumes the list.  Progress counts every item
+-- through a shared counter, as the other parallel hash passes do.
+parMapChunks :: (Int -> IO ()) -> (b -> ()) -> (a -> b) -> [a] -> IO [b]
+parMapChunks onProgress force f xs = do
+  caps <- getNumCapabilities
+  let chunkSize = max 64 ((length xs + caps - 1) `div` max 1 caps)
+  doneRef <- newIORef 0
+  rs <- mapConcurrently (runChunk doneRef) (chunksOf chunkSize xs)
+  pure (concat rs)
+  where
+    runChunk doneRef chunk = forM chunk $ \x -> do
+      let y = f x
+      force y `seq` pure ()
+      done <- atomicModifyIORef' doneRef (\d -> (d + 1, d + 1))
+      onProgress done
+      pure y
+
+implItemSplitDeps :: A.ModName -> Env.Env0 -> HashSet.HashSet A.Name -> TopLevelItem -> (A.Name, DepSplit)
 implItemSplitDeps mn env localNames item =
   case item of
     TLDecl name decl -> (name, splitDeclDirect Data.Set.empty decl emptyDepSplitDirect)
@@ -1441,23 +1470,23 @@ addSplitDep mn env localNames (locals, externals) qn =
       | Data.Set.member n localNames -> (Data.Set.insert n locals, externals)
       | otherwise -> (locals, externals)
 
-addSplitDepHash :: A.ModName -> Env.Env0 -> Data.Set.Set A.Name -> DepSplit -> A.QName -> DepSplit
+addSplitDepHash :: A.ModName -> Env.Env0 -> HashSet.HashSet A.Name -> DepSplit -> A.QName -> DepSplit
 addSplitDepHash mn env localNames (locals, externals) (A.NoQ n)
-  | Data.Set.member n localNames = (HashSet.insert n locals, externals)
+  | HashSet.member n localNames = (HashSet.insert n locals, externals)
 addSplitDepHash mn env localNames (locals, externals) qn =
   case Env.unalias env qn of
     A.GName m _ | m == mPrim -> (locals, externals)
     A.QName m _ | m == mPrim -> (locals, externals)
     A.GName m n
-      | m == mn && Data.Set.member n localNames -> (HashSet.insert n locals, externals)
+      | m == mn && HashSet.member n localNames -> (HashSet.insert n locals, externals)
       | m == mn -> (locals, externals)
       | otherwise -> (locals, HashSet.insert (A.GName m n) externals)
     A.QName m n
-      | m == mn && Data.Set.member n localNames -> (HashSet.insert n locals, externals)
+      | m == mn && HashSet.member n localNames -> (HashSet.insert n locals, externals)
       | m == mn -> (locals, externals)
       | otherwise -> (locals, HashSet.insert (A.GName m n) externals)
     A.NoQ n
-      | Data.Set.member n localNames -> (HashSet.insert n locals, externals)
+      | HashSet.member n localNames -> (HashSet.insert n locals, externals)
       | otherwise -> (locals, externals)
 
 finishSplitDeps :: M.Map A.Name (NameSet, QNameSet) -> (M.Map A.Name [A.Name], M.Map A.Name [A.QName])
