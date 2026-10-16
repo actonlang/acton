@@ -2845,6 +2845,32 @@ p56_changed_path_prunes_removed_module =
       assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
       [".tydb", ".c", ".h"]
 
+p57_dotted_module_name_keeps_outputs :: TestTree
+p57_dotted_module_name_keeps_outputs =
+  testCase "57-module with a dot in its file name keeps outputs until deleted" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        actDot = src </> "z.dot.act"
+        modDot = modLabel proj "z.dot"
+        outDot = proj </> "out" </> "types" </> casesProjName </> "z.dot"
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") "aaa = 1\n"
+    writeFileUtf8 actDot "zzz = 1\n"
+    _ <- buildOutInArgs proj ["--skip-build"]
+    mapM_ (\ext -> do
+      exists <- artifactExists (outDot ++ ext)
+      assertBool ("expected generated " ++ outDot ++ ext) exists)
+      [".tydb", ".c", ".h"]
+    out <- buildOutInArgs proj ["--skip-build"]
+    assertBool ("expected z.dot fresh\n" ++ T.unpack out) (fresh out modDot)
+    assertBool ("did not expect z.dot to type check\n" ++ T.unpack out) (not (typechecked out modDot))
+    removeFile actDot
+    _ <- buildOutInArgs proj ["--skip-build"]
+    mapM_ (\ext -> do
+      exists <- artifactExists (outDot ++ ext)
+      assertBool ("did not expect stale generated " ++ outDot ++ ext) (not exists))
+      [".tydb", ".c", ".h"]
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2927,5 +2953,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       ]
   , sequentialTestGroup "incremental-prune-cases" AllSucceed
       [ p56_changed_path_prunes_removed_module
+      , p57_dotted_module_name_keeps_outputs
       ]
   ]

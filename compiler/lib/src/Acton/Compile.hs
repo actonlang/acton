@@ -4824,7 +4824,7 @@ pruneMissingModuleOutputs ctx = do
 
     proj = BuildSpec.specName $ projBuildSpec ctx
 
-    dropProjDir rel = case splitDirectories $ normalise (dropExtension rel) of
+    dropProjDir base = case splitDirectories $ normalise base of
                         [n] -> n
                         n:ns | n == proj -> joinPath ns
                         ns -> joinPath ns
