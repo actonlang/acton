@@ -38,48 +38,48 @@
 
 #include "q.h"
 
-extern long num_wthreads;
+extern int64_t num_wthreads;
 // Each worker updates its own entry after every continuation. Entries get cache
 // lines of their own, so that workers do not slow each other down.
 struct wt_stat {
     unsigned int idx;          // worker thread index
     char key[10];              // thread index as string for convenience
     unsigned int state;        // current thread state
-    unsigned long long sleeps; // number of times thread slept
+    uint64_t sleeps;           // number of times thread slept
 
     // Executing actor continuations is the primary work of the RTS, we measure
     // the execution time of each and count to buckets to get a rough idea of
     // how long it takes
-    unsigned long long conts_count; // number of executed continuations
-    unsigned long long conts_sum;   // nanoseconds spent running continuations
-    unsigned long long conts_100ns; // bucket for <100ns
-    unsigned long long conts_1us;   // bucket for <1us
-    unsigned long long conts_10us;  // bucket for <10us
-    unsigned long long conts_100us; // bucket for <100us
-    unsigned long long conts_1ms;   // bucket for <1ms
-    unsigned long long conts_10ms;  // bucket for <10ms
-    unsigned long long conts_100ms; // bucket for <100ms
-    unsigned long long conts_1s;     // bucket for <1s
-    unsigned long long conts_10s;    // bucket for <10s
-    unsigned long long conts_100s;   // bucket for <100s
-    unsigned long long conts_inf;   // bucket for <+Inf
+    uint64_t conts_count; // number of executed continuations
+    uint64_t conts_sum;   // nanoseconds spent running continuations
+    uint64_t conts_100ns; // bucket for <100ns
+    uint64_t conts_1us;   // bucket for <1us
+    uint64_t conts_10us;  // bucket for <10us
+    uint64_t conts_100us; // bucket for <100us
+    uint64_t conts_1ms;   // bucket for <1ms
+    uint64_t conts_10ms;  // bucket for <10ms
+    uint64_t conts_100ms; // bucket for <100ms
+    uint64_t conts_1s;     // bucket for <1s
+    uint64_t conts_10s;    // bucket for <10s
+    uint64_t conts_100s;   // bucket for <100s
+    uint64_t conts_inf;   // bucket for <+Inf
     // Bookkeeping is the time a worker spends between continuations, and from
     // the start of its work callback to the first one: handling the result of
     // a continuation, taking locks, taking the next actor from a queue,
     // talking to the database etc
-    unsigned long long bkeep_count; // number of bookkeeping rounds
-    unsigned long long bkeep_sum;   // nanoseconds spent bookkeeping
-    unsigned long long bkeep_100ns; // bucket for <100ns
-    unsigned long long bkeep_1us;   // bucket for <1us
-    unsigned long long bkeep_10us;  // bucket for <10us
-    unsigned long long bkeep_100us; // bucket for <100us
-    unsigned long long bkeep_1ms;   // bucket for <1ms
-    unsigned long long bkeep_10ms;  // bucket for <10ms
-    unsigned long long bkeep_100ms; // bucket for <100ms
-    unsigned long long bkeep_1s;     // bucket for <1s
-    unsigned long long bkeep_10s;    // bucket for <10s
-    unsigned long long bkeep_100s;   // bucket for <100s
-    unsigned long long bkeep_inf;   // bucket for <+Inf
+    uint64_t bkeep_count; // number of bookkeeping rounds
+    uint64_t bkeep_sum;   // nanoseconds spent bookkeeping
+    uint64_t bkeep_100ns; // bucket for <100ns
+    uint64_t bkeep_1us;   // bucket for <1us
+    uint64_t bkeep_10us;  // bucket for <10us
+    uint64_t bkeep_100us; // bucket for <100us
+    uint64_t bkeep_1ms;   // bucket for <1ms
+    uint64_t bkeep_10ms;  // bucket for <10ms
+    uint64_t bkeep_100ms; // bucket for <100ms
+    uint64_t bkeep_1s;     // bucket for <1s
+    uint64_t bkeep_10s;    // bucket for <10s
+    uint64_t bkeep_100s;   // bucket for <100s
+    uint64_t bkeep_inf;   // bucket for <+Inf
 } __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
@@ -267,7 +267,7 @@ typedef struct WorkerCtx *WorkerCtx;
 // it enters or leaves a try block, so no two contexts share a cache line (see
 // struct mpmcq).
 struct WorkerCtx {
-    long id;
+    int64_t id;
     uv_loop_t *uv_loop;
     volatile JumpBuf jump_top;
     // The next key this worker hands out, and the distance to the one after

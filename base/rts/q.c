@@ -57,9 +57,9 @@ int ENQ_ready($Actor a) {
 }
 #elif defined MPMC && MPMC == 2
 // Add d to the count of q, which is locked (see struct mpmcq)
-static inline void rq_count_add(struct mpmcq *q, long d) {
-    unsigned long long n = __atomic_load_n(&q->count, __ATOMIC_RELAXED);
-    __atomic_store_n(&q->count, n + (unsigned long long)d, __ATOMIC_RELAXED);
+static inline void rq_count_add(struct mpmcq *q, int64_t d) {
+    uint64_t n = __atomic_load_n(&q->count, __ATOMIC_RELAXED);
+    __atomic_store_n(&q->count, n + (uint64_t)d, __ATOMIC_RELAXED);
 }
 
 int ENQ_ready($Actor a) {
@@ -79,7 +79,7 @@ int ENQ_ready($Actor a) {
     // If we enqueue to someone who is not us, immediately wake them up...
     WorkerCtx wctx = GET_WCTX();
     if (wctx != NULL) {
-        long our_wtid = wctx->id;
+        int64_t our_wtid = wctx->id;
         if (our_wtid != i)
             wake_wt(i);
     }
@@ -102,7 +102,7 @@ int ENQ_ready($Actor a) {
     // If we enqueue to someone who is not us, immediately wake them up...
     WorkerCtx wctx = GET_WCTX();
     if (wctx != NULL) {
-        long our_wtid = wctx->id;
+        int64_t our_wtid = wctx->id;
         if (our_wtid != i)
             wake_wt(i);
     }
@@ -117,11 +117,11 @@ int ENQ_ready($Actor a) {
 // dequeueing from the thread specific queue and second from the global shared
 // readyQ or return NULL if no work is found.
 #if defined MPMC && MPMC == 3
-$Actor _DEQ_ready(int idx) {
+$Actor _DEQ_ready(int64_t idx) {
     // TODO: atomics!
 }
 #elif defined MPMC && MPMC == 2
-$Actor _DEQ_ready(int idx) {
+$Actor _DEQ_ready(int64_t idx) {
     $Actor res = NULL;
     if (__atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED) == NULL) {
         return res;
@@ -146,7 +146,7 @@ $Actor _DEQ_ready(int idx) {
 }
 #else
 // First version
-$Actor _DEQ_ready(int idx) {
+$Actor _DEQ_ready(int64_t idx) {
     $Actor res = NULL;
     if (__atomic_load_n(&rqs[idx].head, __ATOMIC_RELAXED) == NULL)
         return res;
@@ -162,7 +162,7 @@ $Actor _DEQ_ready(int idx) {
 }
 #endif
 
-$Actor DEQ_ready(int idx) {
+$Actor DEQ_ready(int64_t idx) {
     assert(idx >= 0 && idx < 256);
     $Actor res = _DEQ_ready(idx);
     if (res)

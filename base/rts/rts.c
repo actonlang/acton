@@ -93,7 +93,7 @@ struct sigaction sa_abrt, sa_ill, sa_int, sa_pipe, sa_segv, sa_term;
 
 char rts_verbose = 0;
 char rts_debug = 0;
-long num_wthreads = -1;
+int64_t num_wthreads = -1;
 
 char rts_exit = 0;
 int return_val = 0;
@@ -284,8 +284,8 @@ int get_wtid() {
 
 void pin_actor_affinity() {
     $Actor a = ($Actor)pthread_getspecific(self_key);
-    long i = get_wctx()->id;
-    log_debug("Pinning affinity for %s actor %" PRId64 " to current WT %d", a->$class->$GCINFO, a->$globkey, i);
+    int64_t i = get_wctx()->id;
+    log_debug("Pinning affinity for %s actor %" PRId64 " to current WT %" PRId64, a->$class->$GCINFO, a->$globkey, i);
     a->$affinity = i;
 }
 
@@ -2033,7 +2033,7 @@ static inline uint64_t read_counter(void) {
 }
 #endif
 
-static inline long long int now_ns(void) {
+static inline int64_t now_ns(void) {
 #if defined(__aarch64__) || defined(__x86_64__)
     if (counter_mult)
         return ((unsigned __int128)read_counter() * counter_mult) >> 32;
@@ -2061,7 +2061,7 @@ static void init_counter(void) {
     unsigned int eax, ebx, ecx, edx;
     if (!__get_cpuid(0x80000007, &eax, &ebx, &ecx, &edx) || !(edx & (1 << 8)))
         return;
-    long long int ns0 = now_ns(), ns1;
+    int64_t ns0 = now_ns(), ns1;
     uint64_t ticks0 = read_counter();
     while ((ns1 = now_ns()) - ns0 < 1000 * 1000)
         ;
@@ -2073,7 +2073,7 @@ static void init_counter(void) {
 // Whether another actor is waiting in this worker's queue or in the shared
 // queue. Worker 0 never takes actors from the shared queue, so for worker 0
 // only its own queue counts.
-static inline bool others_waiting(int wtid) {
+static inline bool others_waiting(int64_t wtid) {
     return __atomic_load_n(&rqs[wtid].head, __ATOMIC_RELAXED) != NULL
            || (wtid != 0 && __atomic_load_n(&rqs[SHARED_RQ].head, __ATOMIC_RELAXED) != NULL);
 }
@@ -2086,7 +2086,7 @@ void wt_work_cb(uv_check_t *ev) {
     // taken_ns: when the worker took that actor from a queue
     // conts: how many of its continuations the worker has run since
     volatile $Actor current = NULL;
-    volatile long long int taken_ns = 0;
+    volatile int64_t taken_ns = 0;
     volatile int conts = 0;
 
     // We read the time before and after each continuation. The time between
@@ -2094,8 +2094,8 @@ void wt_work_cb(uv_check_t *ev) {
     // bookkeeping. Like the variables above, these are volatile so that they
     // keep their values when a continuation raises and we longjmp back to the
     // setjmp of jump0 (see struct WorkerCtx).
-    volatile long long int start_ns = now_ns();
-    volatile long long int end_ns = start_ns;
+    volatile int64_t start_ns = now_ns();
+    volatile int64_t end_ns = start_ns;
     while (true) {
         maybe_sync_pause();
         if (rts_exit) {
@@ -2143,13 +2143,13 @@ void wt_work_cb(uv_check_t *ev) {
         $Cont cont = m->$cont;
         $WORD val = m->value;
 
-        long long int cont_start_ns = now_ns();
+        int64_t cont_start_ns = now_ns();
         if (!continued) {
             taken_ns = cont_start_ns;
             conts = 0;
         }
         {
-            long long int diff = cont_start_ns - end_ns;
+            int64_t diff = cont_start_ns - end_ns;
             WT_STAT_ADD(wt_stats[wctx->id].bkeep_count, 1);
             WT_STAT_ADD(wt_stats[wctx->id].bkeep_sum, diff);
             if      (diff < 100)              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ns, 1); }
@@ -2160,8 +2160,8 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10ms, 1); }
             else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ms, 1); }
             else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1s, 1); }
-            else if (diff < (long long int)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10s, 1); }
-            else if (diff < (long long int)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100s, 1); }
+            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10s, 1); }
+            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100s, 1); }
             else                              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_inf, 1); }
         }
 
@@ -2174,7 +2174,7 @@ void wt_work_cb(uv_check_t *ev) {
             assert(wctx->jump_top == &wctx->jump0);     // the continuation popped every try it pushed
 
             end_ns = now_ns();
-            long long int diff = end_ns - cont_start_ns;
+            int64_t diff = end_ns - cont_start_ns;
 
             WT_STAT_ADD(wt_stats[wctx->id].conts_count, 1);
             WT_STAT_ADD(wt_stats[wctx->id].conts_sum, diff);
@@ -2187,15 +2187,15 @@ void wt_work_cb(uv_check_t *ev) {
             else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_10ms, 1); }
             else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_100ms, 1); }
             else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_1s, 1); }
-            else if (diff < (long long int)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_10s, 1); }
-            else if (diff < (long long int)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_100s, 1); }
+            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_10s, 1); }
+            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_100s, 1); }
             else                              { WT_STAT_ADD(wt_stats[wctx->id].conts_inf, 1); }
         } else {                                                       // Exceptional path
             end_ns = now_ns();
             assert(wctx->jump_top == &wctx->jump0);
             assert(wctx->jump0.xval != NULL);
             B_BaseException ex = wctx->jump0.xval;
-            rtsd_printf("## (%d) Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
+            rtsd_printf("## (%" PRId64 ") Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
 
@@ -2361,8 +2361,8 @@ void wt_work_cb(uv_check_t *ev) {
 
 void *main_loop(void *idx) {
     WorkerCtx wctx = GC_memalign(_Alignof(struct WorkerCtx), sizeof(struct WorkerCtx));
-    wctxs[(long)idx] = wctx;
-    wctx->id = (long)idx;
+    wctxs[(intptr_t)idx] = wctx;
+    wctx->id = (intptr_t)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
     start_worker_keys(wctx);
@@ -2371,7 +2371,7 @@ void *main_loop(void *idx) {
 #endif
 
     char tname[11]; // Enough for "Worker XXX\0"
-    snprintf(tname, sizeof(tname), "Worker %ld", wctx->id);
+    snprintf(tname, sizeof(tname), "Worker %" PRId64, wctx->id);
 #ifdef ACTON_THREADS
 #if defined(IS_MACOS)
     pthread_setname_np(tname);
@@ -2481,7 +2481,7 @@ const char* stats_to_json () {
     yyjson_mut_obj_add_val(doc, root, "wt", j_stat);
 #define WT(f) WT_STAT_GET(wt_stats[i].f)
     for (unsigned int i = 1; i < NUM_THREADS; i++) {
-        unsigned long long qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED);
+        uint64_t qlen = __atomic_load_n(&rqs[i].count, __ATOMIC_RELAXED);
         yyjson_mut_val *j_wt = yyjson_mut_obj(doc);
         yyjson_mut_obj_add_val(doc, j_stat, wt_stats[i].key, j_wt);
         yyjson_mut_obj_add_str(doc, j_wt, "state",       WT_State_name[WT(state)]);
@@ -3336,14 +3336,14 @@ int main(int argc, char **argv) {
     if (num_wthreads == -1 && num_cores < 4) { // auto, few CPU cores, so use 4 worker threads
         num_wthreads = 4;
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
     } else if (num_wthreads == -1) { // auto, many CPU cores, use 1 worker thread per CPU core
         num_wthreads = num_cores;
         cpu_pin = 1;
-        log_info("Detected %ld CPUs: Using %ld worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
     } else {
         cpu_pin = 0;
-        log_info("Detected %ld CPUs: Using %ld worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
     }
 #else
     log_info("Running without threads, main thread will perform all work");
