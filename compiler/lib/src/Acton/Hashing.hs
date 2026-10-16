@@ -49,6 +49,9 @@ import Control.Monad (foldM, when)
 import Data.Bits (shiftR, (.&.), (.|.))
 import Data.Char (ord)
 import Data.Graph (SCC(..), stronglyConnComp)
+import qualified Data.Array as Arr
+import Data.Array.IO (IOArray, IOUArray, getElems, newArray, readArray, writeArray)
+import qualified Data.HashMap.Strict as HashMap
 import qualified Data.HashSet as HashSet
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
 import Control.Concurrent.Async (mapConcurrently)
@@ -56,7 +59,7 @@ import GHC.Conc (getNumCapabilities)
 import Data.List (foldl', intercalate, nub)
 import qualified Data.List
 import qualified Data.Map as M
-import Data.Maybe (mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import qualified Data.Set
 import Data.Word (Word8, Word64)
 import Foreign.Marshal.Alloc (alloca, allocaBytes)
@@ -205,7 +208,10 @@ hashFeedWith sink@(HashSink statep _ offp) feed = do
   poke offp 0
   feed sink
   sinkFlush sink
-  SHA256.finalize <$> readIORef statep
+  ctx <- readIORef statep
+  -- Finalize here, in the thread that fed the bytes, not in whoever later
+  -- forces the result.
+  pure $! SHA256.finalize ctx
 
 feedTLDecl :: A.Decl -> HashFeed
 feedTLDecl decl sink = feedTag 0 sink >> feedDecl decl sink
@@ -801,6 +807,22 @@ hashSelfWithDepsFromWith sink self lookupLocal locals externals =
     feedTag 254 sink' >> feedTag 0 sink' >> feedHashBytes self sink' >>
     feedResolvedDepHashes lookupLocal locals externals sink'
 
+-- | hashSelfWithDepsFromWith with the local dep hashes already looked up.
+hashSelfWithDepHashesWith :: HashSink
+                          -> B.ByteString
+                          -> [B.ByteString]
+                          -> [(A.QName, B.ByteString)]
+                          -> IO B.ByteString
+hashSelfWithDepHashesWith sink self localHashes externals =
+  hashFeedWith sink $ \sink' -> do
+    feedTag 254 sink'
+    feedTag 0 sink'
+    feedHashBytes self sink'
+    feedTag 4 sink'
+    mapM_ (\h -> feedHashBytes h sink') localHashes
+    mapM_ (\(_, h) -> feedHashBytes h sink') externals
+    feedTag 5 sink'
+
 hashCycleGroupFromWith :: HashSink
                        -> [B.ByteString]
                        -> (A.Name -> Maybe B.ByteString)
@@ -835,7 +857,9 @@ hashNameHashEntriesWith tag entries feedEntry =
 hashNameHashMapEntriesForNames :: Int -> M.Map A.Name B.ByteString -> [A.Name] -> B.ByteString
 hashNameHashMapEntriesForNames tag hashes names =
   hashNameHashEntriesWith tag names $ \n sink ->
-    feedText (A.nameText n) sink >> feedHashBytes (M.findWithDefault B.empty n hashes) sink
+    feedText (A.nameText n) sink >> feedHashBytes (HashMap.lookupDefault B.empty n hashesH) sink
+  where
+    hashesH = toHashMap hashes
 
 pubSigDepsFromNameInfoMap :: M.Map A.Name I.NameInfo -> M.Map A.Name [A.QName]
 pubSigDepsFromNameInfoMap nameInfoMap =
@@ -1489,39 +1513,55 @@ computeHashesSortedDeps selfHashes localDeps extDeps =
       Just hashes -> pure hashes
       Nothing     -> computeScc sink
   where
-    computeAcyclic sink = go M.empty (M.keys selfHashes)
-      where
-        go acc [] = pure (Just acc)
-        go acc (n:ns) = do
-          acc' <- visit 0 HashSet.empty acc n
-          case acc' of
-            Just m  -> go m ns
-            Nothing -> pure Nothing
+    -- The acyclic walk runs on dense ids in ascending Name order, with
+    -- arrays for its state.  Map operations on names cost a string
+    -- comparison per tree level, and generated modules have long names that
+    -- share most of their prefix.  The bytes fed to the hash are the same.
+    names = M.keys selfHashes
+    count = M.size selfHashes
+    selfArr = Arr.listArray (0, count - 1) (M.elems selfHashes) :: Arr.Array Int B.ByteString
+    nameIds = HashMap.fromList (zip names [0 ..]) :: HashMap.HashMap A.Name Int
+    -- Deps outside selfHashes contribute nothing, so they get no id.
+    localIdArr = Arr.listArray (0, count - 1)
+                   [ mapMaybe (`HashMap.lookup` nameIds) ds | ds <- alignAscending names localDeps ]
+                   :: Arr.Array Int [Int]
+    extArr = Arr.listArray (0, count - 1) (alignAscending names extDeps)
+               :: Arr.Array Int [(A.QName, B.ByteString)]
 
-        visit depth visiting acc n
-          | M.member n acc = pure (Just acc)
-          | M.notMember n selfHashes = pure (Just acc)
-          | depth > maxAcyclicHashDepth = pure Nothing
-          | HashSet.member n visiting = pure Nothing
-          | otherwise = do
-              let visiting' = HashSet.insert n visiting
-                  locals = M.findWithDefault [] n localDeps
-                  externals = M.findWithDefault [] n extDeps
-              acc' <- foldM (visitDep (depth + 1) visiting') (Just acc) locals
-              case acc' of
-                Nothing -> pure Nothing
-                Just m  -> do
-                  finalHash <-
-                    hashSelfWithDepsFromWith
-                      sink
-                      (selfHashes M.! n)
-                      (lookupLocalHash m)
-                      locals
-                      externals
-                  pure (Just (M.insert n finalHash m))
-
-        visitDep _ _ Nothing _ = pure Nothing
-        visitDep depth visiting (Just acc) n = visit depth visiting acc n
+    computeAcyclic sink = do
+      results <- newArray (0, count - 1) Nothing :: IO (IOArray Int (Maybe B.ByteString))
+      onPath <- newArray (0, count - 1) False :: IO (IOUArray Int Bool)
+      let visit depth i = do
+            done <- readArray results i
+            case done of
+              Just _ -> pure True
+              Nothing
+                | depth > maxAcyclicHashDepth -> pure False
+                | otherwise -> do
+                    cyclic <- readArray onPath i
+                    if cyclic then pure False else do
+                      writeArray onPath i True
+                      ok <- visitAll (depth + 1) (localIdArr Arr.! i)
+                      writeArray onPath i False
+                      if not ok then pure False else do
+                        depHashes <- mapM (readArray results) (localIdArr Arr.! i)
+                        finalHash <- hashSelfWithDepHashesWith sink (selfArr Arr.! i)
+                                       (catMaybes depHashes) (extArr Arr.! i)
+                        writeArray results i (Just finalHash)
+                        pure True
+          visitAll _ [] = pure True
+          visitAll depth (j:js) = do
+            ok <- visit depth j
+            if ok then visitAll depth js else pure False
+          go i
+            | i >= count = pure True
+            | otherwise = do
+                ok <- visit (0 :: Int) i
+                if ok then go (i + 1) else pure False
+      ok <- go 0
+      if not ok then pure Nothing else do
+        hashes <- getElems results
+        pure (Just (M.fromDistinctAscList (zip names (map (fromMaybe B.empty) hashes))))
 
     computeScc sink =
       foldM (addScc sink) M.empty (stronglyConnComp nodes)
@@ -1558,6 +1598,22 @@ computeHashesSortedDeps selfHashes localDeps extDeps =
       case M.lookup n acc of
         Just h -> Just h
         Nothing -> M.lookup n selfHashes
+
+-- | The values of a Map for each of the ascending names, by a merge join
+-- with one comparison per step; names without an entry get [].
+alignAscending :: [A.Name] -> M.Map A.Name [a] -> [[a]]
+alignAscending = alignAscendingWith []
+
+alignAscendingWith :: v -> [A.Name] -> M.Map A.Name v -> [v]
+alignAscendingWith d ns m = go ns (M.toAscList m)
+  where
+    go [] _ = []
+    go (n:rest) kvs = case kvs of
+      (k, v) : kvs' -> case compare k n of
+        LT -> go (n:rest) kvs'
+        EQ -> v : go rest kvs'
+        GT -> d : go rest kvs
+      [] -> d : go rest []
 
 maxAcyclicHashDepth :: Int
 maxAcyclicHashDepth = 10000
@@ -1635,23 +1691,43 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> [InterfaceFiles.NameHashInfo]
 assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
-  let namesSorted = Data.List.sortOn A.nameText (Data.Set.toList nameKeys)
-      localDeps m n = Data.List.sortOn A.nameText (M.findWithDefault [] n m)
-  in
-    [ InterfaceFiles.NameHashInfo
-        { InterfaceFiles.nhName = n
-        , InterfaceFiles.nhSrcHash = M.findWithDefault B.empty n nameSrcHashes
-        , InterfaceFiles.nhPubHash = M.findWithDefault B.empty n pubHashes
-        , InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
-        , InterfaceFiles.nhOwnImplHash = M.findWithDefault B.empty n ownImplHashes
-        , InterfaceFiles.nhPubLocalDeps = localDeps pubLocalDeps n
-        , InterfaceFiles.nhImplLocalDeps = localDeps implLocalDeps n
-        , InterfaceFiles.nhPubDeps = M.findWithDefault [] n pubExtHashes
-        , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
-        , InterfaceFiles.nhStmtIndices = []
-        }
-    | n <- namesSorted
-    ]
+  -- Line every Map up with the ascending names by a merge join, then emit
+  -- the entries in nameText order.  The sort is stable and its input is the
+  -- same ascending list as before, so the order is unchanged.
+  [ InterfaceFiles.NameHashInfo
+      { InterfaceFiles.nhName = nameArr Arr.! i
+      , InterfaceFiles.nhSrcHash = srcA Arr.! i
+      , InterfaceFiles.nhPubHash = pubA Arr.! i
+      , InterfaceFiles.nhImplHash = implA Arr.! i
+      , InterfaceFiles.nhOwnImplHash = ownImplA Arr.! i
+      , InterfaceFiles.nhPubLocalDeps = Data.List.sortOn A.nameText (pubLocalA Arr.! i)
+      , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn A.nameText (implLocalA Arr.! i)
+      , InterfaceFiles.nhPubDeps = pubExtA Arr.! i
+      , InterfaceFiles.nhImplDeps = implExtA Arr.! i
+      , InterfaceFiles.nhStmtIndices = []
+      }
+  | i <- order
+  ]
+  where
+    names = Data.Set.toAscList nameKeys
+    count = Data.Set.size nameKeys
+    toArr :: [v] -> Arr.Array Int v
+    toArr = Arr.listArray (0, count - 1)
+    nameArr = toArr names
+    aligned :: v -> M.Map A.Name v -> Arr.Array Int v
+    aligned d m = toArr (alignAscendingWith d names m)
+    srcA = aligned B.empty nameSrcHashes
+    pubA = aligned B.empty pubHashes
+    implA = aligned B.empty implHashes
+    ownImplA = aligned B.empty ownImplHashes
+    pubLocalA = aligned [] pubLocalDeps
+    implLocalA = aligned [] implLocalDeps
+    pubExtA = aligned [] pubExtHashes
+    implExtA = aligned [] implExtHashes
+    order = Data.List.sortOn (A.nameText . (nameArr Arr.!)) [0 .. count - 1]
+
+toHashMap :: M.Map A.Name v -> HashMap.HashMap A.Name v
+toHashMap = HashMap.fromList . M.toList
 
 buildNameHashes :: Data.Set.Set A.Name
                 -> M.Map A.Name B.ByteString
