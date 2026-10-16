@@ -41,6 +41,31 @@ $WORD $val_deserialize($Serial$state state);
 
 $ROW $add_header(int class_id, int64_t blob_size, $Serial$state state);
 
+// Shared codecs for compiler-generated closures. Offsets and scalar sizes are
+// computed by the C compiler; REF fields traverse the ordinary object graph.
+#define $CLOSURE_REF 0
+
+// Compile-time guards for field arrays shared by different typed closures.
+#define $CLOSURE_FIELD_EQ(c1, f1, c2, f2) \
+    (offsetof(struct c1, f1) == offsetof(struct c2, f2) && \
+     sizeof(((c1)0)->f1) == sizeof(((c2)0)->f2))
+
+struct $ClosureField {
+    size_t offset;
+    size_t size;
+    int class_id;
+};
+
+struct $ClosureLayout {
+    size_t size;
+    $SerializableG_class methods;
+    size_t field_count;
+    const struct $ClosureField *fields;
+};
+
+void $closure_serialize($WORD self, const struct $ClosureLayout *layout, $Serial$state state);
+$WORD $closure_deserialize($WORD self, const struct $ClosureLayout *layout, $Serial$state state);
+
 // top-level functions for serialization of an object ////////////////////////////////////////////////
 
 long $total_rowsize($ROW);

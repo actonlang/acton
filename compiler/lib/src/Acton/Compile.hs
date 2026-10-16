@@ -2283,6 +2283,7 @@ data CodegenStatus = CodegenStatus
   { csExpected :: String
   , csC :: Maybe String
   , csH :: Maybe String
+  , csSupport :: Maybe String
   }
 
 -- | Header prefix used to tag generated code with the module impl hash.
@@ -2317,24 +2318,26 @@ codegenStatus paths mn implHash = do
       hFile = outBase paths mn ++ ".h"
   cHash <- readCodegenHash cFile
   hHash <- readCodegenHash hFile
-  return CodegenStatus { csExpected = expected, csC = cHash, csH = hHash }
+  supportHash <- readCodegenHash (Acton.CodeGen.supportFile (outBase paths mn))
+  return CodegenStatus { csExpected = expected, csC = cHash, csH = hHash, csSupport = supportHash }
 
--- | Check whether generated .c/.h hashes match the expected impl hash.
+-- | Check every generated artifact against the expected impl hash.
 codegenUpToDate :: CodegenStatus -> Bool
 codegenUpToDate status =
-  csC status == Just (csExpected status) && csH status == Just (csExpected status)
+  all (== Just (csExpected status)) [csC status,csH status,csSupport status]
 
 -- | Format a short delta message for stale codegen.
 formatCodegenDelta :: CodegenStatus -> String
 formatCodegenDelta status =
   let expected = take 8 (csExpected status)
       short actual = maybe "missing" (take 8) actual
-  in case (csC status, csH status) of
-       (Just c, Just h) | c == h ->
+  in case (csC status, csH status, csSupport status) of
+       (Just c, Just h, Just support) | c == h && h == support ->
          " {impl " ++ take 8 c ++ " -> " ++ expected ++ "}"
        _ ->
          " {impl c " ++ short (csC status) ++ " -> " ++ expected
-         ++ ", h " ++ short (csH status) ++ " -> " ++ expected ++ "}"
+         ++ ", h " ++ short (csH status) ++ " -> " ++ expected
+         ++ ", support " ++ short (csSupport status) ++ " -> " ++ expected ++ "}"
 
 -- | Run the front passes for a single module.
 -- Builds the environment, runs kinds/types, computes per-name src/pub/impl
@@ -3087,10 +3090,10 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
         iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print res)
         return res
 
-      ((_,h,c), tCodeGen) <- timedBackPass BackPassCodeGen $ do
+      ((_,h,c,support), tCodeGen) <- timedBackPass BackPassCodeGen $ do
         let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
             emitLines = not (C.dbg_no_lines opts)
-        Acton.CodeGen.generate liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
+        Acton.CodeGen.generateCode writesOutput liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
 
       let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
       if C.hgen opts
@@ -3104,7 +3107,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
             putStrLn c
             finishBack tRender Nothing
           else do
-            (_, tRender) <- timedBackPass BackPassRender (forceOut h >> forceOut c)
+            (_, tRender) <- timedBackPass BackPassRender (forceOut h >> forceOut c >> forceOut support)
             mWriteTime <-
               if not writesOutput
                 then return Nothing
@@ -3118,6 +3121,9 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
                       (_, tWrite) <- timedBackPass BackPassWrite $ do
                         let cFile = outbase ++ ".c"
                             hFile = outbase ++ ".h"
+                            supportPath = Acton.CodeGen.supportFile outbase
+                        createDirectoryIfMissing True (takeDirectory supportPath)
+                        writeFile supportPath support
                         writeFile hFile h
                         writeFile cFile c
                       return (Just tWrite)
@@ -4778,7 +4784,7 @@ enumerateProjectModules ctx = do
           return (f, mn)
 
 -- | Remove stale generated module artifacts when source modules disappear.
--- Prunes orphan .tydb/.c/.h outputs under out/types before task planning so
+-- Prunes orphan .tydb/.c/.h and support outputs under out/types before planning so
 -- cached headers cannot mask deleted .act modules.
 pruneMissingModuleOutputs :: ProjCtx -> IO ()
 pruneMissingModuleOutputs ctx = do
@@ -4805,12 +4811,13 @@ pruneMissingModuleOutputs ctx = do
        ".test_root" `Data.List.isSuffixOf` dropExtension rel)
 
     moduleBase rel ext
+      | Just owner <- Acton.CodeGen.supportOwner rel = owner
       | isRootStub rel ext = dropExtension (dropExtension rel)
       | otherwise = dropExtension rel
 
     pruneFile srcMods typesRoot absFile = do
       let ext = takeExtension absFile
-      when (ext == ".c" || ext == ".h") $ do
+      when (ext == ".c" || ext == ".h" || isJust (Acton.CodeGen.supportOwner absFile)) $ do
         let rel = normalise (makeRelative typesRoot absFile)
             base = dropProjDir (moduleBase rel ext)
         unless (Data.Set.member base srcMods) $
@@ -4851,6 +4858,7 @@ pruneMissingChangedModuleOutputs ctxs changedPaths = do
             outBase = projTypesDir ctx </> modBase
         removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
         mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
+        removeFile (Acton.CodeGen.supportFile outBase) `catch` ignoreNotExists
 
     ignoreNotExists :: IOException -> IO ()
     ignoreNotExists _ = return ()
