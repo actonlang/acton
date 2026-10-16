@@ -2880,6 +2880,29 @@ p57_dotted_module_name_keeps_outputs =
     _ <- buildOutInArgs proj ["--skip-build"]
     assertArtifactsGone (concatMap outs dotted)
 
+p58_full_build_drops_undeclared_root_stub :: TestTree
+p58_full_build_drops_undeclared_root_stub =
+  testCase "58-full build drops the root stub of a module that loses its root actor" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        typesDir = proj </> "out" </> "types"
+        outsA = [ typesDir </> casesProjName </> ("a" ++ ext) | ext <- [".tydb", ".c", ".h"] ]
+        rootA = typesDir </> "a.root.c"
+        rootMain = typesDir </> "main.root.c"
+        rootActor = T.unlines
+          [ "actor main(env: Env):"
+          , "    env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") rootActor
+    writeFileUtf8 (src </> "main.act") rootActor
+    _ <- buildOutIn proj
+    assertArtifactsExist (rootA : rootMain : outsA)
+    writeFileUtf8 (src </> "a.act") "x = 1\n"
+    _ <- buildOutIn proj
+    assertArtifactsGone [rootA]
+    assertArtifactsExist (rootMain : outsA)
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2963,5 +2986,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
   , sequentialTestGroup "incremental-prune-cases" AllSucceed
       [ p56_changed_path_prunes_removed_module
       , p57_dotted_module_name_keeps_outputs
+      , p58_full_build_drops_undeclared_root_stub
       ]
   ]
