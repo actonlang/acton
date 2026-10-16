@@ -122,6 +122,14 @@ jobs:
         run: |
           sudo sysctl kern.corefile=core.%P
           ulimit -c unlimited
+      # The GHC bindist hardcodes the Command Line Tools SDK
+      # (/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib) as a
+      # library dir, so every GHC link reads the .tbd stubs of that SDK. When
+      # the image ships Command Line Tools newer than its default Xcode, the
+      # Xcode linker cannot parse those stubs (actions/runner-images#14940).
+      # The Command Line Tools linker always matches its own SDK.
+      - name: "Use the Command Line Tools toolchain"
+        run: sudo xcode-select -s /Library/Developer/CommandLineTools
       - name: "Check out repository code"
         uses: actions/checkout@v7
       - name: "Cache downloaded source archives"
