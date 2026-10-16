@@ -1286,6 +1286,16 @@ frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
 frontResultModuleInfo mn fr =
     fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
 
+-- | The ModuleInfo of a module whose result is rebuilt from its .tydb
+-- without a front pass, carrying the escape summaries stored there.
+-- Modules checked later in the same build read them for their
+-- Hashable.hash contracts.
+storedEscapeModuleInfo :: FilePath -> A.ModName -> [A.ModName] -> [(A.Name, I.NameInfo)] -> Maybe String -> IO Acton.Env.ModuleInfo
+storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc = do
+  summaries <- InterfaceFiles.openInterfaceDB tyFile >>= InterfaceFiles.readInterfaceDBEscapeSummaries
+  evaluate (rnf summaries)
+  return $ Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imps ifaceTE mdoc)
+
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
 docNameCountThreshold :: Int
@@ -4202,8 +4212,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
                                                           backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                                          fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
-                                                            { frOutputJobs = outputJobs }
+                                                      moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
+                                                      let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                            { frOutputJobs = outputJobs
+                                                            , frModuleInfo = Just moduleInfo
+                                                            }
                                                       cacheFrontResult fr
                         _ -> rerunFront
                       ) `catch` handleImplRefreshException
@@ -4226,8 +4239,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               case deferredBackJob of
                                 Just _ -> Nothing
                                 Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
-                                   { frInterestDeps = interestDeps }
+                        moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
+                        let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
+                                   { frInterestDeps = interestDeps
+                                   , frModuleInfo = Just moduleInfo
+                                   }
                         cacheFrontResult fr
                   runReuse = do
                     --traceM ("\n## runReuse " ++ prstr mn ++ "\n")

@@ -1042,7 +1042,103 @@ p17b_dep_escape_change = testCase "17b-dependency escape change rechecks Hashabl
   res3 <- runActonIn casesProjDir ["build", "--color", "never"]
   assertExitSuccess "rebuild after restoring keep" res3
 
+p17c_refresh_keeps_escape :: TestTree
+p17c_refresh_keeps_escape = testCase "17c-impl refresh keeps escape summaries" $ do
+  let mainContent = T.unlines
+        [ "import u"
+        , ""
+        , "class Point(object):"
+        , "    x: int"
+        , ""
+        , "    def __init__(self, x: int):"
+        , "        self.x = x"
+        , ""
+        , "extension Point(Eq):"
+        , "    def __eq__(p1, p2):"
+        , "        return p1.x == p2.x"
+        , ""
+        , "extension Point(Hashable):"
+        , "    def hash(self, h):"
+        , "        u.helper(h)"
+        , "        self.x.hash(h)"
+        , ""
+        , "actor main(env: Env):"
+        , "    print(hash(Point(u.g())))"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProjectWithDeps []
+  writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
+    [ "def f() -> int:"
+    , "    return 1"
+    ]
+  writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
+    [ "import v"
+    , ""
+    , "def helper(x: hasher) -> None:"
+    , "    pass"
+    , ""
+    , "def g() -> int:"
+    , "    return v.f()"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") mainContent
+  res1 <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp"]
+  assertExitSuccess "initial build" res1
+  -- An impl-only change in v gives u an eager impl refresh (no deferred back
+  -- job with --no-dbp). Editing main makes main run its front pass in the
+  -- same build, against the ModuleInfo that the refresh produced for u.
+  writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
+    [ "def f() -> int:"
+    , "    return 2"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") (mainContent <> "# edited\n")
+  res2@(_, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp", "--verbose"]
+  assertExitSuccess "rebuild after the impl change" res2
+  assertBool "expected an impl refresh of u" (T.isInfixOf "impl changes in" out2)
+
 -- Incremental/hash case coverage --------------------------------------------
+
+p17d_codegen_refresh_keeps_escape :: TestTree
+p17d_codegen_refresh_keeps_escape = testCase "17d-codegen refresh keeps escape summaries" $ do
+  let uC = casesProjDir </> "out" </> "types" </> "incremental_cases" </> "u.c"
+      mainContent = T.unlines
+        [ "import u"
+        , ""
+        , "class Point(object):"
+        , "    x: int"
+        , ""
+        , "    def __init__(self, x: int):"
+        , "        self.x = x"
+        , ""
+        , "extension Point(Eq):"
+        , "    def __eq__(p1, p2):"
+        , "        return p1.x == p2.x"
+        , ""
+        , "extension Point(Hashable):"
+        , "    def hash(self, h):"
+        , "        u.helper(h)"
+        , "        self.x.hash(h)"
+        , ""
+        , "actor main(env: Env):"
+        , "    print(hash(Point(3)))"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProjectWithDeps []
+  writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
+    [ "def helper(x: hasher) -> None:"
+    , "    pass"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") mainContent
+  res1 <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp"]
+  assertExitSuccess "initial build" res1
+  -- A stale hash line in u.c gives u an eager codegen refresh (no deferred
+  -- back job with --no-dbp). Editing main makes main run its front pass in
+  -- the same build, against the ModuleInfo that the refresh produced for u.
+  rewriteFirstLine uC "/* Acton impl hash: deadbeef */"
+  writeFileUtf8 (casesSrcDir </> "main.act") (mainContent <> "# edited\n")
+  res2@(_, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp", "--verbose"]
+  assertExitSuccess "rebuild after the codegen hash change" res2
+  assertBool "expected a codegen refresh of u" (T.isInfixOf "generated code out of date" out2)
+
 
 p18_type_only_deps :: TestTree
 p18_type_only_deps = testCase "18-type-only deps in signatures" $ do
@@ -2999,6 +3095,8 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p16_dep_api_change
       , p17_dep_impl_change
       , p17b_dep_escape_change
+      , p17c_refresh_keeps_escape
+      , p17d_codegen_refresh_keeps_escape
       , p18_type_only_deps
       , p19_unused_import
       , p20_add_remove_names
