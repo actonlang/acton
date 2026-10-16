@@ -80,6 +80,24 @@ struct wt_stat {
     uint64_t bkeep_10s;    // bucket for <10s
     uint64_t bkeep_100s;   // bucket for <100s
     uint64_t bkeep_inf;   // bucket for <+Inf
+    // How long the actors this worker took from a ready queue had waited:
+    // from their ready stamp (ENQ_ready) to the start of their continuation,
+    // recorded only while the RTS mon output is on (record_waits in rts.c).
+    // Both times have microsecond resolution, and waits are kept in
+    // nanoseconds, so they are multiples of 1000. wait_1us counts the actors
+    // whose two times fall in the same microsecond, and those whose
+    // difference is negative, which counts as 0.
+    uint64_t wait_count;  // number of actors taken
+    uint64_t wait_sum;    // nanoseconds waited
+    uint64_t wait_max;    // longest wait in nanoseconds
+    uint64_t wait_1us;    // bucket for <1us
+    uint64_t wait_10us;   // bucket for <10us
+    uint64_t wait_100us;  // bucket for <100us
+    uint64_t wait_1ms;    // bucket for <1ms
+    uint64_t wait_10ms;   // bucket for <10ms
+    uint64_t wait_100ms;  // bucket for <100ms
+    uint64_t wait_1s;     // bucket for <1s
+    uint64_t wait_inf;    // bucket for <+Inf
 } __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
@@ -149,9 +167,31 @@ struct B_Msg {
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
+    // Ready stamp, in the padding after $wait_lock: the time ENQ_ready was
+    // given when it last made the actor ready to run this message. That is
+    // the end of the continuation whose result the worker was handling, or
+    // else a read of the worker clock by the caller.
+    uint32_t $ready_us;
     $WORD value;
     $int64 $globkey;
 };
+
+// Ready stamps are microseconds of the worker clock (now_ns() in rts.c) in
+// 32 bits, so they fit in the padding of a message. They wrap every 71.6
+// minutes, so compare them only by their difference, a signed 32-bit
+// number: a stamp from 35.8 to 71.6 minutes after another comes out before
+// it. Stamps taken on different threads get compared, for example when a
+// worker takes an actor that another thread made ready. On a machine with
+// several x86 sockets whose TSCs are not in step, a difference between
+// stamps taken on two sockets is off by the offset between their TSCs, and
+// can come out negative. The worker clock never reads below 0, so stamp_us
+// divides ns as an unsigned number, which takes fewer instructions.
+static inline uint32_t stamp_us(int64_t ns) {
+    return (uint32_t)((uint64_t)ns / 1000);
+}
+static inline int32_t stamp_diff(uint32_t a, uint32_t b) {
+    return (int32_t)(a - b);
+}
 
 struct $ActorG_class {
     char *$GCINFO;

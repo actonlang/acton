@@ -71,6 +71,10 @@
 
 #include <uv.h>
 
+// The worker clock, defined below. Callers of ENQ_ready above the definition
+// read their ready stamps with it.
+static inline int64_t now_ns(void);
+
 #include "q.c"
 
 #include "io.c"
@@ -1105,7 +1109,7 @@ B_Msg $ASYNC($Actor to, $Cont cont) {
     } else {                                            // $ASYNC called by the event loop
         m->$baseline = current_time();
         if (ENQ_msg(m, to)) {
-           int wtid = ENQ_ready(to);
+           int32_t wtid = ENQ_ready(to, stamp_us(now_ns()));
            wake_wt(wtid);
         }
     }
@@ -1281,7 +1285,8 @@ void FLUSH_outgoing_db($Actor self, uuid_t *txnid) {
 
 // Actually send all buffered messages of the sender, using internal queues only
 // Assumes the actor's outgoing queue has already been reversed in FIFO order
-void FLUSH_outgoing_local($Actor self) {
+// The actors this makes ready get ready_us as their ready stamp.
+void FLUSH_outgoing_local($Actor self, uint32_t ready_us) {
     rtsd_printf("#### FLUSH_outgoing messages from %" PRId64 " to RTS-internal queues", self->$globkey);
     B_Msg m = self->$outgoing;
     self->$outgoing = NULL;
@@ -1292,7 +1297,7 @@ void FLUSH_outgoing_local($Actor self) {
         if (m->$baseline == self->B_Msg->$baseline) {
             $Actor to = m->$to;
             if (ENQ_msg(m, to)) {
-                ENQ_ready(to);
+                ENQ_ready(to, ready_us);
             }
             dest = to->$globkey;
         } else {
@@ -1322,7 +1327,7 @@ bool handle_timeout(time_t now) {
     if (m) {
         rtsd_printf("## Dequeued timed msg with baseline %ld (now is %ld)", m->$baseline, now);
         if (ENQ_msg(m, m->$to)) {
-            int wtid = ENQ_ready(m->$to);
+            int32_t wtid = ENQ_ready(m->$to, stamp_us(now_ns()));
             wake_wt(wtid);
         }
 #ifdef ACTON_DB
@@ -1574,7 +1579,7 @@ void deserialize_system(snode_t *actors_start) {
                 ENQ_msg(m, act);
             }
             if (act->B_Msg && !act->$waitsfor) {
-                ENQ_ready(act);
+                ENQ_ready(act, stamp_us(now_ns()));
                 rtsd_printf("# Adding Actor %" PRId64 " to the readyQ", act->$globkey);
             }
             print_actor(act);
@@ -1740,12 +1745,15 @@ void BOOTSTRAP(int argc, char *argv[]) {
     }
 #endif
     if (ENQ_msg(m, root_actor)) {
-        ENQ_ready(root_actor);
+        ENQ_ready(root_actor, stamp_us(now_ns()));
     }
 
 }
 
-void save_actor_state($Actor current, B_Msg m) {
+// Deliver the messages in the $outgoing queue of actor "current", which
+// finished message m, after committing its state when there is a database.
+// The actors this makes ready get ready_us as their ready stamp.
+void save_actor_state($Actor current, B_Msg m, uint32_t ready_us) {
 #ifdef ACTON_DB
             if (db) {
                 int success = 0;
@@ -1781,11 +1789,11 @@ void save_actor_state($Actor current, B_Msg m) {
                     if(ret2 == VAL_STATUS_COMMIT)
                         success = 1;
                 }
-                FLUSH_outgoing_local(current);
+                FLUSH_outgoing_local(current, ready_us);
             } else {
 #endif
                 reverse_outgoing_queue(current);
-                FLUSH_outgoing_local(current);
+                FLUSH_outgoing_local(current, ready_us);
 #ifdef ACTON_DB
             }
 #endif
@@ -2070,6 +2078,32 @@ static void init_counter(void) {
 #endif
 }
 
+// Whether workers record how long the actors they take from ready queues
+// waited (note_wait). Only the RTS mon output shows these statistics, so
+// this is set when the mon output is on: a mon log, a mon socket or the
+// dump at exit. main() sets it before the workers start.
+static bool record_waits = false;
+
+// The worker with statistics s took an actor whose ready stamp was d
+// nanoseconds before the start of its continuation. A negative d counts
+// as 0.
+static inline void note_wait(struct wt_stat *s, int64_t d) {
+    if (d < 0)
+        d = 0;
+    WT_STAT_ADD(s->wait_count, 1);
+    WT_STAT_ADD(s->wait_sum, d);
+    if ((uint64_t)d > s->wait_max)
+        WT_STAT_SET(s->wait_max, d);
+    if      (d < 1000)       { WT_STAT_ADD(s->wait_1us, 1); }
+    else if (d < 10000)      { WT_STAT_ADD(s->wait_10us, 1); }
+    else if (d < 100000)     { WT_STAT_ADD(s->wait_100us, 1); }
+    else if (d < 1000000)    { WT_STAT_ADD(s->wait_1ms, 1); }
+    else if (d < 10000000)   { WT_STAT_ADD(s->wait_10ms, 1); }
+    else if (d < 100000000)  { WT_STAT_ADD(s->wait_100ms, 1); }
+    else if (d < 1000000000) { WT_STAT_ADD(s->wait_1s, 1); }
+    else                     { WT_STAT_ADD(s->wait_inf, 1); }
+}
+
 // Whether another actor is waiting in this worker's queue or in the shared
 // queue. Worker 0 never takes actors from the shared queue, so for worker 0
 // only its own queue counts.
@@ -2150,6 +2184,8 @@ void wt_work_cb(uv_check_t *ev) {
         if (!continued) {
             taken_ns = cont_start_ns;
             conts = 0;
+            if (record_waits)
+                note_wait(ws, (int64_t)stamp_diff(stamp_us(taken_ns), m->$ready_us) * 1000);
         }
         {
             int64_t diff = cont_start_ns - end_ns;
@@ -2201,18 +2237,21 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## (%" PRId64 ") Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
+        // The ready stamp of every actor this iteration makes ready: the end
+        // of the continuation, which saves a clock read
+        uint32_t end_us = stamp_us(end_ns);
 
         bool more = false;             // the actor still has work
         switch (r.tag) {
         case $RDONE: {
-            save_actor_state(current, m);
+            save_actor_state(current, m, end_us);
             m->value = r.value;                             // m->value holds the message result,
             $Actor b = FREEZE_waiting(m, MARK_RESULT);      // so mark this and stop further m->waiting additions
             while (b) {
                 b->B_Msg->value = r.value;
                 b->$waitsfor = NULL;
                 $Actor c = b->$next;
-                ENQ_ready(b);
+                ENQ_ready(b, end_us);
                 rtsd_printf("## Waking up actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
                 b = c;
             }
@@ -2238,7 +2277,7 @@ void wt_work_cb(uv_check_t *ev) {
                 rtsd_printf("## FAIL/handle actor %" PRId64 " : %s", current->$globkey, current->$class->$GCINFO);
                 more = true;
             } else {                            // An unhandled exception
-                save_actor_state(current, m);
+                save_actor_state(current, m, end_us);
                 B_BaseException ex = (B_BaseException)r.value;
                 m->value = r.value;                                 // m->value holds the raised exception,
                 $Actor b = FREEZE_waiting(m, MARK_EXCEPTION);       // so mark this and stop further m->waiting additions
@@ -2254,7 +2293,7 @@ void wt_work_cb(uv_check_t *ev) {
                     b->B_Msg->value = r.value;
                     b->$waitsfor = NULL;
                     $Actor c = b->$next;
-                    ENQ_ready(b);
+                    ENQ_ready(b, end_us);
                     rtsd_printf("## Propagating exception to actor %" PRId64 " : %s", b->$globkey, b->$class->$GCINFO);
                     b = c;
                 }
@@ -2298,7 +2337,7 @@ void wt_work_cb(uv_check_t *ev) {
             // waiting list, x's completion can enqueue it and another worker
             // can run it, while flushing still reads its current message. If
             // x completes first, ADD_waiting sees that and the actor goes on.
-            FLUSH_outgoing_local(current);
+            FLUSH_outgoing_local(current, end_us);
             bool added_waiting = ADD_waiting(current, x);
 
             if (added_waiting) {      // x->cont is a proper $Cont: x is still being processed so current was added to x->waiting
@@ -2333,7 +2372,7 @@ void wt_work_cb(uv_check_t *ev) {
                    && (!others_waiting(wctx->id)
                        || (conts < KEEP_CONTS && end_ns - taken_ns < KEEP_NS));
             if (!keep)
-                ENQ_ready(current);
+                ENQ_ready(current, end_us);
         }
         if (!keep)
             current = NULL;
@@ -2350,7 +2389,7 @@ void wt_work_cb(uv_check_t *ev) {
         // exceed this cap
         if (end_ns - start_ns > 20*1000000) {
             if (current) {
-                ENQ_ready(current);
+                ENQ_ready(current, end_us);
                 WT_STAT_SET(ws->state, WT_Idle);
             }
             break;
@@ -2516,6 +2555,17 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_10s",   WT(bkeep_10s));
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_100s",  WT(bkeep_100s));
         yyjson_mut_obj_add_int(doc, j_wt, "bkeep_inf",   WT(bkeep_inf));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_count",  WT(wait_count));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_sum",    WT(wait_sum));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_max",    WT(wait_max));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_1us",    WT(wait_1us));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_10us",   WT(wait_10us));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_100us",  WT(wait_100us));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_1ms",    WT(wait_1ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_10ms",   WT(wait_10ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_100ms",  WT(wait_100ms));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_1s",     WT(wait_1s));
+        yyjson_mut_obj_add_int(doc, j_wt, "wait_inf",    WT(wait_inf));
     }
 #undef WT
 
@@ -3348,6 +3398,7 @@ int main(int argc, char **argv) {
         cpu_pin = 0;
         log_info("Detected %d CPUs: Using %" PRId64 " worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
     }
+    record_waits = mon_log_path != NULL || mon_socket_path != NULL || mon_on_exit;
 #else
     log_info("Running without threads, main thread will perform all work");
     if (num_wthreads != -1) {
@@ -3395,6 +3446,18 @@ int main(int argc, char **argv) {
         wt_stats[i].bkeep_10s = 0;
         wt_stats[i].bkeep_100s = 0;
         wt_stats[i].bkeep_inf = 0;
+
+        wt_stats[i].wait_count = 0;
+        wt_stats[i].wait_sum = 0;
+        wt_stats[i].wait_max = 0;
+        wt_stats[i].wait_1us = 0;
+        wt_stats[i].wait_10us = 0;
+        wt_stats[i].wait_100us = 0;
+        wt_stats[i].wait_1ms = 0;
+        wt_stats[i].wait_10ms = 0;
+        wt_stats[i].wait_100ms = 0;
+        wt_stats[i].wait_1s = 0;
+        wt_stats[i].wait_inf = 0;
     }
 #ifdef ACTON_DB
     init_dbc_stats();

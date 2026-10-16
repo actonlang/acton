@@ -1,0 +1,4 @@
+# The test runs this with --rts-mon-on-exit and reads from the RTS mon output
+# how long the actors that the workers took from ready queues waited.
+actor main(env):
+    env.exit(0)

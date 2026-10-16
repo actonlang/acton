@@ -52,7 +52,7 @@ static inline void spinlock_unlock($Lock *f) {
 }
 
 #if defined MPMC && MPMC == 3
-int ENQ_ready($Actor a) {
+int32_t ENQ_ready($Actor a, uint32_t ready_us) {
     // TODO: atomics!
 }
 #elif defined MPMC && MPMC == 2
@@ -62,9 +62,14 @@ static inline void rq_count_add(struct mpmcq *q, int64_t d) {
     __atomic_store_n(&q->count, n + (uint64_t)d, __ATOMIC_RELAXED);
 }
 
-int ENQ_ready($Actor a) {
+// Make actor "a" ready, with ready_us as its ready stamp, and return the
+// queue it went to: SHARED_RQ or the id of the worker it is pinned to. It
+// always goes to the end of that queue.
+int32_t ENQ_ready($Actor a, uint32_t ready_us) {
     int i = a->$affinity;
     assert(a != NULL && a->$waitsfor == NULL);
+    WorkerCtx wctx = GET_WCTX();
+    a->B_Msg->$ready_us = ready_us;
     spinlock_lock(&rqs[i].lock);
     if (rqs[i].tail) {
         rqs[i].tail->$next = a;
@@ -77,7 +82,6 @@ int ENQ_ready($Actor a) {
     rq_count_add(&rqs[i], 1);
     spinlock_unlock(&rqs[i].lock);
     // If we enqueue to someone who is not us, immediately wake them up...
-    WorkerCtx wctx = GET_WCTX();
     if (wctx != NULL) {
         int64_t our_wtid = wctx->id;
         if (our_wtid != i)
@@ -86,7 +90,7 @@ int ENQ_ready($Actor a) {
     return i;
 }
 #else
-int ENQ_ready($Actor a) {
+int32_t ENQ_ready($Actor a, uint32_t ready_us) {
     int i = a->$affinity;
     spinlock_lock(&rqs[i].lock);
     $Actor x = __atomic_load_n(&rqs[i].head, __ATOMIC_RELAXED);

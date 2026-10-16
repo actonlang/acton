@@ -3211,6 +3211,21 @@ rtsTests =
           forM_ ["2", "8"] $ \n -> do
               (returnCode, cmdOut, cmdErr) <- runThing ("--rts-wthreads " ++ n) "../../test/rts/steal_behind_long_continuation.act"
               assertEqual ("steal_behind_long_continuation with " ++ n ++ " worker threads: " ++ cmdOut ++ cmdErr) ExitSuccess returnCode
+  ,   testCase "mon output at exit shows how long actors waited" $ do
+          testBuildThing "" ExitSuccess False "../../test/rts/mon_on_exit.act"
+          (returnCode, cmdOut, cmdErr) <- runThing "--rts-wthreads 2 --rts-mon-on-exit" "../../test/rts/mon_on_exit.act"
+          assertEqual ("mon_on_exit: " ++ cmdOut ++ cmdErr) ExitSuccess returnCode
+          workers <- either (\e -> assertFailure ("RTS mon output: " ++ e ++ "\n" ++ cmdOut)) return
+                            (monWorkers cmdOut)
+          forM_ (M.toList workers) $ \(k, w) -> do
+              let get f = maybe (assertFailure ("worker " ++ k ++ " shows no " ++ f)) return (M.lookup f w)
+              mapM_ get ["wait_sum", "wait_max"]
+              count <- get "wait_count"
+              buckets <- mapM get ["wait_1us", "wait_10us", "wait_100us", "wait_1ms",
+                                   "wait_10ms", "wait_100ms", "wait_1s", "wait_inf"]
+              assertEqual ("worker " ++ k ++ ": the wait buckets add up to wait_count") count (sum buckets)
+          assertBool "the workers took actors from ready queues"
+                     (sum (M.mapMaybe (M.lookup "wait_count") workers) > 0)
   ]
 
 stdlibTests =
@@ -3574,6 +3589,19 @@ buildAndRun buildOpts runOpts thing = do
 -- without our ending, like __bf. For example, if the project is
 -- import_actor__bf, then we will run ./import_actor in
 -- import_actor__bf/rel/bin
+-- The numbers that each worker shows in the RTS mon output, which a program
+-- run with --rts-mon-on-exit prints as its last line, by worker id
+monWorkers :: String -> Either String (M.Map String (M.Map String Integer))
+monWorkers out = do
+    root <- Ae.eitherDecode (LBS.pack (last ("" : lines out)))
+    case Ae.fromJSON <$> M.lookup "wt" (root :: M.Map String Ae.Value) of
+        Just (Ae.Success workers) -> Right (M.map (M.mapMaybe number) workers)
+        _ -> Left "no worker statistics (wt)"
+  where
+    number v = case Ae.fromJSON v of
+        Ae.Success n -> Just n
+        Ae.Error _   -> Nothing
+
 runThing opts thing = do
     twd <- canonicalizePath $ takeDirectory thing
     isProj <- doesDirectoryExist thing
