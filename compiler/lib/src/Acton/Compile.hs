@@ -245,7 +245,7 @@ import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
 import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
-import Control.DeepSeq (rnf)
+import Control.DeepSeq (force, rnf)
 import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
@@ -2666,11 +2666,12 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 (_, _, Left diags) -> return (Left diags)
                 (Right pubSigExtHashes, Right pubExtHashes, Right implExtHashes) -> do
                   evaluate (rnf (pubSigExtHashes, pubExtHashes, implExtHashes))
-                  let pubHashes = Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes
-                      implHashes = Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes
-                      (modulePubHash, moduleImplHash) = Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes
-                  evaluate (rnf (pubHashes, implHashes, modulePubHash, moduleImplHash))
-                  let nameHashes =
+                  -- The pub and impl passes are independent, and so are the
+                  -- module hashes and the assembly that both use them.
+                  (pubHashes, implHashes) <- concurrently
+                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes)))
+                    (evaluate (force (Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes)))
+                  let nameHashes0 =
                         Hashing.assembleNameHashes
                           nameKeys
                           nameSrcHashes
@@ -2681,7 +2682,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           implLocalDeps
                           pubExtHashes
                           implExtHashes
-                  evaluate (rnf nameHashes)
+                  ((modulePubHash, moduleImplHash), nameHashes) <- concurrently
+                    (evaluate (force (Hashing.moduleHashesFromHashMaps nmod nameKeys pubHashes implHashes)))
+                    (evaluate (force nameHashes0))
                   evaluate (rnf (moduleSrcBytesHash, modulePubHash, moduleImplHash, sourceMeta, impsWithHash))
                   evaluate (rnf (nameHashes, roots, tests, mdoc))
                   emitHashProgressPaced True hashProgressTotal hashProgressTotal Nothing
