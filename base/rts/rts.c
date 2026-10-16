@@ -2081,6 +2081,9 @@ static inline bool others_waiting(int64_t wtid) {
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)ev->data;
     assert(wctx->id >= 0 && wctx->id < 256);
+    // This worker's entry in wt_stats. It is set before any setjmp and
+    // never changes, so it keeps its value without volatile.
+    struct wt_stat *ws = &wt_stats[wctx->id];
     // current: the actor this worker runs. It stays set from one iteration
     // to the next while the worker keeps running the same actor.
     // taken_ns: when the worker took that actor from a queue
@@ -2134,7 +2137,7 @@ void wt_work_cb(uv_check_t *ev) {
             // So when we take an actor and more are waiting, we wake another
             // worker. We mark ourselves as working first, so that this wake
             // goes to a sleeping worker and not to ourselves.
-            WT_STAT_SET(wt_stats[wctx->id].state, WT_Working);
+            WT_STAT_SET(ws->state, WT_Working);
             wake_wt(SHARED_RQ);
         }
 
@@ -2150,19 +2153,19 @@ void wt_work_cb(uv_check_t *ev) {
         }
         {
             int64_t diff = cont_start_ns - end_ns;
-            WT_STAT_ADD(wt_stats[wctx->id].bkeep_count, 1);
-            WT_STAT_ADD(wt_stats[wctx->id].bkeep_sum, diff);
-            if      (diff < 100)              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ns, 1); }
-            else if (diff < 1   * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1us, 1); }
-            else if (diff < 10  * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10us, 1); }
-            else if (diff < 100 * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100us, 1); }
-            else if (diff < 1   * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1ms, 1); }
-            else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10ms, 1); }
-            else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100ms, 1); }
-            else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_1s, 1); }
-            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_10s, 1); }
-            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].bkeep_100s, 1); }
-            else                              { WT_STAT_ADD(wt_stats[wctx->id].bkeep_inf, 1); }
+            WT_STAT_ADD(ws->bkeep_count, 1);
+            WT_STAT_ADD(ws->bkeep_sum, diff);
+            if      (diff < 100)              { WT_STAT_ADD(ws->bkeep_100ns, 1); }
+            else if (diff < 1   * 1000)       { WT_STAT_ADD(ws->bkeep_1us, 1); }
+            else if (diff < 10  * 1000)       { WT_STAT_ADD(ws->bkeep_10us, 1); }
+            else if (diff < 100 * 1000)       { WT_STAT_ADD(ws->bkeep_100us, 1); }
+            else if (diff < 1   * 1000000)    { WT_STAT_ADD(ws->bkeep_1ms, 1); }
+            else if (diff < 10  * 1000000)    { WT_STAT_ADD(ws->bkeep_10ms, 1); }
+            else if (diff < 100 * 1000000)    { WT_STAT_ADD(ws->bkeep_100ms, 1); }
+            else if (diff < 1   * 1000000000) { WT_STAT_ADD(ws->bkeep_1s, 1); }
+            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(ws->bkeep_10s, 1); }
+            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(ws->bkeep_100s, 1); }
+            else                              { WT_STAT_ADD(ws->bkeep_inf, 1); }
         }
 
         $R r;
@@ -2176,20 +2179,20 @@ void wt_work_cb(uv_check_t *ev) {
             end_ns = now_ns();
             int64_t diff = end_ns - cont_start_ns;
 
-            WT_STAT_ADD(wt_stats[wctx->id].conts_count, 1);
-            WT_STAT_ADD(wt_stats[wctx->id].conts_sum, diff);
+            WT_STAT_ADD(ws->conts_count, 1);
+            WT_STAT_ADD(ws->conts_sum, diff);
 
-            if      (diff < 100)              { WT_STAT_ADD(wt_stats[wctx->id].conts_100ns, 1); }
-            else if (diff < 1   * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_1us, 1); }
-            else if (diff < 10  * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_10us, 1); }
-            else if (diff < 100 * 1000)       { WT_STAT_ADD(wt_stats[wctx->id].conts_100us, 1); }
-            else if (diff < 1   * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_1ms, 1); }
-            else if (diff < 10  * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_10ms, 1); }
-            else if (diff < 100 * 1000000)    { WT_STAT_ADD(wt_stats[wctx->id].conts_100ms, 1); }
-            else if (diff < 1   * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_1s, 1); }
-            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_10s, 1); }
-            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(wt_stats[wctx->id].conts_100s, 1); }
-            else                              { WT_STAT_ADD(wt_stats[wctx->id].conts_inf, 1); }
+            if      (diff < 100)              { WT_STAT_ADD(ws->conts_100ns, 1); }
+            else if (diff < 1   * 1000)       { WT_STAT_ADD(ws->conts_1us, 1); }
+            else if (diff < 10  * 1000)       { WT_STAT_ADD(ws->conts_10us, 1); }
+            else if (diff < 100 * 1000)       { WT_STAT_ADD(ws->conts_100us, 1); }
+            else if (diff < 1   * 1000000)    { WT_STAT_ADD(ws->conts_1ms, 1); }
+            else if (diff < 10  * 1000000)    { WT_STAT_ADD(ws->conts_10ms, 1); }
+            else if (diff < 100 * 1000000)    { WT_STAT_ADD(ws->conts_100ms, 1); }
+            else if (diff < 1   * 1000000000) { WT_STAT_ADD(ws->conts_1s, 1); }
+            else if (diff < (int64_t)10  * 1000000000) { WT_STAT_ADD(ws->conts_10s, 1); }
+            else if (diff < (int64_t)100 * 1000000000) { WT_STAT_ADD(ws->conts_100s, 1); }
+            else                              { WT_STAT_ADD(ws->conts_inf, 1); }
         } else {                                                       // Exceptional path
             end_ns = now_ns();
             assert(wctx->jump_top == &wctx->jump0);
@@ -2340,7 +2343,7 @@ void wt_work_cb(uv_check_t *ev) {
         // will not take anything from a queue until we are done with it, so
         // wake_wt() should wake some other worker.
         if (!current)
-            WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
+            WT_STAT_SET(ws->state, WT_Idle);
 
         // run for max 20ms before yielding to IO
         // NOTE: since we are not preemptive, a single long continuation can
@@ -2348,7 +2351,7 @@ void wt_work_cb(uv_check_t *ev) {
         if (end_ns - start_ns > 20*1000000) {
             if (current) {
                 ENQ_ready(current);
-                WT_STAT_SET(wt_stats[wctx->id].state, WT_Idle);
+                WT_STAT_SET(ws->state, WT_Idle);
             }
             break;
         }
