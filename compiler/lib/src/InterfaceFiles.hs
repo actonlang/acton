@@ -46,7 +46,7 @@
 --     "actors"         :: [A.Name]                    -- public actor names
 --     "stmt-count"     :: Int                         -- number of typed top-level statements
 --     "stmt-has-not-impl" :: Bool                     -- any statement contains NotImplemented
---     "escape-summaries" :: EscapeSummaries          -- optional internal parameter summaries
+--     "escape-summaries" :: EscapeSummaries          -- parameter escape summaries
 --     "module-header"  :: (A.ModName, Imports, Maybe String)
 --                                                     -- typed module name, imports, docstring
 --
@@ -210,9 +210,8 @@ instance NFData NameHashInfo
 
 -- | Internal per-function parameter escape summaries.  The path is
 -- relative to its module (for example @[f]@ or @[C, method]@); the Boolean is
--- True for MayEscape and False for NoEscape.  This remains an optional
--- sidecar rather than part of Type so older interface databases remain
--- readable and ordinary public type hashes are unaffected.
+-- True for MayEscape and False for NoEscape.  The summaries are stored in a
+-- row of their own, so ordinary public type hashes do not depend on them.
 type EscapeSummaries = [([A.Name], [(A.Name, Bool)])]
 
 data DepModuleInfo = DepModuleInfo
@@ -990,9 +989,9 @@ readInterfaceDBModuleInfo db =
       doc <- getValue "doc" txn dbi keyDoc
       return (A.importsOf (A.Module tmn timps tdoc []), doc)
 
--- | Read internal escape summaries.  Their absence is expected for old
--- caches and therefore means that every external parameter must be treated
--- conservatively.
+-- | Read the module's escape summaries.  Every .tydb that passes the
+-- version check has the row.  A missing row reads as no summaries, which
+-- makes every call into the module unknown.
 readInterfaceDBEscapeSummaries :: InterfaceDB -> IO EscapeSummaries
 readInterfaceDBEscapeSummaries db =
     withInterfaceDBReadTxn db $ \txn dbi -> do
