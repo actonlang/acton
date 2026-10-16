@@ -2601,8 +2601,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           escapeSummaries = Acton.EscapeAnalysis.interfaceSummaries escapeReport
       -- Run the analysis to completion for every function of every module,
       -- here rather than in whatever later reads a result, such as the
-      -- interface write.
-      evaluate (rnf escapeReport)
+      -- interface write.  The analysis evaluates each function's summary in
+      -- full as part of producing the list.
+      evaluate (length (Acton.EscapeAnalysis.reportFunctions escapeReport))
       evaluate (rnf escapeSummaries)
       when (C.escape_analysis opts && isRoot) $
         dump mn "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport escapeReport)

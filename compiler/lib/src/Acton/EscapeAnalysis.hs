@@ -24,14 +24,19 @@ module Acton.EscapeAnalysis
     , renderEscapeReport
     ) where
 
-import Control.DeepSeq (NFData)
+import Control.Concurrent (getNumCapabilities)
+import Control.Concurrent.Async (mapConcurrently)
+import Control.DeepSeq (NFData, force)
+import Control.Exception (evaluate)
 import Control.Monad (forM_, when)
 import Control.Monad.State.Strict
 import Data.List (intercalate)
 import Data.Maybe (listToMaybe)
+import qualified Data.HashSet as HS
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import GHC.Generics (Generic)
+import System.IO.Unsafe (unsafePerformIO)
 
 import Utils
 import Acton.Syntax
@@ -90,12 +95,12 @@ data FunctionInfo = FunctionInfo
 -- one of its parameter or local names, so map operations on nodes compare
 -- an Int and a short name.
 data Node = Node !Int !Name
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Generic, NFData)
 
 data Facts = Facts
     { factEdges   :: !(M.Map Node (S.Set Node))
     , factEscapes :: !(M.Map Node (S.Set EscapeReason))
-    }
+    } deriving (Generic, NFData)
 
 emptyFacts :: Facts
 emptyFacts = Facts M.empty M.empty
@@ -105,7 +110,7 @@ data Context = Context
     , contextCallees  :: M.Map Name FunctionInfo
     , contextTypes    :: M.Map Name Type
     , contextBound    :: S.Set Name
-    , contextModuleNames :: S.Set Name
+    , contextModuleNames :: HS.HashSet Name
     , contextImported :: QName -> Maybe [(Name, Escape)]
     }
 
@@ -126,16 +131,23 @@ analyzeModuleWithImports imported m = EscapeReport summaries violations
     callees = uniqueFunctions (filter isTopLevel functions)
     -- A bare name bound at module level refers to this module even when an
     -- import has the same name, so it must not be resolved as an import.
-    moduleNames = S.fromList (assigned (mbody m))
+    -- A HashSet: these are all top-level names of the module, and in
+    -- generated modules they are long and share most of their prefix.
+    moduleNames = HS.fromList (assigned (mbody m))
     -- Witnesses introduced by type reconstruction are not necessarily local
     -- to the function that uses them.  A recursive declaration group may
     -- place a shared binding in one declaration body and use it from another,
     -- so retain those internal bindings in every function context as well as
     -- the parameters and locals below.
     moduleTypes = moduleWitnessTypes (mbody m)
-    facts = execState (mapM_ (scanFunction moduleTypes callees moduleNames imported) functions) emptyFacts
+    -- Each function is scanned on its own.  Its edges and sinks are keyed
+    -- by its own nodes, which carry its index, so the per-function maps
+    -- concatenate in key order.
+    perFunction = parMapForce (\f -> execState (scanFunction moduleTypes callees moduleNames imported f) emptyFacts) functions
+    facts = Facts (M.fromDistinctAscList (concatMap (M.toAscList . factEdges) perFunction))
+                  (M.fromDistinctAscList (concatMap (M.toAscList . factEscapes) perFunction))
     escaping = escapingNodes facts
-    summaries = map (summarize facts escaping) functions
+    summaries = parMapForce (summarize facts escaping) functions
     violations =
         [ (fid, parameterName p)
         | (fid, ps) <- summaries
@@ -143,6 +155,18 @@ analyzeModuleWithImports imported m = EscapeReport summaries violations
         , parameterContract p
         , parameterEscape p == MayEscape
         ]
+
+-- | Map over a list in concurrent chunks and evaluate each result fully in
+-- its worker.  A chunk holds 64 elements or an equal share of the list per
+-- capability, whichever is more, so a list of at most 64 elements is a
+-- single chunk.  The analysis is pure, and this only spreads the
+-- per-function work over the cores.
+parMapForce :: NFData b => (a -> b) -> [a] -> [b]
+parMapForce f xs = unsafePerformIO $ do
+    caps <- getNumCapabilities
+    let size = max 64 ((length xs + caps - 1) `div` max 1 caps)
+    concat <$> mapConcurrently (evaluate . force . map f) (chunksOf size xs)
+{-# NOINLINE parMapForce #-}
 
 -- | Summaries of the module's top-level functions and actors, for its
 -- interface file. The names keep their source locations, which Name
@@ -425,7 +449,7 @@ kwdPatternTypes (KwdPat _ p ps) = patternTypes p `M.union` kwdPatternTypes ps
 kwdPatternTypes (KwdPatStar p) = patternTypes p
 
 
-scanFunction :: M.Map Name Type -> M.Map Name FunctionInfo -> S.Set Name -> (QName -> Maybe [(Name, Escape)]) -> FunctionInfo -> State Facts ()
+scanFunction :: M.Map Name Type -> M.Map Name FunctionInfo -> HS.HashSet Name -> (QName -> Maybe [(Name, Escape)]) -> FunctionInfo -> State Facts ()
 scanFunction moduleTypes callees moduleNames imported f = scanSuite (Context f callees types boundNames moduleNames imported) (functionBody f)
   where
     types = M.fromList [ (paramName p,t) | p <- functionParams f, Just t <- [paramType p] ] `M.union`
@@ -675,7 +699,7 @@ importedCallee :: Context -> Expr -> Maybe [(Name, Escape)]
 -- local, so offer every Var to the lookup after local direct-call resolution
 -- has had first refusal.
 importedCallee c (Var _ qn@(NoQ n))
-  | n `S.notMember` contextBound c, n `S.notMember` contextModuleNames c = contextImported c qn
+  | n `S.notMember` contextBound c, not (n `HS.member` contextModuleNames c) = contextImported c qn
   | otherwise = Nothing
 importedCallee c (Var _ qn) = contextImported c qn
 importedCallee _ _ = Nothing
@@ -819,8 +843,10 @@ aliasNames expression = case expression of
 
 
 escapingNodes :: Facts -> S.Set Node
-escapingNodes facts = go initial initial
+escapingNodes facts = go initial (initial `S.intersection` M.keysSet reverseEdges)
   where
+    -- Every node with a sink escapes.  Only those with incoming edges can
+    -- pass that on, so only they start the search.
     initial = M.keysSet (factEscapes facts)
     reverseEdges = M.fromListWith S.union
         [ (to, S.singleton from)
