@@ -32,12 +32,25 @@ import Prelude hiding ((<>))
 import Data.List (intercalate, intersperse, sortBy)
 import Data.Ord (comparing)
 import Data.Char (isDigit)
+import qualified Data.Text.Short as TS
 import qualified Data.Map.Strict as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import System.FilePath ((</>), (<.>), joinPath)
 
 type DocTEnv = Map.Map Name NameInfo
+
+-- What a constraint on one of the operator protocols lets a generic type do.
+protocolExample :: TCon -> String
+protocolExample (TC (NoQ (Name _ t)) _)
+  | Just example <- lookup (TS.toString t) operatorExamples
+                                    = example
+protocolExample _                   = "protocol methods"
+
+operatorExamples :: [(String, String)]
+operatorExamples                    = [ ("Plus", "+ operator"), ("Minus", "- operator"), ("Times", "* operator")
+                                      , ("Divide", "/ operator"), ("Eq", "== operator"), ("Ord", "< > operators")
+                                      , ("Hash", "hash function") ]
 
 -- Preserve TEnv's left-to-right lookup semantics when signatures and defs share a name.
 docTEnv :: TEnv -> DocTEnv
@@ -570,7 +583,7 @@ collectUglyTypeVarsFromType _ = []
 createTypeVarMapping :: [Name] -> [(Name, Name)]
 createTypeVarMapping uglyNames = zip uglyNames niceNames
   where
-    niceNames = [Name NoLoc [c] | c <- ['A'..'Z']]
+    niceNames = [name [c] | c <- ['A'..'Z']]
 
 -- | Replace ugly type vars with nice names in a type
 cleanupTypeVars :: [(Name, Name)] -> Type -> Type
@@ -1873,16 +1886,8 @@ renderTypeWithGenericsAndConstraints generics constraints t = renderTypeHtml gen
                         else "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                              nameStr ++ "s must be the same type.\n\n" ++ nameStr ++ " must support:\n" ++
                              concatMap formatPredAsListItem preds
-                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ formatExampleForPredLocal p ++ ")\n"
+                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ protocolExample p ++ ")\n"
                 formatConstraintNameLocal (TC qn _) = render . pretty . simplifyQName $ qn
-                formatExampleForPredLocal (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Times")) _) = "* operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                formatExampleForPredLocal _ = "protocol methods"
             in "<span class=\"generic-type\" data-generic=\"" ++ nameStr ++
                "\" data-tooltip=\"" ++ tooltip ++ "\">" ++ nameStr ++ "</span>"
         | otherwise =
@@ -1996,16 +2001,8 @@ renderTypeWithGenericsConstraintsAndClassesAndModule currentModule generics cons
                         else "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                              nameStr ++ "s must be the same type.\n\n" ++ nameStr ++ " must support:\n" ++
                              concatMap formatPredAsListItem preds
-                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ formatExampleForPredLocal p ++ ")\n"
+                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ protocolExample p ++ ")\n"
                 formatConstraintNameLocal (TC qn _) = render . pretty . simplifyQName $ qn
-                formatExampleForPredLocal (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Times")) _) = "* operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                formatExampleForPredLocal _ = "protocol methods"
             in "<span class=\"generic-type\" data-generic=\"" ++ nameStr ++
                "\" data-tooltip=\"" ++ tooltip ++ "\">" ++ nameStr ++ "</span>"
         | otherwise =
@@ -2139,16 +2136,8 @@ renderTypeWithGenericsConstraintsClassesModuleAndScope currentModule generics co
                         else "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                              nameStr ++ "s must be the same type.\n\n" ++ nameStr ++ " must support:\n" ++
                              concatMap formatPredAsListItem preds
-                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ formatExampleForPredLocal p ++ ")\n"
+                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ protocolExample p ++ ")\n"
                 formatConstraintNameLocal (TC qn _) = render . pretty . simplifyQName $ qn
-                formatExampleForPredLocal (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Times")) _) = "* operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                formatExampleForPredLocal _ = "protocol methods"
             in "<span class=\"generic-type\" data-generic=\"" ++ nameStr ++
                "\" data-scope=\"" ++ scope ++
                "\" data-tooltip=\"" ++ tooltip ++ "\">" ++ nameStr ++ "</span>"
@@ -2282,16 +2271,8 @@ renderTypeWithGenericsConstraintsAndClasses generics constraints classNames t = 
                         else "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                              nameStr ++ "s must be the same type.\n\n" ++ nameStr ++ " must support:\n" ++
                              concatMap formatPredAsListItem preds
-                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ formatExampleForPredLocal p ++ ")\n"
+                formatPredAsListItem p = "  • " ++ formatConstraintNameLocal p ++ " protocol (" ++ protocolExample p ++ ")\n"
                 formatConstraintNameLocal (TC qn _) = render . pretty . simplifyQName $ qn
-                formatExampleForPredLocal (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Times")) _) = "* operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                formatExampleForPredLocal (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                formatExampleForPredLocal _ = "protocol methods"
             in "<span class=\"generic-type\" data-generic=\"" ++ nameStr ++
                "\" data-tooltip=\"" ++ tooltip ++ "\">" ++ nameStr ++ "</span>"
         | otherwise =
@@ -3219,7 +3200,7 @@ docConstraintsHtmlWithScope generics scope constraints =
                          nameStr ++ "s must be the same type."
                     else "Generic type " ++ nameStr ++ "\n\nThis is a placeholder for any type.\nAll " ++
                          nameStr ++ "s must be the same type.\n\n" ++ nameStr ++ " must support:\n" ++
-                         concatMap (\p -> "  • " ++ formatConstraintName p ++ " protocol (" ++ formatExampleForPred p ++ ")\n") preds
+                         concatMap (\p -> "  • " ++ formatConstraintName p ++ " protocol (" ++ protocolExample p ++ ")\n") preds
                 nameDoc = if Set.member name generics
                     then text $ "<span class=\"generic-type\" data-generic=\"" ++ nameStr ++
                                "\" data-scope=\"" ++ scope ++
@@ -3227,27 +3208,8 @@ docConstraintsHtmlWithScope generics scope constraints =
                     else text nameStr
                 formatConstraintName (TC qn _) = render . pretty . simplifyQName $ qn
 
-                formatExampleForPred :: TCon -> String
-                formatExampleForPred (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                formatExampleForPred (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                formatExampleForPred (TC (NoQ (Name _ "Times")) _) = "* operator"
-                formatExampleForPred (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                formatExampleForPred (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                formatExampleForPred (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                formatExampleForPred (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                formatExampleForPred _ = "protocol methods"
-
                 formatExampleOperators :: [TCon] -> String
-                formatExampleOperators preds = intercalate ", " $ map getExample preds
-                  where
-                    getExample (TC (NoQ (Name _ "Plus")) _) = "+ operator"
-                    getExample (TC (NoQ (Name _ "Minus")) _) = "- operator"
-                    getExample (TC (NoQ (Name _ "Times")) _) = "* operator"
-                    getExample (TC (NoQ (Name _ "Divide")) _) = "/ operator"
-                    getExample (TC (NoQ (Name _ "Eq")) _) = "== operator"
-                    getExample (TC (NoQ (Name _ "Ord")) _) = "< > operators"
-                    getExample (TC (NoQ (Name _ "Hash")) _) = "hash function"
-                    getExample _ = "protocol methods"
+                formatExampleOperators preds = intercalate ", " $ map protocolExample preds
                 -- Format predicates/constraints
                 predsDoc = if null preds
                     then empty

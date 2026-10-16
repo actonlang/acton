@@ -209,6 +209,7 @@ import Prelude hiding (readFile, writeFile)
 import qualified Acton.Parser
 import Acton.Parser (CustomParseError, CustomParseException, ChunkScanError(..), ContextError, IndentationError)
 import qualified Acton.Syntax as A
+import qualified Data.Text.Short as TS
 import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
@@ -2873,8 +2874,8 @@ dbpCodegenHash moduleImplHash selected =
   SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, selectedNames)))
   where
     selectedNames =
-      [ Hashing.nameKey n
-      | n <- Data.List.sortOn Hashing.nameKey (Data.Set.toList selected)
+      [ A.nstr n
+      | n <- Data.List.sortOn A.nameText (Data.Set.toList selected)
       ]
 
 selectDbpNames :: Paths
@@ -2960,13 +2961,13 @@ dbpNameHashClosure paths mn tyFile selected (n:ns)
           new = filter (`M.notMember` selected') deps
       dbpNameHashClosure paths mn tyFile selected' (new ++ ns)
   where
-    unionNames xs ys = Data.List.sortOn Hashing.nameKey (Data.List.nub (xs ++ ys))
+    unionNames xs ys = Data.List.sortOn A.nameText (Data.List.nub (xs ++ ys))
 
 dbpExtensionsForName :: FilePath -> A.Name -> IO [A.Name]
 dbpExtensionsForName tyFile n = do
   byClass <- InterfaceFiles.readExtensionsByClass tyFile n
   byProtocol <- InterfaceFiles.readExtensionsByProtocol tyFile n
-  return (Data.List.sortOn Hashing.nameKey (Data.List.nub (byClass ++ byProtocol)))
+  return (Data.List.sortOn A.nameText (Data.List.nub (byClass ++ byProtocol)))
 
 dbpPruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
 dbpPruneTopStmt selected stmt =
@@ -3622,7 +3623,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               Nothing -> ""
               Just ns ->
                 let uniq = Data.Set.toList (Data.Set.fromList ns)
-                    names = map A.nstr (Data.List.sortOn Hashing.nameKey uniq)
+                    names = map A.nstr (Data.List.sortOn A.nameText uniq)
                 in if null names
                      then ""
                      else " (used by " ++ intercalate ", " names ++ ")"
@@ -3726,9 +3727,9 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   in if null fields
                        then Nothing
                        else Just ("~" ++ A.nstr n ++ "{" ++ intercalate ", " fields ++ "}")
-                addedItems = [ "+" ++ A.nstr n | n <- Data.List.sortOn Hashing.nameKey added ]
-                removedItems = [ "-" ++ A.nstr n | n <- Data.List.sortOn Hashing.nameKey removed ]
-                changedItems = mapMaybe changesFor (Data.List.sortOn Hashing.nameKey shared)
+                addedItems = [ "+" ++ A.nstr n | n <- Data.List.sortOn A.nameText added ]
+                removedItems = [ "-" ++ A.nstr n | n <- Data.List.sortOn A.nameText removed ]
+                changedItems = mapMaybe changesFor (Data.List.sortOn A.nameText shared)
                 items = addedItems ++ removedItems ++ changedItems
             in if null items then Nothing else Just (intercalate ", " items)
 
@@ -5474,7 +5475,7 @@ modNameToString (A.ModName names) = intercalate "." (map nameToString names)
 
 -- | Render a name identifier to a plain string.
 nameToString :: A.Name -> String
-nameToString (A.Name _ s) = s
+nameToString (A.Name _ s) = TS.toString s
 
 addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
   where proj                = projName paths

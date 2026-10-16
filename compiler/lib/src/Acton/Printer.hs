@@ -288,7 +288,8 @@ instance Pretty QName where
 --    pretty (NoQ n)                  = char '~' <> pretty n
     pretty (NoQ n)                  = pretty n
     pretty (GName m n)
-      | ModName [Name _ "$"] <- m   = text ("$" ++ rawstr n)
+      | ModName [Name _ t] <- m
+      , t == packText "$"            = text ("$" ++ nstr n)
       | otherwise                   = pretty m <> dot <> pretty n
 
 instance Pretty Handler where

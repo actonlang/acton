@@ -54,6 +54,7 @@ dependencies:
   - sydtest-discover
   - temporary
   - text
+  - text-short
   - time
   - transformers
   - unix

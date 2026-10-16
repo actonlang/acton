@@ -151,8 +151,8 @@ staticWitnessMethodClass env w attr
                                          qn' <- builtinWitnessPathClass env qn p
                                          followWitnessPath env (TC qn' ts) ws
 
-        witnessPathProtocol (Internal Witness s _)
-                                    = Just (name s)
+        witnessPathProtocol (Internal Witness t _)
+                                    = Just (Name NoLoc t)
         witnessPathProtocol _       = Nothing
 
         builtinWitnessPathClass env qn p

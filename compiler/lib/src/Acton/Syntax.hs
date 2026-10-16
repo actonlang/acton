@@ -17,12 +17,15 @@ module Acton.Syntax where
 import Utils
 import qualified Data.Binary
 import Data.Persist (Persist)
+import qualified Data.Persist
 import qualified Data.Set
 import qualified Data.HashMap.Strict as M
 import qualified Data.Hashable
 import qualified Data.ByteString as BS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import Data.Text.Short (ShortText)
+import qualified Data.Text.Short as TS
 import Data.Char
 import Data.Word (Word8)
 import Numeric (readHex, readOct)
@@ -31,7 +34,7 @@ import Control.DeepSeq
 import Prelude hiding((<>))
 
 version :: [Int]
-version = [0,37]
+version = [0,38]
 
 data Module     = Module        { modname::ModName, imps::[Import], mdoc::Maybe String, mbody::Suite } deriving (Eq,Show,Generic,NFData)
 
@@ -130,41 +133,57 @@ type Target     = Expr
 data Prefix     = Globvar | Xistvar | Tempvar | Witness | NormPass | CPSPass | LLiftPass | BoxPass
                 deriving (Eq,Ord,Show,Read,Enum,Generic,NFData)
 
-data Name       = Name SrcLoc String | Derived Name Name | Internal Prefix String Int deriving (Generic,Show,NFData)
+-- The text of a name is UTF-8 in one array.
+data Name       = Name SrcLoc !ShortText | Derived Name Name | Internal Prefix !ShortText Int deriving (Generic,NFData)
 
 nloc (Name l _) = l
 nloc _          = NoLoc
 
-nstr (Name _ s)             = esc s
-  where esc (c:'_':s)
-          | isUpper c       = c : {- 'X' : -} '_' : esc s
-        esc (c:s)           = c : esc s
-        esc ""              = ""
-nstr (Derived n s)
-  | Internal{} <- s         = nstr n ++ nstr s
-  | otherwise               = nstr n ++ "D_" ++ nstr s
-nstr (Internal p s i)       = prefix p ++ "_" ++ unique i ++ s
-  where prefix Globvar      = "G"
-        prefix Xistvar      = "E"
-        prefix Tempvar      = "V"
-        prefix Witness      = "W"
-        prefix NormPass     = "N"
-        prefix CPSPass      = "C"
-        prefix LLiftPass    = "L"
-        prefix BoxPass      = "U"
-        unique 0            = ""
-        unique i            = show i
+-- The text a name is rendered as.  Derived names join their parts with D_,
+-- except before an Internal part.  Internal names are a prefix letter, _,
+-- the counter unless it is 0, and the text.
+nameText :: Name -> ShortText
+nameText (Name _ t)         = t
+nameText n                  = TS.concat (pieces n [])
+  where pieces (Name _ t) r         = t : r
+        pieces (Derived a b) r
+          | Internal{} <- b         = pieces a (pieces b r)
+          | otherwise               = pieces a (derivedSep : pieces b r)
+        pieces (Internal p t i) r
+          | i == 0                  = prefixText p : t : r
+          | otherwise               = prefixText p : packText (show i) : t : r
 
-rawstr (Name _ s)           = s
-rawstr n                    = nstr n
+derivedSep :: ShortText
+derivedSep                  = packText "D_"
 
-name            = Name NoLoc
+prefixText :: Prefix -> ShortText
+prefixText Globvar          = packText "G_"
+prefixText Xistvar          = packText "E_"
+prefixText Tempvar          = packText "V_"
+prefixText Witness          = packText "W_"
+prefixText NormPass         = packText "N_"
+prefixText CPSPass          = packText "C_"
+prefixText LLiftPass        = packText "L_"
+prefixText BoxPass          = packText "U_"
+
+nstr :: Name -> String
+nstr                        = TS.toString . nameText
+
+-- | A String as ShortText.  TS.pack and TS.fromString encode through
+-- GHC.Foreign, which costs pinned buffers and several copies per call.
+-- Text's pack is a pure UTF-8 encoder and fromText takes its array.
+packText :: String -> ShortText
+packText s                  = TS.fromText (T.pack s)
+
+name :: String -> Name
+name s          = Name NoLoc (packText s)
 
 nWild           = name "_"
 
-globalName s    = Internal Globvar s 0
+globalName s    = Internal Globvar (packText s) 0
 
-globalNames s   = map (Internal Globvar s) [1..]
+globalNames s   = map (Internal Globvar t) [1..]
+  where t       = packText s
 
 
 data ModName    = ModName [Name] deriving (Show,Read,Eq,Generic,NFData)
@@ -175,9 +194,15 @@ modPath (ModName ns) = map nstr ns
 
 modCat (ModName ns) n = ModName (ns++[n])
 
--- rawstr gives the same strings as nstr without copying plain names.
+-- Components compare as their rendered text.
 instance Ord ModName where
-    compare (ModName a) (ModName b) = compare (map rawstr a) (map rawstr b)
+    compare (ModName a) (ModName b) = go a b
+      where go (x:xs) (y:ys)        = case compare (nameText x) (nameText y) of
+                                        EQ -> go xs ys
+                                        o  -> o
+            go [] []                = EQ
+            go [] _                 = LT
+            go _ []                 = GT
 
 instance Data.Hashable.Hashable ModName where
     hashWithSalt s (ModName ns) = Data.Hashable.hashWithSalt s ns
@@ -390,7 +415,7 @@ tFun0 ps t      = tFun fxPure (foldr posRow posNil ps) kwdNil t
 
 tSelf           = TVar NoLoc tvSelf
 tvSelf          = TV KType nSelf
-nSelf           = Name NoLoc "Self"
+nSelf           = name "Self"
 
 fxSelf          = TV KFX nSelf
 
@@ -480,9 +505,9 @@ tvarSupplyMap vs avoid  = map setk (vs `zip` (tvarSupply \\ avoid))
 type Substitution       = [(TVar,Type)]
 
 instance Data.Hashable.Hashable Name where
-    hashWithSalt s (Name _ nstr)    = Data.Hashable.hashWithSalt s nstr
+    hashWithSalt s (Name _ t)       = Data.Hashable.hashWithSalt s t
     hashWithSalt s (Derived  n1 n2) = s `Data.Hashable.hashWithSalt` n1 `Data.Hashable.hashWithSalt` n2
-    hashWithSalt s (Internal pre str n) = s `Data.Hashable.hashWithSalt` (fromEnum pre) `Data.Hashable.hashWithSalt` str `Data.Hashable.hashWithSalt` n
+    hashWithSalt s (Internal pre t n) = s `Data.Hashable.hashWithSalt` (fromEnum pre) `Data.Hashable.hashWithSalt` t `Data.Hashable.hashWithSalt` n
 
 
 -- Finding type leaves -----
@@ -523,7 +548,25 @@ instance Leaves TVar where
 
 instance Data.Binary.Binary Prefix
 instance Persist Prefix
-instance Data.Binary.Binary Name
+-- The bytes the Generic instance gave when the text fields were Strings: a
+-- tag byte, then the fields, with the text as a character count and UTF-8.
+-- Testing.hashDeps hashes this encoding.
+instance Data.Binary.Binary Name where
+    put (Name l t)          = Data.Binary.putWord8 0 >> Data.Binary.put l >> Data.Binary.put (TS.toString t)
+    put (Derived a b)       = Data.Binary.putWord8 1 >> Data.Binary.put a >> Data.Binary.put b
+    put (Internal p t i)    = Data.Binary.putWord8 2 >> Data.Binary.put p >> Data.Binary.put (TS.toString t) >> Data.Binary.put i
+    get                     = do tag <- Data.Binary.getWord8
+                                 case tag of
+                                   0 -> Name <$> Data.Binary.get <*> (packText <$> Data.Binary.get)
+                                   1 -> Derived <$> Data.Binary.get <*> Data.Binary.get
+                                   2 -> Internal <$> Data.Binary.get <*> (packText <$> Data.Binary.get) <*> Data.Binary.get
+                                   _ -> fail ("Binary Name: unknown tag " ++ show tag)
+
+instance Persist ShortText where
+    put t                   = Data.Persist.put (TS.toShortByteString t)
+    get                     = do b <- Data.Persist.get
+                                 maybe (fail "Persist ShortText: invalid UTF-8") pure (TS.fromShortByteString b)
+
 instance Persist Name
 instance Data.Binary.Binary ModName
 instance Persist ModName
@@ -771,9 +814,9 @@ instance Eq Name where
     Internal p1 s1 i1   == Internal p2 s2 i2    = p1 == p2 && s1 == s2 && i1 == i2
     _                   == _                    = False
 
--- One walk over the strings per comparison.  Generated modules have long
--- names that share most of their prefix, so Map and Set operations keyed by
--- Name spend their time here.
+-- Texts compare by their UTF-8 bytes, which orders them by code point.
+-- Generated modules have long names that share most of their prefix, so Map
+-- and Set operations keyed by Name spend their time here.
 instance Ord Name where
     compare (Name _ s1) (Name _ s2)                 = compare s1 s2
     compare (Derived n1 s1) (Derived n2 s2)         = case compare n1 n2 of
@@ -852,11 +895,18 @@ instance Eq Type where
 
 -- Show & Read ----------------
 
---instance Show Name where
---    show n              = show (nstr n)
+-- The output the derived instance gave when the text fields were Strings.
+instance Show Name where
+    showsPrec d (Name l t)          = showParen (d >= 11) $ showString "Name " . showsPrec 11 l
+                                      . showChar ' ' . showsPrec 11 (TS.toString t)
+    showsPrec d (Derived a b)       = showParen (d >= 11) $ showString "Derived " . showsPrec 11 a
+                                      . showChar ' ' . showsPrec 11 b
+    showsPrec d (Internal p t i)    = showParen (d >= 11) $ showString "Internal " . showsPrec 11 p
+                                      . showChar ' ' . showsPrec 11 (TS.toString t)
+                                      . showChar ' ' . showsPrec 11 i
 
 instance Read Name where
-    readsPrec p str     = [ (Name NoLoc s, str') | (s,str') <- readsPrec p str ]
+    readsPrec p str     = [ (name s, str') | (s,str') <- readsPrec p str ]
 
 
 -- Helpers ------------------
@@ -942,7 +992,7 @@ hasNotImpl ss                       = any isNotImpl ss
 -- Check for __cleanup__ method on actor
 hasCleanup ss                       = any isCleanup ss
 
-isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == Name NoLoc "__cleanup__"
+isCleanup (Def _ n _ _ _ _ _ _ _ _) = n == name "__cleanup__"
 
 declbody Typedef{}                  = []
 declbody d                          = dbody d

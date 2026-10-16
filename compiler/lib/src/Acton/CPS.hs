@@ -42,10 +42,10 @@ type CpsState                           = ([Int], [Stmt])
 runCpsM                                 :: CpsM a -> a
 runCpsM m                               = evalState m ([1..], [])
 
-contKW                                  = Internal CPSPass "cont" 0
+contKW                                  = Internal CPSPass (packText "cont") 0
 
 newName                                 :: String -> CpsM Name
-newName s                               = state (\(uniq:supply, stmts) -> (Internal CPSPass s uniq, (supply, stmts)))
+newName s                               = state (\(uniq:supply, stmts) -> (Internal CPSPass (packText s) uniq, (supply, stmts)))
 
 prefix                                  :: [Stmt] -> CpsM ()
 prefix ss                               = state (\(supply, stmts) -> ((), (supply, reverse ss ++ stmts)))

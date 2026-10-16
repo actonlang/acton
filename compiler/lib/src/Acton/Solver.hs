@@ -339,7 +339,7 @@ solve' env select hist te eq cs
                                                  --traceM ("  # trying tuple " ++ prstr v ++ " = " ++ prstr t)
                                                  unify env (noinfo 5) (tUni v) t
                                                  proceed (t:hist) eq cs
-          where selsOf cs                   = sortBy (\a b -> compare (nstr a) (nstr b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
+          where selsOf cs                   = sortBy (\a b -> compare (nameText a) (nameText b)) $ nub [ n | Sel _ _ _ (TUni _ v') n _ <- cs, v' == v ]
                 attrs                       = nub $ selsOf solve_cs \\ valueKWs
         tryAlt v t
           | uvkind v == KFX                 = do t <- instwild env (uvkind v) t

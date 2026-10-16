@@ -41,6 +41,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
+import qualified Data.Text.Short as TS
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -538,12 +539,12 @@ main = do
             -- The previous instance defined only <=, so compare was the
             -- class default built from == and <=.
             oldLe a b = case (a, b) of
-              (S.Name _ s1, S.Name _ s2) -> s1 <= s2
+              (S.Name _ s1, S.Name _ s2) -> TS.toString s1 <= TS.toString s2
               (S.Derived n1 s1, S.Derived n2 s2) -> case oldCompare n1 n2 of
                 LT -> True
                 EQ -> oldLe s1 s2
                 GT -> False
-              (S.Internal p1 s1 i1, S.Internal p2 s2 i2) -> (p1, s1, i1) <= (p2, s2, i2)
+              (S.Internal p1 s1 i1, S.Internal p2 s2 i2) -> (p1, TS.toString s1, i1) <= (p2, TS.toString s2, i2)
               (S.Name{}, S.Derived{}) -> True
               (S.Name{}, S.Internal{}) -> True
               (S.Derived{}, S.Internal{}) -> True
@@ -578,7 +579,6 @@ main = do
           ]
         show (S.QName (S.modName ["m"]) (S.Name (Loc 1 2) "\228")) `shouldBe` "QName {mname = ModName [Name NoLoc \"m\"], noq = Name (Loc 1 2) \"\\228\"}"
         show (Just (S.name "a")) `shouldBe` "Just (Name NoLoc \"a\")"
-        map (\n -> S.rawstr n == S.nstr n) pinNames `shouldBe` map (const True) pinNames
 
       it "encodes names in Binary as before" $ do
         let deps = [ (S.QName (S.modName ["m", "\228"]) n, B8.pack (show i)) | (i, n) <- zip [0 :: Int ..] pinNames ]

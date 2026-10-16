@@ -16,6 +16,7 @@ module Acton.Names where
 
 import Utils
 import Acton.Syntax
+import qualified Data.Text.Short as TS
 import Acton.Builtin
 import Debug.Trace
 import qualified Data.Set as Set
@@ -31,13 +32,13 @@ isUnboxed (Internal BoxPass _ _)    = True
 isUnboxed _                         = False
 
 
-self                                = Name NoLoc "self"
+self                                = name "self"
 
 localName n                         = Derived n suffixLocal
 newactName n                        = Derived n suffixNewact
 
-selfKW'                             = Internal Witness "self" 0
-thisKW'                             = Internal Witness "this" 0
+selfKW'                             = Internal Witness (packText "self") 0
+thisKW'                             = Internal Witness (packText "this") 0
 
 g_self                              = globalName "self"
 
@@ -74,7 +75,7 @@ deriveMod n0 (n:m)                  = deriveMod (Derived n0 n) m
 deriveT (TVar _ v)                  = tvname v
 deriveT (TCon _ c)                  = deriveQ (tcname c)
 
-witAttr qn                          = Internal Witness (nstr $ deriveQ qn) 0
+witAttr qn                          = Internal Witness (nameText $ deriveQ qn) 0
 
 extensionName [] c                  = Derived (globalName "ext") (deriveQ $ tcname c)
 extensionName (p:_) c
@@ -145,7 +146,7 @@ methods b                           = [ n | Decl _ ds <- b, Def{dname=n} <- ds ]
 statevars b                         = concat [ bound ps | VarAssign _ ps _ <- b ]
 
 
-isHidden n@(Name _ str)             = length (takeWhile (=='_') str) == 1 || n == resumeKW || n == cleanupKW
+isHidden n@(Name _ str)             = TS.length (TS.takeWhile (=='_') str) == 1 || n == resumeKW || n == cleanupKW
 isHidden _                          = True
 
 isPrivateName                       :: Name -> Bool

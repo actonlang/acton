@@ -53,7 +53,7 @@ type NormM a                        = State (Int,[(Name,PosPar,Expr)]) a
 newName                             :: String -> NormM Name
 newName s                           = do (n,ts) <- get
                                          put (n+1,ts)
-                                         return $ Internal NormPass s n
+                                         return $ Internal NormPass (packText s) n
 
 addComp                             :: (Name,PosPar,Expr) -> NormM ()
 addComp (n,p,e)                     = state (\(i,ts) -> ((),(i,(n,p,e):ts)))
@@ -407,7 +407,7 @@ normSuite' env (s : ss)             = do s' <- norm' env s
                 tw                  = tMappingW tr tk tv
                 (w0, k)             = unAnnot (tHashableW tk) annot_k
                 e0                  = eCall (tApp (eQVar primMkDict) [tv,tk]) [w0, Dict NoLoc []]
-                e1                  = eCall (eDot (eDot (eVar w) (Internal Witness "Indexed" 0)) setitemKW) [eVar r, k, v]
+                e1                  = eCall (eDot (eDot (eVar w) (Internal Witness (packText "Indexed") 0)) setitemKW) [eVar r, k, v]
                 w1                  = eCall (tApp (eQVar witMappingDict) [tk,tv]) [w0]
 
         compStmt (CompFor l p e c) x = For l p e [compStmt c x] []

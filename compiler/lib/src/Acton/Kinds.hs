@@ -23,6 +23,7 @@ import Control.Monad
 import Pretty
 import Utils
 import Acton.Syntax
+import qualified Data.Text.Short as TS
 import Acton.Names
 import Acton.Builtin
 import Acton.Subst
@@ -69,7 +70,7 @@ newWildvar l                        = do k <- newKUni
 
 newKUni                             = KUni <$> newUnique
 
-newXVar                             = TV KType <$> (Internal Xistvar "" <$> newUnique)
+newXVar                             = TV KType <$> (Internal Xistvar TS.empty <$> newUnique)
 
 type KindEnv                        = EnvF ()
 

@@ -808,9 +808,9 @@ exprPart = do
                                 Just w -> S.Int NoLoc (read w) w
                                 Nothing -> S.Int NoLoc 0 "0"
                 -- First convert the expression to a string
-                strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+                strExpr = S.Call NoLoc (S.Var NoLoc (S.NoQ (S.name "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
                 -- Then call the center method on the string
-                centerMethod = S.Dot NoLoc strExpr (S.Name NoLoc "center")
+                centerMethod = S.Dot NoLoc strExpr (S.name "center")
                 -- Call center(width)
                 centeredExpr = S.Call NoLoc centerMethod (S.PosArg widthExpr S.PosNil) S.KwdNil
             return centeredExpr
@@ -821,7 +821,7 @@ exprPart = do
             -- This allows printf to apply the format directly to the value
             return parsedExpr
         -- For normal formatting, convert to str
-        else return $ S.Call NoLoc (S.Var NoLoc (S.NoQ (S.Name NoLoc "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
+        else return $ S.Call NoLoc (S.Var NoLoc (S.NoQ (S.name "str"))) (S.PosArg parsedExpr S.PosNil) S.KwdNil
 
     return $ ExprPart finalExpr fmt
 
@@ -1141,14 +1141,14 @@ name = do off <- getOffset
           x <- identifier
           if isUpper (head x) && all isDigit (tail x)
             then parseError (FancyError off (Set.fromList [ErrorCustom (TypeVariableNameError x)]))
-            else return $ S.Name (Loc off (off+length x)) x
+            else return $ S.Name (Loc off (off+length x)) (S.packText x)
 
-escname = name <|> addLoc (S.Name NoLoc . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
+escname = name <|> addLoc (S.Name NoLoc . S.packText . head <$> plainstrLiteral)  -- Assumes an escname cannot contain hex escape sequences
 
 tvarname = do off <- getOffset
               x <- identifier
               if isUpper (head x) && all isDigit (tail x)
-               then return $ S.Name (Loc off (off+length x)) x
+               then return $ S.Name (Loc off (off+length x)) (S.packText x)
                else parseError (TrivialError off (Just (Tokens (N.fromList x))) (Set.fromList [Label (N.fromList ("type variable (upper case letter optionally followed by digits)"))]))
 
 module_name :: Parser S.ModName
@@ -1230,14 +1230,14 @@ validateModuleSuite = go Set.empty
         S.Signature{} -> go seen stmts
         S.Decl _ ds
           | null cycles -> go seen stmts
-          | otherwise -> parseException (S.sloc stmt) (CyclicTypedef $ map S.rawstr $ head cycles)
+          | otherwise -> parseException (S.sloc stmt) (CyclicTypedef $ map S.nstr $ head cycles)
           where cycles = [ map S.dname ds | CyclicSCC ds <- stronglyConnComp tdefs ]
                 tdefs  = [ (d, S.dname d, Names.free d) | d@S.Typedef{} <- ds ]
         _             -> parseException (S.sloc stmt) InvalidModuleStatement
 
     addNames seen [] = return seen
     addNames seen (n:ns)
-      | n `Set.member` seen = parseException (loc n) (DuplicateTopLevelAssignment (S.rawstr n))
+      | n `Set.member` seen = parseException (loc n) (DuplicateTopLevelAssignment (S.nstr n))
       | otherwise           = addNames (Set.insert n seen) ns
 
 data SourceSpan = SourceSpan !Int !Int deriving (Eq, Show)
@@ -2433,7 +2433,7 @@ atom_expr = do
                         return (\a -> maybe (S.DotI (loc a `upto` l) a i) (const $ S.RestI (loc a `upto` l) a i) mb)
                  strdot = do
                         (l,ss) <- withLoc plainstrLiteral
-                        return (\a -> S.Dot (loc a `upto` l) a (S.Name l (head ss)))
+                        return (\a -> S.Dot (loc a `upto` l) a (S.Name l (S.packText (head ss))))
 
                  -- Parse slice or index: try slice first since it can start with expr
                  sliceOrIndex = try sliceParser <|> indexParser
@@ -2587,7 +2587,7 @@ tschema = addLoc $
 ttype :: Parser S.Type
 ttype    =  addLoc (
             rword "None" *> return (S.TNone NoLoc)
-        <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return "Self")
+        <|> (S.TVar NoLoc . S.TV S.KType) <$> (S.Name <$> rwordLoc "Self" <*> return (S.packText "Self"))
         <|> S.TOpt NoLoc <$> (qmark *> ttype)
         <|> try (do mbfx <- optional effect
                     (p,k) <- parens funrows
