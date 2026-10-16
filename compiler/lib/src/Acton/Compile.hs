@@ -420,6 +420,7 @@ data FrontTiming = FrontTiming
   , ftTypeReconstruct :: TimeSpec
   , ftTypeAfterProgress :: TimeSpec
   , ftTypeForce :: TimeSpec
+  , ftTypeEscape :: TimeSpec
   , ftTypeHash :: TimeSpec
   , ftTypeStmtTimings :: [TypeStmtTiming]
   } deriving (Eq, Show)
@@ -2633,6 +2634,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             "Hashable.hash implementation " ++ intercalate "." (map A.nstr path) ++
             " may let its hasher parameter '" ++ A.nstr parameter ++
             "' escape; Hashable.hash must consume the hasher only during the call"
+      timeTypeEscape <- getTime Monotonic
       -- Store roots so later builds can discover entry points without reparse.
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
@@ -2822,7 +2824,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeReconstruct = timeTypeReconstruct - timeKindsCheck
                                  , ftTypeAfterProgress = typeAfterProgress
                                  , ftTypeForce = timeTypeForce - timeTypeReconstruct
-                                 , ftTypeHash = timeTypeHash - timeTypeForce
+                                 , ftTypeEscape = timeTypeEscape - timeTypeForce
+                                 , ftTypeHash = timeTypeHash - timeTypeEscape
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
