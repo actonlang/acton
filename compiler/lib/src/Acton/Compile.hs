@@ -2442,6 +2442,26 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                      -> M.Map A.Name SrcLoc
                      -> IO (Either [Diagnostic String] (M.Map A.Name [(A.QName, B.ByteString)]))
     resolveDepHashes label getHash deps nameLocs = do
+      -- Many owners share the same few external deps; resolve each once.
+      memo <- newIORef HM.empty
+      let resolveMemo m n = do
+            cache <- readIORef memo
+            case HM.lookup (m, n) cache of
+              Just r -> return r
+              Nothing -> do
+                r <- resolveNameHash m n
+                modifyIORef' memo (HM.insert (m, n) r)
+                return r
+          lookupName owner m n = do
+            mInfo <- resolveMemo m n
+            return $ case mInfo of
+              Just info ->
+                let h = getHash info
+                    loc = M.findWithDefault NoLoc owner nameLocs
+                in if B.null h
+                     then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
+                     else Right (Just (A.GName m n, h))
+              Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
       resolved <- forM (M.toList deps) $ \(owner, qns) -> do
         resolvedQns <- forM qns $ \qn -> case qn of
           A.GName m n -> lookupName owner m n
@@ -2452,18 +2472,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
           then Right (owner, catMaybes vals)
           else Left (concat errs)
       let (errs, vals) = partitionEithers resolved
-      return $ if null errs then Right (M.fromList vals) else Left (concat errs)
-      where
-        lookupName owner m n = do
-          mInfo <- resolveNameHash m n
-          return $ case mInfo of
-            Just info ->
-              let h = getHash info
-                  loc = M.findWithDefault NoLoc owner nameLocs
-              in if B.null h
-                   then Left (missingDepHashDiagnostics label owner loc (A.GName m n))
-                   else Right (Just (A.GName m n, h))
-            Nothing -> Left (missingNameHashDiagnostics (A.GName m n))
+      return $ if null errs then Right (M.fromDistinctAscList vals) else Left (concat errs)
 
     emitFrontProgress pass completed total current =
       onFrontProgress FrontPassProgress
@@ -2593,7 +2602,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
             let completed = base + done
             when (completed `rem` hashProgressCheckStride == 0) $
               emitHashProgressPaced False completed hashProgressTotal Nothing
-      evaluate (sourceHashWork + implHashWork + ifaceHashWork + ifaceDepWork + implDepWork + M.size nameLocs)
+      evaluate (sourceHashWork + implHashWork + ifaceHashWork + ifaceDepWork + implDepWork)
       emitHashProgressPaced True 0 hashProgressTotal Nothing
       -- Module-level src hash uses raw bytes so any source edit forces re-parse.
       let moduleSrcBytesHash = SHA256.hash srcBytes
