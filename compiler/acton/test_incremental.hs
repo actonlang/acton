@@ -1429,7 +1429,7 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   let namesA = sort (map (prstr . InterfaceFiles.nhName) nameHashesA)
   assertBool "expected generated protocol sibling name" ("BazProtoD_BarProto" `elem` namesA)
   assertBool "expected generated extension name" ("BarProtoD_Widget" `elem` namesA)
-  let idxName n = A.Name NoLoc n
+  let idxName n = A.name n
   extensionsForWidget <- InterfaceFiles.readExtensionsByClass tyA (idxName "Widget")
   extensionsForBarProto <- InterfaceFiles.readExtensionsByProtocol tyA (idxName "BarProto")
   extensionsForFooProto <- InterfaceFiles.readExtensionsByProtocol tyA (idxName "FooProto")

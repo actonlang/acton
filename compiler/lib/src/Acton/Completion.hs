@@ -570,7 +570,7 @@ keywordParameters :: S.Type -> [SignatureParameter]
 keywordParameters row =
   case row of
     S.TRow _ S.KRow name typ d rest ->
-      SignatureParameter (S.rawstr name ++ ": " ++ displayType typ ++
+      SignatureParameter (S.nstr name ++ ": " ++ displayType typ ++
                           maybe "" ((" = " ++) . prstr) (S.defaultExpr <$> d)) : keywordParameters rest
     S.TStar _ S.KRow rest ->
       [SignatureParameter ("**kwargs: " ++ displayType (S.tTupleK rest))]
@@ -580,7 +580,7 @@ keywordParameterRows :: S.Type -> [KeywordParameter]
 keywordParameterRows row =
   case row of
     S.TRow _ S.KRow name typ _ rest ->
-      KeywordParameter (S.rawstr name) typ : keywordParameterRows rest
+      KeywordParameter (S.nstr name) typ : keywordParameterRows rest
     _ -> []
 
 completionEnv :: [FilePath] -> Env.Env0 -> S.ModName -> [S.Import] -> IO Env.Env0
@@ -744,7 +744,7 @@ keywordType :: S.Name -> S.Type -> Maybe S.Type
 keywordType name row =
   case row of
     S.TRow _ S.KRow n typ _ rest
-      | S.rawstr n == S.rawstr name -> Just typ
+      | S.nameText n == S.nameText name -> Just typ
       | otherwise -> keywordType name rest
     _ -> Nothing
 
@@ -754,9 +754,9 @@ attrsForType env typ prefix =
     Nothing -> []
     Just tc ->
       dedup $
-        [ Completion (S.rawstr n) (kindOf info) (detailOf info)
+        [ Completion (S.nstr n) (kindOf info) (detailOf info)
         | (n, info) <- Env.fullAttrEnv env tc
-        , prefix `isPrefixOf` S.rawstr n
+        , prefix `isPrefixOf` S.nstr n
         ]
 
 attrType :: Env.Env0 -> S.TCon -> S.Name -> Maybe S.Type
@@ -765,7 +765,7 @@ attrType env tc attr =
 
 attrInfo :: Env.Env0 -> S.TCon -> S.Name -> Maybe I.NameInfo
 attrInfo env tc attr =
-  snd <$> find ((== S.rawstr attr) . S.rawstr . fst) (Env.fullAttrEnv env tc)
+  snd <$> find ((== S.nameText attr) . S.nameText . fst) (Env.fullAttrEnv env tc)
 
 typeOfInfo :: I.NameInfo -> Maybe S.Type
 typeOfInfo info =

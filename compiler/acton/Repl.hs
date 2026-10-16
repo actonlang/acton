@@ -671,8 +671,8 @@ replIsReplayStmt A.Assign{} = True
 replIsReplayStmt _          = False
 
 replStmtNames :: A.Stmt -> [String]
-replStmtNames A.Signature{A.vars=ns} = map A.rawstr ns
-replStmtNames A.Decl{A.decls=ds}     = map (A.rawstr . A.dname) ds
+replStmtNames A.Signature{A.vars=ns} = map A.nstr ns
+replStmtNames A.Decl{A.decls=ds}     = map (A.nstr . A.dname) ds
 replStmtNames _                      = []
 
 replStartsBlock :: String -> Bool

@@ -80,7 +80,7 @@ runL                            :: LiftM a -> a
 runL m                          = evalState m ([],[1..])
 
 newName                         :: String -> LiftM Name
-newName s                       = state (\(totop,uniq:supply) -> (Internal LLiftPass s uniq, (totop,supply)))
+newName s                       = state (\(totop,uniq:supply) -> (Internal LLiftPass (packText s) uniq, (totop,supply)))
 
 liftToTop                       :: [Decl] -> LiftM ()
 liftToTop ds                    = state (\(totop,supply) -> ((), (totop++ds,supply)))
@@ -89,9 +89,9 @@ liftedToTop                     :: LiftM [Decl]
 liftedToTop                     = state (\(totop,supply) -> (totop, ([],supply)))
 
 
-llCont                          = Internal LLiftPass "cont" 0
+llCont                          = Internal LLiftPass (packText "cont") 0
 
-llSelf                          = Internal LLiftPass "self" 0
+llSelf                          = Internal LLiftPass (packText "self") 0
 
 
 -- Environment ---------------------------------------------------------------------------------------------------------

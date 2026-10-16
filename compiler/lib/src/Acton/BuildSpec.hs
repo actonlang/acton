@@ -39,6 +39,7 @@ import Control.Monad (foldM)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Parser as AP
 import qualified Acton.Syntax as S
+import qualified Data.Text.Short as TS
 import qualified Acton.Printer as Pr
 import Utils (SrcLoc(..))
 import qualified Data.Aeson.KeyMap as KM
@@ -379,7 +380,7 @@ srcLocToPair NoLoc     = Nothing
 srcLocToPair (Loc s e) = Just (s,e)
 
 patternVarName :: S.Pattern -> Maybe String
-patternVarName (S.PVar _ (S.Name _ v) _) = Just v
+patternVarName (S.PVar _ (S.Name _ v) _) = Just (TS.toString v)
 patternVarName (S.PParen _ p)            = patternVarName p
 patternVarName _                         = Nothing
 
@@ -418,7 +419,7 @@ findBodyOffsetsFromAST content varName (S.Module _ _ _ stmts) =
   where
     firstDictLoc [] = Nothing
     firstDictLoc (S.Assign _ [S.PVar _ (S.Name _ v) _] (S.Dict l _) : rest)
-      | v == varName = srcLocToPair l <|> firstDictLoc rest
+      | TS.toString v == varName = srcLocToPair l <|> firstDictLoc rest
     firstDictLoc (_:rest) = firstDictLoc rest
     -- Given a range [s,e) covering the dict, return the inner body [s+1,e-1].
     -- We assume the Acton parser locates the Dict to start at '{' and end
@@ -813,7 +814,7 @@ tupleToLibrary _ = Nothing
 
 kwdToMap :: S.KwdArg -> Map.Map String S.Expr
 kwdToMap S.KwdNil = Map.empty
-kwdToMap (S.KwdArg (S.Name _ n) e rest) = Map.insert n e (kwdToMap rest)
+kwdToMap (S.KwdArg (S.Name _ n) e rest) = Map.insert (TS.toString n) e (kwdToMap rest)
 kwdToMap (S.KwdStar _) = Map.empty
 
 -- Options must be a dict of plain string literals. Anything else (notably a

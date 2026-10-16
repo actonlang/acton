@@ -29,6 +29,7 @@ import qualified Control.Exception
 import Debug.Trace
 import Utils
 import Acton.Syntax
+import qualified Data.Text.Short as TS
 import Acton.Names
 import Acton.Builtin
 import Acton.Prim
@@ -301,7 +302,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                    stopWorkers
                                                    stopProgress
                                                    if null errs
-                                                     then do runType "" (checkSigs env te)
+                                                     then do runType TS.empty (checkSigs env te)
                                                              return (te, ss)
                                                      else throwTopErrors errs
                                              -- If scan/check throws before stopProgress runs, make sure the
@@ -373,7 +374,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
         -- become Left values so infTop can collect multiple errors; async
         -- exceptions still escape through tryTop.
         scanOrCheck env s item q        = tryTop $ do
-                                             let p = nstr $ uniqPrefix s
+                                             let p = nameText $ uniqPrefix s
                                              ((total,te1,s1),st) <- runTypeFromState p (initTypeState p) $ do
                                                pushFX fxPure tNone
                                                -- The scanner returns the syntactic totality bit, the scanned
@@ -397,7 +398,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
         -- Background worker body for a total statement.  It receives exactly
         -- the scanned env and scanned statement returned by scanTopStmt.
         checkTotal env te s             = tryTop $ do
-                                             (te1,ss1) <- runType (nstr $ uniqPrefix s) $ do
+                                             (te1,ss1) <- runType (nameText $ uniqPrefix s) $ do
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
                                              forceSuite te1 ss1

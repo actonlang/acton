@@ -165,6 +165,7 @@ import qualified Data.Persist as Persist
 import qualified Data.Set as Set
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Short as TS
 import Data.Time.Clock (UTCTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
@@ -486,7 +487,7 @@ safeKeySuffix raw =
 
 nameKeySuffix :: A.Name -> BS.ByteString
 nameKeySuffix n =
-    safeKeySuffix (TE.encodeUtf8 (T.pack (A.rawstr n)))
+    safeKeySuffix (TS.toByteString (A.nameText n))
 
 moduleKeySuffix :: A.ModName -> BS.ByteString
 moduleKeySuffix mn =
@@ -1040,7 +1041,7 @@ readNameHashEntries txn dbi = do
     vals <- getValuesWithPrefix txn dbi keyNameHashPrefix
     infos <- forM (zip [0..] vals) $ \(i, v) ->
       decodeStrict ("name-hash " ++ show (i :: Int)) v
-    return (Data.List.sortOn (A.nstr . nhName) infos)
+    return (Data.List.sortOn (A.nameText . nhName) infos)
 
 readStmtEntries :: LMDB.MDB_txn -> LMDB.MDB_dbi -> IO [A.Stmt]
 readStmtEntries txn dbi = do
@@ -1122,7 +1123,7 @@ extensionIndexFromNameInfo mn (I.NModule _ te _) =
       Map.insertWith unionNames n (sortNames exts)
 
     unionNames xs ys = sortNames (xs ++ ys)
-    sortNames = Data.List.sortOn A.nstr . Data.List.nub
+    sortNames = Data.List.sortOn A.nameText . Data.List.nub
 
 extensionIndexEntries :: ExtensionIndex -> [(BS.ByteString, BS.ByteString)]
 extensionIndexEntries index =
@@ -1175,8 +1176,8 @@ depIndexEntries depModules nameHashes =
     | ((mn, n), users) <- userRows
     ]
   where
-    moduleNameKey = A.modPath
-    nameKey = A.nstr
+    moduleNameKey (A.ModName ns) = map A.nameText ns
+    nameKey = A.nameText
     sortModRows = Data.List.sortOn (moduleNameKey . fst)
     sortNameInfos = Data.List.sortOn (nameKey . dniName)
     sortUserRows = Data.List.sortOn (\((mn, n), _) -> (moduleNameKey mn, nameKey n))
@@ -1535,16 +1536,16 @@ readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
 readDepUsers f mn n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.rawstr n) txn dbi (keyDepName mn n)
-      traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.rawstr n)
+      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.nstr n) txn dbi (keyDepName mn n)
+      traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.nstr n)
       return (maybe emptyDepUsers id mUsers)
 
 readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
 readNameHash f n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mInfo <- getMaybeValue ("name-hash/" ++ A.rawstr n) txn dbi (keyNameHash n)
-      traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.rawstr n)
+      mInfo <- getMaybeValue ("name-hash/" ++ A.nstr n) txn dbi (keyNameHash n)
+      traceTydbRead (case mInfo of { Just _ -> "name-hash"; Nothing -> "name-hash-miss" }) f (A.nstr n)
       return mInfo
 
 readNameHashMaybe :: FilePath -> A.Name -> IO (Maybe NameHashInfo)

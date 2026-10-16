@@ -41,6 +41,7 @@ import qualified Control.Monad.Trans.State.Strict as St
 import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosState, errorOffset, reachOffset, runParser, errorBundlePretty, ShowErrorComponent(..))
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
+import qualified Data.Text.Short as TS
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -48,6 +49,7 @@ import qualified Data.Set as Set
 import Data.IORef
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString.Base16 as Base16
+import qualified Data.Binary
 import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSize(..), defaultStyle, addReport, addFile)
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
@@ -85,6 +87,20 @@ nameHash n src pub impl =
 
 hashTestName :: S.Name
 hashTestName = S.name "value"
+
+-- Names whose rendering, hashes and encodings are pinned: two-, three- and
+-- four-byte UTF-8, NUL, and Derived and Internal names with a nonzero,
+-- negative or empty counter.
+pinNames :: [S.Name]
+pinNames =
+  [ S.name "\228\8364\120120"
+  , S.name "x\0y"
+  , S.Derived (S.name "a") (S.name "b")
+  , S.Derived (S.name "a") (S.Internal S.Witness "w" 3)
+  , S.Internal S.Globvar "g" (-7)
+  , S.Internal S.Witness "" 0
+  , S.Derived (S.Derived (S.name "C") (S.name "\228")) (S.Internal S.Tempvar "t" 12)
+  ]
 
 publicHashFor :: I.NameInfo -> B8.ByteString
 publicHashFor info =
@@ -239,19 +255,27 @@ main = do
               sourcePlainName = S.name "foo_bar"
               derivedName = S.Derived (S.name "encode") (S.name "witness")
               longName = S.name (replicate 401 'x')
+              unicodeName = S.name "\228x\0y"
               iface =
                 [ (firstName, I.NVar S.tWild)
                 , (secondName, I.NDef (S.tSchema [] S.tWild) S.NoDec Nothing)
                 , (sourcePlainName, I.NVar S.tWild)
                 , (derivedName, I.NVar S.tWild)
                 , (longName, I.NVar S.tWild)
-                ]
+                , (unicodeName, I.NVar S.tWild)
+                ] ++ [ (n, I.NVar S.tWild) | n <- pinNames ]
+              pinHash i = nameHash (pinNames !! i) "srcp" "pubp" "implp"
+              -- In nstr order, which is the order the rows are stored in.
               nameHashes =
+                map pinHash [6, 4, 5, 2, 3] ++
                 [ nameHash derivedName "src4" "pub4" "impl4"
                 , nameHash firstName "src1" "pub1" "impl1"
                 , nameHash sourcePlainName "src3" "pub3" "impl3"
                 , nameHash secondName "src2" "pub2" "impl2"
+                , pinHash 1
                 , nameHash longName "src5" "pub5" "impl5"
+                , nameHash unicodeName "src6" "pub6" "impl6"
+                , pinHash 0
                 ]
               roots = [secondName, firstName]
               tests = ["test_second", "test_first"]
@@ -264,6 +288,26 @@ main = do
           InterfaceFiles.keyNameInfo sourcePlainName `shouldBe` "name-info/p/foo_bar"
           InterfaceFiles.keyNameInfo derivedName `shouldBe` "name-info/p/encodeD_witness"
           InterfaceFiles.keyNameInfo longName `shouldSatisfy` B8.isPrefixOf "name-info/h/"
+          map InterfaceFiles.keyNameInfo (unicodeName : pinNames) `shouldBe`
+            [ "name-info/h/a239e3b0037f07073d3eb7c2c9c09515788c53c363522f616bfb50b876dff5c2"
+            , "name-info/h/ff26e530e00bdc53799072c65b5114885413e1a792c03792beb7ca8d8d06113c"
+            , "name-info/h/ce3890a816f5237a17aa7e1436113bbac398dfe216cf965537cd035bdbad900a"
+            , "name-info/p/aD_b"
+            , "name-info/p/aW_3w"
+            , "name-info/p/G_-7g"
+            , "name-info/p/W_"
+            , "name-info/h/d411b79b67e5851ef731f1c9af75432996298398b69493e8bbcd0d9e9e7e5ce9"
+            ]
+          map InterfaceFiles.keyNameHash (unicodeName : pinNames) `shouldBe`
+            [ "name-hash/h/a239e3b0037f07073d3eb7c2c9c09515788c53c363522f616bfb50b876dff5c2"
+            , "name-hash/h/ff26e530e00bdc53799072c65b5114885413e1a792c03792beb7ca8d8d06113c"
+            , "name-hash/h/ce3890a816f5237a17aa7e1436113bbac398dfe216cf965537cd035bdbad900a"
+            , "name-hash/p/aD_b"
+            , "name-hash/p/aW_3w"
+            , "name-hash/p/G_-7g"
+            , "name-hash/p/W_"
+            , "name-hash/h/d411b79b67e5851ef731f1c9af75432996298398b69493e8bbcd0d9e9e7e5ce9"
+            ]
           (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes', roots', tests', doc') <-
             InterfaceFiles.readFile tyPath
           te `shouldBe` iface
@@ -482,6 +526,8 @@ main = do
               , plain "junos_conf_root__configuration__system__login"
               , plain "junos_conf_root__configuration__systen"
               , plain "\220n\239code", plain "x\0y", S.Name NoLoc "a"
+              , plain "\x7F", plain "\x80", plain "\x7FF", plain "\x800", plain "\xE000"
+              , plain "\xFFFD", plain "\xFFFF", plain "\x10000", plain "\x1F600", plain "a\x1F600"
               , S.Derived (plain "a") (plain "b"), S.Derived (plain "a") (plain "c")
               , S.Derived (plain "b") (plain "a")
               , S.Derived (S.Derived (plain "a") (plain "b")) (plain "c")
@@ -493,12 +539,12 @@ main = do
             -- The previous instance defined only <=, so compare was the
             -- class default built from == and <=.
             oldLe a b = case (a, b) of
-              (S.Name _ s1, S.Name _ s2) -> s1 <= s2
+              (S.Name _ s1, S.Name _ s2) -> TS.toString s1 <= TS.toString s2
               (S.Derived n1 s1, S.Derived n2 s2) -> case oldCompare n1 n2 of
                 LT -> True
                 EQ -> oldLe s1 s2
                 GT -> False
-              (S.Internal p1 s1 i1, S.Internal p2 s2 i2) -> (p1, s1, i1) <= (p2, s2, i2)
+              (S.Internal p1 s1 i1, S.Internal p2 s2 i2) -> (p1, TS.toString s1, i1) <= (p2, TS.toString s2, i2)
               (S.Name{}, S.Derived{}) -> True
               (S.Name{}, S.Internal{}) -> True
               (S.Derived{}, S.Internal{}) -> True
@@ -511,6 +557,57 @@ main = do
                                           , [plain "b"], [S.Derived (plain "a") (plain "b")] ] ]
         [ (a, b, compare a b) | a <- names, b <- names, compare a b /= oldCompare a b ] `shouldBe` []
         [ (a, b) | a <- mods, b <- mods, compare a b /= compare (S.modPath a) (S.modPath b) ] `shouldBe` []
+
+      it "renders names as before" $ do
+        map S.nstr pinNames `shouldBe`
+          [ "\228\8364\120120"
+          , "x\NULy"
+          , "aD_b"
+          , "aW_3w"
+          , "G_-7g"
+          , "W_"
+          , "CD_\228V_12t"
+          ]
+        map show pinNames `shouldBe`
+          [ "Name NoLoc \"\\228\\8364\\120120\""
+          , "Name NoLoc \"x\\NULy\""
+          , "Derived (Name NoLoc \"a\") (Name NoLoc \"b\")"
+          , "Derived (Name NoLoc \"a\") (Internal Witness \"w\" 3)"
+          , "Internal Globvar \"g\" (-7)"
+          , "Internal Witness \"\" 0"
+          , "Derived (Derived (Name NoLoc \"C\") (Name NoLoc \"\\228\")) (Internal Tempvar \"t\" 12)"
+          ]
+        show (S.QName (S.modName ["m"]) (S.Name (Loc 1 2) "\228")) `shouldBe` "QName {mname = ModName [Name NoLoc \"m\"], noq = Name (Loc 1 2) \"\\228\"}"
+        show (Just (S.name "a")) `shouldBe` "Just (Name NoLoc \"a\")"
+
+      it "encodes names in Binary as before" $ do
+        let deps = [ (S.QName (S.modName ["m", "\228"]) n, B8.pack (show i)) | (i, n) <- zip [0 :: Int ..] pinNames ]
+            small = [ S.QName (S.modName ["\228"]) (S.name "\228\8364\120120")
+                    , S.GName (S.modName ["m"]) (S.Internal S.Globvar "g" (-7)) ]
+        Base16.encode (BL.toStrict (Data.Binary.encode small)) `shouldBe` "000000000000000200000000000000000100000000000000000001c3a400000000000000000003c3a4e282acf09d94b8020000000000000001000000000000000000016d0200000000000000000167fffffffffffffff9"
+        Base16.encode (Testing.hashDeps deps) `shouldBe` "7ce3aa098acffcf877dd15513c852ca5f64bcee91a795834adae5764f5ff6991"
+
+      it "renders C identifiers for names as before" $ do
+        let cname n = Pretty.render (Acton.CodeGen.gen (error "unused GenEnv") n)
+            names = [ S.name "int", S.name "complex", S.name "complx", S.name "__complex__"
+                    , S.name "x$y", S.name "9a", S.name "\228", S.name "a b" ] ++ pinNames
+        map cname names `shouldBe`
+          [ "A_int"
+          , "complx"
+          , "A_complex"
+          , "__complx__"
+          , "x$y"
+          , "X_39_a"
+          , "X_e4_"
+          , "aX_20_b"
+          , "X_e4_X_20ac_X_1d538_"
+          , "xX_0_y"
+          , "aD_b"
+          , "aW_3w"
+          , "G_X_2d_7g"
+          , "W_"
+          , "CD_X_e4_V_12t"
+          ]
 
     describe "Hashing" $ do
       it "keeps public hashes independent of docs and source locations" $ do
@@ -566,6 +663,47 @@ main = do
                   Nothing   -> error "missing source hash"
         Base16.encode h `shouldBe`
           "789782467b319c383a544eb7e882f9b07d9580bf638fa9df6294ab02be71b62c"
+
+      it "pins content hashes of non-ASCII and generated names" $ do
+        let decl n = S.Def NoLoc n [] S.PosNIL S.KwdNIL (Just S.tWild) [S.Pass NoLoc] S.NoDec S.fxPure Nothing
+            srcHash n = fmap Base16.encode (M.lookup n (Hashing.nameHashesFromItems [Hashing.TLDecl n (decl n)]))
+            numbered = zip [0 :: Int ..] pinNames
+            bytes c i = B8.pack (c : show i)
+            infos = [ nameHash n (bytes 's' i) (bytes 'p' i) (bytes 'i' i) | (i, n) <- numbered ]
+            nmod = I.NModule [] [ (n, I.NVar S.tWild) | n <- pinNames ] Nothing
+            hashMap c = M.fromList [ (n, bytes c i) | (i, n) <- numbered ]
+            (pubH, implH) = Hashing.moduleHashesFromHashMaps nmod (Set.fromList pinNames) (hashMap 'p') (hashMap 'i')
+        map srcHash pinNames `shouldBe`
+          [ Just "98a22bef145ac4f9845f387485c62e7339979d677c040653d062de71508913fa"
+          , Just "524ed79e15dd4fbb5f46e6a34e8d2cd90bf24c595277bc2ef91ce7339cf5a8bf"
+          , Just "f1f8d902cd12aeaf0684a98e00af61dc48d29281ccc794955a0baa27e8626f6c"
+          , Just "d216ebc7237d11e2133bb7903db38bcf69473b6717e1bd5c8c1612b089f7a583"
+          , Just "5a58a33a4120b5305f05ad1fa31e5e47adb5bf8185063ec4213122fc00808784"
+          , Just "a22c4801f5cb654b4d790cdf1ccd3ca292f8c8d296331127cee1d4d0278f312f"
+          , Just "85d21d2ef4db812e5a50659b37a37796491083643ad0713b4368980c592a0176"
+          ]
+        Base16.encode (Hashing.moduleImplHashFromNameHashes infos) `shouldBe` "f8005395f3093ccad59c633dfcd524a29ef053e72de565e76f83652579c5b689"
+        (Base16.encode pubH, Base16.encode implH) `shouldBe`
+          ( "48d5c5735dc6a49a5b3a11cf7d91591eb7d40f419f820b92a8bebcd37e53405d"
+          , "f8005395f3093ccad59c633dfcd524a29ef053e72de565e76f83652579c5b689"
+          )
+
+      it "pins cycle hashes of non-ASCII and generated names" $ do
+        let numbered = zip [0 :: Int ..] pinNames
+            count = length pinNames
+            selfHashes = M.fromList [ (n, B8.pack ('h' : show i)) | (i, n) <- numbered ]
+            localDeps = M.fromList [ (n, [pinNames !! ((i + 1) `mod` count)]) | (i, n) <- numbered ]
+            extDeps = M.fromList [ (n, [(S.QName (S.modName ["\228"]) n, B8.pack ('e' : show i))]) | (i, n) <- numbered ]
+            hashes = Hashing.computeHashes selfHashes localDeps extDeps
+        [ Base16.encode h | n <- pinNames, Just h <- [M.lookup n hashes] ] `shouldBe`
+          [ "568d773bb2eaf48b7a82aa9547c523ccd4997842c987c4ca27018ffcd181e4cf"
+          , "6bfe68629135ebff9ee3986b33a332548be7b8706df1546ad7dac99357aff731"
+          , "8719d24ab52eaa230728c5ff7c4165f08c165a17988b126d720ccaa00d6466a2"
+          , "5c0a0f72be798d0c397fbd5dc96b94197b5cc450a708e5fac830651d1ed4422c"
+          , "4e0cc6789fe8b53e4d1d27665d3b671c73546da46c5ca587bf35e15f4359d08f"
+          , "d12efb3485852001e91052a31db9e472762568cab4f5f7609328202bb8f3a7b8"
+          , "7d17ac3881df44298a9a642b165feda2771582e7a5fa617f92bf04d54afb5fbf"
+          ]
 
       it "keeps same-name source fragments in input order" $ do
         let sig = Hashing.TLStmt hashTestName (S.Signature NoLoc [hashTestName] (S.tSchema [] S.tWild) S.NoDec)

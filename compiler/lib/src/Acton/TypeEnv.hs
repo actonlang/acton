@@ -40,6 +40,8 @@ import Data.IntSet (IntSet)
 import Pretty
 import Utils
 import Acton.Syntax
+import Data.Text.Short (ShortText)
+import qualified Data.Text.Short as TS
 import Acton.Builtin
 import Acton.Prim
 import Acton.Printer
@@ -596,23 +598,25 @@ headvar (Seal _ _ (TUni _ u))         = u
 
 data TypeState                          = TypeState {
                                                 nextint         :: Int,
-                                                uniqprefix      :: String, -- Prefix for generated names
+                                                uniqprefix      :: ShortText, -- Prefix for generated names, with its _ separator
                                                 effectstack     :: [(TFX,Type)],
                                                 deferred        :: Constraints,
                                                 unisubst        :: IntMap Type
                                           }
 
-initTypeState p                         = TypeState { nextint = 1, uniqprefix = p, effectstack = [], deferred = [], unisubst = IntMap.empty }
+initTypeState p                         = TypeState { nextint = 1, uniqprefix = prefix, effectstack = [], deferred = [], unisubst = IntMap.empty }
+  where prefix | TS.null p              = p
+               | otherwise              = p `TS.append` packText "_"
 
 type TypeM a                            = ExceptT TypeError (State TypeState) a
 
-runTypeMState                           :: String -> TypeM a -> Either TypeError (a, TypeState)
+runTypeMState                           :: ShortText -> TypeM a -> Either TypeError (a, TypeState)
 runTypeMState p m                       = case runState (runExceptT m) (initTypeState p) of
                                             (Right x, st') -> Right (x, st')
                                             (Left err, _)  -> Left err
 
 runTypeM                                :: TypeM a -> a
-runTypeM m                              = case runTypeMState "" m of
+runTypeM m                              = case runTypeMState TS.empty m of
                                             Right (x,_) -> x
                                             Left err    -> Control.Exception.throw err
 
@@ -659,9 +663,7 @@ uextend s                               = lift $
 
 newGenerated p                          = do i <- newUnique
                                              st <- currentState
-                                             return $ Internal p (tag (uniqprefix st) i) 0
-  where tag "" i                        = show i
-        tag s i                         = s ++ "_" ++ show i
+                                             return $ Internal p (uniqprefix st `TS.append` packText (show i)) 0
 
 newWitness                              = newGenerated Witness
 
@@ -1271,7 +1273,8 @@ intro t mbe                            = case mbe of
                                              Nothing ->  pretty t
                                              Just e ->   text "The type of the indicated expression" <+> text "(" Pretty.<>
                                                            (if isGen t then text "which we call" else text "inferred to be") <+> pretty t Pretty.<> text ")"
-   where isGen (TCon _ (TC (NoQ (Name _ ('t' : ds))) [])) = all isDigit ds
+   where isGen (TCon _ (TC (NoQ (Name _ t)) []))
+           | Just ('t', ds) <- TS.uncons t = TS.all isDigit ds
          isGen _ = False
 
 explainRequirement c                = case info c of
@@ -1375,7 +1378,7 @@ typeReport (NoSolve mbt vs cs) filename src         =
         [(locToPosition l filename src, This m) | (l,m) <- withLocsMsgs]
         []
   where
-        nameStr (Name _ str) = str
+        nameStr (Name _ str) = TS.toString str
 
 typeReport (NoUnify (Simple l msg) _ _) filename src = Err Nothing "Type unification error" [(locToPosition l filename src, This msg)] []
 typeReport (NoUnify info t1 t2) filename src        =

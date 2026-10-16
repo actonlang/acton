@@ -27,7 +27,6 @@ module Acton.Hashing
   , pubSigSplitDepsFromNameInfoMapWithProgress
   , implSplitDepsFromItemsWithProgress
   , buildNameHashes
-  , nameKey
   , qnameKey
   ) where
 
@@ -43,6 +42,9 @@ import Utils (chunksOf)
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Unsafe as BU
+import qualified Data.ByteString.Short as SBS
+import qualified Data.ByteString.Short.Internal as SBSI
+import qualified Data.Text.Short as TS
 import Control.Monad (foldM, when)
 import Data.Bits (shiftR, (.&.), (.|.))
 import Data.Char (ord)
@@ -58,7 +60,7 @@ import Data.Maybe (mapMaybe)
 import qualified Data.Set
 import Data.Word (Word8, Word64)
 import Foreign.Marshal.Alloc (alloca, allocaBytes)
-import Foreign.Ptr (Ptr, castPtr)
+import Foreign.Ptr (Ptr, castPtr, plusPtr)
 import Foreign.Storable (peek, peekByteOff, poke, pokeByteOff)
 import GHC.Float (castDoubleToWord64)
 import System.IO.Unsafe (unsafePerformIO)
@@ -78,10 +80,6 @@ data NameHashInputs = NameHashInputs
   , nhiImplLocalDeps   :: M.Map A.Name [A.Name]
   , nhiImplExtDeps     :: M.Map A.Name [A.QName]
   }
-
--- | Render a local name as a stable string key.
-nameKey :: A.Name -> String
-nameKey = A.nstr
 
 -- | Render a qualified name as a stable string key.
 qnameKey :: A.QName -> String
@@ -232,6 +230,9 @@ feedList f xs sink =
 feedString :: String -> HashFeed
 feedString s sink = sinkWriteString sink s
 
+feedText :: TS.ShortText -> HashFeed
+feedText t sink = sinkWriteShortText sink t
+
 feedInt :: Int -> HashFeed
 feedInt i sink = sinkWriteInt sink i
 
@@ -317,46 +318,76 @@ sinkWriteWord64LE sink@(HashSink _ buf offp) w = do
   where
     byteAt shift = fromIntegral ((w `shiftR` shift) .&. 0xff) :: Word8
 
+-- | The offset to write n bytes at, given the current offset off of a
+-- write in progress.  Flushes the buffer first when the bytes do not fit.
+sinkReserveAt :: HashSink -> Int -> Int -> IO Int
+sinkReserveAt sink@(HashSink _ _ offp) off n
+  | off + n <= hashBufferSize = pure off
+  | otherwise = do
+      poke offp off
+      sinkFlush sink
+      pure 0
+{-# INLINE sinkReserveAt #-}
+
+-- | A string as UTF-8, with each NUL written as 00 00, then 00 01.
 sinkWriteString :: HashSink -> String -> IO ()
 sinkWriteString sink@(HashSink _ buf offp) s = do
   off <- peek offp
   off' <- go off s
-  off'' <- writeStringTerm off'
+  off'' <- sinkWriteStringEnd sink off'
   poke offp off''
   where
     go off [] = pure off
     go off ('\0':cs) = do
-      off' <- ensureLocal off 2
-      pokeByteOff buf off' zeroByte
-      pokeByteOff buf (off'+1) zeroByte
+      off' <- sinkReserveAt sink off 2
+      pokeByteOff buf off' (0 :: Word8)
+      pokeByteOff buf (off'+1) (0 :: Word8)
       go (off' + 2) cs
     go off (c:cs)
       | n <= 0x7f = do
-          off' <- ensureLocal off 1
+          off' <- sinkReserveAt sink off 1
           pokeByteOff buf off' (fromIntegral n :: Word8)
           go (off' + 1) cs
       | otherwise = do
-          off' <- ensureLocal off 4
+          off' <- sinkReserveAt sink off 4
           off'' <- writeUtf8Char buf off' c
           go off'' cs
       where
         n = ord c
 
-    writeStringTerm off = do
-      off' <- ensureLocal off 2
-      pokeByteOff buf off' zeroByte
-      pokeByteOff buf (off'+1) oneByte
-      pure (off' + 2)
+-- | The same bytes as sinkWriteString for the same text.  The text is
+-- already UTF-8, and a NUL byte in UTF-8 is always the character NUL.
+sinkWriteShortText :: HashSink -> TS.ShortText -> IO ()
+sinkWriteShortText sink@(HashSink _ buf offp) t = do
+  off <- peek offp
+  off' <- if off + len <= hashBufferSize && not (SBS.elem 0 b)
+            then SBSI.copyToPtr b 0 (buf `plusPtr` off) len >> pure (off + len)
+            else go off 0
+  off'' <- sinkWriteStringEnd sink off'
+  poke offp off''
+  where
+    b = TS.toShortByteString t
+    len = SBS.length b
+    go off i
+      | i >= len = pure off
+      | otherwise = case SBSI.unsafeIndex b i of
+          0 -> do
+            off' <- sinkReserveAt sink off 2
+            pokeByteOff buf off' (0 :: Word8)
+            pokeByteOff buf (off'+1) (0 :: Word8)
+            go (off' + 2) (i + 1)
+          w -> do
+            off' <- sinkReserveAt sink off 1
+            pokeByteOff buf off' w
+            go (off' + 1) (i + 1)
 
-    ensureLocal off n
-      | off + n <= hashBufferSize = pure off
-      | otherwise = do
-          poke offp off
-          sinkFlush sink
-          pure 0
-
-    zeroByte = 0 :: Word8
-    oneByte = 1 :: Word8
+-- | The 00 01 that ends a string, written at off.  Returns the new offset.
+sinkWriteStringEnd :: HashSink -> Int -> IO Int
+sinkWriteStringEnd sink@(HashSink _ buf _) off = do
+  off' <- sinkReserveAt sink off 2
+  pokeByteOff buf off' (0 :: Word8)
+  pokeByteOff buf (off'+1) (1 :: Word8)
+  pure (off' + 2)
 
 writeUtf8Char :: Ptr Word8 -> Int -> Char -> IO Int
 writeUtf8Char p off c
@@ -627,9 +658,9 @@ feedModName (A.ModName ns) sink = feedTag 186 sink >> feedList feedName ns sink
 
 feedName :: A.Name -> HashFeed
 feedName n sink = case n of
-  A.Name _ s       -> feedTag 187 sink >> feedString s sink
+  A.Name _ t       -> feedTag 187 sink >> feedText t sink
   A.Derived n1 n2  -> feedTag 188 sink >> feedName n1 sink >> feedName n2 sink
-  A.Internal p s i -> feedTag 189 sink >> feedPrefix p sink >> feedString s sink >> feedInt i sink
+  A.Internal p t i -> feedTag 189 sink >> feedPrefix p sink >> feedText t sink >> feedInt i sink
 
 feedPrefix :: A.Prefix -> HashFeed
 feedPrefix p sink = feedTag (case p of
@@ -784,7 +815,7 @@ hashCycleGroupFromWith sink selfHashes lookupLocal locals externals =
 hashCycleMemberWith :: HashSink -> B.ByteString -> B.ByteString -> A.Name -> IO B.ByteString
 hashCycleMemberWith sink self groupHash n =
   hashFeedWith sink $ \sink' ->
-    feedTag 254 sink' >> feedTag 2 sink' >> feedHashBytes self sink' >> feedHashBytes groupHash sink' >> feedString (nameKey n) sink'
+    feedTag 254 sink' >> feedTag 2 sink' >> feedHashBytes self sink' >> feedHashBytes groupHash sink' >> feedText (A.nameText n) sink'
 
 hashNameHashEntries :: Int -> [(String, B.ByteString)] -> B.ByteString
 hashNameHashEntries tag entries =
@@ -804,7 +835,7 @@ hashNameHashEntriesWith tag entries feedEntry =
 hashNameHashMapEntriesForNames :: Int -> M.Map A.Name B.ByteString -> [A.Name] -> B.ByteString
 hashNameHashMapEntriesForNames tag hashes names =
   hashNameHashEntriesWith tag names $ \n sink ->
-    feedString (nameKey n) sink >> feedHashBytes (M.findWithDefault B.empty n hashes) sink
+    feedText (A.nameText n) sink >> feedHashBytes (M.findWithDefault B.empty n hashes) sink
 
 pubSigDepsFromNameInfoMap :: M.Map A.Name I.NameInfo -> M.Map A.Name [A.QName]
 pubSigDepsFromNameInfoMap nameInfoMap =
@@ -1511,7 +1542,7 @@ computeHashesSortedDeps selfHashes localDeps extDeps =
           pure (M.insert n finalHash acc)
       CyclicSCC ns ->
         let nsSet = Data.Set.fromList ns
-            selfHashesSorted = [ selfHashes M.! n | n <- Data.List.sortOn nameKey ns ]
+            selfHashesSorted = [ selfHashes M.! n | n <- Data.List.sortOn A.nameText ns ]
             outsideDeps = Data.Set.toList $ Data.Set.fromList
               [ d | n <- ns, d <- M.findWithDefault [] n localDeps, Data.Set.notMember d nsSet ]
             externalDeps = Data.Set.toList $ Data.Set.fromList (concat [ M.findWithDefault [] n extDeps | n <- ns ])
@@ -1604,8 +1635,8 @@ assembleNameHashes :: Data.Set.Set A.Name
                    -> M.Map A.Name [(A.QName, B.ByteString)]
                    -> [InterfaceFiles.NameHashInfo]
 assembleNameHashes nameKeys nameSrcHashes pubHashes implHashes ownImplHashes pubLocalDeps implLocalDeps pubExtHashes implExtHashes =
-  let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
-      localDeps m n = Data.List.sortOn nameKey (M.findWithDefault [] n m)
+  let namesSorted = Data.List.sortOn A.nameText (Data.Set.toList nameKeys)
+      localDeps m n = Data.List.sortOn A.nameText (M.findWithDefault [] n m)
   in
     [ InterfaceFiles.NameHashInfo
         { InterfaceFiles.nhName = n
@@ -1657,7 +1688,7 @@ refreshImplHashes nameHashes nameImplHashes implLocalDeps implExtHashes =
     -- and its pub/impl deps must keep their places in the regenerated rows.
     [ if M.member n nameImplHashes
         then nh { InterfaceFiles.nhImplHash = M.findWithDefault B.empty n implHashes
-                , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn nameKey (M.findWithDefault [] n implLocalDeps)
+                , InterfaceFiles.nhImplLocalDeps = Data.List.sortOn A.nameText (M.findWithDefault [] n implLocalDeps)
                 , InterfaceFiles.nhImplDeps = M.findWithDefault [] n implExtHashes
                 }
         else nh
@@ -1687,19 +1718,19 @@ modulePubHashFromHashMap :: I.NModule -> M.Map A.Name B.ByteString -> B.ByteStri
 modulePubHashFromHashMap nmod pubHashes =
   let I.NModule _ iface _ = nmod
       pubNamesSorted =
-        Data.List.sortOn nameKey [ n | (n, _) <- iface, Names.isPublicName n ]
+        Data.List.sortOn A.nameText [ n | (n, _) <- iface, Names.isPublicName n ]
   in hashNameHashMapEntriesForNames 3 pubHashes pubNamesSorted
 
 -- | Hash the module impl entries from per-name impl hashes.
 moduleImplHashFromNameHashes :: [InterfaceFiles.NameHashInfo] -> B.ByteString
 moduleImplHashFromNameHashes infos =
   hashNameHashEntriesWith 4 infosSorted $ \nh sink ->
-    feedString (nameKey (InterfaceFiles.nhName nh)) sink >>
+    feedText (A.nameText (InterfaceFiles.nhName nh)) sink >>
     feedHashBytes (InterfaceFiles.nhImplHash nh) sink
   where
-    infosSorted = Data.List.sortOn (nameKey . InterfaceFiles.nhName) infos
+    infosSorted = Data.List.sortOn (A.nameText . InterfaceFiles.nhName) infos
 
 moduleImplHashFromHashMap :: Data.Set.Set A.Name -> M.Map A.Name B.ByteString -> B.ByteString
 moduleImplHashFromHashMap nameKeys implHashes =
-  let namesSorted = Data.List.sortOn nameKey (Data.Set.toList nameKeys)
+  let namesSorted = Data.List.sortOn A.nameText (Data.Set.toList nameKeys)
   in hashNameHashMapEntriesForNames 4 implHashes namesSorted
