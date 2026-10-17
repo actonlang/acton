@@ -2817,6 +2817,153 @@ main = do
         let report = Escape.analyzeModule tchecked
         length (Escape.reportContractViolations report) `shouldBe` 1
 
+    describe "Hashable.hash hasher contract" $ do
+      let contractParams report =
+            [ p
+            | (_, ps) <- Escape.reportFunctions report
+            , p <- ps
+            , Escape.parameterContract p
+            ]
+      it "composes user-class and tuple fields and permits control flow" $ do
+        let src = unlines
+              [ "class Point(object):"
+              , "    x: int"
+              , "    y: int"
+              , "    def __init__(self, x: int, y: int):"
+              , "        self.x = x"
+              , "        self.y = y"
+              , ""
+              , "extension Point(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.x == other.x and self.y == other.y"
+              , "    def hash(self, h):"
+              , "        self.x.hash(h)"
+              , "        self.y.hash(h)"
+              , ""
+              , "class Entry(object):"
+              , "    point: Point"
+              , "    extra: (Point, str)"
+              , "    def __init__(self, point: Point, extra: (Point, str)):"
+              , "        self.point = point"
+              , "        self.extra = extra"
+              , ""
+              , "extension Entry(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.point == other.point and self.extra == other.extra"
+              , "    def hash(self, h):"
+              , "        self.point.hash(h)"
+              , "        Hashable.hash(self.extra, h)"
+              , ""
+              , "class SequenceKey(object):"
+              , "    items: list[Point]"
+              , "    def __init__(self, items: list[Point]):"
+              , "        self.items = items"
+              , ""
+              , "extension SequenceKey(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.items == other.items"
+              , "    def hash(self, h):"
+              , "        len(self.items).hash(h)"
+              , "        for item in self.items:"
+              , "            if item.x >= 0:"
+              , "                alias = h"
+              , "                item.hash(alias)"
+              , "            else:"
+              , "                item.hash(h)"
+              ]
+        typed <- typecheckSource env0 "hash_check_composition" src
+        let report = Escape.analyzeModule typed
+        length (contractParams report) `shouldBe` 3
+        Escape.reportContractViolations report `shouldBe` []
+
+      it "allows local aliases and trusted hasher operations" $ do
+        let src = unlines
+              [ "class Key(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension Key(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        alias = h"
+              , "        alias.update(b'key')"
+              , "        ignored = alias.finalize()"
+              ]
+        typed <- typecheckSource env0 "hash_check_alias" src
+        let report = Escape.analyzeModule typed
+        Escape.reportContractViolations report `shouldBe` []
+        length (contractParams report) `shouldBe` 1
+
+      it "rejects capturing a local alias of the hasher" $ do
+        let src = unlines
+              [ "class Key(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension Key(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        alias = h"
+              , "        captured = lambda: alias"
+              ]
+        typed <- typecheckSource env0 "hash_check_capture_alias" src
+        length (Escape.reportContractViolations (Escape.analyzeModule typed)) `shouldBe` 1
+
+      it "checks implementations inherited through a Hashable subprotocol" $ do
+        forM_ [("1.hash(h)", 0), ("captured = lambda: h", 1)] $ \(body, violations) -> do
+          let src = unlines
+                [ "protocol SpecialHash(Hashable):"
+                , "    pass"
+                , "class Key(object):"
+                , "    def __init__(self):"
+                , "        pass"
+                , "extension Key(SpecialHash):"
+                , "    def __eq__(self, other):"
+                , "        return True"
+                , "    def hash(self, h):"
+                , "        " ++ body
+                ]
+          typed <- typecheckSource env0 "hash_check_inherited" src
+          let report = Escape.analyzeModule typed
+          length (contractParams report) `shouldBe` 1
+          length (Escape.reportContractViolations report) `shouldBe` violations
+
+      it "does not trust a projected witness for an unrelated protocol" $ do
+        let src = unlines
+              [ "protocol Other:"
+              , "    hash: (hasher) -> None"
+              , "class Key[X](object):"
+              , "    value: X"
+              , "    def __init__(self, value: X):"
+              , "        self.value = value"
+              , "extension Key[A(Other)](Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        self.value.hash(h)"
+              ]
+        typed <- typecheckSource env0 "hash_check_other_protocol" src
+        length (Escape.reportContractViolations (Escape.analyzeModule typed)) `shouldBe` 1
+
+      it "does not trust unrelated methods named hash or update" $ do
+        forM_ ["hash", "update"] $ \method -> do
+          let src = unlines
+                [ "class Other(object):"
+                , "    def " ++ method ++ "(self, h: hasher):"
+                , "        pass"
+                , "class Key(object):"
+                , "    other: Other"
+                , "    def __init__(self, other: Other):"
+                , "        self.other = other"
+                , "extension Key(Hashable):"
+                , "    def __eq__(self, other):"
+                , "        return True"
+                , "    def hash(self, h):"
+                , "        self.other." ++ method ++ "(h)"
+                ]
+          typed <- typecheckSource env0 ("hash_check_unrelated_" ++ method) src
+          length (Escape.reportContractViolations (Escape.analyzeModule typed)) `shouldBe` 1
+
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]
       testNorm env0 ["norm_comprehension_condition"]
