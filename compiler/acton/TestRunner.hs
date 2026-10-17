@@ -158,8 +158,7 @@ printErrorAndExit msg = do
 -- | Compute the test binary path for a module and target.
 testBinaryPath :: C.CompileOptions -> Paths -> String -> FilePath
 testBinaryPath opts paths modName =
-    let base = ".test_" ++ modNameToString mn
-        mn = dropProjPrefix paths (modNameFromString modName)
+    let base = rootBinaryName paths True (modNameFromString modName)
         exe = if isWindowsTarget (C.target opts) then base <.> "exe" else base
     in binDir paths </> exe
 
