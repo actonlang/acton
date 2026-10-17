@@ -3585,12 +3585,9 @@ buildAndRun buildOpts runOpts thing = do
     (returnCode, cmdOut, cmdErr) <- runThing runOpts thing
     return (returnCode, cmdOut, cmdErr)
 
--- when in a project, expect the binary to be named the same as the project
--- without our ending, like __bf. For example, if the project is
--- import_actor__bf, then we will run ./import_actor in
--- import_actor__bf/rel/bin
--- The numbers that each worker shows in the RTS mon output, which a program
--- run with --rts-mon-on-exit prints as its last line, by worker id
+-- The numbers that the RTS mon output shows for each worker, by worker id.
+-- A program run with --rts-mon-on-exit prints that output as the last line
+-- of its stdout.
 monWorkers :: String -> Either String (M.Map String (M.Map String Integer))
 monWorkers out = do
     root <- Ae.eitherDecode (LBS.pack (last ("" : lines out)))
@@ -3602,6 +3599,10 @@ monWorkers out = do
         Ae.Success n -> Just n
         Ae.Error _   -> Nothing
 
+-- when in a project, expect the binary to be named the same as the project
+-- without our ending, like __bf. For example, if the project is
+-- import_actor__bf, then we will run ./import_actor in
+-- import_actor__bf/rel/bin
 runThing opts thing = do
     twd <- canonicalizePath $ takeDirectory thing
     isProj <- doesDirectoryExist thing

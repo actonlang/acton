@@ -75,6 +75,23 @@
 // read their ready stamps with it.
 static inline int64_t now_ns(void);
 
+// Ready stamps are microseconds of the worker clock in 32 bits, so they fit
+// in the padding of a message ($ready_us in struct B_Msg). They wrap every
+// 71.6 minutes, so compare them only by their difference, a signed 32-bit
+// number: a stamp from 35.8 to 71.6 minutes after another comes out before
+// it. Stamps taken on different threads get compared, for example when a
+// worker takes an actor that another thread made ready. On a machine with
+// several x86 sockets whose TSCs are not in step, a difference between
+// stamps taken on two sockets is off by the offset between their TSCs, and
+// can come out negative. The worker clock never reads below 0, so stamp_us
+// divides ns as an unsigned number, which saves an instruction on x86_64.
+static inline uint32_t stamp_us(int64_t ns) {
+    return (uint32_t)((uint64_t)ns / 1000);
+}
+static inline int32_t stamp_diff(uint32_t a, uint32_t b) {
+    return (int32_t)(a - b);
+}
+
 #include "q.c"
 
 #include "io.c"
@@ -2020,12 +2037,14 @@ void wt_wake_cb(uv_async_t *ev) {
 // cycle counters. They tick at a fixed rate whatever the frequency of the
 // core, and all cores of a chip, performance and efficiency cores alike, read
 // the same count, so the time does not jump when a worker moves to another
-// core. On a machine with several x86 sockets whose TSCs are not in step, a
-// worker that moves to another socket does see the time jump by the
-// difference. That only affects the statistics and the decisions to keep
-// running an actor around that move. counter_mult converts counter ticks to
-// nanoseconds: ns = ticks * counter_mult / 2^32. It is 0 when there is no
-// such counter. counter_name is the clock we read, for --rts-verbose.
+// core. On a machine with several x86 sockets whose TSCs are not in step,
+// times read on two sockets differ by the offset between their TSCs: a
+// worker that moves to another socket sees the time jump, and a ready stamp
+// taken on one socket and compared on another is off (stamp_us). This
+// affects only the statistics, and around a move the decisions to keep
+// running an actor. counter_mult converts counter ticks to nanoseconds: ns =
+// ticks * counter_mult / 2^32. It is 0 when there is no such counter.
+// counter_name is the clock we read, for --rts-verbose.
 static uint64_t counter_mult = 0;
 static const char *counter_name = "uv_clock_gettime()";
 
@@ -2094,14 +2113,14 @@ static inline void note_wait(struct wt_stat *s, int64_t d) {
     WT_STAT_ADD(s->wait_sum, d);
     if ((uint64_t)d > s->wait_max)
         WT_STAT_SET(s->wait_max, d);
-    if      (d < 1000)       { WT_STAT_ADD(s->wait_1us, 1); }
-    else if (d < 10000)      { WT_STAT_ADD(s->wait_10us, 1); }
-    else if (d < 100000)     { WT_STAT_ADD(s->wait_100us, 1); }
-    else if (d < 1000000)    { WT_STAT_ADD(s->wait_1ms, 1); }
-    else if (d < 10000000)   { WT_STAT_ADD(s->wait_10ms, 1); }
-    else if (d < 100000000)  { WT_STAT_ADD(s->wait_100ms, 1); }
-    else if (d < 1000000000) { WT_STAT_ADD(s->wait_1s, 1); }
-    else                     { WT_STAT_ADD(s->wait_inf, 1); }
+    if      (d < 1   * 1000)       { WT_STAT_ADD(s->wait_1us, 1); }
+    else if (d < 10  * 1000)       { WT_STAT_ADD(s->wait_10us, 1); }
+    else if (d < 100 * 1000)       { WT_STAT_ADD(s->wait_100us, 1); }
+    else if (d < 1   * 1000000)    { WT_STAT_ADD(s->wait_1ms, 1); }
+    else if (d < 10  * 1000000)    { WT_STAT_ADD(s->wait_10ms, 1); }
+    else if (d < 100 * 1000000)    { WT_STAT_ADD(s->wait_100ms, 1); }
+    else if (d < 1   * 1000000000) { WT_STAT_ADD(s->wait_1s, 1); }
+    else                           { WT_STAT_ADD(s->wait_inf, 1); }
 }
 
 // Whether another actor is waiting in this worker's queue or in the shared
@@ -2185,7 +2204,7 @@ void wt_work_cb(uv_check_t *ev) {
             taken_ns = cont_start_ns;
             conts = 0;
             if (record_waits)
-                note_wait(ws, (int64_t)stamp_diff(stamp_us(taken_ns), m->$ready_us) * 1000);
+                note_wait(ws, (int64_t)stamp_diff(stamp_us(cont_start_ns), m->$ready_us) * 1000);
         }
         {
             int64_t diff = cont_start_ns - end_ns;
@@ -2237,8 +2256,8 @@ void wt_work_cb(uv_check_t *ev) {
             rtsd_printf("## (%" PRId64 ") Actor %" PRId64 " : %s longjmp exception: %s", wctx->id, current->$globkey, current->$class->$GCINFO, ex->$class->$GCINFO);
             r = $R_FAIL(ex);
         }
-        // The ready stamp of every actor this iteration makes ready: the end
-        // of the continuation, which saves a clock read
+        // Every actor that this iteration makes ready gets the end of the
+        // continuation as its ready stamp.
         uint32_t end_us = stamp_us(end_ns);
 
         bool more = false;             // the actor still has work

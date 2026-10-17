@@ -167,31 +167,14 @@ struct B_Msg {
     $Actor $waiting;
     time_t $baseline;
     $Lock $wait_lock;
-    // Ready stamp, in the padding after $wait_lock: the time ENQ_ready was
-    // given when it last made the actor ready to run this message. That is
-    // the end of the continuation whose result the worker was handling, or
-    // else a read of the worker clock by the caller.
+    // Ready stamp (stamp_us in rts.c), in the padding after $wait_lock: the
+    // time ENQ_ready was given when it last made the actor ready to run this
+    // message. That is the end of the continuation whose result the worker
+    // was handling, or else a read of the worker clock by the caller.
     uint32_t $ready_us;
     $WORD value;
     $int64 $globkey;
 };
-
-// Ready stamps are microseconds of the worker clock (now_ns() in rts.c) in
-// 32 bits, so they fit in the padding of a message. They wrap every 71.6
-// minutes, so compare them only by their difference, a signed 32-bit
-// number: a stamp from 35.8 to 71.6 minutes after another comes out before
-// it. Stamps taken on different threads get compared, for example when a
-// worker takes an actor that another thread made ready. On a machine with
-// several x86 sockets whose TSCs are not in step, a difference between
-// stamps taken on two sockets is off by the offset between their TSCs, and
-// can come out negative. The worker clock never reads below 0, so stamp_us
-// divides ns as an unsigned number, which takes fewer instructions.
-static inline uint32_t stamp_us(int64_t ns) {
-    return (uint32_t)((uint64_t)ns / 1000);
-}
-static inline int32_t stamp_diff(uint32_t a, uint32_t b) {
-    return (int32_t)(a - b);
-}
 
 struct $ActorG_class {
     char *$GCINFO;
