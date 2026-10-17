@@ -506,24 +506,33 @@ heavyClassModule trees =
         branch = "branch_" ++ pad 5 n
         extra = "extra_" ++ pad 5 n
 
+-- | The escape summaries stored in a .tydb file, so that rewriting another
+-- part of the file keeps them.
+readTyEscapeSummaries :: FilePath -> IO InterfaceFiles.EscapeSummaries
+readTyEscapeSummaries tyPath =
+  InterfaceFiles.openInterfaceDB tyPath >>= InterfaceFiles.readInterfaceDBEscapeSummaries
+
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
   (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') [] roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') escapeSummaries roots tests mdoc nmod tmod
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
 rewriteTySourceMeta tyPath sourceMeta' = do
   (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' [] roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = do
   (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' [] roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do

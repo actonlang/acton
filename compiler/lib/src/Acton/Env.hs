@@ -232,8 +232,9 @@ mkModuleInfo m ms te mdoc   = ModuleInfo {
         isCon _             = False
 
 -- | Attach internal parameter escape summaries to an in-memory module
--- interface. Name equality ignores source locations, so paths originating in
--- the typed tree also match their location-free cached representation.
+-- interface. Name equality and ordering ignore source locations, so a name
+-- that an importing module looks up finds the summary stored under the same
+-- name at its defining location.
 withEscapeSummaries        :: InterfaceFiles.EscapeSummaries -> ModuleInfo -> ModuleInfo
 withEscapeSummaries summaries mi
                             = mi { moduleEscapeSummary = (`Map.lookup` summaryMap) }

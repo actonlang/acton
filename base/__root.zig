@@ -83,7 +83,7 @@ export fn zig_hash_wyhash_init(seed: u64) callconv(.c) *std.hash.Wyhash {
 }
 
 /// Size of the private Wyhash state used by the C runtime.  The ordinary
-/// hasher constructor keeps allocating this state on the GC heap because the
+/// hasher constructor allocates this state on the GC heap because the
 /// resulting Acton object may escape.  B_hash uses this size to reserve
 /// suitably aligned automatic storage for its non-escaping hasher.
 export fn zig_hash_wyhash_size() callconv(.c) usize {

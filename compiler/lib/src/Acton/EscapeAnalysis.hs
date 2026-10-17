@@ -6,7 +6,7 @@
 -- within that module are connected when their target is unambiguous; direct
 -- imported calls can use interface summaries.  Dynamically dispatched calls
 -- remain conservative unless they have one of the explicitly checked
--- contracts below.  The summaries are still an internal experiment, but the
+-- contracts below.  The summaries are an internal experiment, but the
 -- Hashable.hash non-escape contract is enforced because B_hash relies on it
 -- for automatic hasher storage.
 
@@ -149,9 +149,10 @@ analyzeModuleWithImports imported m = EscapeReport summaries violations nodeCoun
     nodeCount = S.size allNodes
     edgeCount = sum (map S.size (M.elems (factEdges facts)))
 
--- | Location-independent representation suitable for an optional interface
--- sidecar. True means MayEscape; absence of a function or parameter is
--- deliberately interpreted as unknown by callers.
+-- | Summaries for the module's interface file. The names keep their source
+-- locations, which Name equality and ordering ignore. True means MayEscape.
+-- Absence of a function or parameter is deliberately interpreted as unknown
+-- by callers.
 interfaceSummaries :: EscapeReport -> [([Name], [(Name, Bool)])]
 interfaceSummaries report =
     [ (path, [ (parameterName p, parameterEscape p == MayEscape) | p <- ps ])
