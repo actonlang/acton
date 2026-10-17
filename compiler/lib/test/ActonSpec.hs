@@ -2894,6 +2894,24 @@ main = do
         Escape.reportContractViolations report `shouldBe` []
         length (contractParams report) `shouldBe` 1
 
+      it "follows the hasher into helper functions" $ do
+        forM_ [("    value.hash(h)", 0), ("    return h", 1)] $ \(helperBody, violations) -> do
+          let src = unlines
+                [ "def feed[A(Hashable)](value: A, h: hasher):"
+                , helperBody
+                , "class Key(object):"
+                , "    x: int"
+                , "    def __init__(self, x: int):"
+                , "        self.x = x"
+                , "extension Key(Hashable):"
+                , "    def __eq__(self, other):"
+                , "        return self.x == other.x"
+                , "    def hash(self, h):"
+                , "        feed(self.x, h)"
+                ]
+          typed <- typecheckSource env0 "hash_check_helper" src
+          length (Escape.reportContractViolations (Escape.analyzeModule typed)) `shouldBe` violations
+
       it "rejects capturing a local alias of the hasher" $ do
         let src = unlines
               [ "class Key(object):"

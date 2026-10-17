@@ -138,7 +138,36 @@ The compiler accepts:
   `self.point.hash(h)` or `Hashable.hash(self.extra, h)`.
 - Feeding custom bytes with the built-in `h.update(data)` operation.
 - Local aliases such as `same_hasher = h`, subject to the same restrictions.
+- Passing `h` to a function, defined at the top level of the same module or
+  imported from another module, that uses it only in these ways itself.
 - Conditionals, loops and ordinary computations.
+
+For example, a helper that forwards the hasher to a field is accepted:
+
+```python
+def feed[A(Hashable)](value: A, h: hasher):
+    value.hash(h)
+
+class Segment(object):
+    start: Point
+    end: Point
+
+    def __init__(self, start: Point, end: Point):
+        self.start = start
+        self.end = end
+
+extension Segment(Hashable):
+    def __eq__(self, other):
+        return self.start == other.start and self.end == other.end
+
+    def hash(self, h):
+        feed(self.start, h)
+        feed(self.end, h)
+```
+
+Passing `h` to any other function or method, such as a nested function, a
+lambda or a class constructor, or in a call that has a `*` or `**`
+argument, counts as letting it escape.
 
 Sequential field calls are the usual implementation, but they are not the
 only accepted form. For example, a method can hash a sequence's length and
