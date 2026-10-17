@@ -1828,6 +1828,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           "Front type detail: reconstruct " ++ fmtTimePrecise (ftTypeReconstruct ft)
           ++ " (after progress " ++ fmtTimePrecise (ftTypeAfterProgress ft) ++ ")"
           ++ ", force " ++ fmtTimePrecise (ftTypeForce ft)
+          ++ ", escape " ++ fmtTimePrecise (ftTypeEscape ft)
           ++ ", hash " ++ fmtTimePrecise (ftTypeHash ft)
         typeStmtTimingLine st =
           "Type stmt " ++ show (tstCompleted st) ++ "/" ++ show (tstTotal st)
