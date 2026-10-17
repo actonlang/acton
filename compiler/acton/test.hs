@@ -33,6 +33,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Data.Map as M
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
+import qualified InterfaceFiles
 import qualified Options.Applicative as OA
 import qualified Paths_acton
 import qualified Repl
@@ -1192,6 +1193,13 @@ parseFlagTests =
           assertBool "no-dbp option should be set" (C.no_dbp (C.buildCompile buildOpts))
         _ ->
           assertFailure "expected build command"
+  , testCase "build parser accepts --escape-analysis" $ do
+      parsed <- parseArgs ["build", "--escape-analysis"]
+      case parsed of
+        C.CmdOpt _ (C.Build buildOpts) ->
+          assertBool "escape-analysis option should be set" (C.escape_analysis (C.buildCompile buildOpts))
+        _ ->
+          assertFailure "expected build command"
   , testCase "build parser help advertises native modes" $ do
       helpText <- renderParserHelp ["build", "--help"]
       forM_ ["--debug", "--safe", "--fast", "--small"] $ \mode ->
@@ -1956,6 +1964,91 @@ actonProjTests =
           assertEqual ("project importing std.json should run\nstdout:\n" ++ runOut ++ "\nstderr:\n" ++ runErr)
             ExitSuccess runCode
           assertEqual "std.json output" "{\"answer\":42}\n" runOut
+
+  , testCase "Hashable.hash may not retain its hasher" $ do
+        withSystemTempDirectory "acton-hashable-hasher-escape" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "hashable_hasher_escape"
+              projectName = "hashable_hasher_escape"
+              fingerprint = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName projectName) 1)
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"" ++ projectName ++ "\""
+            , "fingerprint = " ++ fingerprint
+            ]
+          writeFile (proj </> "src" </> "main.act") $ unlines
+            [ "class Bad(object):"
+            , "    value: int"
+            , "    def __init__(self, value: int):"
+            , "        self.value = value"
+            , "extension Bad(Hashable):"
+            , "    def __eq__(self, other):"
+            , "        return self.value == other.value"
+            , "    def hash(self, h):"
+            , "        retained = lambda: h"
+            , "actor main(env):"
+            , "    print(hash(Bad(1)))"
+            , "    env.exit(0)"
+            ]
+          (returnCode, cmdOut, cmdErr) <- readCreateProcessWithExitCode
+            (proc actonExe ["build", "--always-build", "--skip-build", "--color", "never"])
+              { cwd = Just proj } ""
+          assertEqual ("escaping hasher should fail\nstdout:\n" ++ cmdOut ++ "\nstderr:\n" ++ cmdErr)
+            (ExitFailure 1) returnCode
+          assertBool ("failure should explain the Hashable.hash contract\n" ++ cmdOut ++ cmdErr)
+            ("Hashable.hash must consume the hasher only during the call" `isInfixOf` (cmdOut ++ cmdErr))
+
+  , testCase "hashing checker does not require general escape summaries" $ do
+        withSystemTempDirectory "acton-hashing-checker" $ \tmp -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let proj = tmp </> "hashing_checker"
+              fingerprint = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName "hashing_checker") 1)
+              source hashBody = unlines
+                [ "def ordinary(x: int) -> int:"
+                , "    return x + 1"
+                , "class Key(object):"
+                , "    value: int"
+                , "    def __init__(self, value: int):"
+                , "        self.value = value"
+                , "extension Key(Hashable):"
+                , "    def __eq__(self, other):"
+                , "        return self.value == other.value"
+                , "    def hash(self, h):"
+                , "        " ++ hashBody
+                , "actor main(env):"
+                , "    print(hash(Key(ordinary(1))))"
+                , "    env.exit(0)"
+                ]
+          createDirectoryIfMissing True (proj </> "src")
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"hashing_checker\""
+            , "fingerprint = " ++ fingerprint
+            ]
+          writeFile (proj </> "src/main.act") (source "self.value.hash(h)")
+          forM_ [False, True, False] $ \experimental -> do
+            let extra = ["--escape-analysis" | experimental]
+            (code, out, err) <- readCreateProcessWithExitCode
+              (proc actonExe (["build", "--always-build", "--skip-build", "--color", "never"] ++ extra))
+                { cwd = Just proj } ""
+            assertEqual ("hashing checker should accept forwarding\n" ++ out ++ err) ExitSuccess code
+            db <- InterfaceFiles.openInterfaceDB (proj </> "out/types/hashing_checker/main.tydb")
+            summaries <- InterfaceFiles.readInterfaceDBEscapeSummaries db
+            assertEqual "general summaries should be opt-in" experimental (not (null summaries))
+          -- The diagnostic flag must not relax the mandatory restricted check,
+          -- even though the full experiment can prove this helper nonescaping.
+          let helperSource = "def consume(h: hasher):\n    h.update(b'key')\n" ++ source "consume(h)"
+          writeFile (proj </> "src/main.act") helperSource
+          forM_ [False, True] $ \experimental -> do
+            (code, out, err) <- readCreateProcessWithExitCode
+              (proc actonExe (["build", "--always-build", "--skip-build", "--color", "never"] ++
+                             ["--escape-analysis" | experimental])) { cwd = Just proj } ""
+            assertEqual ("arbitrary helper must fail\n" ++ out ++ err) (ExitFailure 1) code
+            assertBool "failure should explain the restricted helper rule"
+              ("Passing the hasher to arbitrary helpers" `isInfixOf` (out ++ err))
 
   , testCase "with missing src/ dir" $ do
         testBuild "" (ExitFailure 1) False "test/project/missing_src"

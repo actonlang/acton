@@ -576,6 +576,8 @@ class hasher(object):
         NotImplemented  
 
 protocol Hashable (Eq):
+    # Consume h only during this call. It must not be returned, stored, captured
+    # by a closure or otherwise retained after hash returns.
     hash : (hasher) -> None
 
 # Element types with a fixed, pointer-free runtime representation suitable for

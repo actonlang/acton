@@ -13,6 +13,7 @@ import qualified Acton.NameInfo as I
 import qualified Acton.Printer as AP
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Env
+import qualified Acton.EscapeAnalysis as Escape
 import Acton.Env (CompilationError(..))
 import qualified Acton.Kinds
 import qualified Acton.Types
@@ -43,6 +44,7 @@ import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
 import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as Set
@@ -279,9 +281,13 @@ main = do
                 ]
               roots = [secondName, firstName]
               tests = ["test_second", "test_first"]
+              escapeSummaries =
+                [ ([firstName], [(S.name "x", False)])
+                , ([secondName], [(S.name "x", True)])
+                ]
               nmod = I.NModule [] iface (Just "module docs")
               tmod = S.Module mn [] (Just "typed docs") []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes roots tests (Just "module docs") nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes escapeSummaries roots tests (Just "module docs") nmod tmod
           InterfaceFiles.keyNameInfo firstName `shouldBe` "name-info/p/first"
           InterfaceFiles.keyNameInfo firstName `shouldNotBe` InterfaceFiles.keyNameInfo firstishName
           InterfaceFiles.keyNameHash secondName `shouldBe` "name-hash/p/second"
@@ -321,6 +327,8 @@ main = do
           roots' `shouldBe` roots
           tests' `shouldBe` tests
           doc' `shouldBe` Just "module docs"
+          db <- InterfaceFiles.openInterfaceDB tyPath
+          InterfaceFiles.readInterfaceDBEscapeSummaries db `shouldReturn` escapeSummaries
 
           (sourceMetaH, srcHashH, pubHashH, implHashH, impsH, depModulesH, nameHashesH, rootsH, testsH, docH) <-
             InterfaceFiles.readHeader tyPath
@@ -332,6 +340,25 @@ main = do
           rootsH `shouldBe` roots
           testsH `shouldBe` tests
           docH `shouldBe` Just "module docs"
+
+      it "retains builtin escape summaries only in the opt-in base environment" $ do
+        withSystemTempDirectory "acton-iface-builtin-escape" $ \dir -> do
+          let mn = S.modName ["__builtin__"]
+              tyPath = dir </> "__builtin__.tydb"
+              fName = S.name "f"
+              xName = S.name "x"
+              iface = [(fName, I.NDef (S.tSchema [] S.tWild) S.NoDec Nothing)]
+              summaries = [([fName], [(xName, False)])]
+              nmod = I.NModule [] iface Nothing
+              tmod = S.Module mn [] Nothing []
+              lookupSummary env = do
+                mi <- Acton.Env.lookupModuleInfo mn env
+                Acton.Env.moduleEscapeSummary mi [fName]
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] summaries [] [] Nothing nmod tmod
+          ordinaryEnv <- Acton.Env.initEnv dir False
+          escapeEnv <- Acton.Env.initEnvWithEscapeSummaries True dir False
+          lookupSummary ordinaryEnv `shouldBe` Nothing
+          lookupSummary escapeEnv `shouldBe` Just [(xName, False)]
 
       it "reads module query indexes independently" $ do
         withSystemTempDirectory "acton-iface-indexes" $ \dir -> do
@@ -362,7 +389,7 @@ main = do
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
               names = sort . map fst
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
           db <- InterfaceFiles.openInterfaceDB tyPath
           (do InterfaceFiles.readInterfaceDBNameInfoMaybe db clsName `shouldReturn` Just (clsName, I.NClass [] [] [(classAttr, I.NVar S.tWild)] Nothing)
               InterfaceFiles.readInterfaceDBNameInfoMaybe db (S.name "missing") `shouldReturn` Nothing
@@ -376,6 +403,7 @@ main = do
               names <$> InterfaceFiles.readInterfaceDBDescendants db (S.NoQ protoName) `shouldReturn` [subProtoName]
               names <$> InterfaceFiles.readInterfaceDBExtByProto db (S.NoQ protoName) `shouldReturn` [extName]
               names <$> InterfaceFiles.readInterfaceDBExtByType db (S.NoQ clsName) `shouldReturn` [extName]
+              InterfaceFiles.readInterfaceDBEscapeSummaries db `shouldReturn` []
               fst <$> InterfaceFiles.readInterfaceDBModuleInfo db `shouldReturn` [])
 
       it "keeps lock files free of named-semaphore state" $ do
@@ -383,7 +411,7 @@ main = do
           let tyPath = dir </> "lockfmt.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module (S.modName ["lockfmt"]) [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing nmod tmod
           -- liblmdb's lock table must use process-shared mutexes, which live
           -- inside lock.mdb, on every platform. Its POSIX-semaphore variant
           -- (upstream's default on macOS) stores "/MDB[rw]..." names here
@@ -400,7 +428,7 @@ main = do
               tyPath = dir </> "iface_rewrite.tydb"
               vName = S.name "v"
               wName = S.name "w"
-              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
+              write iface = InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] [] [] [] [] Nothing (I.NModule [] iface Nothing) (S.Module mn [] Nothing [])
           write [(vName, I.NVar S.tWild)]
           db <- InterfaceFiles.openInterfaceDB tyPath
           fmap fst <$> InterfaceFiles.readInterfaceDBNameInfoMaybe db vName `shouldReturn` Just vName
@@ -423,7 +451,7 @@ main = do
               nameHashes0 = [ nameHash n "s" "p" "i" | n <- [aName, bName, cName] ]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing body
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes0 [] [] [] Nothing nmod tmod
           (_sourceMetaH, _srcH, _pubH, _implH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
             InterfaceFiles.readHeader tyPath
           [ InterfaceFiles.nhStmtIndices nh | nh <- nameHashesH, InterfaceFiles.nhName nh == bName ]
@@ -444,7 +472,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           mapConcurrently_
             (\_ -> do
                 (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
@@ -463,7 +491,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile srcPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           InterfaceFiles.copyInterface srcPath dstPath
           doesFileExist (dstPath </> "data.mdb") `shouldReturn` True
           doesFileExist (dstPath </> "lock.mdb") `shouldReturn` False
@@ -483,7 +511,7 @@ main = do
               nameHashes = [nameHash firstName "src1" "pub1" "impl1"]
               nmod = I.NModule [] iface Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] Nothing nmod tmod
+          InterfaceFiles.writeFile tyPath "src" "pub" "impl" Nothing [] [] nameHashes [] [] [] Nothing nmod tmod
           removeFile lockPath
           InterfaceFiles.registerSystemTypeRoots [typesRoot]
           (_sourceMetaH, srcHashH, pubHashH, implHashH, _impsH, _depModulesH, nameHashesH, _rootsH, _testsH, _docH) <-
@@ -512,7 +540,7 @@ main = do
               tyPath = dir </> "iface_version.tydb"
               nmod = I.NModule [] [] Nothing
               tmod = S.Module mn [] Nothing []
-          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] Nothing nmod tmod
+          InterfaceFiles.writeFileWithVersion (map (+ 1) S.version) tyPath "" "" "" Nothing [] [] [] [] [] [] Nothing nmod tmod
           InterfaceFiles.readHeaderMaybe tyPath `shouldReturn` Nothing
           InterfaceFiles.readFileMaybe tyPath `shouldReturn` Nothing
 
@@ -1163,6 +1191,7 @@ main = do
             []
             []
             []
+            []
             Nothing
             directIface
             directModule
@@ -1178,6 +1207,7 @@ main = do
             imps
             depModules
             nameHashes
+            []
             roots
             tests
             mdoc
@@ -1595,6 +1625,7 @@ main = do
               B8.empty
               Nothing
               [(staleMod, B8.empty)]
+              []
               []
               []
               []
@@ -2217,7 +2248,8 @@ main = do
                     Acton.Env.moduleDescendants = const [],
                     Acton.Env.moduleProtoDescendants = const [],
                     Acton.Env.moduleWitnessesByProto = const [],
-                    Acton.Env.moduleWitnessesByType = const []
+                    Acton.Env.moduleWitnessesByType = const [],
+                    Acton.Env.moduleEscapeSummary = const Nothing
                   }
             env = Acton.Env.importSome [S.ImportItem wanted Nothing] m mi env0
 
@@ -2343,6 +2375,433 @@ main = do
           Left NoItem{} -> pure ()
           Left err -> expectationFailure $ "Expected NoItem error, got " ++ show err
           Right _ -> expectationFailure "Expected type check failure for private name access"
+
+    describe "Experimental parameter escape analysis" $ do
+      it "propagates aliases and direct calls to escape sinks" $ do
+        let src = unlines
+              [ "def leaf(x: int):"
+              , "    pass"
+              , "def returned(x: int) -> int:"
+              , "    return x"
+              , "def alias_returned(x: int) -> int:"
+              , "    y = x"
+              , "    return y"
+              , "def through_leaf(x: int):"
+              , "    leaf(x)"
+              , "def through_returned(x: int):"
+              , "    returned(x)"
+              , "def captured(x: int):"
+              , "    f = lambda: x"
+              ]
+        tchecked <- typecheckSource env0 "escape_flow" src
+        let report = Escape.analyzeModule tchecked
+        escapeOf report "leaf" "x" `shouldBe` Just Escape.NoEscape
+        escapeOf report "returned" "x" `shouldBe` Just Escape.MayEscape
+        escapeOf report "alias_returned" "x" `shouldBe` Just Escape.MayEscape
+        escapeOf report "through_leaf" "x" `shouldBe` Just Escape.NoEscape
+        escapeOf report "through_returned" "x" `shouldBe` Just Escape.MayEscape
+        escapeOf report "captured" "x" `shouldBe` Just Escape.MayEscape
+        Escape.reportEdgeCount report `shouldSatisfy` (> 0)
+
+      it "checks the inferred Hashable.hash hasher contract" $ do
+        let src = unlines
+              [ "class Good(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Good(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        self.x.hash(h)"
+              , "class Suspicious(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Suspicious(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        f = lambda: h"
+              ]
+        tchecked <- typecheckSource env0 "escape_hashable" src
+        forM_ [Escape.analyzeModule, Escape.checkHashableModule] $ \analyze -> do
+          let report = analyze tchecked
+              hashParams =
+                [ p
+                | (_, ps) <- Escape.reportFunctions report
+                , p <- ps
+                , Escape.parameterContract p
+                ]
+          length hashParams `shouldBe` 2
+          length (Escape.reportContractViolations report) `shouldBe` 1
+          map Escape.parameterEscape hashParams `shouldMatchList`
+            [Escape.NoEscape, Escape.MayEscape]
+
+      it "recognizes Hashable witnesses injected outside the method body" $ do
+        let src = unlines
+              [ "class InferredField(object):"
+              , "    def __init__(self, text: str):"
+              , "        self.text = text"
+              , "extension InferredField(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return False"
+              , "    def hash(self, h):"
+              , "        self.text.hash(h)"
+              , "class LiteralHash(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension LiteralHash(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return False"
+              , "    def hash(self, h):"
+              , "        1.hash(h)"
+              ]
+        tchecked <- typecheckSource env0 "escape_shared_witness" src
+        forM_ [Escape.analyzeModule, Escape.checkHashableModule] $ \analyze -> do
+          let report = analyze tchecked
+              contractParams =
+                [ p
+                | (_, ps) <- Escape.reportFunctions report
+                , p <- ps
+                , Escape.parameterContract p
+                ]
+          map Escape.parameterEscape contractParams `shouldBe`
+            [Escape.NoEscape, Escape.NoEscape]
+          Escape.reportContractViolations report `shouldBe` []
+
+      it "recognizes Hashable calls through projected generic witnesses" $ do
+        let src = unlines
+              [ "class GenericBox[X](object):"
+              , "    item: X"
+              , "    def __init__(self, item: X):"
+              , "        self.item = item"
+              , "extension GenericBox[A(Ord)] (Ord):"
+              , "    def __eq__(a: GenericBox[A], b: GenericBox[A]) -> bool:"
+              , "        return a.item == b.item"
+              , "    def __lt__(a: GenericBox[A], b: GenericBox[A]) -> bool:"
+              , "        return a.item < b.item"
+              , "extension GenericBox[A(Ord,Hashable)] (Hashable):"
+              , "    def hash(self, h):"
+              , "        self.item.hash(h)"
+              ]
+        tchecked <- typecheckSource env0 "escape_generic_hashable_witness" src
+        forM_ [Escape.analyzeModule, Escape.checkHashableModule] $ \analyze -> do
+          let report = analyze tchecked
+              contractParams =
+                [ p
+                | (_, ps) <- Escape.reportFunctions report
+                , p <- ps
+                , Escape.parameterContract p
+                ]
+          map Escape.parameterEscape contractParams `shouldBe` [Escape.NoEscape]
+          Escape.reportContractViolations report `shouldBe` []
+
+      it "trusts only builtin native implementations of the Hashable.hash contract" $ do
+        let src = unlines
+              [ "class NativeHash(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension NativeHash(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        NotImplemented"
+              ]
+            contractParams report =
+              [ p
+              | (_, ps) <- Escape.reportFunctions report
+              , p <- ps
+              , Escape.parameterContract p
+              ]
+        tchecked <- typecheckSource env0 "escape_native_hash" src
+        forM_ [Escape.analyzeModule, Escape.checkHashableModule] $ \analyze -> do
+          let untrustedReport = analyze tchecked
+              S.Module _ imps mdoc body = tchecked
+              builtinReport = analyze (S.Module Builtin.mBuiltin imps mdoc body)
+              [untrustedParam] = contractParams untrustedReport
+              [builtinParam] = contractParams builtinReport
+          Escape.parameterEscape untrustedParam `shouldBe` Escape.MayEscape
+          Escape.parameterTrustedNative untrustedParam `shouldBe` False
+          length (Escape.reportContractViolations untrustedReport) `shouldBe` 1
+          Escape.parameterEscape builtinParam `shouldBe` Escape.NoEscape
+          Escape.parameterTrustedNative builtinParam `shouldBe` True
+          Escape.reportContractViolations builtinReport `shouldBe` []
+
+      it "does not infer contracts from method names alone" $ do
+        let src = unlines
+              [ "class Unrelated(object):"
+              , "    def hash(self, h: hasher):"
+              , "        pass"
+              , "def call_unrelated(x: Unrelated, h: hasher):"
+              , "    x.hash(h)"
+              , "def update_builtin(h: hasher, b: bytes):"
+              , "    h.update(b)"
+              ]
+        tchecked <- typecheckSource env0 "escape_method_contracts" src
+        let report = Escape.analyzeModule tchecked
+        escapeOf report "call_unrelated" "h" `shouldBe` Just Escape.MayEscape
+        escapeOf report "update_builtin" "h" `shouldBe` Just Escape.NoEscape
+        escapeOf report "update_builtin" "b" `shouldBe` Just Escape.NoEscape
+
+      it "does not resolve shadowed call targets as top-level or imported functions" $ do
+        let src = unlines
+              [ "def leaf(x: int):"
+              , "    pass"
+              , "def shadow_top(leaf, x: int):"
+              , "    leaf(x)"
+              , "def shadow_import(external, x: int):"
+              , "    external(x)"
+              ]
+            pretendImported qn =
+              case qn of
+                S.NoQ n | S.nstr n == "external" -> Just [(S.name "x", Escape.NoEscape)]
+                _ -> Nothing
+        tchecked <- typecheckSource env0 "escape_shadowed_calls" src
+        let report = Escape.analyzeModuleWithImports pretendImported tchecked
+        ( escapeOf report "shadow_top" "x"
+          , escapeOf report "shadow_import" "x"
+          ) `shouldBe` (Just Escape.MayEscape, Just Escape.MayEscape)
+
+      it "uses conservative summaries for direct imported calls" $ do
+        let providerName = S.modName ["escape_provider"]
+            providerSrc = unlines
+              [ "def leaf(x: int):"
+              , "    pass"
+              , "def returned(x: int) -> int:"
+              , "    return x"
+              ]
+            consumerSrc = unlines
+              [ "import escape_provider"
+              , "from escape_provider import leaf, returned"
+              , "def through_leaf(x: int):"
+              , "    escape_provider.leaf(x)"
+              , "def through_returned(x: int):"
+              , "    escape_provider.returned(x)"
+              , "def through_leaf_unqualified(x: int):"
+              , "    leaf(x)"
+              , "def through_returned_unqualified(x: int):"
+              , "    returned(x)"
+              ]
+            lookupImported mi qn = do
+              (m,n) <- case qn of
+                S.GName m' n' -> Just (m',n')
+                S.QName m' n' -> Just (m',n')
+                S.NoQ n' -> Just (providerName,n')
+              if m /= providerName then Nothing else do
+                stored <- Acton.Env.moduleEscapeSummary mi [n]
+                return [ (pn, if mayEscape then Escape.MayEscape else Escape.NoEscape)
+                       | (pn,mayEscape) <- stored ]
+        let providerFile = "<escape_provider>"
+            sysTypesPath = ".." </> ".." </> "dist" </> "base" </> "out" </> "types"
+        providerParsed <- liftIO $ P.parseModule providerName providerFile providerSrc Nothing
+        providerEnv <- liftIO $ Acton.Env.mkEnv [sysTypesPath] env0 providerParsed
+        providerKinds <- liftIO $ Acton.Kinds.check providerEnv providerParsed
+        (providerNMod, providerTyped, _, _) <-
+          liftIO $ Acton.Types.reconstruct Nothing Nothing providerEnv providerKinds Nothing
+        let providerReport = Escape.analyzeModule providerTyped
+            providerSummaries = Escape.interfaceSummaries providerReport
+            I.NModule providerImports providerIface providerDoc = providerNMod
+            providerMI = Acton.Env.withEscapeSummaries providerSummaries $
+              Acton.Env.mkModuleInfo providerName providerImports providerIface providerDoc
+            env1 = Acton.Env.addModuleInfo providerName providerMI env0
+        consumerTyped <- typecheckSource env1 "escape_consumer" consumerSrc
+        let conservative = Escape.analyzeModule consumerTyped
+            report = Escape.analyzeModuleWithImports (lookupImported providerMI) consumerTyped
+        escapeOf conservative "through_leaf" "x" `shouldBe` Just Escape.MayEscape
+        Escape.reportImportedSummarized conservative `shouldBe` 0
+        Escape.reportImportedUnknown conservative `shouldBe` 2
+        escapeOf report "through_leaf" "x" `shouldBe` Just Escape.NoEscape
+        escapeOf report "through_returned" "x" `shouldBe` Just Escape.MayEscape
+        escapeOf report "through_leaf_unqualified" "x" `shouldBe` Just Escape.NoEscape
+        escapeOf report "through_returned_unqualified" "x" `shouldBe` Just Escape.MayEscape
+        Escape.reportImportedSummarized report `shouldBe` 4
+        Escape.reportImportedUnknown report `shouldBe` 0
+        Escape.reportImportedNoEscapeArgs report `shouldBe` 2
+        Escape.reportImportedMayEscapeArgs report `shouldBe` 2
+
+    describe "Hashing-specific hasher checker" $ do
+      it "does not inspect unrelated function, actor or method bodies" $ do
+        let src = unlines
+              [ "def unrelated(h: hasher):"
+              , "    pass"
+              , "actor UnrelatedActor():"
+              , "    pass"
+              , "class Unrelated(object):"
+              , "    def hash(self, h: hasher):"
+              , "        pass"
+              ]
+            poisonStmt (S.Decl l ds) = S.Decl l (map poisonDecl ds)
+            poisonStmt s = s
+            poisonDecl d@S.Def{} = d { S.dbody = error "unrelated function body inspected" }
+            poisonDecl d@S.Actor{} = d { S.dbody = error "unrelated actor body inspected" }
+            poisonDecl d@S.Class{} = d { S.dbody = map poisonStmt (S.dbody d) }
+            poisonDecl d = d
+        typed <- typecheckSource env0 "hash_check_skip" src
+        let report = Escape.checkHashableModule (typed { S.mbody = map poisonStmt (S.mbody typed) })
+        Escape.reportFunctions report `shouldBe` []
+        Escape.reportContractViolations report `shouldBe` []
+        Escape.reportNodeCount report `shouldBe` 0
+
+      it "composes user-class and tuple fields and permits control flow" $ do
+        let src = unlines
+              [ "class Point(object):"
+              , "    x: int"
+              , "    y: int"
+              , "    def __init__(self, x: int, y: int):"
+              , "        self.x = x"
+              , "        self.y = y"
+              , ""
+              , "extension Point(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.x == other.x and self.y == other.y"
+              , "    def hash(self, h):"
+              , "        self.x.hash(h)"
+              , "        self.y.hash(h)"
+              , ""
+              , "class Entry(object):"
+              , "    point: Point"
+              , "    extra: (Point, str)"
+              , "    def __init__(self, point: Point, extra: (Point, str)):"
+              , "        self.point = point"
+              , "        self.extra = extra"
+              , ""
+              , "extension Entry(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.point == other.point and self.extra == other.extra"
+              , "    def hash(self, h):"
+              , "        self.point.hash(h)"
+              , "        Hashable.hash(self.extra, h)"
+              , ""
+              , "class SequenceKey(object):"
+              , "    items: list[Point]"
+              , "    def __init__(self, items: list[Point]):"
+              , "        self.items = items"
+              , ""
+              , "extension SequenceKey(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return self.items == other.items"
+              , "    def hash(self, h):"
+              , "        len(self.items).hash(h)"
+              , "        for item in self.items:"
+              , "            if item.x >= 0:"
+              , "                alias = h"
+              , "                item.hash(alias)"
+              , "            else:"
+              , "                item.hash(h)"
+              ]
+        typed <- typecheckSource env0 "hash_check_composition" src
+        let report = Escape.checkHashableModule typed
+        length (Escape.reportFunctions report) `shouldBe` 3
+        Escape.reportContractViolations report `shouldBe` []
+
+      it "allows local aliases and trusted hasher operations" $ do
+        let src = unlines
+              [ "class Key(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension Key(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        alias = h"
+              , "        alias.update(b'key')"
+              , "        ignored = alias.finalize()"
+              ]
+        typed <- typecheckSource env0 "hash_check_alias" src
+        let report = Escape.checkHashableModule typed
+        Escape.reportContractViolations report `shouldBe` []
+        length (Escape.reportFunctions report) `shouldBe` 1
+
+      it "rejects arbitrary helpers even when general analysis proves them safe" $ do
+        let src = unlines
+              [ "def consume(h: hasher):"
+              , "    h.update(b'key')"
+              , "class Key(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension Key(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        consume(h)"
+              ]
+        typed <- typecheckSource env0 "hash_check_helper" src
+        Escape.reportContractViolations (Escape.analyzeModule typed) `shouldBe` []
+        let report = Escape.checkHashableModule typed
+        length (Escape.reportContractViolations report) `shouldBe` 1
+        length (Escape.reportFunctions report) `shouldBe` 1
+
+      it "rejects capturing a local alias of the hasher" $ do
+        let src = unlines
+              [ "class Key(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "extension Key(Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        alias = h"
+              , "        captured = lambda: alias"
+              ]
+        typed <- typecheckSource env0 "hash_check_capture_alias" src
+        length (Escape.reportContractViolations (Escape.checkHashableModule typed)) `shouldBe` 1
+
+      it "checks implementations inherited through a Hashable subprotocol" $ do
+        forM_ [("1.hash(h)", 0), ("captured = lambda: h", 1)] $ \(body, violations) -> do
+          let src = unlines
+                [ "protocol SpecialHash(Hashable):"
+                , "    pass"
+                , "class Key(object):"
+                , "    def __init__(self):"
+                , "        pass"
+                , "extension Key(SpecialHash):"
+                , "    def __eq__(self, other):"
+                , "        return True"
+                , "    def hash(self, h):"
+                , "        " ++ body
+                ]
+          typed <- typecheckSource env0 "hash_check_inherited" src
+          let report = Escape.checkHashableModule typed
+          length (Escape.reportFunctions report) `shouldBe` 1
+          length (Escape.reportContractViolations report) `shouldBe` violations
+
+      it "does not trust a projected witness for an unrelated protocol" $ do
+        let src = unlines
+              [ "protocol Other:"
+              , "    hash: (hasher) -> None"
+              , "class Key[X](object):"
+              , "    value: X"
+              , "    def __init__(self, value: X):"
+              , "        self.value = value"
+              , "extension Key[A(Other)](Hashable):"
+              , "    def __eq__(self, other):"
+              , "        return True"
+              , "    def hash(self, h):"
+              , "        self.value.hash(h)"
+              ]
+        typed <- typecheckSource env0 "hash_check_other_protocol" src
+        length (Escape.reportContractViolations (Escape.checkHashableModule typed)) `shouldBe` 1
+
+      it "does not trust unrelated methods named hash or update" $ do
+        forM_ ["hash", "update"] $ \method -> do
+          let src = unlines
+                [ "class Other(object):"
+                , "    def " ++ method ++ "(self, h: hasher):"
+                , "        pass"
+                , "class Key(object):"
+                , "    other: Other"
+                , "    def __init__(self, other: Other):"
+                , "        self.other = other"
+                , "extension Key(Hashable):"
+                , "    def __eq__(self, other):"
+                , "        return True"
+                , "    def hash(self, h):"
+                , "        self.other." ++ method ++ "(h)"
+                ]
+          typed <- typecheckSource env0 ("hash_check_unrelated_" ++ method) src
+          length (Escape.reportContractViolations (Escape.checkHashableModule typed)) `shouldBe` 1
 
     describe "Pass 4: Normalizer" $ do
       testNorm env0 ["deact"]
@@ -3669,6 +4128,16 @@ typecheckSource env0 modName src = do
   kchecked <- liftIO $ Acton.Kinds.check env parsed
   (_, tchecked, _, _) <- liftIO $ Acton.Types.reconstruct Nothing Nothing env kchecked Nothing
   return tchecked
+
+escapeOf report function parameter =
+  listToMaybe
+    [ Escape.parameterEscape p
+    | (Escape.FunctionId path, ps) <- Escape.reportFunctions report
+    , not (null path)
+    , S.nstr (last path) == function
+    , p <- ps
+    , S.nstr (Escape.parameterName p) == parameter
+    ]
 
 typedDefGeneratedNames env0 modName src defName = do
   tchecked <- typecheckSource env0 modName src

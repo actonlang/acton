@@ -216,6 +216,7 @@ import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
 import Acton.Printer ()
 import qualified Acton.Env
+import qualified Acton.EscapeAnalysis
 import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
@@ -881,6 +882,7 @@ defaultCompileOptions =
     , C.parse_ast = False
     , C.kinds = False
     , C.types = False
+    , C.escape_analysis = False
     , C.sigs = False
     , C.norm = False
     , C.deact = False
@@ -2568,6 +2570,75 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
       timeTypeForce <- getTime Monotonic
+      -- B_hash uses automatic hasher storage. Verify just Hashable.hash
+      -- bodies on the normal path, without whole-module parameter analysis.
+      let hashReport = Acton.EscapeAnalysis.checkHashableModule tchecked
+      case Acton.EscapeAnalysis.reportContractViolations hashReport of
+        [] -> return ()
+        ((fid@(Acton.EscapeAnalysis.FunctionId path), parameter):_) ->
+          let directReasons =
+                [ reason
+                | (fid', parameters) <- Acton.EscapeAnalysis.reportFunctions hashReport
+                , fid' == fid
+                , summary <- parameters
+                , Acton.EscapeAnalysis.parameterName summary == parameter
+                , reason <- Acton.EscapeAnalysis.parameterDirectUses summary
+                ]
+              reasonLoc reason = case reason of
+                Acton.EscapeAnalysis.Returned l -> l
+                Acton.EscapeAnalysis.Stored l -> l
+                Acton.EscapeAnalysis.Raised l -> l
+                Acton.EscapeAnalysis.Yielded l -> l
+                Acton.EscapeAnalysis.Captured l -> l
+                Acton.EscapeAnalysis.Asynchronous l -> l
+                Acton.EscapeAnalysis.ImportedCall l -> l
+                Acton.EscapeAnalysis.UnknownCall l -> l
+                Acton.EscapeAnalysis.UnavailableBody l -> l
+              errorLoc = case [ l | reason <- directReasons, let l = reasonLoc reason, l /= NoLoc ] of
+                l:_ -> l
+                [] -> loc parameter
+          in Acton.Env.err errorLoc $
+            "Hashable.hash implementation " ++ intercalate "." (map A.nstr path) ++
+            " may let its hasher parameter '" ++ A.nstr parameter ++
+            "' escape; Hashable.hash must consume the hasher only during the call" ++
+            ". Passing the hasher to arbitrary helpers is not supported by the hashing-specific checker"
+      -- General parameter summaries are an opt-in experiment. Normal builds
+      -- neither compute nor persist them, and imported summaries are not a
+      -- trust boundary for the mandatory hashing check.
+      escapeSummaries <- if C.escape_analysis opts
+        then do
+          let importedEscapeSummary qn = do
+                (m,n) <- resolveImportedName qn
+                mi <- Acton.Env.lookupModuleInfo m env
+                stored <- Acton.Env.moduleEscapeSummary mi [n]
+                return [ (pn, if mayEscape then Acton.EscapeAnalysis.MayEscape else Acton.EscapeAnalysis.NoEscape)
+                       | (pn,mayEscape) <- stored ]
+              resolveImportedName (A.GName m n) = Just (m,n)
+              resolveImportedName (A.QName m n) = Just (m,n)
+              resolveImportedName (A.NoQ n) =
+                case Acton.Env.lookupName n env of
+                  Just (I.NAlias qn') -> resolveImportedName qn'
+                  _ -> Nothing
+              escapeReport = Acton.EscapeAnalysis.analyzeModuleWithImports importedEscapeSummary tchecked
+              escapeSummaries = Acton.EscapeAnalysis.interfaceSummaries escapeReport
+              -- Fully evaluate the optional experiment here rather than
+              -- charging its work to interface writing or report rendering.
+              escapeWork =
+                Acton.EscapeAnalysis.reportNodeCount escapeReport +
+                Acton.EscapeAnalysis.reportEdgeCount escapeReport +
+                Acton.EscapeAnalysis.reportImportedSummarized escapeReport +
+                Acton.EscapeAnalysis.reportImportedUnknown escapeReport +
+                Acton.EscapeAnalysis.reportImportedNoEscapeArgs escapeReport +
+                Acton.EscapeAnalysis.reportImportedMayEscapeArgs escapeReport +
+                length (Acton.EscapeAnalysis.reportContractViolations escapeReport) +
+                sum [ length ps + length [ () | p <- ps, Acton.EscapeAnalysis.parameterEscape p == Acton.EscapeAnalysis.MayEscape ]
+                    | (_,ps) <- Acton.EscapeAnalysis.reportFunctions escapeReport ]
+          evaluate escapeWork
+          evaluate (rnf escapeSummaries)
+          when isRoot $
+            dump mn "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport escapeReport)
+          pure escapeSummaries
+        else pure []
       -- Store roots so later builds can discover entry points without reparse.
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
@@ -2700,7 +2771,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           (\p -> onFrontOutputProgress outputKey FrontOutputTydb (frontOutputTyDbProgress p))
                           A.version
                           (tyDbPath paths mn)
-                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes roots tests mdoc nmod tchecked
+                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
                       writeDoc = do
                         let docDir = joinPath [projPath paths, "out", "doc"]
                             modPathList = A.modPath mn
@@ -2790,7 +2861,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                         return $ Right FrontResult { frIfaceTE = publicIface
                                                    , frImps = imps
                                                    , frDoc = mdoc
-                                                   , frModuleInfo = Nothing
+                                                   , frModuleInfo = Just $ Acton.Env.withEscapeSummaries escapeSummaries $
+                                                              Acton.Env.mkModuleInfo mn imps publicIface mdoc
                                                    , frPubHash = modulePubHash
                                                    , frImplHash = moduleImplHash
                                                    , frNameHashes = publicNameHashes nameHashes
@@ -3236,7 +3308,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     ((compileMain >>= finishWithFrontOutputs) `finally` cancelRunning) `finally` waitFrontOutputsOnExit
   where
     continue frontOutputRef runningRef = do
-      baseEnv <- Acton.Env.initEnv builtinPath False
+      baseEnv <- Acton.Env.initEnvWithEscapeSummaries (C.escape_analysis opts) builtinPath False
 
       costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
                     let mn = name (gtTask t)
@@ -5477,7 +5549,7 @@ rootEligible _ = False
 -- Used to suppress normal timing/output when dumping parse/sigs/cgen, etc.
 altOutput :: C.CompileOptions -> Bool
 altOutput opts =
-  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
+  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.escape_analysis opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
 -- | Read a UTF-8 text file with explicit encoding.
 -- Keeps compiler IO consistent across platforms.
