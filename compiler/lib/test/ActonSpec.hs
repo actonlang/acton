@@ -2403,6 +2403,52 @@ main = do
         escapeOf report "captured" "x" `shouldBe` Just Escape.MayEscape
         Escape.reportEdgeCount report `shouldSatisfy` (> 0)
 
+      it "resolves bare call targets only to top-level functions of the module" $ do
+        let src = unlines
+              [ "class Kept(Exception):"
+              , "    def __init__(self, h: hasher):"
+              , "        self.error_message = \"kept\""
+              , "        self.h = h"
+              , "def leak(x: hasher) -> None:"
+              , "    raise Kept(x)"
+              , "class Box(object):"
+              , "    def __init__(self, x: hasher):"
+              , "        raise Kept(x)"
+              , "class Other(object):"
+              , "    def __init__(self):"
+              , "        pass"
+              , "    def Box(self, x: hasher) -> None:"
+              , "        pass"
+              , "keep = lambda y: leak(y)"
+              , "class Pt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Pt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        Box(h)"
+              , "class Qt(object):"
+              , "    x: int"
+              , "    def __init__(self, x: int):"
+              , "        self.x = x"
+              , "extension Qt(Hashable):"
+              , "    def __eq__(a, b):"
+              , "        return a.x == b.x"
+              , "    def hash(self, h):"
+              , "        keep(h)"
+              ]
+            -- An import with the same name as the module-level binding keep
+            -- must not lend it its summary.
+            pretendImported qn =
+              case qn of
+                S.NoQ n | S.nstr n == "keep" -> Just [(S.name "x", Escape.NoEscape)]
+                _ -> Nothing
+        tchecked <- typecheckSource env0 "escape_bare_call_scope" src
+        let report = Escape.analyzeModuleWithImports pretendImported tchecked
+        length (Escape.reportContractViolations report) `shouldBe` 2
+
       it "checks the inferred Hashable.hash hasher contract" $ do
         let src = unlines
               [ "class Good(object):"

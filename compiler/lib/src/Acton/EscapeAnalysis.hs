@@ -107,6 +107,7 @@ data Context = Context
     , contextCallees  :: M.Map Name FunctionInfo
     , contextTypes    :: M.Map Name Type
     , contextBound    :: S.Set Name
+    , contextModuleNames :: S.Set Name
     , contextImported :: QName -> Maybe [(Name, Escape)]
     }
 
@@ -124,14 +125,20 @@ analyzeModuleWithImports imported m = EscapeReport summaries violations nodeCoun
                                                     (factImportedMayEscapeArgs facts)
   where
     functions = collectFunctions (modname m == mBuiltin) [] [] (mbody m)
-    callees = uniqueFunctions functions
+    -- A bare call target names a top-level function or actor.  Methods are
+    -- reached through attribute calls and nested defs are bound locally, so
+    -- neither may stand in for a bare name.
+    callees = uniqueFunctions (filter isTopLevel functions)
+    -- A bare name bound at module level refers to this module even when an
+    -- import has the same name, so it must not be resolved as an import.
+    moduleNames = S.fromList (assigned (mbody m))
     -- Witnesses introduced by type reconstruction are not necessarily local
     -- to the function that uses them.  A recursive declaration group may
     -- place a shared binding in one declaration body and use it from another,
     -- so retain those internal bindings in every function context as well as
     -- the parameters and locals below.
     moduleTypes = moduleWitnessTypes (mbody m)
-    facts = execState (mapM_ (scanFunction moduleTypes callees imported) functions) emptyFacts
+    facts = execState (mapM_ (scanFunction moduleTypes callees moduleNames imported) functions) emptyFacts
     escaping = escapingNodes facts
     summaries = map (summarize facts escaping) functions
     violations =
@@ -257,6 +264,11 @@ summarize facts escaping f = (functionId f, map one (functionParams f))
         }
     node p = Node (functionId f) (paramName p)
 
+
+isTopLevel :: FunctionInfo -> Bool
+isTopLevel f = case functionId f of
+    FunctionId [_] -> True
+    _              -> False
 
 -- Resolve only unambiguous direct function names.  Methods normally arrive as
 -- Dot calls and are handled through protocol contracts instead.
@@ -423,8 +435,8 @@ kwdPatternTypes (KwdPat _ p ps) = patternTypes p `M.union` kwdPatternTypes ps
 kwdPatternTypes (KwdPatStar p) = patternTypes p
 
 
-scanFunction :: M.Map Name Type -> M.Map Name FunctionInfo -> (QName -> Maybe [(Name, Escape)]) -> FunctionInfo -> State Facts ()
-scanFunction moduleTypes callees imported f = scanSuite (Context f callees types boundNames imported) (functionBody f)
+scanFunction :: M.Map Name Type -> M.Map Name FunctionInfo -> S.Set Name -> (QName -> Maybe [(Name, Escape)]) -> FunctionInfo -> State Facts ()
+scanFunction moduleTypes callees moduleNames imported f = scanSuite (Context f callees types boundNames moduleNames imported) (functionBody f)
   where
     types = M.fromList [ (paramName p,t) | p <- functionParams f, Just t <- [paramType p] ] `M.union`
             localTypes (functionBody f) `M.union`
@@ -666,7 +678,7 @@ importedCallee :: Context -> Expr -> Maybe [(Name, Escape)]
 -- local, so offer every Var to the lookup after local direct-call resolution
 -- has had first refusal.
 importedCallee c (Var _ qn@(NoQ n))
-  | n `S.notMember` contextBound c = contextImported c qn
+  | n `S.notMember` contextBound c, n `S.notMember` contextModuleNames c = contextImported c qn
   | otherwise = Nothing
 importedCallee c (Var _ qn) = contextImported c qn
 importedCallee _ _ = Nothing
