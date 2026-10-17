@@ -114,9 +114,6 @@ int32_t ENQ_ready($Actor a, uint32_t ready_us) {
 }
 #endif
 
-// Atomically enqueue actor "a" onto the right ready-queue, either a thread
-// local one or the "default" shared one.
-
 // Atomically dequeue and return the first actor from a ready-queue, first
 // dequeueing from the thread specific queue and second from the global shared
 // readyQ or return NULL if no work is found.
