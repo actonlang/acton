@@ -2,7 +2,7 @@
 
 module Main (main) where
 
-import           Control.Monad (foldM, forM, unless, when)
+import           Control.Monad (foldM, forM, forM_, unless, when)
 import qualified Data.ByteString as B
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -216,6 +216,16 @@ artifactExists :: FilePath -> IO Bool
 artifactExists p
   | takeExtension p == ".tydb" = doesDirectoryExist p
   | otherwise = doesFileExist p
+
+assertArtifactsExist :: [FilePath] -> IO ()
+assertArtifactsExist = mapM_ $ \p -> do
+  exists <- artifactExists p
+  assertBool ("expected generated " ++ p) exists
+
+assertArtifactsGone :: [FilePath] -> IO ()
+assertArtifactsGone = mapM_ $ \p -> do
+  exists <- artifactExists p
+  assertBool ("did not expect stale generated " ++ p) (not exists)
 
 -- | Reset a project directory including deps and build outputs.
 ensureCleanProjectAt :: FilePath -> IO ()
@@ -2808,7 +2818,15 @@ p56_changed_path_prunes_removed_module =
         src = casesSrcDir
         actA = src </> "a.act"
         actMain = src </> "main.act"
-        outA = proj </> "out" </> "types" </> casesProjName </> "a"
+        typesDir = proj </> "out" </> "types"
+        -- Root stubs sit at the module path without the project prefix.
+        outsA = [ typesDir </> casesProjName </> ("a" ++ ext) | ext <- [".tydb", ".c", ".h"] ] ++
+                [ typesDir </> "a.root.c" ]
+        rootMain = typesDir </> "main.root.c"
+        rootActor = T.unlines
+          [ "actor main(env: Env):"
+          , "    env.exit(0)"
+          ]
         gopts = C.GlobalOptions
           { C.color = C.Never
           , C.quiet = True
@@ -2821,16 +2839,10 @@ p56_changed_path_prunes_removed_module =
           }
         opts = Compile.defaultCompileOptions
     ensureCasesProject
-    writeFileUtf8 actA "aaa = 1\n"
-    writeFileUtf8 actMain $ T.unlines
-      [ "actor main(env: Env):"
-      , "    env.exit(0)"
-      ]
-    _ <- buildOutInArgs proj ["--skip-build"]
-    mapM_ (\ext -> do
-      exists <- artifactExists (outA ++ ext)
-      assertBool ("expected generated " ++ outA ++ ext) exists)
-      [".tydb", ".c", ".h"]
+    writeFileUtf8 actA rootActor
+    writeFileUtf8 actMain rootActor
+    _ <- buildOutIn proj
+    assertArtifactsExist (rootMain : outsA)
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
     sched <- Compile.newCompileScheduler gopts 1
@@ -2840,36 +2852,56 @@ p56_changed_path_prunes_removed_module =
     removeFile actA
     plan <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [actAAbs])
     assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
-    mapM_ (\ext -> do
-      exists <- artifactExists (outA ++ ext)
-      assertBool ("did not expect stale generated " ++ outA ++ ext) (not exists))
-      [".tydb", ".c", ".h"]
+    assertArtifactsGone outsA
+    assertArtifactsExist [rootMain]
 
 p57_dotted_module_name_keeps_outputs :: TestTree
 p57_dotted_module_name_keeps_outputs =
-  testCase "57-module with a dot in its file name keeps outputs until deleted" $ do
+  testCase "57-modules with a dot in the file name keep outputs until deleted" $ do
     let proj = casesProjDir
         src = casesSrcDir
-        actDot = src </> "z.dot.act"
-        modDot = modLabel proj "z.dot"
-        outDot = proj </> "out" </> "types" </> casesProjName </> "z.dot"
+        -- y.root.c also looks like the root stub of a module y.
+        dotted = ["z.dot", "y.root"]
+        outs m = [ proj </> "out" </> "types" </> casesProjName </> (m ++ ext) | ext <- [".tydb", ".c", ".h"] ]
+        cFiles = filter ((/= ".tydb") . takeExtension) (concatMap outs dotted)
+        stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
     ensureCasesProject
     writeFileUtf8 (src </> "a.act") "aaa = 1\n"
-    writeFileUtf8 actDot "zzz = 1\n"
+    forM_ dotted $ \m -> writeFileUtf8 (src </> m <.> "act") "x = 1\n"
     _ <- buildOutInArgs proj ["--skip-build"]
-    mapM_ (\ext -> do
-      exists <- artifactExists (outDot ++ ext)
-      assertBool ("expected generated " ++ outDot ++ ext) exists)
-      [".tydb", ".c", ".h"]
+    assertArtifactsExist (concatMap outs dotted)
+    stamps <- mapM stamp cFiles
     out <- buildOutInArgs proj ["--skip-build"]
-    assertBool ("expected z.dot fresh\n" ++ T.unpack out) (fresh out modDot)
-    assertBool ("did not expect z.dot to type check\n" ++ T.unpack out) (not (typechecked out modDot))
-    removeFile actDot
+    forM_ dotted $ \m ->
+      assertBool ("expected " ++ m ++ " fresh\n" ++ T.unpack out) (fresh out (modLabel proj m))
+    stamps' <- mapM stamp cFiles
+    assertEqual "expected the second build to keep the generated .c and .h files" stamps stamps'
+    forM_ dotted $ \m -> removeFile (src </> m <.> "act")
     _ <- buildOutInArgs proj ["--skip-build"]
-    mapM_ (\ext -> do
-      exists <- artifactExists (outDot ++ ext)
-      assertBool ("did not expect stale generated " ++ outDot ++ ext) (not exists))
-      [".tydb", ".c", ".h"]
+    assertArtifactsGone (concatMap outs dotted)
+
+p58_full_build_drops_undeclared_root_stub :: TestTree
+p58_full_build_drops_undeclared_root_stub =
+  testCase "58-full build drops the root stub of a module that loses its root actor" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        typesDir = proj </> "out" </> "types"
+        outsA = [ typesDir </> casesProjName </> ("a" ++ ext) | ext <- [".tydb", ".c", ".h"] ]
+        rootA = typesDir </> "a.root.c"
+        rootMain = typesDir </> "main.root.c"
+        rootActor = T.unlines
+          [ "actor main(env: Env):"
+          , "    env.exit(0)"
+          ]
+    ensureCasesProject
+    writeFileUtf8 (src </> "a.act") rootActor
+    writeFileUtf8 (src </> "main.act") rootActor
+    _ <- buildOutIn proj
+    assertArtifactsExist (rootA : rootMain : outsA)
+    writeFileUtf8 (src </> "a.act") "x = 1\n"
+    _ <- buildOutIn proj
+    assertArtifactsGone [rootA]
+    assertArtifactsExist (rootMain : outsA)
 
 -- Main -----------------------------------------------------------------------
 
@@ -2954,5 +2986,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
   , sequentialTestGroup "incremental-prune-cases" AllSucceed
       [ p56_changed_path_prunes_removed_module
       , p57_dotted_module_name_keeps_outputs
+      , p58_full_build_drops_undeclared_root_stub
       ]
   ]

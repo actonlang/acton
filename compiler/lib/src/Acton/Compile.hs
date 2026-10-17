@@ -181,6 +181,7 @@ module Acton.Compile
   , srcFile
   , outBase
   , tyDbPath
+  , rootStubPath
   , srcBase
   , getModPath
   , modNameToFilename
@@ -737,8 +738,8 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   -- For full builds, scan and prune all orphan outputs.
   -- For incremental builds, prune only modules whose changed .act paths are now missing.
   if incremental
-    then maybe (return ()) (pruneMissingChangedModuleOutputs (M.elems projMap)) mChangedPaths
-    else mapM_ pruneMissingModuleOutputs (M.elems projMap)
+    then maybe (return ()) (pruneMissingChangedModuleOutputs opts' projMap) mChangedPaths
+    else mapM_ (pruneMissingModuleOutputs opts' projMap) (M.elems projMap)
   let hasBuildLibraries = any (not . M.null . BuildSpec.libraries . projBuildSpec) (M.elems projMap)
   (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
     (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
@@ -4620,6 +4621,17 @@ outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 tyDbPath                :: Paths -> A.ModName -> FilePath
 tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 
+-- | Compute the root stub path for a module's root actor, or its test root.
+-- Stubs drop the project prefix since build.zig names binaries after them.
+rootStubPath            :: Paths -> Bool -> A.ModName -> FilePath
+rootStubPath paths test mn = outBase paths (dropProjPrefix paths mn) ++ (if test then ".test_root.c" else ".root.c")
+
+-- | All files generated for the module of 'paths'.
+moduleOutputs           :: Paths -> [FilePath]
+moduleOutputs paths     = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
+                          [ rootStubPath paths test mn | test <- [False, True] ]
+  where mn              = modName paths
+
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
@@ -4793,80 +4805,29 @@ enumerateProjectModules ctx = do
 -- | Remove stale generated module artifacts when source modules disappear.
 -- Prunes orphan .tydb/.c/.h outputs under out/types before task planning so
 -- cached headers cannot mask deleted .act modules.
-pruneMissingModuleOutputs :: ProjCtx -> IO ()
-pruneMissingModuleOutputs ctx = do
-    let srcRoot = projSrcDir ctx
-        typesRoot = projTypesDir ctx
+pruneMissingModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> IO ()
+pruneMissingModuleOutputs opts projMap ctx = do
+    let typesRoot = projTypesDir ctx
     typesExists <- doesDirectoryExist typesRoot
     when typesExists $ do
-      srcExists <- doesDirectoryExist srcRoot
-      srcMods <- if srcExists
-                   then do
-                     srcFiles <- getFilesRecursive srcRoot
-                     let actFiles = filter (\f -> takeExtension f == ".act") srcFiles
-                         modBases = map (normalise . dropExtension . makeRelative srcRoot) actFiles
-                     return (Data.Set.fromList modBases)
-                   else return Data.Set.empty
-      outFiles <- getFilesRecursive typesRoot
-      mapM_ (pruneFile srcMods typesRoot) outFiles
+      mods <- enumerateProjectModules ctx
+      let keep = Data.Set.fromList (concatMap (moduleOutputs . modulePaths opts projMap ctx . snd) mods)
+      files <- getFilesRecursive typesRoot
       tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
-      mapM_ (pruneTyDb srcMods typesRoot) tyDbs
-  where
-    isRootStub rel ext =
-      ext == ".c" &&
-      (".root" `Data.List.isSuffixOf` dropExtension rel ||
-       ".test_root" `Data.List.isSuffixOf` dropExtension rel)
-
-    moduleBase rel ext
-      | isRootStub rel ext = dropExtension (dropExtension rel)
-      | otherwise = dropExtension rel
-
-    pruneFile srcMods typesRoot absFile = do
-      let ext = takeExtension absFile
-      when (ext == ".c" || ext == ".h") $ do
-        let rel = normalise (makeRelative typesRoot absFile)
-            base = dropProjDir (moduleBase rel ext)
-        unless (Data.Set.member base srcMods) $
-          removeFile absFile `catch` ignoreNotExists
-
-    pruneTyDb srcMods typesRoot absDir = do
-      let rel = normalise (makeRelative typesRoot absDir)
-          base = dropProjDir (dropExtension rel)
-      unless (Data.Set.member base srcMods) $ do
-        removePathForcibly absDir `catch` ignoreNotExists
-
-    proj = BuildSpec.specName $ projBuildSpec ctx
-
-    dropProjDir base = case splitDirectories $ normalise base of
-                        [n] -> n
-                        n:ns | n == proj -> joinPath ns
-                        ns -> joinPath ns
-
-    ignoreNotExists :: IOException -> IO ()
-    ignoreNotExists _ = return ()
+      let outputs = filter ((`elem` [".c", ".h"]) . takeExtension) files ++ tyDbs
+      mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) outputs)
 
 -- | Incremental variant: prune only modules whose changed .act file no longer exists.
-pruneMissingChangedModuleOutputs :: [ProjCtx] -> [FilePath] -> IO ()
-pruneMissingChangedModuleOutputs ctxs changedPaths = do
+pruneMissingChangedModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> [FilePath] -> IO ()
+pruneMissingChangedModuleOutputs opts projMap changedPaths = do
     absChanged <- mapM normalizePathSafe changedPaths
-    let actPaths = filter (\p -> takeExtension p == ".act") absChanged
-    forM_ actPaths $ \actPath -> do
+    forM_ (filter ((== ".act") . takeExtension) absChanged) $ \actPath -> do
       exists <- doesFileExist actPath
-      unless exists $
-        mapM_ (pruneForCtx actPath) ctxs
-  where
-    pruneForCtx actPath ctx = do
-      srcRoot <- normalizePathSafe (projSrcDir ctx)
-      let srcRoot' = addTrailingPathSeparator (normalise srcRoot)
-          actPath' = normalise actPath
-      when (Data.List.isPrefixOf srcRoot' actPath') $ do
-        mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath'
-        let outBase = joinPath (projTypesDir ctx : A.modPath mn)
-        removePathForcibly (outBase ++ InterfaceFiles.interfaceExt) `catch` ignoreNotExists
-        mapM_ (\ext -> removeFile (outBase ++ ext) `catch` ignoreNotExists) [".c", ".h"]
-
-    ignoreNotExists :: IOException -> IO ()
-    ignoreNotExists _ = return ()
+      unless exists $ forM_ (M.elems projMap) $ \ctx -> do
+        srcRoot <- normalizePathSafe (projSrcDir ctx)
+        when (addTrailingPathSeparator srcRoot `Data.List.isPrefixOf` actPath) $ do
+          mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
+          mapM_ removePathForcibly (moduleOutputs (modulePaths opts projMap ctx mn))
 
 -- | Build a search path for module interfaces for a project.
 -- Includes the project's types dir, dependency types, user searchpath, and
@@ -4877,18 +4838,17 @@ searchPathForProject opts projMap ctx =
     in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ systemTypePaths (projSysPath ctx) (projSysTypes ctx)
 
 -- | Construct a Paths record for a module within a project context.
--- Creates output directories and ensures the types directory exists.
+modulePaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> Paths
+modulePaths opts projMap ctx mn =
+    Paths (searchPathForProject opts projMap ctx) (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx)
+          (joinPath [projOutDir ctx, "bin"]) (projSrcDir ctx) False ".act" mn (BuildSpec.specName (projBuildSpec ctx))
+
+-- | Construct the Paths record of a module and create its output directories.
 pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
 pathsForModule opts projMap ctx mn = do
-    let sPaths = searchPathForProject opts projMap ctx
-        bin = joinPath [projOutDir ctx, "bin"]
-        src = projSrcDir ctx
-        proj = BuildSpec.specName $ projBuildSpec ctx
-        p = Paths sPaths (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx) bin src False ".act" mn proj
+    let p = modulePaths opts projMap ctx mn
     InterfaceFiles.registerSystemTypeRoots (systemTypePaths (projSysPath ctx) (projSysTypes ctx))
-    createDirectoryIfMissing True bin
-    createDirectoryIfMissing True (projOutDir ctx)
-    createDirectoryIfMissing True (projTypesDir ctx)
+    createDirectoryIfMissing True (binDir p)
     createDirectoryIfMissing True (getModPath (projTypesDir ctx) mn)
     return p
 
