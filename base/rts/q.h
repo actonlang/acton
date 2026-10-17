@@ -10,13 +10,20 @@
 // threads working on its neighbours. 128 bytes is the line size of Apple's
 // cores and twice that of x86 cores.
 //
-// Threads read head and count of these queues without taking the queue's
-// lock. Every access to these fields, also under the lock, is a relaxed
-// atomic load or store (__atomic_load_n, __atomic_store_n). A change under
-// the lock is a relaxed load followed by a relaxed store of the new value
-// (rq_count_add): the lock orders the threads that write, so they need no
-// atomic read-modify-write. The other fields are accessed only under the
+// Threads read head, count and head_us of these queues without taking the
+// queue's lock. Every access to these fields, also under the lock, is a
+// relaxed atomic load or store (__atomic_load_n, __atomic_store_n). A change
+// under the lock is a relaxed load followed by a relaxed store of the new
+// value (rq_count_add): the lock orders the threads that write, so they need
+// no atomic read-modify-write. The other fields are accessed only under the
 // lock (tail), and those accesses are plain.
+//
+// head_us is the ready stamp of the actor at the head while the queue holds
+// actors: every change of the head stores it (rq_head_changed). When the
+// queue becomes empty, head_us keeps its last value, so readers check that
+// the queue holds actors first. A read without the lock can still get the
+// stamp of an earlier or a later head actor, and lrq_cut compares the stamps
+// in the messages again under the lock.
 #if defined MPMC && MPMC == 3
 // TODO: do atomics!
 struct mpmcq {
@@ -30,6 +37,7 @@ struct mpmcq {
     $Actor head;
     $Actor tail;
     uint64_t count;
+    uint32_t head_us;
     $Lock lock;
 } __attribute__((aligned(128)));
 #endif
@@ -51,8 +59,15 @@ extern struct mpmcq lrqs[MAX_WTHREADS];
 // input on stdin and the actors pinned to it, and on threads that are not
 // workers wait there, and a worker whose local queue is never empty, for
 // example because it holds an actor that always has another message, would
-// otherwise leave them waiting.
+// otherwise leave them waiting. Each time it looks there first, it also looks
+// at one other worker's local queue (lrq_balance).
 #define INJECT_NS (50 * 1000)
+
+// How much earlier, by head_us, than the actor at the head of its own queue,
+// or than the time it passed to DEQ_ready when that queue is empty, the actor
+// at the head of another worker's queue must have become ready for a worker
+// to take some (lrq_balance)
+#define BALANCE_NS (25 * 1000)
 
 static inline bool rq_empty(struct mpmcq *q) {
     return __atomic_load_n(&q->head, __ATOMIC_RELAXED) == NULL;

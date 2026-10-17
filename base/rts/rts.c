@@ -2014,8 +2014,8 @@ void wt_wake_cb(uv_async_t *ev) {
 // actor's continuations while the actor has work and one of these holds: it
 // has run fewer than KEEP_CONTS of them and less than KEEP_NS has passed
 // since it took the actor, or no other actor waits for the worker and it is
-// not due to look at the injection queue first (look_due). Then the actor
-// goes to the end of its queue.
+// not due to look at the injection queue first and at another worker's queue
+// (look_due). Then the actor goes to the end of its queue.
 #define KEEP_CONTS 8
 #define KEEP_NS (10 * 1000)
 
@@ -2155,7 +2155,7 @@ static inline bool others_waiting(int64_t wtid) {
 // wake_wt calls wake_searcher after an actor went to the injection queue. A
 // worker adds actors to its own local queue without waking another worker:
 // when it makes an actor ready (ENQ_ready) and when it moves actors there from
-// another queue (deq_injected, lrq_steal). It does so only between
+// another queue (deq_injected, lrq_balance, lrq_steal). It does so only between
 // continuations: it moves actors in DEQ_ready, right before it starts a
 // continuation, and it makes actors ready while it handles a continuation's
 // result, since the messages that a continuation sends wait in $outgoing until
@@ -2617,6 +2617,7 @@ void *main_loop(void *idx) {
     start_worker_keys(wctx);
     wctx->inject_due = 0;
     wctx->steal_seed = 2654435761u * (uint32_t)(wctx->id + 1);
+    wctx->balance_next = 0;
 #ifdef ACTON_THREADS
     pthread_setspecific(pkey_wctx, (void *)wctx);
 #endif
@@ -2778,6 +2779,11 @@ const char* stats_to_json () {
         yyjson_mut_obj_add_int(doc, j_wt, "wait_inf",    WT(wait_inf));
         yyjson_mut_obj_add_int(doc, j_wt, "steal_ops",   WT(steal_ops));
         yyjson_mut_obj_add_int(doc, j_wt, "steal_actors", WT(steal_actors));
+        yyjson_mut_obj_add_int(doc, j_wt, "balance_ops", WT(balance_ops));
+        yyjson_mut_obj_add_int(doc, j_wt, "balance_actors", WT(balance_actors));
+        yyjson_mut_obj_add_int(doc, j_wt, "balance_looks", WT(balance_looks));
+        yyjson_mut_obj_add_int(doc, j_wt, "balance_young", WT(balance_young));
+        yyjson_mut_obj_add_int(doc, j_wt, "balance_stale", WT(balance_stale));
     }
 #undef WT
 
@@ -3673,6 +3679,11 @@ int main(int argc, char **argv) {
 
         wt_stats[i].steal_ops = 0;
         wt_stats[i].steal_actors = 0;
+        wt_stats[i].balance_ops = 0;
+        wt_stats[i].balance_actors = 0;
+        wt_stats[i].balance_looks = 0;
+        wt_stats[i].balance_young = 0;
+        wt_stats[i].balance_stale = 0;
     }
 #ifdef ACTON_DB
     init_dbc_stats();

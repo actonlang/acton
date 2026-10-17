@@ -101,6 +101,18 @@ struct wt_stat {
     // Actors this worker took from other workers' local queues
     uint64_t steal_ops;   // steals by this worker while it had no work
     uint64_t steal_actors;
+    uint64_t balance_ops; // lrq_balance takes, with or without work
+    uint64_t balance_actors;
+    // Looks by lrq_balance that read another worker's local queue. Each
+    // look ends in a take (balance_ops) or in one of these: balance_young
+    // when that queue was empty or the actor at its head did not become
+    // ready BALANCE_NS before the actor at the head of this worker's queue,
+    // or before the time this worker passed to DEQ_ready when its queue is
+    // empty, and balance_stale when it did but lrq_cut, under that queue's
+    // lock, found no actor at its head to take.
+    uint64_t balance_looks;
+    uint64_t balance_young;
+    uint64_t balance_stale;
 } __attribute__((aligned(128)));    // see struct mpmcq
 extern struct wt_stat wt_stats[MAX_WTHREADS];
 
@@ -301,9 +313,11 @@ struct WorkerCtx {
     int64_t key_next;
     int64_t key_step;
     // When this worker next looks at the injection queue first (look_due),
-    // and the state of its random choice of a worker to steal from
+    // the state of its random choice of a worker to steal from, and whose
+    // local queue it looks at next to balance the load (lrq_balance)
     int64_t inject_due;
     uint32_t steal_seed;
+    uint64_t balance_next;
     // The worker loop's exception frame, at the bottom of the frame stack.
     // The first continuation on the worker pushes it, with a setjmp in that
     // call of wt_work_cb(). It stays pushed, and a raise that no try catches
