@@ -2903,6 +2903,33 @@ p58_full_build_drops_undeclared_root_stub =
     assertArtifactsGone [rootA]
     assertArtifactsExist (rootMain : outsA)
 
+p59_full_build_keeps_nested_module_binary :: TestTree
+p59_full_build_keeps_nested_module_binary =
+  testCase "59-full build keeps the binary of a root actor in a nested module" $ do
+    let proj = casesProjDir
+        src = casesSrcDir
+        binMain = proj </> "out" </> "bin" </> "main"
+        binSub = proj </> "out" </> "bin" </> "sub.x"
+        stamp p = (\st -> (fileID st, modificationTimeHiRes st)) <$> getFileStatus p
+        rootActor = T.unlines
+          [ "actor main(env: Env):"
+          , "    env.exit(0)"
+          ]
+    ensureCasesProject
+    createDirectoryIfMissing True (src </> "sub")
+    writeFileUtf8 (src </> "main.act") rootActor
+    writeFileUtf8 (src </> "sub" </> "x.act") rootActor
+    _ <- buildOutIn proj
+    assertArtifactsExist [binMain, binSub]
+    stamps <- mapM stamp [binMain, binSub]
+    _ <- buildOutIn proj
+    stamps' <- mapM stamp [binMain, binSub]
+    assertEqual "expected the second build to keep out/bin/main and out/bin/sub.x" stamps stamps'
+    writeFileUtf8 (src </> "sub" </> "x.act") "x = 1\n"
+    _ <- buildOutIn proj
+    assertArtifactsGone [binSub]
+    assertArtifactsExist [binMain]
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
@@ -2987,5 +3014,6 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       [ p56_changed_path_prunes_removed_module
       , p57_dotted_module_name_keeps_outputs
       , p58_full_build_drops_undeclared_root_stub
+      , p59_full_build_keeps_nested_module_binary
       ]
   ]

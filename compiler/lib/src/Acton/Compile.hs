@@ -182,6 +182,7 @@ module Acton.Compile
   , outBase
   , tyDbPath
   , rootStubPath
+  , rootBinaryName
   , srcBase
   , getModPath
   , modNameToFilename
@@ -1506,13 +1507,6 @@ instance Show CompileTask where
   show TyTask{ name = mn } = "TyTask " ++ modNameToString mn
   show ParseErrorTask{ name = mn, parseDiagnostics = ds } =
     "ParseErrorTask " ++ modNameToString mn ++ " (" ++ show (length ds) ++ " diagnostics)"
-
--- TODO: replace binName String type with ModName just like for CompileTask.
--- ModName is a array so a hierarchy with submodules is represented, we can then
--- get it use joinPath (modPath) to get a path or modName to get a string
--- representation. We need both of BinTask when generating build.zig, so it
--- would be more robust to use that type rather than a hacky character
--- replacement (replaceDot in genBuildZigExe)
 
 data TaskKey = TaskKey { tkProj :: FilePath, tkMod :: A.ModName } deriving (Eq, Ord, Show)
 
@@ -4625,6 +4619,11 @@ tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 -- Stubs drop the project prefix since build.zig names binaries after them.
 rootStubPath            :: Paths -> Bool -> A.ModName -> FilePath
 rootStubPath paths test mn = outBase paths (dropProjPrefix paths mn) ++ (if test then ".test_root.c" else ".root.c")
+
+-- | Name of the binary in out/bin that build.zig builds from a root stub: the
+-- stub's module path joined with dots, with .test_ in front for a test root.
+rootBinaryName          :: Paths -> Bool -> A.ModName -> String
+rootBinaryName paths test mn = (if test then ".test_" else "") ++ modNameToString (dropProjPrefix paths mn)
 
 -- | All files generated for the module of 'paths'.
 moduleOutputs           :: Paths -> [FilePath]

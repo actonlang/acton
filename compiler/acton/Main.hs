@@ -2200,12 +2200,12 @@ runCliPostCompile cliHooks gopts plan env = do
     let rootParts = splitOn "." (C.root opts')
         rootMod   = if proj `elem` special_projects then init rootParts else proj : init rootParts
         guessMod  = if length rootParts == 1 then modName pathsRoot else A.modName rootMod
-        binTask   = BinTask False (prstr guessMod) (A.GName guessMod (A.name $ last rootParts)) False
+        binTask   = BinTask (A.GName guessMod (A.name $ last rootParts)) False
         preBinTasks
-          | null (C.root opts') = map (\t -> BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "main")) False) rootTasks
+          | null (C.root opts') = map (\t -> BinTask (A.GName (name t) (A.name "main")) False) rootTasks
           | otherwise        = [binTask]
     requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (cpSrcFiles plan)
-    let preTestBinTasks = [ BinTask True (modNameToString (name t)) (A.GName (name t) (A.name "test_main")) True
+    let preTestBinTasks = [ BinTask (A.GName (name t) (A.name "test_main")) True
                           | t <- rootTasks, name t `elem` requestedModules ]
         selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
@@ -2352,25 +2352,36 @@ projectDepPathOverrides projMap rootProj = snd (go Data.Set.empty rootProj M.emp
       let acc' = M.insertWith (\_ old -> old) depName depProj acc
       in go seen depProj acc'
 
--- | Remove root stubs that their module no longer declares. The .tydb headers
--- written by this build list each module's roots, so a module that loses its
--- root actor loses its stub, while stubs of other build modes stay (e.g. the
--- .root.c during `acton test`). Stubs built in this run stay too.
-removeUndeclaredRootStubs :: Paths -> [CompileTask] -> [BinTask] -> IO ()
-removeUndeclaredRootStubs paths tasks bins = do
-    declared <- concat <$> mapM headerRootStubs tasks
-    let keep = Data.Set.fromList (declared ++ map (binTaskRoot paths) bins)
+-- | Remove the root stubs and binaries of roots that their module no longer
+-- declares. The .tydb headers written by this build list each module's roots,
+-- so a module that loses its root actor loses its stub and its binary in
+-- out/bin, while those of other build modes stay (e.g. the .root.c during
+-- `acton test`). Roots built in this run stay too.
+removeUndeclaredRoots :: Paths -> [CompileTask] -> [BinTask] -> IO ()
+removeUndeclaredRoots paths tasks bins = do
+    declared <- concat <$> mapM headerRoots tasks
+    let live f = Data.Set.fromList [ f test mn | (test, mn) <- declared ++ map binTaskModule bins ]
+        liveStubs = live (rootStubPath paths)
+        liveBinaries = live (rootBinaryName paths)
         stubs = [ rootStubPath paths test (name t) | t <- tasks, test <- [False, True] ]
-    mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) stubs)
+    mapM_ removePathForcibly (filter (`Data.Set.notMember` liveStubs) stubs)
+    -- A scratch build's binDir is the source directory, so leave it alone.
+    binDirExists <- doesDirectoryExist (binDir paths)
+    when (binDirExists && not (isTmp paths)) $ do
+      files <- filterM doesFileExist . map (binDir paths </>) =<< listDirectory (binDir paths)
+      mapM_ removeFile (filter ((`Data.Set.notMember` liveBinaries) . binaryOf . takeFileName) files)
   where
-    headerRootStubs t = do
+    headerRoots t = do
       hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
       return $ case hdrE of
         Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) ->
-          [ rootStubPath paths (nameToString n == "test_main") (name t) | n <- rs ]
+          [ (nameToString n == "test_main", name t) | n <- rs ]
         Left _ -> []
+    -- Windows binaries end in .exe, and their debug info in .pdb.
+    binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
+               | otherwise = f
 
-data BinTask = BinTask { isDefaultRoot :: Bool, binName :: String, rootActor :: A.QName, isTest :: Bool } deriving (Show)
+data BinTask = BinTask { rootActor :: A.QName, isTest :: Bool } deriving (Show)
 
 data BuildLibrary = BuildLibrary { buildLibName :: String, buildLibLinkage :: String, buildLibSources :: [FilePath] } deriving (Show)
 
@@ -2380,9 +2391,13 @@ encodeBuildLibraries libs =
                     | lib <- libs
                     ]
 
-binTaskRoot :: Paths -> BinTask -> FilePath
-binTaskRoot paths binTask = rootStubPath paths (isTest binTask) m
+-- | Whether a bin task builds a test, and the module of its root actor.
+binTaskModule :: BinTask -> (Bool, A.ModName)
+binTaskModule binTask = (isTest binTask, m)
   where A.GName m _ = rootActor binTask
+
+binTaskRoot :: Paths -> BinTask -> FilePath
+binTaskRoot paths = uncurry (rootStubPath paths) . binTaskModule
 
 {-
 ================================================================================
@@ -2953,11 +2968,8 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
     let realBinTasks = catMaybes allBinTasks
 
     let pruningAllowed = allowPrune && not (C.only_build opts)
-    when pruningAllowed $ do
-      removeUndeclaredRootStubs paths tasks realBinTasks
-      unless (isTmp paths) $
-        -- Clean old binaries from out/bin
-        removeOrphanExecutables (binDir paths) (projTypes paths) realBinTasks
+    when pruningAllowed $
+      removeUndeclaredRoots paths tasks realBinTasks
 
     let no_threads = if isWindowsOS (C.target opts) then True else C.no_threads opts
     projAbs <- normalizePathSafe (projPath paths)
@@ -3007,37 +3019,13 @@ zigBuild env gopts opts paths rootSpec tasks binTasks allowPrune rootModules bui
     -- if we are in a temp acton project, copy the outputted binary next to the source file
     if (success && isTmp paths && not (null realBinTasks))
       then do
-        let baseName   = binName (head binTasks)
+        let baseName   = uncurry (rootBinaryName paths) (binTaskModule (head binTasks))
             exeName    = if isWindowsOS (C.target opts) then baseName ++ ".exe" else baseName
             srcBinFile = joinPath [ projOut paths, "bin", exeName ]
             dstBinFile = joinPath [ binDir paths, exeName ]
         copyFile srcBinFile dstBinFile
       else return ()
     return success
-
--- Remove executables that no longer have corresponding root actors
--- | Remove binaries that no longer have corresponding roots.
-removeOrphanExecutables :: FilePath -> FilePath -> [BinTask] -> IO ()
-removeOrphanExecutables binDir projTypes binTasks = do
-    binDirExists <- doesDirectoryExist binDir
-    when binDirExists $ do
-        binFiles <- listDirectory binDir
-        forM_ binFiles $ \exeFile -> do
-            let exeName = takeBaseName (case exeFile of '.':nm -> nm; nm -> nm)
-                modPath = map (\c -> if c == '.' then '/' else c) (if "test_" `isPrefixOf` exeName then drop 5 exeName else exeName)
-                rootCFile = projTypes </> modPath <.> "root.c"
-                testRootCFile = projTypes </> modPath <.> "test_root.c"
-
-            let isCurrentBin = any (\t -> binName t == exeName) binTasks
-            rootExists <- doesFileExist rootCFile
-            testRootExists <- doesFileExist testRootCFile
-
-            when (not isCurrentBin && not rootExists && not testRootExists) $ do
-              let fileName = binDir </> exeFile
-              removeFile fileName `catch` handleNotExists
-  where
-    handleNotExists :: IOException -> IO ()
-    handleNotExists _ = return ()
 
 -- | Compute a relative path when possible, otherwise a safe absolute form.
 makeRelativeOrAbsolute :: FilePath -> FilePath -> FilePath
