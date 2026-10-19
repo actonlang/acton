@@ -139,7 +139,8 @@ genEnv env0                         = setX env0 GenX{ globalX = HashSet.empty,
                                                       volVarsX = [], lineEmitX = Nothing,
                                                       closureFieldsX = Map.empty,
                                                       closureAdaptersX = Map.empty,
-                                                      closureAdapterDocsX = [] }
+                                                      closureAdapterDocsX = [],
+                                                      stackIteratorsX = [], iteratorWitnessesX = [] }
 
 type GenEnv                         = EnvF GenX
 
@@ -160,6 +161,8 @@ data LocalRep                       = MaybeLocal Type PayloadRep
                                     | RangeLocal RangePointerRep
                                     | ArrayIterLocal Type
 
+type StackIteratorSpec              = (String, String) -- concrete C type, initializer
+
 data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , localX :: HashSet.HashSet Name
                                            , retX :: Type
@@ -170,6 +173,8 @@ data GenX                           = GenX { globalX :: HashSet.HashSet Name
                                            , closureFieldsX :: Map.Map Name (Name, [Name])
                                            , closureAdaptersX :: Map.Map (Name, Name) Name
                                            , closureAdapterDocsX :: [Doc]
+                                           , stackIteratorsX :: [(Name, StackIteratorSpec)]
+                                           , iteratorWitnessesX :: [(Name, Expr)]
                                            }
 
 gdefine te env                      = modX env1 $ \x -> x{ globalX = foldr HashSet.insert (globalX x) (dom te) }
@@ -808,9 +813,11 @@ declFunctionWithStorage env storage symbol (Def dloc n q p KwdNIL (Just t) b d f
           | otherwise               = genSuite env1 b
         decl                        = emit dloc $+$
                                       storage <+> t3 <+> symbol <+> parens (genPosPar (setVolVars vs env) n d t1 p) <+> char '{' $+$
-                                      nest 4 ss' $+$ 
+                                      nest 4 (stackIteratorDecls env1 $+$ ss') $+$
                                       char '}'
-        env1                        = setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
+        env1                        = modX env3 $ \x -> x{ stackIteratorsX = if t2 == tR then [] else stackIteratorLocals env3 b }
+        env3                        = modX env2 $ \x -> x{ iteratorWitnessesX = [ (n,e) | Assign _ [PVar _ n _] e <- b, isWitness n ] }
+        env2                        = setMaybeOut mbMaybeOut $ setRet t2 $ ldefine (envOf p) $ defineTVars q env
         t2                          = exposeMsg fx t
         t3 | isMaybeOutFunction n t1 = genVolatile env n <+> boolType
            | otherwise              = genVolatile env n <+> settype env (rawReturn (restype t1)) t2
@@ -1350,6 +1357,105 @@ genRawRangeNew env args             = text "$rangeD_U_new" <> parens (genRawRang
 isNormalizedForIterator (Internal NormPass t _) = t == packText "iter"
 isNormalizedForIterator _          = False
 
+-- These native constructors only initialize a small iterator over their source.
+-- Matching the resolved builtin name also excludes user-defined __iter__ calls.
+-- Reversed iterators and combinators have additional construction semantics.
+builtinIteratorCalls               =
+    [ ("CollectionD_SequenceD_listD___iter__", list)
+    , ("CollectionD_ISequenceD_ilistD___iter__", list)
+    , ("ContainerD_arrayD___iter__", ("B_IteratorD_array", "$arrayD_U_iter_init"))
+    , ("ContainerD_bitarrayD___iter__", ("B_IteratorD_bitarray", "$bitarrayD_U_iter_init"))
+    , ("SetD_bitsetD___iter__", ("B_IteratorD_bitset", "$bitsetD_U_iter_init"))
+    , ("MappingD_dictD___iter__", keys)
+    , ("MappingD_dictD_keys", keys)
+    , ("MappingD_dictD_values", values)
+    , ("MappingD_dictD_items", items)
+    , ("IMappingD_idictD___iter__", keys)
+    , ("IMappingD_idictD_keys", keys)
+    , ("IMappingD_idictD_values", values)
+    , ("IMappingD_idictD_items", items)
+    , ("SetD_setD___iter__", ("B_IteratorD_set", "$setD_U_iter_init"))
+    , ("ISetD_isetD___iter__", ("B_IteratorD_set", "$isetD_U_iter_init"))
+    , ("ContainerD_strD___iter__", ("B_IteratorD_str", "$strD_U_iter_init"))
+    , ("ContainerD_bytesD___iter__", ("B_IteratorD_bytes", "$bytesD_U_iter_init"))
+    , ("CollectionD_SequenceD_bytearrayD___iter__", ("B_IteratorD_bytearray", "$bytearrayD_U_iter_init"))
+    ]
+  where list                        = ("B_IteratorD_list", "$listD_U_iter_init")
+        keys                        = ("B_IteratorD_dict", "$dictD_U_keys_init")
+        values                      = ("B_IteratorD_dict_values", "$dictD_U_values_init")
+        items                       = ("B_IteratorD_dict_items", "$dictD_U_items_init")
+
+builtinIteratorSource env t e
+  | Just _ <- iteratorElementType (boxedRepType t)
+                                    = source e
+  | otherwise                       = Nothing
+  where source (Paren _ e)           = source e
+        source (Box _ e)             = source e
+        source (Call _ f (PosArg wit (PosArg xs PosNil)) KwdNil)
+          | Var _ q <- stripTApp f,
+            GName m n <- unalias env q, m == mBuiltin,
+            Just spec <- lookup (nstr n) builtinIteratorCalls
+                                    = Just (spec, [wit], xs)
+          | isIteratorIterCall env f,
+            Just (spec, wits, xs') <- source xs
+                                    = Just (spec, wit:wits, xs')
+        source (Call _ f (PosArg xs PosNil) KwdNil)
+          | Dot _ wit method <- stripTApp f,
+            Just ctor <- builtinIteratorWitness env [] wit,
+            Just spec <- lookup (ctor ++ "D_" ++ nstr method) builtinIteratorCalls
+                                    = Just (spec, [wit], xs)
+        source _                    = Nothing
+
+-- Some builtin extensions (notably sets and immutable dictionaries) retain
+-- local protocol witnesses rather than exposing a direct method call. Follow
+-- only compiler-created witness bindings, casts and inherited witness fields;
+-- a witness parameter or an arbitrary helper result is deliberately unknown.
+builtinIteratorWitness env seen (Var _ (NoQ n))
+  | n `notElem` seen,
+    Just e <- lookup n (iteratorWitnessesX $ envX env)
+                                    = builtinIteratorWitness env (n:seen) e
+builtinIteratorWitness env seen (Paren _ e)
+                                    = builtinIteratorWitness env seen e
+builtinIteratorWitness env seen (Box _ e)
+                                    = builtinIteratorWitness env seen e
+builtinIteratorWitness env seen (Dot _ e _)
+                                    = builtinIteratorWitness env seen e
+builtinIteratorWitness env seen (Call _ f (PosArg e PosNil) KwdNil)
+  | Var _ q <- stripTApp f, q == primCAST
+                                    = builtinIteratorWitness env seen e
+builtinIteratorWitness env _ (Call _ f _ KwdNil)
+  | Var _ q <- stripTApp f,
+    GName m n <- unalias env q, m == mBuiltin
+                                    = Just (nstr n)
+builtinIteratorWitness _ _ _        = Nothing
+
+-- Only Normalizer's private for-loop temporaries qualify. A user-visible
+-- iterator may escape even when its creation and use happen in one function.
+-- Declaring backing storage at function scope keeps hoisted and conditional
+-- initializations alive for every use. CPS functions are excluded above: an
+-- iterator saved in a continuation can outlive the current C activation.
+stackIteratorLocals env             = Data.List.nubBy (\(n,_) (m,_) -> n == m) . concatMap collect
+  where collect (Assign _ [PVar _ n (Just t)] e)
+          | isNormalizedForIterator n,
+            Just (spec, _, _) <- builtinIteratorSource env t e
+                                    = [(n,spec)]
+        collect (If _ bs els)        = concat [ stackIteratorLocals env b | Branch _ b <- bs ] ++ stackIteratorLocals env els
+        collect (While _ _ b els)    = stackIteratorLocals env b ++ stackIteratorLocals env els
+        collect _                   = []
+
+stackIteratorStorage n             = Derived n (globalName "iterator_storage")
+
+stackIteratorDecls env              = vcat [ text "struct" <+> text ctype <+> gen env (stackIteratorStorage n) <> semi
+                                          | (n,(ctype,_)) <- stackIteratorsX (envX env) ]
+
+genStackIterator env n t (_,init) wits src
+                                    = vcat [ text "(void)" <> parens (staticWitnessValue env wit) <> semi | wit <- wits ] $+$
+                                      target <+> equals <+>
+                                      text init <> parens (char '&' <> gen env (stackIteratorStorage n) <> comma <+> gen env src) <> semi
+  where target
+          | n `HashSet.member` localDefined env = gen env n
+          | otherwise               = genTypeDecl env n t <+> gen env n
+
 rangeStorageName n                  = Derived n (globalName "range_storage")
 
 -- A direct for-loop range cannot escape: Normalizer creates this private
@@ -1576,6 +1682,10 @@ genStmt env (Decl _ ds)             = (empty, [])
 genStmt env s
   | Just (n, it, ml) <- nextMaybeLocal env s
                                     = (genNextMaybeLocal env n it ml, [])
+genStmt env (Assign _ [PVar _ n (Just t)] e)
+  | Just spec <- lookup n (stackIteratorsX $ envX env),
+    Just (actual, wits, src) <- builtinIteratorSource env t e, actual == spec
+                                    = (genStackIterator env n t spec wits src, [])
 genStmt env (Assign _ [PVar _ n (Just t)] e)
   | not (n `HashSet.member` localDefined env),
     ret env /= tR,

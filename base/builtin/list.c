@@ -524,13 +524,21 @@ static bool B_IteratorD_listD_next(B_IteratorD_list self, $WORD *out) {
     return true;
 }
 
-static B_Iterator B_list_base_iter($WORD src, B_list_base data) {
-    B_IteratorD_list iter = acton_malloc(sizeof(struct B_IteratorD_list));
+static B_Iterator B_list_base_iter_init(B_IteratorD_list iter, $WORD src, B_list_base data) {
     iter->$class = &B_IteratorD_listG_methods;
     iter->src = src;
     iter->data = data;
     iter->nxt = 0;
     return (B_Iterator)iter;
+}
+
+B_Iterator $listD_U_iter_init(B_IteratorD_list iter, $WORD src) {
+    return B_list_base_iter_init(iter, src, (B_list_base)src);
+}
+
+static B_Iterator B_list_base_iter($WORD src, B_list_base data) {
+    B_IteratorD_list iter = acton_malloc(sizeof(struct B_IteratorD_list));
+    return B_list_base_iter_init(iter, src, data);
 }
 
 B_IteratorD_list B_IteratorD_listG_new(B_list lst) {

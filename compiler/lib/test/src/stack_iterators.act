@@ -1,0 +1,109 @@
+# Private synchronous for-loop iterators use automatic native storage.
+
+def count_list(xs: list[int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_ilist(xs: ilist[int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_array(xs: array[int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_bitarray(xs: bitarray) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_bitset(xs: bitset) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_dict(xs: dict[int,int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_dict_keys(xs: dict[int,int]) -> int:
+    result = 0
+    for value in xs.keys():
+        result += 1
+    return result
+
+def count_dict_values(xs: dict[int,int]) -> int:
+    result = 0
+    for value in xs.values():
+        result += 1
+    return result
+
+def count_dict_items(xs: dict[int,int]) -> int:
+    result = 0
+    for value in xs.items():
+        result += 1
+    return result
+
+def count_idict(xs: idict[int,int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_idict_keys(xs: idict[int,int]) -> int:
+    result = 0
+    for value in xs.keys():
+        result += 1
+    return result
+
+def count_idict_values(xs: idict[int,int]) -> int:
+    result = 0
+    for value in xs.values():
+        result += 1
+    return result
+
+def count_idict_items(xs: idict[int,int]) -> int:
+    result = 0
+    for value in xs.items():
+        result += 1
+    return result
+
+def count_set(xs: set[int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_iset(xs: iset[int]) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_str(xs: str) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_bytes(xs: bytes) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result
+
+def count_bytearray(xs: bytearray) -> int:
+    result = 0
+    for value in xs:
+        result += 1
+    return result

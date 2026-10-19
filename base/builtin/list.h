@@ -75,6 +75,7 @@ struct B_IteratorD_list {
 
 extern struct  B_IteratorD_listG_class  B_IteratorD_listG_methods;
 B_IteratorD_list B_IteratorD_listG_new(B_list);
+B_Iterator $listD_U_iter_init(B_IteratorD_list iter, $WORD src);
 
 //convenience functions used at various places.
 B_list B_listD_new(int capacity);

@@ -194,6 +194,12 @@ void B_IteratorD_arrayD_init(B_IteratorD_array self, B_array src) {
     self->next = 0;
 }
 
+B_Iterator $arrayD_U_iter_init(B_IteratorD_array iter, B_array src) {
+    iter->$class = &B_IteratorD_arrayG_methods;
+    B_IteratorD_arrayD_init(iter, src);
+    return (B_Iterator)iter;
+}
+
 bool B_IteratorD_arrayD_bool(B_IteratorD_array self) {
     return true;
 }

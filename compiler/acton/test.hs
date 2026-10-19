@@ -216,6 +216,13 @@ compilerTests =
           let src = tmp </> "cps_forwarding.act"
           copyFile "../../test/regression_auto/cps_forwarding.act" src
           testBuildAndRun "--fast" "" ExitSuccess False src
+  , testCase "release stack iterator lifetimes" $ do
+        -- Keep the source and executable separate from the auto test, which
+        -- can build and run the same regression concurrently in debug mode.
+        withSystemTempDirectory "acton-stack-iterators" $ \tmp -> do
+          let source = tmp </> "stack_iterators.act"
+          copyFile "../../test/regression_auto/stack_iterators.act" source
+          testBuildAndRun "--fast" "" ExitSuccess False source
   , testCase "missing source file" $ do
         -- The check runs before a scratch directory or the project lock is
         -- taken, so nothing is printed on stdout and nothing is built.

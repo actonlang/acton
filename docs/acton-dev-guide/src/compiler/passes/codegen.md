@@ -68,3 +68,89 @@ The shared walkers add a loop and descriptor reads to serialization, while
 removing repeated field-walking code. This is a code-size tradeoff, not a claim
 that persistence runs faster. Any binary-size or runtime improvement should be
 measured on representative programs.
+
+## Automatic storage for builtin loop iterators
+
+For a direct `for` loop over a known builtin collection, CodeGen can place the
+loop's iterator in the C function's automatic storage. For example:
+
+```acton
+def total(xs: list[int]) -> int:
+    result = 0
+    for value in xs:
+        result += value
+    return result
+```
+
+The generated function declares a `struct B_IteratorD_list`, initializes it
+with `$listD_U_iter_init(&storage, xs)`, and uses the ordinary non-throwing
+`__next__` method through a `B_Iterator` pointer. No iterator object is allocated
+on the heap. The source collection and the values yielded by the iterator keep
+their usual representations.
+
+The optimization has three requirements:
+
+- Normalizer created the iterator variable privately for a `for` loop. User
+  variables containing iterators are outside this optimization, even when
+  they happen to be local to the function.
+- CodeGen recognizes the builtin iterator factory, either as a direct call or
+  through a compiler-created local witness whose builtin origin is known.
+  Generic witness parameters and user-defined iteration use the ordinary path.
+- The generated C function is synchronous. Functions returning the RTS
+  continuation result (`$R`) keep heap iterators, since a continuation may use
+  the iterator after the current C activation returns.
+
+The supported families are list/ilist, array, bitarray, bitset, dict/idict
+(keys, values and items), set/iset, str, bytes and bytearray. An inline
+`iter(...)` wrapper around a recognized factory is also eligible. Reverse
+iteration and iterator combinators keep their existing construction behavior.
+Range iteration has a separate, existing optimization.
+
+Backing structs are declared at function scope. This is necessary because
+normalization may initialize a loop iterator inside a conditional while
+hoisting the iterator pointer outside that conditional. The storage therefore
+outlives all uses of the pointer. A recursive call gets its own storage, and
+repeated entry into a loop reinitializes its struct. This reserves one small
+struct per eligible loop in the C frame; it does not grow with the number of
+iterations. A source reference in that storage may conservatively remain live
+until the function returns.
+
+The native helpers share initialization logic with heap iterators and keep the
+ordinary class pointer and source reference. The conservative GC scans C
+stacks and registers, so temporary source collections remain reachable during
+iteration. The helpers preserve mutation behavior by using the existing
+`__next__` implementations. Iterator layouts and serialization methods are
+unchanged. This does not remove allocations made while producing elements,
+such as tuples from dictionary items or boxed byte values.
+
+This local proof does not depend on general escape analysis. Extending it to
+named iterators or helper calls would require proving both that the iterator
+cannot escape and that every use stays within the lifetime of the same C
+activation; a no-capture parameter summary alone is insufficient.
+
+### Verification and motivating measurement
+
+The compiler fixtures `stack_iterators.act` and
+`stack_iterators_fallback.act` check recognized families and fallback paths.
+The native regression `test/regression_auto/stack_iterators.act` runs in both
+debug and fast modes and covers nesting, empty loops, mutation, early exits,
+exceptions, recursion, forced GC with a temporary source, and suspension.
+
+For the motivating `~/acton-local/bench/nbody.act`, matched builds from main
+`14e0fe60` and this change used `--fast --always-build` and ran with
+`--rts-wthreads 1`. The source SHA-256 was
+`8a6375f660ed80b7e67a8a63559f9c5c873b94968ad4c39a102306700b0510c3`.
+The RTS reported cumulative heap allocation, including startup:
+
+| Iterations | Main | Automatic loop iterators |
+| ---: | ---: | ---: |
+| 0 | 269,040 bytes | 269,040 bytes |
+| 1,000 | 432,736 bytes | 285,424 bytes |
+| 5,000,000 | 480,332,416 bytes | 285,424 bytes |
+
+Both builds printed identical energies for all three counts. At five million
+iterations these were `-0.169075164` initially and `-0.169083134` finally.
+The two list iterators in the advance loop previously accounted for 96 bytes
+per iteration. The revised build has no iteration-dependent allocation in
+that loop. These figures measure allocation volume, not peak resident memory;
+small startup totals can vary between runs.

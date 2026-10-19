@@ -1847,6 +1847,12 @@ B_NoneType B_IteratorD_strD_init(B_IteratorD_str self, B_str str) {
     return B_None;
 }
 
+B_Iterator $strD_U_iter_init(B_IteratorD_str iter, B_str src) {
+    iter->$class = &B_IteratorD_strG_methods;
+    B_IteratorD_strD_init(iter, src);
+    return (B_Iterator)iter;
+}
+
 void B_IteratorD_strD_serialize(B_IteratorD_str self,$Serial$state state) {
     $step_serialize(self->src,state);
     $step_serialize(toB_int(self->nxt),state);
@@ -2802,6 +2808,12 @@ B_NoneType B_IteratorD_bytearrayD_init(B_IteratorD_bytearray self, B_bytearray b
     self->src = b;
     self->nxt = 0;
     return B_None;
+}
+
+B_Iterator $bytearrayD_U_iter_init(B_IteratorD_bytearray iter, B_bytearray src) {
+    iter->$class = &B_IteratorD_bytearrayG_methods;
+    B_IteratorD_bytearrayD_init(iter, src);
+    return (B_Iterator)iter;
 }
 
 bool B_IteratorD_bytearrayD_bool(B_IteratorD_bytearray self) {
@@ -3979,6 +3991,12 @@ B_NoneType B_IteratorD_bytesD_init(B_IteratorD_bytes self, B_bytes str) {
     self->src = str;
     self->nxt = 0;
     return B_None;
+}
+
+B_Iterator $bytesD_U_iter_init(B_IteratorD_bytes iter, B_bytes src) {
+    iter->$class = &B_IteratorD_bytesG_methods;
+    B_IteratorD_bytesD_init(iter, src);
+    return (B_Iterator)iter;
 }
 
 void B_IteratorD_bytesD_serialize(B_IteratorD_bytes self,$Serial$state state) {

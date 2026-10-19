@@ -630,13 +630,25 @@ static B_setentry *B_IteratorD_set_next_entry_maybe(B_IteratorD_set self) {
     }
     return NULL;
 }
-static B_Iterator B_set_iter_table($WORD src, B_set_table *set) {
-    B_IteratorD_set iter = acton_malloc(sizeof(struct B_IteratorD_set));
+static B_Iterator B_set_iter_table_init(B_IteratorD_set iter, $WORD src, B_set_table *set) {
     iter->$class = &B_IteratorD_setG_methods;
     iter->src = src;
     iter->data = set;
     iter->nxt = 0;
     return (B_Iterator)iter;
+}
+
+B_Iterator $setD_U_iter_init(B_IteratorD_set iter, B_set src) {
+    return B_set_iter_table_init(iter, src, &src->data);
+}
+
+B_Iterator $isetD_U_iter_init(B_IteratorD_set iter, B_iset src) {
+    return B_set_iter_table_init(iter, src, &src->data);
+}
+
+static B_Iterator B_set_iter_table($WORD src, B_set_table *set) {
+    B_IteratorD_set iter = acton_malloc(sizeof(struct B_IteratorD_set));
+    return B_set_iter_table_init(iter, src, set);
 }
 static bool B_IteratorD_set_next(B_IteratorD_set self, $WORD *out) {
     B_setentry *entry = B_IteratorD_set_next_entry_maybe(self);

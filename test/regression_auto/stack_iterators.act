@@ -1,0 +1,207 @@
+import acton.rts
+
+def list_total(xs: list[int]) -> int:
+    total = 0
+    for value in xs:
+        total += value
+    return total
+
+def named_iterator(xs: list[int]) -> Iterator[int]:
+    it = iter(xs)
+    for value in it:
+        break
+    return it
+
+def generic_total[C(object,Iterable[int])](xs: C) -> int:
+    total = 0
+    for value in xs:
+        total += value
+    return total
+
+
+def first(xs: list[int], out: list[int]) -> int:
+    for value in xs:
+        try:
+            return value
+        finally:
+            out.append(value)
+    return -1
+
+def recursive_total(xs: list[int], depth: int) -> int:
+    total = 0
+    for value in xs:
+        total += value
+        if depth > 0:
+            total += recursive_total(xs, depth - 1)
+    return total
+
+# User-defined iteration may do more than initialize a builtin iterator.
+class Wrapped(object):
+    xs: list[int]
+    def __init__(self, xs: list[int]):
+        self.xs = xs
+
+extension Wrapped(Iterable[int]):
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.xs)
+
+def custom_total(xs: Wrapped) -> int:
+    total = 0
+    for value in xs:
+        total += value
+    return total
+
+def check_collections() -> None:
+    assert list_total([]) == 0
+    assert list_total([1, 2, 3]) == 6
+    total = 0
+    for value in ilist([1, 2, 3]):
+        total += value
+    assert total == 6
+    ints: array[int] = array(3, 2)
+    total = 0
+    for value in ints:
+        total += value
+    assert total == 6
+    floats: array[float] = array(3, 2.5)
+    ftotal = 0.0
+    for value in floats:
+        ftotal += value
+    assert ftotal == 7.5
+    total = 0
+    for value in bitarray(70, True):
+        if value:
+            total += 1
+    assert total == 70
+    total = 0
+    for value in bitset(130, [1, 64, 129]):
+        total += value
+    assert total == 194
+    d = {1: 10, 2: 20, 3: 30}
+    fd = idict(d.items())
+    total = 0
+    for value in d:
+        total += value
+    for value in d.keys():
+        total += value
+    for value in fd:
+        total += value
+    for value in fd.keys():
+        total += value
+    assert total == 24
+    total = 0
+    for value in d.values():
+        total += value
+    for value in fd.values():
+        total += value
+    assert total == 120
+    total = 0
+    for key, value in d.items():
+        total += key + value
+    for key, value in fd.items():
+        total += key + value
+    assert total == 132
+    total = 0
+    for value in {1, 2, 3}:
+        total += value
+    for value in iset([1, 2, 3]):
+        total += value
+    assert total == 12
+    text = ""
+    for char in "aå中🙂z":
+        text += char
+    assert text == "aå中🙂z"
+    total = 0
+    for byte in b"abc":
+        total += byte
+    for byte in bytearray(b"abc"):
+        total += byte
+    assert total == 588
+
+def check_control() -> None:
+    total = 0
+    for row in [1, 2, 3]:
+        for value in [row, row + 10]:
+            if value == 2:
+                continue
+            total += value
+    assert total == 40
+    for value in [1, 2]:
+        break
+    else:
+        assert False
+    for value in []:
+        assert False
+    else:
+        total += 1
+    assert total == 41
+    for value in [1, 2, 3]:
+        try:
+            raise ValueError("caught in loop")
+        except ValueError:
+            total += value
+    assert total == 47
+    try:
+        for value in [1, 2, 3]:
+            if value == 2:
+                raise ValueError("exit loop")
+            total += value
+    except ValueError:
+        total += 10
+    assert total == 58
+    item = next(named_iterator([1, 2, 3]))
+    assert isinstance(item, just) and item.val == 2
+    assert generic_total([1, 2, 3]) == 6
+    assert custom_total(Wrapped([1, 2, 3])) == 6
+    out: list[int] = []
+    assert first([], out) == -1 and out == []
+    assert first([7, 8, 9], out) == 7 and out == [7]
+    # Each recursive call needs its own iterator and backing storage.
+    assert recursive_total([1, 2, 3], 2) == 78
+
+def check_mutation() -> None:
+    xs = [1]
+    total = 0
+    for value in xs:
+        total += value
+        if value < 100:
+            xs.append(value + 1)
+    assert total == 5050
+    data = bytearray(b"a")
+    total = 0
+    for byte in data:
+        total += byte
+        if len(data) < 100:
+            data.append(97)
+    assert total == 9700
+
+def temporary_rows() -> list[list[int]]:
+    return [[n, n + 1] for n in range(20)]
+
+def check_gc(cap: SysCap) -> None:
+    total = 0
+    # The collection and its remaining elements are owned by the iterator.
+    for row in temporary_rows():
+        acton.rts.gc(cap)
+        total += row[0] + row[1]
+    assert total == 400
+
+actor Counter():
+    def tick() -> int:
+        return 1
+
+actor main(env):
+    check_collections()
+    check_control()
+    check_mutation()
+    check_gc(env.syscap)
+    counter = Counter()
+
+    def suspended():
+        total = 0
+        for value in [1, 2, 3]:
+            total += value + await async counter.tick()
+        assert total == 9
+        env.exit(0)
+
+    suspended()

@@ -297,6 +297,12 @@ void B_IteratorD_bitsetD_init(B_IteratorD_bitset self, B_bitset src) {
     self->next = 0;
 }
 
+B_Iterator $bitsetD_U_iter_init(B_IteratorD_bitset iter, B_bitset src) {
+    iter->$class = &B_IteratorD_bitsetG_methods;
+    B_IteratorD_bitsetD_init(iter, src);
+    return (B_Iterator)iter;
+}
+
 bool B_IteratorD_bitsetD_bool(B_IteratorD_bitset self) {
     return true;
 }
