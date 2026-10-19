@@ -436,12 +436,34 @@ including database support.
 
 ## GC markers per mark phase
 
-With parallel marking, BDWGC marks every mark phase with all its marker
-threads, by default one per logical processor and at most 16. Waking up and
-coordinating them costs more than they save when the phase has little to scan,
-and in a phase of medium size most of them add CPU time without shortening the
-pause much. Acton gives a mark phase one marker per 4 MiB it is estimated to
-scan, rounded up: a phase estimated at under 4 MiB is marked by the collecting
+With parallel marking, the collector has up to 16 marker threads, by default
+one per processor (hardware thread) that is not an efficiency core, since
+efficiency cores mark the same work more slowly. At least 40% of all the
+processors, rounded up, are counted, though, with as many efficiency cores as
+that takes. An Apple M4 Pro, with 10 performance and 4 efficiency cores, has
+10 markers, and an Apple M1, with 4 of each, has 4. An Intel processor with 2
+two-thread performance cores and 10 efficiency cores has 6: its 4 processors
+that are not efficiency cores are fewer than 40% of its 14 processors (5.6),
+so 2 efficiency cores are counted too.
+
+The efficiency cores are those of the macOS performance levels named
+"Efficiency", on Linux, when an Intel hybrid processor lists processors in both
+`/sys/devices/cpu_core/cpus` and `/sys/devices/cpu_atom/cpus`, those not in the
+first list, and otherwise, as on arm64, the cores of the lowest capacity in
+`/sys/devices/system/cpu/cpu<N>/cpu_capacity` if it is less than 3/4 of the
+highest. On Linux, the collector counts every processor that `/proc/stat` lists,
+however long the file is. With `GC_PRINT_STATS` set, the collector logs the
+count when it leaves out efficiency cores, for example "Counting 10 of 14
+processors for markers: efficiency cores fully excluded". The `GC_MARKERS`
+environment variable sets the number of markers. `GC_NPROCS` sets the number of
+processors, and the default number of markers then follows it with no efficiency
+cores left out.
+
+BDWGC marks every mark phase with all its markers. Waking up and coordinating
+them costs more than they save when the phase has little to scan, and in a
+phase of medium size most of them add CPU time without shortening the pause
+much. Acton gives a mark phase one marker per 4 MiB it is estimated to scan,
+rounded up: a phase estimated at under 4 MiB is marked by the collecting
 thread alone, one estimated at 10 MiB by three markers, and a phase of a large
 heap by all of them. The estimate is the pointer-containing data found live by
 the previous collection, plus all that the program allocated since then, plus
