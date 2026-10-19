@@ -304,6 +304,54 @@ compilerTests =
           assertBool "dynamic executable should not search Zig cache directory"
             (not ("zig-local-cache" `isInfixOf` rpathOut))
 #endif
+  , testCase "release dynamic module library build" $ do
+        -- liba resolves the symbols of base it uses against the executable
+        -- when the executable loads it. Class Foo, the list and the range loop
+        -- in module a use symbols that module b does not use, for example
+        -- B_OrdD_strG_witness, B_mk_list and $rangeD_U_init. A release build
+        -- links the executable with dead stripping, which must keep them.
+        withSystemTempDirectory "acton-release-dynamic-module-build" $ \proj -> do
+          actonExe <- canonicalizePath "../../dist/bin/acton"
+          let srcDir = proj </> "src"
+              binPath = proj </> "out" </> "bin" </> "b"
+              mkFp name = Fingerprint.formatFingerprint
+                (Fingerprint.updateFingerprintPrefix
+                  (Fingerprint.fingerprintPrefixForName name) 1)
+          createDirectoryIfMissing True srcDir
+          writeFile (proj </> "Build.act") $ unlines
+            [ "name = \"release_dynamic_module_build\""
+            , "fingerprint = " ++ mkFp "release_dynamic_module_build"
+            , "libraries = {"
+            , "    \"a\": (modules=[\"a\"], linkage=\"dynamic\")"
+            , "}"
+            ]
+          writeFile (srcDir </> "a.act") $ unlines
+            [ "class Foo(object):"
+            , "    v: int"
+            , "    def __init__(self, v: int):"
+            , "        self.v = v"
+            , ""
+            , "def total(n: int) -> int:"
+            , "    foos = []"
+            , "    for i in range(n):"
+            , "        foos.append(Foo(i))"
+            , "    s = 0"
+            , "    for f in foos:"
+            , "        s += f.v"
+            , "    return s"
+            ]
+          writeFile (srcDir </> "b.act") $ unlines
+            [ "import a"
+            , ""
+            , "actor main(env: Env):"
+            , "    print(a.total(100))"
+            , "    env.exit(0)"
+            ]
+          (returnCode, _cmdOut, cmdErr) <- readCreateProcessWithExitCode (proc actonExe ["build", "--release", "--color", "never"]){ cwd = Just proj } ""
+          assertEqual ("acton should build release executable with dynamic module library: " ++ cmdErr) ExitSuccess returnCode
+          (runCode, runOut, runErr) <- readCreateProcessWithExitCode (proc binPath []) ""
+          assertEqual ("release dynamic executable should load liba and run: " ++ runErr) ExitSuccess runCode
+          assertEqual "release dynamic executable output" "4950\n" runOut
   , sequentialTestGroup "repl" AllSucceed
     [ testCase "renders retained session and eval source" $ do
         let inputs =
