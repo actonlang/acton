@@ -203,6 +203,12 @@ actor UDPConnection(cap: UDPConnectCap, address: str, port: int, on_connect: act
     action def remote_address() -> str:
         return _remote_address
 
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port, empty and 0 when not set up"""
+        if _remote_address == "":
+            return (local_address="", local_port=0, remote_address="", remote_port=0)
+        return (local_address=local_address(), local_port=local_port(), remote_address=_remote_address, remote_port=port)
+
     action def metrics():
         return (connections=_connections,
                 consecutive_connect_errors=_consecutive_connect_errors,
@@ -285,6 +291,12 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     STATE_CONNECTED  = 3 # TCP Connected
     STATE_CLOSED     = 4 # TCP Connection disconnected / closed (it might never have been connected)
     var _state = STATE_NONE
+
+    var _ip_version = 0
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
 
     var _connections = 0
     var _consecutive_connect_errors = 0
@@ -510,13 +522,25 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         NotImplemented
 
     action def ip_version() -> ?int:
-        NotImplemented
+        """IP version of the connection, None if not connected"""
+        if _state != STATE_CONNECTED:
+            return None
+        return _ip_version
 
     action def local_address() -> str:
-        NotImplemented
+        """Local address of the current or most recent connection, see endpoints()"""
+        return _local_address
 
     action def remote_address() -> str:
-        NotImplemented
+        """Remote address of the current or most recent connection, see endpoints()"""
+        return _remote_address
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the current or most recent connection
+
+        Empty addresses and port 0 before the first connection.
+        """
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     action def metrics():
         return (connections=_connections,
@@ -540,6 +564,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     var on_error: ?action(TCPListenConnection, str) -> None = None
     var on_remote_close: ?action(TCPListenConnection) -> None = None
     var _initialized = False
+    var _local_address = ""
+    var _local_port = 0
+    var _remote_address = ""
+    var _remote_port = 0
 
     proc def _read_start():
         """Implementation internal"""
@@ -555,7 +583,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
             _initialized = True
 
     action def close() -> None:
-        """Close connection"""
+        """Close connection
+
+        Data already written is sent before the connection is closed.
+        """
         NotImplemented
 
     action def abort() -> None:
@@ -569,6 +600,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
     action def write(data: bytes) -> None:
         """Write data to remote"""
         NotImplemented
+
+    action def endpoints() -> (local_address: str, local_port: int, remote_address: str, remote_port: int):
+        """Local and remote address and port of the connection"""
+        return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
     mut def __resume__() -> None:
         NotImplemented

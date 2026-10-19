@@ -178,10 +178,12 @@ actor tcp_test_result(t: testing.EnvT, what: str):
 
 
 actor _test_TCPListenerPortZero(t: testing.EnvT):
-    """A listener on port 0 reports the port it listens on"""
+    """A listener on port 0 reports its port, and both ends know each other's address"""
     tcp_cap = net.TCPCap(net.NetCap(t.env.cap))
     base = tcp_test_result(t, "listener port zero")
+    var port = 0
     var listener: ?net.TCPListener = None
+    var client: ?net.TCPConnection = None
 
     def on_listen(l: net.TCPListener, error: ?str):
         if error is not None:
@@ -195,16 +197,42 @@ actor _test_TCPListenerPortZero(t: testing.EnvT):
         if l.local_address() != "127.0.0.1":
             base.failure("listener reports local address " + l.local_address())
             return
-        net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
+        client = net.TCPConnection(net.TCPConnectCap(tcp_cap), "127.0.0.1", port, on_connect, on_receive, on_error)
 
     def on_accept(s: net.TCPListenConnection):
-        s.close()
+        s.cb_install(on_server_receive, on_server_error, None)
 
-    def on_connect(c: net.TCPConnection):
-        c.close(lambda c: None)
+    def on_server_receive(s: net.TCPListenConnection, data: bytes):
+        # The client sends its local port
+        ep = s.endpoints()
+        try:
+            testing.assertEqual(ep.remote_address, "127.0.0.1", "accepted connection remote address")
+            testing.assertEqual(str(ep.remote_port), data.decode(), "accepted connection remote port")
+            testing.assertEqual(ep.local_address, "127.0.0.1", "accepted connection local address")
+            testing.assertEqual(ep.local_port, port, "accepted connection local port")
+        except AssertionError as e:
+            base.failure(str(e))
+            return
+        s.close()
         if listener is not None:
             listener.close()
         base.success()
+
+    def on_server_error(s: net.TCPListenConnection, errmsg: str):
+        base.failure("server error: " + errmsg)
+
+    def on_connect(c: net.TCPConnection):
+        ep = c.endpoints()
+        try:
+            testing.assertEqual(ep.remote_address, "127.0.0.1", "client remote address")
+            testing.assertEqual(ep.remote_port, port, "client remote port")
+            testing.assertEqual(ep.local_address, "127.0.0.1", "client local address")
+            testing.assertTrue(ep.local_port > 0, "client local port")
+            testing.assertEqual(c.ip_version(), 4, "client IP version")
+        except AssertionError as e:
+            base.failure(str(e))
+            return
+        c.write(str(ep.local_port).encode())
 
     def on_receive(c: net.TCPConnection, data: bytes):
         pass
