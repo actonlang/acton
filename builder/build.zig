@@ -509,6 +509,14 @@ pub fn build(b: *std.Build) void {
             if (has_dynamic_libraries) {
                 switch (target.result.os.tag) {
                     .macos => {
+                        // A dynamic library leaves the symbols of base and of
+                        // the project undefined and resolves them against the
+                        // executable when the executable loads it. Zig's
+                        // Mach-O linker exports every global symbol of an
+                        // executable, but an optimized build dead strips the
+                        // ones the executable does not use itself, and
+                        // rdynamic does not keep them, so keep every section.
+                        executable.link_gc_sections = false;
                         executable.root_module.addRPathSpecial("@executable_path/../lib");
                         executable.root_module.addRPathSpecial("@executable_path/lib");
                         executable.root_module.addRPathSpecial("@executable_path");
