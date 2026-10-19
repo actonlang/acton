@@ -419,7 +419,7 @@ createProject name = do
           }
     createDirectoryIfMissing True srcRoot
     writeFile buildActPath (BuildSpec.renderBuildAct buildSpec)
-    paths <- findPaths buildActPath defaultCompileOptions
+    paths <- findPaths buildActPath C.defaultCompileOptions
     writeFile (joinPath [ projDir, ".gitignore" ]) (
       ".acton.compile.lock\n" ++
       ".acton.lock\n" ++
@@ -1104,7 +1104,7 @@ runWatchFile gopts absFile sched runOnce = do
 -- | Fetch dependencies for the current project without compiling.
 fetchCommand :: C.GlobalOptions -> IO ()
 fetchCommand gopts = do
-    paths <- loadProjectPaths defaultCompileOptions
+    paths <- loadProjectPaths C.defaultCompileOptions
     res <- try (fetchDependencies gopts paths []) :: IO (Either ProjectError ())
     case res of
       Left (ProjectError msg) -> printErrorAndExit msg
@@ -1428,17 +1428,17 @@ printDocs gopts opts = do
 
         case fileExt of
           ".tydb" -> do
-            paths <- findPaths filename defaultCompileOptions
+            paths <- findPaths filename C.defaultCompileOptions
             env0 <- Acton.Env.initEnv (sysTypes paths) False
             Acton.Types.showTyFile env0 (modName paths) filename (C.verbose gopts)
 
           ".act" -> do
             let modname = A.modName $ map (replace ".act" "") $ splitOn "/" $ fileBody
-            paths <- findPaths filename defaultCompileOptions
-            parsedRes <- parseActFile defaultCompileOptions Source.diskSourceProvider modname filename Nothing
+            paths <- findPaths filename C.defaultCompileOptions
+            parsedRes <- parseActFile C.defaultCompileOptions Source.diskSourceProvider modname filename Nothing
             (_snap, parsed) <- case parsedRes of
               Left diags -> do
-                printDiagnostics gopts defaultCompileOptions diags
+                printDiagnostics gopts C.defaultCompileOptions diags
                 System.Exit.exitFailure
               Right res -> return res
 
@@ -2242,10 +2242,10 @@ runCliPostCompile cliHooks gopts plan env = do
         if C.test opts'
           then do
             testBinTasks <- catMaybes <$> mapM (filterMainActor env pathsRoot) preTestBinTasks
-            if altOutput opts' then return True else
+            if C.altOutput opts' then return True else
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks testBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
           else do
-            if altOutput opts' then return True else
+            if C.altOutput opts' then return True else
               runFinal (compileBins gopts opts' pathsRoot env rootSpec rootTasks preBinTasks allowPrune' rootModuleEntries rootBuildLibraries rootDepModuleOpts rootDepPathOverrides (Just (cchProgressUI cliHooks)))
 -- Generate documentation index for a project build by reading module names and
 -- docstrings from cached .tydb headers or source headers.

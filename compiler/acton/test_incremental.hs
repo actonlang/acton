@@ -73,6 +73,11 @@ actonExe = ".." </> ".." </> ".." </> ".." </> "dist" </> "bin" </> "acton"
 actonCmd :: String -> String
 actonCmd args = actonExe ++ " " ++ args ++ " --jobs 1"
 
+-- | The global options of the builds a test runs in process through the
+-- library: no colour, quiet, one job.
+quietGlobalOptions :: C.GlobalOptions
+quietGlobalOptions = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
+
 -- Utils ----------------------------------------------------------------------
 
 -- | Atomically write UTF-8 text to a file.
@@ -1522,18 +1527,8 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
-      gopts = C.GlobalOptions
-        { C.color = C.Never
-        , C.quiet = True
-        , C.noProgress = False
-        , C.timing = False
-        , C.tty = False
-        , C.verbose = False
-        , C.verboseZig = False
-        , C.jobs = 1
-        }
-  paths <- Compile.findPaths actAAbs Compile.defaultCompileOptions
-  taskSame <- Compile.readModuleTask spSame gopts Compile.defaultCompileOptions paths actAAbs
+  paths <- Compile.findPaths actAAbs C.defaultCompileOptions
+  taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case taskSame of
     Compile.TyTask{} -> pure ()
     _ -> assertFailure "expected TyTask when overlay matches header"
@@ -1545,13 +1540,13 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         , Source.ssIsOverlay = True
         }
       spDiff = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapDiff else Nothing) }
-  taskDiff <- Compile.readModuleTask spDiff gopts Compile.defaultCompileOptions paths actAAbs
+  taskDiff <- Compile.readModuleTask spDiff quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case taskDiff of
     Compile.ParseTask{ Compile.src = srcText, Compile.srcBytes = srcBytes } -> do
       srcText @?= textDiff
       srcBytes @?= bytesDiff
     _ -> assertFailure "expected ParseTask when overlay differs from header"
-  docDiff <- Compile.readModuleDoc spDiff gopts Compile.defaultCompileOptions paths actAAbs
+  docDiff <- Compile.readModuleDoc spDiff quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case docDiff of
     Just (mn, Just doc) -> do
       mn @?= A.modName ["incremental_cases", "a"]
@@ -1993,17 +1988,7 @@ p35_changed_path_keeps_unaffected_provider =
         actB = src </> "b.act"
         actC = src </> "c.act"
         actMain = src </> "main.act"
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions { C.only_build = True }
+        opts = C.defaultCompileOptions { C.only_build = True }
     ensureCasesProject
     writeFileUtf8 actA "aaa = 1\n"
     writeFileUtf8 actC "ccc = 10\n"
@@ -2025,10 +2010,10 @@ p35_changed_path_keeps_unaffected_provider =
     writeFileUtf8 actA "aaa = 2\n"
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions 1
     plan <- Compile.prepareCompilePlan
       Source.diskSourceProvider
-      gopts
+      quietGlobalOptions
       sched
       opts
       [actMainAbs]
@@ -2050,17 +2035,7 @@ p35_dbp_changed_path_includes_provider =
         actA = src </> "a.act"
         actB = src </> "b.act"
         actMain = src </> "main.act"
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions
+        opts = C.defaultCompileOptions
           { C.skip_build = True
           }
     ensureCasesProject
@@ -2100,10 +2075,10 @@ p35_dbp_changed_path_includes_provider =
       ]
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions 1
     plan <- Compile.prepareCompilePlan
       Source.diskSourceProvider
-      gopts
+      quietGlobalOptions
       sched
       opts
       [actMainAbs]
@@ -2542,7 +2517,7 @@ p45_tydb_records_local_name_dependencies =
 p46_huge_module_skips_doc_output :: TestTree
 p46_huge_module_skips_doc_output =
   testCase "46-huge module skips doc output" $ do
-    let opts = Compile.defaultCompileOptions
+    let opts = C.defaultCompileOptions
         docDir = casesProjDir </> "doc-index"
     assertBool "doc output should run at the threshold"
       (Compile.shouldGenerateDocOutput opts False Compile.docNameCountThreshold)
@@ -3003,17 +2978,7 @@ p56_changed_path_prunes_removed_module =
           [ "actor main(env: Env):"
           , "    env.exit(0)"
           ]
-        gopts = C.GlobalOptions
-          { C.color = C.Never
-          , C.quiet = True
-          , C.noProgress = False
-          , C.timing = False
-          , C.tty = False
-          , C.verbose = False
-          , C.verboseZig = False
-          , C.jobs = 1
-          }
-        opts = Compile.defaultCompileOptions
+        opts = C.defaultCompileOptions
     ensureCasesProject
     writeFileUtf8 actA rootActor
     writeFileUtf8 actMain rootActor
@@ -3021,12 +2986,12 @@ p56_changed_path_prunes_removed_module =
     assertArtifactsExist (rootMain : supportMain : outsA)
     actAAbs <- canonicalizePath actA
     actMainAbs <- canonicalizePath actMain
-    sched <- Compile.newCompileScheduler gopts 1
+    sched <- Compile.newCompileScheduler quietGlobalOptions 1
     -- The first plan records the build spec, so the next plan follows the
     -- changed paths, as in watch mode and the LSP server.
-    _ <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [])
+    _ <- Compile.prepareCompilePlan Source.diskSourceProvider quietGlobalOptions sched opts [actMainAbs] False (Just [])
     removeFile actA
-    plan <- Compile.prepareCompilePlan Source.diskSourceProvider gopts sched opts [actMainAbs] False (Just [actAAbs])
+    plan <- Compile.prepareCompilePlan Source.diskSourceProvider quietGlobalOptions sched opts [actMainAbs] False (Just [actAAbs])
     assertBool "expected a changed-path plan" (Compile.cpIncremental plan)
     assertArtifactsGone outsA
     assertArtifactsExist [rootMain, supportMain]
@@ -3151,7 +3116,7 @@ recordCompileEvents = do
     writeBuildAct proj eventsProjName []
     sched <- Compile.newCompileScheduler eventsGlobalOptions 1
     eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
-    let options = Compile.defaultCompileOptions
+    let options = C.defaultCompileOptions
           { C.syspath = distDir
           , C.ignore_compiler_version = True
           }
@@ -3192,14 +3157,11 @@ takeLines part = atomicModifyIORef' part (\entries -> ([], reverse entries))
 -- | The library reports info lines only in verbose mode.
 eventsGlobalOptions :: C.GlobalOptions
 eventsGlobalOptions =
-  C.GlobalOptions
+  C.defaultGlobalOptions
     { C.color = C.Never
     , C.quiet = True
     , C.noProgress = True
-    , C.timing = False
-    , C.tty = False
     , C.verbose = True
-    , C.verboseZig = False
     , C.jobs = 1
     }
 

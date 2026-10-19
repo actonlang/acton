@@ -1130,16 +1130,7 @@ main = do
 
     describe "CompileScheduler" $ do
       it "waits for canceled generation cleanup before launching the replacement" $ do
-        let gopts = C.GlobalOptions
-              { C.color = C.Never
-              , C.quiet = True
-              , C.noProgress = False
-              , C.timing = False
-              , C.tty = False
-              , C.verbose = False
-              , C.verboseZig = False
-              , C.jobs = 1
-              }
+        let gopts = C.defaultGlobalOptions { C.color = C.Never, C.quiet = True, C.jobs = 1 }
         sched <- Compile.newCompileScheduler gopts 1
         oldStarted <- newEmptyMVar
         oldCleanupStarted <- newEmptyMVar
@@ -1381,7 +1372,7 @@ main = do
           it "returns diagnostics for chunk scanner failures" $ do
             let input = "    pass\n"
                 moduleName = S.modName ["chunked"]
-            result <- Compile.parseActSource Compile.defaultCompileOptions moduleName "chunked.act" input Nothing
+            result <- Compile.parseActSource C.defaultCompileOptions moduleName "chunked.act" input Nothing
             case result of
               Left [diagnostic] ->
                 renderDiagnosticText diagnostic `shouldContain` "non-top-level text before first chunk"

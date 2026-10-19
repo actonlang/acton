@@ -137,20 +137,15 @@ sysRootFromTypesPath :: FilePath -> FilePath
 sysRootFromTypesPath = takeDirectory . takeDirectory . takeDirectory
 
 benchGopts :: C.GlobalOptions
-benchGopts = C.GlobalOptions
+benchGopts = C.defaultGlobalOptions
     { C.color = C.Never
-    , C.quiet = False
     , C.noProgress = True
     , C.timing = True
-    , C.tty = False
-    , C.verbose = False
-    , C.verboseZig = False
-    , C.jobs = 0
     }
 
 benchOpts :: FilePath -> Bool -> C.CompileOptions
 benchOpts typesPath skipBuild =
-    Compile.defaultCompileOptions
+    C.defaultCompileOptions
       { C.ignore_compiler_version = True
       , C.skip_build = skipBuild
       , C.syspath = sysRootFromTypesPath typesPath

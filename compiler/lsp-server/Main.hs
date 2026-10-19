@@ -142,21 +142,16 @@ compileScheduler = unsafePerformIO $ do
 -- | Global compiler options for the LSP server (quiet, no color).
 lspGlobalOpts :: C.GlobalOptions
 lspGlobalOpts =
-  C.GlobalOptions
-    { color = C.Never
-    , quiet = True
-    , noProgress = True
-    , timing = False
-    , tty = False
-    , verbose = False
-    , verboseZig = False
-    , jobs = 0
+  C.defaultGlobalOptions
+    { C.color = C.Never
+    , C.quiet = True
+    , C.noProgress = True
     }
 
 -- | Compile options for LSP runs (front passes only, no final build).
 lspCompileOpts :: C.CompileOptions
 lspCompileOpts =
-  Compile.defaultCompileOptions
+  C.defaultCompileOptions
     { C.skip_build = True
     , C.only_build = False
     , C.test = False

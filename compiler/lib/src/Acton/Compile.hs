@@ -132,7 +132,6 @@ module Acton.Compile
   , BackPassFailure(..)
   , backPassFailureMessage
   , BackJobResult(..)
-  , defaultCompileOptions
   , clearModuleCaches
   , ProjectError(..)
   , throwProjectError
@@ -187,7 +186,6 @@ module Acton.Compile
   , dropProjPrefixOrLib
   , importsOf
   , quiet
-  , altOutput
   , missingIfaceDiagnostics
   , getPubHashCached
   , getImplHashCached
@@ -849,49 +847,6 @@ instrumentHooksForAnalytics ana hooks = hooks
   where taskMod t   = modNameToString (tkMod (gtKey t))
         backMod job = modNameToString (A.modname (biTypedMod (bjInput job)))
 
--- | Baseline compile options for internal helpers and tests.
--- This mirrors CLI defaults so path discovery and parsing behave predictably
--- when no command-line flags are present.
-defaultCompileOptions :: C.CompileOptions
-defaultCompileOptions =
-  C.CompileOptions
-    { C.alwaysbuild = False
-    , C.ignore_compiler_version = False
-    , C.db = False
-    , C.parse = False
-    , C.parse_ast = False
-    , C.kinds = False
-    , C.types = False
-    , C.escape_analysis = False
-    , C.sigs = False
-    , C.norm = False
-    , C.deact = False
-    , C.cps = False
-    , C.llift = False
-    , C.box = False
-    , C.hgen = False
-    , C.cgen = False
-    , C.ccmd = False
-    , C.tydb = False
-    , C.cpedantic = False
-    , C.dbg_no_lines = False
-    , C.no_dbp = False
-    , C.optimize = C.Debug
-    , C.only_build = False
-    , C.skip_build = False
-    , C.watch = False
-    , C.no_threads = False
-    , C.parse_serial = False
-    , C.root = ""
-    , C.tempdir = ""
-    , C.syspath = ""
-    , C.target = C.defTarget
-    , C.cpu = ""
-    , C.test = False
-    , C.searchpath = []
-    , C.dep_overrides = []
-    }
-
 -- | Debug helper for pass dumps.
 -- Prints a header and footer around the given text so pass output is easy to
 -- spot in verbose logs.
@@ -1287,7 +1242,7 @@ dbpDeferredBackJob :: Bool
 dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
   | C.no_dbp opts = Nothing
   | C.only_build opts = Nothing
-  | altOutput opts = Nothing
+  | C.altOutput opts = Nothing
   | mn == A.modName ["__builtin__"] = Nothing
   | blocked = Nothing
   -- A module with NotImplemented bodies is implemented by a hand-written
@@ -2175,7 +2130,7 @@ adjustImports providers m = m{ A.imps = imps' }
 -- | Decide whether to suppress per-module timing/log output.
 -- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
-quiet gopts opts = C.quiet gopts || altOutput opts
+quiet gopts opts = C.quiet gopts || C.altOutput opts
 
 -- | Read a reusable interface shell from a .tydb file and return its hashes.
 -- This is used when a module is deemed fresh and we want to avoid reparsing.
@@ -3010,7 +2965,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
       let mn = A.modname (biTypedMod backInput)
           outbase = outBase paths mn
           relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
-          writesOutput = not (altOutput opts)
+          writesOutput = not (C.altOutput opts)
           backPasses =
             [ BackPassNormalize
             , BackPassDeactorize
@@ -3352,7 +3307,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           mn = name (gtTask t)
           optsBuiltin = optsFor (gtKey t)
           actFile = srcFile bPaths mn
-          forceAlt = altOutput optsBuiltin && mn == rootAlt
+          forceAlt = C.altOutput optsBuiltin && mn == rootAlt
       if C.only_build optsBuiltin
         then return (Right ())
         else do
@@ -3873,7 +3828,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   needByPub = not (null pubDeltas)
                   needByMissing = not (null pubMissing) || not (null implMissing) || not (Data.Set.null rowMissingMods)
                   needByImpl = not (null implDeltas)
-                  forceAlt    = altOutput optsT && mn == rootAlt
+                  forceAlt    = C.altOutput optsT && mn == rootAlt
                   forceAlways = C.alwaysbuild optsT
                   -- Front passes run on source or API changes, or when forced.
                   needFront = needBySource || needByPub || needByMissing || forceAlt || forceAlways
@@ -3889,7 +3844,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     case cachedDeferredBackJob of
                       Just _ -> True
                       Nothing -> False
-              let canCheckCodegen = not needFront && not needByImpl && not (altOutput optsT) && not isCachedDbp
+              let canCheckCodegen = not needFront && not needByImpl && not (C.altOutput optsT) && not isCachedDbp
               mCodegenStatus <- case mModuleImplHash of
                 Just implHash | canCheckCodegen -> Just <$> codegenStatus paths mn implHash
                 _ -> return Nothing
@@ -5358,12 +5313,6 @@ rootEligible (I.NAct [] p k _ _) = case (p,k) of
                                         prstr t == "__builtin__.Env" || prstr t == "__builtin__.None"
                                       _ -> False
 rootEligible _ = False
-
--- | Determine whether any non-standard output mode is enabled.
--- Used to suppress normal timing/output when dumping parse/sigs/cgen, etc.
-altOutput :: C.CompileOptions -> Bool
-altOutput opts =
-  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.escape_analysis opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
 -- | Read a UTF-8 text file with explicit encoding.
 -- Keeps compiler IO consistent across platforms.

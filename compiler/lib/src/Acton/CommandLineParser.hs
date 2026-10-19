@@ -43,6 +43,19 @@ data GlobalOptions = GlobalOptions {
                         jobs         :: Int
                      } deriving Show
 
+-- | The global options of a command line without flags.
+defaultGlobalOptions :: GlobalOptions
+defaultGlobalOptions = GlobalOptions
+    { color      = Auto
+    , quiet      = False
+    , noProgress = False
+    , timing     = False
+    , tty        = False
+    , verbose    = False
+    , verboseZig = False
+    , jobs       = 0
+    }
+
 data Command        = New NewOptions
                     | Build BuildOptions
                     | Install InstallOptions
@@ -107,6 +120,52 @@ data CompileOptions   = CompileOptions {
                          searchpath  :: [String],
                          dep_overrides :: [(String,String)]
                      } deriving Show
+
+-- | The compile options of a command line without flags.  Internal helpers
+-- and tests start from it.
+defaultCompileOptions :: CompileOptions
+defaultCompileOptions = CompileOptions
+    { alwaysbuild             = False
+    , ignore_compiler_version = False
+    , db                      = False
+    , parse                   = False
+    , parse_ast               = False
+    , kinds                   = False
+    , types                   = False
+    , escape_analysis         = False
+    , sigs                    = False
+    , norm                    = False
+    , deact                   = False
+    , cps                     = False
+    , llift                   = False
+    , box                     = False
+    , hgen                    = False
+    , cgen                    = False
+    , ccmd                    = False
+    , tydb                    = False
+    , cpedantic               = False
+    , dbg_no_lines            = False
+    , no_dbp                  = False
+    , optimize                = Debug
+    , only_build              = False
+    , skip_build              = False
+    , watch                   = False
+    , no_threads              = False
+    , parse_serial            = False
+    , root                    = ""
+    , tempdir                 = ""
+    , syspath                 = ""
+    , target                  = defTarget
+    , cpu                     = ""
+    , test                    = False
+    , searchpath              = []
+    , dep_overrides           = []
+    }
+
+-- | Whether a dump flag is set, from --parse through --cgen.  A dump takes
+-- the place of the normal build output.  --ccmd and --tydb are not dumps.
+altOutput :: CompileOptions -> Bool
+altOutput opts = any ($ opts) [parse, parse_ast, kinds, types, escape_analysis, sigs, norm, deact, cps, llift, box, hgen, cgen]
 
 data BuildOptions = BuildOptions
     { buildCompile :: CompileOptions
@@ -334,40 +393,11 @@ sigCompileOptions = mkSigCompileOptions
                 <> help "Override dependency NAME with local PATH"))
   where
     mkSigCompileOptions always ignore syspath' search depOverrides =
-      CompileOptions
+      defaultCompileOptions
         { alwaysbuild = always
         , ignore_compiler_version = ignore
-        , db = False
-        , parse = False
-        , parse_ast = False
-        , kinds = False
-        , types = False
-        , escape_analysis = False
-        , sigs = False
-        , norm = False
-        , deact = False
-        , cps = False
-        , llift = False
-        , box = False
-        , hgen = False
-        , cgen = False
-        , ccmd = False
-        , tydb = False
-        , cpedantic = False
-        , dbg_no_lines = False
-        , no_dbp = False
-        , optimize = Debug
-        , only_build = False
         , skip_build = True
-        , watch = False
-        , no_threads = False
-        , parse_serial = False
-        , root = ""
-        , tempdir = ""
         , syspath = syspath'
-        , target = defTarget
-        , cpu = ""
-        , test = False
         , searchpath = search
         , dep_overrides = depOverrides
         }
