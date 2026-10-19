@@ -2858,6 +2858,7 @@ genBuildZig template sys spec zigDeps depModuleOpts =
                    , "        .gc_no_thread_local_warmup = gc_no_thread_local_warmup,"
                    , "        .gc_thread_local_refill_blocks = gc_thread_local_refill_blocks,"
                    , "        .gc_disable_thp = gc_disable_thp,"
+                   , "        .max_wthreads = max_wthreads,"
                    ]
                    ++ moduleOpts
                    ++ [ "    });" ]

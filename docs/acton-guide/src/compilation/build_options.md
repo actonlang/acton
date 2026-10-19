@@ -50,6 +50,31 @@ mostly use GC allocation and are useful controls. Measure throughput, latency
 and process RSS; the performance runner's allocated-byte count covers GC
 allocation, not all memory obtained through C `malloc`.
 
+## Worker threads
+
+The runtime starts one worker thread per CPU, and at least 4. By default it
+supports at most 255 worker threads, so a machine with more CPUs gets 255. An
+application can set a different limit:
+
+```python
+build_options = {
+    "max_wthreads": "1023",
+}
+```
+
+The value must be from 4 to 65535. On a machine with more CPUs than the limit,
+the runtime starts as many worker threads as the limit allows. A program run
+with `--rts-wthreads` above the limit exits with an error at startup.
+
+The runtime keeps the state of each worker thread in tables sized by the limit
+when the program is built. The limit is therefore shared by the application,
+its Acton dependencies and the standard library, and it cannot be changed by a
+running program. The tables take about 1 KiB of memory for each worker thread
+that the limit allows, whether or not the program starts it. Each running
+worker thread also has a libuv loop with file descriptors of its own, two on
+macOS, so a program with many worker threads may need a higher open file limit
+(`ulimit -n`). Programs built with `--no-threads` ignore the option.
+
 ## GC defaults
 
 Acton changes these defaults of BDWGC. Each change can be turned off, as

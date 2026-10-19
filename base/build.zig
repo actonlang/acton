@@ -100,9 +100,15 @@ pub fn build(b: *std.Build) void {
     const gc_no_thread_local_warmup = b.option(bool, "gc_no_thread_local_warmup", "Let a new thread use its own GC free list of each size from its first allocation of that size (default: true on targets with threads)") orelse gc_enable_threads;
     const gc_thread_local_refill_blocks = b.option(u32, "gc_thread_local_refill_blocks", "Largest number of GC heap blocks that one refill of a thread-local free list takes under the allocator lock, from 1 to 32 (default 16)") orelse 16;
     const gc_disable_thp = b.option(bool, "gc_disable_thp", "Disable transparent huge pages for GC memory on Linux") orelse false;
+    const max_wthreads = b.option(u16, "max_wthreads", "Most RTS worker threads, from 4 to 65535 (default 255)") orelse 255;
 
     if (gc_disable_thp and target.result.os.tag != .linux) {
         std.log.err("gc_disable_thp requires a Linux target", .{});
+        std.process.exit(1);
+    }
+    // On a machine with fewer than 4 CPUs the RTS starts 4 worker threads
+    if (max_wthreads < 4) {
+        std.log.err("max_wthreads must be at least 4", .{});
         std.process.exit(1);
     }
     // Validate here, before the collector's own option checks, so that the
@@ -467,6 +473,7 @@ pub fn build(b: *std.Build) void {
         print("Threads enabled\n", .{});
         flags.appendSlice(b.allocator, &.{
             "-DACTON_THREADS",
+            b.fmt("-DACTON_MAX_WTHREADS={d}", .{max_wthreads}),
         }) catch |err| {
             std.log.err("Error appending flags: {}", .{err});
             std.process.exit(1);

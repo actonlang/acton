@@ -3582,7 +3582,7 @@ int main(int argc, char **argv) {
     } else if (num_wthreads == -1 && num_cores >= MAX_WTHREADS) { // auto, more CPU cores than worker threads supported
         num_wthreads = MAX_WTHREADS - 1;
         cpu_pin = 1;
-        log_info("Detected %d CPUs: Using %" PRId64 " worker threads, the most supported.", num_cores, num_wthreads);
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads, the most supported (build option max_wthreads).", num_cores, num_wthreads);
     } else if (num_wthreads == -1) { // auto, many CPU cores, use 1 worker thread per CPU core
         num_wthreads = num_cores;
         cpu_pin = 1;
@@ -3590,6 +3590,7 @@ int main(int argc, char **argv) {
     } else if (num_wthreads >= MAX_WTHREADS) {
         fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS - 1);
         fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS - 1);
+        fprintf(stderr, "HINT: Or raise max_wthreads in build_options in Build.act and rebuild\n");
         exit(1);
     } else {
         cpu_pin = 0;

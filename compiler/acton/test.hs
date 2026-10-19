@@ -1922,6 +1922,7 @@ actonProjTests =
   , gcTuningBuildOptionTests
   , gcHeapGrowthBuildOptionTests
   , gcCollectorOptionTests
+  , maxWthreadsBuildOptionTests
 
   , testCase "simple project" $ do
         testBuild "" ExitSuccess False "test/project/simple"
@@ -2989,6 +2990,60 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 [show key ++ ": " ++ show value | (key, value) <- selected] ++ "}"
             ]
       action acton proj runEnv writeOptions
+
+maxWthreadsBuildOptionTests = testGroup "max_wthreads"
+  [ testCase "the limit caps the worker threads" $
+      withFixture $ \build run writeOptions -> do
+        writeOptions "4"
+        expectSuccess "build with max_wthreads 4" =<< build
+        -- The RTS starts at least 4 worker threads, and the limit allows at
+        -- most 4, so there are 4 whatever the number of CPUs
+        result@(_, out, _) <- run []
+        expectSuccess "automatic worker count" result
+        assertEqual "worker threads and the sum of the replies" "4 5050\n" out
+        expectSuccess "four worker threads" =<< run ["--rts-wthreads", "4"]
+        (code, _, err) <- run ["--rts-wthreads", "5"]
+        assertEqual ("five worker threads are refused\n" ++ err) (ExitFailure 1) code
+        assertBool ("the error names the limit\n" ++ err)
+          ("Maximum of 4 worker threads supported" `isInfixOf` err)
+  , testCase "invalid values fail clearly" $
+      withFixture $ \build _ writeOptions ->
+        forM_ ["3", "65536", "invalid"] $ \value -> do
+          writeOptions value
+          (code, out, err) <- build
+          assertBool ("invalid value should fail: " ++ value ++ "\n" ++ out ++ err)
+            (code /= ExitSuccess)
+          assertBool ("diagnostic should name max_wthreads\n" ++ out ++ err)
+            ("max_wthreads" `isInfixOf` (out ++ err))
+  ]
+  where
+    expectSuccess label (code, out, err) =
+      assertEqual (label ++ "\nstdout:\n" ++ out ++ "\nstderr:\n" ++ err) ExitSuccess code
+    -- The application depends on a package whose code creates an actor, so
+    -- the option must reach the dependency too
+    withFixture action = withSystemTempDirectory "acton-max-wthreads" $ \tmp -> do
+      acton <- canonicalizePath "../../dist/bin/acton"
+      let app = tmp </> "app"
+          shared = tmp </> "shared"
+          fingerprint name = Fingerprint.formatFingerprint
+            (Fingerprint.updateFingerprintPrefix (Fingerprint.fingerprintPrefixForName name) 1)
+          writeProject dir name rest = writeFile (dir </> "Build.act") $ unlines $
+            [ "name = " ++ show name
+            , "fingerprint = " ++ fingerprint name
+            ] ++ rest
+          writeOptions value = writeProject app "app"
+            [ "dependencies = {\"shared\": (path=\"../shared\")}"
+            , "build_options = {\"max_wthreads\": " ++ show value ++ "}"
+            ]
+          build = readCreateProcessWithExitCode
+            (proc acton ["build", "--color", "never"]) { cwd = Just app } ""
+          run args = readCreateProcessWithExitCode
+            (proc (app </> "out/bin/main") args) { cwd = Just app } ""
+      forM_ [app, shared] $ \dir -> createDirectoryIfMissing True (dir </> "src")
+      copyFile "test/project/max_wthreads/src/main.act" (app </> "src/main.act")
+      copyFile "test/project/max_wthreads/src/shared.act" (shared </> "src/lib.act")
+      writeProject shared "shared" []
+      action build run writeOptions
 
 dependencyDeclarationTests =
   testGroup "dependency declarations"

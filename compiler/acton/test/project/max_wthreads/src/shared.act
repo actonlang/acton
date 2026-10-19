@@ -1,0 +1,9 @@
+# The test copies this to the lib module of a dependency, so that the
+# dependency's own code creates an actor
+
+actor Counter():
+    var count = 0
+
+    def add(n: int) -> int:
+        count += n
+        return count
