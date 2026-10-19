@@ -17,8 +17,8 @@ historical: in DBP output it is a selection-sensitive generated-code hash, not
 just the raw module implementation hash.
 
 File builds put generated closure implementations, global initialization chunks,
-and method-table initialization in `out/types/<module-directory>/generated/<module>.inc`.
-The corresponding module `.c` includes that fragment in the same translation
+and method-table initialization in `<module>.closures.inc`, next to the module's
+`.c` in `out/types`. The `.c` includes that fragment in the same translation
 unit, after its ordinary definitions. This keeps declarations, external C
 extensions, source line directives, and initialization dependencies intact.
 `--cgen` continues to show a complete listing without an external fragment.

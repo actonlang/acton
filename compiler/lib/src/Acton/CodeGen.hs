@@ -46,13 +46,10 @@ generate env srcbase srcText emitLines m hash = do
     (n,h,c,_) <- generateCode False env srcbase srcText emitLines m hash
     return (n,h,c)
 
-supportFile outbase                 = takeDirectory outbase </> "generated" </> takeFileName outbase <.> "inc"
-
--- Recover ownership for pruning; other .inc files are not generated artifacts.
-supportOwner path
-  | takeExtension path == ".inc", takeFileName (takeDirectory path) == "generated"
-                                    = Just (takeDirectory (takeDirectory path) </> dropExtension (takeFileName path))
-  | otherwise                       = Nothing
+-- A file build's support fragment sits next to the module's .c, which includes
+-- it.
+supportFile                         :: FilePath -> FilePath
+supportFile outbase                 = outbase ++ ".closures.inc"
 
 -- File builds keep mechanical support in an included fragment; diagnostics and
 -- golden tests request a complete listing with split=False.
@@ -673,7 +670,7 @@ cModuleParts split env srcbase srcText emitLines (Module m imps _ stmts)
                                       ext_include $+$
                                       (if split then empty else adapterDocs) $+$
                                       declModuleSelect (\d -> not split || not (closureDecl d)) True envWithLine stmts $+$
-                                      (if split then text "#include" <+> doubleQuotes (text (joinPath ["generated",last (modPath m) ++ ".inc"]))
+                                      (if split then text "#include" <+> doubleQuotes (text (supportFile (last (modPath m))))
                                                 else globalChunkDefs) $+$
                                       text "int" <+> genTopName env initFlag <+> equals <+> text "0" <> semi $+$
                                       (text "void" <+> genTopName env initKW <+> parens empty <+> char '{') $+$

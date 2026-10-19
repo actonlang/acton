@@ -657,7 +657,7 @@ compilerTests =
             runBuild ["build", "--skip-build", "--verbose", "--color", "never"]
           assertBool "same selection should reuse cached consumer" ("Fresh main: using cached .tydb" `isInfixOf` sameSelectionLog)
           assertBool "same selection should skip provider back passes" ("generated code up to date" `isInfixOf` sameSelectionLog)
-          let providerSupport = typesDir </> "generated" </> "provider.inc"
+          let providerSupport = typesDir </> "provider.closures.inc"
           supportBefore <- readFile providerSupport
           removeFile providerSupport
           _ <- assertOk "missing support fragment is regenerated" =<<
