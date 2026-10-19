@@ -182,8 +182,6 @@ module Acton.Compile
   , srcBase
   , getModPath
   , modNameToFilename
-  , modNameToString
-  , nameToString
   , addProjPrefix
   , dropProjPrefix
   , dropProjPrefixOrLib
@@ -207,7 +205,7 @@ import Prelude hiding (readFile, writeFile)
 import qualified Acton.Parser
 import Acton.Parser (CustomParseError, CustomParseException, ChunkScanError(..), ContextError, IndentationError)
 import qualified Acton.Syntax as A
-import qualified Data.Text.Short as TS
+import Acton.Syntax (modNameToString)
 import qualified Acton.NameInfo as I
 import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
@@ -5335,17 +5333,7 @@ collectDepTypePaths projDir overrides = do
 -- | Convert a module name to its source filename (path + .act).
 -- This is used for diagnostics and display output.
 modNameToFilename :: A.ModName -> String
-modNameToFilename mn = joinPath (map nameToString names) ++ ".act"
-  where
-    A.ModName names = mn
-
--- | Render a module name as a dotted string (foo.bar.baz).
-modNameToString :: A.ModName -> String
-modNameToString (A.ModName names) = intercalate "." (map nameToString names)
-
--- | Render a name identifier to a plain string.
-nameToString :: A.Name -> String
-nameToString (A.Name _ s) = TS.toString s
+modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
 
 addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
   where proj                = projName paths

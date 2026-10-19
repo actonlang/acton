@@ -12,6 +12,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import Acton.Testing
 import Acton.Compile
 import qualified Acton.Syntax as A
+import Acton.Syntax (modNameToString)
 import qualified Acton.SourceProvider as Source
 import qualified InterfaceFiles
 import qualified FileUtil

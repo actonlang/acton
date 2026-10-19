@@ -192,6 +192,10 @@ modName ss      = ModName (map name ss)
 
 modPath (ModName ns) = map nstr ns
 
+-- | A module name as dotted text, such as foo.bar.baz.
+modNameToString :: ModName -> String
+modNameToString m = intercalate "." (modPath m)
+
 modCat (ModName ns) n = ModName (ns++[n])
 
 -- Components compare as their rendered text.

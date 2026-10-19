@@ -56,7 +56,7 @@ import qualified Data.HashSet as HashSet
 import Data.IORef (IORef, newIORef, readIORef, writeIORef, atomicModifyIORef')
 import Control.Concurrent.Async (mapConcurrently)
 import GHC.Conc (getNumCapabilities)
-import Data.List (foldl', intercalate, nub)
+import Data.List (foldl', nub)
 import qualified Data.List
 import qualified Data.Map as M
 import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
@@ -87,13 +87,9 @@ data NameHashInputs = NameHashInputs
 -- | Render a qualified name as a stable string key.
 qnameKey :: A.QName -> String
 qnameKey qn = case qn of
-  A.GName m n -> modNameToString m ++ "." ++ A.nstr n
-  A.QName m n -> modNameToString m ++ "." ++ A.nstr n
+  A.GName m n -> A.modNameToString m ++ "." ++ A.nstr n
+  A.QName m n -> A.modNameToString m ++ "." ++ A.nstr n
   A.NoQ n -> A.nstr n
-
--- | Render a module name as dot-separated text.
-modNameToString :: A.ModName -> String
-modNameToString m = intercalate "." (A.modPath m)
 
 -- | Extract hashable top-level items from a module.
 topLevelItems :: A.Module -> [TopLevelItem]

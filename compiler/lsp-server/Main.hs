@@ -517,11 +517,11 @@ finishProgressOnce finished progress msg = do
     progressEnd progress msg
 
 moduleLabel :: Compile.GlobalTask -> String
-moduleLabel task = Compile.modNameToString (Compile.tkMod (Compile.gtKey task))
+moduleLabel task = S.modNameToString (Compile.tkMod (Compile.gtKey task))
 
 backJobLabel :: Compile.BackJob -> String
 backJobLabel job =
-  Compile.modNameToString (S.modname (Compile.biTypedMod (Compile.bjInput job)))
+  S.modNameToString (S.modname (Compile.biTypedMod (Compile.bjInput job)))
 
 frontProgressMessage :: Compile.GlobalTask -> Compile.FrontPassProgress -> T.Text
 frontProgressMessage task p =

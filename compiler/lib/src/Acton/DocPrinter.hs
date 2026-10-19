@@ -3584,10 +3584,6 @@ docMethodSignatureHtmlWithGenericsAndClasses generics classNames vs (TSchema _ _
     text "<li class=\"type-context\"><code>" <> commaList vs <> text "</code>: <span class=\"type\">" <>
     text (renderTypeWithGenericsConstraintsAndClasses generics [] classNames t) <> text "</span></li>"
 
--- | Convert ModName to string representation
-modNameToString :: ModName -> String
-modNameToString (ModName names) = intercalate "." (map nstr names)
-
 -- | Generate HTML documentation index for a list of modules.
 -- The Bool marks whether a module page was generated.
 generateDocIndex :: FilePath -> [(ModName, Maybe String, Bool)] -> IO ()

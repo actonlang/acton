@@ -17,6 +17,7 @@ module Main where
 import Prelude hiding (readFile, writeFile)
 
 import qualified Acton.Syntax as A
+import Acton.Syntax (modNameToString)
 import qualified Acton.NameInfo as I
 import qualified Acton.Names
 import Text.Megaparsec.Error (ParseErrorBundle)
@@ -1286,7 +1287,7 @@ printSigInterface paths mn mName tyFile = do
             dropPrefix = dropProjPrefixOrLib paths
         case mName of
           Just n | null selected ->
-            printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ nameToString n)
+            printErrorAndExit ("Name not found: " ++ modNameToString mn ++ "." ++ A.nstr n)
           _ ->
             putStrLn (Acton.Types.prettySigs envForPrint mn (map dropPrefix imps) (Acton.Names.nmap dropPrefix selected))
 
@@ -2376,7 +2377,7 @@ removeUndeclaredRoots paths tasks bins = do
       hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
       return $ case hdrE of
         Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) ->
-          [ (nameToString n == "test_main", name t) | n <- rs ]
+          [ (A.nstr n == "test_main", name t) | n <- rs ]
         Left _ -> []
     -- Windows binaries end in .exe, and their debug info in .pdb.
     binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
