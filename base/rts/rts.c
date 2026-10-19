@@ -153,11 +153,8 @@ static const char *WT_State_name[] = {"poof", "work", "idle", "sleep"};
 
 #if defined(IS_MACOS)
 #include <sys/types.h>
-#include <sys/sysctl.h>
 #include <mach/mach_init.h>
 #include <mach/thread_policy.h>
-
-#define SYSCTL_CORE_COUNT   "machdep.cpu.core_count"
 
 typedef struct cpu_set {
   uint32_t    count;
@@ -171,23 +168,6 @@ CPU_SET(int num, cpu_set_t *cs) { cs->count |= (1 << num); }
 
 static inline int
 CPU_ISSET(int num, cpu_set_t *cs) { return (cs->count & (1 << num)); }
-
-int sched_getaffinity(pid_t pid, size_t cpu_size, cpu_set_t *cpu_set)
-{
-    int32_t core_count = 0;
-    size_t  len = sizeof(core_count);
-    int ret = sysctlbyname(SYSCTL_CORE_COUNT, &core_count, &len, 0, 0);
-    if (ret) {
-        fprintf(stderr, "error getting the core count %d\n", ret);
-        return -1;
-    }
-    cpu_set->count = 0;
-    for (int i = 0; i < core_count; i++) {
-        cpu_set->count |= (1 << i);
-    }
-
-    return 0;
-}
 
 kern_return_t thread_policy_set(
                     thread_t thread,
@@ -2322,7 +2302,7 @@ static bool park(int64_t w, volatile bool *searching) {
 
 void wt_work_cb(uv_check_t *ev) {
     WorkerCtx wctx = (WorkerCtx)ev->data;
-    assert(wctx->id >= 0 && wctx->id < 256);
+    assert(wctx->id >= 0 && wctx->id < MAX_WTHREADS);
     // This worker's entry in wt_stats. It is set before any setjmp and
     // never changes, so it keeps its value without volatile.
     struct wt_stat *ws = &wt_stats[wctx->id];
@@ -3593,21 +3573,24 @@ int main(int argc, char **argv) {
     }
 
 #ifdef ACTON_THREADS
-    if (num_wthreads >= MAX_WTHREADS) {
-        fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS - 1);
-        fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS - 1);
-        exit(1);
-    }
     // Determine number of worker threads, normally 1:1 per CPU thread / core
     // For low core count systems we do a minimum of 4 worker threads
     if (num_wthreads == -1 && num_cores < 4) { // auto, few CPU cores, so use 4 worker threads
         num_wthreads = 4;
         cpu_pin = 0;
         log_info("Detected %d CPUs: Using %" PRId64 " worker threads, due to low CPU count. No CPU affinity used.", num_cores, num_wthreads);
+    } else if (num_wthreads == -1 && num_cores >= MAX_WTHREADS) { // auto, more CPU cores than worker threads supported
+        num_wthreads = MAX_WTHREADS - 1;
+        cpu_pin = 1;
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads, the most supported.", num_cores, num_wthreads);
     } else if (num_wthreads == -1) { // auto, many CPU cores, use 1 worker thread per CPU core
         num_wthreads = num_cores;
         cpu_pin = 1;
-        log_info("Detected %d CPUs: Using %" PRId64 " worker threads for 1:1 mapping with CPU affinity set.", num_cores, num_wthreads);
+        log_info("Detected %d CPUs: Using %" PRId64 " worker threads, one per CPU.", num_cores, num_wthreads);
+    } else if (num_wthreads >= MAX_WTHREADS) {
+        fprintf(stderr, "ERROR: Maximum of %d worker threads supported.\n", MAX_WTHREADS - 1);
+        fprintf(stderr, "HINT: Run this program with fewer worker threads: %s --rts-wthreads %d\n", argv[0], MAX_WTHREADS - 1);
+        exit(1);
     } else {
         cpu_pin = 0;
         log_info("Detected %d CPUs: Using %" PRId64 " worker threads (manually set). No CPU affinity used.", num_cores, num_wthreads);
@@ -3866,16 +3849,10 @@ int main(int argc, char **argv) {
     pthread_t threads[MAX_WTHREADS];
     // Worker threads run through 0..num_wthreads where 0 is the main thread,
     // thus we need to start 1..num_wthreads. Only need to keep track of
-    // branches we start.
+    // branches we start. Worker threads get no CPU affinity: a process that
+    // a worker spawns inherits it, and zig then builds on a single CPU.
     for (int idx = 1; idx <= num_wthreads; idx++) {
         pthread_create(&threads[idx-1], &ss_attr, main_loop, (void*)(intptr_t)idx);
-        // Index start at 1 and we pin wthreads to CPU 1...n
-        // We use CPU 0 for misc threads, like IO / mon etc
-        if (cpu_pin) {
-            CPU_ZERO(&cpu_set);
-            CPU_SET(idx, &cpu_set);
-            //pthread_setaffinity_np(threads[idx-1], sizeof(cpu_set), &cpu_set);
-        }
     }
     sync_pause_workers_started();
 
