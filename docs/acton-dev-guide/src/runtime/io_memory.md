@@ -198,6 +198,12 @@ libuv/tlsuv functions. Cleanup bodies must be idempotent with explicit close
 (guard on the `-1` handle sentinel), detach backrefs, NULL the callback
 fields, and release owner references.
 
+The plain TCP actors differ: their handles are GC memory with `handle->data`
+pointing at the actor, and the loop keeps every open handle, so a connection
+that is reading keeps its actor alive and is never collected. Their
+`__cleanup__` only finds handles that do not point back, such as an accepted
+connection dropped before `cb_install()`.
+
 ### Pin actors to the loop that owns their handles
 
 libuv objects are single-threaded; every callback runs on the loop's worker

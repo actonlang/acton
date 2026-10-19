@@ -301,6 +301,9 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     Once connected, on_error reports read and write errors, such as a
     connection reset by the peer, after which the connection is closed.
     on_remote_close reports that the peer closed the connection.
+
+    An open connection keeps the actor alive, also when nothing else refers
+    to it, so that it can deliver data and events. Close it when done.
     """
     var _a_res: list[str] = []
     var _aaaa_res: list[str] = []
@@ -552,6 +555,9 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
     mut def __resume__() -> None:
         NotImplemented
 
+    action def __cleanup__() -> None:
+        NotImplemented
+
     action def ip_version() -> ?int:
         """IP version of the connection, None if not connected"""
         if _state != STATE_CONNECTED:
@@ -589,6 +595,10 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_
     installed with cb_install(). on_error reports read and write errors, such
     as a connection reset by the peer, after which the connection is closed.
     on_remote_close reports that the peer closed the connection.
+
+    Once callbacks are installed, an open connection keeps the actor alive,
+    also when nothing else refers to it. A connection that is dropped before
+    that is closed when the actor is garbage collected.
     """
     var client: int = -1
     var on_receive: ?action(TCPListenConnection, bytes) -> None = None
@@ -636,6 +646,9 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int, worker_
         """Local and remote address and port of the connection"""
         return (local_address=_local_address, local_port=_local_port, remote_address=_remote_address, remote_port=_remote_port)
 
+    action def __cleanup__() -> None:
+        NotImplemented
+
     mut def __resume__() -> None:
         NotImplemented
 
@@ -649,8 +662,10 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
 
     Listens on address and port, where port 0 picks a free port, see
     local_port(). on_listen is called with None once listening, or with an
-    error. Each accepted connection is passed to on_accept. close() stops
-    listening, connections already accepted stay open.
+    error. Each accepted connection is passed to on_accept.
+
+    A listening socket keeps the actor alive, also when nothing else refers
+    to it. close() stops listening, connections already accepted stay open.
     """
     var _stream = -1
     def create_tcp_listen_connection(cap: _TCPListenConnectCap, client: int, worker_id: int):
@@ -672,6 +687,9 @@ actor TCPListener(cap: TCPListenCap, address: str, port: int, on_listen: action(
 
     action def local_port() -> int:
         """Local port of the listening socket, 0 when closed"""
+        NotImplemented
+
+    action def __cleanup__() -> None:
         NotImplemented
 
     mut def __resume__() -> None:

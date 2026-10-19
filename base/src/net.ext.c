@@ -1136,6 +1136,15 @@ $R netQ_TCPConnectionD__abortG_local (netQ_TCPConnection self, $Cont c$cont) {
     return $R_CONT(c$cont, B_None);
 }
 
+$R netQ_TCPConnectionD___cleanup__G_local (netQ_TCPConnection self, $Cont c$cont) {
+    // An open connection refers to its actor through the loop, so this only
+    // finds sockets of attempts or connections that no longer do
+    tcp_close_attempt(&self->_sock4);
+    tcp_close_attempt(&self->_sock6);
+    tcp_close_attempt(&self->_sock);
+    return $R_CONT(c$cont, B_None);
+}
+
 void on_new_connection(uv_stream_t *server, int status) {
     netQ_TCPListener self = (netQ_TCPListener)server->data;
     if (self == NULL) {
@@ -1205,6 +1214,11 @@ static void tcp_listener_close(netQ_TCPListener self) {
 }
 
 $R netQ_TCPListenerD_closeG_local (netQ_TCPListener self, $Cont c$cont) {
+    tcp_listener_close(self);
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPListenerD___cleanup__G_local (netQ_TCPListener self, $Cont c$cont) {
     tcp_listener_close(self);
     return $R_CONT(c$cont, B_None);
 }
@@ -1348,24 +1362,29 @@ static void listen_conn_after_shutdown(uv_shutdown_t *req, int status) {
     tcp_close_handle((uv_handle_t *)req->handle);
 }
 
-$R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
-    log_debug("Closing TCP connection, affinity=%d", self->$affinity);
+static void tcp_listen_conn_close(netQ_TCPListenConnection self) {
     uv_stream_t *client = (uv_stream_t *)(intptr_t)self->client;
     // fd == -1 means invalid FD and can happen after __resume__ or if the socket was closed
     if ((intptr_t)client == -1)
-        return $R_CONT(c$cont, B_None);
+        return;
 
     self->client = -1LL;
     uv_read_stop(client);
+    client->data = NULL;
     if (uv_is_closing((uv_handle_t *)client))
-        return $R_CONT(c$cont, B_None);
+        return;
 
     uv_shutdown_t *req = (uv_shutdown_t *)acton_malloc(sizeof(uv_shutdown_t));
     int r = uv_shutdown(req, client, listen_conn_after_shutdown);
     if (r < 0) {
         log_debug("TCP listen connection shutdown failed, closing handle: %s", uv_strerror(r));
-        uv_close((uv_handle_t *)client, NULL);
+        tcp_close_handle((uv_handle_t *)client);
     }
+}
+
+$R netQ_TCPListenConnectionD_closeG_local (netQ_TCPListenConnection self, $Cont c$cont) {
+    log_debug("Closing TCP connection, affinity=%d", self->$affinity);
+    tcp_listen_conn_close(self);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -1377,6 +1396,16 @@ $R netQ_TCPListenConnectionD_abortG_local (netQ_TCPListenConnection self, $Cont 
         client->data = NULL;
         tcp_close_reset(client);
     }
+    return $R_CONT(c$cont, B_None);
+}
+
+$R netQ_TCPListenConnectionD___cleanup__G_local (netQ_TCPListenConnection self, $Cont c$cont) {
+    // Reading connections refer to their actor through the loop, so this
+    // only finds connections dropped before cb_install()
+    self->on_receive = NULL;
+    self->on_error = NULL;
+    self->on_remote_close = NULL;
+    tcp_listen_conn_close(self);
     return $R_CONT(c$cont, B_None);
 }
 
