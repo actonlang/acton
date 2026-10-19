@@ -40,7 +40,7 @@ extern int return_val;
 // Env /////////////////////////////////////////////////////////////////////////
 
 $R B_EnvD_stdout_writeG_local (B_Env self, $Cont c$cont, B_str s) {
-    printf("%s", s->str);
+    fwrite(s->str, 1, s->nbytes, stdout);
     return $R_CONT(c$cont, B_None);
 }
 

@@ -1,0 +1,4 @@
+# env.stdout_write writes a NUL in its string like any other char
+actor main(env):
+    env.stdout_write("a" + chr(0) + "b\n")
+    env.exit(0)
