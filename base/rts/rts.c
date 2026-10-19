@@ -1018,13 +1018,21 @@ $R $InitRootD___call__ ($Cont $this, $WORD val) {
     return ((ROOT__init__t)root_actor->$class->__init__)(root_actor, ($Cont)val, env_actor);
 }
 
+extern struct $ContG_class $InitRootG_methods;
+
+$Cont $InitRoot__deserialize__($Cont self, $Serial$state state) {
+  $Cont res = $DNEW($Cont,state);
+  res->$class = &$InitRootG_methods;
+  return res;
+}
+
 struct $ContG_class $InitRootG_methods = {
     "$InitRoot",
     UNASSIGNED,
     NULL,
     $ContD___init__,
     $ContD___serialize__,
-    $ContD___deserialize__,
+    $InitRoot__deserialize__,
     $ContD___bool__,
     $ContD___str__,
     $ContD___str__,
