@@ -756,8 +756,6 @@ void netQ_TCPConnection__on_receive(uv_stream_t *stream, ssize_t nread, const uv
         tcp_close_handle((uv_handle_t *)stream);
         if ((uv_stream_t *)(intptr_t)self->_sock == stream) {
             self->_sock = -1LL;
-            self->_sock4 = -1LL;
-            self->_sock6 = -1LL;
             self->_state = self->STATE_CLOSED;
         }
         if (nread == UV_EOF) {
@@ -780,63 +778,94 @@ $R netQ_TCPConnectionD__pin_affinityG_local (netQ_TCPConnection self, $Cont c$co
     return $R_CONT(c$cont, B_None);
 }
 
-void on_connect4(uv_connect_t *connect_req, int status) {
+static void tcp_connection_on_connect(uv_connect_t *connect_req, int status, int64_t family) {
     netQ_TCPConnection self = (netQ_TCPConnection)connect_req->data;
+    uv_stream_t *socket = connect_req->handle;
 
-    if (status != 0) {
-        char errmsg[1024] = "Error in TCP connect over IPv4: ";
-        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        self->$class->_on_tcp_error(self, 4LL, (int64_t)status, actStrFromCStringCopy(errmsg));
+    // The attempt was abandoned and its socket closed, by close() or by
+    // losing the Happy Eyeballs race
+    if (status == UV_ECANCELED) {
         return;
     }
-    self->$class->_on_connect4(self);
+    if (status != 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Error in TCP connect over IPv%lld: ", (long long)family);
+        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        tcp_close_handle((uv_handle_t *)socket);
+        self->$class->_on_tcp_error(self, family, (int64_t)(intptr_t)socket, (int64_t)status, actStrFromCStringCopy(errmsg));
+        return;
+    }
+    if (family == 4) {
+        self->$class->_on_connect4(self, (int64_t)(intptr_t)socket);
+    } else {
+        self->$class->_on_connect6(self, (int64_t)(intptr_t)socket);
+    }
+}
+
+void on_connect4(uv_connect_t *connect_req, int status) {
+    tcp_connection_on_connect(connect_req, status, 4);
 }
 
 void on_connect6(uv_connect_t *connect_req, int status) {
-    netQ_TCPConnection self = (netQ_TCPConnection)connect_req->data;
+    tcp_connection_on_connect(connect_req, status, 6);
+}
 
-    if (status != 0) {
-        char errmsg[1024] = "Error in TCP connect over IPv6: ";
-        uv_strerror_r(status, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
-        log_warn(errmsg);
-        self->$class->_on_tcp_error(self, 6LL, (int64_t)status, actStrFromCStringCopy(errmsg));
-        return;
+static void tcp_connection_connect(netQ_TCPConnection self, B_str ip_address, int64_t family) {
+    log_debug("TCP connecting over IPv%lld to %s", (long long)family, fromB_str(ip_address));
+    int64_t *sock = family == 4 ? &self->_sock4 : &self->_sock6;
+    *sock = -1LL;
+
+    uv_tcp_t *socket = NULL;
+    struct sockaddr_storage dest;
+    int r = make_sockaddr(ip_address, self->port, &dest);
+    if (r == 0) {
+        socket = (uv_tcp_t *)acton_malloc(sizeof(uv_tcp_t));
+        r = uv_tcp_init(get_uv_loop(), socket);
+        if (r != 0) {
+            socket = NULL;
+        }
     }
-    self->$class->_on_connect6(self);
+    if (r == 0) {
+        *sock = (int64_t)(intptr_t)socket;
+        uv_connect_t *connect_req = (uv_connect_t *)acton_malloc(sizeof(uv_connect_t));
+        connect_req->data = (void *)self;
+        r = uv_tcp_connect(connect_req, socket, (const struct sockaddr *)&dest, family == 4 ? on_connect4 : on_connect6);
+    }
+    if (r != 0) {
+        char errmsg[1024];
+        snprintf(errmsg, sizeof(errmsg), "Error in TCP connect over IPv%lld: ", (long long)family);
+        uv_strerror_r(r, errmsg + strlen(errmsg), sizeof(errmsg)-strlen(errmsg));
+        log_warn(errmsg);
+        if (socket != NULL) {
+            tcp_close_handle((uv_handle_t *)socket);
+        }
+        self->$class->_on_tcp_error(self, family, *sock, (int64_t)r, actStrFromCStringCopy(errmsg));
+    }
 }
 
 $R netQ_TCPConnectionD__connect4G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
-    log_debug("TCP connecting over IPv4 to %s", fromB_str(ip_address));
-    uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(get_uv_loop(), socket);
-    self->_sock4 = (int64_t)(intptr_t)socket;
-
-    uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
-    connect_req->data = (void *)self;
-
-    struct sockaddr_in dest;
-    uv_ip4_addr((const char *)fromB_str(ip_address), (int)self->port, &dest);
-
-    uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect4);
-
+    tcp_connection_connect(self, ip_address, 4);
     return $R_CONT(c$cont, B_None);
 }
 
 $R netQ_TCPConnectionD__connect6G_local (netQ_TCPConnection self, $Cont c$cont, B_str ip_address) {
-    log_debug("TCP connecting over IPv6 to %s", fromB_str(ip_address));
-    uv_tcp_t* socket = (uv_tcp_t*)acton_malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(get_uv_loop(), socket);
-    self->_sock6 = (int64_t)(intptr_t)socket;
+    tcp_connection_connect(self, ip_address, 6);
+    return $R_CONT(c$cont, B_None);
+}
 
-    uv_connect_t* connect_req = (uv_connect_t*)acton_malloc(sizeof(uv_connect_t));
-    connect_req->data = (void *)self;
+static void tcp_close_attempt(int64_t *sock) {
+    uv_handle_t *socket = (uv_handle_t *)(intptr_t)*sock;
+    *sock = -1LL;
+    if ((intptr_t)socket != -1) {
+        // A pending connect completes with UV_ECANCELED
+        tcp_close_handle(socket);
+    }
+}
 
-    struct sockaddr_in6 dest;
-    uv_ip6_addr((const char *)fromB_str(ip_address), (int)self->port, &dest);
-
-    uv_tcp_connect(connect_req, socket, (const struct sockaddr*)&dest, on_connect6);
-
+$R netQ_TCPConnectionD__close_attemptsG_local (netQ_TCPConnection self, $Cont c$cont) {
+    tcp_close_attempt(&self->_sock4);
+    tcp_close_attempt(&self->_sock6);
     return $R_CONT(c$cont, B_None);
 }
 
@@ -866,8 +895,6 @@ static void tcp_connection_write_failed(netQ_TCPConnection self, uv_stream_t *st
         return;
     }
     self->_sock = -1LL;
-    self->_sock4 = -1LL;
-    self->_sock6 = -1LL;
     self->_state = self->STATE_CLOSED;
     stream->data = NULL;
     tcp_close_handle((uv_handle_t *)stream);
@@ -904,6 +931,7 @@ B_NoneType netQ_TCPConnectionD___resume__ (netQ_TCPConnection self) {
     self->_sock = -1LL;
     self->_sock4 = -1LL;
     self->_sock6 = -1LL;
+    self->_state = self->STATE_CLOSED;
     $action2 f = ($action2)self->on_error;
     f->$class->__asyn__(f, self, actStrFromCString("resume"));
     return B_None;
@@ -924,11 +952,9 @@ static void after_shutdown(uv_shutdown_t* req, int status) {
     on_close->$class->__asyn__(on_close, cb_data->self);
 }
 
-$R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
+$R netQ_TCPConnectionD__closeG_local (netQ_TCPConnection self, $Cont c$cont, $action on_close) {
     uv_stream_t *stream = (uv_stream_t *)(intptr_t)self->_sock;
     self->_sock = -1LL;
-    self->_sock4 = -1LL;
-    self->_sock6 = -1LL;
     // fd == -1 means invalid FD and can happen after __resume__
     if ((intptr_t)stream == -1) {
         on_close->$class->__asyn__(on_close, self);
@@ -955,12 +981,9 @@ $R netQ_TCPConnectionD_closeG_local (netQ_TCPConnection self, $Cont c$cont, $act
     return $R_CONT(c$cont, B_None);
 }
 
-$R netQ_TCPConnectionD_abortG_local (netQ_TCPConnection self, $Cont c$cont) {
+$R netQ_TCPConnectionD__abortG_local (netQ_TCPConnection self, $Cont c$cont) {
     uv_tcp_t *socket = (uv_tcp_t *)(intptr_t)self->_sock;
     self->_sock = -1LL;
-    self->_sock4 = -1LL;
-    self->_sock6 = -1LL;
-    self->_state = self->STATE_CLOSED;
     if ((intptr_t)socket != -1) {
         log_debug("Resetting TCP connection");
         socket->data = NULL;
