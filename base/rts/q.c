@@ -362,7 +362,7 @@ static inline bool look_due(WorkerCtx wctx, int64_t now) {
 // since.
 $Actor DEQ_ready(WorkerCtx wctx, int64_t now) {
     int64_t idx = wctx->id;
-    assert(idx >= 0 && idx < 256);
+    assert(idx >= 0 && idx < MAX_WTHREADS);
     $Actor res = _DEQ_ready(idx);
     if (res)
         return res;
