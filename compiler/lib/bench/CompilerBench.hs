@@ -119,6 +119,7 @@ printFrontTiming ft =
             ++ " reconstruct " ++ fmtTime (Compile.ftTypeReconstruct ft)
             ++ " reconstruct_after_progress " ++ fmtTime (Compile.ftTypeAfterProgress ft)
             ++ " force " ++ fmtTime (Compile.ftTypeForce ft)
+            ++ " escape " ++ fmtTime (Compile.ftTypeEscape ft)
             ++ " hash " ++ fmtTime (Compile.ftTypeHash ft)
 
 printBackTiming :: Compile.BackTiming -> IO ()

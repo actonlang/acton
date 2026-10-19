@@ -506,24 +506,33 @@ heavyClassModule trees =
         branch = "branch_" ++ pad 5 n
         extra = "extra_" ++ pad 5 n
 
+-- | The escape summaries stored in a .tydb file, so that rewriting another
+-- part of the file keeps them.
+readTyEscapeSummaries :: FilePath -> IO InterfaceFiles.EscapeSummaries
+readTyEscapeSummaries tyPath =
+  InterfaceFiles.openInterfaceDB tyPath >>= InterfaceFiles.readInterfaceDBEscapeSummaries
+
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
 rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
   (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') escapeSummaries roots tests mdoc nmod tmod
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
 rewriteTySourceMeta tyPath sourceMeta' = do
   (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
 rewriteTyVersion tyPath version' = do
   (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
   nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' roots tests mdoc nmod tmod
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
@@ -984,7 +993,152 @@ p17_dep_impl_change = testCase "17-dependency impl change triggers back job" $ d
   assertBool "did not expect main to type check" (not (typechecked out2 modMain))
   assertBool "expected main to compile codegen" (compiled out2 modMain)
 
+p17b_dep_escape_change :: TestTree
+p17b_dep_escape_change = testCase "17b-dependency escape change rechecks Hashable.hash" $ do
+  let keepContent = T.unlines
+        [ "def keep(x: hasher) -> None:"
+        , "    pass"
+        ]
+      leakContent = T.unlines
+        [ "def keep(x: hasher) -> None:"
+        , "    f = lambda: x"
+        ]
+  ensureCasesProjectWithDeps [("libfoo", "deps/libfoo")]
+  depDir <- ensureDepProject casesProjDir "libfoo"
+  let depSrc = depDir </> "src" </> "lib.act"
+  writeFileUtf8 depSrc keepContent
+  writeFileUtf8 (casesSrcDir </> "main.act") $ T.unlines
+    [ "import libfoo.lib"
+    , ""
+    , "class Point(object):"
+    , "    x: int"
+    , ""
+    , "    def __init__(self, x: int):"
+    , "        self.x = x"
+    , ""
+    , "extension Point(Eq):"
+    , "    def __eq__(p1, p2):"
+    , "        return p1.x == p2.x"
+    , ""
+    , "extension Point(Hashable):"
+    , "    def hash(self, h):"
+    , "        libfoo.lib.keep(h)"
+    , "        self.x.hash(h)"
+    , ""
+    , "actor main(env: Env):"
+    , "    print(hash(Point(3)))"
+    , "    env.exit(0)"
+    ]
+  res1 <- runActonIn casesProjDir ["build", "--color", "never"]
+  assertExitSuccess "initial build" res1
+  -- Only the body changes, so the signature and the type-level public hash
+  -- stay the same, but keep's parameter now escapes.
+  writeFileUtf8 depSrc leakContent
+  (ec2, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--verbose"]
+  assertBool "expected the rebuild to fail" (ec2 /= ExitSuccess)
+  assertBool "expected the Hashable.hash contract error"
+    (T.isInfixOf "may let its hasher parameter 'h' escape" out2)
+  writeFileUtf8 depSrc keepContent
+  res3 <- runActonIn casesProjDir ["build", "--color", "never"]
+  assertExitSuccess "rebuild after restoring keep" res3
+
+p17c_refresh_keeps_escape :: TestTree
+p17c_refresh_keeps_escape = testCase "17c-impl refresh keeps escape summaries" $ do
+  let mainContent = T.unlines
+        [ "import u"
+        , ""
+        , "class Point(object):"
+        , "    x: int"
+        , ""
+        , "    def __init__(self, x: int):"
+        , "        self.x = x"
+        , ""
+        , "extension Point(Eq):"
+        , "    def __eq__(p1, p2):"
+        , "        return p1.x == p2.x"
+        , ""
+        , "extension Point(Hashable):"
+        , "    def hash(self, h):"
+        , "        u.helper(h)"
+        , "        self.x.hash(h)"
+        , ""
+        , "actor main(env: Env):"
+        , "    print(hash(Point(u.g())))"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProjectWithDeps []
+  writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
+    [ "def f() -> int:"
+    , "    return 1"
+    ]
+  writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
+    [ "import v"
+    , ""
+    , "def helper(x: hasher) -> None:"
+    , "    pass"
+    , ""
+    , "def g() -> int:"
+    , "    return v.f()"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") mainContent
+  res1 <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp"]
+  assertExitSuccess "initial build" res1
+  -- An impl-only change in v gives u an eager impl refresh (no deferred back
+  -- job with --no-dbp). Editing main makes main run its front pass in the
+  -- same build, against the ModuleInfo that the refresh produced for u.
+  writeFileUtf8 (casesSrcDir </> "v.act") $ T.unlines
+    [ "def f() -> int:"
+    , "    return 2"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") (mainContent <> "# edited\n")
+  res2@(_, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp", "--verbose"]
+  assertExitSuccess "rebuild after the impl change" res2
+  assertBool "expected an impl refresh of u" (T.isInfixOf "impl changes in" out2)
+
 -- Incremental/hash case coverage --------------------------------------------
+
+p17d_codegen_refresh_keeps_escape :: TestTree
+p17d_codegen_refresh_keeps_escape = testCase "17d-codegen refresh keeps escape summaries" $ do
+  let uC = casesProjDir </> "out" </> "types" </> "incremental_cases" </> "u.c"
+      mainContent = T.unlines
+        [ "import u"
+        , ""
+        , "class Point(object):"
+        , "    x: int"
+        , ""
+        , "    def __init__(self, x: int):"
+        , "        self.x = x"
+        , ""
+        , "extension Point(Eq):"
+        , "    def __eq__(p1, p2):"
+        , "        return p1.x == p2.x"
+        , ""
+        , "extension Point(Hashable):"
+        , "    def hash(self, h):"
+        , "        u.helper(h)"
+        , "        self.x.hash(h)"
+        , ""
+        , "actor main(env: Env):"
+        , "    print(hash(Point(3)))"
+        , "    env.exit(0)"
+        ]
+  ensureCasesProjectWithDeps []
+  writeFileUtf8 (casesSrcDir </> "u.act") $ T.unlines
+    [ "def helper(x: hasher) -> None:"
+    , "    pass"
+    ]
+  writeFileUtf8 (casesSrcDir </> "main.act") mainContent
+  res1 <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp"]
+  assertExitSuccess "initial build" res1
+  -- A stale hash line in u.c gives u an eager codegen refresh (no deferred
+  -- back job with --no-dbp). Editing main makes main run its front pass in
+  -- the same build, against the ModuleInfo that the refresh produced for u.
+  rewriteFirstLine uC "/* Acton impl hash: deadbeef */"
+  writeFileUtf8 (casesSrcDir </> "main.act") (mainContent <> "# edited\n")
+  res2@(_, out2) <- runActonIn casesProjDir ["build", "--color", "never", "--no-dbp", "--verbose"]
+  assertExitSuccess "rebuild after the codegen hash change" res2
+  assertBool "expected a codegen refresh of u" (T.isInfixOf "generated code out of date" out2)
+
 
 p18_type_only_deps :: TestTree
 p18_type_only_deps = testCase "18-type-only deps in signatures" $ do
@@ -2967,6 +3121,9 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , p15_rebuild_import
       , p16_dep_api_change
       , p17_dep_impl_change
+      , p17b_dep_escape_change
+      , p17c_refresh_keeps_escape
+      , p17d_codegen_refresh_keeps_escape
       , p18_type_only_deps
       , p19_unused_import
       , p20_add_remove_names

@@ -217,6 +217,7 @@ import Text.Megaparsec.Error (ParseErrorBundle)
 import qualified Acton.CommandLineParser as C
 import Acton.Printer ()
 import qualified Acton.Env
+import qualified Acton.EscapeAnalysis
 import qualified Acton.TypeEnv
 import Acton.Env (simp, define, setMod)
 import qualified Acton.Hashing as Hashing
@@ -420,6 +421,7 @@ data FrontTiming = FrontTiming
   , ftTypeReconstruct :: TimeSpec
   , ftTypeAfterProgress :: TimeSpec
   , ftTypeForce :: TimeSpec
+  , ftTypeEscape :: TimeSpec
   , ftTypeHash :: TimeSpec
   , ftTypeStmtTimings :: [TypeStmtTiming]
   } deriving (Eq, Show)
@@ -882,6 +884,7 @@ defaultCompileOptions =
     , C.parse_ast = False
     , C.kinds = False
     , C.types = False
+    , C.escape_analysis = False
     , C.sigs = False
     , C.norm = False
     , C.deact = False
@@ -1284,6 +1287,16 @@ data FrontResult = FrontResult
 frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
 frontResultModuleInfo mn fr =
     fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
+
+-- | The ModuleInfo of a module whose result is rebuilt from its .tydb
+-- without a front pass, carrying the escape summaries stored there.
+-- Modules checked later in the same build read them for their
+-- Hashable.hash contracts.
+storedEscapeModuleInfo :: FilePath -> A.ModName -> [A.ModName] -> [(A.Name, I.NameInfo)] -> Maybe String -> IO Acton.Env.ModuleInfo
+storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc = do
+  summaries <- InterfaceFiles.openInterfaceDB tyFile >>= InterfaceFiles.readInterfaceDBEscapeSummaries
+  evaluate (rnf summaries)
+  return $ Acton.Env.withEscapeSummaries summaries (Acton.Env.mkModuleInfo mn imps ifaceTE mdoc)
 
 type InterestMap = M.Map A.ModName (Data.Set.Set A.Name)
 
@@ -2562,6 +2575,61 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
       timeTypeForce <- getTime Monotonic
+      -- Escape summaries are part of the internal compilation interface.  In
+      -- particular, every Hashable.hash implementation is checked here before
+      -- B_hash may pass it an automatically allocated hasher.  The command
+      -- line flag controls only the diagnostic dump.
+      let importedEscapeSummary qn = do
+            (m,n) <- resolveImportedName qn
+            mi <- Acton.Env.lookupModuleInfo m env
+            stored <- Acton.Env.moduleEscapeSummary mi [n]
+            return [ (pn, if mayEscape then Acton.EscapeAnalysis.MayEscape else Acton.EscapeAnalysis.NoEscape)
+                   | (pn,mayEscape) <- stored ]
+          resolveImportedName (A.GName m n) = Just (m,n)
+          resolveImportedName (A.QName m n) = Just (m,n)
+          resolveImportedName (A.NoQ n) =
+            case Acton.Env.lookupName n env of
+              Just (I.NAlias qn') -> resolveImportedName qn'
+              _ -> Nothing
+          escapeReport = Acton.EscapeAnalysis.analyzeModuleWithImports importedEscapeSummary tchecked
+          escapeSummaries = Acton.EscapeAnalysis.interfaceSummaries escapeReport
+      -- Run the analysis to completion for every function of every module,
+      -- here rather than in whatever later reads a result, such as the
+      -- interface write.  The analysis evaluates each function's summary in
+      -- full as part of producing the list.
+      evaluate (length (Acton.EscapeAnalysis.reportFunctions escapeReport))
+      evaluate (rnf escapeSummaries)
+      when (C.escape_analysis opts && isRoot) $
+        dump mn "escape-analysis" (Acton.EscapeAnalysis.renderEscapeReport escapeReport)
+      case Acton.EscapeAnalysis.reportContractViolations escapeReport of
+        [] -> return ()
+        ((fid@(Acton.EscapeAnalysis.FunctionId path), parameter):_) ->
+          let directReasons =
+                [ reason
+                | (fid', parameters) <- Acton.EscapeAnalysis.reportFunctions escapeReport
+                , fid' == fid
+                , summary <- parameters
+                , Acton.EscapeAnalysis.parameterName summary == parameter
+                , reason <- Acton.EscapeAnalysis.parameterDirectUses summary
+                ]
+              reasonLoc reason = case reason of
+                Acton.EscapeAnalysis.Returned l -> l
+                Acton.EscapeAnalysis.Stored l -> l
+                Acton.EscapeAnalysis.Raised l -> l
+                Acton.EscapeAnalysis.Yielded l -> l
+                Acton.EscapeAnalysis.Captured l -> l
+                Acton.EscapeAnalysis.Asynchronous l -> l
+                Acton.EscapeAnalysis.ImportedCall l -> l
+                Acton.EscapeAnalysis.UnknownCall l -> l
+                Acton.EscapeAnalysis.UnavailableBody l -> l
+              errorLoc = case [ l | reason <- directReasons, let l = reasonLoc reason, l /= NoLoc ] of
+                l:_ -> l
+                [] -> loc parameter
+          in Acton.Env.err errorLoc $
+            "Hashable.hash implementation " ++ intercalate "." (map A.nstr path) ++
+            " may let its hasher parameter '" ++ A.nstr parameter ++
+            "' escape; Hashable.hash must consume the hasher only during the call"
+      timeTypeEscape <- getTime Monotonic
       -- Store roots so later builds can discover entry points without reparse.
       let I.NModule imps fullIface mdoc = nmod
           publicIface = publicIfaceTE fullIface
@@ -2628,6 +2696,18 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
               (hashProgress afterImplHashes)
               nameInfoMap
           evaluate (rnf selfPubHashes)
+          -- Importers rely on a top-level function's escape summary when they
+          -- check their own Hashable.hash implementations, so the summary is
+          -- part of that function's public interface.  Folding it into the
+          -- name's public hash turns a summary change into a public delta for
+          -- exactly the dependents that use the name.
+          let escapeBits = M.fromList
+                [ (n, B.pack [ if mayEscape then '1' else '0' | (_, mayEscape) <- ps ])
+                | ([n], ps) <- escapeSummaries ]
+              selfPubHashesEsc = M.mapWithKey
+                (\n h -> maybe h (\bits -> SHA256.hash (h <> B.pack "escape:" <> bits)) (M.lookup n escapeBits))
+                selfPubHashes
+          evaluate (rnf selfPubHashesEsc)
           -- Split deps into local (same module) vs external (qualified) names.
           (pubSigLocalDeps, pubSigExtDeps) <-
             Hashing.pubSigSplitDepsFromNameInfoMapWithProgress
@@ -2664,7 +2744,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                   -- The pub and impl passes are independent, and so are the
                   -- module hashes and the assembly that both use them.
                   (pubHashes, implHashes) <- concurrently
-                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashes pubSigLocalDeps pubSigExtHashes)))
+                    (evaluate (force (Hashing.computeHashesSortedDeps selfPubHashesEsc pubSigLocalDeps pubSigExtHashes)))
                     (evaluate (force (Hashing.computeHashesSortedDeps nameImplHashes implLocalDeps implExtHashes)))
                   let nameHashes0 =
                         Hashing.assembleNameHashes
@@ -2694,7 +2774,7 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           (\p -> onFrontOutputProgress outputKey FrontOutputTydb (frontOutputTyDbProgress p))
                           A.version
                           (tyDbPath paths mn)
-                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes roots tests mdoc nmod tchecked
+                          moduleSrcBytesHash modulePubHash moduleImplHash sourceMeta impsWithHash depModules nameHashes escapeSummaries roots tests mdoc nmod tchecked
                       writeDoc = do
                         let docDir = joinPath [projPath paths, "out", "doc"]
                             modPathList = A.modPath mn
@@ -2739,7 +2819,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeReconstruct = timeTypeReconstruct - timeKindsCheck
                                  , ftTypeAfterProgress = typeAfterProgress
                                  , ftTypeForce = timeTypeForce - timeTypeReconstruct
-                                 , ftTypeHash = timeTypeHash - timeTypeForce
+                                 , ftTypeEscape = timeTypeEscape - timeTypeForce
+                                 , ftTypeHash = timeTypeHash - timeTypeEscape
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
@@ -2784,7 +2865,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                         return $ Right FrontResult { frIfaceTE = publicIface
                                                    , frImps = imps
                                                    , frDoc = mdoc
-                                                   , frModuleInfo = Nothing
+                                                   , frModuleInfo = Just $ Acton.Env.withEscapeSummaries escapeSummaries $
+                                                              Acton.Env.mkModuleInfo mn imps publicIface mdoc
                                                    , frPubHash = modulePubHash
                                                    , frImplHash = moduleImplHash
                                                    , frNameHashes = publicNameHashes nameHashes
@@ -3230,7 +3312,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     ((compileMain >>= finishWithFrontOutputs) `finally` cancelRunning) `finally` waitFrontOutputsOnExit
   where
     continue frontOutputRef runningRef = do
-      baseEnv <- Acton.Env.initEnv builtinPath False
+      baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
 
       costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
                     let mn = name (gtTask t)
@@ -4118,8 +4200,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                       let I.NModule imps ifaceFull _mdoc = nmod
                                                           ifaceTE = publicIfaceTE ifaceFull
                                                           backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                                          fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
-                                                            { frOutputJobs = outputJobs }
+                                                      moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
+                                                      let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                            { frOutputJobs = outputJobs
+                                                            , frModuleInfo = Just moduleInfo
+                                                            }
                                                       cacheFrontResult fr
                         _ -> rerunFront
                       ) `catch` handleImplRefreshException
@@ -4142,8 +4227,11 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                               case deferredBackJob of
                                 Just _ -> Nothing
                                 Nothing -> Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHashStored)
-                            fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
-                                   { frInterestDeps = interestDeps }
+                        moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
+                        let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHashStored (publicNameHashes nameHashes) nameHashes backJob deferredBackJob)
+                                   { frInterestDeps = interestDeps
+                                   , frModuleInfo = Just moduleInfo
+                                   }
                         cacheFrontResult fr
                   runReuse = do
                     --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
@@ -5476,7 +5564,7 @@ rootEligible _ = False
 -- Used to suppress normal timing/output when dumping parse/sigs/cgen, etc.
 altOutput :: C.CompileOptions -> Bool
 altOutput opts =
-  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
+  (C.parse opts) || (C.parse_ast opts) || (C.kinds opts) || (C.types opts) || (C.escape_analysis opts) || (C.sigs opts) || (C.norm opts) || (C.deact opts) || (C.cps opts) || (C.llift opts) || (C.box opts) || (C.hgen opts) || (C.cgen opts)
 
 -- | Read a UTF-8 text file with explicit encoding.
 -- Keeps compiler IO consistent across platforms.
