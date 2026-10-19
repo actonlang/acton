@@ -2997,6 +2997,7 @@ main = do
 
     describe "Pass 7: Lambda Lifting" $ do
       testLL env0 ["deact"]
+      testLL env0 ["action_proc_param"]
 
     describe "Pass 8: Boxing" $ do
       testBoxing env0 ["deact"]

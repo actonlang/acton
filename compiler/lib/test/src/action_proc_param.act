@@ -1,0 +1,47 @@
+# Calls of a proc-typed parameter, which may be bound to an action. CPS turns
+# each call into a tail call with a continuation, and the lambda lifter calls
+# the closure through __call__ or __exec__. The result is used in assign, tail
+# and mutate, and discarded in discard, discard_last, discard_live,
+# discard_bang, discard_cond and discard_none. In discard_live, z is live after
+# the if statement, so the continuation of the call is a lambda that passes z
+# on. In discard_none the discarded result is None.
+
+class Box(object):
+    def __init__(self):
+        self.v = 0.0
+
+def assign(f: proc(int) -> float, x: int) -> float:
+    r = f(x)
+    return r + 0.25
+
+def tail(f: proc(int) -> float, x: int) -> float:
+    return f(x)
+
+def mutate(f: proc(int) -> float, b: Box, x: int) -> None:
+    b.v = f(x)
+
+def discard(f: proc(int) -> float, x: int) -> None:
+    f(x)
+    print("sent")
+
+def discard_last(f: proc(int) -> float, x: int, flag: bool) -> None:
+    if flag:
+        f(x)
+
+def discard_live(f: proc(int) -> float, x: int, flag: bool) -> int:
+    if flag:
+        z = 7
+        f(x)
+    else:
+        z = 2
+    return z
+
+def discard_bang(f: ?proc(int) -> float, x: int) -> None:
+    f!(x)
+
+def discard_cond(f: proc(int) -> float, x: int, flag: bool) -> None:
+    f(x) if flag else f(x + 1)
+
+def discard_none(g: proc(int) -> None, x: int, flag: bool) -> None:
+    if flag:
+        g(x)
