@@ -126,7 +126,7 @@ actor Tester(env, verbose, port_chunk):
     # Tests go here
     def test_ddb_app():
         dbc_start()
-        cmd = ["rts_db/ddb_test_app", "--rts-verbose"] + db_args(port_chunk, 3)
+        cmd = ["rts_db/ddb_test_app", "--rts-debug"] + db_args(port_chunk, 3)
         p = process.Process(process_cap, cmd, on_stdout, on_stderr, app_on_exit, on_error)
         p_alive += 1
         paid = p.aid()

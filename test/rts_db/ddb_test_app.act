@@ -7,6 +7,12 @@
 
 
 actor Foo(cb_method):
+    # 2160 bytes of ASCII. test_db_app runs this app with --rts-debug, which
+    # logs every DB row the RTS writes as text. Each word of the row that holds
+    # this value prints as 19 digits, so its text is far longer than the
+    # 1024-byte buffer the RTS formats it in.
+    data = b"acton-db-row-text-" * 120
+
     def callback():
         print("Calling cb_method()")
         cb_method()
