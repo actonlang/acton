@@ -252,7 +252,12 @@ actor UDPListener(cap: UDPListenCap, address: str, port: int, on_listen: action(
 
 
 actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: action(TCPConnection) -> None, on_receive: action(TCPConnection, bytes) -> None, on_error: action(TCPConnection, str) -> None, on_remote_close: ?action(TCPConnection) -> None=None, connect_timeout: float=10.0):
-    """TCP IP Connection"""
+    """TCP IP Connection
+
+    Once connected, on_error reports read and write errors, such as a
+    connection reset by the peer, after which the connection is closed.
+    on_remote_close reports that the peer closed the connection.
+    """
     var _a_res: list[str] = []
     var _aaaa_res: list[str] = []
     var _sock = -1
@@ -383,6 +388,14 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
         """Close the connection"""
         NotImplemented
 
+    action def abort() -> None:
+        """Close the connection with a TCP reset (RST)
+
+        Unsent data is discarded and the peer sees the connection reset
+        instead of an orderly close.
+        """
+        NotImplemented
+
     def _connect_timeout():
         if _state == STATE_CONNECTING:
             _state = STATE_CLOSED
@@ -433,7 +446,13 @@ actor TCPConnection(cap: TCPConnectCap, address: str, port: int, on_connect: act
 
 
 actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
-    """TCP Listener Connection"""
+    """TCP Listener Connection
+
+    A connection accepted by a TCPListener. Reading starts once callbacks are
+    installed with cb_install(). on_error reports read and write errors, such
+    as a connection reset by the peer, after which the connection is closed.
+    on_remote_close reports that the peer closed the connection.
+    """
     var client: int = -1
     var on_receive: ?action(TCPListenConnection, bytes) -> None = None
     var on_error: ?action(TCPListenConnection, str) -> None = None
@@ -455,6 +474,14 @@ actor TCPListenConnection(cap: _TCPListenConnectCap, server_client: int):
 
     action def close() -> None:
         """Close connection"""
+        NotImplemented
+
+    action def abort() -> None:
+        """Close the connection with a TCP reset (RST)
+
+        Unsent data is discarded and the peer sees the connection reset
+        instead of an orderly close.
+        """
         NotImplemented
 
     action def write(data: bytes) -> None:
