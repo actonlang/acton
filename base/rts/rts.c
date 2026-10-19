@@ -286,8 +286,7 @@ static time_t wall_offset_us(void) {
 }
 
 #ifdef ACTON_THREADS
-pthread_key_t self_key;
-pthread_key_t pkey_wctx;
+_Thread_local WorkerCtx thread_wctx;
 
 pthread_mutex_t rts_exit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rts_exit_signal = PTHREAD_COND_INITIALIZER;
@@ -305,14 +304,14 @@ int get_wtid() {
 }
 
 void pin_actor_affinity() {
-    $Actor a = ($Actor)pthread_getspecific(self_key);
+    $Actor a = GET_SELF();
     int64_t i = get_wctx()->id;
     log_debug("Pinning affinity for %s actor %" PRId64 " to current WT %" PRId64, a->$class->$GCINFO, a->$globkey, i);
     a->$affinity = i;
 }
 
 void set_actor_affinity(int wthread_id) {
-    $Actor a = ($Actor)pthread_getspecific(self_key);
+    $Actor a = GET_SELF();
     log_debug("Setting affinity for %s actor %" PRId64 " to WT %d", a->$class->$GCINFO, a->$globkey, wthread_id);
     a->$affinity = wthread_id;
 }
@@ -2614,12 +2613,13 @@ void *main_loop(void *idx) {
     wctx->id = (intptr_t)idx;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
+    wctx->actor = NULL;
     start_worker_keys(wctx);
     wctx->inject_due = 0;
     wctx->steal_seed = 2654435761u * (uint32_t)(wctx->id + 1);
     wctx->balance_next = 0;
 #ifdef ACTON_THREADS
-    pthread_setspecific(pkey_wctx, (void *)wctx);
+    thread_wctx = wctx;
 #endif
 
     char tname[11]; // Enough for "Worker XXX\0"
@@ -3379,11 +3379,7 @@ int main(int argc, char **argv) {
     }
 #endif
 
-#ifdef ACTON_THREADS
-    pthread_key_create(&self_key, NULL);
-    pthread_setspecific(self_key, NULL);
-    pthread_key_create(&pkey_wctx, NULL);
-#else
+#ifndef ACTON_THREADS
     self_actor = NULL;
 #endif
 
@@ -3738,8 +3734,9 @@ int main(int argc, char **argv) {
     wctx->id = 0;
     wctx->uv_loop = uv_loops[wctx->id];
     wctx->jump_top = NULL;
+    wctx->actor = NULL;
 #ifdef ACTON_THREADS
-    pthread_setspecific(pkey_wctx, (void *)wctx);
+    thread_wctx = wctx;
 #endif
     start_keys(FIRST_KEY);
 

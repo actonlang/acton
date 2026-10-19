@@ -132,19 +132,19 @@ struct B_Msg;
 struct $ConstCont;
 
 #ifdef ACTON_THREADS
-extern pthread_key_t pkey_wctx;
-extern pthread_key_t pkey_uv_loop;
-
-extern pthread_key_t self_key;
 extern pthread_mutex_t sleep_lock;
 extern pthread_cond_t work_to_do;
 
-#define GET_WCTX() (WorkerCtx)pthread_getspecific(pkey_wctx)
+#define GET_WCTX() thread_wctx
 #else
 #define GET_WCTX() wctxs[0]
 #endif
 
+#ifndef ACTON_THREADS
+// The actor whose continuation the program is running, or NULL when it runs
+// none
 extern $Actor self_actor;
+#endif
 
 typedef struct B_Msg *B_Msg;
 typedef struct $ConstCont *$ConstCont;
@@ -284,13 +284,12 @@ void serialize_state_shortcut($Actor);
 #define $InstallFinalizer(act, fn) GC_register_finalizer(act, fn, NULL, NULL, NULL)
 
 #ifdef ACTON_THREADS
-#define GET_SELF() ($Actor)pthread_getspecific(self_key)
-#define SET_SELF(a) pthread_setspecific(self_key, (void *)a)
-#define GET_WTID() (int)pthread_getspecific(pkey_wtid);
+// A thread that is not a worker runs no continuation
+#define GET_SELF() (thread_wctx ? thread_wctx->actor : NULL)
+#define SET_SELF(a) thread_wctx->actor = a
 #else
 #define GET_SELF() self_actor
 #define SET_SELF(a) self_actor = a
-#define GET_WTID() 0
 #endif
 
 $R $PUSH_C($Cont);
@@ -301,13 +300,18 @@ void $DROP_C();
 
 struct WorkerCtx;
 typedef struct WorkerCtx *WorkerCtx;
-// A worker writes its context for every new message and actor, and whenever
-// it enters or leaves a try block, so no two contexts share a cache line (see
-// struct mpmcq).
+// A worker writes its context for every continuation, new message and actor,
+// and whenever it enters or leaves a try block, so no two contexts share a
+// cache line (see struct mpmcq).
 struct WorkerCtx {
     int64_t id;
     uv_loop_t *uv_loop;
     volatile JumpBuf jump_top;
+    // The actor whose continuation this worker is running, or NULL when it
+    // runs none. It is not a thread-local of its own: macOS keeps the
+    // thread-locals of each thread in a small heap block, and the blocks of
+    // several threads can share a cache line.
+    $Actor actor;
     // The next key this worker hands out, and the distance to the one after
     // it (see get_next_key())
     int64_t key_next;
@@ -327,6 +331,11 @@ struct WorkerCtx {
     struct JumpBuf jump0;
 } __attribute__((aligned(128)));
 extern WorkerCtx wctxs[MAX_WTHREADS];
+#ifdef ACTON_THREADS
+// The context of the worker that runs on this thread, or NULL on a thread
+// that is not a worker
+extern _Thread_local WorkerCtx thread_wctx;
+#endif
 
 WorkerCtx get_wctx();
 int get_wtid();
