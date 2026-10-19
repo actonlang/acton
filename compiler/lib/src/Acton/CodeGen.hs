@@ -2540,6 +2540,10 @@ instance Gen Expr where
     gen env (Cond _ e1 e e2)        = parens (parens (gen env (B.unbox tBool e)) <+> text "?" <+> gen env e1 <+> text ":" <+> gen env e2)
     gen env (Paren _ e)             = parens (gen env e)
     gen env (Box t e)
+      -- Generic closure arguments can already carry the required scalar box.
+      -- Preserve it only when both the C representation and Acton type agree.
+      | B.isUnboxable t', boxedExpr env e, typeOf env e == t'
+                                    = gen env e
       | B.isUnboxable t'            = genBoxed env t' (genRawExprAs env t' e)
       where t'                      = boxedRepType t
     gen env (Box t e)

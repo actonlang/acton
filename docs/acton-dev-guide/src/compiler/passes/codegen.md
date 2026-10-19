@@ -59,6 +59,11 @@ helpers are private to the translation unit and have no per-class prototypes
 in the header. Typed captures, method tables, serialization identities, and
 object allocation remain as before, with no extra pointer in each object.
 
+Scalar boxing also reuses an expression's existing box when its generated C
+representation is boxed and its Acton type exactly matches the requested scalar
+type. Identity lambda bodies therefore return their argument directly. Raw
+computed values and numeric conversions retain the required boxing.
+
 The shared walkers add a loop and descriptor reads to serialization, while
 removing repeated field-walking code. This is a code-size tradeoff, not a claim
 that persistence runs faster. Any binary-size or runtime improvement should be

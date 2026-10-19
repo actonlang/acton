@@ -63,6 +63,12 @@ bool closure_serializationQ_shared_class($pure first, $pure second) {
     return first != second && first->$class == second->$class;
 }
 
+// Calling a genuine restored identity body must preserve the incoming box.
+// Value equality alone would miss an unnecessary unbox/box allocation.
+bool closure_serializationQ_identity_probe($pure callback, $WORD value) {
+    return (($WORD (*)(void *, $WORD))callback->$class->__eval__)(callback, value) == value;
+}
+
 $R closure_serializationQ_exec_proc($Cont cont, $proc callback, int64_t value) {
     return (($R (*)(void *, $Cont, B_int))callback->$class->__exec__)(callback, cont, toB_int(value));
 }

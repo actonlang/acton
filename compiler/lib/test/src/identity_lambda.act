@@ -1,0 +1,14 @@
+def identity_int() -> pure(int) -> int:
+    return lambda x: x
+
+def identity_float() -> pure(float) -> float:
+    return lambda x: x
+
+def identity_byte() -> pure(i8) -> i8:
+    return lambda x: x
+
+def increment() -> pure(int) -> int:
+    return lambda x: x + 1
+
+def convert() -> pure(int) -> float:
+    return lambda x: float(x)

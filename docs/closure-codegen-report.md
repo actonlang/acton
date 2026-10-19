@@ -150,13 +150,18 @@ The implementation is ready for colleague review. The most consequential points 
 
 Current tests and measurements establish correct behavior for the exercised cases and substantial code-size reductions on these projects. Cross-platform ABI validation and focused serialization timing would provide additional evidence before drawing broader portability or runtime-performance conclusions. Old-build snapshot compatibility would require separate design work.
 
-One small box/unbox improvement is deliberately left for a separate follow-up. An identity lambda can still generate:
+A small follow-up on 19 October 2026 removes redundant scalar reboxing inside identity lambdas. When an expression already produces a box of exactly the required scalar type, CodeGen reuses that box. For example:
 
 ```c
+// Before
 return toB_int(((B_int)x)->val);
+// After
+return x;
 ```
 
-When the boxed types match and no conversion is required, this may be replaceable with `return x;`, avoiding an allocation. This is separate from the redundant reboxing already removed from adapters. A computed scalar still commonly travels through evaluation, boxing, a generic continuation, and unboxing; eliminating that boundary would require specialization or a broader interface change.
+The compiler regression checks that identity bodies lose their reboxing while computed and converted results retain the required boxing. Runtime coverage invokes restored identity closures for all eleven unboxable scalar types and checks that they return the original box; computed and int-to-float lambdas are also checked. The measurements above predate this follow-up.
+
+This is separate from the redundant reboxing removed from adapters. A computed scalar still commonly travels through evaluation, boxing, a generic continuation, and unboxing; eliminating that boundary would require specialization or a broader interface change.
 
 Bool, Show, Serialize, general deriving, more aggressive capture renaming, and sharing across modules remain future work. None is required to review the present changes.
 
