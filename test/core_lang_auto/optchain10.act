@@ -1,0 +1,41 @@
+# Statement-position calls of an actor method through a forced unwrap (!),
+# through optional chaining (?.) and in a conditional expression statement must
+# be asynchronous fire-and-forget sends. Pinger is parked in
+# `await async cb(self)`, waiting for the activation of on_ping in main that
+# makes the calls. A call that waited for the reply of Pinger would deadlock
+# the two actors: Pinger would never process the poke, and on_ping would never
+# finish.
+
+actor Pinger(cb: action(Pinger) -> None):
+    var count = 0
+    def start():
+        await async cb(self)
+    def poke(a: int, b: int = 0):
+        count += 1
+    def get_count() -> int:
+        return count
+
+actor Watchdog(env: Env):
+    # Independent timer: if main and Pinger deadlock, main's own timers never
+    # fire and only this actor can end the test.
+    after 10.0: env.exit(2)
+
+actor main(env):
+    var op: ?Pinger = None
+    w = Watchdog(env)
+
+    def on_ping(p: Pinger):
+        op!.poke(1)
+        op?.poke(1)
+        op!.poke(1) if True else op!.poke(2)
+        p.poke(1) if True else p.poke(2)
+        def check():
+            n = op!.get_count()
+            env.exit(0 if n == 4 else 1)
+        after 0.2: check()
+
+    # Start Pinger through pinger, not op!, so that only the calls in on_ping
+    # depend on how these statements are compiled.
+    pinger = Pinger(on_ping)
+    op = pinger
+    pinger.start()

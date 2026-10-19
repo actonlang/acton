@@ -10,15 +10,60 @@ class Cls (__builtin__.value):
 
 proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
     V_maybe_log_9: ?Cls = c
-    proc def C_3cont (C_4res : None, C_2pre : None) -> $R:
+    proc def C_7cont (C_8res : None, C_2pre : None) -> $R:
         C_2pre
         return $R_CONTc@[None](C_cont, None)
     if $ISNOTNONE@[Cls](V_maybe_log_9):
-        proc def C_5cont (C_6res : None) -> $R:
-            C_1pre: None = C_6res
+        proc def C_9cont (C_10res : None) -> $R:
+            C_1pre: None = C_10res
             C_2pre: None = C_1pre
-            return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
-        return $CAST@[?Cls, Cls](V_maybe_log_9).f(C_5cont, "\"boom\"")
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_7cont(G_skip, C_2pre), None)
+        return $CAST@[?Cls, Cls](V_maybe_log_9).f(C_9cont, "\"boom\"")
     else:
         C_2pre: None = None
-        return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_7cont(G_skip, C_2pre), None)
+
+# recursive group:
+class Logger ($Actor, __builtin__.value):
+    proc def __init__ (self : Self, C_cont : proc(None) -> $R) -> $R:
+        pass
+        return $R_CONTc@[None](C_cont, None)
+    proc def logG_local (self : Self, C_cont : proc(None) -> $R, msg : __builtin__.str) -> $R:
+        pass
+        return $R_CONTc@[None](C_cont, None)
+    action def log (self : Self, msg : __builtin__.str) -> None:
+        return $ASYNCc@[None](self, proc lambda (C_cont : proc(None) -> $R): self.logG_local(C_cont, msg))
+proc def LoggerG_newact (C_cont : proc(Logger) -> $R) -> $R:
+    G_act: Logger = $NEWACTOR@[Logger]()
+    $InstallFinalizer@[Logger](G_act)
+    proc def C_11cont (C_12res : None) -> $R:
+        return $R_CONTc@[Logger](C_cont, G_act)
+    return $AWAITc@[None](C_11cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+# (recursive group)
+
+action def must_log (a : ?Logger) -> None:
+    V_must_log_9: ?Logger = a
+    proc def C_13cont (C_14res : None, C_4pre : None) -> $R:
+        C_4pre
+        V_must_log_17: ?Logger = a
+        proc def C_15cont (C_16res : None, C_6pre : None) -> $R:
+            C_6pre
+            return None
+        if $ISNOTNONE@[Logger](V_must_log_17):
+            proc def C_17cont (C_18res : None) -> $R:
+                C_5pre: None = C_18res
+                C_6pre: None = C_5pre
+                return $R_CONTc@[None](proc lambda (G_skip : None): C_15cont(G_skip, C_6pre), None)
+            return $AWAITc@[None](C_17cont, (async $CAST@[?Logger, Logger](V_must_log_17).log)("\"chain\""))
+        else:
+            C_6pre: None = None
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_15cont(G_skip, C_6pre), None)
+    if $ISNOTNONE@[Logger](V_must_log_9):
+        proc def C_19cont (C_20res : None) -> $R:
+            C_3pre: None = C_20res
+            C_4pre: None = C_3pre
+            return $R_CONTc@[None](proc lambda (G_skip : None): C_13cont(G_skip, C_4pre), None)
+        return $AWAITc@[None](C_19cont, (async $CAST@[?Logger, Logger](V_must_log_9).log)("\"bang\""))
+    else:
+        C_4pre: None = $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_13cont(G_skip, C_4pre), None)
