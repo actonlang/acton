@@ -133,18 +133,17 @@ instance CPS [Stmt] where
       | contCall env e, e' == eVar n    = return [sReturn $ addContArg env (conv env e) $ fst $ retcont $ ctxt env]
 
     cps env [Expr _ e]
-      | contCall env e                  = return [sReturn $ addContArg env (conv env e) $ cont $ seqcont $ ctxt env]
+      | contCall env e                  = return [sReturn $ addContArg env (conv env e) $ skipRes env t $ kRef env c ns g_skip tNone]
       where t                           = typeOf env e
-            cont (c,ns)                 = if t == tNone then c' else eCall (tApp (eQVar primSKIPRESc) [conv env t]) [c']
-              where c'                  = kRef env c ns g_skip t
+            (c,ns)                      = seqcont $ ctxt env
 
     cps env (Expr _ e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env ss
                                              --traceM ("## kDef Expr " ++ prstr k ++ ", updates: " ++ prstrs nts)
-                                             return $ kDef env k nts x t ss' :
-                                                      sReturn (addContArg env (conv env e) (kRef env k (dom nts) x t)) : []
+                                             return $ kDef env k nts x tNone ss' :
+                                                      sReturn (addContArg env (conv env e) (skipRes env t $ kRef env k (dom nts) x tNone)) : []
       where t                           = typeOf env e
             nts                         = extraBinds env ss
 
@@ -285,6 +284,11 @@ kDef env k nts x t b                    = sDef k (conv env $ pospar $ (x,t):nts)
 -- continuation the row does not have.
 kRef env k [] x t                       = eVar k
 kRef env k ns x t                       = eLambda' [(x, conv env t)] $ eCall (eVar k) (map eVar (x:ns))
+
+-- The continuation of a call in statement position discards the result. The
+-- lambda lifter recognizes the $SKIPRESc wrapper and calls a proc closure via
+-- __exec__, which does not await an action's result.
+skipRes env t c                         = eCall (tApp (eQVar primSKIPRESc) [conv env t]) [c]
 
 fxCall env test (Call _ Async{} p k)    = False
 fxCall env test (Call _ e p k)          = test fx

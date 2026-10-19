@@ -26,11 +26,11 @@ proc def ret_inner (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) -
                             pass
                         else:
                             $RAISE(N_1x)
-                    proc def C_7cont (C_8res : __builtin__.int) -> $R:
+                    proc def C_7cont (C_8res : None) -> $R:
                         $DROP_C()
                         $RAISE($SEQ())
                         return $R_CONTc@[None](C_1cont, None)
-                    return force_cps(C_7cont, x)
+                    return force_cps($SKIPRESc@[__builtin__.int](C_7cont), x)
                 else:
                     N_2x: __builtin__.BaseException = $POP_C()
                     if isinstance(N_2x, ValueError):
@@ -79,11 +79,11 @@ proc def ret_else (C_cont : proc(__builtin__.int) -> $R, x : __builtin__.int) ->
                             pass
                         else:
                             $RAISE(N_6x)
-                    proc def C_15cont (C_16res : __builtin__.int) -> $R:
+                    proc def C_15cont (C_16res : None) -> $R:
                         $DROP_C()
                         $RAISE($SEQ())
                         return $R_CONTc@[None](C_9cont, None)
-                    return force_cps(C_15cont, x)
+                    return force_cps($SKIPRESc@[__builtin__.int](C_15cont), x)
                 else:
                     N_7x: __builtin__.BaseException = $POP_C()
                     if isinstance(N_7x, ValueError):

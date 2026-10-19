@@ -774,7 +774,7 @@ deactQ_L_32proc deactQ_L_32procG_new(deactQ_main G_1, B_Env G_2) {
 }
 struct deactQ_L_32procG_class deactQ_L_32procG_methods;
 $R deactQ_ApaD___init__ (deactQ_Apa self, $Cont C_cont) {
-    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, (($Cont)deactQ_L_2ContG_new(C_cont)), (($action)deactQ_L_4actionG_new(self)));
+    return (($R (*) ($WORD, $Cont, $action))((deactQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)deactQ_L_2ContG_new(C_cont))), (($action)deactQ_L_4actionG_new(self)));
 }
 #line 2 "test/src/deact.act"
 $R deactQ_ApaD_setupG_local (deactQ_Apa self, $Cont C_cont, $action cb) {
@@ -931,17 +931,17 @@ struct deactQ_mainG_class deactQ_mainG_methods;
 $R deactQ_ApaG_newact ($Cont C_cont) {
     deactQ_Apa G_act = $NEWACTOR(deactQ_Apa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_ApaD_GCfinalizer);
-    return $AWAIT((($Cont)deactQ_L_25ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_26procG_new(G_act))));
+    return $AWAIT($SKIPRES((($Cont)deactQ_L_25ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_26procG_new(G_act))));
 }
 $R deactQ_BepaG_newact ($Cont C_cont) {
     deactQ_Bepa G_act = $NEWACTOR(deactQ_Bepa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_BepaD_GCfinalizer);
-    return $AWAIT((($Cont)deactQ_L_28ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_29procG_new(G_act))));
+    return $AWAIT($SKIPRES((($Cont)deactQ_L_28ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_29procG_new(G_act))));
 }
 $R deactQ_mainG_newact ($Cont C_cont, B_Env env) {
     deactQ_main G_act = $NEWACTOR(deactQ_main);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, deactQ_mainD_GCfinalizer);
-    return $AWAIT((($Cont)deactQ_L_31ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_32procG_new(G_act, env))));
+    return $AWAIT($SKIPRES((($Cont)deactQ_L_31ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)deactQ_L_32procG_new(G_act, env))));
 }
 int deactQ_done$ = 0;
 void deactQ___init__ () {

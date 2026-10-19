@@ -17,10 +17,10 @@ def f(m: proc() -> proc(str) -> None) -> str:
     d("x")
     return "ok"
 
-# The wrapper around a discarded proc-valued cont call must agree with the
-# eta: a cont call ending a nested suite (the if branch) is wrapped in
-# $SKIPRESc specialized on the call's result type, and that type application
-# must carry the CPS-converted type for the same reason as kRef's annotation.
+# A cont call ending a nested suite (the if branch) discards its result: CPS
+# wraps its continuation in $SKIPRESc specialized on the call's result type,
+# and that type application must carry the CPS-converted type for the same
+# reason as kRef's annotation.
 
 def f2(m: proc() -> proc(str) -> None, flag: bool) -> str:
     x = 1

@@ -548,7 +548,9 @@ instance Norm Stmt where
     -- the Deactorizer and becomes an asynchronous fire-and-forget message
     -- send, just as it would outside the Let/Cond. A conditional expression
     -- statement written by the user is flattened into an if statement the same
-    -- way.
+    -- way. CPS relies on this form too: it marks the continuation of a call in
+    -- an expression statement with $SKIPRESc, and the lambda lifter then calls
+    -- a proc closure through __exec__, which does not await an action.
     norm' env (Expr l (Let _ ss e)) = normSuite env (ss ++ [Expr l e])
     norm' env (Expr l (Cond _ e1 c e2))
                                     = norm' env (If l [Branch c [Expr l e1]] [Expr l e2])

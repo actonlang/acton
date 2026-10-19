@@ -13,7 +13,7 @@ proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
     proc def C_1cont (C_2res : None) -> $R:
         return $R_CONTc@[None](C_cont, None)
     if $ISNOTNONE@[Cls](V_maybe_log_9):
-        return $CAST@[?Cls, Cls](V_maybe_log_9).f(C_1cont, "\"boom\"")
+        return $CAST@[?Cls, Cls](V_maybe_log_9).f($SKIPRESc@[None](C_1cont), "\"boom\"")
     else:
         None
         return $R_CONTc@[None](C_1cont, None)
@@ -33,7 +33,7 @@ proc def LoggerG_newact (C_cont : proc(Logger) -> $R) -> $R:
     $InstallFinalizer@[Logger](G_act)
     proc def C_3cont (C_4res : None) -> $R:
         return $R_CONTc@[Logger](C_cont, G_act)
-    return $AWAITc@[None](C_3cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+    return $AWAITc@[None]($SKIPRESc@[None](C_3cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
 # (recursive group)
 
 action def must_log (a : ?Logger) -> None:
