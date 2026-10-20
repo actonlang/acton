@@ -1120,6 +1120,12 @@ frontResultModuleInfo :: A.ModName -> FrontResult -> Acton.Env.ModuleInfo
 frontResultModuleInfo mn fr =
     fromMaybe (Acton.Env.mkModuleInfo mn (frImps fr) (frIfaceTE fr) (frDoc fr)) (frModuleInfo fr)
 
+-- | An impl refresh computed from stored rows, before anything is written.
+data Recomputation
+  = Recomputed [InterfaceFiles.DepModuleInfo] [InterfaceFiles.NameHashInfo] FrontResult
+  | Unresolved                          -- a dependency hash is unavailable: run the front passes
+  | InterfaceGone                       -- the module's own .tydb cannot be read: the module fails
+
 -- | The ModuleInfo of a module whose result is rebuilt from its .tydb
 -- without a front pass, carrying the escape summaries stored there.
 -- Modules checked later in the same build read them for their
@@ -3638,139 +3644,116 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                             cacheFrontResult fr
                       ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
+                  -- Only the attempt falls back to the front passes, and only
+                  -- for a synchronous exception or an unresolved hash.  The
+                  -- write comes after every read, so a fallback never runs on
+                  -- top of a committed refresh.  A failed write and a missing
+                  -- own interface fail the module instead.
                   runImplRefresh = do
-                    let rerunFront = do
-                          when (C.verbose gopts) $
-                            ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
-                          runFront
-                        handleSyncFailure :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-                        handleSyncFailure err =
-                          if isAsyncException err
-                            then throwIO err
-                            else rerunFront
-                    (do
-                      when (C.verbose gopts) $ do
-                        let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
-                        ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
-                      -- The refresh is pure row math: every input is already stored.
-                      -- Own impl-hash components (nhOwnImplHash) and local deps come
-                      -- from the per-name rows, the external dep NAMES from the dep
-                      -- index rows (only their hashes changed -- the module's source
-                      -- is unchanged), and the new dep hashes are resolved fresh.
-                      -- No re-read of the typed module, no re-parse, no dep re-walk;
-                      -- the .tydb is updated surgically. The typed module is read
-                      -- only when the refresh must feed an EAGER back job -- then it
-                      -- is the compilation input.
-                      case taskCurrent of
-                        TyTask{ tyDepModules = depModules, tyPubHash = storedPubHash } -> do
-                          -- The task header carries only the name COUNT (selective
-                          -- reads); the refresh needs the module's own hash rows.
-                          storedNameHashes <- InterfaceFiles.readNameHashes tyFile
-                          moduleHasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                          restored <- restorePubDepsFromRows depModules storedNameHashes
-                          -- Only names with an impl item participate in the refresh --
-                          -- exactly the names the front pass gave a (non-empty) own
-                          -- impl-hash component. A signature-only name's impl hash is
-                          -- invariant under dependency changes.
-                          let refreshables =
-                                [ nh | nh <- restored
-                                     , not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
-                              ownImplHashes = M.fromList
-                                [ (InterfaceFiles.nhName nh, InterfaceFiles.nhOwnImplHash nh) | nh <- refreshables ]
-                              implLocalDeps = M.fromList
-                                [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplLocalDeps nh) | nh <- refreshables ]
-                              implExtDeps = M.fromList
-                                [ (InterfaceFiles.nhName nh, map fst (InterfaceFiles.nhImplDeps nh)) | nh <- refreshables ]
-                          do
-                              implExtRes <- (try :: IO a -> IO (Either SomeException a)) $
-                                resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
-                              case implExtRes of
-                                Left err -> handleSyncFailure err
-                                Right (Left _) -> rerunFront
-                                Right (Right implExtHashes) -> do
-                                  let updatedNameHashes =
-                                        Hashing.refreshImplHashes restored ownImplHashes implLocalDeps implExtHashes
-                                      moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
-                                  depModulesRes <- depModulesFromNameHashes updatedNameHashes
-                                  case depModulesRes of
-                                    Left _ -> rerunFront
-                                    Right updatedDepModules -> do
-                                      evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
-                                      let outputKey = TaskKey (projPath paths) mn
-                                          -- Synchronous, like the full write: completion implies
-                                          -- the refreshed rows are committed. A write failure is
-                                          -- THIS module's front failure on the diagnostics path --
-                                          -- returned, not thrown, so handleSyncFailure
-                                          -- cannot misread it as stale dep hashes and rerun the
-                                          -- front against a persistent environmental error.
-                                          writeRefreshedRows = do
-                                            res <- trySync (runFrontOutputSync (ccOnFrontOutputStart callbacks)
+                    when (C.verbose gopts) $ do
+                      let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
+                      ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl changes in " ++ Data.List.intercalate ", " (map fmtDelta implDeltas))
+                    attempt <- trySync recomputeImpl
+                    case attempt of
+                      Right (Recomputed updatedDepModules updatedNameHashes fr) -> do
+                        -- Synchronous, like the full write: completion implies
+                        -- the refreshed rows are committed.  A write failure is
+                        -- this module's diagnostics, returned and not thrown.
+                        written <- trySync (runFrontOutputSync (ccOnFrontOutputStart callbacks)
+                                                               (ccOnFrontOutputDone callbacks)
+                                                               (ccShouldWriteFrontOutput callbacks)
+                                                               outputKey
+                                                               FrontOutputTydb $
+                                              InterfaceFiles.updateImplRefresh tyFile (frImplHash fr) updatedDepModules updatedNameHashes)
+                        case written of
+                          Left err -> return (key, Left (tydbWriteDiagnostics mn err))
+                          Right () -> mask_ $ do
+                            outputJobs <- if C.tydb optsT
+                                            then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
                                                                                (ccOnFrontOutputDone callbacks)
                                                                                (ccShouldWriteFrontOutput callbacks)
                                                                                outputKey
-                                                                               FrontOutputTydb $
-                                                              InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes)
-                                            case res of
-                                              Left err -> return (Just (tydbWriteDiagnostics mn err))
-                                              Right () -> return Nothing
-                                          startOutputJobs =
-                                            if C.tydb optsT
-                                              then (:[]) <$> startFrontOutputJob (ccOnFrontOutputStart callbacks)
-                                                                                 (ccOnFrontOutputDone callbacks)
-                                                                                 (ccShouldWriteFrontOutput callbacks)
-                                                                                 outputKey
-                                                                                 FrontOutputTydbCopy
-                                                                                 (copyTydbInterface optsT paths mn)
-                                              else return []
-                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths key moduleImplHash (length updatedNameHashes)
-                                      case deferredBackJob0 of
-                                        Just _ -> do
-                                          ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
-                                          case ifaceRes of
-                                            Left diags -> return (key, Left diags)
-                                            Right (imps, ifaceTE, mdocI, storedPubH, _storedImplH, mModuleInfo) -> do
-                                              writeFailure <- writeRefreshedRows
-                                              case writeFailure of
-                                                Just diags -> return (key, Left diags)
-                                                Nothing -> mask_ $ do
-                                                  outputJobs <- startOutputJobs
-                                                  rememberFrontOutputJobList frontOutputRef outputJobs
-                                                  let deferredBackJob = deferredBackJob0
-                                                      fr = (mkFrontResult imps ifaceTE mdocI storedPubH moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
-                                                        { frOutputJobs = outputJobs
-                                                        , frModuleInfo = mModuleInfo
-                                                        }
-                                                  cacheFrontResult fr
-                                        Nothing -> do
-                                          tyRes <- readTyFile
-                                          case tyRes of
-                                            Left diags -> return (key, Left diags)
-                                            Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
-                                              snap <- Source.readSource sp actFile
-                                              envRes <- (try :: IO Acton.Env.Env0 -> IO (Either SomeException Acton.Env.Env0)) $
-                                                Acton.Env.mkEnv (searchPath paths) envSnap tmod
-                                              case envRes of
-                                                Left err -> handleSyncFailure err
-                                                Right env1 -> do
-                                                  evaluate (rnf nmod)
-                                                  evaluate (rnf tmod)
-                                                  writeFailure <- writeRefreshedRows
-                                                  case writeFailure of
-                                                    Just diags -> return (key, Left diags)
-                                                    Nothing -> mask_ $ do
-                                                      outputJobs <- startOutputJobs
-                                                      rememberFrontOutputJobList frontOutputRef outputJobs
-                                                      let I.NModule imps ifaceFull _mdoc = nmod
-                                                          ifaceTE = publicIfaceTE ifaceFull
-                                                          backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
-                                                      moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
-                                                      let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
-                                                            { frOutputJobs = outputJobs
-                                                            , frModuleInfo = Just moduleInfo
-                                                            }
-                                                      cacheFrontResult fr
-                        _ -> rerunFront
-                      ) `catch` handleSyncFailure
+                                                                               FrontOutputTydbCopy
+                                                                               (copyTydbInterface optsT paths mn)
+                                            else return []
+                            rememberFrontOutputJobList frontOutputRef outputJobs
+                            cacheFrontResult fr{ frOutputJobs = outputJobs }
+                      Right InterfaceGone -> return (key, Left (missingIfaceDiagnostics mn "" mn))
+                      _ -> do
+                        when (C.verbose gopts) $
+                          ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
+                        runFront
+                    where outputKey = TaskKey (projPath paths) mn
+                  -- The refresh is pure row math: every input is already stored.
+                  -- Own impl-hash components (nhOwnImplHash) and local deps come
+                  -- from the per-name rows, the external dep NAMES from the dep
+                  -- index rows (only their hashes changed -- the module's source
+                  -- is unchanged), and the new dep hashes are resolved fresh.
+                  -- No re-read of the typed module, no re-parse, no dep re-walk;
+                  -- the .tydb is updated surgically. The typed module is read
+                  -- only when the refresh must feed an EAGER back job -- then it
+                  -- is the compilation input.  Every read, the escape summaries
+                  -- included, and every forcing happen here, before the write.
+                  recomputeImpl =
+                    case taskCurrent of
+                      TyTask{ tyDepModules = depModules, tyPubHash = storedPubHash } -> do
+                        -- The task header carries only the name COUNT (selective
+                        -- reads); the refresh needs the module's own hash rows.
+                        storedNameHashes <- InterfaceFiles.readNameHashes tyFile
+                        moduleHasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
+                        restored <- restorePubDepsFromRows depModules storedNameHashes
+                        -- Only names with an impl item participate in the refresh --
+                        -- exactly the names the front pass gave a (non-empty) own
+                        -- impl-hash component. A signature-only name's impl hash is
+                        -- invariant under dependency changes.
+                        let refreshables =
+                              [ nh | nh <- restored
+                                   , not (B.null (InterfaceFiles.nhOwnImplHash nh)) ]
+                            ownImplHashes = M.fromList
+                              [ (InterfaceFiles.nhName nh, InterfaceFiles.nhOwnImplHash nh) | nh <- refreshables ]
+                            implLocalDeps = M.fromList
+                              [ (InterfaceFiles.nhName nh, InterfaceFiles.nhImplLocalDeps nh) | nh <- refreshables ]
+                            implExtDeps = M.fromList
+                              [ (InterfaceFiles.nhName nh, map fst (InterfaceFiles.nhImplDeps nh)) | nh <- refreshables ]
+                        implExtRes <- resolveDepHashes "impl" InterfaceFiles.nhImplHash implExtDeps
+                        case implExtRes of
+                          Left _ -> return Unresolved
+                          Right implExtHashes -> do
+                            let updatedNameHashes =
+                                  Hashing.refreshImplHashes restored ownImplHashes implLocalDeps implExtHashes
+                                moduleImplHash = Hashing.moduleImplHashFromNameHashes updatedNameHashes
+                            depModulesRes <- depModulesFromNameHashes updatedNameHashes
+                            case depModulesRes of
+                              Left _ -> return Unresolved
+                              Right updatedDepModules -> do
+                                evaluate (rnf (moduleImplHash, updatedDepModules, updatedNameHashes))
+                                let deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths key moduleImplHash (length updatedNameHashes)
+                                case deferredBackJob of
+                                  Just _ -> do
+                                    ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
+                                    return $ case ifaceRes of
+                                      Left _ -> InterfaceGone
+                                      Right (imps, ifaceTE, mdoc, pubHash, _storedImplHash, mModuleInfo) ->
+                                        let fr = (mkFrontResult imps ifaceTE mdoc pubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes Nothing deferredBackJob)
+                                                   { frModuleInfo = mModuleInfo }
+                                        in Recomputed updatedDepModules updatedNameHashes fr
+                                  Nothing -> do
+                                    stored <- InterfaceFiles.readFileMaybe tyFile
+                                    case stored of
+                                      Nothing -> return InterfaceGone
+                                      Just (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
+                                        snap <- Source.readSource sp actFile
+                                        env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
+                                        evaluate (rnf nmod)
+                                        evaluate (rnf tmod)
+                                        let I.NModule imps ifaceFull _mdoc = nmod
+                                            ifaceTE = publicIfaceTE ifaceFull
+                                            backJob = Just (mkBackJob env1 tmod (Source.ssText snap) moduleImplHash)
+                                        moduleInfo <- storedEscapeModuleInfo tyFile mn imps ifaceTE mdoc
+                                        let fr = (mkFrontResult imps ifaceTE mdoc modulePubHash moduleImplHash (publicNameHashes updatedNameHashes) updatedNameHashes backJob Nothing)
+                                                   { frModuleInfo = Just moduleInfo }
+                                        return (Recomputed updatedDepModules updatedNameHashes fr)
+                      _ -> return Unresolved
                   runCodegenRefresh = do
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
