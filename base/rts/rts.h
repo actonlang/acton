@@ -24,7 +24,10 @@
 
 #define MSGQ 2
 #ifdef ACTON_THREADS
-#define MAX_WTHREADS 256
+// Worker thread ids run from 0, the main thread, to ACTON_MAX_WTHREADS, which
+// the max_wthreads build option sets. Every C file that includes this header
+// must see the same value: $NEWACTOR stores SHARED_RQ in each new actor.
+#define MAX_WTHREADS (ACTON_MAX_WTHREADS+1)
 #define NUM_RQS (MAX_WTHREADS+1)
 // The shared RQ is the top-most readyQ
 #define SHARED_RQ (NUM_RQS-1)

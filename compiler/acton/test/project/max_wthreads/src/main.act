@@ -1,0 +1,18 @@
+# Actors created by the application and by its dependency run on the worker
+# threads that the max_wthreads build option allows. Prints the number of
+# worker threads and the sum of the replies, 5050.
+
+import shared
+
+actor Local():
+    def next(x: int) -> int:
+        return x + 1
+
+actor main(env):
+    counter = shared.Counter()
+    local = Local()
+    total = 0
+    for i in range(100):
+        total = counter.add(local.next(i))
+    print(env.nr_wthreads, total)
+    env.exit(0)

@@ -43,9 +43,9 @@ $
 
 # Worker threads
 
-Per default, the RTS starts as many worker threads as there are CPU threads available, although at least 4. This is optimized for server style workloads where it is presumed that the Acton program is the sole program consuming considerable resources. When there are 4 and more CPU threads available, the worker threads are pinned to each respective CPU thread.
+Per default, the RTS starts as many worker threads as there are CPU threads available, although at least 4 and at most 255. This is optimized for server style workloads where it is presumed that the Acton program is the sole program consuming considerable resources. The limit of 255 is set when the program is built, with the [`max_wthreads` build option](compilation/build_options.md#worker-threads).
 
-It is possible to specify the number of worker threads with `--rts-wthreads=COUNT`.
+It is possible to specify the number of worker threads with `--rts-wthreads=COUNT`, up to the same limit.
 
 Actor method continuations run to completion, which is why it is wise not to set this value too low. Per default a minimum of 4 threads are started even when there are fewer CPU threads available, which means the operating system will switch between the threads inducing context switching overhead.
 
