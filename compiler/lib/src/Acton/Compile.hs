@@ -42,20 +42,20 @@ Call flow:
        enqueue a BackJob into the scheduler's
        BackQueue, so back passes begin as soon as they are ready and can overlap
        remaining front passes.
-    3) Callers either wait for backQueueWait (CLI builds) or let back jobs run
+    3) Callers either wait for waitBackJobs (CLI builds) or let back jobs run
        in the background. CLI builds wait before invoking Zig.
     4) runBackPasses can be used for standalone back-pass execution when a
        caller already has a BackJob to run.
   - Triggering:
     - acton build runs the pipeline once for the requested files/project.
     - acton watch and LSP call startCompile on each event; callers can gate
-      output with generation checks (e.g. whenCurrentGen). BackQueue ignores
+      output with generation checks (e.g. whenCurrent). BackQueue ignores
       back jobs for stale generations, and front-output jobs are skipped for
       stale generations before writing.
     - Callers may supply a delay (debounce) before startCompile runs (LSP uses
       debounceMicros on change events; acton watch uses 0).
   - Finalization:
-    - CLI waits on backQueueWait before running Zig build
+    - CLI waits on waitBackJobs before running Zig build
     - LSP does not implicitly run the Zig build, it is only run explicitly when
       the user asks to build / run a module
 
@@ -66,7 +66,8 @@ State and orchestration:
   - Callers allocate and hold a CompileScheduler from this module. The
     scheduler encapsulates mutable state (generation id, cancelable async
     handle, build-spec stamp, and a shared back-queue); callers pass it into
-    startCompile and backQueueEnqueue rather than mutating it directly.
+    startCompile, runCompilePlan and waitBackJobs rather than mutating it
+    directly.
   - LSP additionally keeps overlaysRef for in-memory buffers and builds an
     overlay-aware SourceProvider on top of disk reads. acton watch reads
     directly from disk.
@@ -106,16 +107,17 @@ module Acton.Compile
   , ParseProgress(..)
   , CompileCallbacks(..)
   , defaultCompileCallbacks
-  , BackJobCallbacks(..)
-  , BackQueue
-  , newBackQueue
-  , backQueueEnqueue
-  , backQueueWait
-  , CompileScheduler(..)
+  , CompileScheduler
   , newCompileScheduler
   , compileParallelism
   , startCompile
-  , whenCurrentGen
+  , stopCompile
+  , Generation
+  , generationNumber
+  , currentGeneration
+  , isCurrent
+  , whenCurrent
+  , waitBackJobs
   , checkBuildSpecChange
   , CompileContext(..)
   , prepareCompileContext
@@ -198,7 +200,7 @@ import qualified InterfaceFiles
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.STM (atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
+import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, readTVarIO, writeTChan, writeTVar)
 import Control.DeepSeq (force, rnf)
 import Control.Exception (Exception, Handler(..), SomeException, catch, catches, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
@@ -420,110 +422,62 @@ data BackJobCallbacks = BackJobCallbacks
   , bjcOnDone :: BackJob -> BackJobResult -> IO ()
   }
 
-data BackQueue = BackQueue
-  { backQueueEnqueue :: Int -> BackJob -> BackJobCallbacks -> IO Bool
-  , backQueueWait :: Int -> IO (Maybe BackPassFailure)
-  }
-
 checkBuildSpecChange :: CompileScheduler -> BuildSpecStamp -> IO Bool
 checkBuildSpecChange sched stamp =
-  atomicModifyIORef' (csBuildStampRef sched) $ \prev ->
+  atomicModifyIORef' (schedulerBuildSpec sched) $ \prev ->
     let changed = prev /= Just stamp
     in (Just stamp, changed)
 
--- | Create a concurrent back-pass queue gated by a generation counter.
--- Each job is tagged with a generation id; stale jobs are skipped.
-newBackQueue :: IORef Int -> C.GlobalOptions -> Int -> IO BackQueue
-newBackQueue genRef gopts maxPar = do
-  queue <- newTChanIO
-  counts <- newTVarIO M.empty
-  failures <- newTVarIO M.empty
-  let incPending gen = M.insertWith (+) gen 1
-      decPending gen m =
-        case M.lookup gen m of
-          Nothing -> m
-          Just n ->
-            let n' = n - 1
-            in if n' <= 0
-                 then M.delete gen m
-                 else M.insert gen n' m
-      recordFailure gen failure =
-        M.insertWith (\_ old -> old) gen failure
-      enqueue gen job callbacks = do
-        current <- readIORef genRef
-        if current /= gen
-          then return False
-          else do
-            atomically $ do
-              modifyTVar' counts (incPending gen)
-              writeTChan queue (gen, job, callbacks)
-            return True
-      waitDone gen = atomically $ do
-        failuresNow <- readTVar failures
-        case M.lookup gen failuresNow of
-          Just failure -> do
-            modifyTVar' failures (M.delete gen)
-            return (Just failure)
-          Nothing -> do
-            pending <- readTVar counts
-            let n = M.findWithDefault 0 gen pending
-            check (n == 0)
-            return Nothing
-      worker = forever $ do
-        (gen, job, callbacks) <- atomically $ readTChan queue
-        current <- readIORef genRef
-        if current /= gen
-          then atomically $ modifyTVar' counts (decPending gen)
-          else do
-            failed <- atomically $ do
-              failuresNow <- readTVar failures
-              return (M.member gen failuresNow)
-            if failed
-              then atomically $ modifyTVar' counts (decPending gen)
-              else do
-                let shouldWrite = do
-                      currentWrite <- readIORef genRef
-                      return (currentWrite == gen)
-                bjcOnStart callbacks job
-                res <- (try $
-                          runBackPasses gopts job shouldWrite (bjcOnProgress callbacks job))
-                        :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
-                currentDone <- readIORef genRef
-                when (currentDone == gen) $
-                  case res of
-                    Left err -> do
-                      let failure = BackPassFailure (bjKey job) (displayException err)
-                      atomically $ modifyTVar' failures (recordFailure gen failure)
-                      bjcOnDone callbacks job (BackJobFailed failure)
-                    Right (t, bt) -> bjcOnDone callbacks job (BackJobOk t bt)
-                atomically $ modifyTVar' counts (decPending gen)
-  let workers = max 1 maxPar
-  replicateM_ workers (forkIO worker)
-  return BackQueue
-    { backQueueEnqueue = enqueue
-    , backQueueWait = waitDone
-    }
-
-data CompileScheduler = CompileScheduler
-  { csGenRef :: IORef Int
-  , csAsyncRef :: MVar (Maybe (Async ()))
-  , csBackQueue :: BackQueue
-  , csBuildStampRef :: IORef (Maybe BuildSpecStamp)
+-- | A compile run's place in its scheduler's sequence of runs. A run is
+-- current until a newer one starts. A stale run writes no front output and
+-- queues no back job, and its queued back jobs neither write nor report an
+-- end.
+data Generation = Generation
+  { generationNumber  :: Int
+  , generationCounter :: IORef Int      -- the scheduler's newest generation
   }
 
--- | Create a scheduler with generation tracking and a shared back queue.
+isCurrent :: Generation -> IO Bool
+isCurrent gen = (== generationNumber gen) <$> readIORef (generationCounter gen)
+
+whenCurrent :: Generation -> IO () -> IO ()
+whenCurrent gen action = isCurrent gen >>= \current -> when current action
+
+-- | The generation a scheduler is at, which a one-shot build runs as. A
+-- fresh scheduler is at generation 0, and it stays current until a run is
+-- started with startCompile.
+currentGeneration :: CompileScheduler -> IO Generation
+currentGeneration sched = do
+  number <- readIORef (schedulerCounter sched)
+  return (Generation number (schedulerCounter sched))
+
+-- | A long-lived compiler. The back passes of every generation share one
+-- pool of workers.
+data CompileScheduler = CompileScheduler
+  { schedulerCounter   :: IORef Int                     -- the newest generation
+  , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
+  , schedulerBackQueue :: BackQueue
+  , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last plan
+  }
+
+-- | Back jobs waiting for a worker, with the state waitBackJobs reads.
+data BackQueue = BackQueue
+  { queuedJobs    :: TChan QueuedJob
+  , pendingCounts :: TVar (M.Map Int Int)               -- per generation: queued or running jobs
+  , firstFailures :: TVar (M.Map Int BackPassFailure)   -- per generation: the first failure
+  }
+
+data QueuedJob = QueuedJob Generation BackJobCallbacks BackJob
+
+-- | Create a scheduler at generation 0. Its back passes run on the given
+-- number of workers (at least one) with the given global options, which
+-- decide whether back passes report their time and timing.
 newCompileScheduler :: C.GlobalOptions -> Int -> IO CompileScheduler
-newCompileScheduler gopts maxPar = do
-  genRef <- newIORef 0
-  asyncRef <- newMVar Nothing
-  backQueue <- newBackQueue genRef gopts maxPar
-  buildStampRef <- newIORef Nothing
-  return CompileScheduler
-    { csGenRef = genRef
-    , csAsyncRef = asyncRef
-    , csBackQueue = backQueue
-    , csBuildStampRef = buildStampRef
-    }
+newCompileScheduler gopts workers = do
+  counter <- newIORef 0
+  queue <- BackQueue <$> newTChanIO <*> newTVarIO M.empty <*> newTVarIO M.empty
+  replicateM_ (max 1 workers) (forkIO (backWorker gopts queue))
+  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing
 
 -- | How many modules compile at once: --jobs when given, else one per
 -- capability.
@@ -532,28 +486,77 @@ compileParallelism gopts
   | C.jobs gopts > 0                    = return (C.jobs gopts)
   | otherwise                           = max 1 <$> getNumCapabilities
 
--- | Start a new compile action, canceling and joining any in-flight run.
--- Returns the generation id associated with this run.
-startCompile :: CompileScheduler -> Int -> (Int -> IO ()) -> IO Int
+-- | Start a generation and return it. The counter moves first, so the
+-- running generation's writes see themselves stale at once. The previous
+-- run is then cancelled under the MVar, and cancel waits for its finalizer,
+-- which drains its front-output jobs, so stale writes never overlap the new
+-- run. After the delay the run starts only if no newer generation began.
+startCompile :: CompileScheduler -> Int -> (Generation -> IO ()) -> IO Generation
 startCompile sched delay run = do
-  gen <- atomicModifyIORef' (csGenRef sched) $ \g -> let g' = g + 1 in (g', g')
-  modifyMVar_ (csAsyncRef sched) $ \m -> do
-    -- The canceled action drains front-output jobs in its finalizer, and
-    -- cancel waits for the action to finish, so stale writes cannot overlap
-    -- the next generation.
-    forM_ m cancel
-    a <- async $ do
-      when (delay > 0) $ threadDelay delay
-      current <- readIORef (csGenRef sched)
-      when (current == gen) $ run gen
-    return (Just a)
+  number <- atomicModifyIORef' (schedulerCounter sched) (\newest -> (newest + 1, newest + 1))
+  let gen = Generation number (schedulerCounter sched)
+  modifyMVar_ (schedulerRun sched) $ \previous -> do
+    mapM_ cancel previous
+    Just <$> async (do when (delay > 0) (threadDelay delay)
+                       whenCurrent gen (run gen))
   return gen
 
--- | Run an action only if the generation still matches.
-whenCurrentGen :: CompileScheduler -> Int -> IO () -> IO ()
-whenCurrentGen sched gen action = do
-  current <- readIORef (csGenRef sched)
-  when (current == gen) action
+-- | Cancel the newest generation's run and wait for its finalizer.
+stopCompile :: CompileScheduler -> IO ()
+stopCompile sched = modifyMVar_ (schedulerRun sched) (\running -> Nothing <$ mapM_ cancel running)
+
+-- | Queue a back job of a current generation. A stale generation's job is
+-- dropped. The pending count rises in the transaction that queues the job,
+-- so waitBackJobs never sees zero while a job of its generation is queued.
+enqueueBack :: BackQueue -> Generation -> BackJobCallbacks -> BackJob -> IO ()
+enqueueBack queue gen callbacks job = whenCurrent gen $ atomically $ do
+  modifyTVar' (pendingCounts queue) (M.insertWith (+) (generationNumber gen) 1)
+  writeTChan (queuedJobs queue) (QueuedJob gen callbacks job)
+
+-- | Run queued back jobs, one at a time. A job runs only while its
+-- generation is current and has no failure yet. The write gate is asked
+-- right before the generated files are written. The end is reported, and a
+-- failure recorded, only while the generation is current, so a job that
+-- goes stale while it runs reports its start but no end. The first failure
+-- of a generation is kept. The progress callback runs inside the try, so an
+-- exception from progress reporting fails the job. The start and end
+-- callbacks run outside it, so an exception from them ends the worker. The
+-- pending count falls after every job, whether it ran or was dropped.
+backWorker :: C.GlobalOptions -> BackQueue -> IO ()
+backWorker gopts queue = forever $ do
+  QueuedJob gen callbacks job <- atomically (readTChan (queuedJobs queue))
+  current <- isCurrent gen
+  failed <- M.member (generationNumber gen) <$> readTVarIO (firstFailures queue)
+  when (current && not failed) $ do
+    bjcOnStart callbacks job
+    result <- try (runBackPasses gopts job (isCurrent gen) (bjcOnProgress callbacks job))
+                :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
+    whenCurrent gen $ case result of
+      Left err -> do
+        let failure = BackPassFailure (bjKey job) (displayException err)
+        atomically (modifyTVar' (firstFailures queue) (M.insertWith (\_ first -> first) (generationNumber gen) failure))
+        bjcOnDone callbacks job (BackJobFailed failure)
+      Right (time, timing) -> bjcOnDone callbacks job (BackJobOk time timing)
+  atomically (modifyTVar' (pendingCounts queue) (M.update decrement (generationNumber gen)))
+  where
+    decrement count = if count <= 1 then Nothing else Just (count - 1)
+
+-- | Wait for a generation's back jobs. Returns its first failure as soon as
+-- there is one, and forgets it, without waiting for the remaining jobs.
+-- Otherwise returns Nothing once none of its jobs is queued or running.
+-- Stale jobs drain without running, so waiting on a superseded generation
+-- returns Nothing, and callers check the generation again afterwards.
+waitBackJobs :: CompileScheduler -> Generation -> IO (Maybe BackPassFailure)
+waitBackJobs sched gen = atomically $ do
+  failures <- readTVar (firstFailures queue)
+  case M.lookup number failures of
+    Just failure -> Just failure <$ writeTVar (firstFailures queue) (M.delete number failures)
+    Nothing      -> do pending <- readTVar (pendingCounts queue)
+                       check (M.findWithDefault 0 number pending == 0)
+                       return Nothing
+  where
+    queue  = schedulerBackQueue sched
+    number = generationNumber gen
 
 data CompileContext = CompileContext
   { ccOpts :: C.CompileOptions
@@ -696,7 +699,7 @@ data CompileHooks = CompileHooks
   , chOnFrontOutputStart :: TaskKey -> FrontOutputKind -> IO ()
   , chOnFrontOutputProgress :: TaskKey -> FrontOutputKind -> FrontOutputProgress -> IO ()
   , chOnFrontOutputDone :: TaskKey -> FrontOutputKind -> Maybe TimeSpec -> IO ()
-  , chOnBackQueued :: TaskKey -> Bool -> IO ()
+  , chOnBackQueued :: TaskKey -> IO ()
   , chOnBackSkipped :: TaskKey -> IO ()
   , chOnBackStart :: BackJob -> IO ()
   , chOnBackProgress :: BackJob -> BackPassProgress -> IO ()
@@ -718,7 +721,7 @@ defaultCompileHooks =
     , chOnFrontOutputStart = \_ _ -> return ()
     , chOnFrontOutputProgress = \_ _ _ -> return ()
     , chOnFrontOutputDone = \_ _ _ -> return ()
-    , chOnBackQueued = \_ _ -> return ()
+    , chOnBackQueued = \_ -> return ()
     , chOnBackSkipped = \_ -> return ()
     , chOnBackStart = \_ -> return ()
     , chOnBackProgress = \_ _ -> return ()
@@ -730,12 +733,11 @@ runCompilePlan :: Source.SourceProvider
                -> C.GlobalOptions
                -> CompilePlan
                -> CompileScheduler
-               -> Int
+               -> Generation
                -> CompileHooks
                -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
 runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
   let hooks = instrumentHooksForAnalytics ana hooks0
-      backQueue = csBackQueue sched
       backCallbacks = BackJobCallbacks
         { bjcOnStart = chOnBackStart hooks
         , bjcOnProgress = chOnBackProgress hooks
@@ -753,12 +755,10 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
         , ccOnFrontOutputStart = chOnFrontOutputStart hooks
         , ccOnFrontOutputProgress = chOnFrontOutputProgress hooks
         , ccOnFrontOutputDone = chOnFrontOutputDone hooks
-        , ccShouldWriteFrontOutput = do
-            current <- readIORef (csGenRef sched)
-            return (current == gen)
+        , ccShouldWriteFrontOutput = isCurrent gen
         , ccOnBackJob = \job -> do
-            enqueued <- backQueueEnqueue backQueue gen job backCallbacks
-            chOnBackQueued hooks (bjKey job) enqueued
+            enqueueBack (schedulerBackQueue sched) gen backCallbacks job
+            chOnBackQueued hooks (bjKey job)
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }

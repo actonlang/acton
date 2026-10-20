@@ -3176,8 +3176,9 @@ buildRecordingEvents sched eventLog proj opts = do
   names <- sort . map dropExtension . filter ((== ".act") . takeExtension) <$> listDirectory (proj </> "src")
   let srcFiles = map (sourcePath proj) names
   plan <- Compile.prepareCompilePlan Source.diskSourceProvider eventsGlobalOptions sched opts srcFiles True Nothing
-  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions plan sched 0 (eventHooks eventLog)
-  backFailure <- Compile.backQueueWait (Compile.csBackQueue sched) 0
+  gen <- Compile.currentGeneration sched
+  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions plan sched gen (eventHooks eventLog)
+  backFailure <- Compile.waitBackJobs sched gen
   return (buildResult res backFailure)
 
 -- | The last line of a scenario: how its build ended.
@@ -3202,7 +3203,7 @@ eventHooks eventLog =
     , Compile.chOnFrontDone        = \t -> stage ("front-done " ++ taskName t)
     , Compile.chOnFrontResult      = \t fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind fr)
     , Compile.chOnDiagnostics      = \t _ diags -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
-    , Compile.chOnBackQueued       = \key _ -> stage ("back-queued " ++ keyName key)
+    , Compile.chOnBackQueued       = \key -> stage ("back-queued " ++ keyName key)
     , Compile.chOnBackSkipped      = \key -> stage ("back-skipped " ++ keyName key)
     , Compile.chOnFrontOutputStart = \key kind -> stage (outputLine "output-start" key kind)
     , Compile.chOnFrontOutputDone  = \key kind time -> outputDone kind (outputLine "output-done" key kind ++ " " ++ maybe "failed" (const "ok") time)

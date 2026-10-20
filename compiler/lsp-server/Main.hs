@@ -550,13 +550,13 @@ warnBackgroundCompilerLocked projRoot = do
                  "; LSP compilation is disabled until it exits.")))
 
 -- | Run an action only if the compile generation is current.
-whenCurrentGen :: Int -> LspM () () -> LspM () ()
+whenCurrentGen :: Compile.Generation -> LspM () () -> LspM () ()
 whenCurrentGen gen action = do
-  current <- liftIO $ readIORef (Compile.csGenRef compileScheduler)
-  when (current == gen) action
+  current <- liftIO $ Compile.isCurrent gen
+  when current action
 
 -- | Notify the client of a compile error for the current generation.
-notifyCompileError :: Int -> String -> LspM () ()
+notifyCompileError :: Compile.Generation -> String -> LspM () ()
 notifyCompileError gen msg =
   whenCurrentGen gen $
     sendNotification SMethod_WindowShowMessage
@@ -613,10 +613,10 @@ lspDiagnosticsFrom :: [Diagnostic String] -> [LSP.Diagnostic]
 lspDiagnosticsFrom diags = concatMap (map reportToLsp . reportsOf) diags
 
 -- | Prepare a compile plan for a file, run it, and publish diagnostics.
-runCompile :: Int -> FilePath -> LspM () ()
+runCompile :: Compile.Generation -> FilePath -> LspM () ()
 runCompile gen path = do
   env <- getLspEnv
-  progress <- startLspProgress gen path
+  progress <- startLspProgress (Compile.generationNumber gen) path
   finished <- liftIO $ newIORef False
   let finish = finishProgressOnce finished progress
       body = do
@@ -650,7 +650,7 @@ resolveCompileRoot path opts = do
       Project.normalizePathSafe (Project.projPath paths)
 
 -- | Prepare and run a compile while holding the per-run project work lock.
-runCompilePlanWithHooks :: Int -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
+runCompilePlanWithHooks :: Compile.Generation -> FilePath -> FilePath -> Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> LspProgress -> LspM () Bool
 runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
   env <- getLspEnv
   let publishFor t diags =
@@ -703,13 +703,9 @@ runCompilePlanWithHooks gen rootProj path sp gopts opts progress = do
               Left err ->
                 return (Left (Compile.compileFailureMessage err))
               Right (envAcc, _) -> do
-                rememberCompletionStates gen plan envAcc
+                rememberCompletionStates (Compile.generationNumber gen) plan envAcc
                 progressFor "Completion ready"
-                let opts' = Compile.ccOpts (Compile.cpContext plan)
-                backFailure <-
-                  if C.only_build opts'
-                    then return Nothing
-                    else Compile.backQueueWait (Compile.csBackQueue compileScheduler) gen
+                backFailure <- Compile.waitBackJobs compileScheduler gen
                 case backFailure of
                   Just failure ->
                     return (Left (Compile.backPassFailureMessage failure))

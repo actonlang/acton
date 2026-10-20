@@ -520,12 +520,12 @@ withProjectLockNotice gopts projDir action =
       unless (C.quiet gopts) $
         putStrLn ("Waiting for compiler lock in " ++ projDir)
 
-withProjectLockForGen :: C.GlobalOptions -> CompileScheduler -> Int -> FilePath -> IO Bool -> IO Bool
-withProjectLockForGen gopts sched gen projDir action = do
+withProjectLockForGen :: C.GlobalOptions -> Generation -> FilePath -> IO Bool -> IO Bool
+withProjectLockForGen gopts gen projDir action = do
     completed <- newIORef False
-    whenCurrentGen sched gen $
+    whenCurrent gen $
       withProjectLockNotice gopts projDir $
-        whenCurrentGen sched gen (action >>= writeIORef completed)
+        whenCurrent gen (action >>= writeIORef completed)
     readIORef completed
 
 requireProjectLayout :: Paths -> IO ()
@@ -623,9 +623,7 @@ withCompileWatchContext gopts action = do
       CliWatchContext <$> newCompileScheduler gopts maxParallel <*> initProgressUI gopts maxParallel
                       <*> newProgressState
     cleanup ctx = do
-      modifyMVar_ (csAsyncRef (cwScheduler ctx)) $ \running -> do
-        mapM_ Async.cancel running
-        return Nothing
+      stopCompile (cwScheduler ctx)
       progressReset (cwProgressUI ctx) (cwProgressState ctx)
 
 logProjectBuild :: C.GlobalOptions -> ProgressUI -> ProgressState -> FilePath -> IO ()
@@ -796,7 +794,7 @@ runTestsWatch gopts opts topts mode paths = do
         testParallel0 <- testMaxParallel gopts
         let testParallel = if mode `elem` [TestModePerf, TestModeScale, TestModeStress] then 1 else testParallel0
         let runOnce gen mChanged = do
-              withProjectLockForGen gopts sched gen projDir $ do
+              withProjectLockForGen gopts gen projDir $ do
                 logProjectBuild gopts progressUI progressState projDir
                 srcFiles <- projectSourceFiles paths
                 selected <- selectTestSources gopts opts paths topts srcFiles
@@ -804,12 +802,12 @@ runTestsWatch gopts opts topts mode paths = do
                 -- unchanged compiler passes.
                 hadErrors <- if null selected then return False else
                   compileFilesChanged sp gopts opts selected (selected == srcFiles) Nothing (Just (watchCtx, gen))
-                unless hadErrors $ whenCurrentGen sched gen $ do
+                unless hadErrors $ whenCurrent gen $ do
                   selectStart <- getTime Monotonic
                   testModules <- mapM (fmap modNameToString . moduleNameFromFile (srcDir paths) (projName paths)) selected
                   modulesToTest <- selectTestModules paths srcFiles mChanged testModules
                   logTiming gopts opts (progressLogLine progressUI) "affected test selection" selectStart
-                  unless (null modulesToTest) $ whenCurrentGen sched gen $
+                  unless (null modulesToTest) $ whenCurrent gen $
                     do
                       useColorOut <- useColor gopts
                       testStart <- getTime Monotonic
@@ -882,7 +880,7 @@ watchProjectAt gopts opts projDir = do
                         progressUI = cwProgressUI watchCtx
                         progressState = cwProgressState watchCtx
                     let runOnce gen mChanged =
-                          withProjectLockForGen gopts sched gen (projPath paths) $ do
+                          withProjectLockForGen gopts gen (projPath paths) $ do
                             logProjectBuild gopts progressUI progressState (projPath paths)
                             srcFiles <- projectSourceFiles paths
                             hadErrors <- compileFilesChanged sp gopts opts srcFiles True mChanged (Just (watchCtx, gen))
@@ -949,7 +947,7 @@ watchFile gopts opts file = do
         withTempDirOpts opts $ \opts' _ ->
           withCompileWatchContext gopts $ \watchCtx -> do
             let sched = cwScheduler watchCtx
-                runOnce gen mChanged = whenCurrentGen sched gen $
+                runOnce gen mChanged = whenCurrent gen $
                   void $ compileFilesChanged sp gopts opts' [absFile] False mChanged (Just (watchCtx, gen))
             runWatchFile gopts absFile sched runOnce
 
@@ -1027,7 +1025,7 @@ runWatchProject :: C.GlobalOptions
                 -> FilePath
                 -> FilePath
                 -> CompileScheduler
-                -> (Int -> Maybe [FilePath] -> IO Bool)
+                -> (Generation -> Maybe [FilePath] -> IO Bool)
                 -> IO ()
 runWatchProject gopts projDir srcRoot sched runOnce = do
     stampsRef <- newIORef M.empty
@@ -1070,7 +1068,7 @@ runWatchProject gopts projDir srcRoot sched runOnce = do
 runWatchFile :: C.GlobalOptions
              -> FilePath
              -> CompileScheduler
-             -> (Int -> Maybe [FilePath] -> IO ())
+             -> (Generation -> Maybe [FilePath] -> IO ())
              -> IO ()
 runWatchFile gopts absFile sched runOnce = do
     stampsRef <- newIORef M.empty
@@ -1518,7 +1516,7 @@ compileFilesChanged :: Source.SourceProvider
                     -> [String]
                     -> Bool
                     -> Maybe [FilePath]
-                    -> Maybe (CliWatchContext, Int)
+                    -> Maybe (CliWatchContext, Generation)
                     -> IO Bool
 compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
     maxParallel <- compileParallelism gopts
@@ -1533,8 +1531,9 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
       Just (ctx, gen) -> return (cwScheduler ctx, gen)
       Nothing -> do
         sched' <- newCompileScheduler gopts maxParallel
-        return (sched', 0)
-    let cleanupProgress = whenCurrentGen sched gen (progressReset progressUI progressState)
+        gen' <- currentGeneration sched'
+        return (sched', gen')
+    let cleanupProgress = whenCurrent gen (progressReset progressUI progressState)
     cleanupProgress
     let runCompile = do
           sp' <- overlayChangedPaths sp mChangedPaths
@@ -1551,8 +1550,8 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                 let cctx = cpContext plan
                     opts' = ccOpts cctx
                     watchMode = C.watch opts'
-                cliHooks <- initCliCompileHooks progressUI progressState gopts sched gen plan
-                let clearProgress = whenCurrentGen sched gen (cchClearProgress cliHooks)
+                cliHooks <- initCliCompileHooks progressUI progressState gopts gen plan
+                let clearProgress = whenCurrent gen (cchClearProgress cliHooks)
                     finalizeCompile onError = do
                       clearProgress
                       onError
@@ -1568,8 +1567,8 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                 compileStart <- getTime Monotonic
                 compileRes <- runCompilePlan sp gopts plan sched gen (cchHooks cliHooks)
                 backFailure <- case compileRes of
-                  Right _ | not (C.only_build opts') -> backQueueWait (csBackQueue sched) gen
-                  _ -> return Nothing
+                  Right _ -> waitBackJobs sched gen
+                  Left _ -> return Nothing
                 logTiming gopts opts' logLine "Acton compilation" compileStart
                 case compileRes of
                   Left err ->
@@ -1584,7 +1583,7 @@ compileFilesChanged sp gopts opts srcFiles allowPrune mChangedPaths mWatch = do
                           else do
                             clearProgress
                             result <- newIORef False
-                            whenCurrentGen sched gen $ do
+                            whenCurrent gen $ do
                               success <- runCliPostCompile cliHooks gopts plan env
                               writeIORef result success
                             not <$> readIORef result
@@ -1626,11 +1625,10 @@ data CliCompileHooks = CliCompileHooks
 initCliCompileHooks :: ProgressUI
                     -> ProgressState
                     -> C.GlobalOptions
-                    -> CompileScheduler
-                    -> Int
+                    -> Generation
                     -> CompilePlan
                     -> IO CliCompileHooks
-initCliCompileHooks progressUI progressState gopts sched gen plan = do
+initCliCompileHooks progressUI progressState gopts gen plan = do
     let neededTasks = cpNeededTasks plan
         rootProj = ccRootProj (cpContext plan)
         rootPaths = ccPathsRoot (cpContext plan)
@@ -1682,7 +1680,7 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                         , shareForPhase t backRatio))
             | t <- neededTasks
             ]
-    let gate = whenCurrentGen sched gen
+    let gate = whenCurrent gen
         logLine msg = gate $ do
           progressLogLine progressUI msg
         logRendered render = gate $ do
@@ -2103,7 +2101,6 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
               when (not (quiet gopts optsPlan)) $
                 forM_ melapsed $ \elapsed ->
                   logRendered (\cols -> frontOutputDoneLine cols key kind elapsed)
-          , chOnBackQueued = \_ _ -> return ()
           , chOnBackSkipped = creditBack
           , chOnBackStart = onBackStart
           , chOnBackProgress = onBackProgress
@@ -2113,9 +2110,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
         onFinalStart = do
           gate (progressStartTask progressUI progressState finalKey finalActiveLine Nothing)
           setPercent 85
-        onFinalDone success = do
-          current <- readIORef (csGenRef sched)
-          when (current == gen) $ do
+        onFinalDone success =
+          whenCurrent gen $ do
             mElapsed <- progressDoneTask progressUI progressState finalKey
             setPercent 100
             when success $
