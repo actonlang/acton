@@ -60,9 +60,9 @@ Call flow:
       the user asks to build / run a module
 
 State and orchestration:
-  - Acton.Compile holds only small in-process caches (tyPathCache, pubHashCache,
-    and nameHashCache) to speed up .tydb lookups; all orchestration state is
-    owned by the caller.
+  - Acton.Compile holds only one in-process ModuleCache (.tydb paths, module
+    hashes and name hashes) to speed up .tydb lookups; all orchestration state
+    is owned by the caller.
   - Callers allocate and hold a CompileScheduler from this module. The
     scheduler encapsulates mutable state (generation id, cancelable async
     handle, build-spec stamp, and a shared back-queue); callers pass it into
@@ -154,9 +154,10 @@ module Acton.Compile
   , hasParseStage
   , quiet
   , missingIfaceDiagnostics
-  , getPubHashCached
-  , getImplHashCached
-  , updatePubHashCache
+  , ModuleCache
+  , moduleCache
+  , HashKind(..)
+  , lookupModuleHash
   , rootEligible
   ) where
 
@@ -762,7 +763,7 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }
-  compileTasks sp gopts (cpContext plan) (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+  compileTasks sp gopts moduleCache (cpContext plan) (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
 
 -- | Tap the generic progress hooks to feed the analytics sampler. Each pass
 -- already reports through these callbacks, so a single wrapper covers parse,
@@ -797,66 +798,70 @@ dump mn h txt =
 dumpWhen                                :: C.CompileOptions -> A.ModName -> (C.CompileOptions -> Bool) -> String -> String -> IO ()
 dumpWhen opts mn flag label text        = when (flag opts) (dump mn label text)
 
--- Global caches (process‑wide) to reduce repeated .tydb lookups during parallel builds
---
--- We deliberately create top‑level MVars via unsafePerformIO and mark them
--- NOINLINE so their initializer runs exactly once. Without NOINLINE, GHC could
--- inline or float the initializer, accidentally creating multiple MVars under
--- optimization. This guarantees a single cache per process.
---
--- Thread‑safety: all access goes through modifyMVar/modifyMVar_ so read/modify/
--- write is atomic. These caches are best‑effort for performance; correctness
--- does not depend on them. On a miss we fall back to reading .tydb headers from
--- disk. After a successful compile we update pubHashCache so dependents in
--- this process see the new public hash.
---
--- tyPathCache    :: ModName -> absolute .tydb path (resolved from searchPath)
--- pubHashCache   :: ModName -> current public hash (from header or compile)
--- implHashCache  :: ModName -> current implementation hash (from header or compile)
--- nameHashCache  :: ModName -> per-name hash info (from header or compile)
-{-# NOINLINE tyPathCache #-}
-tyPathCache :: MVar (M.Map A.ModName FilePath)
-tyPathCache = unsafePerformIO (newMVar M.empty)
+-- Module cache -------------------------------------------------------------------------------------
 
-{-# NOINLINE pubHashCache #-}
-pubHashCache :: MVar (M.Map A.ModName B.ByteString)
-pubHashCache = unsafePerformIO (newMVar M.empty)
+-- | Interface hashes read from .tydb files, keyed by module name.  Every
+-- table is read and written under its own lock.  A hash or name table is
+-- always locked before the path table, never after.
+data ModuleCache = ModuleCache
+  { tydbPathTable :: MVar (M.Map A.ModName FilePath)
+  , pubHashTable  :: MVar (M.Map A.ModName B.ByteString)                                      -- found answers only
+  , implHashTable :: MVar (M.Map A.ModName B.ByteString)                                      -- found answers only
+  , nameMapTable  :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))         -- complete public maps
+  , nameReadTable :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))      -- single reads, misses kept
+  }
 
-{-# NOINLINE implHashCache #-}
-implHashCache :: MVar (M.Map A.ModName B.ByteString)
-implHashCache = unsafePerformIO (newMVar M.empty)
+-- | The two hashes of a module or name: its public interface and its
+-- implementation.
+data HashKind = Pub | Impl deriving (Eq, Ord, Show)
 
-{-# NOINLINE nameHashCache #-}
-nameHashCache :: MVar (M.Map A.ModName (M.Map A.Name InterfaceFiles.NameHashInfo))
-nameHashCache = unsafePerformIO (newMVar M.empty)
+hashTable                               :: HashKind -> ModuleCache -> MVar (M.Map A.ModName B.ByteString)
+hashTable Pub                           = pubHashTable
+hashTable Impl                          = implHashTable
 
--- | Per-name results of targeted name-hash reads. Kept apart from
--- nameHashCache, whose per-module maps must stay complete.
-{-# NOINLINE nameHashOneCache #-}
-nameHashOneCache :: MVar (M.Map (A.ModName, A.Name) (Maybe InterfaceFiles.NameHashInfo))
-nameHashOneCache = unsafePerformIO (newMVar M.empty)
+newModuleCache :: IO ModuleCache
+newModuleCache = ModuleCache <$> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty
 
--- | Start an independent build of another source tree. These caches are keyed
--- by module name, so they cannot cross revision boundaries. The caller must
--- finish all compiler jobs before clearing them.
+-- | The process-wide module cache.  NOINLINE keeps GHC from inlining or
+-- floating the initializer, so it runs once and the process has exactly one.
+{-# NOINLINE moduleCache #-}
+moduleCache :: ModuleCache
+moduleCache = unsafePerformIO newModuleCache
+
+-- | Empty the process-wide cache before an independent build of another
+-- source tree.  Its tables are keyed by module name, so they cannot tell two
+-- revisions apart.  No compile job may be running.
 clearModuleCaches :: IO ()
 clearModuleCaches = do
-  modifyMVar_ tyPathCache (const (return M.empty))
-  modifyMVar_ pubHashCache (const (return M.empty))
-  modifyMVar_ implHashCache (const (return M.empty))
-  modifyMVar_ nameHashCache (const (return M.empty))
-  modifyMVar_ nameHashOneCache (const (return M.empty))
+    clear tydbPathTable
+    clear pubHashTable
+    clear implHashTable
+    clear nameMapTable
+    clear nameReadTable
+  where
+    clear :: (ModuleCache -> MVar (M.Map k v)) -> IO ()
+    clear table = modifyMVar_ (table moduleCache) (const (return M.empty))
 
--- | Resolve the on-disk .tydb path for a module, using a process-wide cache.
--- Avoids repeated filesystem walks when many modules share dependencies.
-getTyFileCached :: [FilePath] -> A.ModName -> IO (Maybe FilePath)
-getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
+-- | Look a key up, loading and remembering it on a miss.  Only found values
+-- are kept, so a miss is loaded again next time.  The table stays locked
+-- while loading.
+memoFound :: Ord k => MVar (M.Map k v) -> k -> IO (Maybe v) -> IO (Maybe v)
+memoFound table key load = modifyMVar table $ \known -> case M.lookup key known of
+    Just v  -> return (known, Just v)
+    Nothing -> do found <- load
+                  return (maybe known (\v -> M.insert key v known) found, found)
+
+-- | The .tydb of a module on a search path.  A remembered path counts only
+-- while it exists and lies under the search path; its search order is not
+-- checked again.  A module without a .tydb is forgotten.
+lookupTydbPath :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe FilePath)
+lookupTydbPath cache spaths mn = modifyMVar (tydbPathTable cache) $ \m -> do
   normSearch <- mapM normalizePathSafe spaths
-  let refresh cache = do
+  let refresh known = do
         mty <- Acton.Env.findTyFile spaths mn
         case mty of
-          Just p  -> return (M.insert mn p cache, Just p)
-          Nothing -> return (M.delete mn cache, Nothing)
+          Just p  -> return (M.insert mn p known, Just p)
+          Nothing -> return (M.delete mn known, Nothing)
   case M.lookup mn m of
     Just p -> do
       pNorm <- normalizePathSafe p
@@ -866,45 +871,49 @@ getTyFileCached spaths mn = modifyMVar tyPathCache $ \m -> do
         else refresh m
     Nothing -> refresh m
 
--- | Read a module's public hash using the cache and .tydb header.
--- This drives dependency invalidation when an imported interface changes.
-getPubHashCached :: Paths -> A.ModName -> IO (Maybe B.ByteString)
-getPubHashCached paths mn = modifyMVar pubHashCache $ \m -> do
-  case M.lookup mn m of
-    Just ih -> return (m, Just ih)
-    Nothing -> do
-      mty <- getTyFileCached (searchPath paths) mn
-      case mty of
-        Just ty -> do
-          hashes <- InterfaceFiles.readModuleHashesMaybe ty
-          case hashes of
-            Just (_srcH, ih, _implH) -> return (M.insert mn ih m, Just ih)
-            Nothing -> return (m, Nothing)
-        Nothing -> return (m, Nothing)
+-- | Read from a module's .tydb on the search path, when it has one.
+withTydb :: ModuleCache -> [FilePath] -> A.ModName -> (FilePath -> IO (Maybe a)) -> IO (Maybe a)
+withTydb cache spath m readTydb = lookupTydbPath cache spath m >>= maybe (return Nothing) readTydb
 
--- | Update the public-hash cache after a successful compile.
--- Keeps in-process dependency checks consistent for later modules.
-updatePubHashCache :: A.ModName -> B.ByteString -> IO ()
-updatePubHashCache mn ih = modifyMVar_ pubHashCache $ \m -> return (M.insert mn ih m)
+-- | A module's current pub or impl hash, from its .tydb header unless a
+-- finished module or an earlier read remembered it.
+lookupModuleHash :: ModuleCache -> [FilePath] -> HashKind -> A.ModName -> IO (Maybe B.ByteString)
+lookupModuleHash cache spath kind m = memoFound (hashTable kind cache) m $
+    withTydb cache spath m (fmap (fmap pick) . InterfaceFiles.readModuleHashesMaybe)
+  where
+    pick (_, pub, impl) = case kind of
+      Pub  -> pub
+      Impl -> impl
 
--- | Read a module's implementation hash using the cache and .tydb header.
-getImplHashCached :: Paths -> A.ModName -> IO (Maybe B.ByteString)
-getImplHashCached paths mn = modifyMVar implHashCache $ \m -> do
-  case M.lookup mn m of
-    Just ih -> return (m, Just ih)
-    Nothing -> do
-      mty <- getTyFileCached (searchPath paths) mn
-      case mty of
-        Just ty -> do
-          hashes <- InterfaceFiles.readModuleHashesMaybe ty
-          case hashes of
-            Just (_srcH, _pubH, ih) -> return (M.insert mn ih m, Just ih)
-            Nothing -> return (m, Nothing)
-        Nothing -> return (m, Nothing)
+-- | A module's complete public name map, from its .tydb header unless a
+-- finished module or an earlier read remembered it.
+lookupNameMap :: ModuleCache -> [FilePath] -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
+lookupNameMap cache spath m = memoFound (nameMapTable cache) m $
+    withTydb cache spath m (fmap (fmap publicNameMap) . InterfaceFiles.readHeaderMaybe)
+  where
+    publicNameMap (_, _, _, _, _, _, nameHashes, _, _, _) = nameHashMapFromList (publicNameHashes nameHashes)
 
--- | Update the implementation-hash cache after a successful compile.
-updateImplHashCache :: A.ModName -> B.ByteString -> IO ()
-updateImplHashCache mn ih = modifyMVar_ implHashCache $ \m -> return (M.insert mn ih m)
+-- | One name's hashes: from the module's complete map when there is one,
+-- else by a single-name read of its .tydb, whose absence is remembered too.
+lookupNameHash :: ModuleCache -> [FilePath] -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
+lookupNameHash cache spath m n = do
+    complete <- readMVar (nameMapTable cache)
+    case M.lookup m complete of
+      Just names -> return (M.lookup n names)
+      Nothing    -> modifyMVar (nameReadTable cache) $ \singleReads -> case M.lookup (m, n) singleReads of
+        Just r  -> return (singleReads, r)
+        Nothing -> do r <- withTydb cache spath m (`InterfaceFiles.readNameHashMaybe` n)
+                      return (M.insert (m, n) r singleReads, r)
+
+-- | Make a finished module's hashes visible to later lookups.  A result
+-- without name hashes (a module reused from its .tydb) must not enter the
+-- complete maps: it would hide the single-name reads of its .tydb.
+rememberFront :: ModuleCache -> A.ModName -> FrontResult -> IO ()
+rememberFront cache m fr = do
+    modifyMVar_ (pubHashTable cache)  (return . M.insert m (frPubHash fr))
+    modifyMVar_ (implHashTable cache) (return . M.insert m (frImplHash fr))
+    unless (null (frNameHashes fr)) $
+      modifyMVar_ (nameMapTable cache) (return . M.insert m (nameHashMapFromList (frNameHashes fr)))
 
 -- | Build a name hash map keyed by Name.
 nameHashMapFromList :: [InterfaceFiles.NameHashInfo] -> M.Map A.Name InterfaceFiles.NameHashInfo
@@ -915,46 +924,6 @@ publicIfaceTE = filter (Names.isPublicName . fst)
 
 publicNameHashes :: [InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]
 publicNameHashes = filter (Names.isPublicName . InterfaceFiles.nhName)
-
--- | Read a module's per-name hash map using the cache and .tydb header.
-getNameHashMapCached :: Paths -> A.ModName -> IO (Maybe (M.Map A.Name InterfaceFiles.NameHashInfo))
-getNameHashMapCached paths mn = modifyMVar nameHashCache $ \m -> do
-  case M.lookup mn m of
-    Just hm -> return (m, Just hm)
-    Nothing -> do
-      mty <- getTyFileCached (searchPath paths) mn
-      case mty of
-        Just ty -> do
-          hdr <- InterfaceFiles.readHeaderMaybe ty
-          case hdr of
-            Just (_sourceMetaH, _srcH, _ih, _implH, _impsH, _depModulesH, nameHashes, _rootsH, _testsH, _docH) -> do
-              let hm = nameHashMapFromList (publicNameHashes nameHashes)
-              return (M.insert mn hm m, Just hm)
-            Nothing -> return (m, Nothing)
-        Nothing -> return (m, Nothing)
-
--- | Read one cached name hash without decoding all per-name hash rows.
-getNameHashCached :: Paths -> A.ModName -> A.Name -> IO (Maybe InterfaceFiles.NameHashInfo)
-getNameHashCached paths mn n = do
-  m <- readMVar nameHashCache
-  case M.lookup mn m of
-    Just hm -> return (M.lookup n hm)
-    Nothing -> modifyMVar nameHashOneCache $ \c ->
-      case M.lookup (mn, n) c of
-        Just r -> return (c, r)
-        Nothing -> do
-          mty <- getTyFileCached (searchPath paths) mn
-          r <- case mty of
-                 Just ty -> InterfaceFiles.readNameHashMaybe ty n
-                 Nothing -> return Nothing
-          return (M.insert (mn, n) r c, r)
-
--- | Update the name-hash cache after a successful compile. Cached modules
--- carry no name hashes; their entries must not shadow targeted reads.
-updateNameHashCache :: A.ModName -> [InterfaceFiles.NameHashInfo] -> IO ()
-updateNameHashCache mn infos =
-  when (not (null infos)) $
-    modifyMVar_ nameHashCache $ \m -> return (M.insert mn (nameHashMapFromList infos) m)
 
 
 -- Handling Acton files -----------------------------------------------------------------------------
@@ -2728,12 +2697,13 @@ criticalWeights g sizes                 = weights
 --     tests and final binary while the root keeps the user's options.
 compileTasks :: Source.SourceProvider
              -> C.GlobalOptions
+             -> ModuleCache
              -> CompileContext
              -> [GlobalTask]
              -> Data.Set.Set TaskKey
              -> CompileCallbacks
              -> IO (Either CompileFailure (Acton.Env.Env0, Bool))
-compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
+compileTasks sp gopts cache ctx tasks dbpBlocked callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = readIORef runningRef >>= mapM_ cancel
@@ -2865,9 +2835,9 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                 (sourceText source)
                 (sourceBytes source)
                 (sourceMeta source)
-                (getPubHashCached bPaths)
-                (getImplHashCached bPaths)
-                (getNameHashCached bPaths)
+                (lookupModuleHash cache (searchPath bPaths) Pub)
+                (lookupModuleHash cache (searchPath bPaths) Impl)
+                (lookupNameHash cache (searchPath bPaths))
                 (\p -> ccOnFrontProgress callbacks t optsBuiltin p)
                 (ccOnFrontOutputStart callbacks)
                 (ccOnFrontOutputProgress callbacks)
@@ -2886,9 +2856,7 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                     Nothing -> do
                       ccOnFrontDone callbacks t optsBuiltin
                       ccOnFrontResult callbacks t optsBuiltin fr
-                      updatePubHashCache mn (frPubHash fr)
-                      updateImplHashCache mn (frImplHash fr)
-                      updateNameHashCache mn (frNameHashes fr)
+                      rememberFront cache mn fr
                       forM_ (frBackJob fr) $ ccOnBackJob callbacks
                       return (Right ())
 
@@ -2961,9 +2929,7 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                 return fr{ frOutputJobs = [job] }
           cacheFrontResult fr0 = do
             fr <- addCachedTyOutputJob fr0
-            updatePubHashCache mn (frPubHash fr)
-            updateImplHashCache mn (frImplHash fr)
-            updateNameHashCache mn (frNameHashes fr)
+            rememberFront cache mn fr
             return (key, Right fr)
           readTyFile = do
             tyRes <- InterfaceFiles.readFileMaybe tyFile
@@ -2987,20 +2953,20 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                 case M.lookup depKey pubMap of
                   Just h  -> return (Just h)
                   Nothing
-                    | isBuiltin depKey -> getPubHashCached paths m
+                    | isBuiltin depKey -> lookupModuleHash cache (searchPath paths) Pub m
                     | M.member depKey taskMap -> error ("Internal error: missing pub hash for dep " ++ modNameToString m)
-                    | otherwise -> getPubHashCached paths m
-              Nothing -> getPubHashCached paths m
+                    | otherwise -> lookupModuleHash cache (searchPath paths) Pub m
+              Nothing -> lookupModuleHash cache (searchPath paths) Pub m
           resolveImportImplHash m =
             case M.lookup m providers of
               Just depKey ->
                 case M.lookup depKey implMap of
                   Just h  -> return (Just h)
                   Nothing
-                    | isBuiltin depKey -> getImplHashCached paths m
+                    | isBuiltin depKey -> lookupModuleHash cache (searchPath paths) Impl m
                     | M.member depKey taskMap -> error ("Internal error: missing impl hash for dep " ++ modNameToString m)
-                    | otherwise -> getImplHashCached paths m
-              Nothing -> getImplHashCached paths m
+                    | otherwise -> lookupModuleHash cache (searchPath paths) Impl m
+              Nothing -> lookupModuleHash cache (searchPath paths) Impl m
           resolveNameHash' m n =
             case M.lookup m providers of
               Just depKey ->
@@ -3009,13 +2975,13 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                     case M.lookup n hm of
                       Just info -> return (Just info)
                       Nothing
-                        | providerIsCachedTy depKey -> getNameHashCached paths m n
+                        | providerIsCachedTy depKey -> lookupNameHash cache (searchPath paths) m n
                         | otherwise -> return Nothing
                   Nothing
-                    | isBuiltin depKey -> getNameHashCached paths m n
+                    | isBuiltin depKey -> lookupNameHash cache (searchPath paths) m n
                     | M.member depKey taskMap -> error ("Internal error: missing name hashes for dep " ++ modNameToString m)
-                    | otherwise -> getNameHashCached paths m n
-              Nothing -> getNameHashCached paths m n
+                    | otherwise -> lookupNameHash cache (searchPath paths) m n
+              Nothing -> lookupNameHash cache (searchPath paths) m n
           providerIsCachedTy depKey =
             case M.lookup depKey taskMap of
               Just GlobalTask{ gtTask = TyTask _ } -> True
@@ -3054,7 +3020,7 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
                      if M.member depMn providers
                        then return (missingAcc, Data.Set.insert depMn changedAcc)
                        else do
-                         mTy <- getTyFileCached (searchPath paths) depMn
+                         mTy <- lookupTydbPath cache (searchPath paths) depMn
                          case mTy of
                            Nothing -> return (Data.Set.insert depMn missingAcc, changedAcc)
                            Just tyPath -> do
@@ -3362,7 +3328,7 @@ compileTasks sp gopts ctx tasks dbpBlocked callbacks = do
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
                     prevNameHashes <- if C.verbose gopts
-                      then getNameHashMapCached paths mn
+                      then lookupNameMap cache (searchPath paths) mn
                       else return Nothing
                     when (C.verbose gopts) $ do
                       if needBySource

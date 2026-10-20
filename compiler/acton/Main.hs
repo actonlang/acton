@@ -1163,7 +1163,7 @@ compileSigTarget gopts queryGopts opts paths rootProj sysAbs depOverrides target
           , ccOnInfo = \msg -> when (C.verbose gopts) $ putStrLn msg
           , ccOnBackJob = \_ -> return ()
           }
-    compileRes <- compileTasks sp queryGopts cctx' (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
+    compileRes <- compileTasks sp queryGopts moduleCache cctx' (cpNeededTasks plan) (cpDbpBlocked plan) callbacks
     case compileRes of
       Left err -> printErrorAndExit (compileFailureMessage err)
       Right (_, hadErrors) -> when hadErrors System.Exit.exitFailure

@@ -765,8 +765,8 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
       src
       srcBytes
       Nothing
-      (Compile.getPubHashCached paths)
-      (Compile.getImplHashCached paths)
+      (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Pub)
+      (Compile.lookupModuleHash Compile.moduleCache (Project.searchPath paths) Compile.Impl)
       (resolveNameHash paths)
       (\_ -> return ())
       (\_ _ -> return ())
