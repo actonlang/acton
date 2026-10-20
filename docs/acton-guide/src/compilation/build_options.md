@@ -777,7 +777,7 @@ promise that the host kernel permits them.
 The result also reports `page_hash_table_log2`, `block_size`, `end_padding`,
 `thread_local_size_limit`, `no_thread_local_warmup`,
 `thread_local_refill_blocks`, `realloc_no_free`, available `markers` (including
-the initiating thread), `bytes_per_marker`, `mark_range_stealing`,
+the initiating thread), `bytes_per_marker`, `mark_range_stealing`, `mark_bits`,
 `initial_mark_stack_size`, `pause_target_ms`, `free_space_divisor`,
 `full_frequency`, `heap_growth_divisor`, `alloc_budget_percent`, `heap_size`,
 `free_bytes` and `unmapped_bytes`. The pause target is `None` for ordinary and
