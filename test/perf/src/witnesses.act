@@ -1,0 +1,29 @@
+import testing
+
+
+# Each helper uses two levels of collection witnesses three times. Their
+# identity is unobservable, so all three comparisons can share the same recipe.
+def compare_concrete(xs: list[list[int]], ys: list[list[int]]) -> bool:
+    return xs == ys and xs == ys and xs == ys
+
+
+def compare_generic[A(Eq)](xs: list[list[A]], ys: list[list[A]]) -> bool:
+    return xs == ys and xs == ys and xs == ys
+
+
+def _test_concrete_nested_equality(t: testing.SyncT):
+    xs = [[1, 2, 3], [4, 5, 6]]
+    ys = [[1, 2, 3], [4, 5, 6]]
+    result = True
+    for _ in t.loop():
+        result = compare_concrete(xs, ys)
+    testing.assertEqual(result, True)
+
+
+def _test_generic_nested_equality(t: testing.SyncT):
+    xs = [[1, 2, 3], [4, 5, 6]]
+    ys = [[1, 2, 3], [4, 5, 6]]
+    result = True
+    for _ in t.loop():
+        result = compare_generic(xs, ys)
+    testing.assertEqual(result, True)

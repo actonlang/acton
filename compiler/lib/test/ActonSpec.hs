@@ -32,6 +32,9 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.Completion as Completion
 import qualified Acton.Hashing as Hashing
 import qualified Acton.Testing as Testing
+import qualified Acton.Transform as Transform
+import qualified Acton.WitnessKey as WitnessKey
+import qualified Acton.WitnessStats as WitnessStats
 import qualified InterfaceFiles
 import Pretty (print, prettyText)
 import qualified Pretty
@@ -69,6 +72,7 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.Aeson as Ae
+import qualified Data.Aeson.Types as AeTypes
 import qualified System.IO.Unsafe
 
 
@@ -169,6 +173,94 @@ main = do
   env0 <- Acton.Env.initEnv sysTypesPath False
 
   sydTest $ do
+    describe "Local witness sharing" $ do
+      let w i = S.Internal S.Witness "test" i
+          dep i = S.eVar (w i)
+          bind i t e = S.Assign NoLoc [S.pVar (w i) t] e
+          recipe e = S.eCallVar (S.name "Ctor") [e]
+          emit e = S.Expr NoLoc e
+          reduce = Transform.wtrans Transform.env0
+          t = S.tCon (S.TC (S.noQ "WitnessType") [])
+          a = dep 0
+          first = bind 1 t (recipe a)
+      it "compares alias-expanded dependency recipes" $ do
+        reduce [bind 3 t a, first, bind 2 t (recipe (dep 3)), emit (dep 2)]
+          `shouldBe` [first, emit (dep 1)]
+      it "normalizes aliases of projected witnesses" $ do
+        let projected = S.eDot a (S.name "component")
+            first = bind 1 t (recipe projected)
+        reduce [bind 3 t projected, first, bind 2 t (recipe (dep 3)), emit (dep 2)]
+          `shouldBe` [first, emit (dep 1)]
+      it "keeps different types, dependencies and constructors distinct" $ do
+        let otherType = bind 2 S.tNone (recipe a)
+            otherDep = bind 3 t (recipe (dep 7))
+            otherCtor = bind 4 t (S.eCallVar (S.name "OtherCtor") [a])
+            ss = [first, otherType, otherDep, otherCtor]
+        reduce ss `shouldBe` ss
+      it "checks exact equality within a fingerprint bucket" $ do
+        let x = S.Async NoLoc a
+            y = S.Await NoLoc a
+            ss = [bind 1 t (recipe x), bind 2 t (recipe y)]
+        WitnessKey.witnessHash t (recipe x) `shouldBe` WitnessKey.witnessHash t (recipe y)
+        reduce ss `shouldBe` ss
+      it "ignores source locations in the fingerprint and equality" $ do
+        let atLocation = S.Call (Loc 10 20) (S.Var (Loc 11 12) (S.noQ "Ctor")) (S.posarg [a]) S.KwdNil
+        WitnessKey.witnessHash t atLocation `shouldBe` WitnessKey.witnessHash t (recipe a)
+        reduce [first, bind 2 t atLocation, emit (dep 2)] `shouldBe` [first, emit (dep 1)]
+      it "matches type equality for optional defaults and type-variable kinds" $ do
+        let row e = S.TRow NoLoc S.PRow (S.name "x") S.tNone (Just (S.DfltExpr e e Nothing)) S.posNil
+            r1 = row (S.eInt 1)
+            r2 = row (S.eInt 2)
+            v1 = S.tVar (S.TV S.KType (S.name "A"))
+            v2 = S.tVar (S.TV S.KWild (S.name "A"))
+        r1 `shouldBe` r2
+        WitnessKey.witnessHash r1 a `shouldBe` WitnessKey.witnessHash r2 a
+        WitnessKey.witnessHash v1 a `shouldBe` WitnessKey.witnessHash v2 a
+      it "does not share with a witness whose dependency is shadowed by a parameter" $ do
+        let inner = S.Def NoLoc (S.name "inner") [] (S.pospar [(w 0,t)]) S.KwdNIL (Just S.tNone)
+                        [bind 2 t (recipe a), emit (dep 2)] S.NoDec S.fxPure Nothing
+            ss = [first, S.sDecl [inner]]
+        reduce ss `shouldBe` ss
+      it "retains safe reuse of a dominating witness" $ do
+        let inner = S.Def NoLoc (S.name "inner") [] S.PosNIL S.KwdNIL (Just S.tNone)
+                        [bind 2 t (recipe a), emit (dep 2)] S.NoDec S.fxPure Nothing
+            expected = inner{ S.dbody = [emit (dep 1)] }
+        reduce [first, S.sDecl [inner]] `shouldBe` [first, S.sDecl [expected]]
+      it "invalidates recipes when a type variable is shadowed" $ do
+        let tv = S.TV S.KType (S.name "A")
+            generic = S.eCall (S.tApp (S.eVar (S.name "Ctor")) [S.tVar tv]) []
+            inner = S.Def NoLoc (S.name "inner") [S.QBind tv []] S.PosNIL S.KwdNIL (Just S.tNone)
+                        [bind 2 t generic, emit (dep 2)] S.NoDec S.fxPure Nothing
+            ss = [bind 1 t generic, S.sDecl [inner]]
+        reduce ss `shouldBe` ss
+      it "keeps branches separate" $ do
+        let ss = [S.sIf1 (S.eBool True) [first] [bind 2 t (recipe a)], bind 3 t (recipe a)]
+        reduce ss `shouldBe` ss
+      it "uses an existing witness only after its definition" $ do
+        let second = bind 2 t (recipe a)
+        reduce [emit (dep 2), first, second, emit (dep 2)]
+          `shouldBe` [emit (dep 2), first, emit (dep 1)]
+      it "handles many distinct recipes followed by aliases" $ do
+        let count = 4000
+            originals = [bind i t (recipe (S.eInt (fromIntegral i))) | i <- [1..count]]
+            duplicates = [bind (count+i) t (recipe (S.eInt (fromIntegral i))) | i <- [1..count]]
+        length (reduce (originals ++ duplicates)) `shouldBe` count
+      it "reports static and nonstatic constructors, excluding default metadata" $ do
+        let ctor = S.qName ["__builtin__"] "SequenceD_list"
+            static = S.eCall (S.tApp (S.eQVar ctor) [S.tNone]) []
+            generic = S.eCallVar (S.name "Ctor") [a]
+            loop = S.While NoLoc (S.eBool True) [bind 2 t generic] []
+            unusedDefault = S.Def NoLoc (S.name "unused_default") []
+                              (S.PosPar (S.name "x") (Just S.tNone) (Just generic) S.PosNIL)
+                              S.KwdNIL (Just S.tNone) [S.sPass] S.NoDec S.fxPure Nothing
+            m = S.Module (S.modName ["witness_test"]) [] Nothing [bind 1 t static, loop, S.sDecl [unusedDefault]]
+            stats = WitnessStats.witnessStats env0 "boxed" m
+            number key = AeTypes.parseMaybe (Ae.withObject "stats" (Ae..: key)) stats :: Maybe Int
+        number "bindings" `shouldBe` Just 2
+        number "constructor_expressions" `shouldBe` Just 2
+        number "static_bindings" `shouldBe` Just 1
+        number "nonstatic_constructor_expressions_in_loops" `shouldBe` Just 1
+
     describe "Zon (build.zig.zon)" $ do
       let deps src = case Zon.parseZon src of
                        Left e  -> error ("parse failed: " ++ e)

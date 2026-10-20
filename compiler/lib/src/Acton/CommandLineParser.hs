@@ -79,6 +79,7 @@ data CompileOptions   = CompileOptions {
                          kinds       :: Bool,
                          types       :: Bool,
                          escape_analysis :: Bool,
+                         witness_stats :: Bool,
                          sigs        :: Bool,
                          norm        :: Bool,
                          deact       :: Bool,
@@ -343,6 +344,7 @@ sigCompileOptions = mkSigCompileOptions
         , kinds = False
         , types = False
         , escape_analysis = False
+        , witness_stats = False
         , sigs = False
         , norm = False
         , deact = False
@@ -384,6 +386,7 @@ compileOptionsWith optimization = CompileOptions
         <*> switch (long "kinds"        <> help "Show all the result after kind-checking")
         <*> switch (long "types"        <> help "Show all inferred expression types")
         <*> switch (long "escape-analysis" <> help "Show experimental parameter escape analysis")
+        <*> switch (long "witness-stats" <> help "Print per-module witness statistics as JSON lines (compiled modules only)")
         <*> switch (long "sigs"         <> help "Show the inferred type signatures")
         <*> switch (long "norm"         <> help "Show the result after syntactic normalization")
         <*> switch (long "deact"        <> help "Show the result after deactorization")

@@ -230,6 +230,7 @@ import qualified Acton.CPS
 import qualified Acton.Deactorizer
 import qualified Acton.LambdaLifter
 import Acton.Analytics
+import qualified Acton.WitnessStats
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import Acton.Builtin (mBuiltin)
@@ -293,6 +294,7 @@ import Text.Printf
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
@@ -885,6 +887,7 @@ defaultCompileOptions =
     , C.kinds = False
     , C.types = False
     , C.escape_analysis = False
+    , C.witness_stats = False
     , C.sigs = False
     , C.norm = False
     , C.deact = False
@@ -1239,7 +1242,8 @@ readSourceFileMeta path = do
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
 
 data BackInput = BackInput
-  { biTypeEnv   :: Acton.Env.Env0
+  { biWitnessEnv :: Maybe Acton.Env.Env0 -- Original extension identities; diagnostics only
+  , biTypeEnv   :: Acton.Env.Env0
   , biTypedMod  :: A.Module
   , biSrc       :: String
   , biImplHash  :: B.ByteString
@@ -1318,7 +1322,7 @@ dbpDeferredBackJob :: Bool
 dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
   | C.no_dbp opts = Nothing
   | C.only_build opts = Nothing
-  | altOutput opts = Nothing
+  | altOutput opts || C.witness_stats opts = Nothing
   | mn == A.modName ["__builtin__"] = Nothing
   | blocked = Nothing
   -- A module with NotImplemented bodies is implemented by a hand-written
@@ -2578,6 +2582,10 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
       timeTypeReconstruct <- getTime Monotonic
       forceTypeResult nmod tchecked typeEnv tests
       timeTypeForce <- getTime Monotonic
+      let witnessEnv = if C.witness_stats opts
+                         then let I.NModule _ te _ = nmod in Just (Acton.Env.defineClosed te (setMod mn env))
+                         else Nothing
+      forM_ witnessEnv $ \we -> emitWitnessStats we "typed" tchecked
       -- Escape summaries are part of the internal compilation interface.  In
       -- particular, every Hashable.hash implementation is checked here before
       -- B_hash may pass it an automatically allocated hasher.  The command
@@ -2834,7 +2842,8 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                           Nothing ->
                             Just BackJob { bjPaths = paths
                                          , bjOpts = opts
-                                         , bjInput = BackInput { biTypeEnv = typeEnv
+                                         , bjInput = BackInput { biWitnessEnv = witnessEnv
+                                                              , biTypeEnv = typeEnv
                                                               , biTypedMod = tchecked
                                                               , biSrc = srcContent
                                                               , biImplHash = moduleImplHash
@@ -2932,7 +2941,8 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
         { bjPaths = paths
         , bjOpts = dbjOpts dbj
         , bjInput = BackInput
-            { biTypeEnv = Converter.convEnvProtos env1
+            { biWitnessEnv = if C.witness_stats (dbjOpts dbj) then Just env1 else Nothing
+            , biTypeEnv = Converter.convEnvProtos env1
             , biTypedMod = dbsModule selection
             , biSrc = Source.ssText snap
             , biImplHash = codegenHash
@@ -3157,6 +3167,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 
       ((normalized, normEnv), tNormalize) <- timedBackPass BackPassNormalize $ do
         res@(normalized', _) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
+        forM_ (biWitnessEnv backInput) $ \we -> emitWitnessStats we "normalized" normalized'
         iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized')
         return res
 
@@ -3177,6 +3188,7 @@ runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
 
       (boxed, tBoxing) <- timedBackPass BackPassBoxing $ do
         res <- Acton.Boxing.doBoxing liftEnv lifted
+        forM_ (biWitnessEnv backInput) $ \we -> emitWitnessStats we "boxed" res
         iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print res)
         return res
 
@@ -3603,7 +3615,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               { bjPaths = paths
               , bjOpts = optsT
               , bjInput = BackInput
-                  { biTypeEnv = Converter.convEnvProtos env1
+                  { biWitnessEnv = if C.witness_stats optsT then Just env1 else Nothing
+                  , biTypeEnv = Converter.convEnvProtos env1
                   , biTypedMod = tmod
                   , biSrc = srcText
                   , biImplHash = moduleImplHash
@@ -5594,3 +5607,14 @@ fmtTime t =
   where
     secs :: Float
     secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)
+
+-- Encode before taking the diagnostic lock, then write the strict record and
+-- newline together. Lazy/chunked writes can interleave JSON from parallel passes.
+{-# NOINLINE witnessStatsLock #-}
+witnessStatsLock :: MVar ()
+witnessStatsLock = unsafePerformIO (newMVar ())
+
+emitWitnessStats env stage m = do
+  let record = B.snoc (BL.toStrict $ Aeson.encode $ Acton.WitnessStats.witnessStats env stage m) '\n'
+  _ <- evaluate (B.length record)
+  withMVar witnessStatsLock $ \_ -> B.hPut stdout record

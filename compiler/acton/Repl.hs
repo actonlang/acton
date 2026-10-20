@@ -165,6 +165,7 @@ normalizeReplCompileOptions opts =
          , C.kinds = False
          , C.types = False
          , C.escape_analysis = False
+         , C.witness_stats = False
          , C.sigs = False
          , C.norm = False
          , C.deact = False
