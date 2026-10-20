@@ -144,6 +144,47 @@ Three compatibility adjustments were necessary for pinned native dependencies un
 
 The server comparison used `--dbg-no-lines` and matched native `-O2` settings. Closure classes fell from 17 to 14. Generated C fell from 1,087 lines to 178 main-file lines plus 588 support lines, or 766 total, a reduction of 29.5%. Optimized project instructions fell from 11,516 to 6,696 bytes, a reduction of 41.9%. Final shared adapters saved a further 288 instruction bytes relative to the preceding implementation, with descriptor storage unchanged at 664 bytes.
 
+## Integration with the await fix and CPS simplification, 20 October 2026
+
+The branch is now rebased onto main at `7153db45`, which includes the
+`await-action-proc-param` fix. It also includes the separate
+`cps-continuation-simplification` change. The compiler and runtime source changes
+merged without conflicts; conflicting generated snapshots were regenerated from
+the combined compiler.
+
+The await fix distinguishes calls through a proc parameter that consume an
+action's result from statement calls that discard it. Result-using calls use
+`__call__` and await the reply; statement calls use `__exec__` and retain the
+`$SKIPRESc` marker. The closure adapter sharing preserves this distinction.
+The [CPS simplification](acton-dev-guide/src/compiler/passes/cps.md) bypasses
+immediate forwarding jumps while retaining continuations passed to suspending
+calls. Its commit remains separate for review.
+
+Ignored-result continuations now have a `None` parameter, so more of them can
+use `$ConstCont`. Its runtime call method previously invoked the next
+continuation directly, which let long chains consume the C stack. It now
+returns an `R_CONT` record and leaves the invocation to the worker trampoline.
+No closure layout or serialization format changes are needed for this repair.
+
+The serialization regression checks that one ConstCont invocation returns one
+step without calling the next continuation. An isolated probe returned false
+with the old runtime and true after the fix. Another case snapshots and resumes
+a ConstCont introduced after an ignored-result call, checking its captured
+return value. The CPS regression additionally unwinds 100,000 await-separated
+recursive calls. The expanded serialization regression passes in release mode.
+The final `make` build passed, followed by 662 library tests, all 74 incremental
+tests, and 176 native compiler, core-language, regression and sieve tests.
+The native run includes the action/proc tests, serialization checks and the
+100,000-call CPS regression in both debug and release modes.
+
+The larger-project tables above predate this integration. As a smaller smoke
+comparison, the exact saved sieve sources from 19 October produce identical
+prime lists for arguments 100 and 4000. At 4000, the combined compiler generates
+17 closure classes for each version, versus 26 and 25 in that saved baseline.
+Cumulative allocation is approximately 1.568 GB and 62.2 MB, versus 1.827 GB and
+70.8 MB. Main also changed between these runs; these observations do not isolate
+all effects of the integration, and no new timing claim is made.
+
 ## Review focus and remaining opportunities
 
 The implementation is ready for colleague review. The most consequential points to examine are conservative class equivalence and `$ConstCont` recognition; exact-width scalar persistence and early registration for cycles; shared field offsets and scalar IDs; adapter calling conventions, casts, and Action behavior; and support-file freshness and ownership during incremental builds. The new regression files should be reviewed together with the compiler, runtime, documentation, and golden-output changes.

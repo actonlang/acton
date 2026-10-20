@@ -162,3 +162,26 @@ bool closure_serializationQ_action_three_probe($action callback) {
                   (&probe, cont, probe.args[0], probe.args[1], probe.args[2]);
     return closure_serialization_probe_result(&probe, cont, call, exec, $RWAIT);
 }
+
+// A ConstCont invocation must return one trampoline step without invoking the
+// next continuation. Two links distinguish that from recursively forwarding.
+struct closure_serialization_stop {
+    struct $ContG_class *methods;
+    int calls;
+};
+
+static $R closure_serialization_stop_call($Cont self, $WORD value) {
+    ((struct closure_serialization_stop *)self)->calls++;
+    return $R_CONT(NULL, value);
+}
+
+bool closure_serializationQ_constcont_step_probe(void) {
+    struct $ContG_class methods = { .__call__ = closure_serialization_stop_call };
+    struct closure_serialization_stop stop = { .methods = &methods };
+    $WORD outer_value = toB_int(17);
+    $Cont inner = $CONSTCONT(toB_int(23), ($Cont)&stop);
+    $Cont outer = $CONSTCONT(outer_value, inner);
+    $R step = outer->$class->__call__(outer, B_None);
+    return step.tag == $RCONT && step.cont == inner &&
+           step.value == outer_value && stop.calls == 0;
+}

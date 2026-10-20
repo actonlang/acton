@@ -33,6 +33,16 @@ proc def exec_mut(callback: mut(int) -> int, value: int) -> int:
 proc def snapshot(value: int) -> int:
     NotImplemented
 
+# The runtime must return a single step rather than invoke the next Cont.
+def constcont_step_probe() -> bool:
+    NotImplemented
+
+# Ignoring snapshot's result produces a ConstCont after the await fix. The
+# extension serializes that continuation before resuming the captured value.
+proc def saved_result(value: int) -> int:
+    snapshot(0)
+    return value
+
 class Node(object):
     next: ?Node
     callback: ?pure() -> Node
@@ -111,6 +121,8 @@ def round_trip_actor[A](value: A, actor_ref: Sample) -> A:
     NotImplemented
 
 actor main(env):
+    assert constcont_step_probe()
+    assert saved_result(23) == 23
     assert round_trip(mixed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 281
     assert round_trip(mixed_renamed(10, i8(-3), u16(258), u64(7), 2.5, True, "ab"))(4) == 282
     assert round_trip(packed(i8(-15), 12345))() == (i8(-15), 12345)

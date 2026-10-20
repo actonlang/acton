@@ -743,8 +743,8 @@ $ConstCont $ConstContD___deserialize__($ConstCont self, $Serial$state state) {
 }
 
 $R $ConstContD___call__($ConstCont $this, $WORD _ignore) {
-    $Cont cont = $this->cont;
-    return cont->$class->__call__(cont, $this->val);
+    // Keep continuation chains on the worker trampoline, not the C stack.
+    return $R_CONT($this->cont, $this->val);
 }
 
 $Cont $CONSTCONT($WORD val, $Cont cont){
