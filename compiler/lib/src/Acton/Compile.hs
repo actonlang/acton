@@ -219,7 +219,7 @@ import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.IO
 import System.IO.Unsafe (unsafePerformIO)
-import System.Posix.Files (FileStatus, deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
+import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
 
@@ -1719,7 +1719,7 @@ readModuleHeader sp gopts opts paths actFile = do
       else do
         -- .tydb exists: read the cached header and validate it against compiler
         -- compatibility plus source metadata/content as needed.
-        hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
+        hdrE <- trySync (InterfaceFiles.readHeaderSummary tyFile)
         case hdrE of
           Left _ -> readSourceHead mn
           Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, mdoc) -> do
@@ -1787,11 +1787,11 @@ readModuleHeader sp gopts opts paths actFile = do
     compilerNewerThan tyMTimeNs
       | C.ignore_compiler_version opts = return False
       | otherwise = do
-          exePathE <- (try getExecutablePath :: IO (Either SomeException FilePath))
+          exePathE <- trySync getExecutablePath
           case exePathE of
             Left _ -> return False
             Right exePath -> do
-              exeStatusE <- (try (getFileStatus exePath) :: IO (Either SomeException FileStatus))
+              exeStatusE <- trySync (getFileStatus exePath)
               case exeStatusE of
                 Left _ -> return False
                 Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
@@ -1802,11 +1802,7 @@ readModuleHeader sp gopts opts paths actFile = do
     -- besides rewriting a possibly multi-GB file for a pure mtime drift.
     refreshCachedSourceMeta currentSourceMeta = do
       let tyFilePath = tyDbPath paths (modName paths)
-      res <- (try :: IO a -> IO (Either SomeException a)) $
-        InterfaceFiles.updateSourceMeta tyFilePath currentSourceMeta
-      case res of
-        Left _  -> return ()
-        Right _ -> return ()
+      void (trySync (InterfaceFiles.updateSourceMeta tyFilePath currentSourceMeta))
 
     verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps depModules nameCount roots tests mdoc = do
       let curHash = SHA256.hash (Source.ssBytes snap)
@@ -2004,7 +2000,7 @@ readCodegenHash path = do
   if not exists
     then return Nothing
     else do
-      res <- (try :: IO a -> IO (Either SomeException a)) $ withFile path ReadMode hGetLine
+      res <- trySync (withFile path ReadMode hGetLine)
       case res of
         Left _ -> return Nothing
         Right line -> return (extractCodegenHash line)
