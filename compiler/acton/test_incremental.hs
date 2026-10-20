@@ -3130,7 +3130,9 @@ main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
       , f09_run_124
       , f10_alt_output
       ]
-  , sequentialTestGroup "incremental-project-cases" AllSucceed
+  , -- Every test of this group writes a fresh fixture project first, so a
+    -- failing test does not keep the tests after it from running.
+    sequentialTestGroup "incremental-project-cases" AllFinish
       [ p14_partial_rebuild
       , p15_rebuild_import
       , p16_dep_api_change
