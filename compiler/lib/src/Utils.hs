@@ -28,8 +28,9 @@ import Pretty
 import Control.DeepSeq
 import Prelude hiding((<>))
 import System.Directory (renameFile, removeFile)
+import System.Clock (Clock(Monotonic), TimeSpec, getTime)
 import System.FilePath (takeDirectory, takeFileName)
-import System.IO (openTempFile, hSetEncoding, utf8, hPutStr, hClose)
+import System.IO (IOMode(ReadMode), openFile, openTempFile, hGetContents, hSetEncoding, utf8, hPutStr, hClose)
 import System.IO.Error (catchIOError)
 
 data SrcLoc                     = Loc Int Int | NoLoc deriving (Eq,Ord,Show,Read,Generic,NFData)
@@ -200,3 +201,31 @@ writeFileUtf8Atomic path contents =
   where
     dir = takeDirectory path
     template = takeFileName path ++ ".tmp"
+
+-- | Read a UTF-8 text file without altering newlines or encoding.
+readFileUtf8 :: FilePath -> IO String
+readFileUtf8 path = do
+    h <- openFile path ReadMode
+    hSetEncoding h utf8
+    hGetContents h
+
+-- | Run an action and return its synchronous exception as Left. An
+-- asynchronous exception, such as a cancel, is rethrown, so the thread
+-- receiving it still stops.
+trySync                         :: IO a -> IO (Either Control.Exception.SomeException a)
+trySync m                       = do r <- Control.Exception.try m
+                                     case r of
+                                       Left err | isAsyncException err -> Control.Exception.throwIO err
+                                       _ -> return r
+
+-- | True for an exception thrown to a thread by another thread, such as a
+-- cancel. A handler that catches every exception must rethrow these.
+isAsyncException                :: Control.Exception.SomeException -> Bool
+isAsyncException err            = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
+
+-- | Run an action and measure its duration on the monotonic clock.
+timed                           :: IO a -> IO (a, TimeSpec)
+timed m                         = do t0 <- getTime Monotonic
+                                     r <- m
+                                     t1 <- getTime Monotonic
+                                     return (r, t1 - t0)

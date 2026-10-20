@@ -372,8 +372,8 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                      [ e | Left e <- xs ])
         -- Scanner/checker front door for one statement. Ordinary exceptions
         -- become Left values so infTop can collect multiple errors; async
-        -- exceptions still escape through tryTop.
-        scanOrCheck env s item q        = tryTop $ do
+        -- exceptions still escape through trySync.
+        scanOrCheck env s item q        = trySync $ do
                                              let p = nameText $ uniqPrefix s
                                              ((total,te1,s1),st) <- runTypeFromState p (initTypeState p) $ do
                                                pushFX fxPure tNone
@@ -397,7 +397,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                    (writeChan q (TopProgressFinished item))
         -- Background worker body for a total statement.  It receives exactly
         -- the scanned env and scanned statement returned by scanTopStmt.
-        checkTotal env te s             = tryTop $ do
+        checkTotal env te s             = trySync $ do
                                              (te1,ss1) <- runType (nameText $ uniqPrefix s) $ do
                                                pushFX fxPure tNone
                                                checkTopStmt env te s
@@ -412,7 +412,7 @@ infTop progressCb inferredCb env ss     = do -- The scanner itself is sequential
                                                               when (isAsyncException err) (Control.Exception.throwIO err)
                                                Right x -> putMVar result x
         -- Run a TypeM action and convert TypeM's Either error into the IO
-        -- exception path used by tryTop.
+        -- exception path used by trySync.
         runType p m                     = do r <- Control.Exception.evaluate (runTypeMState p m)
                                              case r of
                                                Left err -> Control.Exception.throwIO err
@@ -471,15 +471,6 @@ activeProgressLabel active              = Just (formatActive active)
         formatNames [n1,n2]             = n1 ++ ", " ++ n2
         formatNames (n1:n2:rest)        = n1 ++ ", " ++ n2 ++ " (+" ++ show (length rest) ++ " others)"
         formatNames []                  = ""
-
-tryTop                                  :: IO a -> IO (Either Control.Exception.SomeException a)
-tryTop m                                = do r <- Control.Exception.try m
-                                             case r of
-                                               Left err | isAsyncException err -> Control.Exception.throwIO err
-                                               _ -> return r
-
-isAsyncException                        :: Control.Exception.SomeException -> Bool
-isAsyncException err                    = isJust (Control.Exception.fromException err :: Maybe Control.Exception.SomeAsyncException)
 
 throwTopErrors                          :: [Control.Exception.SomeException] -> IO a
 throwTopErrors errs                     = case others of

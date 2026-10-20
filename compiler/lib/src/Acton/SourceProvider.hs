@@ -12,7 +12,7 @@ module Acton.SourceProvider
 import qualified Data.ByteString as B
 import Data.Time.Clock (UTCTime)
 import System.Directory (getModificationTime)
-import System.IO (IOMode(ReadMode), hGetContents, hSetEncoding, openFile, utf8)
+import Utils (readFileUtf8)
 
 -- | Snapshot of a file's contents.
 -- The same contents are available as decoded text and raw bytes.
@@ -52,10 +52,3 @@ diskSourceProvider =
           }
     , spGetModTime = getModificationTime
     }
-
--- | Read a UTF-8 text file without altering newlines or encoding.
-readFileUtf8 :: FilePath -> IO String
-readFileUtf8 path = do
-  h <- openFile path ReadMode
-  hSetEncoding h utf8
-  hGetContents h

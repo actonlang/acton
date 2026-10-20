@@ -244,7 +244,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
 import Control.DeepSeq (force, rnf)
-import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
+import Control.Exception (Exception, IOException, SomeException, bracketOnError, catch, displayException, evaluate, finally, mask_, throwIO, try)
 import Control.Monad
 import Data.Binary (encode)
 import Data.Bits (shiftL, shiftR, (.|.))
@@ -1384,17 +1384,12 @@ runStartedFrontOutputAction :: (TaskKey -> FrontOutputKind -> Maybe TimeSpec -> 
                             -> IO ()
                             -> IO ()
 runStartedFrontOutputAction onDone key kind action = do
-  t0 <- getTime Monotonic
-  res <- (try action :: IO (Either SomeException ()))
-  t1 <- getTime Monotonic
-  let elapsed = t1 - t0
+  (res, elapsed) <- timed (try action :: IO (Either SomeException ()))
   onDone key kind (either (const Nothing) (const (Just elapsed)) res) `catch` ignoreProgressException
   either throwIO return res
   where
     ignoreProgressException :: SomeException -> IO ()
-    ignoreProgressException err
-      | isJust (fromException err :: Maybe SomeAsyncException) = throwIO err
-      | otherwise = return ()
+    ignoreProgressException err = when (isAsyncException err) (throwIO err)
 
 frontOutputKindName :: FrontOutputKind -> String
 frontOutputKindName FrontOutputTydb     = "tydb"
@@ -1450,7 +1445,7 @@ frontOutputFailure job = do
   case mErr of
     Nothing -> return Nothing
     Just err
-      | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
+      | isAsyncException err -> throwIO err
       | otherwise -> return (Just (CompileInternalFailure (frontOutputFailureMessage job err)))
 
 rememberFrontOutputJobList :: IORef [FrontOutputJob] -> [FrontOutputJob] -> IO ()
@@ -2761,10 +2756,9 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                     -- module's front on the structured diagnostics path.
                     -- Docs and the interface copy are never read back within
                     -- this build, so they stay in the background.
-                    writeRes <- try (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey FrontOutputTydb (writeTyDb outputKey))
+                    writeRes <- trySync (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey FrontOutputTydb (writeTyDb outputKey))
                     case writeRes of
-                      Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
-                               | otherwise -> return (Left (tydbWriteDiagnostics mn err))
+                      Left err -> return (Left (tydbWriteDiagnostics mn err))
                       Right () -> do
                         outputJobs <- mask_ $ do
                           let startOutput =
@@ -3194,15 +3188,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
     let cancelRunning = readIORef runningRef >>= mapM_ cancel
-        waitFrontOutputs = do
-          _ <- waitFrontOutputJobsRef frontOutputRef
-          return ()
         waitFrontOutputsOnExit =
-          waitFrontOutputs `catch` ignoreFrontOutputExitFailure
-        ignoreFrontOutputExitFailure :: SomeException -> IO ()
-        ignoreFrontOutputExitFailure err
-          | isJust (fromException err :: Maybe SomeAsyncException) = throwIO err
-          | otherwise = return ()
+          void (trySync (waitFrontOutputJobsRef frontOutputRef))
         finishWithFrontOutputs res = do
           outputFailure <- waitFrontOutputJobsRef frontOutputRef
           case res of
@@ -3342,19 +3329,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             M.partitionWithKey
               (\_ (_dbj, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
               deferredBacks
-      prepared <- (try $
+      prepared <- trySync $
         forM (M.elems ready) $ \(dbj, _waitSet) -> do
           mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
           case mJob of
             Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
             Just _ -> return ()
-          return mJob)
-        :: IO (Either SomeException [Maybe BackJob])
+          return mJob
       case prepared of
-        Left err ->
-          if isJust (fromException err :: Maybe SomeAsyncException)
-            then throwIO err
-            else return (Left (CompileInternalFailure (displayException err)))
+        Left err -> return (Left (CompileInternalFailure (displayException err)))
         Right jobs -> do
           mapM_ (ccOnBackJob callbacks) (catMaybes jobs)
           return (Right waiting)
@@ -3983,7 +3966,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           runFront
                         handleSyncFailure :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
                         handleSyncFailure err =
-                          if isJust (fromException err :: Maybe SomeAsyncException)
+                          if isAsyncException err
                             then throwIO err
                             else rerunFront
                     (do
@@ -4042,15 +4025,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           -- cannot misread it as stale dep hashes and rerun the
                                           -- front against a persistent environmental error.
                                           writeRefreshedRows = do
-                                            res <- try (runFrontOutputSync (ccOnFrontOutputStart callbacks)
-                                                                           (ccOnFrontOutputDone callbacks)
-                                                                           (ccShouldWriteFrontOutput callbacks)
-                                                                           outputKey
-                                                                           FrontOutputTydb $
-                                                          InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes)
+                                            res <- trySync (runFrontOutputSync (ccOnFrontOutputStart callbacks)
+                                                                               (ccOnFrontOutputDone callbacks)
+                                                                               (ccShouldWriteFrontOutput callbacks)
+                                                                               outputKey
+                                                                               FrontOutputTydb $
+                                                              InterfaceFiles.updateImplRefresh tyFile moduleImplHash updatedDepModules updatedNameHashes)
                                             case res of
-                                              Left err | isJust (fromException err :: Maybe SomeAsyncException) -> throwIO err
-                                                       | otherwise -> return (Just (tydbWriteDiagnostics mn err))
+                                              Left err -> return (Just (tydbWriteDiagnostics mn err))
                                               Right () -> return Nothing
                                           startOutputJobs =
                                             if C.tydb optsT
