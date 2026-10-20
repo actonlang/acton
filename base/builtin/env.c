@@ -35,6 +35,10 @@
 
 extern char rts_exit;
 extern int return_val;
+#if defined(_WIN32) || defined(_WIN64)
+#else
+extern bool stdin_attr_changed;
+#endif
 
 
 // Env /////////////////////////////////////////////////////////////////////////
@@ -66,6 +70,7 @@ $R B_EnvD_set_stdinG_local (B_Env self, $Cont c$cont, B_bool canonical, B_bool e
         }
     }
 
+    stdin_attr_changed = true;
     tcsetattr(STDIN_FILENO, TCSANOW, &attr);
 #endif
     return $R_CONT(c$cont, B_None);

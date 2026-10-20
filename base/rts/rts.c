@@ -536,6 +536,10 @@ remote_db_t * db = NULL;
 // TODO: termios support in windows?
 #else
 struct termios old_stdin_attr;
+// set_stdin() sets this before it changes the terminal settings of stdin.
+// Only then are the settings in old_stdin_attr restored at exit, because from
+// a background process group, tcsetattr() stops the process with SIGTTOU.
+bool stdin_attr_changed = false;
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -3053,7 +3057,8 @@ void *$mon_socket_loop() {
 void rts_shutdown() {
 #if defined(_WIN32) || defined(_WIN64)
 #else
-    tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
+    if (stdin_attr_changed)
+        tcsetattr(STDIN_FILENO, TCSANOW, &old_stdin_attr);
 #endif
 
     rts_exit = 1;
