@@ -2927,7 +2927,7 @@ dbpReadNameHash paths mn tyFile n = do
   mnh <- InterfaceFiles.readNameHashMaybe tyFile n
   case mnh of
     Just nh -> return nh
-    Nothing -> dbpSelectionError paths mn ("hash info missing for " ++ nameToString n)
+    Nothing -> dbpSelectionError paths mn ("hash info missing for " ++ A.nstr n)
 
 dbpReadOwningName :: Paths -> A.ModName -> FilePath -> A.Name -> IO A.Name
 dbpReadOwningName paths mn tyFile n = do
@@ -2937,8 +2937,8 @@ dbpReadOwningName paths mn tyFile n = do
     Nothing ->
       case n of
         A.Derived base _ -> dbpReadOwningName paths mn tyFile base
-        _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ nameToString n)
-        _ -> dbpSelectionError paths mn ("no top-level owner for " ++ nameToString n)
+        _ | Names.isWitness n -> dbpSelectionError paths mn ("unresolved witness owner for " ++ A.nstr n)
+        _ -> dbpSelectionError paths mn ("no top-level owner for " ++ A.nstr n)
 
 dbpNameHashClosure :: Paths
                    -> A.ModName
