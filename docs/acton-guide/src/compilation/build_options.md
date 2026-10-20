@@ -92,28 +92,50 @@ its section below describes:
 | One automatic heap expansion may add up to [a quarter of the heap](#gc-heap-growth) instead of 16 MiB | `"gc_heap_growth_divisor": "0"` | `GC_HEAP_GROWTH_DIVISOR=0` |
 | The heap is managed in [blocks of 16 KiB](#gc-heap-block-size) instead of 4 KiB | `"gc_block_size": "4096"` | not possible |
 | Threads allocate objects of up to [2048 bytes](#gc-thread-local-allocation-size) from their own free lists, instead of 384 | `"gc_thread_local_size_limit": "0"` | not possible |
+| The collector keeps its marks as [bits](#gc-mark-layout) instead of bytes | `"gc_use_mark_bits": "false"` | not possible |
 
 ## GC mark layout
 
-Applications can opt into a different BDWGC mark representation:
+The collector keeps the marks of a heap block in the block's header, one mark
+per allocation granule (16 bytes on 64-bit targets). With parallel marking,
+BDWGC stores each mark in a byte. Acton stores the marks as bits by default.
+With 16 KiB blocks a header then takes 208 bytes instead of 1104, and the
+headers add 1.3% to the heap instead of 6.7%. Clearing the marks before each
+collection clears about an eighth as many bytes, and the walk over all headers
+at the start of the sweep steps about a fifth as far from one header to the
+next. Setting a mark bit takes an atomic operation, since parallel markers may
+set bits of the same word, where setting a mark byte is a plain store.
+
+On an M1 with 4 markers and on an AMD Ryzen 9 5950X (Linux) with 16, each
+workload ran 8 rounds with either layout: the `gc_heap` and `fleet` benchmarks,
+binarytrees, merkletrees, a build of 4 million records and fleetmgr loading
+10,000 and 50,000 devices. In the geometric mean over the rounds, mark bits used
+2 to 14% less CPU time than mark bytes, 2 to 10% less wall time and 3 to 6% less
+peak resident memory in each workload. The CPU time was lower in every round but
+one, of the `gc_heap` benchmark on the Ryzen. The wall time was lower in 7 or 8
+of the 8 rounds of each workload except fleetmgr loading 10,000 devices on the
+Ryzen, where it was lower in 4 rounds and the same in 4. World-stopped marking
+took 4 to 21% less time in the workloads whose peak resident memory was 390 MB
+or more with mark bytes. Loading 50,000 devices, fleetmgr used 14% less CPU time
+and 19% less time in world-stopped marking. Binarytrees and merkletrees, whose
+peak resident memory was 105 and 84 MB with mark bytes, gained the least: they
+took as long to mark with either layout, and gained only through the cheaper
+clearing and sweep start.
+
+Mark bytes, BDWGC's default with parallel marking, can be selected instead:
 
 ```python
 build_options = {
-    "gc_use_mark_bits": "true",
-    "gc_mark_bit_per_object": "true",
+    "gc_use_mark_bits": "false",
 }
 ```
 
-`gc_use_mark_bits` packs marks into bits instead of using the collector's
-default representation. With parallel marking, the default is byte marks;
-without parallel marking, BDWGC already uses bits. `gc_mark_bit_per_object`
-indexes marks by object instead of allocation granule. The options are
-independent, so either can be enabled on its own.
-
-Both default to `"false"`, preserving BDWGC's existing choices. Packed marks
-reduce metadata size but may increase contention between marking threads.
-Per-object indexing changes the work needed to find an object's mark.
-Measure both on the application's workload before choosing them.
+Without parallel marking, as on WebAssembly, BDWGC uses mark bits whatever
+`gc_use_mark_bits` says. `gc_mark_bit_per_object` indexes marks by object
+instead of allocation granule, which changes the work needed to find an
+object's mark. It defaults to `"false"`. The options are independent, so
+either can be set on its own. Measure on the application's workload before
+changing them.
 
 These are compile-time settings shared by the application, its Acton
 dependencies, the standard library and database support. They preserve

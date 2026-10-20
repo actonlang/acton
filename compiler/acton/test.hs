@@ -2938,14 +2938,14 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("no_thread_local_warmup", "True"),
                 ("thread_local_refill_blocks", "16"),
                 ("realloc_no_free", "True"), ("realloc_frees_moved", "False"),
-                ("mark_range_stealing", "True"), ("mark_bits", "False"),
+                ("mark_range_stealing", "True"), ("mark_bits", "True"),
                 ("bytes_per_marker", "4194304"),
                 ("initial_mark_stack_size",
                  if System.Info.os == "mingw32" then "1048576" else "4194304")]
     -- Build.act settings and the fields they should report.
     tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
-             ("gc_use_mark_bits", "true"),
+             ("gc_use_mark_bits", "false"),
              ("gc_bytes_per_marker", "0"),
              ("gc_initial_mark_stack_size", "65536"),
              ("gc_no_end_padding", "true"),
@@ -2961,7 +2961,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                     ("realloc_no_free", "False"),
                     ("realloc_frees_moved", "True"),
                     ("mark_range_stealing", "False"),
-                    ("mark_bits", "True"),
+                    ("mark_bits", "False"),
                     ("bytes_per_marker", "0"),
                     ("initial_mark_stack_size", "65536")]
     -- With 0, the initial mark stack has the collector's default size: as

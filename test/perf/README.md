@@ -207,7 +207,7 @@ project's `Build.act`:
 
 ```python
 build_options = {
-    "gc_use_mark_bits": "true",
+    "gc_use_mark_bits": "false",
     "gc_mark_bit_per_object": "true",
 }
 ```
