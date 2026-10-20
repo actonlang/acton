@@ -4,15 +4,18 @@ module Main (main) where
 
 import           Control.Monad (foldM, forM, forM_, unless, when)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Data.Text.Encoding as TE
-import           Data.Char (isHexDigit, isSpace, toLower)
+import           Data.Char (isAlphaNum, isHexDigit, isSpace, toLower)
 import           Data.Bits (shiftL, (.|.))
 import           Data.Word (Word64)
 import qualified Acton.Fingerprint as Fingerprint
 import qualified Crypto.Hash.SHA256 as SHA256
-import           Data.List (elemIndex, find, isPrefixOf, partition, sort, sortOn)
+import           Data.Function (on)
+import           Data.IORef (IORef, atomicModifyIORef', newIORef)
+import           Data.List (elemIndex, find, groupBy, intercalate, isPrefixOf, partition, sort, sortOn)
 import qualified Data.Map.Strict as M
 import           Data.Maybe (isJust)
 import           System.Directory
@@ -20,6 +23,7 @@ import           System.Environment (getEnvironment)
 import           System.Exit
 import           System.FilePath
 import           System.IO (Handle)
+import           System.IO.Temp (withSystemTempDirectory)
 import           System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import           System.Process
 import           System.Timeout (timeout)
@@ -32,6 +36,7 @@ import           Control.Concurrent     (threadDelay)
 import           Test.Tasty
 import           Test.Tasty.Runners (NumThreads(..))
 import           Test.Tasty (DependencyType(..), after, TestName)
+import           Test.Tasty.Golden (goldenVsString)
 import           Test.Tasty.HUnit
 import qualified Acton.Compile as Compile
 import qualified Acton.CommandLineParser as C
@@ -286,9 +291,13 @@ rewriteFirstLine path newLine = do
   let rest = snd (T.breakOn "\n" content)
   T.writeFile path (T.pack newLine <> rest)
 
+-- | Resolve the dist tree that holds the acton binary.
+distPath :: IO FilePath
+distPath = canonicalizePath (".." </> ".." </> "dist")
+
 -- | Resolve the acton binary path.
 actonPath :: IO FilePath
-actonPath = canonicalizePath (".." </> ".." </> "dist" </> "bin" </> "acton")
+actonPath = (</> "bin" </> "acton") <$> distPath
 
 -- | Run acton in a directory with fixed job count.
 runActonIn :: FilePath -> [String] -> IO (ExitCode, T.Text)
@@ -3098,12 +3107,265 @@ p59_full_build_keeps_nested_module_binary =
     assertArtifactsGone [binSub]
     assertArtifactsExist [binMain]
 
+-- Compile events -------------------------------------------------------------
+
+-- | The events the compiler library reports while it rebuilds a small module
+-- graph through a series of edits, one line per event. Each build runs in
+-- process with one job. A scenario lists the events of its build in three
+-- parts, each in a deterministic order:
+--
+-- * The events of the stage coordinator and of the stage it runs, in
+--   reporting order. The coordinator starts one stage and waits for it, so
+--   the two take turns. A stage commits the .tydb of its module before it
+--   reports its front done, so the completion of that commit is part of
+--   this order.
+-- * The completions of the doc and .tydb copy outputs, sorted. These outputs
+--   run on threads of their own, alongside the stages, and every one of them
+--   has finished when the build returns.
+-- * The events of the back jobs, in reporting order. The back queue has one
+--   worker, which runs its jobs one at a time in queue order, and each build
+--   waits for all of its jobs.
+--
+-- Parse, front and output progress events depend on timing and on thread
+-- scheduling, so the recorder leaves them out. It records no times either.
+compileEventsGolden :: TestTree
+compileEventsGolden =
+  goldenVsString "compile events across rebuilds" "test/compile_events.golden" $
+    BL.fromStrict . TE.encodeUtf8 . T.pack . unlines <$> recordCompileEvents
+
+-- | The name of the project the scenarios build.
+eventsProjName :: String
+eventsProjName = "events"
+
+-- | Run every scenario in order on a fresh project in a new temporary
+-- directory, with one scheduler for the whole series. The builds read the
+-- system types of the dist tree that holds the suite's acton binary. The
+-- modification time of the test binary must not decide reuse, so the builds
+-- ignore the compiler version.
+recordCompileEvents :: IO [String]
+recordCompileEvents = do
+  distDir <- distPath
+  withSystemTempDirectory "compile-events" $ \tmp -> do
+    proj <- canonicalizePath tmp
+    createDirectoryIfMissing True (proj </> "src")
+    writeBuildAct proj eventsProjName []
+    sched <- Compile.newCompileScheduler eventsGlobalOptions 1
+    eventLog <- EventLog <$> newIORef [] <*> newIORef [] <*> newIORef []
+    let options = Compile.defaultCompileOptions
+          { C.syspath = distDir
+          , C.ignore_compiler_version = True
+          }
+        runScenario (title, edit, adjust) = do
+          edit proj
+          result <- buildRecordingEvents sched eventLog proj (adjust options)
+          stage <- takeLines (stageLines eventLog)
+          outputs <- takeLines (outputLines eventLog)
+          back <- takeLines (backLines eventLog)
+          return $ concat
+            [ ["== " ++ title]
+            , stage
+            , part "background outputs, sorted" (sort outputs)
+            , part "back jobs" back
+            , [result]
+            ]
+        part _ []           = []
+        part header entries = ("-- " ++ header) : entries
+    scenarios <- mapM runScenario eventScenarios
+    return (map (maskHashes . maskPath proj) (intercalate [""] scenarios))
+
+-- | The lines a build records, one list for each part of a scenario, newest
+-- first.
+data EventLog = EventLog
+  { stageLines  :: IORef [String]
+  , outputLines :: IORef [String]
+  , backLines   :: IORef [String]
+  }
+
+-- | Add a line to one part of the log.
+logLine :: IORef [String] -> String -> IO ()
+logLine part line = atomicModifyIORef' part (\entries -> (line : entries, ()))
+
+-- | Take the lines of one part of the log, oldest first, and empty it.
+takeLines :: IORef [String] -> IO [String]
+takeLines part = atomicModifyIORef' part (\entries -> ([], reverse entries))
+
+-- | The library reports info lines only in verbose mode.
+eventsGlobalOptions :: C.GlobalOptions
+eventsGlobalOptions =
+  C.GlobalOptions
+    { C.color = C.Never
+    , C.quiet = True
+    , C.noProgress = True
+    , C.timing = False
+    , C.tty = False
+    , C.verbose = True
+    , C.verboseZig = False
+    , C.jobs = 1
+    }
+
+-- | Plan and run one full build of every module of the project, as
+-- `acton build` does, then wait for its back jobs. Returns the result line.
+buildRecordingEvents :: Compile.CompileScheduler -> EventLog -> FilePath -> C.CompileOptions -> IO String
+buildRecordingEvents sched eventLog proj opts = do
+  names <- sort . map dropExtension . filter ((== ".act") . takeExtension) <$> listDirectory (proj </> "src")
+  let srcFiles = map (sourcePath proj) names
+  plan <- Compile.prepareCompilePlan Source.diskSourceProvider eventsGlobalOptions sched opts srcFiles True Nothing
+  res <- Compile.runCompilePlan Source.diskSourceProvider eventsGlobalOptions plan sched 0 (eventHooks eventLog)
+  backFailure <- Compile.backQueueWait (Compile.csBackQueue sched) 0
+  return (buildResult res backFailure)
+
+-- | The last line of a scenario: how its build ended.
+buildResult :: Either Compile.CompileFailure (a, Bool) -> Maybe Compile.BackPassFailure -> String
+buildResult res backFailure =
+  case (res, backFailure) of
+    (Left failure, _)           -> "result failed: " ++ oneLine (Compile.compileFailureMessage failure)
+    (Right _, Just failure)     -> "result failed: " ++ oneLine (Compile.backPassFailureMessage failure)
+    (Right (_, True), Nothing)  -> "result errors"
+    (Right (_, False), Nothing) -> "result ok"
+  where
+    oneLine = unwords . words
+
+-- | Hooks that record one line per event that compileEventsGolden pins, in
+-- the part of the log the event belongs to.
+eventHooks :: EventLog -> Compile.CompileHooks
+eventHooks eventLog =
+  Compile.defaultCompileHooks
+    { Compile.chOnParseStart       = \t -> stage ("parse-start " ++ taskName t)
+    , Compile.chOnParseDone        = \t _ -> stage ("parse-done " ++ taskName t)
+    , Compile.chOnFrontStart       = \t -> stage ("front-start " ++ taskName t)
+    , Compile.chOnFrontDone        = \t -> stage ("front-done " ++ taskName t)
+    , Compile.chOnFrontResult      = \t fr -> stage ("front-result " ++ taskName t ++ " " ++ backPlanKind fr)
+    , Compile.chOnDiagnostics      = \t _ diags -> stage ("diagnostics " ++ taskName t ++ " " ++ show (length diags))
+    , Compile.chOnBackQueued       = \key _ -> stage ("back-queued " ++ keyName key)
+    , Compile.chOnBackSkipped      = \key -> stage ("back-skipped " ++ keyName key)
+    , Compile.chOnFrontOutputStart = \key kind -> stage (outputLine "output-start" key kind)
+    , Compile.chOnFrontOutputDone  = \key kind time -> outputDone kind (outputLine "output-done" key kind ++ " " ++ maybe "failed" (const "ok") time)
+    , Compile.chOnBackStart        = \job -> back ("back-start " ++ jobName job)
+    , Compile.chOnBackProgress     = \job progress -> back ("back-pass " ++ jobName job ++ " " ++ backPassLine progress)
+    , Compile.chOnBackDone         = \job result -> back ("back-done " ++ jobName job ++ " " ++ backJobOutcome result)
+    , Compile.chOnInfo             = \msg -> stage ("info " ++ msg)
+    }
+  where
+    stage      = logLine (stageLines eventLog)
+    background = logLine (outputLines eventLog)
+    back       = logLine (backLines eventLog)
+
+    -- The .tydb commit finishes on the stage thread, the other outputs on
+    -- threads of their own.
+    outputDone Compile.FrontOutputTydb     = stage
+    outputDone Compile.FrontOutputTydbCopy = background
+    outputDone Compile.FrontOutputDoc      = background
+
+    outputLine event key kind = unwords [event, keyName key, outputKindName kind]
+    taskName = keyName . Compile.gtKey
+    keyName  = prstr . Compile.tkMod
+    jobName  = prstr . A.modname . Compile.biTypedMod . Compile.bjInput
+
+backPlanKind :: Compile.FrontResult -> String
+backPlanKind fr
+  | isJust (Compile.frBackJob fr)         = "eager"
+  | isJust (Compile.frDeferredBackJob fr) = "deferred"
+  | otherwise                             = "none"
+
+outputKindName :: Compile.FrontOutputKind -> String
+outputKindName Compile.FrontOutputTydb     = "tydb"
+outputKindName Compile.FrontOutputTydbCopy = "tydb-copy"
+outputKindName Compile.FrontOutputDoc      = "doc"
+
+-- | A back pass event: the pass, what happened to it, and the number of
+-- passes of the job completed out of its total.
+backPassLine :: Compile.BackPassProgress -> String
+backPassLine progress =
+  case progress of
+    Compile.BackPassStarted  pass completed total   -> line pass "started"  completed total
+    Compile.BackPassFinished pass completed total _ -> line pass "finished" completed total
+    Compile.BackPassSkipped  pass completed total   -> line pass "skipped"  completed total
+  where
+    line pass event completed total =
+      unwords [Compile.backPassName pass, event, show completed ++ "/" ++ show total]
+
+backJobOutcome :: Compile.BackJobResult -> String
+backJobOutcome Compile.BackJobOk{}     = "ok"
+backJobOutcome Compile.BackJobFailed{} = "failed"
+
+-- | Replace the project directory with <proj>.
+maskPath :: FilePath -> String -> String
+maskPath proj = T.unpack . T.replace (T.pack proj) "<proj>" . T.pack
+
+-- | Replace every hash, a word of exactly eight hexadecimal digits, with
+-- <hash>.
+maskHashes :: String -> String
+maskHashes = concatMap mask . groupBy ((==) `on` isAlphaNum)
+  where
+    mask word
+      | length word == 8 && all isHexDigit word = "<hash>"
+      | otherwise                               = word
+
+-- | The scenarios in build order. Each edits the project and then builds it
+-- with its options. A module stays broken until a later scenario restores it.
+eventScenarios :: [(String, FilePath -> IO (), C.CompileOptions -> C.CompileOptions)]
+eventScenarios =
+  [ ("clean build",                               writeSources [("a", aFirst), ("b", bUsesFoo), ("c", cUsesB)], id)
+  , ("no change",                                 noEdit,                                           id)
+  , ("touched source reuses its interface",       touchSource "a",                                  id)
+  , ("comment-only source change",                writeSources [("a", aCommented)],                 id)
+  , ("pub change",                                writeSources [("a", aPubChanged)],                id)
+  , ("impl-only change",                          writeSources [("a", aImplChanged)],               id)
+  , ("new interest prepares DBP of a provider",   writeSources [("c", cUsesBar)],                   id)
+  , ("parse error",                               writeSources [("c", cParseError)],                id)
+  , ("restored source reuses its interface",      writeSources [("c", cUsesBar)],                   id)
+  , ("type error with a blocked dependent",       writeSources [("b", bTypeError)],                 id)
+  , ("import cycle",                              writeSources [("b", bUsesFoo), ("a", aImportsC)], id)
+  , ("always build",                              writeSources [("a", aImplChanged)],               alwaysBuild)
+  , ("only build",                                noEdit,                                           onlyBuild)
+  , ("tydb copies",                               noEdit,                                           tydbCopies)
+  , ("no DBP refreshes generated code",           noEdit,                                           noDbp)
+  , ("codegen tag tampered",                      tamperCodegenTag "a",                             noDbp)
+  , ("impl-only change with tydb copies",         writeSources [("a", aImplChangedAgain)],          tydbCopies)
+  , ("impl-only change with tydb copies, no DBP", writeSources [("a", aImplChanged)],               tydbCopies . noDbp)
+  ]
+  where
+    noEdit _      = return ()
+    alwaysBuild o = o { C.alwaysbuild = True }
+    onlyBuild o   = o { C.only_build = True }
+    tydbCopies o  = o { C.tydb = True }
+    noDbp o       = o { C.no_dbp = True }
+
+    aFirst            = unlines ["def foo() -> int:", "    return 1", "", "def bar() -> int:", "    return 2"]
+    aCommented        = aFirst ++ "\n# a comment\n"
+    aPubChanged       = unlines ["def foo(x: int = 0) -> int:", "    return 1", "", "def bar() -> int:", "    return 2"]
+    aImplChanged      = unlines ["def foo(x: int = 0) -> int:", "    return 3", "", "def bar() -> int:", "    return 2"]
+    aImplChangedAgain = unlines ["def foo(x: int = 0) -> int:", "    return 4", "", "def bar() -> int:", "    return 2"]
+    aImportsC         = "import c\n\n" ++ aImplChanged
+    bUsesFoo          = unlines ["import a", "", "def fb() -> int:", "    return a.foo()"]
+    bTypeError        = unlines ["import a", "", "def fb() -> int:", "    return a.foo() + \"x\""]
+    cUsesB            = unlines ["import b", "", "def fc() -> int:", "    return b.fb()"]
+    cUsesBar          = unlines ["import a", "import b", "", "def fc() -> int:", "    return b.fb() + a.bar()"]
+    cParseError       = unlines ["import a", "import b", "", "def fc( -> int:", "    return b.fb() + a.bar()"]
+
+-- | Write the given text to the source file of each named module.
+writeSources :: [(String, String)] -> FilePath -> IO ()
+writeSources modules proj =
+  forM_ modules $ \(name, text) -> writeFileUtf8 (sourcePath proj name) (T.pack text)
+
+touchSource :: String -> FilePath -> IO ()
+touchSource name proj = touch (sourcePath proj name)
+
+sourcePath :: FilePath -> String -> FilePath
+sourcePath proj name = proj </> "src" </> name <.> "act"
+
+-- | Overwrite the impl hash tag of a module's generated .c file.
+tamperCodegenTag :: String -> FilePath -> IO ()
+tamperCodegenTag name proj =
+  rewriteFirstLine (proj </> "out" </> "types" </> eventsProjName </> name <.> "c") "/* Acton impl hash: decade */"
+
 -- Main -----------------------------------------------------------------------
 
 -- | Tasty entry point for incremental tests.
 main :: IO ()
 main = defaultMain $ localOption (NumThreads 1) $ testGroup "incremental"
-  [ sequentialTestGroup "incremental-project" AllSucceed
+  [ testGroup "compile-events" [ compileEventsGolden ]
+  , sequentialTestGroup "incremental-project" AllSucceed
       [ p01_init
       , p02_initial_build
       , p03_up_to_date

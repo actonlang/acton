@@ -1,0 +1,826 @@
+== clean build
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+front-done events.a
+front-result events.a deferred
+parse-start events.b
+parse-done events.b
+front-start events.b
+info   Stale b: source changed
+output-start events.b tydb
+output-done events.b tydb ok
+output-start events.b doc
+front-done events.b
+front-result events.b deferred
+parse-start events.c
+parse-done events.c
+front-start events.c
+info   Stale c: source changed
+output-start events.c tydb
+output-done events.c tydb ok
+output-start events.c doc
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+back-queued events.a
+back-queued events.b
+back-queued events.c
+-- background outputs, sorted
+output-done events.a doc ok
+output-done events.b doc ok
+output-done events.c doc ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== no change
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Fresh c: using cached .tydb
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+result ok
+
+== touched source reuses its interface
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Fresh c: using cached .tydb
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+result ok
+
+== comment-only source change
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Fresh c: using cached .tydb
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+-- background outputs, sorted
+output-done events.a doc ok
+result ok
+
+== pub change
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+info   Hash deltas a: ~foo{src <hash> -> <hash>, pub <hash> -> <hash>, impl <hash> -> <hash>}
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Stale b: pub changes in events.a.foo <hash> → <hash> (used by fb)
+output-start events.b tydb
+output-done events.b tydb ok
+output-start events.b doc
+info   Hash deltas b: ~fb{impl <hash> -> <hash>}
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Stale c: impl changes in events.b.fb <hash> → <hash> (used by fc)
+output-start events.c tydb
+output-done events.c tydb ok
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+back-queued events.a
+back-queued events.b
+back-queued events.c
+-- background outputs, sorted
+output-done events.a doc ok
+output-done events.b doc ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== impl-only change
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+info   Hash deltas a: ~foo{src <hash> -> <hash>, impl <hash> -> <hash>}
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Stale b: impl changes in events.a.foo <hash> → <hash> (used by fb)
+output-start events.b tydb
+output-done events.b tydb ok
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Stale c: impl changes in events.b.fb <hash> → <hash> (used by fc)
+output-start events.c tydb
+output-done events.c tydb ok
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+back-queued events.a
+back-queued events.b
+back-queued events.c
+-- background outputs, sorted
+output-done events.a doc ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== new interest prepares DBP of a provider
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+parse-start events.c
+parse-done events.c
+front-start events.c
+info   Stale c: source changed
+output-start events.c tydb
+output-done events.c tydb ok
+output-start events.c doc
+info   Hash deltas c: ~fc{src <hash> -> <hash>, impl <hash> -> <hash>}
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 2, root names 0, selected closure 2, generated code out of date
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+back-queued events.a
+back-queued events.c
+-- background outputs, sorted
+output-done events.c doc ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== parse error
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+parse-start events.c
+parse-done events.c
+front-start events.c
+front-done events.c
+diagnostics events.c 1
+result errors
+
+== restored source reuses its interface
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Fresh c: using cached .tydb
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 2, root names 0, selected closure 2, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+result ok
+
+== type error with a blocked dependent
+front-start events.a
+info   Fresh a: using cached .tydb
+front-done events.a
+front-result events.a deferred
+parse-start events.b
+parse-done events.b
+front-start events.b
+info   Stale b: source changed
+front-done events.b
+diagnostics events.b 1
+result errors
+
+== import cycle
+result failed: Cyclic imports: <proj>:events.a <proj>:events.c <proj>:events.b
+
+== always build
+front-start events.a
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+front-done events.a
+front-result events.a deferred
+front-start events.b
+output-start events.b tydb
+output-done events.b tydb ok
+output-start events.b doc
+front-done events.b
+front-result events.b deferred
+front-start events.c
+output-start events.c tydb
+output-done events.c tydb ok
+output-start events.c doc
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 2, root names 0, selected closure 2, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+-- background outputs, sorted
+output-done events.a doc ok
+output-done events.b doc ok
+output-done events.c doc ok
+result ok
+
+== only build
+front-start events.a
+front-done events.a
+front-result events.a none
+front-start events.b
+front-done events.b
+front-result events.b none
+front-start events.c
+front-done events.c
+front-result events.c none
+result ok
+
+== tydb copies
+front-start events.a
+info   Fresh a: using cached .tydb
+output-start events.a tydb-copy
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Fresh b: using cached .tydb
+output-start events.b tydb-copy
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Fresh c: using cached .tydb
+output-start events.c tydb-copy
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 2, root names 0, selected closure 2, generated code up to date
+back-skipped events.a
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code up to date
+back-skipped events.b
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code up to date
+back-skipped events.c
+-- background outputs, sorted
+output-done events.a tydb-copy ok
+output-done events.b tydb-copy ok
+output-done events.c tydb-copy ok
+result ok
+
+== no DBP refreshes generated code
+front-start events.a
+info   Stale a: generated code out of date {impl <hash> -> <hash>}
+front-done events.a
+front-result events.a eager
+back-queued events.a
+front-start events.b
+info   Stale b: generated code out of date {impl <hash> -> <hash>}
+front-done events.b
+front-result events.b eager
+back-queued events.b
+front-start events.c
+info   Stale c: generated code out of date {impl <hash> -> <hash>}
+front-done events.c
+front-result events.c eager
+back-queued events.c
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== codegen tag tampered
+front-start events.a
+info   Stale a: generated code out of date {impl c decade -> <hash>, h <hash> -> <hash>, support <hash> -> <hash>}
+front-done events.a
+front-result events.a eager
+back-queued events.a
+front-start events.b
+info   Fresh b: using cached .tydb
+front-done events.b
+front-result events.b none
+front-start events.c
+info   Fresh c: using cached .tydb
+front-done events.c
+front-result events.c none
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+result ok
+
+== impl-only change with tydb copies
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+output-start events.a tydb-copy
+info   Hash deltas a: ~foo{src <hash> -> <hash>, impl <hash> -> <hash>}
+front-done events.a
+front-result events.a deferred
+front-start events.b
+info   Stale b: impl changes in events.a.foo <hash> → <hash> (used by fb)
+output-start events.b tydb
+output-done events.b tydb ok
+output-start events.b tydb-copy
+front-done events.b
+front-result events.b deferred
+front-start events.c
+info   Stale c: impl changes in events.b.fb <hash> → <hash> (used by fc)
+output-start events.c tydb
+output-done events.c tydb ok
+output-start events.c tydb-copy
+front-done events.c
+front-result events.c deferred
+info   DBP a: total names 2, interested names 2, root names 0, selected closure 2, generated code out of date
+info   DBP b: total names 1, interested names 1, root names 0, selected closure 1, generated code out of date
+info   DBP c: total names 1, interested names 0, root names 0, selected closure 0, generated code out of date
+back-queued events.a
+back-queued events.b
+back-queued events.c
+-- background outputs, sorted
+output-done events.a doc ok
+output-done events.a tydb-copy ok
+output-done events.b tydb-copy ok
+output-done events.c tydb-copy ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
+
+== impl-only change with tydb copies, no DBP
+parse-start events.a
+parse-done events.a
+front-start events.a
+info   Stale a: source changed
+output-start events.a tydb
+output-done events.a tydb ok
+output-start events.a doc
+output-start events.a tydb-copy
+info   Hash deltas a: ~foo{src <hash> -> <hash>, impl <hash> -> <hash>}
+front-done events.a
+front-result events.a eager
+back-queued events.a
+front-start events.b
+info   Stale b: impl changes in events.a.foo <hash> → <hash> (used by fb)
+output-start events.b tydb
+output-done events.b tydb ok
+output-start events.b tydb-copy
+front-done events.b
+front-result events.b eager
+back-queued events.b
+front-start events.c
+info   Stale c: impl changes in events.b.fb <hash> → <hash> (used by fc)
+output-start events.c tydb
+output-done events.c tydb ok
+output-start events.c tydb-copy
+front-done events.c
+front-result events.c eager
+back-queued events.c
+-- background outputs, sorted
+output-done events.a doc ok
+output-done events.a tydb-copy ok
+output-done events.b tydb-copy ok
+output-done events.c tydb-copy ok
+-- back jobs
+back-start events.a
+back-pass events.a normalize started 0/8
+back-pass events.a normalize finished 1/8
+back-pass events.a deactorize started 1/8
+back-pass events.a deactorize finished 2/8
+back-pass events.a cps started 2/8
+back-pass events.a cps finished 3/8
+back-pass events.a llift started 3/8
+back-pass events.a llift finished 4/8
+back-pass events.a boxing started 4/8
+back-pass events.a boxing finished 5/8
+back-pass events.a codegen started 5/8
+back-pass events.a codegen finished 6/8
+back-pass events.a render started 6/8
+back-pass events.a render finished 7/8
+back-pass events.a write started 7/8
+back-pass events.a write finished 8/8
+back-done events.a ok
+back-start events.b
+back-pass events.b normalize started 0/8
+back-pass events.b normalize finished 1/8
+back-pass events.b deactorize started 1/8
+back-pass events.b deactorize finished 2/8
+back-pass events.b cps started 2/8
+back-pass events.b cps finished 3/8
+back-pass events.b llift started 3/8
+back-pass events.b llift finished 4/8
+back-pass events.b boxing started 4/8
+back-pass events.b boxing finished 5/8
+back-pass events.b codegen started 5/8
+back-pass events.b codegen finished 6/8
+back-pass events.b render started 6/8
+back-pass events.b render finished 7/8
+back-pass events.b write started 7/8
+back-pass events.b write finished 8/8
+back-done events.b ok
+back-start events.c
+back-pass events.c normalize started 0/8
+back-pass events.c normalize finished 1/8
+back-pass events.c deactorize started 1/8
+back-pass events.c deactorize finished 2/8
+back-pass events.c cps started 2/8
+back-pass events.c cps finished 3/8
+back-pass events.c llift started 3/8
+back-pass events.c llift finished 4/8
+back-pass events.c boxing started 4/8
+back-pass events.c boxing finished 5/8
+back-pass events.c codegen started 5/8
+back-pass events.c codegen finished 6/8
+back-pass events.c render started 6/8
+back-pass events.c render finished 7/8
+back-pass events.c write started 7/8
+back-pass events.c write finished 8/8
+back-done events.c ok
+result ok
