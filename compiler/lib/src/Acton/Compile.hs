@@ -306,18 +306,23 @@ throwProjectError :: String -> IO a
 throwProjectError msg = throwIO (ProjectError msg)
 
 
+-- | Why a run could not compile its modules.
 data CompileFailure
-  = CompileCycleFailure String
-  | CompileBuiltinFailure
-  | CompileInternalFailure String
+  = ImportCycles [[TaskKey]]                      -- the modules of each import cycle
+  | BuiltinFailed                                 -- __builtin__ had errors, already reported as diagnostics
+  | OutputFailed TaskKey FrontOutputKind String   -- the first failed output job in start order, with its exception text
+  | DeferredBackFailed String                     -- the exception text from preparing ready deferred back jobs
   deriving (Eq, Show)
 
--- | Render internal compile failures as user-facing messages.
--- Centralizes wording so CLI output and tests stay consistent.
-compileFailureMessage :: CompileFailure -> String
-compileFailureMessage (CompileCycleFailure msg) = msg
-compileFailureMessage CompileBuiltinFailure = "Builtin compilation failed"
-compileFailureMessage (CompileInternalFailure msg) = msg
+-- | The text a user sees for each failure.
+compileFailureMessage                   :: CompileFailure -> String
+compileFailureMessage (ImportCycles cs) = "Cyclic imports: " ++ concat [ '\n' : concat [ tkProj k ++ ":" ++ modNameToString (tkMod k) ++ " " | k <- c ] | c <- cs ]
+compileFailureMessage BuiltinFailed     = "Builtin compilation failed"
+compileFailureMessage (OutputFailed k kind msg)
+                                        = "Front output job failed for " ++ tkProj k ++ "/" ++ modNameToString (tkMod k)
+                                          ++ " (" ++ frontOutputKindName kind ++ "): " ++ msg
+compileFailureMessage (DeferredBackFailed msg)
+                                        = msg
 
 
 data BackPassFailure = BackPassFailure
@@ -1384,14 +1389,6 @@ frontOutputException job = do
     Right () -> return Nothing
     Left err -> return (Just err)
 
-frontOutputFailureMessage :: FrontOutputJob -> SomeException -> String
-frontOutputFailureMessage job err =
-  "Front output job failed for "
-  ++ tkProj key ++ "/" ++ modNameToString (tkMod key)
-  ++ " (" ++ frontOutputKindName (fojKind job) ++ "): " ++ displayException err
-  where
-    key = fojKey job
-
 frontOutputFailure :: FrontOutputJob -> IO (Maybe CompileFailure)
 frontOutputFailure job = do
   mErr <- frontOutputException job
@@ -1399,7 +1396,7 @@ frontOutputFailure job = do
     Nothing -> return Nothing
     Just err
       | isAsyncException err -> throwIO err
-      | otherwise -> return (Just (CompileInternalFailure (frontOutputFailureMessage job err)))
+      | otherwise -> return (Just (OutputFailed (fojKey job) (fojKind job) (displayException err)))
 
 rememberFrontOutputJobList :: IORef [FrontOutputJob] -> [FrontOutputJob] -> IO ()
 rememberFrontOutputJobList ref jobs =
@@ -3104,7 +3101,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     let compileMain = do
           -- Reject cycles
           if not (null cycles)
-            then return $ Left (CompileCycleFailure ("Cyclic imports: " ++ concatMap showTaskGraph cycles))
+            then return $ Left (ImportCycles cycles)
             else do
               -- Compile __builtin__ first if present anywhere in the graph
               case builtinOrder of
@@ -3143,11 +3140,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     depsOf t = nub [ d | d <- M.elems (gtImportProviders t), Data.Set.member d nonBuiltinKeys ]
     nodes    = [ (t, gtKey t, depsOf t) | t <- nonBuiltinTasks ]
     sccs     = stronglyConnComp nodes
-    cycles   = [ ts | ts@(CyclicSCC _) <- sccs ]
+    cycles   = [ map gtKey ts | CyclicSCC ts <- sccs ]
     order    = [ t | AcyclicSCC t <- sccs ]
-    showTaskGraph (CyclicSCC ts) = "\n" ++ concatMap fmt ts
-    showTaskGraph _              = ""
-    fmt t = tkProj (gtKey t) ++ ":" ++ modNameToString (name (gtTask t)) ++ " "
 
     revMap :: M.Map TaskKey [TaskKey]
     revMap = foldl' (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty (M.toList depMap)
@@ -3240,7 +3234,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             Just _ -> return ()
           return mJob
       case prepared of
-        Left err -> return (Left (CompileInternalFailure (displayException err)))
+        Left err -> return (Left (DeferredBackFailed (displayException err)))
         Right jobs -> do
           mapM_ (ccOnBackJob callbacks) (catMaybes jobs)
           return (Right waiting)
@@ -3268,7 +3262,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           case t' of
             ParseErrorTask{ parseDiagnostics = diags } -> do
               ccOnDiagnostics callbacks t optsBuiltin diags
-              return (Left CompileBuiltinFailure)
+              return (Left BuiltinFailed)
             TyTask{} -> return (Right ())
             ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
             ActonTask{ src = srcContent, srcBytes = srcBytes, sourceMeta = mSourceMeta, atree = m } -> do
@@ -3297,7 +3291,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 Left diags -> do
                   ccOnFrontDone callbacks t optsBuiltin
                   ccOnDiagnostics callbacks t optsBuiltin diags
-                  return (Left CompileBuiltinFailure)
+                  return (Left BuiltinFailed)
                 Right fr -> do
                   outputFailure <- waitFrontOutputJobsRef frontOutputRef
                   case outputFailure of
