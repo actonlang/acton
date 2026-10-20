@@ -363,11 +363,12 @@ compilePlanFromCache ctx changedPath cache = do
   case refreshed of
     Nothing -> return Nothing
     Just (globalTasks, importKeys) -> do
-      let dbpBlocked = Compile.libraryBoundaryTasks (cachedProjectMap cache) globalTasks
+      let modules = Compile.moduleGraph (cachedProjectMap cache) globalTasks
+          dbpBlocked = Compile.libraryBoundaryTasks modules
       neededTasks <- Compile.selectAffectedTasks
         (Compile.ccRootProj ctx)
         (Compile.ccOpts ctx)
-        globalTasks
+        modules
         dbpBlocked
         [changedPath]
       let rootProj = Compile.ccRootProj ctx

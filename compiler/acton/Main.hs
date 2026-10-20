@@ -44,6 +44,7 @@ import qualified Acton.Fingerprint as Fingerprint
 import qualified Acton.SourceProvider as Source
 import qualified Acton.Zon as Zon
 import Acton.Compile
+import Acton.Graph (closure, depsOf)
 import Utils
 import  Pretty
 import qualified InterfaceFiles
@@ -66,7 +67,6 @@ import Data.IORef
 import Data.Maybe (catMaybes, isJust, isNothing, maybeToList)
 import Data.Monoid ((<>))
 import Data.Word (Word32)
-import Data.Graph
 import Data.String.Utils (replace)
 import Data.Version (showVersion)
 import Data.Char (toLower)
@@ -862,21 +862,11 @@ dependentTestModulesFromHeaders paths srcFiles changedModules = do
       mn <- moduleNameFromFile (srcDir paths) (projName paths) file
       imps <- readModuleImports paths mn
       return (modNameToString mn, map modNameToString imps)
-    let revMap = foldl'
-          (\acc (mn, deps) -> foldl' (\a dep -> M.insertWith (++) dep [mn] a) acc deps)
-          M.empty
-          depsByMod
-        affected = reverseClosure revMap (Data.Set.fromList changedModules)
+    -- importers keeps edges to modules outside the source list: a deleted
+    -- module is a changed module whose importers are affected.
+    let importers = M.fromListWith (++) [ (dep, [mn]) | (mn, deps) <- depsByMod, dep <- deps ]
+        affected = closure (\m -> M.findWithDefault [] m importers) changedModules
     return (Data.List.sort (Data.Set.toList affected))
-  where
-    reverseClosure revMap start = go start (Data.Set.toList start)
-      where
-        go seen [] = seen
-        go seen (k:ks) =
-          let ds = M.findWithDefault [] k revMap
-              new = filter (`Data.Set.notMember` seen) ds
-              seen' = foldl' (flip Data.Set.insert) seen new
-          in go seen' (ks ++ new)
 
 -- | Watch a project directory and rebuild on source or build spec changes.
 watchProjectAt :: C.GlobalOptions -> C.CompileOptions -> FilePath -> IO ()
@@ -2268,24 +2258,8 @@ selectedTasksWithProvidersByProj :: [GlobalTask] -> [GlobalTask] -> M.Map FilePa
 selectedTasksWithProvidersByProj globalTasks neededTasks =
     M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- selectedTasks ]
   where
-    taskKeys = Data.Set.fromList (map gtKey globalTasks)
-    depMap = M.fromList
-      [ (gtKey t, Data.Set.fromList (filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t))))
-      | t <- globalTasks
-      ]
-    start = Data.Set.fromList (map gtKey neededTasks)
-    selectedKeys = reachable depMap start
+    selectedKeys = closure (depsOf (importGraph globalTasks)) (map gtKey neededTasks)
     selectedTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) selectedKeys ]
-
-    reachable deps startKeys = go (Data.Set.toList startKeys) Data.Set.empty
-      where
-        go [] seen = seen
-        go (k:ks) seen =
-          if Data.Set.member k seen
-            then go ks seen
-            else
-              let ds = Data.Set.toList (M.findWithDefault Data.Set.empty k deps)
-              in go (ds ++ ks) (Data.Set.insert k seen)
 
 -- | Relative root-stub C paths for selected binaries.
 selectedRootStubEntriesForBins :: Paths -> [BinTask] -> [FilePath]

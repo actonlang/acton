@@ -143,6 +143,9 @@ module Acton.Compile
   , readModuleDocIndexEntry
   , special_projects
   , buildGlobalTasks
+  , importGraph
+  , ModuleGraph
+  , moduleGraph
   , selectNeededTasks
   , selectAffectedTasks
   , libraryBoundaryTasks
@@ -228,6 +231,7 @@ import Acton.Builtin (mBuiltin)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Fingerprint as Fingerprint
+import Acton.Graph
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.SourceProvider as Source
 import Utils
@@ -246,7 +250,6 @@ import Data.Binary (encode)
 import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
-import Data.Graph
 import Data.List (foldl', intercalate, isPrefixOf, nub, partition)
 import qualified Data.List
 import Data.IORef
@@ -732,11 +735,12 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
   let hasBuildLibraries = any (not . M.null . BuildSpec.libraries . projBuildSpec) (M.elems projMap)
   globalTasks <- buildGlobalTasks sp gopts opts' projMap
     (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
-  let dbpBlocked = libraryBoundaryTasks projMap globalTasks
+  let modules = moduleGraph projMap globalTasks
+      dbpBlocked = libraryBoundaryTasks modules
   neededTasks0 <- case mChangedPaths of
-    Nothing -> selectNeededTasks pathsRoot rootProj globalTasks srcFiles
-    Just changed -> selectAffectedTasks rootProj opts' globalTasks dbpBlocked changed
-  let neededTasks = expandBuildLibraryTasks projMap globalTasks neededTasks0
+    Nothing -> selectNeededTasks pathsRoot rootProj modules srcFiles
+    Just changed -> selectAffectedTasks rootProj opts' modules dbpBlocked changed
+  let neededTasks = expandBuildLibraryTasks modules neededTasks0
       rootTasks = [ gtTask t | t <- neededTasks0, tkProj (gtKey t) == rootProj ]
   return CompilePlan
     { cpContext = ctx
@@ -1607,29 +1611,52 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
       where localMods = M.findWithDefault Data.Set.empty (projPath paths) modSets
 
 
+-- | The import graph of the tasks: each task's edges go to its import
+-- providers among the tasks.
+importGraph :: [GlobalTask] -> Graph TaskKey
+importGraph tasks = graph [ (gtKey t, M.elems (gtImportProviders t)) | t <- tasks ]
+
+-- | A plan's discovered modules as one graph, built once per plan.
+data ModuleGraph = ModuleGraph
+  { graphTasks     :: [GlobalTask]                      -- in discovery order
+  , graphIndex     :: M.Map TaskKey GlobalTask
+  , graphImports   :: Graph TaskKey
+  , graphLibraries :: [Data.Set.Set TaskKey]            -- the modules of each declared build library
+  }
+
+moduleGraph :: M.Map FilePath ProjCtx -> [GlobalTask] -> ModuleGraph
+moduleGraph projMap tasks = ModuleGraph
+    { graphTasks     = tasks
+    , graphIndex     = M.fromList [ (gtKey t, t) | t <- tasks ]
+    , graphImports   = importGraph tasks
+    , graphLibraries = libraryTaskGroups projMap tasks
+    }
+
+-- | The graph's tasks whose keys are in the set, in discovery order.
+restrictTasks :: ModuleGraph -> Data.Set.Set TaskKey -> [GlobalTask]
+restrictTasks g keys = [ t | t <- graphTasks g, Data.Set.member (gtKey t) keys ]
+
 -- | Select the subgraph needed for a given build request.
 -- Maps file paths to TaskKeys, adds __builtin__, and computes the reachable
 -- dependency closure.
-selectNeededTasks :: Paths -> FilePath -> [GlobalTask] -> [FilePath] -> IO [GlobalTask]
-selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
-    requestedKeys <- catMaybes <$> mapM (lookupTaskKey globalTasks) srcFiles
+selectNeededTasks :: Paths -> FilePath -> ModuleGraph -> [FilePath] -> IO [GlobalTask]
+selectNeededTasks pathsRoot rootProj g srcFiles = do
+    requestedKeys <- catMaybes <$> mapM lookupTaskKey srcFiles
     let wantedNames   = map takeFileName srcFiles
         requestedKeys' = if null requestedKeys
                            then [ gtKey t
-                                | t <- globalTasks
+                                | t <- graphTasks g
                                 , takeFileName (srcFile (gtPaths t) (tkMod (gtKey t))) `elem` wantedNames
                                 ]
                            else requestedKeys
-        builtinKeys = [ gtKey t | t <- globalTasks, tkMod (gtKey t) == A.modName ["__builtin__"] ]
-        startKeys   = if null requestedKeys' then map gtKey globalTasks else requestedKeys' ++ builtinKeys
-        depMapSet   = M.fromList [ (gtKey t, Data.Set.fromList (M.elems (gtImportProviders t))) | t <- globalTasks ]
-        neededKeys  = reachable depMapSet (Data.Set.fromList startKeys)
-    return [ t | t <- globalTasks, Data.Set.member (gtKey t) neededKeys ]
+        builtinKeys = [ gtKey t | t <- graphTasks g, tkMod (gtKey t) == A.modName ["__builtin__"] ]
+        startKeys   = if null requestedKeys' then map gtKey (graphTasks g) else requestedKeys' ++ builtinKeys
+    return (restrictTasks g (closure (depsOf (graphImports g)) startKeys))
   where
-    lookupTaskKey ts f = do
+    lookupTaskKey f = do
       absF <- canonicalizePath f
       let byPath = listToMaybe [ gtKey t
-                               | t <- ts
+                               | t <- graphTasks g
                                , let k = gtKey t
                                      pths = gtPaths t
                                , srcFile pths (tkMod k) == absF
@@ -1639,142 +1666,55 @@ selectNeededTasks pathsRoot rootProj globalTasks srcFiles = do
         Nothing -> do
           mn <- moduleNameFromFile (srcDir pathsRoot) (projName pathsRoot) absF
           return $ listToMaybe [ gtKey t
-                               | t <- ts
+                               | t <- graphTasks g
                                , tkProj (gtKey t) == rootProj
                                , tkMod (gtKey t) == mn
                                ]
 
-    reachable depMap start = go (Data.Set.toList start) Data.Set.empty
-      where
-        go [] seen = seen
-        go (k:ks) seen =
-          if Data.Set.member k seen
-            then go ks seen
-            else
-              let deps = Data.Set.toList (M.findWithDefault Data.Set.empty k depMap)
-              in go (deps ++ ks) (Data.Set.insert k seen)
-
--- | Select the minimal subgraph affected by a set of changed files.
--- Computes reverse dependencies so we rebuild dependents while keeping
--- unrelated modules untouched. DBP-eligible providers on dependency paths from
--- affected modules are kept too, along with their reverse dependents, because
--- every consumer of a deferred provider can contribute selected-name interest.
-selectAffectedTasks :: FilePath -> C.CompileOptions -> [GlobalTask] -> Data.Set.Set TaskKey -> [FilePath] -> IO [GlobalTask]
-selectAffectedTasks rootProj opts globalTasks dbpBlocked changedFiles = do
-    if null changedFiles
-      then return globalTasks
-      else do
-        absChanged <- mapM normalizePathSafe changedFiles
-        taskPaths <- forM globalTasks $ \t -> do
-          let k = gtKey t
-              pths = gtPaths t
-          p <- normalizePathSafe (srcFile pths (tkMod k))
-          return (p, k)
-        let pathIndex = M.fromList taskPaths
-            changedKeys = catMaybes [ M.lookup p pathIndex | p <- absChanged ]
-        if null changedKeys
-          then return globalTasks
-          else do
-            let taskKeys = Data.Set.fromList (map gtKey globalTasks)
-                depMap = M.fromList
-                  [ (gtKey t, filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t)))
-                  | t <- globalTasks
-                  ]
-                revMap = foldl' (\acc (k, ds) ->
-                                  foldl' (\a d -> M.insertWith (++) d [k] a) acc ds)
-                                M.empty
-                                (M.toList depMap)
-                affected = reverseClosure revMap (Data.Set.fromList changedKeys)
-                dbpProviderPaths = dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affected
-                selected = Data.Set.union affected dbpProviderPaths
-            -- Keep original provider mappings so unchanged imports can still
-            -- resolve via cached interfaces during incremental checks.
-            return [ t | t <- globalTasks, Data.Set.member (gtKey t) selected ]
+-- | Select the modules an edit of the changed files affects: every dependent
+-- of a changed module, every module on a dependency path from those to a DBP
+-- provider, and every dependent of the providers on those paths, because
+-- every consumer of a deferred provider can contribute selected-name
+-- interest.  Changes that match no module select everything.  Safe on import
+-- cycles, which the run reports later.  The tasks keep their full provider
+-- maps, so unchanged imports still resolve through cached interfaces.
+selectAffectedTasks :: FilePath -> C.CompileOptions -> ModuleGraph -> Data.Set.Set TaskKey -> [FilePath] -> IO [GlobalTask]
+selectAffectedTasks rootProj opts g dbpBlocked changedFiles
+  | null changedFiles = return (graphTasks g)
+  | otherwise = do
+      absChanged <- mapM normalizePathSafe changedFiles
+      taskPaths <- forM (graphTasks g) $ \t -> do
+        p <- normalizePathSafe (srcFile (gtPaths t) (tkMod (gtKey t)))
+        return (p, gtKey t)
+      let pathIndex = M.fromList taskPaths
+      return $ case mapMaybe (`M.lookup` pathIndex) absChanged of
+        []      -> graphTasks g
+        changed -> restrictTasks g (affectedBy changed)
   where
-    reverseClosure revMap start = go start (Data.Set.toList start)
-      where
-        go seen [] = seen
-        go seen (k:ks) =
-          let ds = M.findWithDefault [] k revMap
-              new = filter (`Data.Set.notMember` seen) ds
-              seen' = foldl' (flip Data.Set.insert) seen new
-          in go seen' (ks ++ new)
+    imports = graphImports g
+    affectedBy changed = Data.Set.unions [affected, onPaths, dependents imports providers]
+      where affected  = dependents imports changed
+            onPaths   = pathsTo imports isDbpProvider (Data.Set.toList affected)
+            providers = filter isDbpProvider (Data.Set.toList onPaths)
 
-dbpProviderPathClosure :: FilePath
-                       -> C.CompileOptions
-                       -> [GlobalTask]
-                       -> Data.Set.Set TaskKey
-                       -> M.Map TaskKey [TaskKey]
-                       -> M.Map TaskKey [TaskKey]
-                       -> Data.Set.Set TaskKey
-                       -> Data.Set.Set TaskKey
-dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affected =
-    Data.Set.union pathKeys dependentKeys
-  where
-    taskMap = M.fromList [ (gtKey t, t) | t <- globalTasks ]
     depOpts = opts { C.skip_build = True, C.test = False }
-    pathKeys = go Data.Set.empty (Data.Set.toList affected)
-    dbpProviders = Data.Set.filter isDbpProvider pathKeys
-    dependentKeys = reverseReachable Data.Set.empty (Data.Set.toList dbpProviders)
-
     optsFor k = if tkProj k == rootProj then opts else depOpts
 
     isDbpProvider k =
-      case M.lookup k taskMap of
-        Just t ->
-          case gtTask t of
-            TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
-              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) k implHash nameCount)
-            _ -> False
-        Nothing -> False
-
-    reachesDbp = reaches Data.Set.empty
-      where
-        reaches seen k
-          | Data.Set.member k seen = False
-          | isDbpProvider k = True
-          | otherwise =
-              let seen' = Data.Set.insert k seen
-              in any (reaches seen') (M.findWithDefault [] k depMap)
-
-    go seen [] = seen
-    go seen (k:ks) =
-      let deps = [ d | d <- M.findWithDefault [] k depMap, reachesDbp d ]
-          new = filter (`Data.Set.notMember` seen) deps
-          seen' = foldl' (flip Data.Set.insert) seen new
-      in go seen' (ks ++ new)
-
-    reverseReachable seen [] = seen
-    reverseReachable seen (k:ks) =
-      if Data.Set.member k seen
-        then reverseReachable seen ks
-        else
-          let deps = M.findWithDefault [] k revMap
-              seen' = Data.Set.insert k seen
-          in reverseReachable seen' (ks ++ deps)
+      case gtTask t of
+        TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
+          isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) k implHash nameCount)
+        _ -> False
+      where t = graphIndex g M.! k
 
 -- | DBP may prune generated C/H for internal library modules, but a module at
--- an explicit library boundary must keep its full generated surface.
-libraryBoundaryTasks :: M.Map FilePath ProjCtx -> [GlobalTask] -> Data.Set.Set TaskKey
-libraryBoundaryTasks projMap globalTasks =
-    Data.Set.unions (map boundaryFor libraryGroups)
-  where
-    taskKeys = Data.Set.fromList (map gtKey globalTasks)
-    revMap = foldl'
-      (\acc t ->
-        foldl'
-          (\m dep -> M.insertWith (++) dep [gtKey t] m)
-          acc
-          (filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t))))
-      M.empty
-      globalTasks
-    libraryGroups = libraryTaskGroups projMap globalTasks
-
-    boundaryFor group =
-      Data.Set.filter hasOutsideConsumer group
-      where
-        hasOutsideConsumer k =
-          any (`Data.Set.notMember` group) (M.findWithDefault [] k revMap)
+-- an explicit library boundary must keep its full generated surface.  A
+-- member is at the boundary when a module outside its library imports it, so
+-- members nobody imports stay DBP-eligible.
+libraryBoundaryTasks :: ModuleGraph -> Data.Set.Set TaskKey
+libraryBoundaryTasks g =
+    Data.Set.unions [ Data.Set.filter (importedOutside group) group | group <- graphLibraries g ]
+  where importedOutside group = any (`Data.Set.notMember` group) . usersOf (graphImports g)
 
 moduleStringToName :: String -> A.ModName
 moduleStringToName = A.modName . splitMod
@@ -1784,6 +1724,9 @@ moduleStringToName = A.modName . splitMod
         (p, []) -> [p]
         (p, _:rest) -> p : splitMod rest
 
+-- | The modules of each declared build library, for every project's
+-- libraries.  A library module is the task of that name that belongs to the
+-- declaring project.
 libraryTaskGroups :: M.Map FilePath ProjCtx -> [GlobalTask] -> [Data.Set.Set TaskKey]
 libraryTaskGroups projMap globalTasks =
     [ Data.Set.fromList keys
@@ -1791,15 +1734,15 @@ libraryTaskGroups projMap globalTasks =
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
     , let keys = [ gtKey t
                  | modName <- BuildSpec.libModules lib
-                 , let mn = moduleStringToName (proj ++ "." ++ modName)
-                 , t <- globalTasks
-                 , tkMod (gtKey t) == mn
+                 , t <- M.findWithDefault [] (moduleStringToName (proj ++ "." ++ modName)) tasksByModule
                  , taskInProject ctx t
                  ]
           proj = BuildSpec.specName $ projBuildSpec ctx
     , not (null keys)
     ]
   where
+    tasksByModule = M.fromListWith (flip (++)) [ (tkMod (gtKey t), [t]) | t <- globalTasks ]
+
     taskInProject ctx t =
       tkProj (gtKey t) == projRoot ctx
         || projPath (gtPaths t) == projRoot ctx
@@ -1813,38 +1756,20 @@ libraryTaskGroups projMap globalTasks =
 
 -- | Declared build libraries are artifact units: selecting any member selects
 -- every module in that library, plus their dependencies.
-expandBuildLibraryTasks :: M.Map FilePath ProjCtx -> [GlobalTask] -> [GlobalTask] -> [GlobalTask]
-expandBuildLibraryTasks projMap globalTasks selectedTasks =
-    [ t | t <- globalTasks, Data.Set.member (gtKey t) selectedKeys ]
+expandBuildLibraryTasks :: ModuleGraph -> [GlobalTask] -> [GlobalTask]
+expandBuildLibraryTasks g selectedTasks =
+    restrictTasks g (close (Data.Set.fromList (map gtKey selectedTasks)))
   where
-    taskKeys = Data.Set.fromList (map gtKey globalTasks)
-    depMap = M.fromList
-      [ (gtKey t, Data.Set.fromList (filter (`Data.Set.member` taskKeys) (M.elems (gtImportProviders t))))
-      | t <- globalTasks
-      ]
-    libraryGroups = libraryTaskGroups projMap globalTasks
-    selectedKeys = close (Data.Set.fromList (map gtKey selectedTasks))
-
     close keys =
-      let keys' = addLibraries (reachable depMap (addLibraries keys))
+      let keys' = addLibraries (closure (depsOf (graphImports g)) (Data.Set.toList (addLibraries keys)))
       in if keys' == keys then keys else close keys'
 
     addLibraries keys =
-      foldl' add keys libraryGroups
+      foldl' add keys (graphLibraries g)
       where
         add acc group
           | Data.Set.null (Data.Set.intersection acc group) = acc
           | otherwise = Data.Set.union acc group
-
-    reachable deps startKeys = go (Data.Set.toList startKeys) Data.Set.empty
-      where
-        go [] seen = seen
-        go (k:ks) seen =
-          if Data.Set.member k seen
-            then go ks seen
-            else
-              let ds = Data.Set.toList (M.findWithDefault Data.Set.empty k deps)
-              in go (ds ++ ks) (Data.Set.insert k seen)
 
 data ModuleHead
   = TyHead
@@ -3026,6 +2951,13 @@ runBackPasses gopts job shouldWrite onProgress = do
     total      = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
 
 
+-- | Source size plus the heaviest chain of modules waiting for the module.
+-- The map is defined in terms of itself: sound because the graph is acyclic
+-- (checked before) and Data.Map is the lazy one.
+criticalWeights                         :: Graph TaskKey -> M.Map TaskKey Integer -> M.Map TaskKey Integer
+criticalWeights g sizes                 = weights
+  where weights                         = M.fromList [ (k, M.findWithDefault 0 k sizes + maximum (0 : map (weights M.!) (usersOf g k))) | k <- nodes g ]
+
 -- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
 -- This drives front passes, emits diagnostics via callbacks, and collects
 -- back-pass jobs for later execution.
@@ -3047,7 +2979,7 @@ runBackPasses gopts job shouldWrite onProgress = do
 --     reachable dependencies across projects. __builtin__ is compiled first if
 --     present, i.e. we are building the base lib.
 --
---   1) Construct a dependency graph over non-builtin tasks and topologically order it.
+--   1) Construct a dependency graph over non-builtin tasks and reject import cycles.
 --   2) Compile __builtin__ first if present.
 --   3) Walk modules in topo order, deciding per module whether to compile or reuse cached .tydb,
 --      and update the shared environment.
@@ -3100,8 +3032,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 Nothing -> return (Right ok)
     let compileMain = do
           -- Reject cycles
-          if not (null cycles)
-            then return $ Left (ImportCycles cycles)
+          if not (null importCycles)
+            then return $ Left (ImportCycles importCycles)
             else do
               -- Compile __builtin__ first if present anywhere in the graph
               case builtinOrder of
@@ -3116,14 +3048,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     continue frontOutputRef runningRef = do
       baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
 
-      costMap <- fmap M.fromList $ forM order $ \t -> do
+      costMap <- fmap M.fromList $ forM nonBuiltinTasks $ \t -> do
                     let mn = name (gtTask t)
                         pth = gtPaths t
                         fp  = srcFile pth mn
                     ok <- doesFileExist fp
                     sz <- if ok then getFileSize fp else return 0
                     return (gtKey t, sz)
-      let cwMap = computeCriticalWeights costMap
+      let cwMap = criticalWeights modules costMap
 
       nCaps <- getNumCapabilities
       let maxParallel = max 1 (if C.jobs gopts > 0 then C.jobs gopts else nCaps)
@@ -3136,17 +3068,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     isBuiltinKey k = tkMod k == A.modName ["__builtin__"]
     builtinOrder = [ t | t <- tasks, isBuiltinKey (gtKey t) ]
     nonBuiltinTasks = [ t | t <- tasks, not (isBuiltinKey (gtKey t)) ]
-    nonBuiltinKeys = Data.Set.fromList [ gtKey t | t <- nonBuiltinTasks ]
-    depsOf t = nub [ d | d <- M.elems (gtImportProviders t), Data.Set.member d nonBuiltinKeys ]
-    nodes    = [ (t, gtKey t, depsOf t) | t <- nonBuiltinTasks ]
-    sccs     = stronglyConnComp nodes
-    cycles   = [ map gtKey ts | CyclicSCC ts <- sccs ]
-    order    = [ t | AcyclicSCC t <- sccs ]
-
-    revMap :: M.Map TaskKey [TaskKey]
-    revMap = foldl' (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty (M.toList depMap)
-    depMap :: M.Map TaskKey [TaskKey]
-    depMap = M.fromList [ (gtKey t, depsOf t) | t <- order ]
+    modules = importGraph nonBuiltinTasks
+    importCycles = cycles modules
 
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
@@ -3156,32 +3079,15 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
         ParseTask{} -> not (C.only_build (optsFor (gtKey t)))
         _ -> False
 
-    stageDepsOf t =
-      let k = gtKey t
-          parseDeps = [ParseStage k | needsParseStage t]
-          frontDeps = map FrontStage (depsOf t)
-      in (parseDeps ++ frontDeps)
-
-    stageDepMap :: M.Map StageKey [StageKey]
-    stageDepMap =
-      M.fromList $
-        [ (ParseStage (gtKey t), [])
-        | t <- order
-        , needsParseStage t
-        ] ++
-        [ (FrontStage (gtKey t), stageDepsOf t)
-        | t <- order
-        ]
-
-    stageRevMap :: M.Map StageKey [StageKey]
-    stageRevMap =
-      foldl'
-        (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds)
-        M.empty
-        (M.toList stageDepMap)
+    -- A front stage runs after its providers' front stages and, when its
+    -- source is parsed separately, after its own parse stage.
+    stages :: Graph StageKey
+    stages = graph $
+         [ (ParseStage k, [])                                                            | t <- nonBuiltinTasks, let k = gtKey t, needsParseStage t ]
+      ++ [ (FrontStage k, [ ParseStage k | needsParseStage t ] ++ map FrontStage (depsOf modules k)) | t <- nonBuiltinTasks, let k = gtKey t ]
 
     stageIndeg :: M.Map StageKey Int
-    stageIndeg = M.map length stageDepMap
+    stageIndeg = M.fromList [ (s, length (depsOf stages s)) | s <- nodes stages ]
 
     stageInitialReady :: [StageKey]
     stageInitialReady = [ k | (k, d) <- M.toList stageIndeg, d == 0 ]
@@ -3195,26 +3101,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       case builtinOrder of
         (t:_) -> projTypes (gtPaths t)
         _     -> sysTypes rootPaths
-
-    computeCriticalWeights :: M.Map TaskKey Integer -> M.Map TaskKey Integer
-    computeCriticalWeights cm = cwMap
-      where
-        costOf m = M.findWithDefault 0 m cm
-        depsOfK m = M.findWithDefault [] m revMap
-        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOfK m ]) | m <- M.keys depMap ]
-        weight m = M.findWithDefault 0 m cwMap
-        max0 []  = 0
-        max0 xs  = maximum xs
-
-    dependentClosure :: TaskKey -> Data.Set.Set TaskKey
-    dependentClosure k = go Data.Set.empty [k]
-      where
-        go seen [] = seen
-        go seen (x:xs) =
-          let ds = M.findWithDefault [] x revMap
-              new = filter (`Data.Set.notMember` seen) ds
-              seen' = foldl' (flip Data.Set.insert) seen new
-          in go seen' (new ++ xs)
 
     flushReadyDeferredBacks :: Acton.Env.Env0
                             -> InterestMap
@@ -4161,7 +4047,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             Left diags -> do
               ccOnFrontDone callbacks tDone optsDone
               ccOnDiagnostics callbacks tDone optsDone diags
-              let blockedMods = dependentClosure keyDone
+              let blockedMods = strictDependents modules keyDone
                   blockedStages =
                     Data.Set.fromList $
                       concatMap (\m -> [ParseStage m, FrontStage m]) (Data.Set.toList blockedMods)
@@ -4176,9 +4062,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               loop frontOutputRef runningRef rdy2 running3 res implRes nameRes parsedTasks2 interestMap frontDone deferredBacks ind pend2 envAcc True maxPar cw
             Right success -> do
               let pend2 = Data.Set.delete stageDone pend
-                  ind2  = case M.lookup stageDone stageRevMap of
-                            Nothing -> ind
-                            Just ds -> foldl' (\m d -> M.adjust (\x -> x-1) d m) ind ds
+                  ind2  = foldl' (\m d -> M.adjust (\x -> x-1) d m) ind (usersOf stages stageDone)
                   runningKeys = map snd running2
                   newlyReady = [ sk | sk <- Data.Set.toList pend2
                                     , M.findWithDefault 0 sk ind2 == 0
@@ -4205,7 +4089,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       deferredBacks1 =
                         case frDeferredBackJob fr of
                           Nothing -> deferredBacks
-                          Just deferred -> M.insert keyDone (deferred, dependentClosure keyDone) deferredBacks
+                          Just deferred -> M.insert keyDone (deferred, strictDependents modules keyDone) deferredBacks
                   flushRes <- flushReadyDeferredBacks envAcc' interestMap2 frontDone2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)

@@ -26,6 +26,7 @@ import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
+import qualified Acton.Graph as Graph
 import qualified Acton.Zon as Zon
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
@@ -43,7 +44,7 @@ import Text.Megaparsec (ParseErrorBundle, PosState(..), bundleErrors, bundlePosS
 import Text.Megaparsec.Pos (sourceLine, unPos)
 import qualified Data.Text as T
 import qualified Data.Text.Short as TS
-import Data.List (isInfixOf, isPrefixOf, nub, sort)
+import Data.List (foldl', isInfixOf, isPrefixOf, nub, sort, subsequences)
 import Data.Maybe (listToMaybe)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -147,6 +148,54 @@ implSplitDepSetMapsSlow env mn localNames items =
 
 locatedType :: SrcLoc -> S.Type
 locatedType l = S.TVar l (S.TV S.KType (S.Name l "T"))
+
+-- | Import graphs for the selection test: a chain, diamonds, cycles (one
+-- through a diamond, one through stacked diamonds), a module imported from
+-- two separate chains, a self-import, and disconnected parts with an import
+-- of a module outside the graph.
+selectionGraphs :: [[(Int, [Int])]]
+selectionGraphs =
+  [ [(1, [2]), (2, [3]), (3, [4]), (4, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4, 5]), (4, [5]), (5, [])]
+  , [(1, [2]), (2, [3]), (3, [4]), (4, [2, 5]), (5, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [1, 5]), (5, [])]
+  , [(1, [2, 3]), (2, [4]), (3, [4]), (4, [5, 6]), (5, [6]), (6, [3])]
+  , [(1, [3]), (2, [3]), (3, [4]), (4, []), (5, [2])]
+  , [(1, [1, 2]), (2, [3]), (3, [])]
+  , [(1, [2, 9]), (2, []), (3, [4]), (4, [3]), (5, [])]
+  ]
+
+-- | The modules an edit selects, found by hand-written searches over a
+-- dependency map and a reverse-dependency map: the edited modules and their
+-- dependents; the modules reachable from those through at least one import
+-- that lead to a DBP provider; and the dependents of the providers among the
+-- latter, the providers included.
+searchedSelection :: [(Int, [Int])] -> (Int -> Bool) -> [Int] -> Set.Set Int
+searchedSelection adjacency isProvider changed = Set.unions [affected, pathKeys, providerDependents]
+  where
+    known    = Set.fromList (map fst adjacency)
+    depMap   = M.fromList [ (k, filter (`Set.member` known) ds) | (k, ds) <- adjacency ]
+    revMap   = foldl' (\acc (k, ds) -> foldl' (\m d -> M.insertWith (++) d [k] m) acc ds) M.empty (M.toList depMap)
+    affected = go start (Set.toList start)
+      where start            = Set.fromList changed
+            go seen []       = seen
+            go seen (k : ks) = let new = filter (`Set.notMember` seen) (M.findWithDefault [] k revMap)
+                               in go (foldl' (flip Set.insert) seen new) (ks ++ new)
+    reachesProvider = reaches Set.empty
+      where reaches seen k
+              | Set.member k seen = False
+              | isProvider k      = True
+              | otherwise         = any (reaches (Set.insert k seen)) (M.findWithDefault [] k depMap)
+    pathKeys = go Set.empty (Set.toList affected)
+      where go seen []       = seen
+            go seen (k : ks) = let new = filter (`Set.notMember` seen) [ d | d <- M.findWithDefault [] k depMap, reachesProvider d ]
+                               in go (foldl' (flip Set.insert) seen new) (ks ++ new)
+    providerDependents = go Set.empty (Set.toList (Set.filter isProvider pathKeys))
+      where go seen [] = seen
+            go seen (k : ks)
+              | Set.member k seen = go seen ks
+              | otherwise         = go (Set.insert k seen) (ks ++ M.findWithDefault [] k revMap)
 
 hashDecl :: SrcLoc -> Maybe String -> S.Decl
 hashDecl l doc =
@@ -1149,6 +1198,63 @@ main = do
           (putMVar releaseOldCleanup ())
         _ <- wait nextCompile
         timeout 1000000 (takeMVar newStarted) `shouldReturn` Just ()
+
+    describe "Graph" $ do
+      -- 1 imports 2 and 3, which both import 4.  9 is outside the graph.
+      let diamond  = Graph.graph [(1, [2, 3, 9]), (2, [4]), (3, [4, 4]), (4, [])] :: Graph.Graph Int
+          -- 2, 3 and 4 form a cycle that 1 enters and that leads to 5.
+          cyclic   = Graph.graph [(1, [2]), (2, [3]), (3, [4]), (4, [2, 5]), (5, [])] :: Graph.Graph Int
+          -- 1 imports itself.
+          selfLoop = Graph.graph [(1, [1, 2]), (2, [])] :: Graph.Graph Int
+      it "keeps the node order and each node's distinct dependencies inside the graph" $ do
+        Graph.nodes diamond `shouldBe` [1, 2, 3, 4]
+        map (Graph.depsOf diamond) [1, 3, 4, 9] `shouldBe` [[2, 3], [4], [], []]
+        sort (Graph.usersOf diamond 4) `shouldBe` [2, 3]
+        map (Graph.usersOf diamond) [1, 9] `shouldBe` [[], []]
+      it "closes over a step function, start nodes included" $ do
+        Graph.closure (Graph.depsOf diamond) [2] `shouldBe` Set.fromList [2, 4]
+        Graph.closure (Graph.depsOf cyclic) [3] `shouldBe` Set.fromList [2, 3, 4, 5]
+        Graph.closure (Graph.depsOf cyclic) [] `shouldBe` Set.empty
+      it "finds the dependents of nodes, the nodes included" $ do
+        Graph.dependents diamond [4] `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.dependents diamond [2, 3] `shouldBe` Set.fromList [1, 2, 3]
+        Graph.dependents cyclic [5] `shouldBe` Set.fromList [1, 2, 3, 4, 5]
+      it "finds the strict dependents of a node, the node itself only on a cycle" $ do
+        Graph.strictDependents diamond 4 `shouldBe` Set.fromList [1, 2, 3]
+        Graph.strictDependents diamond 1 `shouldBe` Set.empty
+        Graph.strictDependents cyclic 3 `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.strictDependents cyclic 5 `shouldBe` Set.fromList [1, 2, 3, 4]
+        Graph.strictDependents selfLoop 1 `shouldBe` Set.fromList [1]
+        Graph.strictDependents selfLoop 2 `shouldBe` Set.fromList [1]
+      it "reports each cycle, a self-import included, dependencies first" $ do
+        Graph.cycles diamond `shouldBe` []
+        map sort (Graph.cycles cyclic) `shouldBe` [[2, 3, 4]]
+        Graph.cycles selfLoop `shouldBe` [[1]]
+        map sort (Graph.cycles (Graph.graph [(1, [2, 3]), (2, [1]), (3, [4]), (4, [3])]))
+          `shouldBe` [[3, 4], [1, 2 :: Int]]
+      it "finds the nodes on paths from start nodes to targets" $ do
+        Graph.pathsTo diamond (== 4) [2] `shouldBe` Set.fromList [2, 4]
+        Graph.pathsTo diamond (== 2) [1] `shouldBe` Set.fromList [1, 2]
+        Graph.pathsTo diamond (== 1) [2] `shouldBe` Set.empty
+        Graph.pathsTo diamond (const False) [1] `shouldBe` Set.empty
+        Graph.pathsTo cyclic (== 5) [1] `shouldBe` Set.fromList [1, 2, 3, 4, 5]
+        Graph.pathsTo cyclic (== 3) [4] `shouldBe` Set.fromList [2, 3, 4]
+      it "selects for an edit what the hand-written searches select" $ do
+        -- Every set of DBP providers and every non-empty set of edited modules.
+        let mismatches =
+              [ (adjacency, providers, changed)
+              | adjacency <- selectionGraphs
+              , let g    = Graph.graph adjacency
+                    keys = map fst adjacency
+              , providers <- subsequences keys
+              , changed <- filter (not . null) (subsequences keys)
+              , let isProvider = (`elem` providers)
+                    affected   = Graph.dependents g changed
+                    onPaths    = Graph.pathsTo g isProvider (Set.toList affected)
+                    selected   = Set.unions [affected, onPaths, Graph.dependents g (filter isProvider (Set.toList onPaths))]
+              , selected /= searchedSelection adjacency isProvider changed
+              ]
+        mismatches `shouldBe` []
 
     describe "Environment" $ do
       it "forgets defaults when row expressions are no longer available" $ do

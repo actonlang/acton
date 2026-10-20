@@ -80,6 +80,7 @@ library:
     - Acton.Env
     - Acton.EscapeAnalysis
     - Acton.Fingerprint
+    - Acton.Graph
     - Acton.Hashing
     - Acton.HttpFetch
     - Acton.Kinds
