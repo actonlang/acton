@@ -27,6 +27,7 @@ import qualified Acton.CodeGen
 import qualified Acton.Diagnostics as Diag
 import qualified Acton.Compile as Compile
 import qualified Acton.Graph as Graph
+import qualified Acton.Project as Project
 import qualified Acton.Zon as Zon
 import qualified Acton.CommandLineParser as C
 import qualified Acton.Fingerprint as Fingerprint
@@ -3702,9 +3703,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Fingerprint mismatch")
             Right _ ->
               expectationFailure "Expected fingerprint mismatch error"
@@ -3719,9 +3720,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               expectationFailure ("Unexpected fingerprint error: " ++ msg)
             Right spec ->
               BuildSpec.fingerprint spec `shouldBe` fp
@@ -3734,9 +3735,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3749,9 +3750,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3764,9 +3765,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Invalid fingerprint")
             Right _ ->
               expectationFailure "Expected invalid fingerprint error"
@@ -3778,9 +3779,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing project name")
             Right _ ->
               expectationFailure "Expected missing project name error"
@@ -3792,9 +3793,9 @@ main = do
                 , ""
                 ]
           writeFile (dir </> "Build.act") buildAct
-          res <- (E.try (Compile.loadBuildSpec dir) :: IO (Either Compile.ProjectError BuildSpec.BuildSpec))
+          res <- (E.try (Project.loadBuildSpec dir) :: IO (Either Project.ProjectError BuildSpec.BuildSpec))
           case res of
-            Left (Compile.ProjectError msg) ->
+            Left (Project.ProjectError msg) ->
               msg `shouldSatisfy` (isInfixOf "Missing fingerprint")
             Right _ ->
               expectationFailure "Expected missing fingerprint error"

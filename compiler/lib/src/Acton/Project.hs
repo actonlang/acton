@@ -1,0 +1,880 @@
+-- | Acton projects on disk: the Paths of a module, the per-project context of
+-- a multi-project build, loading and validating Build.act, discovering the
+-- projects a project depends on, the project locks, and the paths of a
+-- module's source and generated files.
+module Acton.Project
+  ( ProjectError(..)
+  , throwProjectError
+  , Paths(..)
+  , ProjCtx(..)
+  , BuildSpecStamp(..)
+  , readBuildSpecStamp
+  , findPaths
+  , findProjectDir
+  , discoverProjects
+  , collectDepTypePaths
+  , depTypePathsFromMap
+  , resolveDepBase
+  , pathsForModule
+  , searchPathForProject
+  , systemTypePaths
+  , moduleTypesDir
+  , scratchBuildSpec
+  , moduleNameFromFile
+  , enumerateProjectModules
+  , pruneMissingModuleOutputs
+  , pruneMissingChangedModuleOutputs
+  , srcFile
+  , srcBase
+  , outBase
+  , tyDbPath
+  , rootStubPath
+  , rootBinaryName
+  , filterActFile
+  , modNameToFilename
+  , special_projects
+  , addProjPrefix
+  , dropProjPrefix
+  , dropProjPrefixOrLib
+  , BackgroundCompilerLock
+  , backgroundCompilerLockPath
+  , tryBackgroundCompilerLock
+  , releaseBackgroundCompilerLock
+  , projectLockPath
+  , withProjectLockOnWait
+  , withProjectLock
+  , loadBuildSpec
+  , normalizeDepOverrides
+  , applyDepOverrides
+  , normalizePathSafe
+  , isAbsolutePath
+  , collapseDots
+  , rebasePath
+  , rebaseDepPath
+  ) where
+
+import qualified Acton.BuildSpec as BuildSpec
+import qualified Acton.CodeGen
+import qualified Acton.CommandLineParser as C
+import qualified Acton.Fingerprint as Fingerprint
+import qualified Acton.Syntax as A
+import Acton.Syntax (modNameToString)
+import qualified InterfaceFiles
+import Utils (readFileUtf8)
+
+import Control.Exception (Exception, IOException, catch, finally, throwIO, try)
+import Control.Monad
+import Data.Bits (shiftL, shiftR, (.|.))
+import Data.Char (isAlpha, isDigit)
+import Data.List (foldl', intercalate, isPrefixOf)
+import Data.Maybe (isJust)
+import qualified Data.Map as M
+import qualified Data.Set
+import Data.Time.Clock (UTCTime)
+import Data.Word (Word32, Word64)
+import System.Directory
+import System.Directory.Recursive (getFilesRecursive)
+import System.Environment (getExecutablePath, lookupEnv)
+import System.FileLock (FileLock, SharedExclusive(Exclusive), tryLockFile, unlockFile, withFileLock)
+import System.FilePath.Posix
+import System.Random (randomRIO)
+
+
+newtype ProjectError = ProjectError String deriving (Show)
+
+instance Exception ProjectError
+
+-- | Raise a ProjectError for library callers.
+-- Used by project discovery and path helpers to stop on unrecoverable errors.
+throwProjectError :: String -> IO a
+throwProjectError msg = throwIO (ProjectError msg)
+
+data BuildSpecStamp = BuildSpecStamp
+  { bssBuildAct :: Maybe UTCTime
+  } deriving (Eq, Show)
+
+readBuildSpecStamp :: FilePath -> IO BuildSpecStamp
+readBuildSpecStamp projDir = do
+  buildAct <- stampFor "Build.act"
+  return BuildSpecStamp
+    { bssBuildAct = buildAct
+    }
+  where
+    stampFor name = do
+      let path = projDir </> name
+      exists <- doesFileExist path
+      if exists
+        then Just <$> getModificationTime path
+        else return Nothing
+
+-- | Compute the subdirectory for a module within a types root.
+-- Used when creating directories before writing .tydb files.
+moduleTypesDir :: FilePath -> A.ModName -> FilePath
+moduleTypesDir path mn =
+  joinPath [path, joinPath $ init $ A.modPath mn]
+
+-- | Keep only .act files when scanning directories.
+-- Returns Just the file path for Acton sources and Nothing otherwise.
+filterActFile :: FilePath -> Maybe FilePath
+filterActFile file =
+    case takeExtension file of
+        ".act" -> Just file
+        _ -> Nothing
+
+special_projects :: [String]
+special_projects = ["", "base", "acton_scratch"]
+
+
+-- Paths handling -------------------------------------------------------------------------------------
+
+data Paths      = Paths {
+                    searchPath  :: [FilePath],
+                    sysPath     :: FilePath,
+                    sysTypes    :: FilePath,
+                    projPath    :: FilePath,
+                    projOut     :: FilePath,
+                    projTypes   :: FilePath,
+                    binDir      :: FilePath,
+                    srcDir      :: FilePath,
+                    isTmp       :: Bool,
+                    modName     :: A.ModName,
+                    projName    :: String
+                  }
+
+-- Per-project context used for multi-project orchestration.
+-- Identified by projRoot (absolute path). Keeps directories and BuildSpec if present.
+data ProjCtx = ProjCtx {
+                     projRoot    :: FilePath,
+                     projOutDir  :: FilePath,
+                     projTypesDir:: FilePath,
+                     projSrcDir  :: FilePath,
+                     projSysPath :: FilePath,
+                     projSysTypes:: FilePath,
+                     projBuildSpec :: BuildSpec.BuildSpec,
+                     projDeps     :: [(String, FilePath)]          -- resolved dependency roots (abs paths)
+                   } deriving (Show)
+
+systemTypePaths :: FilePath -> FilePath -> [FilePath]
+systemTypePaths sys types =
+    [joinPath [sys, "std", "out", "types"], types]
+
+type FingerprintMap = M.Map String FilePath
+
+scratchBuildSpec :: FilePath -> BuildSpec.BuildSpec
+scratchBuildSpec projRoot =
+    let name = "acton_scratch"
+        prefix = Fingerprint.fingerprintPrefixForName name
+        suffix = Fingerprint.fingerprintPrefixForName projRoot
+        fp = Fingerprint.formatFingerprint (Fingerprint.updateFingerprintPrefix prefix (fromIntegral suffix))
+    in BuildSpec.BuildSpec
+         { BuildSpec.specName = name
+         , BuildSpec.specDescription = Nothing
+         , BuildSpec.fingerprint = fp
+         , BuildSpec.dependencies = M.empty
+         , BuildSpec.zig_dependencies = M.empty
+         , BuildSpec.build_options = M.empty
+         , BuildSpec.libraries = M.empty
+         }
+
+
+normalizeFingerprintKey :: String -> Maybe String
+normalizeFingerprintKey raw =
+    Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
+
+fingerprintKeyFromSpec :: BuildSpec.BuildSpec -> String
+fingerprintKeyFromSpec spec =
+    case normalizeFingerprintKey (BuildSpec.fingerprint spec) of
+      Just fp -> fp
+      Nothing -> BuildSpec.fingerprint spec
+
+applyFingerprint :: FilePath -> BuildSpec.BuildSpec -> FingerprintMap -> (FilePath, FingerprintMap, String)
+applyFingerprint path spec fpMap =
+    let fp = fingerprintKeyFromSpec spec
+    in case M.lookup fp fpMap of
+         Just canonical -> (canonical, fpMap, fp)
+         Nothing -> (path, M.insert fp path fpMap, fp)
+
+-- | Discover all projects reachable from a root project.
+-- Follows Build.act dependencies, applies overrides/pins, and
+-- returns a map from project root to ProjCtx while skipping duplicates.
+discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
+discoverProjects gopts sysAbs rootProj depOverrides = do
+    rootAbs <- normalizePathSafe rootProj
+    rootSpec0 <- loadBuildSpec rootAbs
+    rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
+    let rootPins = M.map (rebaseDepPath rootAbs) (BuildSpec.concreteDependencies rootSpec)
+        (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
+    (projects, _) <- go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    resolveFollows projects
+  where
+    go root seen acc fpMap pins dir mSpec = do
+      dirAbs <- normalizePathSafe dir
+      if Data.Set.member dirAbs seen
+        then return (acc, fpMap)
+        else do
+          spec0 <- case mSpec of
+                     Just s -> return s
+                     Nothing -> loadBuildSpec dirAbs
+          spec <- applyDepOverrides dirAbs depOverrides spec0
+          let (_, fpMap1, _) = applyFingerprint dirAbs spec fpMap
+          (deps, fpMap2) <- do
+            let depsList = M.toList (BuildSpec.concreteDependencies spec)
+            foldM (collectDep pins dirAbs) ([], fpMap1) depsList
+          let outDir   = joinPath [dirAbs, "out"]
+              typesDir = joinPath [outDir, "types"]
+              srcDir'  = joinPath [dirAbs, "src"]
+              ctx = ProjCtx { projRoot = dirAbs
+                            , projOutDir = outDir
+                            , projTypesDir = typesDir
+                            , projSrcDir = srcDir'
+                            , projSysPath = sysAbs
+                            , projSysTypes = joinPath [sysAbs, "base", "out", "types"]
+                            , projBuildSpec = spec
+                            , projDeps = [ (n, p) | (n, p, _) <- reverse deps ]
+                            }
+              acc' = M.insert dirAbs ctx acc
+              seen' = Data.Set.insert dirAbs seen
+          foldM (step root seen' pins) (acc', fpMap2) (reverse deps)
+
+    collectDep pins base (accDeps, fpMap) (depName, dep) = do
+      let (chosenDep, conflict) =
+            case M.lookup depName pins of
+              Nothing -> (dep, Nothing)
+              Just pinDep ->
+                if pinDep == rebaseDepPath base dep
+                  then (pinDep, Nothing)
+                  else (pinDep, Just dep)
+      when (isJust conflict) $
+        unless (C.quiet gopts) $
+          putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
+                    ++ " overridden by root pin")
+      depBase <- resolveDepBase base depName chosenDep
+      depAbs  <- normalizePathSafe depBase
+      (depPath, fpMap', depSpec) <- canonicalizeDep depAbs fpMap
+      return ((depName, depPath, depSpec) : accDeps, fpMap')
+
+    canonicalizeDep depAbs fpMap = do
+      spec0 <- loadBuildSpec depAbs
+      spec <- applyDepOverrides depAbs depOverrides spec0
+      let (canonPath, fpMap', fp) = applyFingerprint depAbs spec fpMap
+      when (canonPath /= depAbs) $
+        unless (C.quiet gopts) $
+          putStrLn ("Warning: dependency fingerprint " ++ fp
+                    ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
+      let depSpec = if canonPath == depAbs then Just spec else Nothing
+      return (canonPath, fpMap', depSpec)
+
+    step root seen pins (acc, fpMap) (_, depBase, mSpec) =
+      go root seen acc fpMap pins depBase mSpec
+
+-- | Bind passive dependency references after concrete selection and deduplication.
+-- A follows entry contributes neither a source nor a root pin. Every segment
+-- traverses the selected project's own dependency declarations.
+resolveFollows :: M.Map FilePath ProjCtx -> IO (M.Map FilePath ProjCtx)
+resolveFollows projects = M.traverseWithKey resolveProject projects
+  where
+    resolveProject root ctx = do
+      deps <- forM (M.keys (BuildSpec.dependencies (projBuildSpec ctx))) $ \name -> do
+        target <- resolve [] root name
+        return (name, target)
+      return ctx { projDeps = deps }
+
+    resolve seen root name
+      | (root, name) `elem` seen =
+          throwProjectError ("Cyclic dependency follows: " ++ intercalate " -> "
+                             [ p ++ ":" ++ n | (p, n) <- reverse ((root, name) : seen) ])
+      | otherwise =
+          case M.lookup root projects of
+            Nothing -> throwProjectError ("Missing project for dependency follows: " ++ root)
+            Just ctx ->
+              case M.lookup name (BuildSpec.dependencies (projBuildSpec ctx)) of
+                Nothing -> throwProjectError ("Dependency follows target '" ++ name
+                                               ++ "' is not declared in " ++ root ++ "/Build.act")
+                Just dep ->
+                  case BuildSpec.follows dep of
+                    Nothing -> case lookup name (projDeps ctx) of
+                                 Just target -> return target
+                                 Nothing -> throwProjectError ("Unresolved dependency '" ++ name ++ "' in " ++ root)
+                    Just ref -> do
+                      target <- foldM (resolve ((root, name) : seen)) root (splitRef ref)
+                                `catch` \(ProjectError msg) ->
+                                  throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                                     ++ "' in " ++ root ++ "/Build.act:\n" ++ msg)
+                      let targetName = BuildSpec.specName (projBuildSpec (projects M.! target))
+                      unless (name == targetName) $
+                        throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
+                                           ++ "', which resolves to project '" ++ targetName
+                                           ++ "'. Use the project name as the dependency name.")
+                      return target
+
+    splitRef ref = case break (== '.') ref of
+                     (name, []) -> [name]
+                     (name, _:rest) -> name : splitRef rest
+
+-- Given a FILE and optionally --syspath PATH:
+-- 'sysPath' is the path to the system directory as given by PATH, defaulting to the acton executable directory.
+-- 'sysTypes' is directory "types" under 'sysPath'.
+-- 'projPath' is the closest parent directory of FILE that contains a Build.act
+-- file, or a temporary directory in "/tmp" if no such parent exists.
+-- 'projOut' is directory "out" under 'projPath'.
+-- 'projTypes' is directory "types" under 'projOut'.
+-- 'binDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "bin" under 'projOut'
+-- 'srcDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "src" under 'projPath'
+-- 'modName' is the module name of FILE (its path after 'src' without the file suffix, split at every '/')
+
+-- | Compute the source file path for a module under its project src dir.
+srcFile                 :: Paths -> A.ModName -> FilePath
+srcFile paths mn        = srcBase paths mn ++ ".act"
+
+-- | Compute the output base path (without extension) for a module.
+-- Used to locate .tydb/.c/.h output under the project's types directory.
+outBase                 :: Paths -> A.ModName -> FilePath
+outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
+
+tyDbPath                :: Paths -> A.ModName -> FilePath
+tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
+
+-- | Compute the root stub path for a module's root actor, or its test root.
+-- Stubs drop the project prefix since build.zig names binaries after them.
+rootStubPath            :: Paths -> Bool -> A.ModName -> FilePath
+rootStubPath paths test mn = outBase paths (dropProjPrefix paths mn) ++ (if test then ".test_root.c" else ".root.c")
+
+-- | Name of the binary in out/bin that build.zig builds from a root stub: the
+-- stub's module path joined with dots, with .test_ in front for a test root.
+rootBinaryName          :: Paths -> Bool -> A.ModName -> String
+rootBinaryName paths test mn = (if test then ".test_" else "") ++ modNameToString (dropProjPrefix paths mn)
+
+-- | All files generated for the module of 'paths'.
+moduleOutputs           :: Paths -> [FilePath]
+moduleOutputs paths     = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
+                          [ rootStubPath paths test mn | test <- [False, True] ] ++
+                          [ Acton.CodeGen.supportFile (outBase paths mn) ]
+  where mn              = modName paths
+
+-- | Compute the module path without extension under the project's src dir.
+-- Used to derive the .act path or related per-module files.
+srcBase                 :: Paths -> A.ModName -> FilePath
+srcBase paths mn        = joinPath (srcDir paths : names)
+  where names           = case A.modPath mn of
+                            n:ns | n == projName paths -> ns
+                            ns -> ns
+
+
+-- | Walk upward from a path to find a project root.
+-- A project root is identified by Build.act plus a
+-- src/ directory; returns Nothing if we reach filesystem root.
+
+-- | Check whether a directory is an Acton project root.
+-- Requires Build.act and a src/ directory.
+isActonProjectRoot :: FilePath -> IO Bool
+isActonProjectRoot path = do
+    runacton <- lookupEnv "ACTON_RUNACTON"
+    if isJust runacton
+      then return False
+      else do
+        hasBuildAct <- doesFileExist (path </> "Build.act")
+        hasSrcDir <- doesDirectoryExist (path </> "src")
+        return (hasBuildAct && hasSrcDir)
+
+findProjectDir :: FilePath -> IO (Maybe FilePath)
+findProjectDir path = do
+    isProjectRoot <- isActonProjectRoot path
+    if isProjectRoot
+        then return (Just path)
+        else if path == takeDirectory path  -- Check if we're at root
+            then return Nothing
+            else findProjectDir (takeDirectory path)
+
+
+-- | Opaque handle for the lifetime lock of a long-running project compiler.
+data BackgroundCompilerLock = BackgroundCompilerLock FileLock FilePath
+
+-- | Path to the lock held for the lifetime of a long-running project compiler.
+--
+-- This lock only establishes unique ownership of a background compiler
+-- process such as LSP or watch mode. It does not imply that project state
+-- is current, so all compile/build work must still take 'withProjectLock'.
+backgroundCompilerLockPath :: FilePath -> FilePath
+backgroundCompilerLockPath projDir =
+    joinPath [projDir, ".acton.compile.lock"]
+
+-- | Acquire the long-running compiler lock for a project root, if available.
+tryBackgroundCompilerLock :: FilePath -> IO (Maybe BackgroundCompilerLock)
+tryBackgroundCompilerLock projDir = do
+    let lockPath = backgroundCompilerLockPath projDir
+    mlock <- tryLockFile lockPath Exclusive
+    return ((\lock -> BackgroundCompilerLock lock lockPath) <$> mlock)
+
+-- | Release the long-running compiler lock and remove its lock file if possible.
+releaseBackgroundCompilerLock :: BackgroundCompilerLock -> IO ()
+releaseBackgroundCompilerLock (BackgroundCompilerLock lock lockPath) = do
+    unlockFile lock
+    mlock <- tryLockFile lockPath Exclusive
+    case mlock of
+      Nothing -> return ()
+      Just lock2 -> do
+        removeFile lockPath `catch` handleNotExists
+        unlockFile lock2
+  where
+    handleNotExists :: IOException -> IO ()
+    handleNotExists _ = return ()
+
+-- | Path to the single per-project compiler work lock.
+projectLockPath :: FilePath -> FilePath
+projectLockPath projDir =
+    joinPath [projDir, ".acton.lock"]
+
+-- | Run an action while holding the single per-project compiler work lock.
+--
+-- If the lock is not immediately available, run the callback once before
+-- blocking until the lock can be acquired.
+withProjectLockOnWait :: FilePath -> IO () -> IO a -> IO a
+withProjectLockOnWait projDir onWait action = do
+    let lockPath = projectLockPath projDir
+    mlock <- tryLockFile lockPath Exclusive
+    case mlock of
+      Just lock -> action `finally` unlockFile lock
+      Nothing -> do
+        onWait
+        withFileLock lockPath Exclusive (\_ -> action)
+
+-- | Run an action while holding the single per-project compiler work lock.
+withProjectLock :: FilePath -> IO a -> IO a
+withProjectLock projDir action =
+    withProjectLockOnWait projDir (return ()) action
+
+
+-- | Compute Paths for a given source file and compile options.
+-- Resolves the project root (or temp root), output dirs, and search path,
+-- creating required directories along the way.
+findPaths               :: FilePath -> C.CompileOptions -> IO Paths
+findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
+                             sysPath <- canonicalizePath (if null $ C.syspath opts then execDir ++ "/.." else C.syspath opts)
+                             absSrcFile <- canonicalizePath actFile
+                             (isTmp, projPath, dirInSrc) <- analyze (takeDirectory absSrcFile) []
+                             let sysTypes = joinPath [sysPath, "base", "out", "types"]
+                                 srcDir  = if isTmp then takeDirectory absSrcFile else joinPath [projPath, "src"]
+                                 projOut = joinPath [projPath, "out"]
+                                 projTypes = joinPath [projOut, "types"]
+                                 binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
+                             -- join the search paths from command line options with the ones found in the deps directory
+                             depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
+                             (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
+                             let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
+                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [takeBaseName actFile]
+                             InterfaceFiles.registerSystemTypeRoots (systemTypePaths sysPath sysTypes)
+                             createDirectoryIfMissing True binDir
+                             createDirectoryIfMissing True projOut
+                             createDirectoryIfMissing True projTypes
+                             createDirectoryIfMissing True (moduleTypesDir projTypes modName)
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp modName projName
+  where analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
+                             return (True, tmp, [])
+        analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
+                             if isProjectRoot
+                                then case ds of
+                                    [] -> return $ (False, pre, [])
+                                    "src":dirs -> return $ (False, pre, dirs)
+                                    "out":"types":dirs -> return $ (False, pre, dirs)
+                                    _ -> throwProjectError ("Source file is not in a valid project directory: " ++ joinPath ds)
+                                else analyze (takeDirectory pre) (takeFileName pre : ds)
+
+-- Module helpers for multi-project builds ---------------------------------------------------------
+
+-- | Derive a module name from a file path under a project's src root.
+-- The result uses path segments and strips the .act extension.
+moduleNameFromFile :: FilePath -> String -> FilePath -> IO A.ModName
+moduleNameFromFile srcBase proj actFile = do
+    base <- normalizePathSafe srcBase
+    file <- normalizePathSafe actFile
+    let rel = dropExtension (makeRelative base file)
+        names = splitDirectories rel
+    return (A.modName $ if proj `elem` special_projects then names else proj:names)
+
+-- | Enumerate all .act files in a project and pair them with module names.
+-- Used to seed the project module index for graph construction.
+enumerateProjectModules :: ProjCtx -> IO [(FilePath, A.ModName)]
+enumerateProjectModules ctx = do
+    exists <- doesDirectoryExist (projSrcDir ctx)
+    if not exists
+      then return []
+      else do
+        files <- getFilesRecursive (projSrcDir ctx)
+        let actFiles = filter (\f -> takeExtension f == ".act") files
+            proj = BuildSpec.specName $ projBuildSpec ctx
+            rootName = head . splitDirectories . makeRelative (projSrcDir ctx) . dropExtension
+            depNames = map fst $ projDeps ctx
+            depOverlaps = filter ((`elem` depNames) . rootName) actFiles
+
+        when (not $ null depOverlaps) $
+            throwProjectError ("Source files in project " ++ projRoot ctx ++ " overlap with declared dependencies:\n" ++
+                               concat ["    " ++ makeRelative (projRoot ctx) f ++ "\n" | f <- depOverlaps])
+
+        forM actFiles $ \f -> do
+          mn <- moduleNameFromFile (projSrcDir ctx) proj f
+          return (f, mn)
+
+-- | Remove stale generated module artifacts when source modules disappear.
+-- Prunes orphan .tydb/.c/.h and support outputs under out/types before planning so
+-- cached headers cannot mask deleted .act modules.
+pruneMissingModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> IO ()
+pruneMissingModuleOutputs opts projMap ctx = do
+    let typesRoot = projTypesDir ctx
+    typesExists <- doesDirectoryExist typesRoot
+    when typesExists $ do
+      mods <- enumerateProjectModules ctx
+      let keep = Data.Set.fromList (concatMap (moduleOutputs . modulePaths opts projMap ctx . snd) mods)
+      files <- getFilesRecursive typesRoot
+      tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
+      let outputs = filter ((`elem` [".c", ".h", ".inc"]) . takeExtension) files ++ tyDbs
+      mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) outputs)
+
+-- | Incremental variant: prune only modules whose changed .act file no longer exists.
+pruneMissingChangedModuleOutputs :: C.CompileOptions -> M.Map FilePath ProjCtx -> [FilePath] -> IO ()
+pruneMissingChangedModuleOutputs opts projMap changedPaths = do
+    absChanged <- mapM normalizePathSafe changedPaths
+    forM_ (filter ((== ".act") . takeExtension) absChanged) $ \actPath -> do
+      exists <- doesFileExist actPath
+      unless exists $ forM_ (M.elems projMap) $ \ctx -> do
+        srcRoot <- normalizePathSafe (projSrcDir ctx)
+        when (addTrailingPathSeparator srcRoot `Data.List.isPrefixOf` actPath) $ do
+          mn <- moduleNameFromFile srcRoot (BuildSpec.specName (projBuildSpec ctx)) actPath
+          mapM_ removePathForcibly (moduleOutputs (modulePaths opts projMap ctx mn))
+
+-- | Build a search path for module interfaces for a project.
+-- Includes the project's types dir, dependency types, user searchpath, and
+-- the system types directory.
+searchPathForProject :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> [FilePath]
+searchPathForProject opts projMap ctx =
+    let deps = depTypePathsFromMap projMap (projRoot ctx)
+    in [projTypesDir ctx] ++ deps ++ (C.searchpath opts) ++ systemTypePaths (projSysPath ctx) (projSysTypes ctx)
+
+-- | Construct a Paths record for a module within a project context.
+modulePaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> Paths
+modulePaths opts projMap ctx mn =
+    Paths (searchPathForProject opts projMap ctx) (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx)
+          (joinPath [projOutDir ctx, "bin"]) (projSrcDir ctx) False mn (BuildSpec.specName (projBuildSpec ctx))
+
+-- | Construct the Paths record of a module and create its output directories.
+pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
+pathsForModule opts projMap ctx mn = do
+    let p = modulePaths opts projMap ctx mn
+    InterfaceFiles.registerSystemTypeRoots (systemTypePaths (projSysPath ctx) (projSysTypes ctx))
+    createDirectoryIfMissing True (binDir p)
+    createDirectoryIfMissing True (moduleTypesDir (projTypesDir ctx) mn)
+    return p
+
+
+-- | Load a BuildSpec from Build.act.
+-- Throws ProjectError on parse or validation failure.
+loadBuildSpec :: FilePath -> IO BuildSpec.BuildSpec
+loadBuildSpec dir = do
+    let actPath = joinPath [dir, "Build.act"]
+    actExists <- doesFileExist actPath
+    if actExists
+      then do
+        content <- readFileUtf8 actPath
+        case BuildSpec.parseBuildActDetailed content of
+          Left err ->
+            case err of
+              BuildSpec.MissingFingerprint name -> do
+                suggestion <- suggestFingerprint name
+                throwProjectError ("Missing fingerprint in " ++ actPath ++ ".\n"
+                                   ++ "ERROR: Build.act requires `fingerprint`. For example: fingerprint = " ++ suggestion ++ "\n"
+                                   ++ "HINT: Fingerprint = CRC32(name) in the high 32 bits + random low 32 bits. You may choose a different value.")
+              BuildSpec.InvalidFingerprint name raw -> do
+                suggestion <- suggestFingerprint name
+                throwProjectError ("Invalid fingerprint " ++ raw ++ " in " ++ actPath
+                                   ++ " (project name: " ++ show name ++ ").\n"
+                                   ++ "Expected an unquoted 64-bit hex fingerprint like 0x1234abcd5678ef00.\n"
+                                   ++ "Suggested fingerprint: " ++ suggestion)
+              BuildSpec.MissingProjectName -> do
+                suggestion <- suggestProjectName dir
+                throwProjectError ("Missing project name in " ++ actPath ++ ".\n"
+                                   ++ "Add: name = " ++ show suggestion)
+              _ ->
+                throwProjectError ("Failed to parse Build.act in " ++ dir ++ ":\n"
+                                   ++ BuildSpec.renderBuildSpecParseError err)
+          Right (spec, _, _) -> validateBuildSpec actPath spec
+      else
+        throwProjectError ("Missing Build.act in " ++ dir ++ ".\n"
+                           ++ "Create Build.act with required name and fingerprint fields.")
+
+validateBuildSpec :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+validateBuildSpec sourcePath spec = do
+    validateProjectName sourcePath (BuildSpec.specName spec)
+    validateFingerprint sourcePath (BuildSpec.specName spec) (BuildSpec.fingerprint spec)
+    return spec
+
+validateProjectName :: FilePath -> String -> IO ()
+validateProjectName sourcePath name =
+    if not (isProjectIdent name)
+      then throwProjectError ("Invalid project name '" ++ name ++ "' in " ++ sourcePath ++ ".\n"
+                              ++ "The name must be a valid Acton project name (letters, digits, underscore; cannot start with a digit).")
+      else if length name > projectNameMax
+        then throwProjectError ("Invalid project name '" ++ name ++ "' in " ++ sourcePath ++ ".\n"
+                                ++ "The name must be at most " ++ show projectNameMax ++ " characters.")
+        else return ()
+  where
+    isProjectIdent [] = False
+    isProjectIdent (c:cs) =
+      (isAlpha c || c == '_') && all isIdentChar cs
+      where
+        isIdentChar x = isAlpha x || isDigit x || x == '_'
+
+suggestProjectName :: FilePath -> IO String
+suggestProjectName dir = do
+    resolved <- normalizePathSafe dir
+    let base = takeBaseName resolved
+    if null base || base == "."
+      then return "my_project"
+      else return base
+
+suggestFingerprint :: String -> IO String
+suggestFingerprint name = do
+    let prefix = Fingerprint.fingerprintPrefixForName name
+    low <- randomRIO (1, maxBound :: Word32)
+    let fp = (fromIntegral prefix `shiftL` 32) .|. (fromIntegral low :: Word64)
+    return (Fingerprint.formatFingerprint fp)
+
+validateFingerprint :: FilePath -> String -> String -> IO ()
+validateFingerprint sourcePath name fpRaw =
+    case Fingerprint.parseFingerprint fpRaw of
+      Nothing -> do
+        suggestion <- suggestFingerprint name
+        throwProjectError ("Invalid fingerprint '" ++ fpRaw ++ "' in " ++ sourcePath
+                           ++ " (project name: " ++ show name ++ ").\n"
+                           ++ "Expected an unquoted 64-bit hex fingerprint like 0x1234abcd5678ef00.\n"
+                           ++ "Suggested fingerprint: " ++ suggestion)
+      Just fp -> do
+        let formatted = Fingerprint.formatFingerprint fp
+            expectedPrefix = Fingerprint.fingerprintPrefixForName name
+            expectedPrefixHex = Fingerprint.formatFingerprintPrefix expectedPrefix
+            actualPrefix = fromIntegral (fp `shiftR` 32)
+        if formatted == Fingerprint.fingerprintPlaceholder
+          then do
+            suggestion <- suggestFingerprint name
+            throwProjectError ("Fingerprint placeholder " ++ formatted ++ " in " ++ sourcePath
+                               ++ " is not valid.\n"
+                               ++ "Suggested fingerprint: " ++ suggestion)
+          else if expectedPrefix == actualPrefix
+            then return ()
+            else do
+              suggestion <- suggestFingerprint name
+              throwProjectError ("Fingerprint mismatch in " ++ sourcePath
+                                 ++ " for project name " ++ show name ++ ".\n"
+                                 ++ "Expected prefix: " ++ expectedPrefixHex
+                                 ++ " (CRC32 of name).\n"
+                                 ++ "Current fingerprint: " ++ formatted ++ "\n"
+                                 ++ "Renames and forks require a new fingerprint for this name.\n"
+                                 ++ "Suggested fingerprint: " ++ suggestion)
+
+
+projectNameMax :: Int
+projectNameMax = 32
+
+-- | Treat drive-letter paths as absolute in addition to POSIX roots.
+-- This keeps path normalization consistent on Windows hosts.
+isAbsolutePath :: FilePath -> Bool
+isAbsolutePath p =
+    isAbsolute p ||
+    case p of
+      (c:':':_) -> isAlpha c
+      _         -> False
+
+-- | Normalize a path without failing if it does not exist.
+-- Falls back to normalise for non-existent paths (useful for temporary builds).
+normalizePathSafe :: FilePath -> IO FilePath
+normalizePathSafe p = do
+    res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
+    return $ either (const (normalise p)) id res
+
+-- | Collapse "." and ".." segments without dropping leading ".." on relative paths.
+-- Example: "a/b/../c/./d" becomes "a/c/d".
+collapseDots :: FilePath -> FilePath
+collapseDots p =
+    let parts = splitDirectories p
+        (root, rest) = case parts of
+                         (r:xs) | isRoot r -> (Just r, xs)
+                         xs                -> (Nothing, xs)
+        (revAcc, ups) = foldl step ([], 0) rest
+        cleaned = replicate ups ".." ++ reverse revAcc
+        prefix = maybe [] (\r -> [r]) root
+    in joinPath (prefix ++ cleaned)
+  where
+    isRoot r = r == "/" || (length r >= 2 && r !! 1 == ':')
+    step (acc, ups) comp =
+      case comp of
+        "."  -> (acc, ups)
+        ""   -> (acc, ups)
+        ".." -> case acc of
+                  (_:as) -> (as, ups)
+                  []     -> (acc, ups + 1)
+        _    -> (comp:acc, ups)
+
+-- | Rebase a path against a base directory and normalize it.
+-- Absolute paths are left as-is; relative paths are joined to the base.
+rebasePath :: FilePath -> FilePath -> FilePath
+rebasePath base p
+  | isAbsolutePath p = normalise p
+  | otherwise        = normalise (joinPath [base, p])
+
+-- | Keep a concrete source path relative to the project that declares it.
+rebaseDepPath :: FilePath -> BuildSpec.PkgDep -> BuildSpec.PkgDep
+rebaseDepPath base dep =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> dep { BuildSpec.path = Just (rebasePath base p) }
+      _ -> dep
+
+-- | Normalize --dep overrides relative to a base directory.
+-- Absolute override paths are kept, relative paths are rebased and normalized.
+normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
+normalizeDepOverrides base overrides =
+  mapM (\(n,p) -> do
+           let absP0 = if isAbsolutePath p then p else joinPath [base, p]
+           p' <- normalizePathSafe absP0
+           return (n, p'))
+       overrides
+
+-- | Apply --dep overrides (NAME=PATH) to a BuildSpec.
+-- Resolves override paths relative to the given base directory when needed.
+applyDepOverrides :: FilePath -> [(String, FilePath)] -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
+applyDepOverrides base overrides spec = do
+    deps' <- foldM applyOne (BuildSpec.dependencies spec) overrides
+    return spec { BuildSpec.dependencies = deps' }
+  where
+    applyOne depsMap (depName, depPath) =
+      case M.lookup depName depsMap of
+        Nothing -> return depsMap
+        Just dep | isJust (BuildSpec.follows dep) -> return depsMap
+        Just dep -> do
+          let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
+          absP <- normalizePathSafe absP0
+          validateDepOverridePath depName absP
+          let dep' = dep { BuildSpec.path = Just absP }
+          return (M.insert depName dep' depsMap)
+
+validateDepOverridePath :: String -> FilePath -> IO ()
+validateDepOverridePath depName depPath = do
+    exists <- doesDirectoryExist depPath
+    unless exists $
+      throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depPath ++ "\n"
+                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                         ++ "(directory with src/ and Build.act).")
+    isProjectRoot <- isActonProjectRoot depPath
+    unless isProjectRoot $
+      throwProjectError ("Dependency " ++ depName ++ " path is not an Acton project root: " ++ depPath ++ "\n"
+                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                         ++ "(directory with src/ and Build.act).")
+
+-- | Collect dependency type directories using an existing ProjCtx map.
+-- Traverses dependency edges so downstream lookups can build search paths.
+depTypePathsFromMap :: M.Map FilePath ProjCtx -> FilePath -> [FilePath]
+depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
+  where
+    go seen node =
+      case M.lookup node ctxs of
+        Nothing  -> (seen, [])
+        Just ctx ->
+          foldl' step (Data.Set.insert node seen, []) (projDeps ctx)
+
+    step (seen, acc) (_, depRoot) =
+      case M.lookup depRoot ctxs of
+        Nothing -> (Data.Set.insert depRoot seen, acc)
+        Just depCtx ->
+          if Data.Set.member depRoot seen
+            then (seen, acc)
+            else
+              let seen' = Data.Set.insert depRoot seen
+                  (seenNext, sub) = go seen' depRoot
+              in (seenNext, acc ++ [projTypesDir depCtx] ++ sub)
+
+-- | Resolve a dependency's base directory from a BuildSpec PkgDep.
+-- Prefers an explicit project path, otherwise selects subdir in the cached archive.
+resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
+resolveDepBase base name dep =
+    case BuildSpec.path dep of
+      Just p | not (null p) -> normalizePathSafe (rebasePath base p)
+      _ -> case BuildSpec.hash dep of
+             Just h -> do
+               home <- getHomeDirectory
+               root <- normalizePathSafe (joinPath [home, ".cache", "acton", "deps", name ++ "-" ++ h])
+               case BuildSpec.subdir dep of
+                 Nothing -> return root
+                 Just dir -> do
+                   selected <- normalizePathSafe (root </> dir)
+                   unless (selected == root || addTrailingPathSeparator root `isPrefixOf` selected) $
+                     throwProjectError ("Dependency " ++ name ++ " subdir " ++ show dir ++ " escapes the archive")
+                   cached <- doesDirectoryExist root
+                   when cached $ do
+                     isProject <- isActonProjectRoot selected
+                     unless isProject $
+                       throwProjectError ("Dependency " ++ name ++ " subdir " ++ show dir
+                                          ++ " is not an Acton project root: " ++ selected
+                                          ++ "\nExpected Build.act and src/ in the selected directory.")
+                   return selected
+             Nothing -> throwProjectError ("Dependency " ++ name ++ " has no path or hash")
+
+-- | Recursively collect out/types paths for all declared dependencies.
+-- Reads Build.act and follows dependency edges.
+collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO (String,[FilePath])
+collectDepTypePaths projDir overrides = do
+  root <- normalizePathSafe projDir
+  spec <- loadBuildSpec root
+  (_, _, paths) <- go Data.Set.empty M.empty root spec
+  return (BuildSpec.specName spec, paths)
+  where
+    go seen fpMap dir spec0 = do
+      spec <- applyDepOverrides dir overrides spec0
+      let (_, fpMap1, _) = applyFingerprint dir spec fpMap
+      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.concreteDependencies spec))
+
+    step base (seen, fpMap, acc) (depName, dep) = do
+      depBase <- resolveDepBase base depName dep
+      depAbs  <- normalizePathSafe depBase
+      depExists <- doesDirectoryExist depAbs
+      if not depExists
+        then case BuildSpec.path dep of
+               Just p | not (null p) ->
+                 throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs ++ "\n"
+                                    ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                                    ++ "(directory with src/ and Build.act).")
+               _ -> return (seen, fpMap, acc)
+        else do
+          (depPath, fpMap') <- canonicalizeDep depAbs fpMap
+          let typesDir = joinPath [depPath, "out", "types"]
+          if Data.Set.member depPath seen
+            then return (seen, fpMap', acc)
+            else do
+              let seen' = Data.Set.insert depPath seen
+              spec <- loadBuildSpec depPath
+              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath spec
+              return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
+
+    canonicalizeDep depAbs fpMap = do
+      spec0 <- loadBuildSpec depAbs
+      spec <- applyDepOverrides depAbs overrides spec0
+      let (canonPath, fpMap', _) = applyFingerprint depAbs spec fpMap
+      return (canonPath, fpMap')
+
+
+-- | Convert a module name to its source filename (path + .act).
+-- This is used for diagnostics and display output.
+modNameToFilename :: A.ModName -> String
+modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
+
+addProjPrefix               :: Paths -> A.ModName -> A.ModName
+addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
+  where proj                = projName paths
+        ns                  = A.modPath mn
+
+dropProjPrefix              :: Paths -> A.ModName -> A.ModName
+dropProjPrefix paths mn     = A.modName $ if n == projName paths then ns else n:ns
+  where n:ns                = A.modPath mn
+
+dropProjPrefixOrLib         :: Paths -> A.ModName -> A.ModName
+dropProjPrefixOrLib paths mn
+  | n == projName paths     = A.modName ns
+  | ns == ["lib"]           = A.modName [n]
+  | otherwise               = A.modName (n:ns)
+  where n:ns                = A.modPath mn

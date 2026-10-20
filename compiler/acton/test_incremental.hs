@@ -43,6 +43,7 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.SourceProvider as Source
 import qualified Acton.NameInfo as I
+import qualified Acton.Project as Project
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import           Utils (SrcLoc(NoLoc), prstr, prstrs)
@@ -247,12 +248,12 @@ ensureCleanProjectAt proj = do
 
 withBackgroundCompilerLockHeld :: FilePath -> IO a -> IO a
 withBackgroundCompilerLockHeld proj action = do
-  mlock <- Compile.tryBackgroundCompilerLock proj
+  mlock <- Project.tryBackgroundCompilerLock proj
   case mlock of
     Nothing ->
       assertFailure ("failed to acquire .acton.compile.lock in " ++ proj)
     Just lock ->
-      action `E.finally` Compile.releaseBackgroundCompilerLock lock
+      action `E.finally` Project.releaseBackgroundCompilerLock lock
 
 -- | Write a Build.act file with optional path deps.
 writeBuildAct :: FilePath -> String -> [(String, FilePath)] -> IO ()
@@ -1527,7 +1528,7 @@ p27_overlay_source_provider = testCase "27-overlay snapshots drive readModuleTas
         }
       disk = Source.diskSourceProvider
       spSame = disk { Source.spReadOverlay = \path -> return (if path == actAAbs then Just snapSame else Nothing) }
-  paths <- Compile.findPaths actAAbs C.defaultCompileOptions
+  paths <- Project.findPaths actAAbs C.defaultCompileOptions
   taskSame <- Compile.readModuleTask spSame quietGlobalOptions C.defaultCompileOptions paths actAAbs
   case taskSame of
     Compile.TyTask{} -> pure ()
@@ -2190,7 +2191,7 @@ p38_project_lock_blocks_build =
       , "    env.exit(0)"
       ]
     actonExe <- actonPath
-    res <- Compile.withProjectLock proj $ do
+    res <- Project.withProjectLock proj $ do
       (_, mOut, mErr, ph) <- createProcess
         (proc actonExe ["build", "--color", "never", "--jobs", "1"])
           { cwd = Just proj

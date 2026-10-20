@@ -11,6 +11,7 @@ import qualified Acton.CommandLineParser as C
 import qualified Acton.BuildSpec as BuildSpec
 import Acton.Testing
 import Acton.Compile
+import Acton.Project
 import qualified Acton.Syntax as A
 import Acton.Syntax (modNameToString)
 import qualified Acton.SourceProvider as Source

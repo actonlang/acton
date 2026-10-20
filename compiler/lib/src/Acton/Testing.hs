@@ -30,9 +30,9 @@ module Acton.Testing
   , buildTestHashInfo
   ) where
 
-import qualified Acton.Compile as Compile
 import qualified Acton.Env
 import qualified Acton.Hashing as Hashing
+import qualified Acton.Project as Project
 import qualified Acton.Syntax as A
 import qualified InterfaceFiles
 import Utils (prstr)
@@ -262,8 +262,8 @@ emptyTestCache ctx = TestCache
   }
 
 -- | Resolve the on-disk test cache path for a project.
-testCachePath :: Compile.Paths -> FilePath
-testCachePath paths = Compile.projPath paths </> "out" </> "test" </> "cache.json"
+testCachePath :: Project.Paths -> FilePath
+testCachePath paths = Project.projPath paths </> "out" </> "test" </> "cache.json"
 
 -- | Read the cache file, returning an empty cache on error/mismatch.
 readTestCache :: FilePath -> TestRunContext -> IO TestCache
@@ -355,7 +355,7 @@ formatTestCacheLog modName testName info entry =
              ++ " cache=" ++ cacheStatus
 
 -- | Build TestHashInfo records for a list of tests.
-buildTestHashInfos :: Compile.Paths
+buildTestHashInfos :: Project.Paths
                    -> B.ByteString
                    -> [(String, [String])]
                    -> IO (M.Map String TestHashInfo)
@@ -432,7 +432,7 @@ lookupTestInfo nameMap testName =
                 ]
 
 -- | Read the name hash map for a module name string.
-readModuleNameHashes :: Compile.Paths -> String -> IO (M.Map String InterfaceFiles.NameHashInfo)
+readModuleNameHashes :: Project.Paths -> String -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashes paths modName =
     readModuleNameHashesByModName paths (A.modName (splitOnDot modName))
 
@@ -447,9 +447,9 @@ splitOnChar ch input = case break (== ch) input of
   (chunk, _ : rest) -> chunk : splitOnChar ch rest
 
 -- | Read the name hash map for a module name.
-readModuleNameHashesByModName :: Compile.Paths -> A.ModName -> IO (M.Map String InterfaceFiles.NameHashInfo)
+readModuleNameHashesByModName :: Project.Paths -> A.ModName -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashesByModName paths mn = do
-    mty <- Acton.Env.findTyFile (Compile.searchPath paths) mn
+    mty <- Acton.Env.findTyFile (Project.searchPath paths) mn
     case mty of
       Nothing -> return M.empty
       Just tyFile -> do
@@ -461,7 +461,7 @@ readModuleNameHashesByModName paths mn = do
 
 -- | Cache-aware wrapper for reading name hashes.
 readModuleNameHashesCached :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                           -> Compile.Paths
+                           -> Project.Paths
                            -> A.ModName
                            -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashesCached cacheRef paths mn = do
@@ -475,7 +475,7 @@ readModuleNameHashesCached cacheRef paths mn = do
 
 -- | Resolve a dependency QName to its current impl hash, if any.
 resolveDepImplHash :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                   -> Compile.Paths
+                   -> Project.Paths
                    -> A.QName
                    -> IO (Maybe (A.QName, B.ByteString))
 resolveDepImplHash cacheRef paths qn =
@@ -490,7 +490,7 @@ resolveDepImplHash cacheRef paths qn =
 
 -- | Resolve recorded impl deps to current hashes, preserving fallbacks.
 resolveTestImplDeps :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                    -> Compile.Paths
+                    -> Project.Paths
                     -> InterfaceFiles.NameHashInfo
                     -> IO [(A.QName, B.ByteString)]
 resolveTestImplDeps cacheRef paths info = do
@@ -501,7 +501,7 @@ resolveTestImplDeps cacheRef paths info = do
 
 -- | Build the hash info for a single test name.
 buildTestHashInfo :: IORef (M.Map A.ModName (M.Map String InterfaceFiles.NameHashInfo))
-                  -> Compile.Paths
+                  -> Project.Paths
                   -> B.ByteString
                   -> M.Map String InterfaceFiles.NameHashInfo
                   -> String

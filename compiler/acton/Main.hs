@@ -45,6 +45,7 @@ import qualified Acton.SourceProvider as Source
 import qualified Acton.Zon as Zon
 import Acton.Compile
 import Acton.Graph (closure, depsOf)
+import Acton.Project
 import Utils
 import  Pretty
 import qualified InterfaceFiles
