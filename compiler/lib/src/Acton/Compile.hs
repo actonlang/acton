@@ -1953,24 +1953,22 @@ adjustImports providers m = m{ A.imps = imps' }
 quiet :: C.GlobalOptions -> C.CompileOptions -> Bool
 quiet gopts opts = C.quiet gopts || C.altOutput opts
 
--- | Read a reusable interface shell from a .tydb file and return its hashes.
--- This is used when a module is deemed fresh and we want to avoid reparsing.
+-- | Read a reusable interface shell from the module's own .tydb and return
+-- its hashes.  This is used when a module is deemed fresh and we want to
+-- avoid reparsing.
 readIfaceFromTy :: Paths -> A.ModName -> String -> Maybe B.ByteString -> IO (Either [Diagnostic String] ([A.ModName], [(A.Name, I.NameInfo)], Maybe String, B.ByteString, B.ByteString, Maybe Acton.Env.ModuleInfo))
 readIfaceFromTy paths mn src mHash = do
-    mty <- Acton.Env.findTyFile (searchPath paths) mn
-    case mty of
-      Nothing -> return $ Left (missingIfaceDiagnostics mn src mn)
-      Just tyF -> do
-        hashes <- InterfaceFiles.readModuleHashesMaybe tyF
-        mdb <- InterfaceFiles.openInterfaceDBMaybe tyF
-        case (hashes, mdb) of
-          (Just (_srcH, pubH, implH), Just db) -> do
-            (ms, mdoc) <- InterfaceFiles.readInterfaceDBModuleInfo db
-            ih <- case mHash of
-                    Just h -> return h
-                    Nothing -> return pubH
-            return $ Right (ms, [], mdoc, ih, implH, Just (Acton.Env.mkTyFileModuleInfo mn ms mdoc db))
-          _ -> return $ Left (missingIfaceDiagnostics mn src mn)
+    hashes <- InterfaceFiles.readModuleHashesMaybe tyFile
+    mdb <- InterfaceFiles.openInterfaceDBMaybe tyFile
+    case (hashes, mdb) of
+      (Just (_srcH, pubH, implH), Just db) -> do
+        (ms, mdoc) <- InterfaceFiles.readInterfaceDBModuleInfo db
+        ih <- case mHash of
+                Just h -> return h
+                Nothing -> return pubH
+        return $ Right (ms, [], mdoc, ih, implH, Just (Acton.Env.mkTyFileModuleInfo mn ms mdoc db))
+      _ -> return $ Left (missingIfaceDiagnostics mn src mn)
+  where tyFile = tyDbPath paths mn
 
 
 -- | Snapshot of expected/recorded impl hashes for generated code.
