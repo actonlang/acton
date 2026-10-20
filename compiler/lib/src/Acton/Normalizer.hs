@@ -541,6 +541,20 @@ instance Norm Stmt where
     norm' env (Decl l ds)           = do (eqs,ds) <- normDecls env ds
                                          return $ eqs ++ [Decl l ds]
 
+    -- The OptChain elimination in Types wraps its rewritten expression in a
+    -- Let with an embedded Cond, which moves a statement-position call into
+    -- expression position. Flatten such statements back into plain statements,
+    -- so that a call of an action in statement position stays recognizable to
+    -- the Deactorizer and becomes an asynchronous fire-and-forget message
+    -- send, just as it would outside the Let/Cond. A conditional expression
+    -- statement written by the user is flattened into an if statement the same
+    -- way. CPS relies on this form too: it marks the continuation of a call in
+    -- an expression statement with $SKIPRESc, and the lambda lifter then calls
+    -- a proc closure through __exec__, which does not await an action.
+    norm' env (Expr l (Let _ ss e)) = normSuite env (ss ++ [Expr l e])
+    norm' env (Expr l (Cond _ e1 c e2))
+                                    = norm' env (If l [Branch c [Expr l e1]] [Expr l e2])
+
     norm' env (Try l b [] els [])   = normSuite env (b ++ els)
     norm' env (Try l b hs els [])   = do b <- normSuite (pushMark DROP env) b
                                          els <- normSuite (define (envOf b) env) els

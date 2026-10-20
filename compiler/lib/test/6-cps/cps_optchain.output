@@ -10,15 +10,41 @@ class Cls (__builtin__.value):
 
 proc def maybe_log (C_cont : proc(None) -> $R, c : ?Cls) -> $R:
     V_maybe_log_9: ?Cls = c
-    proc def C_3cont (C_4res : None, C_2pre : None) -> $R:
-        C_2pre
+    proc def C_1cont (C_2res : None) -> $R:
         return $R_CONTc@[None](C_cont, None)
     if $ISNOTNONE@[Cls](V_maybe_log_9):
-        proc def C_5cont (C_6res : None) -> $R:
-            C_1pre: None = C_6res
-            C_2pre: None = C_1pre
-            return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
-        return $CAST@[?Cls, Cls](V_maybe_log_9).f(C_5cont, "\"boom\"")
+        return $CAST@[?Cls, Cls](V_maybe_log_9).f($SKIPRESc@[None](C_1cont), "\"boom\"")
     else:
-        C_2pre: None = None
-        return $R_CONTc@[None](proc lambda (G_skip : None): C_3cont(G_skip, C_2pre), None)
+        None
+        return $R_CONTc@[None](C_1cont, None)
+
+# recursive group:
+class Logger ($Actor, __builtin__.value):
+    proc def __init__ (self : Self, C_cont : proc(None) -> $R) -> $R:
+        pass
+        return $R_CONTc@[None](C_cont, None)
+    proc def logG_local (self : Self, C_cont : proc(None) -> $R, msg : __builtin__.str) -> $R:
+        pass
+        return $R_CONTc@[None](C_cont, None)
+    action def log (self : Self, msg : __builtin__.str) -> None:
+        return $ASYNCc@[None](self, proc lambda (C_cont : proc(None) -> $R): self.logG_local(C_cont, msg))
+proc def LoggerG_newact (C_cont : proc(Logger) -> $R) -> $R:
+    G_act: Logger = $NEWACTOR@[Logger]()
+    $InstallFinalizer@[Logger](G_act)
+    proc def C_3cont (C_4res : None) -> $R:
+        return $R_CONTc@[Logger](C_cont, G_act)
+    return $AWAITc@[None]($SKIPRESc@[None](C_3cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+# (recursive group)
+
+action def must_log (a : ?Logger) -> None:
+    V_must_log_9: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_9):
+        (async $CAST@[?Logger, Logger](V_must_log_9).log)("\"bang\"")
+    else:
+        $raiseValueError@[None]("\"Forced unwrapping applied to None\"")
+    V_must_log_17: ?Logger = a
+    if $ISNOTNONE@[Logger](V_must_log_17):
+        (async $CAST@[?Logger, Logger](V_must_log_17).log)("\"chain\"")
+    else:
+        None
+    return None

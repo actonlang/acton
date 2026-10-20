@@ -4,3 +4,11 @@ class Cls:
 
 def maybe_log(c: ?Cls):
     c?.f("boom")
+
+actor Logger():
+    def log(msg: str):
+        pass
+
+def must_log(a: ?Logger):
+    a!.log("bang")
+    a?.log("chain")

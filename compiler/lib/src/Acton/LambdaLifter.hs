@@ -208,11 +208,12 @@ llSuite env (s : ss)
 
 
 instance Lift Stmt where
-    ll env (Return l (Just (Call _ e p KwdNil)))
+    ll env (Return l (Just (Call _ e p@(PosArg c _) KwdNil)))
       | closedType env e,
         effect t == fxProc,
-        not (isCont t)                  = do e' <- llSub env e                                  -- A CPS-converted proc, but not a $Cont!
-                                             p' <- ll env p
+        not (isCont t),
+        skipsResult c                   = do e' <- llSub env e                                  -- A CPS-converted proc, but not a $Cont,
+                                             p' <- ll env p                                     -- called in statement position
                                              return $ Return l $ Just $ Call l (eDot e' attr_exec_) p' KwdNil
       where t                           = typeOf env e
     ll env (Expr l e)                   = Expr l <$> ll env e
@@ -315,6 +316,10 @@ closureCon fx p t
 
 isCont (TFun _ fx p@TRow{} _ r)         = fx == fxProc && r == tR && rtail p == posNil && not (isCont $ rtype p)
 isCont _                                = False
+
+skipsResult (Call _ (TApp _ (Var _ n) _) _ KwdNil)
+                                        = n == primSKIPRESc
+skipsResult _                           = False
 
 
 instance Lift Expr where

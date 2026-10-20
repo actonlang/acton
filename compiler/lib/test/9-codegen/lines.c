@@ -562,7 +562,7 @@ $R linesQ_L_17C_9cont (linesQ_main self, $Cont C_cont, int64_t C_10res) {
     }
     #line 89 "test/src/lines.act"
     $AFTER(toB_float(1), (($Cont)linesQ_L_20procG_new(self)));
-    return (($R (*) ($WORD, $Cont))((linesQ_main)(self))->$class->nopG_local)(self, C_cont);
+    return (($R (*) ($WORD, $Cont))((linesQ_main)(self))->$class->nopG_local)(self, $SKIPRES(C_cont));
 }
 B_NoneType linesQ_L_21ContD___init__ (linesQ_L_21Cont L_self, linesQ_main self, $Cont C_cont) {
     ((linesQ_L_21Cont)(L_self))->self = self;
@@ -985,7 +985,7 @@ $R linesQ_ApaD___init__ (linesQ_Apa self, $Cont C_cont) {
     ((linesQ_Apa)(self))->apb = 2002LL;
     #line 16 "test/src/lines.act"
     ((linesQ_Apa)(self))->y = 123LL;
-    return (($R (*) ($WORD, $Cont, $action))((linesQ_Apa)(self))->$class->setupG_local)(self, (($Cont)linesQ_L_2ContG_new(self, C_cont)), (($action)linesQ_L_4actionG_new(self)));
+    return (($R (*) ($WORD, $Cont, $action))((linesQ_Apa)(self))->$class->setupG_local)(self, $SKIPRES((($Cont)linesQ_L_2ContG_new(self, C_cont))), (($action)linesQ_L_4actionG_new(self)));
 }
 #line 3 "test/src/lines.act"
 $R linesQ_ApaD_setupG_local (linesQ_Apa self, $Cont C_cont, $action cb) {
@@ -1168,17 +1168,17 @@ struct linesQ_mainG_class linesQ_mainG_methods;
 $R linesQ_ApaG_newact ($Cont C_cont) {
     linesQ_Apa G_act = $NEWACTOR(linesQ_Apa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_ApaD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_27ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_28procG_new(G_act))));
+    return $AWAIT($SKIPRES((($Cont)linesQ_L_27ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_28procG_new(G_act))));
 }
 $R linesQ_BepaG_newact ($Cont C_cont) {
     linesQ_Bepa G_act = $NEWACTOR(linesQ_Bepa);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_BepaD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_30ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_31procG_new(G_act))));
+    return $AWAIT($SKIPRES((($Cont)linesQ_L_30ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_31procG_new(G_act))));
 }
 $R linesQ_mainG_newact ($Cont C_cont, B_Env env) {
     linesQ_main G_act = $NEWACTOR(linesQ_main);
     if ((void*)G_act->$class->__cleanup__ != (void*)$ActorD___cleanup__) $InstallFinalizer(G_act, linesQ_mainD_GCfinalizer);
-    return $AWAIT((($Cont)linesQ_L_33ContG_new(C_cont, G_act)), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_34procG_new(G_act, env))));
+    return $AWAIT($SKIPRES((($Cont)linesQ_L_33ContG_new(C_cont, G_act))), $ASYNC((($Actor)G_act), (($Cont)linesQ_L_34procG_new(G_act, env))));
 }
 static void linesQ___init__$g0 () {
     linesQ_W_Apa_1097 = (B_Eq)B_OrdD_intG_witness;

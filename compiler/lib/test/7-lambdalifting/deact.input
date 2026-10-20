@@ -12,7 +12,7 @@ class Apa ($Actor, __builtin__.value):
         proc def C_1cont (C_2res : None) -> $R:
             print@[(__builtin__.str,)](("\"Apa\"",), "\" \"", "\"\\n\"", False, False)
             return $R_CONTc@[None](C_cont, None)
-        return self.setupG_local(C_1cont, self.notice)
+        return self.setupG_local($SKIPRESc@[None](C_1cont), self.notice)
     proc def setupG_local (self : Self, C_cont : proc(None) -> $R, cb : action(__builtin__.int) -> __builtin__.int) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", False, False)
         (async cb)(W_Apa_39.__fromatom__(0))
@@ -86,17 +86,17 @@ proc def ApaG_newact (C_cont : proc(Apa) -> $R) -> $R:
     $InstallFinalizer@[Apa](G_act)
     proc def C_11cont (C_12res : None) -> $R:
         return $R_CONTc@[Apa](C_cont, G_act)
-    return $AWAITc@[None](C_11cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+    return $AWAITc@[None]($SKIPRESc@[None](C_11cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
 proc def BepaG_newact (C_cont : proc(Bepa) -> $R) -> $R:
     G_act: Bepa = $NEWACTOR@[Bepa]()
     $InstallFinalizer@[Bepa](G_act)
     proc def C_13cont (C_14res : None) -> $R:
         return $R_CONTc@[Bepa](C_cont, G_act)
-    return $AWAITc@[None](C_13cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
+    return $AWAITc@[None]($SKIPRESc@[None](C_13cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont)))
 proc def mainG_newact (C_cont : proc(main) -> $R, env : __builtin__.Env) -> $R:
     G_act: main = $NEWACTOR@[main]()
     $InstallFinalizer@[main](G_act)
     proc def C_15cont (C_16res : None) -> $R:
         return $R_CONTc@[main](C_cont, G_act)
-    return $AWAITc@[None](C_15cont, $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont, env)))
+    return $AWAITc@[None]($SKIPRESc@[None](C_15cont), $ASYNCc@[None](G_act, proc lambda (C_cont : proc(None) -> $R): G_act.__init__(C_cont, env)))
 # (recursive group)

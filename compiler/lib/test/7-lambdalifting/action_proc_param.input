@@ -1,0 +1,84 @@
+W_Box_8: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+
+class Box (__builtin__.object, __builtin__.value):
+    @property
+    v : __builtin__.float
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    pure def __init__ (self : Self) -> None:
+        self.v = W_Box_8.__fromatom__(0.0)
+        return None
+
+proc def assign (C_cont : proc(__builtin__.float) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    W_assign_9: __builtin__.RealFloat[__builtin__.float] = __builtin__.RealFloatD_float()
+    W_assign_11: __builtin__.Plus[__builtin__.float] = __builtin__.RealFloatD_float()
+    proc def C_1cont (C_2res : __builtin__.float) -> $R:
+        r: __builtin__.float = C_2res
+        N_tmp: __builtin__.float = W_assign_11.__add__(r, W_assign_9.__fromatom__(0.25))
+        return $R_CONTc@[__builtin__.float](C_cont, N_tmp)
+    return f(C_1cont, x)
+
+proc def tail (C_cont : proc(__builtin__.float) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    return f(C_cont, x)
+
+proc def mutate (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, b : Box, x : __builtin__.int) -> $R:
+    proc def C_3cont (C_4res : __builtin__.float) -> $R:
+        b.v = C_4res
+        return $R_CONTc@[None](C_cont, None)
+    return f(C_3cont, x)
+
+proc def discard (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    proc def C_5cont (C_6res : None) -> $R:
+        print@[(__builtin__.str,)](("\"sent\"",), "\" \"", "\"\\n\"", False, False)
+        return $R_CONTc@[None](C_cont, None)
+    return f($SKIPRESc@[__builtin__.float](C_5cont), x)
+
+proc def discard_last (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
+    proc def C_7cont (C_8res : None) -> $R:
+        return $R_CONTc@[None](C_cont, None)
+    if flag:
+        return f($SKIPRESc@[__builtin__.float](C_7cont), x)
+    else:
+        return $R_CONTc@[None](C_7cont, None)
+
+proc def discard_live (C_cont : proc(__builtin__.int) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
+    W_discard_live_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    proc def C_9cont (C_10res : None, z : __builtin__.int) -> $R:
+        return $R_CONTc@[__builtin__.int](C_cont, z)
+    if flag:
+        z: __builtin__.int = W_discard_live_4.__fromatom__(7)
+        return f($SKIPRESc@[__builtin__.float](proc lambda (G_skip : None): C_9cont(G_skip, z)), x)
+    else:
+        z: __builtin__.int = W_discard_live_4.__fromatom__(2)
+        return $R_CONTc@[None](proc lambda (G_skip : None): C_9cont(G_skip, z), None)
+
+proc def discard_bang (C_cont : proc(None) -> $R, f : ?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int) -> $R:
+    V_discard_bang_7: ?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R = f
+    proc def C_11cont (C_12res : None) -> $R:
+        return $R_CONTc@[None](C_cont, None)
+    if $ISNOTNONE@[proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R](V_discard_bang_7):
+        return $CAST@[?proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R](V_discard_bang_7)($SKIPRESc@[__builtin__.float](C_11cont), x)
+    else:
+        $raiseValueError@[__builtin__.float]("\"Forced unwrapping applied to None\"")
+        return $R_CONTc@[None](C_11cont, None)
+
+proc def discard_cond (C_cont : proc(None) -> $R, f : proc(proc(__builtin__.float) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
+    W_discard_cond_9: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_discard_cond_11: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    proc def C_13cont (C_14res : None) -> $R:
+        return $R_CONTc@[None](C_cont, None)
+    if flag:
+        return f($SKIPRESc@[__builtin__.float](C_13cont), x)
+    else:
+        return f($SKIPRESc@[__builtin__.float](C_13cont), W_discard_cond_11.__add__(x, W_discard_cond_9.__fromatom__(1)))
+
+proc def discard_none (C_cont : proc(None) -> $R, g : proc(proc(None) -> $R, __builtin__.int) -> $R, x : __builtin__.int, flag : __builtin__.bool) -> $R:
+    proc def C_15cont (C_16res : None) -> $R:
+        return $R_CONTc@[None](C_cont, None)
+    if flag:
+        return g($SKIPRESc@[None](C_15cont), x)
+    else:
+        return $R_CONTc@[None](C_15cont, None)

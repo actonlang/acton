@@ -252,7 +252,7 @@ proc def L_17C_9cont (self : main, C_cont : $Cont[None], C_10res : UNBOXED __bui
         else:
             $RAISE(N_8xx)
     $AFTER@[__builtin__.int]((BOX __builtin__.float (UNBOX __builtin__.float 1)), L_20proc(self))
-    return self.nopG_local(C_cont)
+    return self.nopG_local($SKIPRES@[None](C_cont))
 class L_21Cont ($Cont[__builtin__.int], __builtin__.value):
     @property
     self : main
@@ -432,7 +432,7 @@ class Apa ($Actor, __builtin__.value):
         self.apa = (UNBOX __builtin__.int 2001)
         self.apb = (UNBOX __builtin__.int 2002)
         self.y = (UNBOX __builtin__.int 123)
-        return self.setupG_local(L_2Cont(self, C_cont), L_4action(self))
+        return self.setupG_local($SKIPRES@[None](L_2Cont(self, C_cont)), L_4action(self))
     proc def setupG_local (self : Apa, C_cont : $Cont[None], cb : $action[(__builtin__.int,), __builtin__.int]) -> $R:
         print@[(__builtin__.str,)](("\"setup\"",), "\" \"", "\"\\n\"", (UNBOX __builtin__.bool False), (UNBOX __builtin__.bool False))
         cb.__asyn__((BOX __builtin__.int (UNBOX __builtin__.int 0)))
@@ -493,13 +493,13 @@ class main ($Actor, __builtin__.value):
 proc def ApaG_newact (C_cont : $Cont[Apa]) -> $R:
     G_act: Apa = $NEWACTOR@[Apa]()
     $InstallFinalizer@[Apa](G_act)
-    return $AWAIT@[None](L_27Cont(C_cont, G_act), $ASYNC@[None](G_act, L_28proc(G_act)))
+    return $AWAIT@[None]($SKIPRES@[None](L_27Cont(C_cont, G_act)), $ASYNC@[None](G_act, L_28proc(G_act)))
 proc def BepaG_newact (C_cont : $Cont[Bepa]) -> $R:
     G_act: Bepa = $NEWACTOR@[Bepa]()
     $InstallFinalizer@[Bepa](G_act)
-    return $AWAIT@[None](L_30Cont(C_cont, G_act), $ASYNC@[None](G_act, L_31proc(G_act)))
+    return $AWAIT@[None]($SKIPRES@[None](L_30Cont(C_cont, G_act)), $ASYNC@[None](G_act, L_31proc(G_act)))
 proc def mainG_newact (C_cont : $Cont[main], env : __builtin__.Env) -> $R:
     G_act: main = $NEWACTOR@[main]()
     $InstallFinalizer@[main](G_act)
-    return $AWAIT@[None](L_33Cont(C_cont, G_act), $ASYNC@[None](G_act, L_34proc(G_act, env)))
+    return $AWAIT@[None]($SKIPRES@[None](L_33Cont(C_cont, G_act)), $ASYNC@[None](G_act, L_34proc(G_act, env)))
 # (recursive group)

@@ -1,0 +1,131 @@
+# An action passed as a proc-typed argument: when the caller uses the result,
+# as in r = f(x), return f(x) or b.v = f(x), the call must await the action's
+# reply. A call in statement position, whose result is unused, sends the
+# message without waiting. That includes a statement-position unwrap f!(x),
+# both branches of a conditional expression statement and calls of an action
+# that returns None. Runner makes these statement calls while Poked, the actor
+# of the actions, is waiting for Runner.
+# A statement call that waited for the reply would deadlock the two actors, and
+# the watchdog actor would then end the test.
+
+class Box(object):
+    def __init__(self):
+        self.v = 0.0
+
+def assign(f: proc(int, float) -> float, x: int, y: float) -> float:
+    r = f(x, y)
+    return r + 0.25
+
+def tail(f: proc(int, float) -> float, x: int, y: float) -> float:
+    return f(x, y)
+
+def mutate(f: proc(int, float) -> float, b: Box, x: int, y: float) -> None:
+    b.v = f(x, y)
+
+def tail_str(f: proc() -> str) -> str:
+    return f()
+
+def discard(f: proc(int) -> int, x: int) -> None:
+    f(x)
+
+def discard_bang(f: ?proc(int) -> int, x: int) -> None:
+    f!(x)
+
+def discard_cond(f: proc(int) -> int, x: int, flag: bool) -> None:
+    f(x) if flag else f(2 * x)
+
+def discard_none(g: proc(int) -> None, x: int) -> None:
+    g(x)
+
+def discard_none_last(g: proc(int) -> None, x: int, flag: bool) -> None:
+    if flag:
+        g(x)
+
+def plain_scale(x: int, y: float) -> float:
+    return float(x) * y
+
+actor Other():
+    def scale(x: int, y: float) -> float:
+        return float(x) * y
+
+    def hello() -> str:
+        return "hello"
+
+actor Poked():
+    var hits = 0
+
+    def poke(n: int) -> int:
+        hits += n
+        return hits
+
+    def nudge(n: int) -> None:
+        hits += n
+
+    def via(r: Runner, mode: int) -> int:
+        return r.run(poke, nudge, mode)
+
+    def get_hits() -> int:
+        return hits
+
+actor Runner():
+    def run(f: proc(int) -> int, g: proc(int) -> None, mode: int) -> int:
+        if mode == 0:
+            discard(f, 1)
+        elif mode == 1:
+            discard_bang(f, 10)
+        elif mode == 2:
+            discard_cond(f, 100, True)
+        elif mode == 3:
+            discard_cond(f, 500, False)
+        elif mode == 4:
+            discard_none(g, 10000)
+        else:
+            discard_none_last(g, 100000, True)
+        return mode
+
+actor Watchdog(env: Env):
+    def timeout():
+        print("FAIL timeout, a call of an action never completed")
+        env.exit(1)
+
+    after 5.0: timeout()
+
+actor main(env):
+    var failed = False
+    w = Watchdog(env)
+
+    def check(what: str, got: value, expected: value, ok: bool):
+        if not ok:
+            print("FAIL", what, "got", got, "expected", expected)
+            failed = True
+
+    o = Other()
+
+    r = assign(o.scale, 3, 1.5)
+    check("action assign", r, 4.75, r == 4.75)
+    r = tail(o.scale, 3, 1.5)
+    check("action tail", r, 4.5, r == 4.5)
+    b = Box()
+    mutate(o.scale, b, 2, 1.25)
+    check("action mutate", b.v, 2.5, b.v == 2.5)
+    s = tail_str(o.hello)
+    check("action tail str", s, "hello", s == "hello")
+
+    r = assign(plain_scale, 3, 1.5)
+    check("proc assign", r, 4.75, r == 4.75)
+    r = tail(plain_scale, 3, 1.5)
+    check("proc tail", r, 4.5, r == 4.5)
+
+    p = Poked()
+    rn = Runner()
+    for mode in range(6):
+        m = p.via(rn, mode)
+        check("statement call", m, mode, m == mode)
+    n = p.get_hits()
+    check("action statement calls", n, 111111, n == 111111)
+
+    if failed:
+        env.exit(1)
+    else:
+        print("OK")
+        env.exit(0)
