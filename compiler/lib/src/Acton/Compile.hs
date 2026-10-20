@@ -33,10 +33,10 @@ module focuses on deterministic compilation and structured callbacks.
 Call flow:
   - Shared pipeline (acton build, acton watch, LSP):
     1) prepareCompilePlan (via prepareCompileContext, readModuleTask/
-       buildGlobalTasks/readImports, and selectNeededTasks/selectAffectedTasks)
-       builds a CompilePlan for the requested subgraph. Parsing is performed
-       through parseActSource/parseActSnapshot/parseActFile so SourceProvider
-       overlays can supply unsaved buffers.
+       buildGlobalTasks, and selectNeededTasks/selectAffectedTasks) builds a
+       CompilePlan for the requested subgraph. Parsing is performed through
+       parseActSource/parseActFile so SourceProvider overlays can supply
+       unsaved buffers.
     2) runCompilePlan drives compileTasks. As each module finishes its front
        passes, the CompileHooks callbacks (for example chOnFrontResult)
        enqueue a BackJob into the scheduler's
@@ -44,8 +44,8 @@ Call flow:
        remaining front passes.
     3) Callers either wait for backQueueWait (CLI builds) or let back jobs run
        in the background. CLI builds wait before invoking Zig.
-    4) runBackJobs/runBackPasses can be used for standalone back-pass execution
-       when a caller already has BackJobs to run.
+    4) runBackPasses can be used for standalone back-pass execution when a
+       caller already has a BackJob to run.
   - Triggering:
     - acton build runs the pipeline once for the requested files/project.
     - acton watch and LSP call startCompile on each event; callers can gate
@@ -108,7 +108,6 @@ module Acton.Compile
   , CompileCallbacks(..)
   , defaultCompileCallbacks
   , BackJobCallbacks(..)
-  , defaultBackJobCallbacks
   , BackQueue
   , newBackQueue
   , backQueueEnqueue
@@ -139,12 +138,10 @@ module Acton.Compile
   , throwProjectError
   , fetchDependencies
   , parseActSource
-  , parseActSnapshot
   , parseActFile
   , readModuleTask
   , readModuleDoc
   , readModuleDocIndexEntry
-  , readImports
   , special_projects
   , buildGlobalTasks
   , selectNeededTasks
@@ -155,7 +152,6 @@ module Acton.Compile
   , docNameCountThreshold
   , shouldGenerateDocOutput
   , runBackPasses
-  , runBackJobs
   , findProjectDir
   , BackgroundCompilerLock
   , backgroundCompilerLockPath
@@ -233,7 +229,6 @@ import Acton.Analytics
 import qualified Acton.Boxing
 import qualified Acton.CodeGen
 import Acton.Builtin (mBuiltin)
-import Acton.Prim (mPrim)
 import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.DocPrinter as DocP
 import qualified Acton.Fingerprint as Fingerprint
@@ -246,8 +241,8 @@ import qualified InterfaceFiles
 
 import Control.Concurrent.Async
 import Control.Concurrent.MVar
-import Control.Concurrent (forkIO, myThreadId, threadCapability, threadDelay)
-import Control.Concurrent.STM (TChan, TVar, atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.STM (atomically, check, modifyTVar', newTChanIO, newTVarIO, readTChan, readTVar, writeTChan)
 import Control.DeepSeq (force, rnf)
 import Control.Exception (Exception, IOException, SomeAsyncException, SomeException, bracketOnError, catch, displayException, evaluate, finally, fromException, mask_, throwIO, try)
 import Control.Monad
@@ -256,7 +251,7 @@ import Data.Bits (shiftL, shiftR, (.|.))
 import Data.Char (isAlpha, isDigit, isHexDigit, isSpace)
 import Data.Either (partitionEithers)
 import Data.Graph
-import Data.List (find, foldl', intercalate, intersperse, isPrefixOf, isSuffixOf, nub, partition)
+import Data.List (foldl', intercalate, isPrefixOf, nub, partition)
 import qualified Data.List
 import Data.IORef
 import Data.Maybe (catMaybes, isJust, isNothing, listToMaybe, mapMaybe)
@@ -288,9 +283,7 @@ import System.Process (readCreateProcessWithExitCode, proc)
 import System.Random (randomRIO)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
-import Text.Printf
 
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as Base16
@@ -393,7 +386,6 @@ data ParseProgress = ParseProgress
 data TypeStmtTiming = TypeStmtTiming
   { tstCompleted :: Int
   , tstTotal :: Int
-  , tstLabel :: String
   , tstNames :: [String]
   , tstTime :: TimeSpec
   } deriving (Eq, Show)
@@ -482,15 +474,6 @@ data BackJobCallbacks = BackJobCallbacks
   , bjcOnProgress :: BackJob -> BackPassProgress -> IO ()
   , bjcOnDone :: BackJob -> BackJobResult -> IO ()
   }
-
--- | Default no-op callbacks for back-pass execution.
-defaultBackJobCallbacks :: BackJobCallbacks
-defaultBackJobCallbacks =
-  BackJobCallbacks
-    { bjcOnStart = \_ -> return ()
-    , bjcOnProgress = \_ _ -> return ()
-    , bjcOnDone = \_ _ -> return ()
-    }
 
 data BackQueue = BackQueue
   { backQueueEnqueue :: Int -> BackJob -> BackJobCallbacks -> IO Bool
@@ -624,11 +607,10 @@ startCompile :: CompileScheduler -> Int -> (Int -> IO ()) -> IO Int
 startCompile sched delay run = do
   gen <- atomicModifyIORef' (csGenRef sched) $ \g -> let g' = g + 1 in (g', g')
   modifyMVar_ (csAsyncRef sched) $ \m -> do
-    forM_ m $ \old -> do
-      -- The canceled action drains front-output jobs in its finalizer; wait so
-      -- stale writes cannot overlap the next generation.
-      cancel old
-      waitCatch old >> return ()
+    -- The canceled action drains front-output jobs in its finalizer, and
+    -- cancel waits for the action to finish, so stale writes cannot overlap
+    -- the next generation.
+    forM_ m cancel
     a <- async $ do
       when (delay > 0) $ threadDelay delay
       current <- readIORef (csGenRef sched)
@@ -699,7 +681,6 @@ data CompilePlan = CompilePlan
   , cpRootTasks :: [CompileTask]
   , cpIncremental :: Bool
   , cpAllowPrune :: Bool
-  , cpChangedPaths :: Maybe [FilePath]
   , cpSrcFiles :: [FilePath]
   }
 
@@ -744,7 +725,7 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     then maybe (return ()) (pruneMissingChangedModuleOutputs opts' projMap) mChangedPaths
     else mapM_ (pruneMissingModuleOutputs opts' projMap) (M.elems projMap)
   let hasBuildLibraries = any (not . M.null . BuildSpec.libraries . projBuildSpec) (M.elems projMap)
-  (globalTasks, _) <- buildGlobalTasks sp gopts opts' projMap
+  globalTasks <- buildGlobalTasks sp gopts opts' projMap
     (if incremental || allowPrune || hasBuildLibraries then Nothing else Just srcFiles)
   let dbpBlocked = libraryBoundaryTasks projMap globalTasks
   neededTasks0 <- case mChangedPaths of
@@ -761,7 +742,6 @@ prepareCompilePlanFromContext sp gopts ctx srcFiles allowPrune mChangedPaths = d
     , cpRootTasks = rootTasks
     , cpIncremental = incremental
     , cpAllowPrune = allowPrune'
-    , cpChangedPaths = mChangedPaths
     , cpSrcFiles = srcFiles
     }
 
@@ -1100,10 +1080,9 @@ updateNameHashCache mn infos =
 -- Returns Just the file path for Acton sources and Nothing otherwise.
 filterActFile :: FilePath -> Maybe FilePath
 filterActFile file =
-    case fileExt of
+    case takeExtension file of
         ".act" -> Just file
         _ -> Nothing
-  where (fileBody, fileExt) = splitExtension $ takeFileName file
 
 -- | Turn a list of (location, message) pairs into diagnostics.
 -- Used to normalize errors from different compiler subsystems.
@@ -1192,14 +1171,6 @@ parseActHeaderSnapshot mn actFile snap = do
 
     handleIndentationError srcContent err =
       return $ Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) srcContent (Acton.Parser.indentationError err))
-
--- | Parse a SourceSnapshot with a display path relative to cwd.
--- Keeps diagnostics stable regardless of absolute paths or overlays.
-parseActSnapshot :: C.CompileOptions -> A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] A.Module)
-parseActSnapshot opts mn actFile snap = do
-  cwd <- getCurrentDirectory
-  let displayFile = makeRelative cwd actFile
-  parseActSource opts mn displayFile (Source.ssText snap) Nothing
 
 -- | Read and parse a source file via SourceProvider (overlay-aware).
 -- Returns both the snapshot and the parsed AST for reuse by callers.
@@ -1591,16 +1562,8 @@ checkImportDependencies paths projects modSets imps =
 -- producing TaskKeys for dependency edges.
 resolveProviders :: TaskKey -> String -> [FilePath] -> M.Map FilePath (Data.Set.Set A.ModName) -> Data.Set.Set ProjName -> [A.ModName] -> M.Map A.ModName TaskKey
 resolveProviders key proj order modSets deps imps =
-    --trace ("#### resolveProviders " ++ prstr key) $
-    --trace ("   # proj: " ++ proj) $
---    trace ("   # order: " ++ prstrs order) $
---    trace ("   # modset: " ++ prstrs (case M.lookup (tkProj key) modSets of Nothing -> []; Just s -> Data.Set.toList s)) $
-    --trace ("   # imps: " ++ prstrs imps) $
-    --trace ("   # imps': " ++ prstrs imps') $
-    --trace ("  ## map: "  ++ prstr result) $
-    result
-  where result          = M.fromList $ concat $ map findProvider imps'
-        imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ map dropLib imps
+    M.fromList $ concat $ map findProvider imps'
+  where imps'           = [ A.modName ns | mn <- imps, let n:ns = A.modPath mn, n == proj ] ++ map dropLib imps
         p0              = tkProj key
         Just mods0      = M.lookup p0 modSets
         findProvider mn
@@ -1629,7 +1592,7 @@ buildGlobalTasks :: Source.SourceProvider
                  -> C.CompileOptions
                  -> M.Map FilePath ProjCtx
                  -> Maybe [String]                  -- optional seed source files; Nothing = all modules
-                 -> IO ([GlobalTask], M.Map FilePath (Data.Set.Set A.ModName))
+                 -> IO [GlobalTask]
 buildGlobalTasks sp gopts opts projMap mSeeds = do
     -- perProj :: [(ProjCtx, (ActFile,A.ModName))]
     perProj <- forM (M.elems projMap) $ \ctx -> do
@@ -1656,7 +1619,7 @@ buildGlobalTasks sp gopts opts projMap mSeeds = do
                         found = mapMaybe (`M.lookup` pathIndex) absFiles
                     return (if null found then allKeys else found)
     tasks <- go modMaps modSets allDeps orderCache Data.Set.empty seedKeys []
-    return (reverse tasks, modSets)
+    return (reverse tasks)
   where
     go modMaps modSets allDeps orderCache seen [] acc = return acc
     go modMaps modSets allDeps orderCache seen (k:qs) acc
@@ -2198,19 +2161,8 @@ materializeTask opts sp mn actFile providers mOnProgress task =
       let displayFile = makeRelative cwd file
       parseActSource opts mn' displayFile srcContent mOnProgress
 
-instance Pretty (A.ModName, TaskKey) where
-    pretty (m, tk) = pretty m <+> text "-->" <+> pretty tk
-
-instance Pretty TaskKey where
-    pretty tk = pretty (tkMod tk) <+> parens (pretty (tkProj tk))
-
-instance Pretty (M.Map A.ModName TaskKey) where
-    pretty prov = nest 4 $ vcat $ map pretty (M.toList prov)
-
 adjustImports :: M.Map A.ModName TaskKey -> A.Module -> A.Module
-adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) ++ "\n    old: " ++ prstrs (A.imps m) ++ "\n    new: " ++ prstrs imps') $
-                            --trace ("  ## providers:\n" ++ render (pretty providers))
-                            m{ A.imps = imps' }
+adjustImports providers m = m{ A.imps = imps' }
   where imps'                        = map adjust (A.imps m)
         adjust (A.Import l ms)       = A.Import l (map adj ms)
         adjust (A.FromImport l m i)  = A.FromImport l (adj' m) i
@@ -2226,41 +2178,6 @@ adjustImports providers m = --trace ("#### adjust for " ++ prstr (A.modname m) +
         adjusted m = case M.lookup m providers of
                         Just tk | tkMod tk /= m -> Just (tkMod tk)
                         _                       -> Nothing
-
--- | Recursively read imports for a set of tasks within the same project.
--- Any missing module is added by parsing or reading its .tydb header via
--- readModuleTask, yielding a self-contained task list.
-readImports :: Source.SourceProvider -> C.GlobalOptions -> C.CompileOptions -> Paths -> [CompileTask] -> IO [CompileTask]
-readImports sp gopts opts paths tasks = do
-    let tasks' = filter (\t -> name t /= modName paths) tasks
-    chaseRecursively tasks' [] (concatMap importsOf tasks')
-  where
-    readAFile tasks mn = case lookUp mn tasks of
-      Just _ -> return Nothing
-      Nothing -> do
-        let actFile = srcFile paths mn
-        ok <- doesFileExist actFile
-        if ok
-          then do
-            p <- findPaths actFile opts
-            t <- readModuleTask sp gopts opts p actFile
-            return (Just t)
-          else return Nothing
-
-    lookUp mn (t:ts)
-      | name t == mn = Just t
-      | otherwise = lookUp mn ts
-    lookUp _ [] = Nothing
-
-    chaseRecursively tasks mns [] = return tasks
-    chaseRecursively tasks mns (imn:imns)
-      | imn `elem` mns = chaseRecursively tasks mns imns
-      | otherwise = do
-          t <- readAFile tasks imn
-          chaseRecursively (maybe tasks (:tasks) t)
-                           (imn:mns)
-                           (imns ++ concatMap importsOf (maybe [] (:[]) t))
-
 
 -- | Decide whether to suppress per-module timing/log output.
 -- We also treat any alternate output mode (parse/sigs/cgen/etc) as quiet.
@@ -2384,9 +2301,6 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
   where
     mn = A.modname parsed
     filename = modNameToFilename (dropProjPrefix paths mn)
-    outbase = outBase paths mn
-    absSrcBase = srcBase paths mn
-    actFile = absSrcBase ++ ".act"
     prettyAstStyle = style { mode = PageMode, lineLength = 120, ribbonsPerLine = 1.0 }
 
     handleGeneral :: GeneralError -> IO (Either [Diagnostic String] FrontResult)
@@ -2538,18 +2452,17 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                 writeIORef typeProgressDoneRef (Just now)
             when collectTypeStmtTimings $ do
               mActive <- readIORef typeActiveRef
-              forM_ mActive $ \(label, bindNames, activeTotal, t0) ->
+              forM_ mActive $ \(bindNames, activeTotal, t0) ->
                 modifyIORef' typeStmtTimingsRef
                   ( TypeStmtTiming
                       { tstCompleted = completed
                       , tstTotal = activeTotal
-                      , tstLabel = label
                       , tstNames = bindNames
                       , tstTime = now - t0
                       }
                   : )
               case current of
-                Just label -> writeIORef typeActiveRef (Just (label, names, total, now))
+                Just _ -> writeIORef typeActiveRef (Just (names, total, now))
                 Nothing -> writeIORef typeActiveRef Nothing
             emitTypeProgressPaced False now completed total current
           onInferredSignature names sig =
@@ -3280,10 +3193,7 @@ compileTasks :: Source.SourceProvider
 compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     runningRef <- newIORef []
     frontOutputRef <- newIORef []
-    let cancelRunning = do
-          running <- readIORef runningRef
-          mapM_ cancel running
-          mapM_ (\a -> waitCatch a >> return ()) running
+    let cancelRunning = readIORef runningRef >>= mapM_ cancel
         waitFrontOutputs = do
           _ <- waitFrontOutputJobsRef frontOutputRef
           return ()
@@ -3319,7 +3229,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     continue frontOutputRef runningRef = do
       baseEnv <- Acton.Env.initEnvWithEscapeSummaries True builtinPath False
 
-      costMap <- fmap M.fromList $ forM otherOrder $ \t -> do
+      costMap <- fmap M.fromList $ forM order $ \t -> do
                     let mn = name (gtTask t)
                         pth = gtPaths t
                         fp  = srcFile pth mn
@@ -3349,17 +3259,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     showTaskGraph _              = ""
     fmt t = tkProj (gtKey t) ++ ":" ++ modNameToString (name (gtTask t)) ++ " "
 
-    otherOrder = order
     revMap :: M.Map TaskKey [TaskKey]
     revMap = foldl' (\acc (k, ds) -> foldl' (\a d -> M.insertWith (++) d [k] a) acc ds) M.empty (M.toList depMap)
     depMap :: M.Map TaskKey [TaskKey]
     depMap = M.fromList [ (gtKey t, depsOf t) | t <- order ]
-    indeg  = M.map length depMap
 
     depOpts = opts { C.skip_build = True, C.test = False }
     optsFor k = if tkProj k == rootProj then opts else depOpts
-
-    formatTaskKey k = modNameToString (dropProjPrefix rootPaths (tkMod k))
 
     needsParseStage t =
       case gtTask t of
@@ -3411,7 +3317,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
       where
         costOf m = M.findWithDefault 0 m cm
         depsOfK m = M.findWithDefault [] m revMap
-        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOfK m ]) | m <- M.keys indeg ]
+        cwMap    = M.fromList [ (m, costOf m + max0 [ weight d | d <- depsOfK m ]) | m <- M.keys depMap ]
         weight m = M.findWithDefault 0 m cwMap
         max0 []  = 0
         max0 xs  = maximum xs
@@ -3863,8 +3769,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
             return (fmap M.fromList resolved)
 
           checkDepModuleRows depModules = do
-            resolved <- traverseDiags checkOne depModules
-            return $ fmap foldRows resolved
+            rows <- mapM checkOne depModules
+            return (foldRows rows)
             where
               checkOne depInfo = do
                 let depMn = InterfaceFiles.dmiModule depInfo
@@ -3872,14 +3778,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 mimpl <- resolveImportImplHash depMn
                 return $ case (mpub, mimpl) of
                   (Just pubH, Just implH) ->
-                    Right ( depMn
-                          , pubH /= InterfaceFiles.dmiPubHash depInfo
-                          , implH /= InterfaceFiles.dmiImplHash depInfo
-                          )
+                    ( depMn
+                    , pubH /= InterfaceFiles.dmiPubHash depInfo
+                    , implH /= InterfaceFiles.dmiImplHash depInfo
+                    )
                   _ ->
                     -- Stale dep rows may mention a removed transitive provider;
                     -- the per-name rows decide whether any used name is affected.
-                    Right (depMn, True, True)
+                    (depMn, True, True)
 
               foldRows rows =
                 ( Data.Set.fromList [ depMn | (depMn, pubChanged, _implChanged) <- rows, pubChanged ]
@@ -3898,10 +3804,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                   then return (noteMissingRows depMn acc)
                   else foldM (checkName depMn) acc depNames
 
-              noteMissingRows depMn acc@(pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods)
-                | Data.Set.member depMn changedPubMods || Data.Set.member depMn changedImplMods =
-                    (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, Data.Set.insert depMn rowMissingMods)
-                | otherwise = acc
+              noteMissingRows depMn (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, rowMissingMods) =
+                (pubDeltas, implDeltas, pubMissing, implMissing, pubUsers, implUsers, Data.Set.insert depMn rowMissingMods)
 
               checkName depMn acc depInfo = do
                 let depName = InterfaceFiles.dniName depInfo
@@ -3973,13 +3877,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               case importHashRes of
                 Left diags -> return (Left diags)
                 Right _ -> do
-                  depModuleRes <- checkDepModuleRows depModules
-                  case depModuleRes of
-                    Left diags -> return (Left diags)
-                    Right (changedPubMods, changedImplMods) ->
-                      if Data.Set.null changedPubMods && Data.Set.null changedImplMods
-                        then return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
-                        else Right <$> checkDepNameRows changedPubMods changedImplMods
+                  (changedPubMods, changedImplMods) <- checkDepModuleRows depModules
+                  if Data.Set.null changedPubMods && Data.Set.null changedImplMods
+                    then return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
+                    else Right <$> checkDepNameRows changedPubMods changedImplMods
             -- Source tasks always run front passes, so deps are irrelevant.
             _ -> return (Right ([], [], [], [], M.empty, M.empty, Data.Set.empty))
 
@@ -4013,7 +3914,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                 _ -> return Nothing
               let needByCodegen = maybe False (not . codegenUpToDate) mCodegenStatus
               let runFront = do
-                    --traceM ("\n## runFront " ++ prstr mn ++ "\n")
                     prevNameHashes <- if C.verbose gopts
                       then case taskCurrent of
                         TyTask{ tyNameHashes = nhs } | not (null nhs) -> return (Just (nameHashMapFromList (publicNameHashes nhs)))
@@ -4077,7 +3977,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       ParseTask{} -> error ("Internal error: unmaterialized ParseTask " ++ modNameToString mn)
                       _ -> error ("Internal error: unexpected task " ++ show t')
                   runImplRefresh = do
-                    --traceM ("\n## runImplRefresh " ++ prstr mn ++ "\n")
                     let rerunFront = do
                           when (C.verbose gopts) $
                             ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": impl refresh encountered unresolved dep hashes; rerunning front passes")
@@ -4087,8 +3986,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                           if isJust (fromException err :: Maybe SomeAsyncException)
                             then throwIO err
                             else rerunFront
-                        handleImplRefreshException :: SomeException -> IO (TaskKey, Either [Diagnostic String] FrontResult)
-                        handleImplRefreshException = handleSyncFailure
                     (do
                       when (C.verbose gopts) $ do
                         let fmtDelta (qn, old, new) = prstr qn ++ " " ++ short8 old ++ " → " ++ short8 new ++ fmtUsers implUsers qn
@@ -4141,7 +4038,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                           -- Synchronous, like the full write: completion implies
                                           -- the refreshed rows are committed. A write failure is
                                           -- THIS module's front failure on the diagnostics path --
-                                          -- returned, not thrown, so handleImplRefreshException
+                                          -- returned, not thrown, so handleSyncFailure
                                           -- cannot misread it as stale dep hashes and rerun the
                                           -- front against a persistent environmental error.
                                           writeRefreshedRows = do
@@ -4212,9 +4109,8 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                             }
                                                       cacheFrontResult fr
                         _ -> rerunFront
-                      ) `catch` handleImplRefreshException
+                      ) `catch` handleSyncFailure
                   runCodegenRefresh = do
-                    --traceM ("\n## runCodegenRefresh " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $ do
                       let suffix = maybe "" formatCodegenDelta mCodegenStatus
                       ccOnInfo callbacks ("  Stale " ++ modNameToString (dropProjPrefix paths mn) ++ ": generated code out of date" ++ suffix)
@@ -4239,7 +4135,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                    }
                         cacheFrontResult fr
                   runReuse = do
-                    --traceM ("\n## runReuse " ++ prstr mn ++ "\n")
                     when (C.verbose gopts) $
                       ccOnInfo callbacks ("  Fresh " ++ modNameToString (dropProjPrefix paths mn) ++ ": using cached .tydb")
                     ifaceRes <- case taskCurrent of
@@ -4288,20 +4183,16 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
           onProgress p = ccOnParseProgress callbacks t optsT p
           providers = gtImportProviders t
       timeStart <- getTime Monotonic
-      parsed <- if C.only_build optsT
-                  then return (gtTask t)
-                  else case gtTask t of
-                         ParseTask{} -> materializeTask optsT sp mn actFile providers (Just onProgress) (gtTask t)
-                         _ -> return (gtTask t)
+      -- A parse stage exists only for a ParseTask, which materializes into an
+      -- ActonTask or a ParseErrorTask.
+      parsed <- materializeTask optsT sp mn actFile providers (Just onProgress) (gtTask t)
       case parsed of
-        ParseTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
         ActonTask{ atree = m } -> do
           _ <- evaluate (rnf m)
           timeEnd <- getTime Monotonic
           let parseTime = if not (quiet gopts optsT) then Just (timeEnd - timeStart) else Nothing
           return (ParseStage key, Right (StageParsed parsed parseTime))
-        ParseErrorTask{} -> return (ParseStage key, Right (StageParsed parsed Nothing))
-        _ -> error ("Internal error: parse stage did not materialize " ++ modNameToString mn)
+        _ -> return (ParseStage key, Right (StageParsed parsed Nothing))
 
     runFrontStage :: Acton.Env.Env0
                   -> IORef [FrontOutputJob]
@@ -4387,10 +4278,10 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               tDone = taskMap M.! keyDone
               optsDone = optsFor keyDone
           case outcome of
+            -- Only a front stage fails: a parse stage reports a parse error as
+            -- a ParseErrorTask, which its front stage turns into diagnostics.
             Left diags -> do
-              case stageDone of
-                FrontStage _ -> ccOnFrontDone callbacks tDone optsDone
-                ParseStage _ -> ccOnParseDone callbacks tDone optsDone Nothing
+              ccOnFrontDone callbacks tDone optsDone
               ccOnDiagnostics callbacks tDone optsDone diags
               let blockedMods = dependentClosure keyDone
                   blockedStages =
@@ -4444,59 +4335,6 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       loop frontOutputRef runningRef rdy2 running2 res2 implRes2 nameRes2 parsedTasks2 interestMap2 frontDone2 deferredBacks2 ind2 pend2 envAcc' hadErrors maxPar cw
 
 
--- | Execute back-pass jobs in parallel while keeping output order stable.
--- Jobs are started up to the concurrency limit, then completions are buffered
--- and flushed in job order so logs are deterministic.
-runBackJobs :: C.GlobalOptions -> Int -> (BackJob -> IO ()) -> (BackJob -> Maybe TimeSpec -> IO ()) -> [BackJob] -> IO ()
-runBackJobs _ _ _ _ [] = return ()
-runBackJobs gopts maxPar onStart onDone jobs = do
-  runningRef <- newIORef []
-  let cancelRunning = readIORef runningRef >>= mapM_ cancel
-  let runMain = loopBack runningRef indexed [] M.empty 0
-  runMain `finally` cancelRunning
-  where
-    indexed = zip [0..] (orderBackJobs jobs)
-
-    backJobKey :: BackJob -> TaskKey
-    backJobKey job =
-      TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
-
-    orderBackJobs :: [BackJob] -> [BackJob]
-    orderBackJobs js = Data.List.sortOn backJobKey js
-
-    loopBack runningRef pending running results nextIx = do
-      let capacity = maxPar - length running
-          (toStart, pending') = splitAt capacity pending
-      running' <- mask_ $ do
-        new <- forM toStart $ \(ix, job) ->
-                 async $ do
-                   onStart job
-                   (res, _timing) <- runBackPasses gopts (bjOpts job) (bjPaths job) (bjInput job) (return True)
-                   return (ix, job, res)
-        let running' = running ++ new
-        writeIORef runningRef running'
-        return running'
-      if null running' && null pending'
-        then do
-          (_, _) <- flushReady results nextIx
-          return ()
-        else do
-          (doneA, (ix, job, res)) <- waitAny running'
-          let running'' = filter (/= doneA) running'
-              results' = M.insert ix (job, res) results
-          writeIORef runningRef running''
-          (results'', nextIx') <- flushReady results' nextIx
-          loopBack runningRef pending' running'' results'' nextIx'
-
-    flushReady :: M.Map Int (BackJob, Maybe TimeSpec) -> Int -> IO (M.Map Int (BackJob, Maybe TimeSpec), Int)
-    flushReady res ix =
-      case M.lookup ix res of
-        Nothing -> return (res, ix)
-        Just (job, mline) -> do
-          onDone job mline
-          flushReady (M.delete ix res) (ix + 1)
-
-
 -- Paths handling -------------------------------------------------------------------------------------
 
 data Paths      = Paths {
@@ -4509,7 +4347,6 @@ data Paths      = Paths {
                     binDir      :: FilePath,
                     srcDir      :: FilePath,
                     isTmp       :: Bool,
-                    fileExt     :: String,
                     modName     :: A.ModName,
                     projName    :: String
                   }
@@ -4693,8 +4530,7 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
 -- 'projTypes' is directory "types" under 'projOut'.
 -- 'binDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "bin" under 'projOut'
 -- 'srcDir' is the directory prefix of FILE if 'projPath' is temporary, otherwise it is directory "src" under 'projPath'
--- 'fileExt' is file suffix of FILE.
--- 'modName' is the module name of FILE (its path after 'src' except 'fileExt', split at every '/')
+-- 'modName' is the module name of FILE (its path after 'src' without the file suffix, split at every '/')
 
 -- | Compute the source file path for a module under its project src dir.
 srcFile                 :: Paths -> A.ModName -> FilePath
@@ -4728,10 +4564,8 @@ moduleOutputs paths     = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.int
 -- | Compute the module path without extension under the project's src dir.
 -- Used to derive the .act path or related per-module files.
 srcBase                 :: Paths -> A.ModName -> FilePath
-srcBase paths mn        = --trace ("## srcBase " ++ prstr mn ++ " --> " ++ fpath) $
-                          fpath
-  where fpath           = joinPath (srcDir paths : names)
-        names           = case A.modPath mn of
+srcBase paths mn        = joinPath (srcDir paths : names)
+  where names           = case A.modPath mn of
                             n:ns | n == projName paths -> ns
                             ns -> ns
 
@@ -4833,21 +4667,18 @@ findPaths actFile opts  = do execDir <- takeDirectory <$> getExecutablePath
                                  projOut = joinPath [projPath, "out"]
                                  projTypes = joinPath [projOut, "types"]
                                  binDir  = if isTmp then srcDir else joinPath [projOut, "bin"]
-                                 modName = A.modName $ dirInSrc ++ [fileBody]
                              -- join the search paths from command line options with the ones found in the deps directory
                              depOverrides <- normalizeDepOverrides projPath (C.dep_overrides opts)
                              (projName,depTypePaths) <- if isTmp then return ("",[]) else collectDepTypePaths projPath depOverrides
                              let sPaths = [projTypes] ++ depTypePaths ++ (C.searchpath opts) ++ systemTypePaths sysPath sysTypes
-                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [fileBody]
+                                 modName = A.modName $ (if isTmp then dirInSrc else projName:dirInSrc) ++ [takeBaseName actFile]
                              InterfaceFiles.registerSystemTypeRoots (systemTypePaths sysPath sysTypes)
                              createDirectoryIfMissing True binDir
                              createDirectoryIfMissing True projOut
                              createDirectoryIfMissing True projTypes
                              createDirectoryIfMissing True (getModPath projTypes modName)
-                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp fileExt modName projName
-  where (fileBody,fileExt) = splitExtension $ takeFileName actFile
-
-        analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
+                             return $ Paths sPaths sysPath sysTypes projPath projOut projTypes binDir srcDir isTmp modName projName
+  where analyze "/" ds  = do tmp <- canonicalizePath (C.tempdir opts)
                              return (True, tmp, [])
         analyze pre ds  = do isProjectRoot <- isActonProjectRoot pre
                              if isProjectRoot
@@ -4868,9 +4699,7 @@ moduleNameFromFile srcBase proj actFile = do
     file <- normalizePathSafe actFile
     let rel = dropExtension (makeRelative base file)
         names = splitDirectories rel
-        mn = A.modName $ if proj `elem` special_projects then names else proj:names
-    --traceM ("## from file " ++ actFile ++ " --> " ++ prstr mn)
-    return mn
+    return (A.modName $ if proj `elem` special_projects then names else proj:names)
 
 -- | Enumerate all .act files in a project and pair them with module names.
 -- Used to seed the project module index for graph construction.
@@ -4934,7 +4763,7 @@ searchPathForProject opts projMap ctx =
 modulePaths :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> Paths
 modulePaths opts projMap ctx mn =
     Paths (searchPathForProject opts projMap ctx) (projSysPath ctx) (projSysTypes ctx) (projRoot ctx) (projOutDir ctx) (projTypesDir ctx)
-          (joinPath [projOutDir ctx, "bin"]) (projSrcDir ctx) False ".act" mn (BuildSpec.specName (projBuildSpec ctx))
+          (joinPath [projOutDir ctx, "bin"]) (projSrcDir ctx) False mn (BuildSpec.specName (projBuildSpec ctx))
 
 -- | Construct the Paths record of a module and create its output directories.
 pathsForModule :: C.CompileOptions -> M.Map FilePath ProjCtx -> ProjCtx -> A.ModName -> IO Paths
@@ -5069,12 +4898,6 @@ normalizePathSafe :: FilePath -> IO FilePath
 normalizePathSafe p = do
     res <- try (canonicalizePath p) :: IO (Either IOException FilePath)
     return $ either (const (normalise p)) id res
-
--- | Trim leading and trailing whitespace from a string.
--- Used when parsing or normalizing BuildSpec inputs.
-trim :: String -> String
-trim = f . f
-  where f = reverse . dropWhile isSpace
 
 -- | Collapse "." and ".." segments without dropping leading ".." on relative paths.
 -- Example: "a/b/../c/./d" becomes "a/c/d".
@@ -5585,12 +5408,3 @@ readFile f = do
 -- Used for generated sources and BuildSpec parsing.
 writeFile :: FilePath -> String -> IO ()
 writeFile = writeFileUtf8Atomic
-
--- | Format a TimeSpec as a fixed-width seconds string.
--- Used for stable logging and snapshot test output.
-fmtTime :: TimeSpec -> String
-fmtTime t =
-    printf "%6.3f s" secs
-  where
-    secs :: Float
-    secs = (fromIntegral(sec t)) + (fromIntegral (nsec t) / 1000000000)

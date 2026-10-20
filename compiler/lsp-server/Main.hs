@@ -398,7 +398,6 @@ compilePlanFromCache ctx changedPath cache = do
         , Compile.cpRootTasks = rootTasks
         , Compile.cpIncremental = True
         , Compile.cpAllowPrune = False
-        , Compile.cpChangedPaths = Just [changedPath]
         , Compile.cpSrcFiles = [changedPath]
         }
 

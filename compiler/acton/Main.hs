@@ -2455,7 +2455,7 @@ High-level Steps
      read module imports/roots/docstring from the header, which is much faster
      than parsing the full .act file.
 
-2) Expand to include transitive project imports (readImports)
+2) Expand to include transitive project imports (buildGlobalTasks)
    - For project builds, we enumerate all modules under src/ upfront, so chasing
      is typically a no-op.
    - For single-file builds (or partial sets), we chase imports from the seeded
