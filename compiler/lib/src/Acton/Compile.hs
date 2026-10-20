@@ -1056,18 +1056,13 @@ parseActFile opts sp mn actFile mOnProgress = do
 readSourceFileMeta :: FilePath -> IO InterfaceFiles.SourceFileMeta
 readSourceFileMeta path = do
   st <- getFileStatus path
-  let mtimeNs = fileStatusMTimeNs st
-      ctimeNs = fileStatusCTimeNs st
   return InterfaceFiles.SourceFileMeta
-    { InterfaceFiles.sfmMTimeNs = mtimeNs
-    , InterfaceFiles.sfmCTimeNs = ctimeNs
+    { InterfaceFiles.sfmMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes st)
+    , InterfaceFiles.sfmCTimeNs = InterfaceFiles.posixNanoseconds (statusChangeTimeHiRes st)
     , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
     , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
     , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
     }
-  where
-    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
-    fileStatusCTimeNs st = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
 
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
@@ -1722,7 +1717,7 @@ readModuleHeader sp gopts opts paths actFile = do
         hdrE <- trySync (InterfaceFiles.readHeaderSummary tyFile)
         case hdrE of
           Left _ -> readSourceHead mn
-          Right (cachedSourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, mdoc) -> do
+          Right header -> do
             tyMTimeNs <- InterfaceFiles.interfaceModifiedTimeNs tyFile
             newCompiler <- compilerNewerThan tyMTimeNs
             mOverlay <- Source.spReadOverlay sp actFile
@@ -1730,33 +1725,31 @@ readModuleHeader sp gopts opts paths actFile = do
               Just snap ->
                 if newCompiler
                   then sourceHeadFromSnapshot mn snap
-                  else verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta Nothing imps depModules nameCount roots tests mdoc
+                  else verifyOrParse mn snap header Nothing
               Nothing -> do
                 if newCompiler
                   then readSourceHead mn
                   else do
                     currentSourceMeta <- readSourceFileMeta actFile
-                    if canReuseHeader cachedSourceMeta currentSourceMeta tyMTimeNs
-                      then return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc)
+                    if canReuseHeader (InterfaceFiles.summarySourceMeta header) currentSourceMeta tyMTimeNs
+                      then return (mkTyHead mn header)
                       else do
                         snap <- Source.spReadFile sp actFile
-                        verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta (Just currentSourceMeta) imps depModules nameCount roots tests mdoc
+                        verifyOrParse mn snap header (Just currentSourceMeta)
   where
-    fileStatusMTimeNs st = floor (toRational (modificationTimeHiRes st) * 1000000000)
-
-    mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc =
+    mkTyHead mn header =
       TyHead
         { mhName       = mn
-        , mhSrcHash    = moduleSrcBytesHash
-        , mhPubHash    = modulePubHash
-        , mhImplHash   = moduleImplHash
-        , mhTyImports  = imps
-        , mhDepModules = depModules
+        , mhSrcHash    = InterfaceFiles.summarySourceHash header
+        , mhPubHash    = InterfaceFiles.summaryPubHash header
+        , mhImplHash   = InterfaceFiles.summaryImplHash header
+        , mhTyImports  = InterfaceFiles.summaryImports header
+        , mhDepModules = InterfaceFiles.summaryDepModules header
         , mhNameHashes = []
-        , mhNameCount  = nameCount
-        , mhRoots      = roots
-        , mhTests      = tests
-        , mhDoc        = mdoc
+        , mhNameCount  = InterfaceFiles.summaryNameCount header
+        , mhRoots      = InterfaceFiles.summaryRoots header
+        , mhTests      = InterfaceFiles.summaryTests header
+        , mhDoc        = InterfaceFiles.summaryDoc header
         }
 
     metadataMatches cached current =
@@ -1794,7 +1787,7 @@ readModuleHeader sp gopts opts paths actFile = do
               exeStatusE <- trySync (getFileStatus exePath)
               case exeStatusE of
                 Left _ -> return False
-                Right exeStatus -> return (fileStatusMTimeNs exeStatus > tyMTimeNs)
+                Right exeStatus -> return (InterfaceFiles.posixNanoseconds (modificationTimeHiRes exeStatus) > tyMTimeNs)
 
     -- Surgical single-row update: a full readFile+writeFile here would re-derive
     -- the dependency index rows from the stripped per-name hashes and silently
@@ -1804,10 +1797,11 @@ readModuleHeader sp gopts opts paths actFile = do
       let tyFilePath = tyDbPath paths (modName paths)
       void (trySync (InterfaceFiles.updateSourceMeta tyFilePath currentSourceMeta))
 
-    verifyOrParse mn snap moduleSrcBytesHash modulePubHash moduleImplHash cachedSourceMeta currentSourceMeta imps depModules nameCount roots tests mdoc = do
+    verifyOrParse mn snap header currentSourceMeta = do
       let curHash = SHA256.hash (Source.ssBytes snap)
+          storedHash = InterfaceFiles.summarySourceHash header
           short8 bs = take 8 (B.unpack $ Base16.encode bs)
-          same = curHash == moduleSrcBytesHash
+          same = curHash == storedHash
       when (C.verbose gopts && Source.ssIsOverlay snap) $ do
         actTime <- Source.spGetModTime sp actFile
         tyTime <- InterfaceFiles.interfaceModifiedTime (tyDbPath paths mn)
@@ -1816,14 +1810,14 @@ readModuleHeader sp gopts opts paths actFile = do
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
                   ++ " hash=" ++ short8 curHash
-                  ++ " header=" ++ short8 moduleSrcBytesHash
+                  ++ " header=" ++ short8 storedHash
                   ++ " len=" ++ show len
                   ++ if same then " (match)" else " (diff)")
       if same
         then do
-          when (currentSourceMeta /= Nothing && currentSourceMeta /= cachedSourceMeta) $
+          when (currentSourceMeta /= Nothing && currentSourceMeta /= InterfaceFiles.summarySourceMeta header) $
             refreshCachedSourceMeta currentSourceMeta
-          return (mkTyHead mn moduleSrcBytesHash modulePubHash moduleImplHash imps depModules nameCount roots tests mdoc)
+          return (mkTyHead mn header)
         else sourceHeadFromSnapshot mn snap
 
 -- | Prepare a task for dependency graph construction.
@@ -3732,10 +3726,14 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                    { frModuleInfo = mModuleInfo }
                                         in Recomputed updatedDepModules updatedNameHashes fr
                                   Nothing -> do
-                                    stored <- InterfaceFiles.readFileMaybe tyFile
-                                    case stored of
+                                    storedRes <- InterfaceFiles.readFileMaybe tyFile
+                                    case storedRes of
                                       Nothing -> return InterfaceGone
-                                      Just (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, _moduleImplHash, _imps, _depModules, _nameHashes, _roots, _tests, mdoc) -> do
+                                      Just stored -> do
+                                        let nmod          = InterfaceFiles.storedInterface stored
+                                            tmod          = InterfaceFiles.storedTyped stored
+                                            mdoc          = InterfaceFiles.storedDoc stored
+                                            modulePubHash = InterfaceFiles.storedPubHash stored
                                         snap <- Source.readSource sp actFile
                                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
                                         evaluate (rnf nmod)
@@ -3755,7 +3753,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                     tyRes <- readTyFile
                     case tyRes of
                       Left diags -> return (key, Left diags)
-                      Right (_ms, nmod, tmod, _sourceMeta, _moduleSrcBytesHash, modulePubHash, moduleImplHashStored, _imps, _depModules, nameHashes, _roots, _tests, mdoc) -> do
+                      Right stored -> do
+                        let nmod                 = InterfaceFiles.storedInterface stored
+                            tmod                 = InterfaceFiles.storedTyped stored
+                            mdoc                 = InterfaceFiles.storedDoc stored
+                            modulePubHash        = InterfaceFiles.storedPubHash stored
+                            moduleImplHashStored = InterfaceFiles.storedImplHash stored
+                            nameHashes           = InterfaceFiles.storedNames stored
                         snap <- Source.readSource sp actFile
                         env1 <- Acton.Env.mkEnv (searchPath paths) envSnap tmod
                         interestDeps <- cachedInterestDeps

@@ -95,15 +95,16 @@ module InterfaceFiles
   , DepNameInfo(..)
   , DepUsers(..)
   , SourceFileMeta(..)
-  , TyFile
+  , StoredModule(..)
   , TyHeader
-  , TyHeaderSummary
+  , HeaderSummary(..)
   , InterfaceDB
   , interfaceExt
   , interfacePath
   , interfaceExists
   , interfaceModifiedTime
   , interfaceModifiedTimeNs
+  , posixNanoseconds
   , copyInterface
   , listInterfaceDirsRecursive
   , registerSystemTypeRoots
@@ -171,6 +172,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Short as TS
 import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (POSIXTime)
 import qualified Database.LMDB.Raw as LMDB
 import qualified Acton.Syntax as A
 import qualified Acton.NameInfo as I
@@ -265,21 +267,23 @@ data TyDbWriteProgress = TyDbWriteProgress
   , tyDbWriteProgressRatio :: Double
   } deriving (Show, Eq)
 
-type TyFile =
-  ( [A.ModName]
-  , I.NModule
-  , A.Module
-  , Maybe SourceFileMeta
-  , BS.ByteString
-  , BS.ByteString
-  , BS.ByteString
-  , [(A.ModName, BS.ByteString)]
-  , [DepModuleInfo]
-  , [NameHashInfo]
-  , [A.Name]
-  , [String]
-  , Maybe String
-  )
+-- | A whole .tydb as readFile decodes it: the module-level keys described
+-- at the top of this module, every name and the typed module.
+data StoredModule = StoredModule
+  { storedSourceImports :: [A.ModName]                    -- the typed module's imports
+  , storedInterface     :: I.NModule                      -- those imports, every NameInfo in TEnv order, the docstring
+  , storedTyped         :: A.Module
+  , storedSourceMeta    :: Maybe SourceFileMeta
+  , storedSourceHash    :: BS.ByteString
+  , storedPubHash       :: BS.ByteString
+  , storedImplHash      :: BS.ByteString
+  , storedImports       :: [(A.ModName, BS.ByteString)]
+  , storedDepModules    :: [DepModuleInfo]
+  , storedNames         :: [NameHashInfo]                 -- nhPubDeps and nhImplDeps empty: those live in the deps rows
+  , storedRoots         :: [A.Name]
+  , storedTests         :: [String]
+  , storedDoc           :: Maybe String
+  } deriving (Show, Eq)
 
 type TyHeader =
   ( Maybe SourceFileMeta
@@ -294,18 +298,20 @@ type TyHeader =
   , Maybe String
   )
 
-type TyHeaderSummary =
-  ( Maybe SourceFileMeta
-  , BS.ByteString
-  , BS.ByteString
-  , BS.ByteString
-  , [(A.ModName, BS.ByteString)]
-  , [DepModuleInfo]
-  , Int
-  , [A.Name]
-  , [String]
-  , Maybe String
-  )
+-- | The small module-level keys of a .tydb, which readHeaderSummary decodes
+-- without touching any per-name or per-statement row.
+data HeaderSummary = HeaderSummary
+  { summarySourceMeta :: Maybe SourceFileMeta
+  , summarySourceHash :: BS.ByteString
+  , summaryPubHash    :: BS.ByteString
+  , summaryImplHash   :: BS.ByteString
+  , summaryImports    :: [(A.ModName, BS.ByteString)]
+  , summaryDepModules :: [DepModuleInfo]
+  , summaryNameCount  :: Int
+  , summaryRoots      :: [A.Name]
+  , summaryTests      :: [String]
+  , summaryDoc        :: Maybe String
+  } deriving (Show, Eq)
 
 type TyMeta =
   ( Maybe SourceFileMeta
@@ -406,7 +412,14 @@ interfaceModifiedTime path = getModificationTime (dataFilePath path)
 interfaceModifiedTimeNs :: FilePath -> IO Integer
 interfaceModifiedTimeNs path = do
     st <- getFileStatus (dataFilePath path)
-    return (floor (toRational (modificationTimeHiRes st) * 1000000000))
+    return (posixNanoseconds (modificationTimeHiRes st))
+
+-- | A POSIX time in whole nanoseconds, rounded down.  Stored source metadata
+-- is compared with == against a fresh stat, and modification times are
+-- ordered against the .tydb's, so every such time is converted by this one
+-- function.
+posixNanoseconds :: POSIXTime -> Integer
+posixNanoseconds t = floor (toRational t * 1000000000)
 
 copyInterface :: FilePath -> FilePath -> IO ()
 copyInterface src dst = do
@@ -1464,7 +1477,7 @@ writeFileWithProgress onProgress version f moduleSrcBytesHash modulePubHash modu
     writeProgress frac =
       onProgress (TyDbWriteProgress "Writing .tydb" (prepShare + writeShare * max 0 (min 1 frac)))
 
-readFile :: FilePath -> IO TyFile
+readFile :: FilePath -> IO StoredModule
 readFile f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
@@ -1479,8 +1492,21 @@ readFile f =
       traceTydbRead "all" f ("names " ++ show (length te) ++ " stmts " ++ show (length stmts))
       let tmod = A.Module tmn timps tdoc stmts
           sourceImps = A.importsOf tmod
-          nmod = I.NModule sourceImps te mdoc
-      return (sourceImps, nmod, tmod, sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameHashes, roots, tests, mdoc)
+      return StoredModule
+        { storedSourceImports = sourceImps
+        , storedInterface     = I.NModule sourceImps te mdoc
+        , storedTyped         = tmod
+        , storedSourceMeta    = sourceMeta
+        , storedSourceHash    = moduleSrcBytesHash
+        , storedPubHash       = modulePubHash
+        , storedImplHash      = moduleImplHash
+        , storedImports       = imps
+        , storedDepModules    = depModules
+        , storedNames         = nameHashes
+        , storedRoots         = roots
+        , storedTests         = tests
+        , storedDoc           = mdoc
+        }
 
 -- | Read whether the module contains NotImplemented statements (implemented
 -- by a hand-written .ext.c); such modules are rendered whole, never DBP'd.
@@ -1535,7 +1561,7 @@ readHeader f =
 
 -- Like readHeader, but reads the stored name count instead of decoding every
 -- per-name hash row, so cache checks stay independent of module size.
-readHeaderSummary :: FilePath -> IO TyHeaderSummary
+readHeaderSummary :: FilePath -> IO HeaderSummary
 readHeaderSummary f =
     withReadTxn f $ \txn dbi -> do
       (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash) <- readMeta txn dbi
@@ -1546,7 +1572,18 @@ readHeaderSummary f =
       doc <- getValue "doc" txn dbi keyDoc
       nameCount <- getValue "name-count" txn dbi keyNameCount
       traceTydbRead "header" f "cached"
-      return (sourceMeta, moduleSrcBytesHash, modulePubHash, moduleImplHash, imps, depModules, nameCount, roots, tests, doc)
+      return HeaderSummary
+        { summarySourceMeta = sourceMeta
+        , summarySourceHash = moduleSrcBytesHash
+        , summaryPubHash    = modulePubHash
+        , summaryImplHash   = moduleImplHash
+        , summaryImports    = imps
+        , summaryDepModules = depModules
+        , summaryNameCount  = nameCount
+        , summaryRoots      = roots
+        , summaryTests      = tests
+        , summaryDoc        = doc
+        }
 
 readRoots :: FilePath -> IO [A.Name]
 readRoots f =
@@ -1608,13 +1645,13 @@ readExtensionsByProtocol f n =
 -- Interface files are caches for most callers. If a file is missing,
 -- unreadable, corrupt, or from a different compiler interface version, the
 -- cache entry is not usable.
-readFileMaybe :: FilePath -> IO (Maybe TyFile)
+readFileMaybe :: FilePath -> IO (Maybe StoredModule)
 readFileMaybe = readTyMaybe readFile
 
 readHeaderMaybe :: FilePath -> IO (Maybe TyHeader)
 readHeaderMaybe = readTyMaybe readHeader
 
-readHeaderSummaryMaybe :: FilePath -> IO (Maybe TyHeaderSummary)
+readHeaderSummaryMaybe :: FilePath -> IO (Maybe HeaderSummary)
 readHeaderSummaryMaybe = readTyMaybe readHeaderSummary
 
 readTyMaybe :: (FilePath -> IO a) -> FilePath -> IO (Maybe a)

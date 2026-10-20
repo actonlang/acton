@@ -892,8 +892,7 @@ readModuleTests paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
         case hdrE of
           Left _ -> return []
-          Right (_sourceMeta, _srcH, _ih, _implH, _imps, _depModules, _nameCount, _roots, tests, _doc) ->
-            return tests
+          Right header -> return (InterfaceFiles.summaryTests header)
 
 modNameFromString :: String -> A.ModName
 modNameFromString s = A.modName (splitOnChar '.' s)

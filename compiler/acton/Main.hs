@@ -856,7 +856,7 @@ readModuleImports paths mn = do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary tyFile
         case hdrE of
           Left _ -> return []
-          Right (_sourceMeta, _hash, _ih, _implH, imps, _depModules, _nameCount, _roots, _tests, _doc) -> return (map fst imps)
+          Right header -> return (map fst (InterfaceFiles.summaryImports header))
 
 dependentTestModulesFromHeaders :: Paths -> [FilePath] -> [String] -> IO [String]
 dependentTestModulesFromHeaders paths srcFiles changedModules = do
@@ -2327,8 +2327,8 @@ removeUndeclaredRoots paths tasks bins = do
     headerRoots t = do
       hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary (tyDbPath paths (name t))
       return $ case hdrE of
-        Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, rs, _tests, _) ->
-          [ (A.nstr n == "test_main", name t) | n <- rs ]
+        Right header ->
+          [ (A.nstr n == "test_main", name t) | n <- InterfaceFiles.summaryRoots header ]
         Left _ -> []
     -- Windows binaries end in .exe, and their debug info in .pdb.
     binaryOf f | takeExtension f `elem` [".exe", ".pdb"] = dropExtension f
@@ -2471,7 +2471,7 @@ writeRootC env gopts opts paths tasks binTask = do
         -- was rebuilt during this run.
         tyPath <- Acton.Env.findTyFile (searchPath paths) mn
         rootsHeader <- case tyPath of
-                         Just ty -> do (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) <- InterfaceFiles.readHeaderSummary ty; return roots
+                         Just ty -> InterfaceFiles.summaryRoots <$> InterfaceFiles.readHeaderSummary ty
                          Nothing -> throwProjectError ("Root module " ++ prstr (dropProjPrefix paths mn) ++ " not found")
         let rootsEnv = case Acton.Env.lookupModuleInfo mn env of
                          Nothing -> []
@@ -3102,7 +3102,7 @@ filterMainActor env paths binTask = do
       Just ty -> do
         hdrE <- (try :: IO a -> IO (Either SomeException a)) $ InterfaceFiles.readHeaderSummary ty
         case hdrE of
-          Right (_sourceMeta, _, _, _implH, _imps, _depModules, _nameCount, roots, _tests, _) | n `elem` roots -> return (Just binTask)
+          Right header | n `elem` InterfaceFiles.summaryRoots header -> return (Just binTask)
           _ -> checkEnv
       Nothing -> checkEnv
 

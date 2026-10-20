@@ -364,19 +364,20 @@ main = do
             , "name-hash/p/W_"
             , "name-hash/h/d411b79b67e5851ef731f1c9af75432996298398b69493e8bbcd0d9e9e7e5ce9"
             ]
-          (_mods, I.NModule _ te mdoc, tmod', sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes', roots', tests', doc') <-
-            InterfaceFiles.readFile tyPath
+          stored <- InterfaceFiles.readFile tyPath
+          let I.NModule _ te mdoc = InterfaceFiles.storedInterface stored
           te `shouldBe` iface
           mdoc `shouldBe` Just "module docs"
-          tmod' `shouldBe` tmod
-          sourceMeta `shouldBe` Nothing
-          (srcHash, pubHash, implHash) `shouldBe` ("src", "pub", "impl")
-          imps `shouldBe` []
-          depModules `shouldBe` []
-          nameHashes' `shouldBe` nameHashes
-          roots' `shouldBe` roots
-          tests' `shouldBe` tests
-          doc' `shouldBe` Just "module docs"
+          InterfaceFiles.storedTyped stored `shouldBe` tmod
+          InterfaceFiles.storedSourceMeta stored `shouldBe` Nothing
+          (InterfaceFiles.storedSourceHash stored, InterfaceFiles.storedPubHash stored, InterfaceFiles.storedImplHash stored)
+            `shouldBe` ("src", "pub", "impl")
+          InterfaceFiles.storedImports stored `shouldBe` []
+          InterfaceFiles.storedDepModules stored `shouldBe` []
+          InterfaceFiles.storedNames stored `shouldBe` nameHashes
+          InterfaceFiles.storedRoots stored `shouldBe` roots
+          InterfaceFiles.storedTests stored `shouldBe` tests
+          InterfaceFiles.storedDoc stored `shouldBe` Just "module docs"
           db <- InterfaceFiles.openInterfaceDB tyPath
           InterfaceFiles.readInterfaceDBEscapeSummaries db `shouldReturn` escapeSummaries
 
@@ -1293,24 +1294,23 @@ main = do
             Nothing
             directIface
             directModule
-          (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <-
-            InterfaceFiles.readFile directTy
+          stored <- InterfaceFiles.readFile directTy
           InterfaceFiles.writeFileWithVersion
             (map (+ 1) S.version)
             directTy
-            srcHash
-            pubHash
-            implHash
-            sourceMeta
-            imps
-            depModules
-            nameHashes
+            (InterfaceFiles.storedSourceHash stored)
+            (InterfaceFiles.storedPubHash stored)
+            (InterfaceFiles.storedImplHash stored)
+            (InterfaceFiles.storedSourceMeta stored)
+            (InterfaceFiles.storedImports stored)
+            (InterfaceFiles.storedDepModules stored)
+            (InterfaceFiles.storedNames stored)
             []
-            roots
-            tests
-            mdoc
-            nmod
-            tmod
+            (InterfaceFiles.storedRoots stored)
+            (InterfaceFiles.storedTests stored)
+            (InterfaceFiles.storedDoc stored)
+            (InterfaceFiles.storedInterface stored)
+            (InterfaceFiles.storedTyped stored)
           (_env2, mi) <- Acton.Env.doImp [dir] env1 directMod
           map fst (Acton.Env.modulePublicTEnv mi) `shouldBe` [valueName]
 

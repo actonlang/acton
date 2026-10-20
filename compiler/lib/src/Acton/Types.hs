@@ -184,22 +184,22 @@ substDefaultTerms _ t                 = t
 
 -- | Print a .tydb header and interface; include name hashes when verbose.
 showTyFile env0 m fname verbose = do
-                                     (_,nmod,_,sourceMeta,srcH,pubH,implH,imps,depModules,nameHashes,roots,tests,mdocH) <- InterfaceFiles.readFile fname
+                                     stored <- InterfaceFiles.readFile fname
                                      putStrLn ("\n############### Header ###############")
-                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- imps ]))
-                                     putStrLn ("Deps   : " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode pubH'), take 16 (B.unpack $ Base16.encode implH')) | InterfaceFiles.DepModuleInfo mn pubH' implH' <- depModules ]))
-                                     putStrLn ("Roots  : " ++ (show (map prstr roots)))
-                                     putStrLn ("Tests  : " ++ (show tests))
-                                     case mdocH of
+                                     putStrLn ("Imports: " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode h)) | (mn,h) <- InterfaceFiles.storedImports stored ]))
+                                     putStrLn ("Deps   : " ++ (show [ (prstr mn, take 16 (B.unpack $ Base16.encode pubH'), take 16 (B.unpack $ Base16.encode implH')) | InterfaceFiles.DepModuleInfo mn pubH' implH' <- InterfaceFiles.storedDepModules stored ]))
+                                     putStrLn ("Roots  : " ++ (show (map prstr (InterfaceFiles.storedRoots stored))))
+                                     putStrLn ("Tests  : " ++ (show (InterfaceFiles.storedTests stored)))
+                                     case InterfaceFiles.storedDoc stored of
                                        Just ds -> putStrLn ("Doc    : \"\"\"" ++ ds ++ "\"\"\"")
                                        Nothing -> return ()
-                                     putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode srcH))
-                                     putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode pubH))
-                                     putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode implH))
+                                     putStrLn ("ModuleSrcBytesHash: 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedSourceHash stored)))
+                                     putStrLn ("ModulePubHash     : 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedPubHash stored)))
+                                     putStrLn ("ModuleImplHash    : 0x" ++ (B.unpack $ Base16.encode (InterfaceFiles.storedImplHash stored)))
 
                                      when verbose $ do
                                        putStrLn ("\n############### Source Meta ############")
-                                       case sourceMeta of
+                                       case InterfaceFiles.storedSourceMeta stored of
                                          Nothing -> putStrLn "None"
                                          Just meta -> do
                                            putStrLn ("mtimeNs: " ++ show (InterfaceFiles.sfmMTimeNs meta))
@@ -208,7 +208,7 @@ showTyFile env0 m fname verbose = do
                                            putStrLn ("device : " ++ maybe "-" show (InterfaceFiles.sfmDevice meta))
                                            putStrLn ("inode  : " ++ maybe "-" show (InterfaceFiles.sfmInode meta))
                                        putStrLn ("\n############### Name Hashes ############")
-                                       forM_ nameHashes $ \nh -> do
+                                       forM_ (InterfaceFiles.storedNames stored) $ \nh -> do
                                          let formatHash h =
                                                if B.null h
                                                  then ""
@@ -231,7 +231,7 @@ showTyFile env0 m fname verbose = do
                                            putStrLn ("  implDeps: " ++ show (map showDep (InterfaceFiles.nhImplDeps nh)))
 
                                      putStrLn ("\n############### Interface ############")
-                                     let NModule imps te mdoc = nmod
+                                     let NModule imps te mdoc = InterfaceFiles.storedInterface stored
                                      forM_ mdoc $ \docstring ->
                                        putStrLn $ "\"\"\"" ++ docstring ++ "\"\"\""
 

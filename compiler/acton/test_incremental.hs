@@ -398,21 +398,19 @@ buildProject = do
 
 -- | Read name hashes from a .tydb file.
 readTyNameHashes :: FilePath -> IO [InterfaceFiles.NameHashInfo]
-readTyNameHashes tyPath = do
-  (_, _, _, _, _, _, _, _, _, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
-  pure nameHashes
+readTyNameHashes tyPath = InterfaceFiles.storedNames <$> InterfaceFiles.readFile tyPath
 
 -- | Read pub/impl dependency names for a binding in a .tydb file.
 readTyDeps :: FilePath -> String -> IO ([String], [String])
 readTyDeps tyPath nameLabel = do
-  (_, _, _, _, _, _, _, _, depModules, nameHashes, _, _, _) <- InterfaceFiles.readFile tyPath
+  stored <- InterfaceFiles.readFile tyPath
   let matchName nh = prstr (InterfaceFiles.nhName nh) == nameLabel
-  case find matchName nameHashes of
+  case find matchName (InterfaceFiles.storedNames stored) of
     Nothing -> do
       assertFailure ("missing name " ++ nameLabel ++ " in " ++ tyPath)
       pure ([], [])
     Just nh -> do
-      deps <- forM depModules $ \depInfo -> do
+      deps <- forM (InterfaceFiles.storedDepModules stored) $ \depInfo -> do
         let depMn = InterfaceFiles.dmiModule depInfo
         depNames <- InterfaceFiles.readDepNames tyPath depMn
         forM depNames $ \depNameInfo -> do
@@ -527,27 +525,34 @@ readTyEscapeSummaries :: FilePath -> IO InterfaceFiles.EscapeSummaries
 readTyEscapeSummaries tyPath =
   InterfaceFiles.openInterfaceDB tyPath >>= InterfaceFiles.readInterfaceDBEscapeSummaries
 
+-- | Rewrite a .tydb file whole, in the given interface version, after a
+-- change to its stored module.  The change sees each name's dependencies on
+-- other modules restored from the dependency rows, and the escape summaries
+-- are kept.
+rewriteTy :: [Int] -> FilePath -> (InterfaceFiles.StoredModule -> InterfaceFiles.StoredModule) -> IO ()
+rewriteTy version tyPath change = do
+  stored <- InterfaceFiles.readFile tyPath
+  nameHashes <- restoreExternalDeps tyPath (InterfaceFiles.storedDepModules stored) (InterfaceFiles.storedNames stored)
+  escapeSummaries <- readTyEscapeSummaries tyPath
+  let updated = change stored { InterfaceFiles.storedNames = nameHashes }
+  InterfaceFiles.writeFileWithVersion version tyPath
+    (InterfaceFiles.storedSourceHash updated) (InterfaceFiles.storedPubHash updated) (InterfaceFiles.storedImplHash updated)
+    (InterfaceFiles.storedSourceMeta updated) (InterfaceFiles.storedImports updated) (InterfaceFiles.storedDepModules updated)
+    (InterfaceFiles.storedNames updated) escapeSummaries (InterfaceFiles.storedRoots updated) (InterfaceFiles.storedTests updated)
+    (InterfaceFiles.storedDoc updated) (InterfaceFiles.storedInterface updated) (InterfaceFiles.storedTyped updated)
+
 -- | Rewrite source hash and name-hash section of a .tydb file.
 rewriteTySrcHashAndNameHashes :: FilePath -> B.ByteString -> ([InterfaceFiles.NameHashInfo] -> [InterfaceFiles.NameHashInfo]) -> IO ()
-rewriteTySrcHashAndNameHashes tyPath srcHash' f = do
-  (_mods, nmod, tmod, sourceMeta, _srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFile tyPath srcHash' pubHash implHash sourceMeta imps depModules (f nameHashes') escapeSummaries roots tests mdoc nmod tmod
+rewriteTySrcHashAndNameHashes tyPath srcHash' f =
+  rewriteTy A.version tyPath $ \stored ->
+    stored { InterfaceFiles.storedSourceHash = srcHash', InterfaceFiles.storedNames = f (InterfaceFiles.storedNames stored) }
 
 rewriteTySourceMeta :: FilePath -> Maybe InterfaceFiles.SourceFileMeta -> IO ()
-rewriteTySourceMeta tyPath sourceMeta' = do
-  (_mods, nmod, tmod, _sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFile tyPath srcHash pubHash implHash sourceMeta' imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
+rewriteTySourceMeta tyPath sourceMeta' =
+  rewriteTy A.version tyPath $ \stored -> stored { InterfaceFiles.storedSourceMeta = sourceMeta' }
 
 rewriteTyVersion :: FilePath -> [Int] -> IO ()
-rewriteTyVersion tyPath version' = do
-  (_mods, nmod, tmod, sourceMeta, srcHash, pubHash, implHash, imps, depModules, nameHashes, roots, tests, mdoc) <- InterfaceFiles.readFile tyPath
-  nameHashes' <- restoreExternalDeps tyPath depModules nameHashes
-  escapeSummaries <- readTyEscapeSummaries tyPath
-  InterfaceFiles.writeFileWithVersion version' tyPath srcHash pubHash implHash sourceMeta imps depModules nameHashes' escapeSummaries roots tests mdoc nmod tmod
+rewriteTyVersion tyPath version' = rewriteTy version' tyPath id
 
 readTySourceMeta :: FilePath -> IO (Maybe InterfaceFiles.SourceFileMeta)
 readTySourceMeta tyPath = do
@@ -585,11 +590,9 @@ restoreExternalDeps tyPath depModules nameHashes = do
 sourceFileMetaForPath :: FilePath -> IO InterfaceFiles.SourceFileMeta
 sourceFileMetaForPath path = do
   st <- getFileStatus path
-  let mtimeNs = floor (toRational (modificationTimeHiRes st) * 1000000000)
-      ctimeNs = floor (toRational (statusChangeTimeHiRes st) * 1000000000)
   pure InterfaceFiles.SourceFileMeta
-    { InterfaceFiles.sfmMTimeNs = mtimeNs
-    , InterfaceFiles.sfmCTimeNs = ctimeNs
+    { InterfaceFiles.sfmMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes st)
+    , InterfaceFiles.sfmCTimeNs = InterfaceFiles.posixNanoseconds (statusChangeTimeHiRes st)
     , InterfaceFiles.sfmSize = fromIntegral (fileSize st)
     , InterfaceFiles.sfmDevice = Just (fromIntegral (deviceID st))
     , InterfaceFiles.sfmInode = Just (fromIntegral (fileID st))
@@ -1615,8 +1618,8 @@ p28_protocol_extension_deps = testCase "28-protocol/extension deps are recorded 
   assertEqual "exact extensions by class" ["BarProtoD_Widget"] (sort (map prstr extensionsForWidget))
   assertEqual "exact extensions by protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForBarProto))
   assertEqual "exact extensions by inherited protocol" ["BarProtoD_Widget"] (sort (map prstr extensionsForFooProto))
-  (_, nmod, _, _, _, _, _, _, _, _, _, _, _) <- InterfaceFiles.readFile tyA
-  let I.NModule _ iface _ = nmod
+  stored <- InterfaceFiles.readFile tyA
+  let I.NModule _ iface _ = InterfaceFiles.storedInterface stored
       extMatch (n, _) = prstr n == "BarProtoD_Widget"
   case find extMatch iface of
     Just (_, I.NExt _ _ ps _ _ _) -> do
@@ -2381,7 +2384,7 @@ p43_equal_act_ty_mtime_hashes_source =
       ]
     rewriteTySourceMeta tyB Nothing
     tyStatus <- getFileStatus tyBData
-    let tyMTimeNs = floor (toRational (modificationTimeHiRes tyStatus) * 1000000000)
+    let tyMTimeNs = InterfaceFiles.posixNanoseconds (modificationTimeHiRes tyStatus)
     setFileMTimeNs actB tyMTimeNs
     currentMeta <- sourceFileMetaForPath actB
     rewriteTySourceMeta tyB (Just currentMeta)
