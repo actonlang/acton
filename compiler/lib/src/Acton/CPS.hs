@@ -17,6 +17,8 @@ module Acton.CPS(convert) where
 import Debug.Trace
 import Control.Monad.State.Strict
 import Control.Monad.Writer
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Utils
 import Pretty
 import Acton.Syntax
@@ -72,18 +74,25 @@ instance Pretty Frame where
 
 type CPSEnv                             = EnvF CPSX
 
-data CPSX                               = CPSX { ctxtX :: [Frame], volatileX :: [Name] }
+data CPSX                               = CPSX { ctxtX :: [Frame], volatileX :: [Name],
+                                                localValuesX :: Set.Set Name,
+                                                forwardingX :: Map.Map Name ([Name],Expr) }
 
 data Where                              = OnTop | InClass | InDef | InInnerLoop deriving (Eq,Show)
 
-cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], volatileX = [] }
+cpsEnv env0                             = setX env0 CPSX{ ctxtX = [], volatileX = [],
+                                                       localValuesX = Set.empty, forwardingX = Map.empty }
 
 ctxt env                                = ctxtX $ envX env
 
 infixr +:
 frame +: env                            = modX env $ \x -> x{ ctxtX = frame : ctxtX x }
 
-clearCtxt env                           = modX env $ \x -> x{ ctxtX = [] }
+-- Source declarations start a new control-flow scope, but can still capture
+-- local values from an enclosing function.
+clearCtxt env                           = modX env $ \x -> x{ ctxtX = [], forwardingX = Map.empty }
+
+localValues ns env                      = modX env $ \x -> x{ localValuesX = Set.union (Set.fromList ns) (localValuesX x) }
 
 setVolatiles ns env                     = modX env $ \x -> x{ volatileX = ns }
 
@@ -94,8 +103,35 @@ volatiles env                           = volatileX (envX env)
 -- Current callers satisfy this via the Meth context, built with conv env t.
 eCallCont e (c,t)                       = eCall (tApp (eQVar primRContc) [t]) [c, e]
 
-eCallCont0 env (c, ns)                  = eCallCont eNone (c',tNone)
+-- Generated state parameters have the same names at the definition and jump.
+-- Require an exact match before reusing the body without substitution.
+eCallCont0 env (c, ns)
+  | Just (params,body) <- Map.lookup c (forwardingX $ envX env), params == ns
+                                        = body
+  | otherwise                           = eCallCont eNone (c',tNone)
   where c'                              = kRef env c ns g_skip tNone
+
+-- A generated sequence continuation can merely ignore None and forward a
+-- stable local value to its caller. When jumping to it now, forward directly
+-- instead of constructing a closure for that intermediate jump. Keep the
+-- ordinary continuation whenever it is passed to an operation that may suspend.
+-- The result is still an RTS return record, never a recursive C call.
+forwardingCont env n ns skip [Return _ (Just body@(Call _ f (PosArg target (PosArg value PosNil)) KwdNil))]
+  | forwardingPrimitive f,
+    skip `notElem` free [target,value], stable target, stable value
+                                        = modX env $ \x -> x{ forwardingX = Map.insert n (ns,body) (forwardingX x) }
+  where stable (Var _ (NoQ v))           = v == contKW || Set.member v (localValuesX $ envX env)
+        stable (Paren _ e)              = stable e
+        stable None{}                   = True
+        stable Bool{}                   = True
+        stable Int{}                    = True
+        stable Float{}                  = True
+        stable Strings{}                = True
+        stable _                        = False
+        forwardingPrimitive (TApp _ f _) = forwardingPrimitive f
+        forwardingPrimitive (Var _ f)   = f == primRContc || f == primRCont
+        forwardingPrimitive _           = False
+forwardingCont env _ _ _ _              = env
 
 cntcont (Seq _ _ : ctx)                 = cntcont ctx       -- 'continue'       followed by some cmd:   ignore it
 cntcont (Loop c ns : ctx)               = (c, ns)           --                  inside a loop:          jump to its top
@@ -150,7 +186,7 @@ instance CPS [Stmt] where
     cps env ss0@(Assign l [p] e : ss)
       | contCall env e                  = do k <- newName "cont"
                                              x <- newName "res"
-                                             ss' <- cps (define [(x,NVar t)] env) (Assign l [p] (eVar x) : ss)
+                                             ss' <- cps (localValues [x] $ define [(x,NVar t)] env) (Assign l [p] (eVar x) : ss)
                                              --traceM ("## kDef Assign " ++ prstr k ++ ", updates: " ++ prstrs nts)
                                              return $ kDef env k nts x t ss' :
                                                       sReturn (addContArg env (conv env e) (kRef env k (dom nts) x t)) : []
@@ -209,7 +245,7 @@ instance CPS [Stmt] where
     cps env (s : ss)                    = do k <- newName "cont"
                                              x <- newName "res"
                                              ss' <- cps env1 ss
-                                             s' <- cps (Seq k (dom nts) +: env) [s]
+                                             s' <- cps (Seq k (dom nts) +: forwardingCont env k (dom nts) x ss') [s]
                                              --traceM ("## kDef Seq " ++ prstr k ++ ", live/updates: " ++ prstrs nts)
                                              return $ kDef env k nts x tNone ss' :
                                                       s'
@@ -243,7 +279,8 @@ instance CPS Decl where
                                              b' <- cps env1 b
                                              return $ Def l n q' p' KwdNIL (Just t') b' dec fx ddoc
       where env2                        = setVolatiles volvs $ Meth contKW t' +: env1
-            env1                        = define (envOf p) $ defineTVars q $ clearCtxt $ setInDef env
+            env1                        = localValues (map fst $ nvarsOf (envOf p ++ envOf b)) $
+                                            define (envOf p) $ defineTVars q $ clearCtxt $ setInDef env
             volvs                       = volatileVars env2 b
             volinits                    = [ sAssign (pVar v (tCell t)) (eCall (tApp (eQVar primCell) [t]) [eVar v])
                                           | (v,NVar t) <- envOf p, v `elem` volvs ]

@@ -1,0 +1,156 @@
+proc def step (C_cont : proc(__builtin__.int) -> $R, value : __builtin__.int) -> $R:
+    W_step_5: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    W_step_7: __builtin__.Plus[__builtin__.int] = __builtin__.IntegralD_int()
+    N_tmp: __builtin__.int = W_step_7.__add__(value, W_step_5.__fromatom__(1))
+    return $R_CONTc@[__builtin__.int](C_cont, N_tmp)
+
+W_loop_value_17: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_loop_value_19: __builtin__.Eq[__builtin__.int] = __builtin__.OrdD_int()
+
+W_loop_value_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def loop_value (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int) -> $R:
+    value: __builtin__.int = W_loop_value_17.__fromatom__(0)
+    proc def C_1cont (C_2res : None) -> $R:
+        return $R_CONTc@[__builtin__.int](C_cont, value)
+    proc def C_3loop (C_4res : None, value : __builtin__.int) -> $R:
+        if True:
+            proc def C_5cont (C_6res : None, value : __builtin__.int) -> $R:
+                proc def C_7cont (C_8res : __builtin__.int, value : __builtin__.int) -> $R:
+                    value = C_8res
+                    if W_loop_value_19.__eq__(value, W_loop_value_17.__fromatom__(3)):
+                        return $R_CONTc@[__builtin__.int](C_cont, value)
+                    else:
+                        return $R_CONTc@[None](proc lambda (G_skip : None): C_3loop(G_skip, value), None)
+                return step(proc lambda (C_8res : __builtin__.int): C_7cont(C_8res, value), value)
+            if W_loop_value_9.__lt__(value, limit):
+                pass
+                return $R_CONTc@[None](proc lambda (G_skip : None): C_5cont(G_skip, value), None)
+            else:
+                return $R_CONTc@[__builtin__.int](C_cont, value)
+        else:
+            return $R_CONTc@[__builtin__.int](C_cont, value)
+    return C_3loop(None, value)
+
+proc def branch_value (C_cont : proc(__builtin__.int) -> $R, flag : __builtin__.bool) -> $R:
+    W_branch_value_10: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+    proc def C_9cont (C_10res : None, value : __builtin__.int) -> $R:
+        return $R_CONTc@[__builtin__.int](C_cont, value)
+    if flag:
+        proc def C_11cont (C_12res : __builtin__.int) -> $R:
+            value: __builtin__.int = C_12res
+            return $R_CONTc@[__builtin__.int](C_cont, value)
+        return step(C_11cont, W_branch_value_10.__fromatom__(0))
+    else:
+        value: __builtin__.int = W_branch_value_10.__fromatom__(7)
+        return $R_CONTc@[__builtin__.int](C_cont, value)
+
+proc def wait_then_return (C_cont : proc(__builtin__.int) -> $R, value : __builtin__.int) -> $R:
+    proc def C_13cont (C_14res : None) -> $R:
+        return $R_CONTc@[__builtin__.int](C_cont, value)
+    return step($SKIPRESc@[__builtin__.int](C_13cont), value)
+
+class Box (__builtin__.object, __builtin__.value):
+    pure def __get_attr__ (self : Self, name : __builtin__.str) -> ?__builtin__.value:
+        return None
+    pure def G_init (self : Self) -> None:
+        pass
+        return None
+    @property
+    value : __builtin__.int
+    pure def __init__ (self : Self, value : __builtin__.int) -> None:
+        self.value = value
+        return None
+
+W_property_after_loop_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_property_after_loop_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def property_after_loop (C_cont : proc(__builtin__.int) -> $R, box : Box, limit : __builtin__.int) -> $R:
+    value: __builtin__.int = W_property_after_loop_4.__fromatom__(0)
+    proc def C_15cont (C_16res : None) -> $R:
+        return $R_CONTc@[__builtin__.int](C_cont, box.value)
+    proc def C_17loop (C_18res : None, value : __builtin__.int) -> $R:
+        if True:
+            proc def C_19cont (C_20res : None, value : __builtin__.int) -> $R:
+                proc def C_21cont (C_22res : __builtin__.int, value : __builtin__.int) -> $R:
+                    value = C_22res
+                    return $R_CONTc@[None](proc lambda (G_skip : None): C_17loop(G_skip, value), None)
+                return step(proc lambda (C_22res : __builtin__.int): C_21cont(C_22res, value), value)
+            if W_property_after_loop_9.__lt__(value, limit):
+                pass
+                return $R_CONTc@[None](proc lambda (G_skip : None): C_19cont(G_skip, value), None)
+            else:
+                return $R_CONTc@[None](C_15cont, None)
+        else:
+            return $R_CONTc@[None](C_15cont, None)
+    return C_17loop(None, value)
+
+mut def finish (value : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> __builtin__.int:
+    W_finish_8: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+    W_finish_8.append(out, value)
+    return value
+
+W_call_after_loop_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_call_after_loop_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def call_after_loop (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> $R:
+    value: __builtin__.int = W_call_after_loop_4.__fromatom__(0)
+    proc def C_23cont (C_24res : None) -> $R:
+        N_1tmp: __builtin__.int = finish(value, out)
+        return $R_CONTc@[__builtin__.int](C_cont, N_1tmp)
+    proc def C_25loop (C_26res : None, value : __builtin__.int) -> $R:
+        if True:
+            proc def C_27cont (C_28res : None, value : __builtin__.int) -> $R:
+                proc def C_29cont (C_30res : __builtin__.int, value : __builtin__.int) -> $R:
+                    value = C_30res
+                    return $R_CONTc@[None](proc lambda (G_skip : None): C_25loop(G_skip, value), None)
+                return step(proc lambda (C_30res : __builtin__.int): C_29cont(C_30res, value), value)
+            if W_call_after_loop_9.__lt__(value, limit):
+                pass
+                return $R_CONTc@[None](proc lambda (G_skip : None): C_27cont(G_skip, value), None)
+            else:
+                return $R_CONTc@[None](C_23cont, None)
+        else:
+            return $R_CONTc@[None](C_23cont, None)
+    return C_25loop(None, value)
+
+W_cleanup_4: __builtin__.Number[__builtin__.int] = __builtin__.IntegralD_int()
+
+W_cleanup_9: __builtin__.Ord[__builtin__.int] = __builtin__.OrdD_int()
+
+proc def cleanup (C_cont : proc(__builtin__.int) -> $R, limit : __builtin__.int, out : __builtin__.list[__builtin__.int]) -> $R:
+    W_cleanup_24: __builtin__.Sequence[__builtin__.list[__builtin__.int], __builtin__.int] = __builtin__.SequenceD_list@[__builtin__.int]()
+    value: $Cell[__builtin__.int] = $Cell@[__builtin__.int](W_cleanup_4.__fromatom__(0))
+    proc def C_31try (C_32res : __builtin__.bool) -> $R:
+        if C_32res:
+            proc def C_33cont (C_34res : None) -> $R:
+                $RAISE($RET(value.cell))
+                return $R_CONTc@[None](C_cont, None)
+            proc def C_35loop (C_36res : None) -> $R:
+                if True:
+                    proc def C_37cont (C_38res : None) -> $R:
+                        proc def C_39cont (C_40res : __builtin__.int) -> $R:
+                            value.cell = C_40res
+                            return $R_CONTc@[None](C_35loop, None)
+                        return step(C_39cont, value.cell)
+                    if W_cleanup_9.__lt__(value.cell, limit):
+                        pass
+                        return $R_CONTc@[None](C_37cont, None)
+                    else:
+                        return $R_CONTc@[None](C_33cont, None)
+                else:
+                    return $R_CONTc@[None](C_33cont, None)
+            return C_35loop(None)
+        else:
+            N_2xx: __builtin__.BaseException = $POP_C()
+            W_cleanup_24.append(out, W_cleanup_4.__fromatom__(99))
+            if isinstance(N_2xx, $RET):
+                N_2xxG_RET: $RET = $CAST@[__builtin__.BaseException, $RET](N_2xx)
+                return $R_CONTc@[__builtin__.int](C_cont, $CAST@[__builtin__.value, __builtin__.int](N_2xxG_RET.val))
+            else:
+                $RAISE(N_2xx)
+                return $R_CONTc@[None](C_cont, None)
+    return $PUSHF_Cc(C_31try)

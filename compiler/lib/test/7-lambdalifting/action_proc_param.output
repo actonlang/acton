@@ -97,7 +97,7 @@ proc def discard_last (C_cont : $Cont[None], f : $proc[(__builtin__.int,), __bui
     if flag:
         return f.__exec__($SKIPRES@[__builtin__.float](L_8Cont(C_cont)), x)
     else:
-        return $R_CONT@[None](L_8Cont(C_cont), None)
+        return $R_CONT@[None](C_cont, None)
 # (recursive group)
 
 # recursive group:
@@ -123,7 +123,7 @@ proc def discard_live (C_cont : $Cont[__builtin__.int], f : $proc[(__builtin__.i
         return f.__exec__($SKIPRES@[__builtin__.float](L_10Cont(z, C_cont)), x)
     else:
         z: __builtin__.int = W_discard_live_4.__fromatom__(2)
-        return $R_CONT@[None](L_10Cont(z, C_cont), None)
+        return $R_CONT@[__builtin__.int](C_cont, z)
 # (recursive group)
 
 # recursive group:
@@ -144,7 +144,7 @@ proc def discard_bang (C_cont : $Cont[None], f : ?$proc[(__builtin__.int,), __bu
         return $CAST@[?$proc[(__builtin__.int,), __builtin__.float], $proc[(__builtin__.int,), __builtin__.float]](V_discard_bang_7).__exec__($SKIPRES@[__builtin__.float](L_12Cont(C_cont)), x)
     else:
         $raiseValueError@[__builtin__.float]("\"Forced unwrapping applied to None\"")
-        return $R_CONT@[None](L_12Cont(C_cont), None)
+        return $R_CONT@[None](C_cont, None)
 # (recursive group)
 
 # recursive group:
@@ -184,5 +184,5 @@ proc def discard_none (C_cont : $Cont[None], g : $proc[(__builtin__.int,), None]
     if flag:
         return g.__exec__($SKIPRES@[None](L_16Cont(C_cont)), x)
     else:
-        return $R_CONT@[None](L_16Cont(C_cont), None)
+        return $R_CONT@[None](C_cont, None)
 # (recursive group)

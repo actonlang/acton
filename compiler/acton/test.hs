@@ -210,6 +210,12 @@ compilerTests =
         -- An optimized (--release=fast) build used to roll it back to its
         -- pre-loop value, which dropped explicitly-provided argparse options.
         testBuildAndRun "--fast" "" ExitSuccess False "../../test/compiler/release_loop_volatile.act"
+  , testCase "CPS forwarding in release mode" $ do
+        -- Use a separate copy so the automatic debug test can run concurrently.
+        withSystemTempDirectory "acton-cps-forwarding" $ \tmp -> do
+          let src = tmp </> "cps_forwarding.act"
+          copyFile "../../test/regression_auto/cps_forwarding.act" src
+          testBuildAndRun "--fast" "" ExitSuccess False src
   , testCase "missing source file" $ do
         -- The check runs before a scratch directory or the project lock is
         -- taken, so nothing is printed on stdout and nothing is built.

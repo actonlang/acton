@@ -2994,6 +2994,7 @@ main = do
       testCps env0 ["cps_volatiles"]
       testCps env0 ["cps_optchain"]
       testCps env0 ["cps_nested_try"]
+      testCps env0 ["cps_forwarding"]
 
     describe "Pass 7: Lambda Lifting" $ do
       testLL env0 ["deact"]
