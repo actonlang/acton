@@ -87,7 +87,6 @@ module Acton.Compile
   , TaskKey(..)
   , GlobalTask(..)
   , CompileTask(..)
-  , BackInput(..)
   , BackJob(..)
   , DeferredBackJob(..)
   , FrontResult(..)
@@ -98,9 +97,10 @@ module Acton.Compile
   , FrontTiming(..)
   , TypeStmtTiming(..)
   , InferredSignature(..)
-  , BackTiming(..)
+  , BackTiming
   , BackPass(..)
   , BackPassProgress(..)
+  , BackPassEvent(..)
   , backPassName
   , FrontPass(..)
   , FrontPassProgress(..)
@@ -334,6 +334,8 @@ data BackJobResult
   | BackJobFailed BackPassFailure
   deriving (Eq, Show)
 
+-- | The back passes in the order they run.  A pass's index (fromEnum) is
+-- the number of passes completed before it starts.
 data BackPass
   = BackPassNormalize
   | BackPassDeactorize
@@ -343,7 +345,7 @@ data BackPass
   | BackPassCodeGen
   | BackPassRender
   | BackPassWrite
-  deriving (Eq, Show)
+  deriving (Eq, Enum, Bounded, Show)
 
 backPassName :: BackPass -> String
 backPassName BackPassNormalize  = "normalize"
@@ -355,10 +357,23 @@ backPassName BackPassCodeGen    = "codegen"
 backPassName BackPassRender     = "render"
 backPassName BackPassWrite      = "write"
 
-data BackPassProgress
-  = BackPassStarted BackPass Int Int
-  | BackPassFinished BackPass Int Int TimeSpec
-  | BackPassSkipped BackPass Int Int
+-- | The dump a back pass prints, and the flag that asks for it.
+backPassDump                    :: BackPass -> Maybe (C.CompileOptions -> Bool, String)
+backPassDump BackPassNormalize  = Just (C.norm,  "norm")
+backPassDump BackPassDeactorize = Just (C.deact, "deact")
+backPassDump BackPassCPS        = Just (C.cps,   "cps")
+backPassDump BackPassLLift      = Just (C.llift, "llift")
+backPassDump BackPassBoxing     = Just (C.box,   "box")
+backPassDump _                  = Nothing
+
+data BackPassProgress = BackPassProgress
+  { bppPass      :: BackPass
+  , bppCompleted :: Int                 -- the pass's index when it starts, index + 1 after
+  , bppTotal     :: Int                 -- 8 when the job writes files, 7 otherwise
+  , bppEvent     :: BackPassEvent
+  } deriving (Eq, Show)
+
+data BackPassEvent = BackPassStarted | BackPassFinished TimeSpec | BackPassSkipped
   deriving (Eq, Show)
 
 data FrontPass
@@ -414,16 +429,8 @@ data FrontTiming = FrontTiming
   , ftTypeStmtTimings :: [TypeStmtTiming]
   } deriving (Eq, Show)
 
-data BackTiming = BackTiming
-  { btNormalize :: TimeSpec
-  , btDeactorize :: TimeSpec
-  , btCPS :: TimeSpec
-  , btLLift :: TimeSpec
-  , btBoxing :: TimeSpec
-  , btCodeGen :: TimeSpec
-  , btRender :: TimeSpec
-  , btWrite :: Maybe TimeSpec
-  } deriving (Eq, Show)
+-- | Each back pass's time in pass order; the write only when it wrote.
+type BackTiming = [(BackPass, TimeSpec)]
 
 
 data CompileCallbacks = CompileCallbacks
@@ -555,16 +562,13 @@ newBackQueue genRef gopts maxPar = do
                       return (currentWrite == gen)
                 bjcOnStart callbacks job
                 res <- (try $
-                          runBackPassesWithProgress
-                            gopts (bjOpts job) (bjPaths job) (bjInput job)
-                            shouldWrite (bjcOnProgress callbacks job))
+                          runBackPasses gopts job shouldWrite (bjcOnProgress callbacks job))
                         :: IO (Either SomeException (Maybe TimeSpec, Maybe BackTiming))
                 currentDone <- readIORef genRef
                 when (currentDone == gen) $
                   case res of
                     Left err -> do
-                      let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
-                          failure = BackPassFailure key (displayException err)
+                      let failure = BackPassFailure (bjKey job) (displayException err)
                       atomically $ modifyTVar' failures (recordFailure gen failure)
                       bjcOnDone callbacks job (BackJobFailed failure)
                     Right (t, bt) -> bjcOnDone callbacks job (BackJobOk t bt)
@@ -818,9 +822,8 @@ runCompilePlan sp gopts plan sched gen hooks0 = withAnalytics $ \ana -> do
             current <- readIORef (csGenRef sched)
             return (current == gen)
         , ccOnBackJob = \job -> do
-            let key = TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
             enqueued <- backQueueEnqueue backQueue gen job backCallbacks
-            chOnBackQueued hooks key enqueued
+            chOnBackQueued hooks (bjKey job) enqueued
         , ccOnBackSkipped = chOnBackSkipped hooks
         , ccOnInfo = chOnInfo hooks
         }
@@ -838,14 +841,13 @@ instrumentHooksForAnalytics ana hooks = hooks
       when (fppPass p == FrontPassTypes) $
         recordType ana (taskMod t) (fppCompleted p) (fppTotal p)
       chOnFrontProgress hooks t p
-  , chOnBackProgress = \job bp -> do
-      case bp of
-        BackPassFinished pass _ _ _ -> recordBackPass ana (backMod job) (backPassName pass)
-        _                           -> return ()
-      chOnBackProgress hooks job bp
+  , chOnBackProgress = \job p -> do
+      case bppEvent p of
+        BackPassFinished _ -> recordBackPass ana (modNameToString (tkMod (bjKey job))) (backPassName (bppPass p))
+        _                  -> return ()
+      chOnBackProgress hooks job p
   }
   where taskMod t   = modNameToString (tkMod (gtKey t))
-        backMod job = modNameToString (A.modname (biTypedMod (bjInput job)))
 
 -- | Debug helper for pass dumps.
 -- Prints a header and footer around the given text so pass output is easy to
@@ -1162,27 +1164,25 @@ readSourceFileMeta path = do
 
 -- Compilation tasks, chasing imported modules, compilation and building executables -----------------
 
-data BackInput = BackInput
-  { biTypeEnv   :: Acton.Env.Env0
-  , biTypedMod  :: A.Module
-  , biSrc       :: String
-  , biImplHash  :: B.ByteString
-  }
-
+-- | Generating C for one module.
 data BackJob = BackJob
-  { bjPaths :: Paths
-  , bjOpts  :: C.CompileOptions
-  , bjInput :: BackInput
+  { bjKey      :: TaskKey
+  , bjPaths    :: Paths
+  , bjOpts     :: C.CompileOptions
+  , bjTypeEnv  :: Acton.Env.Env0        -- protocols converted
+  , bjModule   :: A.Module              -- typed; only the selected names for a deferred module
+  , bjSource   :: String                -- for #line directives
+  , bjImplHash :: B.ByteString          -- tagged into the first line of each generated file
   }
 
--- Deferred jobs deliberately keep only reloadable metadata so large typed
--- modules can be released after front passes finish.
+-- | Back work that waits for every dependent's interest.  It keeps only
+-- reloadable metadata, so the typed module is collected after the front passes.
 data DeferredBackJob = DeferredBackJob
-  { dbjPaths :: Paths
-  , dbjOpts :: C.CompileOptions
-  , dbjMod :: A.ModName
-  , dbjImplHash :: B.ByteString
-  , dbjNameCount :: Int
+  { deferredKey       :: TaskKey
+  , deferredPaths     :: Paths
+  , deferredOptions   :: C.CompileOptions
+  , deferredImplHash  :: B.ByteString
+  , deferredNameCount :: Int
   }
 
 data FrontOutputJob = FrontOutputJob
@@ -1235,15 +1235,15 @@ dbpDeferredBackJob :: Bool
                    -> Bool
                    -> C.CompileOptions
                    -> Paths
-                   -> A.ModName
+                   -> TaskKey
                    -> B.ByteString
                    -> Int
                    -> Maybe DeferredBackJob
-dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
+dbpDeferredBackJob blocked hasNotImpl opts paths key moduleImplHash nameCount
   | C.no_dbp opts = Nothing
   | C.only_build opts = Nothing
   | C.altOutput opts = Nothing
-  | mn == A.modName ["__builtin__"] = Nothing
+  | tkMod key == A.modName ["__builtin__"] = Nothing
   | blocked = Nothing
   -- A module with NotImplemented bodies is implemented by a hand-written
   -- .ext.c and must be rendered whole, like __builtin__ -- its statement
@@ -1251,11 +1251,11 @@ dbpDeferredBackJob blocked hasNotImpl opts paths mn moduleImplHash nameCount
   | hasNotImpl = Nothing
   | otherwise =
       Just DeferredBackJob
-        { dbjPaths = paths
-        , dbjOpts = opts
-        , dbjMod = mn
-        , dbjImplHash = moduleImplHash
-        , dbjNameCount = nameCount
+        { deferredKey = key
+        , deferredPaths = paths
+        , deferredOptions = opts
+        , deferredImplHash = moduleImplHash
+        , deferredNameCount = nameCount
         }
 
 interestDepsFromNameHashes :: [InterfaceFiles.NameHashInfo] -> Data.Set.Set (A.ModName, A.Name)
@@ -1727,7 +1727,7 @@ dbpProviderPathClosure rootProj opts globalTasks dbpBlocked depMap revMap affect
         Just t ->
           case gtTask t of
             TyTask{ tyImplHash = implHash, tyNameCount = nameCount } ->
-              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) (tkMod k) implHash nameCount)
+              isJust (dbpDeferredBackJob (Data.Set.member k dbpBlocked) False (optsFor k) (gtPaths t) k implHash nameCount)
             _ -> False
         Nothing -> False
 
@@ -2688,34 +2688,34 @@ runFrontPasses gopts opts dbpBlocked paths env0 parsed srcContent srcBytes sourc
                                  , ftTypeStmtTimings = typeStmtTimings
                                  }
                           else Nothing
-                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths mn moduleImplHash (length nameHashes)
+                      key = TaskKey (projPath paths) mn
+                      deferredBackJob = dbpDeferredBackJob dbpBlocked (A.hasNotImpl (A.mbody tchecked)) opts paths key moduleImplHash (length nameHashes)
                       backJob =
                         case deferredBackJob of
                           Just _ -> Nothing
                           Nothing ->
-                            Just BackJob { bjPaths = paths
+                            Just BackJob { bjKey = key
+                                         , bjPaths = paths
                                          , bjOpts = opts
-                                         , bjInput = BackInput { biTypeEnv = typeEnv
-                                                              , biTypedMod = tchecked
-                                                              , biSrc = srcContent
-                                                              , biImplHash = moduleImplHash
-                                                              }
+                                         , bjTypeEnv = typeEnv
+                                         , bjModule = tchecked
+                                         , bjSource = srcContent
+                                         , bjImplHash = moduleImplHash
                                          }
                   do
-                    let outputKey = TaskKey (projPath paths) mn
                     -- The .tydb commit is synchronous with front completion:
                     -- once this module reports done, its rows are on disk.
                     -- A write failure (disk full, permissions) fails THIS
                     -- module's front on the structured diagnostics path.
                     -- Docs and the interface copy are never read back within
                     -- this build, so they stay in the background.
-                    writeRes <- trySync (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey FrontOutputTydb (writeTyDb outputKey))
+                    writeRes <- trySync (runFrontOutputSync onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput key FrontOutputTydb (writeTyDb key))
                     case writeRes of
                       Left err -> return (Left (tydbWriteDiagnostics mn err))
                       Right () -> do
                         outputJobs <- mask_ $ do
                           let startOutput =
-                                startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput outputKey
+                                startFrontOutputJob onFrontOutputStart onFrontOutputDone shouldWriteFrontOutput key
                           docJobs <-
                             forM docOutputActions $ uncurry startOutput
                           tyJobs <-
@@ -2760,22 +2760,22 @@ prepareDeferredBackJob :: Source.SourceProvider
                        -> InterestMap
                        -> DeferredBackJob
                        -> IO (Maybe BackJob)
-prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
-  let paths = dbjPaths dbj
-      mn = dbjMod dbj
+prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred = do
+  let paths = deferredPaths deferred
+      mn = tkMod (deferredKey deferred)
       tyFile = tyDbPath paths mn
       actFile = srcFile paths mn
   roots <- InterfaceFiles.readRoots tyFile
   let interested = M.findWithDefault Data.Set.empty mn interestMap
       rootSeeds = Data.Set.fromList roots
       selectedSeeds = Data.Set.union interested rootSeeds
-      totalNames = dbjNameCount dbj
+      totalNames = deferredNameCount deferred
   nameSelection <- selectDbpNames paths mn tyFile selectedSeeds
-  let codegenHash = dbpCodegenHash (dbjImplHash dbj) (dnsSelectedNames nameSelection)
+  let codegenHash = dbpCodegenHash (deferredImplHash deferred) (dnsSelectedNames nameSelection)
   codegen <- codegenStatus paths mn codegenHash
   if codegenUpToDate codegen
     then do
-      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
+      logDbpSelection gopts callbacks mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (Data.Set.size (dnsSelectedNames nameSelection)) Nothing "generated code up to date"
       return Nothing
     else do
       selectedTmod <- InterfaceFiles.readSelectedModule tyFile (dnsNameHashes nameSelection) (dnsSelectedNames nameSelection)
@@ -2787,16 +2787,15 @@ prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj = do
         Nothing -> error ("Internal error: missing statement rows in " ++ tyFile)
       snap <- Source.readSource sp actFile
       env1 <- Acton.Env.mkEnv (searchPath paths) envAcc (dbsModule selection)
-      logDbpSelection gopts callbacks mn dbj totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
+      logDbpSelection gopts callbacks mn deferred totalNames (Data.Set.size interested) (Data.Set.size rootSeeds) (dbsSelectedCount selection) (dbsFallbackReason selection) "generated code out of date"
       return $ Just BackJob
-        { bjPaths = paths
-        , bjOpts = dbjOpts dbj
-        , bjInput = BackInput
-            { biTypeEnv = Converter.convEnvProtos env1
-            , biTypedMod = dbsModule selection
-            , biSrc = Source.ssText snap
-            , biImplHash = codegenHash
-            }
+        { bjKey = deferredKey deferred
+        , bjPaths = paths
+        , bjOpts = deferredOptions deferred
+        , bjTypeEnv = Converter.convEnvProtos env1
+        , bjModule = dbsModule selection
+        , bjSource = Source.ssText snap
+        , bjImplHash = codegenHash
         }
 
 logDbpSelection :: C.GlobalOptions
@@ -2810,10 +2809,10 @@ logDbpSelection :: C.GlobalOptions
                 -> Maybe String
                 -> String
                 -> IO ()
-logDbpSelection gopts callbacks mn dbj totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
+logDbpSelection gopts callbacks mn deferred totalNames interestedCount rootCount selectedCount fallbackReason codegenReason =
   when (C.verbose gopts) $
     ccOnInfo callbacks $
-      "  DBP " ++ modNameToString (dropProjPrefix (dbjPaths dbj) mn)
+      "  DBP " ++ modNameToString (dropProjPrefix (deferredPaths deferred) mn)
       ++ ": total names " ++ show totalNames
       ++ ", interested names " ++ show interestedCount
       ++ ", root names " ++ show rootCount
@@ -2947,136 +2946,87 @@ dbpPruneTopStmt selected stmt =
     _ -> Nothing
 
 
--- | Run the back passes for a single module.
--- Executes normalization through codegen, writes .c/.h output as needed, and
--- returns the back-pass elapsed time for logging.
-runBackPasses :: C.GlobalOptions -> C.CompileOptions -> Paths -> BackInput -> IO Bool -> IO (Maybe TimeSpec, Maybe BackTiming)
-runBackPasses gopts opts paths backInput shouldWrite =
-      runBackPassesWithProgress gopts opts paths backInput shouldWrite (\_ -> return ())
+-- | What a job does with its generated code.
+data BackOutput = PrintHeader | PrintCode | RenderOnly | WriteFiles deriving Eq
 
-runBackPassesWithProgress :: C.GlobalOptions
-                          -> C.CompileOptions
-                          -> Paths
-                          -> BackInput
-                          -> IO Bool
-                          -> (BackPassProgress -> IO ())
-                          -> IO (Maybe TimeSpec, Maybe BackTiming)
-runBackPassesWithProgress gopts opts paths backInput shouldWrite onProgress = do
-      let mn = A.modname (biTypedMod backInput)
-          outbase = outBase paths mn
-          relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
-          writesOutput = not (C.altOutput opts)
-          backPasses =
-            [ BackPassNormalize
-            , BackPassDeactorize
-            , BackPassCPS
-            , BackPassLLift
-            , BackPassBoxing
-            , BackPassCodeGen
-            , BackPassRender
-            ] ++ [BackPassWrite | writesOutput]
-          backPassTotal = length backPasses
-          backPassIndex pass =
-            case Data.List.elemIndex pass backPasses of
-              Just ix -> ix
-              Nothing -> backPassTotal
-          emitStarted pass =
-            onProgress (BackPassStarted pass (backPassIndex pass) backPassTotal)
-          emitFinished pass t0 t1 =
-            onProgress (BackPassFinished pass (backPassIndex pass + 1) backPassTotal (t1 - t0))
-          emitSkipped pass =
-            onProgress (BackPassSkipped pass (backPassIndex pass + 1) backPassTotal)
-      timeStart <- getTime Monotonic
-      let timedBackPass pass action = do
-            emitStarted pass
-            passStart <- getTime Monotonic
-            result <- action
-            passEnd <- getTime Monotonic
-            emitFinished pass passStart passEnd
-            return (result, passEnd - passStart)
-          finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen tRender mWriteTime = do
-            timeEnd <- getTime Monotonic
-            let backTime = timeEnd - timeStart
-            let backTimingMaybe =
-                  if C.timing gopts
-                    then Just BackTiming
-                           { btNormalize = tNormalize
-                           , btDeactorize = tDeactorize
-                           , btCPS = tCPS
-                           , btLLift = tLLift
-                           , btBoxing = tBoxing
-                           , btCodeGen = tCodeGen
-                           , btRender = tRender
-                           , btWrite = mWriteTime
-                           }
-                    else Nothing
-            if not (quiet gopts opts)
-              then return (Just backTime, backTimingMaybe)
-              else return (Nothing, backTimingMaybe)
-          forceOut s = evaluate (rnf s)
+-- | --hgen prints the header and --cgen the C file (--hgen wins).  Any other
+-- alternative output renders the code and discards it.  A normal build
+-- writes the generated files.
+backOutput                      :: C.CompileOptions -> BackOutput
+backOutput opts
+  | C.hgen opts                 = PrintHeader
+  | C.cgen opts                 = PrintCode
+  | C.altOutput opts            = RenderOnly
+  | otherwise                   = WriteFiles
 
-      ((normalized, normEnv), tNormalize) <- timedBackPass BackPassNormalize $ do
-        res@(normalized', _) <- Acton.Normalizer.normalize (biTypeEnv backInput) (biTypedMod backInput)
-        iff (C.norm opts && mn == (modName paths)) $ dump mn "norm" (Pretty.print normalized')
-        return res
+-- | Run the back passes of one job, from the normalizer to code generation,
+-- then print or write the generated code.
+--
+-- The passes return lazily: their work happens in Render, or earlier in a
+-- dump, so a pass's failure surfaces after Render has started.  Nothing is
+-- forced between passes.  A dump prints inside its pass.  shouldWrite is
+-- asked once, right before writing, and the closure support file, the .h
+-- and the .c are written in that order.
+-- The elapsed time is Nothing when quiet, and the timing is collected only
+-- with --timing.
+runBackPasses :: C.GlobalOptions -> BackJob -> IO Bool -> (BackPassProgress -> IO ()) -> IO (Maybe TimeSpec, Maybe BackTiming)
+runBackPasses gopts job shouldWrite onProgress = do
+    laps <- newIORef []
+    let report :: BackPass -> Int -> BackPassEvent -> IO ()
+        report p completed event = onProgress (BackPassProgress p completed total event)
 
-      ((deacted,deactEnv), tDeactorize) <- timedBackPass BackPassDeactorize $ do
-        res@(deacted', _) <- Acton.Deactorizer.deactorize normEnv normalized
-        iff (C.deact opts && mn == (modName paths)) $ dump mn "deact" (Pretty.print deacted')
-        return res
+        pass :: BackPass -> IO a -> IO a
+        pass p work = do
+          report p (fromEnum p) BackPassStarted
+          (result, elapsed) <- timed work
+          report p (fromEnum p + 1) (BackPassFinished elapsed)
+          modifyIORef' laps ((p, elapsed) :)
+          return result
 
-      ((cpstyled,cpsEnv), tCPS) <- timedBackPass BackPassCPS $ do
-        res@(cpstyled', _) <- Acton.CPS.convert deactEnv deacted
-        iff (C.cps opts && mn == (modName paths)) $ dump mn "cps" (Pretty.print cpstyled')
-        return res
+        dumpPass :: BackPass -> A.Module -> IO ()
+        dumpPass p m = forM_ (backPassDump p) $ \(flag, label) ->
+                       when (flag opts) (dump mn label (Pretty.print m))
 
-      ((lifted,liftEnv), tLLift) <- timedBackPass BackPassLLift $ do
-        res@(lifted', _) <- Acton.LambdaLifter.liftModule cpsEnv cpstyled
-        iff (C.llift opts && mn == (modName paths)) $ dump mn "llift" (Pretty.print lifted')
-        return res
+        transform :: BackPass -> IO (A.Module, Acton.Env.Env0) -> IO (A.Module, Acton.Env.Env0)
+        transform p work = pass p $ do
+          result@(m, _) <- work
+          dumpPass p m
+          return result
 
-      (boxed, tBoxing) <- timedBackPass BackPassBoxing $ do
-        res <- Acton.Boxing.doBoxing liftEnv lifted
-        iff (C.box opts && mn == (modName paths)) $ dump mn "box" (Pretty.print res)
-        return res
+        render :: String -> IO ()
+        render text = evaluate (rnf text)
 
-      ((_,h,c,support), tCodeGen) <- timedBackPass BackPassCodeGen $ do
-        let hexHash = B.unpack $ Base16.encode (biImplHash backInput)
-            emitLines = not (C.dbg_no_lines opts)
-        Acton.CodeGen.generateCode writesOutput liftEnv relSrcBase (biSrc backInput) emitLines boxed hexHash
-
-      let finishBack = finish tNormalize tDeactorize tCPS tLLift tBoxing tCodeGen
-      if C.hgen opts
-        then do
-          (_, tRender) <- timedBackPass BackPassRender (forceOut h)
-          putStrLn h
-          finishBack tRender Nothing
-        else if C.cgen opts
-          then do
-            (_, tRender) <- timedBackPass BackPassRender (forceOut c)
-            putStrLn c
-            finishBack tRender Nothing
-          else do
-            (_, tRender) <- timedBackPass BackPassRender (forceOut h >> forceOut c >> forceOut support)
-            mWriteTime <-
-              if not writesOutput
-                then return Nothing
-                else do
-                  ok <- shouldWrite
-                  if not ok
-                    then do
-                      emitSkipped BackPassWrite
-                      return Nothing
-                    else do
-                      (_, tWrite) <- timedBackPass BackPassWrite $ do
-                        let cFile = outbase ++ ".c"
-                            hFile = outbase ++ ".h"
-                            supportPath = Acton.CodeGen.supportFile outbase
-                        writeFile supportPath support
-                        writeFile hFile h
-                        writeFile cFile c
-                      return (Just tWrite)
-            finishBack tRender mWriteTime
+    ((), elapsed) <- timed $ do
+      (normalized, env1)  <- transform BackPassNormalize  (Acton.Normalizer.normalize (bjTypeEnv job) (bjModule job))
+      (deactorized, env2) <- transform BackPassDeactorize (Acton.Deactorizer.deactorize env1 normalized)
+      (converted, env3)   <- transform BackPassCPS        (Acton.CPS.convert env2 deactorized)
+      (lifted, env4)      <- transform BackPassLLift      (Acton.LambdaLifter.liftModule env3 converted)
+      boxed               <- pass BackPassBoxing          (do m <- Acton.Boxing.doBoxing env4 lifted
+                                                              dumpPass BackPassBoxing m
+                                                              return m)
+      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed hexHash)
+      case output of
+        PrintHeader -> pass BackPassRender (render h) >> putStrLn h
+        PrintCode   -> pass BackPassRender (render c) >> putStrLn c
+        RenderOnly  -> pass BackPassRender (render h >> render c >> render support)
+        WriteFiles  -> do
+          pass BackPassRender (render h >> render c >> render support)
+          current <- shouldWrite
+          if current
+            then pass BackPassWrite (writeFileUtf8Atomic (Acton.CodeGen.supportFile base) support >> writeFileUtf8Atomic (base ++ ".h") h >> writeFileUtf8Atomic (base ++ ".c") c)
+            else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
+    timing <- reverse <$> readIORef laps
+    return ( if quiet gopts opts then Nothing else Just elapsed
+           , if C.timing gopts then Just timing else Nothing )
+  where
+    opts       = bjOpts job
+    paths      = bjPaths job
+    mn         = tkMod (bjKey job)
+    output     = backOutput opts
+    base       = outBase paths mn
+    relSrcBase = makeRelative (projPath paths) (srcBase paths mn)
+    hexHash    = B.unpack (Base16.encode (bjImplHash job))
+    total      = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
 
 
 -- | Compile a set of GlobalTasks using a parallel, dependency-aware scheduler.
@@ -3280,13 +3230,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
     flushReadyDeferredBacks envAcc interestMap frontDone deferredBacks = do
       let (ready, waiting) =
             M.partitionWithKey
-              (\_ (_dbj, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
+              (\_ (_deferred, waitSet) -> waitSet `Data.Set.isSubsetOf` frontDone)
               deferredBacks
       prepared <- trySync $
-        forM (M.elems ready) $ \(dbj, _waitSet) -> do
-          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap dbj
+        forM (M.elems ready) $ \(deferred, _waitSet) -> do
+          mJob <- prepareDeferredBackJob sp gopts callbacks envAcc interestMap deferred
           case mJob of
-            Nothing -> ccOnBackSkipped callbacks (TaskKey (projPath (dbjPaths dbj)) (dbjMod dbj))
+            Nothing -> ccOnBackSkipped callbacks (deferredKey deferred)
             Just _ -> return ()
           return mJob
       case prepared of
@@ -3442,14 +3392,13 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               Just ty -> return (Right ty)
           mkBackJob env1 tmod srcText moduleImplHash =
             BackJob
-              { bjPaths = paths
+              { bjKey = key
+              , bjPaths = paths
               , bjOpts = optsT
-              , bjInput = BackInput
-                  { biTypeEnv = Converter.convEnvProtos env1
-                  , biTypedMod = tmod
-                  , biSrc = srcText
-                  , biImplHash = moduleImplHash
-                  }
+              , bjTypeEnv = Converter.convEnvProtos env1
+              , bjModule = tmod
+              , bjSource = srcText
+              , bjImplHash = moduleImplHash
               }
 
           resolveImportHash m =
@@ -3838,7 +3787,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
               cachedDeferredBackJob <- case taskCurrent of
                     TyTask{ tyImplHash = implHash, tyNameCount = nameCount } -> do
                       hasNotImpl <- InterfaceFiles.readStmtHasNotImpl tyFile
-                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths mn implHash nameCount)
+                      return (dbpDeferredBackJob (isDbpBlocked key) hasNotImpl optsT paths key implHash nameCount)
                     _ -> return Nothing
               let isCachedDbp =
                     case cachedDeferredBackJob of
@@ -3996,7 +3945,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                                                                                  FrontOutputTydbCopy
                                                                                  (copyTydbInterface optsT paths mn)
                                               else return []
-                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths mn moduleImplHash (length updatedNameHashes)
+                                          deferredBackJob0 = dbpDeferredBackJob (isDbpBlocked key) moduleHasNotImpl optsT paths key moduleImplHash (length updatedNameHashes)
                                       case deferredBackJob0 of
                                         Just _ -> do
                                           ifaceRes <- readIfaceFromTy paths mn "" (Just storedPubHash)
@@ -4058,7 +4007,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                         interestDeps <- cachedInterestDeps
                         let I.NModule imps ifaceFull _mdoc = nmod
                             ifaceTE = publicIfaceTE ifaceFull
-                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths mn moduleImplHashStored (length nameHashes)
+                            deferredBackJob = dbpDeferredBackJob (isDbpBlocked key) (A.hasNotImpl (A.mbody tmod)) optsT paths key moduleImplHashStored (length nameHashes)
                             backJob =
                               case deferredBackJob of
                                 Just _ -> Nothing
@@ -4262,7 +4211,7 @@ compileTasks sp gopts opts rootPaths rootProj tasks dbpBlocked callbacks = do
                       deferredBacks1 =
                         case frDeferredBackJob fr of
                           Nothing -> deferredBacks
-                          Just dbj -> M.insert keyDone (dbj, dependentClosure keyDone) deferredBacks
+                          Just deferred -> M.insert keyDone (deferred, dependentClosure keyDone) deferredBacks
                   flushRes <- flushReadyDeferredBacks envAcc' interestMap2 frontDone2 deferredBacks1
                   case flushRes of
                     Left err -> return (Left err)

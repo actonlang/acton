@@ -1837,15 +1837,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
           "binds: " ++ intercalate ", " (tstNames st)
         inferredSignatureLine sig =
           "Non-total inferred signature: " ++ intercalate ", " (isigNames sig)
-        backTimingLine bt =
-          "Back timing: normalize " ++ fmtTimePrecise (btNormalize bt)
-          ++ ", deactorize " ++ fmtTimePrecise (btDeactorize bt)
-          ++ ", cps " ++ fmtTimePrecise (btCPS bt)
-          ++ ", llift " ++ fmtTimePrecise (btLLift bt)
-          ++ ", boxing " ++ fmtTimePrecise (btBoxing bt)
-          ++ ", codegen " ++ fmtTimePrecise (btCodeGen bt)
-          ++ ", render " ++ fmtTimePrecise (btRender bt)
-          ++ maybe "" (\t -> ", write " ++ fmtTimePrecise t) (btWrite bt)
+        backTimingLine timing =
+          "Back timing: " ++ intercalate ", " [ backPassName pass ++ " " ++ fmtTimePrecise t | (pass, t) <- timing ]
         parseDoneRenderer =
           staticStatusRenderer parseDoneStatus "Parsed"
         frontDoneRenderer =
@@ -1967,12 +1960,10 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                    FrontPassKinds -> staticStatusRenderer "Kinds check" "Kinds" budget
                    FrontPassTypes -> Just (fullTypeStatus (fppCurrent p))
                    FrontPassHash  -> Just (fullHashStatus (fppCurrent p))
-        backPassStatusRenderer (BackPassSkipped pass _ _) =
-          let passName = backPassName pass
-          in staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
-        backPassStatusRenderer p =
-          let passName = backPassName (backProgressPass p)
-          in staticStatusRenderer ("Back " ++ passName) passName
+        backPassStatusRenderer p
+          | bppEvent p == BackPassSkipped = staticStatusRenderer ("Back " ++ passName ++ " skipped") (passName ++ " skipped")
+          | otherwise                     = staticStatusRenderer ("Back " ++ passName) passName
+          where passName = backPassName (bppPass p)
         parseStatusRenderer p budget
           | budget < 10 = Nothing
           | otherwise =
@@ -1986,20 +1977,8 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                           else Just (show pct ++ "%")
         frontProgressLine mn p =
           renderProjectLine mn (frontStatusRenderer p)
-        backProgressPass (BackPassStarted pass _ _) = pass
-        backProgressPass (BackPassFinished pass _ _ _) = pass
-        backProgressPass (BackPassSkipped pass _ _) = pass
-        backProgressCompleted (BackPassStarted _ completed _) = completed
-        backProgressCompleted (BackPassFinished _ completed _ _) = completed
-        backProgressCompleted (BackPassSkipped _ completed _) = completed
-        backProgressTotal (BackPassStarted _ _ total) = total
-        backProgressTotal (BackPassFinished _ _ total _) = total
-        backProgressTotal (BackPassSkipped _ _ total) = total
         backProgressRatio p =
-          let total = backProgressTotal p
-          in if total <= 0
-               then 1
-               else clamp01 (fromIntegral (backProgressCompleted p) / fromIntegral total)
+          fromIntegral (bppCompleted p) / fromIntegral (bppTotal p)
         backPassDoneLine mn pass =
           "Back " ++ backPassName pass ++ " done: " ++ modLabel mn
         finalKey = ProgressTaskKey (TaskKey rootProj (A.modName ["__final__"]))
@@ -2041,35 +2020,31 @@ initCliCompileHooks progressUI progressState gopts sched gen plan = do
                  else (M.insert key (parseDoneFrac, frontDoneFrac, True) m, backShare)
           addProgress delta
     setPercent 0
-    let backJobKey job =
-          TaskKey (projPath (bjPaths job)) (A.modname (biTypedMod (bjInput job)))
-        onBackStart job =
-          let mn = A.modname (biTypedMod (bjInput job))
-          in do
-            gate (progressStartTask progressUI progressState (taskProgressKey (backJobKey job)) (backActiveLine mn) (Just 0))
+    let onBackStart job =
+          gate (progressStartTask progressUI progressState (taskProgressKey (bjKey job)) (backActiveLine (tkMod (bjKey job))) (Just 0))
         onBackProgress job p = do
-          let mn = A.modname (biTypedMod (bjInput job))
-          gate (progressUpdateTask progressUI progressState (taskProgressKey (backJobKey job))
+          let mn = tkMod (bjKey job)
+          gate (progressUpdateTask progressUI progressState (taskProgressKey (bjKey job))
                   (backProgressLine mn p) (Just (backProgressRatio p)))
           when (not (quiet gopts optsPlan) && (C.timing gopts || C.verbose gopts)) $
-            case p of
-              BackPassFinished pass _ _ elapsed ->
+            case bppEvent p of
+              BackPassFinished elapsed ->
                 logRendered (\cols ->
                   detailTimedLine cols detailStmtIndentWide detailStmtIndentNarrow
-                    (backPassDoneLine mn pass) elapsed)
+                    (backPassDoneLine mn (bppPass p)) elapsed)
               _ -> return ()
         onBackDone job result = do
-          gate (void $ progressDoneTask progressUI progressState (taskProgressKey (backJobKey job)))
-          creditBack (backJobKey job)
+          gate (void $ progressDoneTask progressUI progressState (taskProgressKey (bjKey job)))
+          creditBack (bjKey job)
           when (not (quiet gopts optsPlan)) $
             case result of
               BackJobOk mtime mtiming -> do
-                logRendered (\cols -> backDoneLine cols (A.modname (biTypedMod (bjInput job))) mtime)
+                logRendered (\cols -> backDoneLine cols (tkMod (bjKey job)) mtime)
                 when (C.timing gopts) $
-                  forM_ mtiming $ \bt ->
-                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine bt))
+                  forM_ mtiming $ \timing ->
+                    logRendered (\cols -> detailLine cols detailStmtIndentWide detailStmtIndentNarrow (backTimingLine timing))
               BackJobFailed failure ->
-                logRendered (\cols -> backFailLine cols (A.modname (biTypedMod (bjInput job))) (bpfMessage failure))
+                logRendered (\cols -> backFailLine cols (tkMod (bjKey job)) (bpfMessage failure))
         hooks = defaultCompileHooks
           { chOnDiagnostics = \t optsT diags -> do
               gate (void $ progressDoneTask progressUI progressState (taskProgressKey (gtKey t)))

@@ -123,15 +123,8 @@ printFrontTiming ft =
             ++ " hash " ++ fmtTime (Compile.ftTypeHash ft)
 
 printBackTiming :: Compile.BackTiming -> IO ()
-printBackTiming bt =
-    putStrLn $ "back_timing normalize " ++ fmtTime (Compile.btNormalize bt)
-            ++ " deactorize " ++ fmtTime (Compile.btDeactorize bt)
-            ++ " cps " ++ fmtTime (Compile.btCPS bt)
-            ++ " llift " ++ fmtTime (Compile.btLLift bt)
-            ++ " boxing " ++ fmtTime (Compile.btBoxing bt)
-            ++ " codegen " ++ fmtTime (Compile.btCodeGen bt)
-            ++ " render " ++ fmtTime (Compile.btRender bt)
-            ++ maybe "" (\t -> " write " ++ fmtTime t) (Compile.btWrite bt)
+printBackTiming timing =
+    putStrLn $ "back_timing" ++ concat [ " " ++ Compile.backPassName pass ++ " " ++ fmtTime t | (pass, t) <- timing ]
 
 sysRootFromTypesPath :: FilePath -> FilePath
 sysRootFromTypesPath = takeDirectory . takeDirectory . takeDirectory
@@ -796,7 +789,7 @@ runCompilerFront buildFront runBack typesPath sourcePath = do
         (do
             s3 <- getStats statsEnabled
             t3 <- getCurrentTime
-            (_mtime, mtiming) <- Compile.runBackPasses benchGopts (Compile.bjOpts job) (Compile.bjPaths job) (Compile.bjInput job) (return True)
+            (_mtime, mtiming) <- Compile.runBackPasses benchGopts job (return True) (\_ -> return ())
             t4 <- getCurrentTime
             s4 <- getStats statsEnabled
             elapsed "back" t3 t4

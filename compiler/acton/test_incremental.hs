@@ -3221,7 +3221,7 @@ eventHooks eventLog =
     outputLine event key kind = unwords [event, keyName key, outputKindName kind]
     taskName = keyName . Compile.gtKey
     keyName  = prstr . Compile.tkMod
-    jobName  = prstr . A.modname . Compile.biTypedMod . Compile.bjInput
+    jobName  = keyName . Compile.bjKey
 
 backPlanKind :: Compile.FrontResult -> String
 backPlanKind fr
@@ -3238,13 +3238,14 @@ outputKindName Compile.FrontOutputDoc      = "doc"
 -- passes of the job completed out of its total.
 backPassLine :: Compile.BackPassProgress -> String
 backPassLine progress =
-  case progress of
-    Compile.BackPassStarted  pass completed total   -> line pass "started"  completed total
-    Compile.BackPassFinished pass completed total _ -> line pass "finished" completed total
-    Compile.BackPassSkipped  pass completed total   -> line pass "skipped"  completed total
+  unwords [ Compile.backPassName (Compile.bppPass progress)
+          , eventName (Compile.bppEvent progress)
+          , show (Compile.bppCompleted progress) ++ "/" ++ show (Compile.bppTotal progress)
+          ]
   where
-    line pass event completed total =
-      unwords [Compile.backPassName pass, event, show completed ++ "/" ++ show total]
+    eventName Compile.BackPassStarted      = "started"
+    eventName (Compile.BackPassFinished _) = "finished"
+    eventName Compile.BackPassSkipped      = "skipped"
 
 backJobOutcome :: Compile.BackJobResult -> String
 backJobOutcome Compile.BackJobOk{}     = "ok"

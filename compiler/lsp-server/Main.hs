@@ -516,7 +516,7 @@ moduleLabel task = S.modNameToString (Compile.tkMod (Compile.gtKey task))
 
 backJobLabel :: Compile.BackJob -> String
 backJobLabel job =
-  S.modNameToString (S.modname (Compile.biTypedMod (Compile.bjInput job)))
+  S.modNameToString (Compile.tkMod (Compile.bjKey job))
 
 frontProgressMessage :: Compile.GlobalTask -> Compile.FrontPassProgress -> T.Text
 frontProgressMessage task p =
@@ -539,10 +539,11 @@ backProgressMessage job result =
       Compile.BackJobFailed{} -> "Codegen failed for " ++ backJobLabel job
 
 backPassProgressMessage :: Compile.BackJob -> Compile.BackPassProgress -> Maybe T.Text
-backPassProgressMessage job (Compile.BackPassStarted pass _ _) =
-  Just $
-    T.pack ("Generating " ++ backJobLabel job ++ " (" ++ Compile.backPassName pass ++ ")")
-backPassProgressMessage _ _ = Nothing
+backPassProgressMessage job p
+  | Compile.bppEvent p == Compile.BackPassStarted =
+      Just $
+        T.pack ("Generating " ++ backJobLabel job ++ " (" ++ Compile.backPassName (Compile.bppPass p) ++ ")")
+  | otherwise = Nothing
 
 warnBackgroundCompilerLocked :: FilePath -> LspM () ()
 warnBackgroundCompilerLocked projRoot = do
