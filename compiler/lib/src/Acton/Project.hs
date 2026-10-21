@@ -802,15 +802,11 @@ rebaseDepPath base dep =
       Just p  -> dep { BuildSpec.path = Just (rebasePath base p) }
       Nothing -> dep
 
--- | Normalize --dep overrides relative to a base directory.
--- Absolute override paths are kept, relative paths are rebased and normalized.
+-- | The --dep overrides with each path rebased on the directory 'base' and
+-- normalised with normalizePathSafe.
 normalizeDepOverrides :: FilePath -> [(String, FilePath)] -> IO [(String, FilePath)]
-normalizeDepOverrides base overrides =
-  mapM (\(n,p) -> do
-           let absP0 = if isAbsolutePath p then p else joinPath [base, p]
-           p' <- normalizePathSafe absP0
-           return (n, p'))
-       overrides
+normalizeDepOverrides base =
+    mapM (\(name, path) -> (,) name <$> normalizePathSafe (rebasePath base path))
 
 -- | Apply --dep overrides (NAME=PATH) to a BuildSpec.
 -- Resolves override paths relative to the given base directory when needed.
@@ -824,8 +820,7 @@ applyDepOverrides base overrides spec = do
         Nothing -> return depsMap
         Just dep | isJust (BuildSpec.follows dep) -> return depsMap
         Just dep -> do
-          let absP0 = if isAbsolutePath depPath then depPath else joinPath [base, depPath]
-          absP <- normalizePathSafe absP0
+          absP <- normalizePathSafe (rebasePath base depPath)
           validateDepOverridePath depName absP
           let dep' = dep { BuildSpec.path = Just absP }
           return (M.insert depName dep' depsMap)
