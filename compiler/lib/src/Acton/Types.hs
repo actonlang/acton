@@ -45,7 +45,7 @@ import qualified InterfaceFiles
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.Set as Set
-import Data.List (foldl', intersperse, isPrefixOf, partition)
+import Data.List (foldl', isPrefixOf, partition)
 import Data.Maybe (mapMaybe, fromMaybe)
 import GHC.Conc (getNumCapabilities)
 
@@ -73,7 +73,7 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
                                              let env2 = defineClosed te (setMod m env0)
                                                  (teT,ssT,tests) =
                                                    if hasTesting i
-                                                     then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameStr m) bareMod) ss1
+                                                     then let (testSs, discovered) = testStmts env2 (fromMaybe (modNameToString m) bareMod) ss1
                                                           in (te ++ testEnv, ss1 ++ testSs, discovered)
                                                      else (te, ss1, [])
                                                  -- Defaults are evaluated at call sites, so every free
@@ -97,9 +97,6 @@ reconstruct progressCb inferredCb env0 (Module m i mdoc ss) bareMod = do --trace
           | nstr n == "test_main"       = rmTests ss
         rmTests (s : ss)                = s : rmTests ss
         rmTests []                      = []
-
-        -- Convert the module name (ModName) to a string, e.g. "foo.bar"
-        modNameStr (ModName ns) = concat (intersperse "." (map nstr ns))
 
 qualifyInterfaceDefaults env          = map qualifyBinding
   where qualifyBinding (n,i)           = (n, qualifyInfo i)

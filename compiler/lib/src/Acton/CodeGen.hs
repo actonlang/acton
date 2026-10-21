@@ -56,7 +56,7 @@ supportFile outbase                 = outbase ++ ".closures.inc"
 generateCode                        :: Bool -> Acton.Env.Env0 -> FilePath -> String -> Bool -> Module -> String -> IO (String,String,String,String)
 generateCode split env srcbase srcText emitLines m hash = return (n,h,c,support)
 
-  where n                           = concat (Data.List.intersperse "." (modPath (modname m))) --render $ quotes $ gen env0 (modname m)
+  where n                           = modNameToString (modname m)
         hashComment                 = text implHashTag <+> text hash <+> text "*/"
         h                           = render $ hashComment $+$ hModule env0 m
         (cDoc,supportDoc)            = cModuleParts split env0 srcbase srcText emitLines m
