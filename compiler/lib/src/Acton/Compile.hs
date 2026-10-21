@@ -2570,8 +2570,7 @@ hashPass env source parsed checked = do
                                             (forced (Hashing.computeHashesSortedDeps implOwn implLocal implResolved))
     ((pub, impl), names)    <- concurrently (forced (Hashing.moduleHashesFromHashMaps (checkedInterface checked) keys pubHashes implHashes))
                                             (forced (Hashing.assembleNameHashes keys srcHashes pubHashes implHashes implOwn pubLocal implLocal pubResolved implResolved))
-    _            <- forced (sourceHash, pub, impl, sourceMeta source, imports)
-    _            <- forced (names, roots, checkedTests checked, doc)
+    _            <- forced (sourceMeta source, imports, roots)
     report True total
     return Hashed { hashedSource = sourceHash, hashedPub = pub, hashedImpl = impl, hashedImports = imports
                   , hashedDependencies = dependencies, hashedNames = names, hashedRoots = roots }
@@ -2579,7 +2578,7 @@ hashPass env source parsed checked = do
     resolver    = moduleResolver env
     mn          = nameOf env
     hashEnv     = setMod mn (checkedScope checked)
-    I.NModule moduleImports iface doc = checkedInterface checked
+    I.NModule moduleImports iface _ = checkedInterface checked
     headerImports
       | mn == mBuiltin = moduleImports
       | otherwise      = nub (mBuiltin : moduleImports)
