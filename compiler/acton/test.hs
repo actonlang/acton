@@ -2932,7 +2932,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
   ]
   where
     -- Reported get_gc_info fields for a build without settings.
-    defaults = [("alloc_budget_percent", "100"), ("block_size", "16384"),
+    defaults = [("alloc_budget_percent", "200"), ("block_size", "16384"),
                 ("end_padding", "True"), ("small_object_size", "32"),
                 ("thread_local_size_limit", "2048"),
                 ("no_thread_local_warmup", "True"),
@@ -2943,7 +2943,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
                 ("initial_mark_stack_size",
                  if System.Info.os == "mingw32" then "1048576" else "4194304")]
     -- Build.act settings and the fields they should report.
-    tuned = [("gc_alloc_budget_percent", "200"), ("gc_block_size", "4096"),
+    tuned = [("gc_alloc_budget_percent", "100"), ("gc_block_size", "4096"),
              ("gc_mark_range_stealing", "false"),
              ("gc_bytes_per_marker", "0"),
              ("gc_initial_mark_stack_size", "65536"),
@@ -2952,7 +2952,7 @@ gcCollectorOptionTests = testGroup "GC collector options"
              ("gc_thread_local_refill_blocks", "1"),
              ("gc_realloc_no_free", "false"),
              ("gc_no_thread_local_warmup", "false")]
-    tunedReports = [("alloc_budget_percent", "200"), ("block_size", "4096"),
+    tunedReports = [("alloc_budget_percent", "100"), ("block_size", "4096"),
                     ("end_padding", "False"), ("small_object_size", "16"),
                     ("thread_local_size_limit", "2048"),
                     ("no_thread_local_warmup", "False"),
