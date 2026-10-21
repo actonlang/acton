@@ -1763,7 +1763,7 @@ selectRequested ctx g files = do
       case [ gtKey t | t <- graphTasks g, taskSourceFile t == absolute ] of
         k : _ -> return (Just k)
         []    -> do mn <- moduleNameFromFile (srcDir paths) (projName paths) absolute
-                    return (listToMaybe [ gtKey t | t <- graphTasks g, tkProj (gtKey t) == ccRootProj ctx, tkMod (gtKey t) == mn ])
+                    return (gtKey <$> M.lookup (TaskKey (ccRootProj ctx) mn) (graphIndex g))
 
 -- | The modules an edit of the changed files affects: every dependent of a
 -- changed module, every module on a dependency path from those to a DBP
