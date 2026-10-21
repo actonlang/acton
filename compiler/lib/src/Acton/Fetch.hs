@@ -10,7 +10,8 @@ import qualified Acton.BuildSpec as BuildSpec
 import qualified Acton.CommandLineParser as C
 import Acton.ArchiveDownload (downloadArchive)
 import Acton.HttpFetch (isHttpUrl, proxyEnvReportLines, readProxyEnv)
-import Acton.Project (Paths(..), applyDepOverrides, depCacheDir, depCacheEntry, loadBuildSpec, normalizePathSafe, rebaseDepPath, resolveDepBase, throwProjectError, zigGlobalCacheDir)
+import Acton.Project ( Paths(..), dependencyPathError, depCacheDir, depCacheEntry, loadOverriddenSpec, localPath, localZigPath
+                     , normalizePathSafe, resolveDepBase, rootPins, selectDepAndWarn, throwProjectError, zigGlobalCacheDir )
 import Acton.ZigFetch (fetchZigPackage)
 import qualified Acton.Zon as Zon
 
@@ -18,7 +19,7 @@ import Control.Concurrent.Async (mapConcurrently)
 import Control.Exception (IOException, bracketOnError, try)
 import Control.Monad
 import Data.IORef
-import Data.Maybe (catMaybes, isJust)
+import Data.Maybe (catMaybes)
 import qualified Data.Map as M
 import qualified Data.Set
 import System.Directory
@@ -33,8 +34,7 @@ fetchDependencies gopts paths depOverrides = do
     if isTmp paths
       then return ()
       else do
-        rootSpec0 <- loadBuildSpec (projPath paths)
-        rootSpec <- applyDepOverrides (projPath paths) depOverrides rootSpec0
+        rootSpec <- loadOverriddenSpec depOverrides (projPath paths)
         unless (C.quiet gopts) $
           putStrLn "Resolving dependencies (fetching if missing)..."
         when (C.verbose gopts) $ do
@@ -50,18 +50,17 @@ fetchDependencies gopts paths depOverrides = do
         -- Tracks zig package dirs / hashes already pre-seeded, so the transitive
         -- walk over build.zig.zon files terminates on cycles and shared deps.
         zigSeen <- newIORef Data.Set.empty
-        let rootPins = M.map (rebaseDepPath (projPath paths)) (BuildSpec.concreteDependencies rootSpec)
-        _ <- walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen
+        _ <- walkProject (rootPins (projPath paths) rootSpec) cacheDir zigExe globalCache depsCache zigSeen
                          Data.Set.empty (projPath paths) rootSpec
         return ()
   where
-    walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen seen projDir spec = do
+    walkProject pins cacheDir zigExe globalCache depsCache zigSeen seen projDir spec = do
       projAbs <- normalizePathSafe projDir
       if Data.Set.member projAbs seen
         then return seen
         else do
-          selectedDeps <- forM (M.toList (BuildSpec.concreteDependencies spec)) $
-            selectDependency rootPins projAbs
+          selectedDeps <- forM (M.toList (BuildSpec.concreteDependencies spec)) $ \(name, dep) ->
+            (,) name <$> selectDepAndWarn gopts pins projAbs name dep
           let pkgFetches = catMaybes
                 [ mkPkgFetch cacheDir zigExe globalCache name dep | (name, dep) <- selectedDeps ]
               zigFetches = catMaybes
@@ -86,48 +85,29 @@ fetchDependencies gopts paths depOverrides = do
           -- already seeded above by mkZigFetch (see seedTransitiveZigDeps for why
           -- url packages are not recursed into).
           forM_ (M.toList (BuildSpec.zig_dependencies spec)) $ \(_, zdep) ->
-            case BuildSpec.zpath zdep of
-              Just p | not (null p) ->
-                seedTransitiveZigDeps zigSeen cacheDir zigExe globalCache (projAbs </> p)
-              _ -> return ()
+            case localZigPath zdep of
+              Just p  -> seedTransitiveZigDeps zigSeen cacheDir zigExe globalCache (projAbs </> p)
+              Nothing -> return ()
           let seen' = Data.Set.insert projAbs seen
-          foldM (walkDependency rootPins cacheDir zigExe globalCache depsCache zigSeen projAbs)
+          foldM (walkDependency pins cacheDir zigExe globalCache depsCache zigSeen projAbs)
                 seen' selectedDeps
 
-    selectDependency rootPins base (depName, dep) = do
-      let (chosenDep, conflict) =
-            case M.lookup depName rootPins of
-              Nothing -> (dep, Nothing)
-              Just pinDep ->
-                if pinDep == rebaseDepPath base dep
-                  then (pinDep, Nothing)
-                  else (pinDep, Just dep)
-      when (isJust conflict) $
-        unless (C.quiet gopts) $
-          putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
-                    ++ " overridden by root pin")
-      return (depName, chosenDep)
-
-    walkDependency rootPins cacheDir zigExe globalCache depsCache zigSeen base seen (depName, dep) = do
+    walkDependency pins cacheDir zigExe globalCache depsCache zigSeen base seen (depName, dep) = do
       depBase <- resolveDepBase base depName dep
       depAbs <- normalizePathSafe depBase
       depExists <- doesDirectoryExist depAbs
       if not depExists
-        then case BuildSpec.path dep of
-               Just p | not (null p) ->
-                 throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs ++ "\n"
-                                    ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                                    ++ "(directory with src/ and Build.act).")
-               _ -> return seen
+        then case localPath dep of
+               Just _  -> dependencyPathError depName "does not exist" depAbs
+               Nothing -> return seen
         else do
-          depSpec0 <- loadBuildSpec depAbs
-          depSpec <- applyDepOverrides depAbs depOverrides depSpec0
-          walkProject rootPins cacheDir zigExe globalCache depsCache zigSeen seen depAbs depSpec
+          depSpec <- loadOverriddenSpec depOverrides depAbs
+          walkProject pins cacheDir zigExe globalCache depsCache zigSeen seen depAbs depSpec
 
     mkPkgFetch cacheDir zigExe globalCache name dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> Nothing
-        _ -> case (BuildSpec.url dep, BuildSpec.hash dep) of
+      case localPath dep of
+        Just _  -> Nothing
+        Nothing -> case (BuildSpec.url dep, BuildSpec.hash dep) of
                (Just u, Just h) ->
                  Just (fetchOne "pkg" name u (Just h) cacheDir zigExe globalCache)
                (Just _, Nothing) ->
@@ -135,9 +115,9 @@ fetchDependencies gopts paths depOverrides = do
                _ -> Nothing
 
     mkZigFetch cacheDir zigExe globalCache name dep =
-      case BuildSpec.zpath dep of
-        Just p | not (null p) -> Nothing
-        _ -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
+      case localZigPath dep of
+        Just _  -> Nothing
+        Nothing -> case (BuildSpec.zurl dep, BuildSpec.zhash dep) of
                (Just u, Just h) ->
                  Just (fetchOne "zig" name u (Just h) cacheDir zigExe globalCache)
                (Just _, Nothing) ->
@@ -145,9 +125,9 @@ fetchDependencies gopts paths depOverrides = do
                _ -> Nothing
 
     copyPkgDep cacheDir depsCache name dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> return ()
-        _ -> case BuildSpec.hash dep of
+      case localPath dep of
+        Just _  -> return ()
+        Nothing -> case BuildSpec.hash dep of
                Nothing -> return ()
                Just h -> do
                  let src = cacheDir h

@@ -1273,27 +1273,21 @@ pkgShow gopts = do
     curDir <- getCurrentDirectory
     _ <- requireProjectConfigPath curDir
     spec <- loadBuildSpec curDir
-    let rootPins = M.map (rebaseDepPath curDir) (BuildSpec.concreteDependencies spec)
     unless (C.quiet gopts) $
       putStrLn "Dependency tree (hash overrides shown):"
-    partial <- showTree rootPins curDir spec 0
+    partial <- showTree (rootPins curDir spec) curDir spec 0
     when (partial && not (C.quiet gopts)) $
       putStrLn "Note: dependency tree is partial; some dependencies are not fetched yet. Run 'acton fetch'."
   where
     describeDep dep =
       (case BuildSpec.hash dep of
         Just h -> "hash=" ++ h
-        Nothing -> case BuildSpec.path dep of
-                     Just p | not (null p) -> "path=" ++ p
-                     _ -> "unversioned")
+        Nothing -> case localPath dep of
+                     Just p  -> "path=" ++ p
+                     Nothing -> "unversioned")
       ++ maybe "" (\dir -> ", subdir=" ++ dir) (BuildSpec.subdir dep)
 
-    isHashDep dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> False
-        _ -> case BuildSpec.hash dep of
-               Just _ -> True
-               Nothing -> False
+    isHashDep dep = isNothing (localPath dep) && isJust (BuildSpec.hash dep)
 
     showTree pins dir spec depth = do
       let deps = M.toList (BuildSpec.dependencies spec)
@@ -1306,10 +1300,7 @@ pkgShow gopts = do
       | otherwise = showConcrete pins dir depth partial depName dep
 
     showConcrete pins dir depth partial depName dep = do
-      let (chosen, conflict) =
-            case M.lookup depName pins of
-              Nothing -> (dep, False)
-              Just pinDep -> (pinDep, pinDep /= rebaseDepPath dir dep)
+      let (chosen, conflict) = selectDep pins dir depName dep
       depBase <- resolveDepBase dir depName chosen
       depExists <- doesDirectoryExist depBase
       let notFetched = isHashDep chosen && not depExists
@@ -1321,10 +1312,7 @@ pkgShow gopts = do
       if not depExists
         then if notFetched
           then return (partial || True)
-          else do
-            throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depBase ++ "\n"
-                               ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                               ++ "(directory with src/ and Build.act).")
+          else dependencyPathError depName "does not exist" depBase
         else do
           spec' <- loadBuildSpec depBase
           childPartial <- showTree pins depBase spec' (depth + 1)
@@ -2652,9 +2640,9 @@ data ZigDepIdentity
 
 zigDepIdentity :: BuildSpec.ZigDep -> ZigDepIdentity
 zigDepIdentity dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) -> ZigDepPathIdentity p (BuildSpec.options dep)
-    _ -> case BuildSpec.zhash dep of
+  case localZigPath dep of
+    Just p  -> ZigDepPathIdentity p (BuildSpec.options dep)
+    Nothing -> case BuildSpec.zhash dep of
            Just h | not (null h) -> ZigDepHashIdentity h (BuildSpec.options dep)
            _ -> ZigDepUrlIdentity (BuildSpec.zurl dep) (BuildSpec.options dep)
 
@@ -2837,9 +2825,9 @@ genBuildZigZon template relSys depsRootAbs sysAbs projAbs buildDir fingerprint z
     in unlines $ header ++ concatMap inject replaced
   where
     pkgToZon projRoot depsRoot (name, dep) =
-      let rawPath = case BuildSpec.path dep of
-                      Just p | not (null p) -> p
-                      _ -> case BuildSpec.hash dep of
+      let rawPath = case localPath dep of
+                      Just p  -> p
+                      Nothing -> case BuildSpec.hash dep of
                              Just h -> joinPath (depCacheEntry depsRoot name h : maybeToList (BuildSpec.subdir dep))
                              Nothing -> errorWithoutStackTrace ("Dependency " ++ name ++ " has no path or hash")
           pathAbs = collapseDots $
@@ -3017,12 +3005,12 @@ collectDepsRecursive rootSpec projDir depPaths = do
 
 rebaseZigDep :: FilePath -> FilePath -> BuildSpec.ZigDep -> BuildSpec.ZigDep
 rebaseZigDep root base dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) ->
+  case localZigPath dep of
+    Just p ->
       let absP = rebasePath base p
           relP = makeRelativeOrAbsolute root absP
       in dep { BuildSpec.zpath = Just (collapseDots relP) }
-    _ -> dep
+    Nothing -> dep
 
 -- | Normalize dependency paths in a BuildSpec.
 normalizeSpecPaths :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
@@ -3034,26 +3022,26 @@ normalizeSpecPaths base spec = do
   where
     normalizePkgDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizePkgDep b v; return (k,v')) . M.toList
     normalizePkgDep b dep =
-      case BuildSpec.path dep of
-        Just p | not (null p) -> do
+      case localPath dep of
+        Just p -> do
           if isAbsolutePath p
             then do p' <- normalizePathSafe p
                     return dep { BuildSpec.path = Just p' }
             else return dep { BuildSpec.path = Just (collapseDots (normalise p)) }
-        _ -> return dep
+        Nothing -> return dep
 
     normalizeZigDeps b = fmap M.fromList . mapM (\(k,v) -> do v' <- normalizeZigDep b v; return (k,v')) . M.toList
 
 -- | Normalize a zig dependency path entry.
 normalizeZigDep :: FilePath -> BuildSpec.ZigDep -> IO BuildSpec.ZigDep
 normalizeZigDep b dep =
-  case BuildSpec.zpath dep of
-    Just p | not (null p) -> do
+  case localZigPath dep of
+    Just p -> do
       if isAbsolutePath p
         then do p' <- normalizePathSafe p
                 return dep { BuildSpec.zpath = Just p' }
         else return dep { BuildSpec.zpath = Just (collapseDots (normalise p)) }
-    _ -> return dep
+    Nothing -> return dep
 
 -- | Filter bin tasks to those with a valid root actor.
 filterMainActor :: Acton.Env.Env0 -> Paths -> BinTask -> IO (Maybe BinTask)

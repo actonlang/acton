@@ -1700,7 +1700,7 @@ libraryTaskGroups projMap globalTasks =
     , lib <- M.elems (BuildSpec.libraries (projBuildSpec ctx))
     , let keys = [ gtKey t
                  | modName <- BuildSpec.libModules lib
-                 , t <- M.findWithDefault [] (dottedModName (proj ++ "." ++ modName)) tasksByModule
+                 , t <- M.findWithDefault [] (A.dottedModName (proj ++ "." ++ modName)) tasksByModule
                  , taskInProject ctx t
                  ]
           proj = BuildSpec.specName $ projBuildSpec ctx

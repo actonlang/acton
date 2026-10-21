@@ -196,6 +196,16 @@ modPath (ModName ns) = map nstr ns
 modNameToString :: ModName -> String
 modNameToString m = intercalate "." (modPath m)
 
+-- | The names of a dotted text: foo.bar.baz has the names foo, bar and baz.
+dottedNames :: String -> [String]
+dottedNames s   = case break (== '.') s of
+                    (n, [])     -> [n]
+                    (n, _:rest) -> n : dottedNames rest
+
+-- | The module name written as dotted text: foo.bar.baz is the module foo.bar.baz.
+dottedModName :: String -> ModName
+dottedModName   = modName . dottedNames
+
 modCat (ModName ns) n = ModName (ns++[n])
 
 -- Components compare as their rendered text.

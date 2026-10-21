@@ -765,10 +765,7 @@ checkFollows ref fields
       Left "follows cannot be combined with url, hash, path, repo_url, repo_ref or subdir"
   | otherwise = Right ()
   where
-    names = split ref
-    split s = case break (== '.') s of
-                (n, []) -> [n]
-                (n, _:rest) -> n : split rest
+    names = S.dottedNames ref
     validName (c:cs) = (isAlpha c || c == '_') && all (\c -> isAlphaNum c || c == '_') cs
     validName [] = False
 

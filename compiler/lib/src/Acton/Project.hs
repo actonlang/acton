@@ -15,7 +15,14 @@ module Acton.Project
   , discoverProjects
   , collectDepTypePaths
   , depTypePathsFromMap
+  , RootPins
+  , rootPins
+  , selectDep
+  , selectDepAndWarn
+  , localPath
+  , localZigPath
   , resolveDepBase
+  , dependencyPathError
   , depCacheDir
   , depCacheEntry
   , zigGlobalCacheDir
@@ -36,7 +43,6 @@ module Acton.Project
   , rootBinaryName
   , filterActFile
   , modNameToFilename
-  , dottedModName
   , special_projects
   , addProjPrefix
   , dropProjPrefix
@@ -50,14 +56,13 @@ module Acton.Project
   , withProjectLockOnWait
   , withProjectLock
   , loadBuildSpec
+  , loadOverriddenSpec
   , normalizeDepOverrides
-  , applyDepOverrides
   , normalizePathSafe
   , isUnder
   , isAbsolutePath
   , collapseDots
   , rebasePath
-  , rebaseDepPath
   ) where
 
 import qualified Acton.BuildSpec as BuildSpec
@@ -209,22 +214,58 @@ scratchBuildSpec projRoot =
          }
 
 
-normalizeFingerprintKey :: String -> Maybe String
-normalizeFingerprintKey raw =
-    Fingerprint.formatFingerprint <$> Fingerprint.parseFingerprint raw
-
+-- | The key of a project's fingerprint in a FingerprintMap: the fingerprint
+-- in its formatted form, so that case and leading zeros do not matter, or as
+-- written when it does not parse.
 fingerprintKeyFromSpec :: BuildSpec.BuildSpec -> String
 fingerprintKeyFromSpec spec =
-    case normalizeFingerprintKey (BuildSpec.fingerprint spec) of
-      Just fp -> fp
-      Nothing -> BuildSpec.fingerprint spec
+    maybe raw Fingerprint.formatFingerprint (Fingerprint.parseFingerprint raw)
+  where raw = BuildSpec.fingerprint spec
 
-applyFingerprint :: FilePath -> BuildSpec.BuildSpec -> FingerprintMap -> (FilePath, FingerprintMap, String)
-applyFingerprint path spec fpMap =
-    let fp = fingerprintKeyFromSpec spec
-    in case M.lookup fp fpMap of
-         Just canonical -> (canonical, fpMap, fp)
-         Nothing -> (path, M.insert fp path fpMap, fp)
+-- | Register the fingerprint of the project at 'path' unless a path is
+-- registered for it already. The first path registered for a fingerprint is
+-- the canonical path of every project with that fingerprint.
+registerFingerprint :: FilePath -> BuildSpec.BuildSpec -> FingerprintMap -> FingerprintMap
+registerFingerprint path spec =
+    M.insertWith (\_ registered -> registered) (fingerprintKeyFromSpec spec) path
+
+-- | Load the Build.act of the dependency at 'depAbs' with the --dep
+-- overrides and register its fingerprint. Returns the canonical path of the
+-- fingerprint, the updated map and the loaded spec. The canonical path is
+-- another path when that path registered the fingerprint first.
+canonicalDep :: [(String, FilePath)] -> FingerprintMap -> FilePath -> IO (FilePath, FingerprintMap, BuildSpec.BuildSpec)
+canonicalDep overrides fpMap depAbs = do
+    spec <- loadOverriddenSpec overrides depAbs
+    let fpMap' = registerFingerprint depAbs spec fpMap
+    return (fpMap' M.! fingerprintKeyFromSpec spec, fpMap', spec)
+
+-- | The root pins of a build: the root project's concrete dependencies with
+-- their local paths made absolute. Every project in the build uses the pin
+-- of a name in place of its own declaration of that name.
+type RootPins = M.Map String BuildSpec.PkgDep
+
+-- | The root pins taken from the spec of the root project at 'root'.
+rootPins :: FilePath -> BuildSpec.BuildSpec -> RootPins
+rootPins root spec = M.map (rebaseDepPath root) (BuildSpec.concreteDependencies spec)
+
+-- | The dependency that the project at 'base' uses for its declaration
+-- 'dep' of 'name': the root pin of that name if there is one, otherwise the
+-- declaration. The flag is True when the pin replaces a declaration that
+-- differs from it.
+selectDep :: RootPins -> FilePath -> String -> BuildSpec.PkgDep -> (BuildSpec.PkgDep, Bool)
+selectDep pins base name dep =
+    case M.lookup name pins of
+      Nothing  -> (dep, False)
+      Just pin -> (pin, pin /= rebaseDepPath base dep)
+
+-- | The dependency 'selectDep' selects, after a warning, unless quiet, when
+-- the root pin replaces a different declaration.
+selectDepAndWarn :: C.GlobalOptions -> RootPins -> FilePath -> String -> BuildSpec.PkgDep -> IO BuildSpec.PkgDep
+selectDepAndWarn gopts pins base name dep = do
+    let (selected, replaced) = selectDep pins base name dep
+    when (replaced && not (C.quiet gopts)) $
+      putStrLn ("Warning: dependency '" ++ name ++ "' in " ++ base ++ " overridden by root pin")
+    return selected
 
 -- | Discover all projects reachable from a root project.
 -- Follows Build.act dependencies, applies overrides/pins, and
@@ -232,61 +273,37 @@ applyFingerprint path spec fpMap =
 discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePath)] -> IO (M.Map FilePath ProjCtx)
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
-    rootSpec0 <- loadBuildSpec rootAbs
-    rootSpec  <- applyDepOverrides rootAbs depOverrides rootSpec0
-    let rootPins = M.map (rebaseDepPath rootAbs) (BuildSpec.concreteDependencies rootSpec)
-        (_, fpMap0, _) = applyFingerprint rootAbs rootSpec M.empty
-    (projects, _) <- go rootAbs Data.Set.empty M.empty fpMap0 rootPins rootAbs (Just rootSpec)
+    rootSpec <- loadOverriddenSpec depOverrides rootAbs
+    (projects, _) <- go Data.Set.empty M.empty (registerFingerprint rootAbs rootSpec M.empty)
+                        (rootPins rootAbs rootSpec) rootAbs (Just rootSpec)
     resolveFollows projects
   where
-    go root seen acc fpMap pins dir mSpec = do
+    go seen acc fpMap pins dir mSpec = do
       dirAbs <- normalizePathSafe dir
       if Data.Set.member dirAbs seen
         then return (acc, fpMap)
         else do
-          spec0 <- case mSpec of
-                     Just s -> return s
-                     Nothing -> loadBuildSpec dirAbs
-          spec <- applyDepOverrides dirAbs depOverrides spec0
-          let (_, fpMap1, _) = applyFingerprint dirAbs spec fpMap
-          (deps, fpMap2) <- do
-            let depsList = M.toList (BuildSpec.concreteDependencies spec)
-            foldM (collectDep pins dirAbs) ([], fpMap1) depsList
+          spec <- maybe (loadOverriddenSpec depOverrides dirAbs) return mSpec
+          let fpMap1 = registerFingerprint dirAbs spec fpMap
+          (deps, fpMap2) <- foldM (collectDep pins dirAbs) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
           let ctx = mkProjCtx sysAbs dirAbs (projectSrcDir dirAbs) spec [ (n, p) | (n, p, _) <- reverse deps ]
               acc' = M.insert dirAbs ctx acc
               seen' = Data.Set.insert dirAbs seen
-          foldM (step root seen' pins) (acc', fpMap2) (reverse deps)
+          foldM (step seen' pins) (acc', fpMap2) (reverse deps)
 
     collectDep pins base (accDeps, fpMap) (depName, dep) = do
-      let (chosenDep, conflict) =
-            case M.lookup depName pins of
-              Nothing -> (dep, Nothing)
-              Just pinDep ->
-                if pinDep == rebaseDepPath base dep
-                  then (pinDep, Nothing)
-                  else (pinDep, Just dep)
-      when (isJust conflict) $
-        unless (C.quiet gopts) $
-          putStrLn ("Warning: dependency '" ++ depName ++ "' in " ++ base
-                    ++ " overridden by root pin")
-      depBase <- resolveDepBase base depName chosenDep
+      selected <- selectDepAndWarn gopts pins base depName dep
+      depBase <- resolveDepBase base depName selected
       depAbs  <- normalizePathSafe depBase
-      (depPath, fpMap', depSpec) <- canonicalizeDep depAbs fpMap
+      (depPath, fpMap', spec) <- canonicalDep depOverrides fpMap depAbs
+      when (depPath /= depAbs && not (C.quiet gopts)) $
+        putStrLn ("Warning: dependency fingerprint " ++ fingerprintKeyFromSpec spec
+                  ++ " at " ++ depAbs ++ " deduplicated to " ++ depPath)
+      let depSpec = if depPath == depAbs then Just spec else Nothing
       return ((depName, depPath, depSpec) : accDeps, fpMap')
 
-    canonicalizeDep depAbs fpMap = do
-      spec0 <- loadBuildSpec depAbs
-      spec <- applyDepOverrides depAbs depOverrides spec0
-      let (canonPath, fpMap', fp) = applyFingerprint depAbs spec fpMap
-      when (canonPath /= depAbs) $
-        unless (C.quiet gopts) $
-          putStrLn ("Warning: dependency fingerprint " ++ fp
-                    ++ " at " ++ depAbs ++ " deduplicated to " ++ canonPath)
-      let depSpec = if canonPath == depAbs then Just spec else Nothing
-      return (canonPath, fpMap', depSpec)
-
-    step root seen pins (acc, fpMap) (_, depBase, mSpec) =
-      go root seen acc fpMap pins depBase mSpec
+    step seen pins (acc, fpMap) (_, depBase, mSpec) =
+      go seen acc fpMap pins depBase mSpec
 
 -- | Bind passive dependency references after concrete selection and deduplication.
 -- A follows entry contributes neither a source nor a root pin. Every segment
@@ -316,10 +333,8 @@ resolveFollows projects = M.traverseWithKey resolveProject projects
                     Nothing -> case lookup name (projDeps ctx) of
                                  Just target -> return target
                                  Nothing -> throwProjectError ("Unresolved dependency '" ++ name ++ "' in " ++ root)
-                    -- A follows reference is written like a module name:
-                    -- the dependency names along the way, joined by dots.
                     Just ref -> do
-                      target <- foldM (resolve ((root, name) : seen)) root (A.modPath (dottedModName ref))
+                      target <- foldM (resolve ((root, name) : seen)) root (A.dottedNames ref)
                                 `catch` \(ProjectError msg) ->
                                   throwProjectError ("Dependency '" ++ name ++ "' follows '" ++ ref
                                                      ++ "' in " ++ root ++ "/Build.act:\n" ++ msg)
@@ -654,6 +669,11 @@ loadBuildSpec dir = do
         throwProjectError ("Missing Build.act in " ++ dir ++ ".\n"
                            ++ "Create Build.act with required name and fingerprint fields.")
 
+-- | Load the Build.act of the project at 'dir' and apply the --dep
+-- overrides to its dependencies.
+loadOverriddenSpec :: [(String, FilePath)] -> FilePath -> IO BuildSpec.BuildSpec
+loadOverriddenSpec overrides dir = loadBuildSpec dir >>= applyDepOverrides dir overrides
+
 validateBuildSpec :: FilePath -> BuildSpec.BuildSpec -> IO BuildSpec.BuildSpec
 validateBuildSpec sourcePath spec = do
     validateProjectName sourcePath (BuildSpec.specName spec)
@@ -779,12 +799,20 @@ rebasePath base p
   | isAbsolutePath p = normalise p
   | otherwise        = normalise (joinPath [base, p])
 
+-- | The local path of an Acton dependency. An empty path is no path.
+localPath :: BuildSpec.PkgDep -> Maybe FilePath
+localPath dep = mfilter (not . null) (BuildSpec.path dep)
+
+-- | The local path of a Zig dependency. An empty path is no path.
+localZigPath :: BuildSpec.ZigDep -> Maybe FilePath
+localZigPath dep = mfilter (not . null) (BuildSpec.zpath dep)
+
 -- | Keep a concrete source path relative to the project that declares it.
 rebaseDepPath :: FilePath -> BuildSpec.PkgDep -> BuildSpec.PkgDep
 rebaseDepPath base dep =
-    case BuildSpec.path dep of
-      Just p | not (null p) -> dep { BuildSpec.path = Just (rebasePath base p) }
-      _ -> dep
+    case localPath dep of
+      Just p  -> dep { BuildSpec.path = Just (rebasePath base p) }
+      Nothing -> dep
 
 -- | Normalize --dep overrides relative to a base directory.
 -- Absolute override paths are kept, relative paths are rebased and normalized.
@@ -818,14 +846,18 @@ validateDepOverridePath :: String -> FilePath -> IO ()
 validateDepOverridePath depName depPath = do
     exists <- doesDirectoryExist depPath
     unless exists $
-      throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depPath ++ "\n"
-                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                         ++ "(directory with src/ and Build.act).")
+      dependencyPathError depName "does not exist" depPath
     isProjectRoot <- isActonProjectRoot depPath
     unless isProjectRoot $
-      throwProjectError ("Dependency " ++ depName ++ " path is not an Acton project root: " ++ depPath ++ "\n"
-                         ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                         ++ "(directory with src/ and Build.act).")
+      dependencyPathError depName "is not an Acton project root" depPath
+
+-- | Fail because the local path 'path' of the dependency 'name' has the
+-- problem 'problem', with a hint on what a local dependency path must be.
+dependencyPathError :: String -> String -> FilePath -> IO a
+dependencyPathError name problem path =
+    throwProjectError ("Dependency " ++ name ++ " path " ++ problem ++ ": " ++ path ++ "\n"
+                       ++ "Hint: Local dependency paths must point to an Acton project root\n"
+                       ++ "(directory with src/ and Build.act).")
 
 -- | Collect dependency type directories using an existing ProjCtx map.
 -- Traverses dependency edges so downstream lookups can build search paths.
@@ -853,9 +885,9 @@ depTypePathsFromMap ctxs root = snd (go Data.Set.empty root)
 -- Prefers an explicit project path, otherwise selects subdir in the cached archive.
 resolveDepBase :: FilePath -> String -> BuildSpec.PkgDep -> IO FilePath
 resolveDepBase base name dep =
-    case BuildSpec.path dep of
-      Just p | not (null p) -> normalizePathSafe (rebasePath base p)
-      _ -> case BuildSpec.hash dep of
+    case localPath dep of
+      Just p  -> normalizePathSafe (rebasePath base p)
+      Nothing -> case BuildSpec.hash dep of
              Just h -> do
                home <- getHomeDirectory
                root <- normalizePathSafe (depCacheEntry (depCacheDir home) name h)
@@ -895,55 +927,37 @@ zigGlobalCacheDir home = joinPath [home, ".cache", "acton", "zig-global-cache"]
 collectDepTypePaths :: FilePath -> [(String, FilePath)] -> IO (String,[FilePath])
 collectDepTypePaths projDir overrides = do
   root <- normalizePathSafe projDir
-  spec <- loadBuildSpec root
+  spec <- loadOverriddenSpec overrides root
   (_, _, paths) <- go Data.Set.empty M.empty root spec
   return (BuildSpec.specName spec, paths)
   where
-    go seen fpMap dir spec0 = do
-      spec <- applyDepOverrides dir overrides spec0
-      let (_, fpMap1, _) = applyFingerprint dir spec fpMap
-      foldM (step dir) (seen, fpMap1, []) (M.toList (BuildSpec.concreteDependencies spec))
+    go seen fpMap dir spec =
+      foldM (step dir) (seen, registerFingerprint dir spec fpMap, []) (M.toList (BuildSpec.concreteDependencies spec))
 
     step base (seen, fpMap, acc) (depName, dep) = do
       depBase <- resolveDepBase base depName dep
       depAbs  <- normalizePathSafe depBase
       depExists <- doesDirectoryExist depAbs
       if not depExists
-        then case BuildSpec.path dep of
-               Just p | not (null p) ->
-                 throwProjectError ("Dependency " ++ depName ++ " path does not exist: " ++ depAbs ++ "\n"
-                                    ++ "Hint: Local dependency paths must point to an Acton project root\n"
-                                    ++ "(directory with src/ and Build.act).")
-               _ -> return (seen, fpMap, acc)
+        then case localPath dep of
+               Just _  -> dependencyPathError depName "does not exist" depAbs
+               Nothing -> return (seen, fpMap, acc)
         else do
-          (depPath, fpMap') <- canonicalizeDep depAbs fpMap
+          (depPath, fpMap', spec) <- canonicalDep overrides fpMap depAbs
           let typesDir = projectTypesDir depPath
           if Data.Set.member depPath seen
             then return (seen, fpMap', acc)
             else do
               let seen' = Data.Set.insert depPath seen
-              spec <- loadBuildSpec depPath
-              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath spec
+              depSpec <- if depPath == depAbs then return spec else loadOverriddenSpec overrides depPath
+              (seenNext, fpMapNext, sub) <- go seen' fpMap' depPath depSpec
               return (seenNext, fpMapNext, acc ++ [typesDir] ++ sub)
-
-    canonicalizeDep depAbs fpMap = do
-      spec0 <- loadBuildSpec depAbs
-      spec <- applyDepOverrides depAbs overrides spec0
-      let (canonPath, fpMap', _) = applyFingerprint depAbs spec fpMap
-      return (canonPath, fpMap')
 
 
 -- | Convert a module name to its source filename (path + .act).
 -- This is used for diagnostics and display output.
 modNameToFilename :: A.ModName -> String
 modNameToFilename mn = joinPath (A.modPath mn) ++ ".act"
-
--- | The module name written with dots between its names: "a.b" is a.b.
-dottedModName :: String -> A.ModName
-dottedModName = A.modName . names
-  where names s = case break (== '.') s of
-                    (n, [])     -> [n]
-                    (n, _:rest) -> n : names rest
 
 addProjPrefix               :: Paths -> A.ModName -> A.ModName
 addProjPrefix paths mn      = A.modName $ if proj `elem` special_projects then ns else proj : ns
