@@ -1617,6 +1617,12 @@ data ModuleIndex = ModuleIndex
 declares                                :: ModuleIndex -> FilePath -> A.ModName -> Bool
 declares index project mn               = M.member (TaskKey project mn) (indexSources index)
 
+-- | The dependencies that a module's own project declares, by name and
+-- root, in name order.  A module's paths are those of its project, so
+-- their projPath is a project root of the index.
+directDependencies                      :: ModuleIndex -> Paths -> [(String, FilePath)]
+directDependencies index paths          = projDeps (indexProjects index M.! projPath paths)
+
 -- | Whether a cached canonical import names a namespace that the module's
 -- own project now declares: the import itself, or, for a dependency's lib
 -- module, the dependency's bare name.
@@ -1651,7 +1657,7 @@ checkImportDependencies index paths importer = mapM_ check
     projects     = indexProjects index
     projectNames = Data.Set.fromList [ BuildSpec.specName (projBuildSpec ctx) | ctx <- M.elems projects ]
     directNames  = "std" : [ BuildSpec.specName (projBuildSpec ctx)
-                           | root <- maybe [] (map snd . projDeps) (M.lookup (projPath paths) projects)
+                           | (_, root) <- directDependencies index paths
                            , Just ctx <- [M.lookup root projects] ]
 
 -- | The in-graph provider of each import, keyed by its spellings: the
@@ -1669,9 +1675,9 @@ checkImportDependencies index paths importer = mapM_ check
 resolveProviders :: ModuleIndex -> Paths -> [A.ModName] -> M.Map A.ModName TaskKey
 resolveProviders index paths imports = M.fromList (concatMap provide spellings)
   where
-    project       = indexProjects index M.! projPath paths
-    dependencies  = map fst (projDeps project)
-    searchOrder   = projRoot project : map snd (projDeps project)
+    declared      = directDependencies index paths
+    dependencies  = map fst declared
+    searchOrder   = projPath paths : map snd declared
     spellings     = [ A.modName ns | n:ns <- map A.modPath imports, n == projName paths ] ++ map dropLib imports
     provide mn
       | declares index (projPath paths) local
