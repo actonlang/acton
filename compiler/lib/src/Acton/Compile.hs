@@ -2790,14 +2790,11 @@ describeDbp label stats upToDate =
     ++ ", root names " ++ show (rootNames stats) ++ ", selected closure " ++ show (selectedClosure stats)
     ++ ", " ++ (if upToDate then "generated code up to date" else "generated code out of date")
 
+-- | The hash a deferred module's generated code is tagged with: it changes
+-- with the module's impl hash and with the set of selected names.
 dbpCodegenHash :: B.ByteString -> Data.Set.Set A.Name -> B.ByteString
 dbpCodegenHash moduleImplHash selected =
-  SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, selectedNames)))
-  where
-    selectedNames =
-      [ A.nstr n
-      | n <- Data.List.sortOn A.nameText (Data.Set.toList selected)
-      ]
+    SHA256.hash (BL.toStrict (encode ("dbp" :: String, moduleImplHash, map A.nstr (Data.List.sortOn A.nameText (Data.Set.toList selected)))))
 
 -- | The rows of the names the seeds need, keyed by name.  Each seed and each
 -- dependency resolves to the name owning its row, through the Derived chain,
@@ -2836,30 +2833,16 @@ selectedRows tydb label seeds = traverse owner (Data.Set.toList seeds) >>= close
 pruneModule :: Data.Set.Set A.Name -> A.Module -> A.Module
 pruneModule selected (A.Module loc imps mdoc suite) = A.Module loc imps mdoc (mapMaybe (pruneTopStmt selected) suite)
 
+-- | A typed module's top-level statement restricted to the selected names,
+-- or Nothing when it binds none of them.
 pruneTopStmt :: Data.Set.Set A.Name -> A.Stmt -> Maybe A.Stmt
-pruneTopStmt selected stmt =
-  case stmt of
-    A.Decl l ds ->
-      case filter (\d -> Data.Set.member (Names.dname' d) selected) ds of
-        [] -> Nothing
-        ds' -> Just (A.Decl l ds')
-    A.Signature l ns typ dec ->
-      case filter (`Data.Set.member` selected) ns of
-        [] -> Nothing
-        ns' -> Just (A.Signature l ns' typ dec)
-    A.Assign{} ->
-      if any (`Data.Set.member` selected) (Names.bound stmt)
-        then Just stmt
-        else Nothing
-    A.VarAssign{} ->
-      if any (`Data.Set.member` selected) (Names.bound stmt)
-        then Just stmt
-        else Nothing
-    A.Pass{} -> Nothing
-    -- Source-level modules only admit Decl, Signature, and Assign at the top
-    -- level. VarAssign and Pass are compiler-introduced typed forms handled
-    -- above; other statement forms should not appear in a typed module suite.
-    _ -> Nothing
+pruneTopStmt selected stmt = case stmt of
+    A.Decl l ds            | ds'@(_:_) <- filter (isSelected . Names.dname') ds -> Just (A.Decl l ds')
+    A.Signature l ns t dec | ns'@(_:_) <- filter isSelected ns                 -> Just (A.Signature l ns' t dec)
+    A.Assign{}             | any isSelected (Names.bound stmt)                 -> Just stmt
+    A.VarAssign{}          | any isSelected (Names.bound stmt)                 -> Just stmt
+    _                                                                          -> Nothing
+  where isSelected = (`Data.Set.member` selected)
 
 
 -- | What a job does with its generated code.
