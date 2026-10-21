@@ -1177,17 +1177,21 @@ resolveAll resolve problem items = do
     failOnAny [ e | Left e <- results ]
     return [ b | Right b <- results ]
 
+-- | Run an action, with the exceptions the handlers know as its
+-- diagnostics.  Every other exception propagates.
+tryDiagnostics :: [Handler [Diagnostic String]] -> IO a -> IO (Either [Diagnostic String] a)
+tryDiagnostics handlers action = (Right <$> action) `catches` map (fmap Left) handlers
+
 -- | The failures that the front passes report as the module's own
--- diagnostics, with its source text.  Every other exception propagates.
-frontFailures :: ModuleEnv -> String -> [Handler (Either [Diagnostic String] a)]
+-- diagnostics, with its source text.
+frontFailures :: ModuleEnv -> String -> [Handler [Diagnostic String]]
 frontFailures env src =
-    [ Handler $ \(ModuleErrors errs)               -> failed (map (explainError env src) errs)
-    , Handler $ \(e :: GeneralError)               -> failed (located (generalError e))
-    , Handler $ \(e :: Acton.Env.CompilationError) -> failed (located (Acton.Env.compilationError e))
-    , Handler $ \(Acton.Types.TypeErrors errs)     -> failed (map typed errs)
-    , Handler $ \(e :: Acton.TypeEnv.TypeError)    -> failed [typed e] ]
+    [ Handler $ \(ModuleErrors errs)               -> return (map (explainError env src) errs)
+    , Handler $ \(e :: GeneralError)               -> return (located (generalError e))
+    , Handler $ \(e :: Acton.Env.CompilationError) -> return (located (Acton.Env.compilationError e))
+    , Handler $ \(Acton.Types.TypeErrors errs)     -> return (map typed errs)
+    , Handler $ \(e :: Acton.TypeEnv.TypeError)    -> return [typed e] ]
   where
-    failed       = return . Left
     file         = modNameToFilename (dropProjPrefix (pathsOf env) (nameOf env))
     located errs = [ compilationError file src l msg | (l, msg) <- errs ]
     typed e      = Acton.TypeEnv.mkErrorDiagnostic file src (Acton.TypeEnv.typeReport e file src)
@@ -1212,33 +1216,34 @@ displayPath                             :: FilePath -> IO FilePath
 displayPath file                        = (\cwd -> makeRelative cwd file) <$> getCurrentDirectory
 
 -- | Parser exceptions as diagnostics: parse errors name the parsed file,
--- context and indentation errors the module's file.  Other exceptions
--- propagate.
-parserHandlers :: A.ModName -> FilePath -> String -> [Handler (Either [Diagnostic String] a)]
+-- context and indentation errors the module's file.
+parserHandlers :: A.ModName -> FilePath -> String -> [Handler [Diagnostic String]]
 parserHandlers mn file src =
-    [ Handler $ \e -> return (Left [Diag.parseDiagnosticFromBundle file src (e :: ParseErrorBundle String CustomParseError)])
-    , Handler $ \e -> return (Left [Diag.customParseExceptionToDiagnostic file src (e :: CustomParseException)])
-    , Handler $ \e -> return (Left (errsToDiagnostics "Context error"     (modNameToFilename mn) src (Acton.Parser.contextError (e :: ContextError))))
-    , Handler $ \e -> return (Left (errsToDiagnostics "Indentation error" (modNameToFilename mn) src (Acton.Parser.indentationError (e :: IndentationError)))) ]
+    [ Handler $ \(e :: ParseErrorBundle String CustomParseError) -> return [Diag.parseDiagnosticFromBundle file src e]
+    , Handler $ \(e :: CustomParseException)                     -> return [Diag.customParseExceptionToDiagnostic file src e]
+    , Handler $ \(e :: ContextError)                             -> return (errsToDiagnostics "Context error"     moduleFile src (Acton.Parser.contextError e))
+    , Handler $ \(e :: IndentationError)                         -> return (errsToDiagnostics "Indentation error" moduleFile src (Acton.Parser.indentationError e)) ]
+  where moduleFile = modNameToFilename mn
 
 -- | Parse a module from source text.  A chunk scan error is a parse error at
 -- the parsed file.
 parseActSource :: C.CompileOptions -> A.ModName -> FilePath -> String -> Maybe (ParseProgress -> IO ()) -> IO (Either [Diagnostic String] A.Module)
 parseActSource opts mn actFile srcContent mOnProgress =
-    (Right <$> parseModule mn actFile srcContent (fmap wrapProgress mOnProgress))
-      `catches` (chunkScanError : parserHandlers mn actFile srcContent)
+    tryDiagnostics (chunkScanError : parserHandlers mn actFile srcContent)
+                   (parseModule mn actFile srcContent (fmap wrapProgress mOnProgress))
   where
     parseModule
       | C.parse_serial opts             = Acton.Parser.parseModuleSerial
       | otherwise                       = Acton.Parser.parseModule
     wrapProgress onProgress completed total = onProgress (ParseProgress completed total)
-    chunkScanError = Handler $ \(ChunkScanError loc msg) -> return (Left (errsToDiagnostics "Parse error" actFile srcContent [(loc, msg)]))
+    chunkScanError = Handler $ \(ChunkScanError loc msg) -> return (errsToDiagnostics "Parse error" actFile srcContent [(loc, msg)])
 
--- | Parse only the module header from a SourceSnapshot.
-parseActHeaderSnapshot :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
-parseActHeaderSnapshot mn actFile snap = do
+-- | Parse only the header of a module's source: the modules it imports and
+-- its docstring.
+parseSourceHeader :: A.ModName -> FilePath -> Source.SourceSnapshot -> IO (Either [Diagnostic String] ([A.ModName], Maybe String))
+parseSourceHeader mn actFile snap = do
     display <- displayPath actFile
-    (Right <$> header display) `catches` parserHandlers mn display src
+    tryDiagnostics (parserHandlers mn display src) (header display)
   where
     src = Source.ssText snap
     header display = do
@@ -1881,7 +1886,7 @@ readModuleTask sp gopts opts paths mn file = do
     tydb = tyDbPath paths mn
 
     fromSource snap = do
-      parsed <- parseActHeaderSnapshot mn file snap
+      parsed <- parseSourceHeader mn file snap
       case parsed of
         Left diags        -> return (ParseErrorTask diags)
         Right (imps, doc) -> (\source -> ParseTask source imps doc) <$> moduleSource file snap
@@ -2469,7 +2474,7 @@ newtype Pacer = Pacer (IORef (Maybe TimeSpec))
 runFrontPasses :: ModuleEnv -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
 runFrontPasses env source parsed = do
     createDirectoryIfMissing True (moduleTypesDir (projTypes (pathsOf env)) mn)
-    (Right <$> passes) `catches` frontFailures env (sourceText source)
+    tryDiagnostics (frontFailures env (sourceText source)) passes
   where
     gopts    = buildOptions (moduleBuild env)
     opts     = moduleOptions env
