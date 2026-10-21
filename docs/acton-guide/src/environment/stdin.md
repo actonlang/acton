@@ -1,15 +1,15 @@
 # Reading stdin input
 
-Read from stdin by installing a handler with `env.stdin_install`. The
-handler receives data as it arrives. In the common text case, the data
-is decoded to `str`.
+Read from stdin by installing a handler with `env.stdio.stdin_install`.
+The handler receives data as it arrives. In the common text case, the
+data is decoded to `str`.
 
 ```python
 actor main(env):
     def interact(input):
         print("Got some input:", input)
 
-    env.stdin_install(interact)
+    env.stdio.stdin_install(interact)
 ```
 
 You can make the text decoding explicit by providing `on_stdin`,
@@ -27,7 +27,7 @@ actor main(env):
         print("Some error with decoding the input data:", err)
         print("Raw bytes data:", data)
 
-    env.stdin_install(on_stdin=interact, encoding="utf-8",
+    env.stdio.stdin_install(on_stdin=interact, encoding="utf-8",
         on_error=on_stdin_error)
 ```
 
@@ -40,7 +40,7 @@ actor main(env):
         # Decode only when this code is ready to decide how.
         print("Got some input:", bytes_input.decode())
 
-    env.stdin_install(on_stdin_bytes=interact)
+    env.stdio.stdin_install(on_stdin_bytes=interact)
 ```
 
 <div class="advanced-content">

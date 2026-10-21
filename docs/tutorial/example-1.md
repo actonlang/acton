@@ -21,7 +21,7 @@ the integer argument to `harmonic` on the command line:
 
 ```py
 actor harmonicMain(env):
-    print(harmonic(int(argv.env[1])))
+    print(harmonic(int(env.argv[1])))
 ```
 
 We used the name `harmonicMain` for this actor just to emphasize
@@ -47,14 +47,14 @@ actor harmonicMain2(env):
     def response(input):
         print(harmonic(int(input)))
 
-    env.stdin_install(response)
+    env.stdio.stdin_install(response)
 ```
 
 This actor definition has two parts: first we have the definition of a
 local method `response`, which describes how the actor should react
 to one line of user `input`. Then follows the actor
-initialization code, which simply installs `response` as a
-callback in the environment.
+initialization code, which simply installs `response` as the stdin
+callback with the environment's stdio service, `env.stdio`.
 
 Program execution starts by running the root actor's initialization
 code. After that, the program is idle, waiting for
