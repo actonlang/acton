@@ -365,7 +365,7 @@ buildTestHashInfos paths ctxHash testsByModule = do
       return (modName, nameHashes)
     let nameHashesByModule = M.fromList moduleHashes
         seedCache = M.fromList
-          [ (A.modName (splitOnDot modName), nameMap)
+          [ (A.dottedModName modName, nameMap)
           | (modName, nameMap) <- M.toList nameHashesByModule
           ]
         allTests =
@@ -434,17 +434,7 @@ lookupTestInfo nameMap testName =
 -- | Read the name hash map for a module name string.
 readModuleNameHashes :: Project.Paths -> String -> IO (M.Map String InterfaceFiles.NameHashInfo)
 readModuleNameHashes paths modName =
-    readModuleNameHashesByModName paths (A.modName (splitOnDot modName))
-
--- | Split a module name string on dots.
-splitOnDot :: String -> [String]
-splitOnDot = splitOnChar '.'
-
--- | Split a string on a single delimiter character.
-splitOnChar :: Char -> String -> [String]
-splitOnChar ch input = case break (== ch) input of
-  (chunk, []) -> [chunk]
-  (chunk, _ : rest) -> chunk : splitOnChar ch rest
+    readModuleNameHashesByModName paths (A.dottedModName modName)
 
 -- | Read the name hash map for a module name.
 readModuleNameHashesByModName :: Project.Paths -> A.ModName -> IO (M.Map String InterfaceFiles.NameHashInfo)

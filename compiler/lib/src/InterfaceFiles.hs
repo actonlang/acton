@@ -515,7 +515,7 @@ nameKeySuffix n =
 
 moduleKeySuffix :: A.ModName -> BS.ByteString
 moduleKeySuffix mn =
-    let raw = TE.encodeUtf8 (T.pack (Data.List.intercalate "." (A.modPath mn)))
+    let raw = TE.encodeUtf8 (T.pack (A.modNameToString mn))
     in if plainKeyRaw raw
          then raw
          else B.concat [key "h/", Base16.encode (SHA256.hash raw)]
@@ -1599,17 +1599,17 @@ readDepNames :: FilePath -> A.ModName -> IO [DepNameInfo]
 readDepNames f mn =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mDeps <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn)) txn dbi (keyDepModule mn)
+      mDeps <- getMaybeValue ("deps/" ++ A.modNameToString mn) txn dbi (keyDepModule mn)
       let deps = maybe [] id mDeps
-      traceTydbRead "dep-names" f (Data.List.intercalate "." (A.modPath mn) ++ " " ++ show (length deps))
+      traceTydbRead "dep-names" f (A.modNameToString mn ++ " " ++ show (length deps))
       return deps
 
 readDepUsers :: FilePath -> A.ModName -> A.Name -> IO DepUsers
 readDepUsers f mn n =
     withReadTxn f $ \txn dbi -> do
       validateVersion txn dbi
-      mUsers <- getMaybeValue ("deps/" ++ Data.List.intercalate "." (A.modPath mn) ++ "/" ++ A.nstr n) txn dbi (keyDepName mn n)
-      traceTydbRead "dep-users" f (Data.List.intercalate "." (A.modPath mn) ++ "." ++ A.nstr n)
+      mUsers <- getMaybeValue ("deps/" ++ A.modNameToString mn ++ "/" ++ A.nstr n) txn dbi (keyDepName mn n)
+      traceTydbRead "dep-users" f (A.modNameToString mn ++ "." ++ A.nstr n)
       return (maybe emptyDepUsers id mUsers)
 
 readNameHash :: FilePath -> A.Name -> IO (Maybe NameHashInfo)
