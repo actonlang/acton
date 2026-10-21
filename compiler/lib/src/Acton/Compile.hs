@@ -337,7 +337,6 @@ import Text.Show.Pretty (ppDoc)
 
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 
 
@@ -1317,8 +1316,8 @@ readModuleTask sp gopts opts paths mn file = do
         putStrLn ("[debug] readModuleHeader " ++ modNameToString mn
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
-                  ++ " hash=" ++ shortHash hash
-                  ++ " header=" ++ shortHash (InterfaceFiles.summarySourceHash header)
+                  ++ " hash=" ++ Hashing.shortHash hash
+                  ++ " header=" ++ Hashing.shortHash (InterfaceFiles.summarySourceHash header)
                   ++ " len=" ++ show (B.length (Source.ssBytes snap))
                   ++ if same then " (match)" else " (diff)")
       if not same then fromSource snap else do
@@ -2046,7 +2045,7 @@ describe env action = case action of
     Reuse _ _                       -> [ "  Fresh " ++ labelOf env ++ ": using cached .tydb" ]
   where
     stale reason                    = "  Stale " ++ labelOf env ++ ": " ++ reason
-    deltas kind cs                  = intercalate ", " [ prstr qn ++ " " ++ shortHash old ++ " → " ++ shortHash new ++ usedBy users
+    deltas kind cs                  = intercalate ", " [ prstr qn ++ " " ++ Hashing.shortHash old ++ " → " ++ Hashing.shortHash new ++ usedBy users
                                                        | Changed k qn old new users <- reverse cs, k == kind ]
     missing cs                      = intercalate ", " $
                                            [ hashKindName kind ++ " " ++ prstr qn ++ usedBy users
@@ -2104,7 +2103,7 @@ nameHashSummary old new
                   fields -> Just ("~" ++ A.nstr n ++ "{" ++ intercalate ", " fields ++ "}")
     field before after (label, hashOf)
       | hashOf before == hashOf after   = Nothing
-      | otherwise                       = Just (label ++ " " ++ shortHash (hashOf before) ++ " -> " ++ shortHash (hashOf after))
+      | otherwise                       = Just (label ++ " " ++ Hashing.shortHash (hashOf before) ++ " -> " ++ Hashing.shortHash (hashOf after))
 
 -- | An impl refresh computed from stored rows, before anything is written.
 data Recomputation
@@ -2916,7 +2915,7 @@ runBackPasses gopts job shouldWrite onProgress = do
       boxed               <- pass BackPassBoxing          (do m <- Acton.Boxing.doBoxing env4 lifted
                                                               dumpPass BackPassBoxing m
                                                               return m)
-      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (hashHex (bjImplHash job)))
+      (_, h, c, support)  <- pass BackPassCodeGen         (Acton.CodeGen.generateCode (output == WriteFiles) env4 relSrcBase (bjSource job) (not (C.dbg_no_lines opts)) boxed (Hashing.hashHex (bjImplHash job)))
       case output of
         PrintHeader -> pass BackPassRender (render h) >> putStrLn h
         PrintCode   -> pass BackPassRender (render c) >> putStrLn c
@@ -3268,14 +3267,6 @@ data CodegenStatus = CodegenStatus
   , csSupport  :: Maybe String
   }
 
--- | A hash in lowercase hex, as generated code is tagged with it.
-hashHex                                 :: B.ByteString -> String
-hashHex                                 = B.unpack . Base16.encode
-
--- | The first eight hex digits of a hash, as verbose lines show it.
-shortHash                               :: B.ByteString -> String
-shortHash                               = take 8 . hashHex
-
 -- | The hash tagged into a generated file's first line, when the file can
 -- be read and its first line is tagged.
 readCodegenHash :: FilePath -> IO (Maybe String)
@@ -3288,7 +3279,7 @@ readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile p
 -- | A module's generated code, given the hash it should be tagged with: the
 -- .c is read first, then the .h, then the closure support file.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn expected = CodegenStatus (hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (Acton.CodeGen.supportFile base)
+codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (Acton.CodeGen.supportFile base)
   where base = outBase paths mn
 
 -- | Check every generated artifact against the expected impl hash.
@@ -3298,13 +3289,8 @@ codegenUpToDate status =
 
 -- | Format a short delta message for stale codegen.
 formatCodegenDelta :: CodegenStatus -> String
-formatCodegenDelta status =
-  let expected = take 8 (csExpected status)
-      short actual = maybe "missing" (take 8) actual
-  in case (csC status, csH status, csSupport status) of
-       (Just c, Just h, Just support) | c == h && h == support ->
-         " {impl " ++ take 8 c ++ " -> " ++ expected ++ "}"
-       _ ->
-         " {impl c " ++ short (csC status) ++ " -> " ++ expected
-         ++ ", h " ++ short (csH status) ++ " -> " ++ expected
-         ++ ", support " ++ short (csSupport status) ++ " -> " ++ expected ++ "}"
+formatCodegenDelta status
+  | Just _ <- csC status, csC status == csH status, csH status == csSupport status
+                                                   = " {impl " ++ delta (csC status) ++ "}"
+  | otherwise                                      = " {impl c " ++ delta (csC status) ++ ", h " ++ delta (csH status) ++ ", support " ++ delta (csSupport status) ++ "}"
+  where delta tag                                  = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex (csExpected status)

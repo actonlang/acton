@@ -29,6 +29,9 @@ module Acton.Hashing
   , implSplitDepsFromItemsWithProgress
   , buildNameHashes
   , qnameKey
+  , hashHex
+  , shortHex
+  , shortHash
   ) where
 
 import qualified Acton.Env as Env
@@ -41,6 +44,7 @@ import qualified InterfaceFiles
 import Utils (chunksOf)
 
 import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.ByteString.Short as SBS
@@ -91,6 +95,18 @@ qnameKey qn = case qn of
   A.GName m n -> A.modNameToString m ++ "." ++ A.nstr n
   A.QName m n -> A.modNameToString m ++ "." ++ A.nstr n
   A.NoQ n -> A.nstr n
+
+-- | A hash in lowercase hex.
+hashHex :: B.ByteString -> String
+hashHex = B.unpack . Base16.encode
+
+-- | The first eight digits of a hex hash, as verbose lines show it.
+shortHex :: String -> String
+shortHex = take 8
+
+-- | The first eight hex digits of a hash.
+shortHash :: B.ByteString -> String
+shortHash = shortHex . hashHex
 
 -- | Extract hashable top-level items from a module.
 topLevelItems :: A.Module -> [TopLevelItem]

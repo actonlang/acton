@@ -9,6 +9,7 @@ module TestRunner
 
 import qualified Acton.CommandLineParser as C
 import qualified Acton.BuildSpec as BuildSpec
+import qualified Acton.Hashing as Hashing
 import Acton.Testing
 import Acton.Compile
 import Acton.Project
@@ -52,7 +53,6 @@ import qualified Data.Aeson.Key as AesonKey
 import qualified Data.Aeson.KeyMap as AesonKM
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Base16 as Base16
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -117,7 +117,7 @@ withPerfWorktree cache project ref action = do
     root <- git project ["rev-parse", "--show-toplevel"] >>= canonicalizePath . unlinesTrimmed
     common <- git root ["rev-parse", "--git-common-dir"] >>= canonicalizePath . (root </>) . unlinesTrimmed
     previous <- unlinesTrimmed <$> git root ["rev-parse", "--verify", ref ++ "^{commit}"]
-    let key = BS.unpack (Base16.encode (SHA256.hash (BL.toStrict (Aeson.encode common))))
+    let key = Hashing.hashHex (SHA256.hash (BL.toStrict (Aeson.encode common)))
         directory = cache </> "worktrees" </> key
     createDirectoryIfMissing True directory
     baseline <- (</> previous) <$> canonicalizePath directory
@@ -333,7 +333,7 @@ runScalingTests useColorOut gopts opts paths topts modules directory sourceInfo 
       let provenance = AesonKM.union host sourceInfo
       tests <- forM testsByModule $ \(modName, names) -> do
         hashes <- readModuleNameHashes paths modName
-        return [(modName, name, fmap (BS.unpack . Base16.encode . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
+        return [(modName, name, fmap (Hashing.hashHex . InterfaceFiles.nhImplHash . snd) (lookupTestInfo hashes name)) | name <- names]
       let callbacks = TestProgressCallbacks (const (return ())) (const (return ())) (const (return ()))
           runSample limits scale modName testName = do
             now <- getTime Monotonic
@@ -1655,7 +1655,7 @@ readPerfHostInfo :: C.CompileOptions -> C.TestOptions -> M.Map String String -> 
 readPerfHostInfo opts topts buildOptions = do
     identity <- try readIdentity :: IO (Either IOException (Maybe String))
     let machine = case identity of
-          Right (Just raw) -> Just (BS.unpack (Base16.encode (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw)))))
+          Right (Just raw) -> Just (Hashing.hashHex (SHA256.hash (BS.pack ("acton-perf-machine-v1:" ++ raw))))
           _ -> Nothing
     return $ AesonKM.fromList $
       [ (AesonKey.fromString "machine", Aeson.toJSON machine)

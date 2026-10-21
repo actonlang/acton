@@ -44,7 +44,6 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as AesonKey
 import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (partitionEithers)
 import Data.IORef
@@ -292,13 +291,9 @@ writeTestCache path tc = do
 contextHashBytes :: TestRunContext -> B.ByteString
 contextHashBytes ctx = SHA256.hash (BL.toStrict (Aeson.encode ctx))
 
--- | Hex-encode a hash.
-toHex :: B.ByteString -> String
-toHex = B.unpack . Base16.encode
-
 -- | Hash impl/deps/context into a cache run hash string.
 hashRun :: B.ByteString -> B.ByteString -> B.ByteString -> String
-hashRun implHash depsHash ctxHash = toHex (SHA256.hash (B.concat [implHash, depsHash, ctxHash]))
+hashRun implHash depsHash ctxHash = Hashing.hashHex (SHA256.hash (B.concat [implHash, depsHash, ctxHash]))
 
 -- | Hash a dependency list with a stable ordering.
 hashDeps :: [(A.QName, B.ByteString)] -> B.ByteString
@@ -306,23 +301,15 @@ hashDeps deps =
     let sorted = Data.List.sortOn (Hashing.qnameKey . fst) deps
     in SHA256.hash (BL.toStrict (encode sorted))
 
--- | Shorten a hash to 8 hex characters.
-shortHash :: B.ByteString -> String
-shortHash bs = take 8 (toHex bs)
-
--- | Shorten a hex hash string to 8 characters.
-shortHashStr :: String -> String
-shortHashStr s = take 8 s
-
 -- | Format the verbose test cache context header.
 formatTestCacheContext :: B.ByteString -> FilePath -> String
 formatTestCacheContext ctxHash cachePath =
-    "[test-cache] context=" ++ shortHash ctxHash ++ " path=" ++ cachePath
+    "[test-cache] context=" ++ Hashing.shortHash ctxHash ++ " path=" ++ cachePath
 
 -- | Format a dependency list with shortened hashes.
 formatDepsShort :: [(A.QName, B.ByteString)] -> String
 formatDepsShort deps =
-    let entries = [ prstr qn ++ ":" ++ shortHash h | (qn, h) <- deps ]
+    let entries = [ prstr qn ++ ":" ++ Hashing.shortHash h | (qn, h) <- deps ]
         shown = take 6 entries
         suffix = if length entries > 6 then " +" ++ show (length entries - 6) ++ " more" else ""
     in "[" ++ intercalate ", " shown ++ suffix ++ "]"
@@ -344,8 +331,8 @@ formatTestCacheLog modName testName info entry =
          TestHashInfo (Just implHash) (Just runHash) resolved _ ->
            base
              ++ " name=" ++ maybe "?" id resolved
-             ++ " impl=" ++ shortHash implHash
-             ++ " run=" ++ shortHashStr runHash
+             ++ " impl=" ++ Hashing.shortHash implHash
+             ++ " run=" ++ Hashing.shortHex runHash
              ++ implDeps
              ++ " cache=" ++ cacheStatus
          _ ->
@@ -515,7 +502,7 @@ updateTestCacheEntry testHashInfos acc res =
     let key = mkTestKey (trModule res) (trName res)
         info = M.lookup key testHashInfos
         runHash = maybe "" (\ti -> fromMaybe "" (thiRunHash ti)) info
-        implHashHex = info >>= fmap toHex . thiImplHash
+        implHashHex = info >>= fmap Hashing.hashHex . thiImplHash
         entry = TestCacheEntry
           { tceRunHash = runHash
           , tceImplHash = implHashHex
