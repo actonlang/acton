@@ -240,7 +240,6 @@ module Acton.Compile
   , isCurrent
   , whenCurrent
   , waitBackJobs
-  , checkBuildSpecChange
   , CompileContext(..)
   , prepareCompileContext
   , compileContext
@@ -264,7 +263,6 @@ module Acton.Compile
   , parseActFile
   , readModuleTask
   , docIndexEntry
-  , buildGlobalTasks
   , selectPlan
   , docNameCountThreshold
   , shouldGenerateDocOutput
@@ -537,12 +535,6 @@ data BuildEnv = BuildEnv
 info                                    :: BuildEnv -> String -> IO ()
 info build line                         = when (C.verbose (buildOptions build)) (emit build (Info line))
 
-checkBuildSpecChange :: CompileScheduler -> BuildSpecStamp -> IO Bool
-checkBuildSpecChange sched stamp =
-  atomicModifyIORef' (schedulerBuildSpec sched) $ \prev ->
-    let changed = prev /= Just stamp
-    in (Just stamp, changed)
-
 -- | A compile run's place in its scheduler's sequence of runs. A run is
 -- current until a newer one starts. A stale run writes no front output,
 -- queues no back job and reports no event to runCompilePlan's handler, and
@@ -753,10 +745,12 @@ data CompilePlan = CompilePlan
 -- paths are dropped.  The stamp is recorded before fetching.
 prepareCompilePlan :: Source.SourceProvider -> C.GlobalOptions -> CompileScheduler -> CompileContext -> PlanRequest -> IO CompilePlan
 prepareCompilePlan sp gopts sched ctx request = do
-    specChanged <- checkBuildSpecChange sched (ccBuildStamp ctx)
+    specChanged <- atomicModifyIORef' (schedulerBuildSpec sched) (\previous -> (stamp, previous /= stamp))
     when specChanged $
       fetchDependencies gopts (ccPathsRoot ctx) (C.dep_overrides (ccOpts ctx))
     planFetched sp gopts ctx (if specChanged then request { requestChanged = Nothing } else request)
+  where
+    stamp = Just (ccBuildStamp ctx)
 
 -- | Plan a build whose dependencies are in place.  Orphan outputs are pruned
 -- before discovery, so that a cached header cannot resurrect a deleted

@@ -49,11 +49,9 @@ module Acton.Project
   , moduleLabel
   , dropProjPrefixOrLib
   , BackgroundCompilerLock
-  , backgroundCompilerLockPath
   , tryBackgroundCompilerLock
   , releaseBackgroundCompilerLock
   , withBackgroundCompilerLock
-  , projectLockPath
   , withProjectLockOnWait
   , withProjectLock
   , loadBuildSpec
