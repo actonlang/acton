@@ -116,17 +116,17 @@ walkProject env visited dir spec = do
         foldM (walkDependency env projAbs) (Data.Set.insert projAbs visited) selectedDeps
 
 -- | Walk the Acton dependency 'name' of the project at 'base', starting
--- from 'visited'. A missing directory is an error for a local dependency
--- and ends the walk of any other dependency.
+-- from 'visited', in the absolute and normalised directory that
+-- resolveDepBase gives. A missing directory is an error for a local
+-- dependency and ends the walk of any other dependency.
 walkDependency :: FetchEnv -> FilePath -> Data.Set.Set FilePath -> (String, BuildSpec.PkgDep) -> IO (Data.Set.Set FilePath)
 walkDependency env base visited (name, dep) = do
-    depBase <- resolveDepBase base name dep
-    depAbs <- normalizePathSafe depBase
-    exists <- doesDirectoryExist depAbs
+    dir    <- resolveDepBase base name dep
+    exists <- doesDirectoryExist dir
     if exists
-      then loadOverriddenSpec (overrides env) depAbs >>= walkProject env visited depAbs
+      then loadOverriddenSpec (overrides env) dir >>= walkProject env visited dir
       else case localPath dep of
-             Just _  -> dependencyPathError name "does not exist" depAbs
+             Just _  -> dependencyPathError name "does not exist" dir
              Nothing -> return visited
 
 -- | The two kinds of dependency a project fetches by url and hash. Both are
