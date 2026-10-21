@@ -25,9 +25,14 @@ module Acton.Project
   , createModuleDirectories
   , srcFile
   , srcBase
-  , outBase
   , tyDbPath
-  , closureSupportPath
+  , GeneratedFile
+  , generatedLabel
+  , cFile
+  , headerFile
+  , closureSupportFile
+  , generatedFiles
+  , generatedPath
   , rootStubPath
   , rootBinaryName
   , isActFile
@@ -330,17 +335,37 @@ srcFile paths mn        = srcBase paths mn ++ ".act"
 srcBase                 :: Paths -> A.ModName -> FilePath
 srcBase paths mn        = joinPath (srcDir paths : A.modPath (dropProjPrefix paths mn))
 
--- | Compute the output base path (without extension) for a module.
--- Used to locate .tydb/.c/.h output under the project's types directory.
+-- | The output path of a module without extension, under the project's
+-- types directory.  The paths of its .tydb, its generated files and its
+-- root stubs extend it.
 outBase                 :: Paths -> A.ModName -> FilePath
 outBase paths mn        = joinPath (projTypes paths : A.modPath mn)
 
 tyDbPath                :: Paths -> A.ModName -> FilePath
 tyDbPath paths mn       = outBase paths mn ++ InterfaceFiles.interfaceExt
 
--- | The closure support file of a module, next to its .c, which includes it.
-closureSupportPath      :: Paths -> A.ModName -> FilePath
-closureSupportPath paths mn = outBase paths mn ++ ".closures.inc"
+-- | A file the back passes generate for a module: its label in the
+-- --verbose line of a module whose generated code is out of date, and the
+-- suffix its path adds to the module's output path.
+data GeneratedFile = GeneratedFile
+  { generatedLabel  :: String
+  , generatedSuffix :: String
+  }
+
+-- | A module's generated .c, its .h, and its closure support file, which
+-- the .c next to it includes.
+cFile, headerFile, closureSupportFile :: GeneratedFile
+cFile                   = GeneratedFile "c"       ".c"
+headerFile              = GeneratedFile "h"       ".h"
+closureSupportFile      = GeneratedFile "support" ".closures.inc"
+
+-- | Every file the back passes generate for a module.
+generatedFiles          :: [GeneratedFile]
+generatedFiles          = [cFile, headerFile, closureSupportFile]
+
+-- | The path of a module's generated file.
+generatedPath           :: Paths -> A.ModName -> GeneratedFile -> FilePath
+generatedPath paths mn file = outBase paths mn ++ generatedSuffix file
 
 -- | Compute the root stub path for a module's root actor, or its test root.
 -- Stubs drop the project prefix since build.zig names binaries after them.
@@ -354,9 +379,8 @@ rootBinaryName paths test mn = (if test then ".test_" else "") ++ moduleLabel pa
 
 -- | All files generated for a module.
 moduleOutputs           :: Paths -> A.ModName -> [FilePath]
-moduleOutputs paths mn  = [ outBase paths mn ++ ext | ext <- [InterfaceFiles.interfaceExt, ".c", ".h"] ] ++
-                          [ rootStubPath paths test mn | test <- [False, True] ] ++
-                          [ closureSupportPath paths mn ]
+moduleOutputs paths mn  = tyDbPath paths mn : map (generatedPath paths mn) generatedFiles ++
+                          [ rootStubPath paths test mn | test <- [False, True] ]
 
 -- | Whether 'file' names an Acton source file.
 isActFile :: FilePath -> Bool
@@ -435,7 +459,9 @@ enumerateProjectModules ctx = do
 
 -- | Remove the generated outputs under a project's types directory that
 -- belong to no module the project declares, so that a cached header cannot
--- resurrect a deleted module.
+-- resurrect a deleted module.  The candidates are the .tydb files and the
+-- files with the extension of a generated file, which a root stub (.c) has
+-- too.
 pruneMissingModuleOutputs :: ProjCtx -> Paths -> IO ()
 pruneMissingModuleOutputs ctx paths = do
     let typesRoot = projTypes paths
@@ -445,8 +471,9 @@ pruneMissingModuleOutputs ctx paths = do
       let keep = Data.Set.fromList (concatMap (moduleOutputs paths . snd) mods)
       files <- getFilesRecursive typesRoot
       tyDbs <- InterfaceFiles.listInterfaceDirsRecursive typesRoot
-      let outputs = filter ((`elem` [".c", ".h", ".inc"]) . takeExtension) files ++ tyDbs
+      let outputs = filter ((`elem` extensions) . takeExtension) files ++ tyDbs
       mapM_ removePathForcibly (filter (`Data.Set.notMember` keep) outputs)
+  where extensions = map (takeExtension . generatedSuffix) generatedFiles
 
 -- | Remove the outputs of every changed .act path that no longer exists,
 -- from each project whose source directory holds it.

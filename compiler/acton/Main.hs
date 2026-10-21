@@ -2072,7 +2072,7 @@ generateProjectDocIndex sp gopts opts paths srcFiles = do
 selectedCSourceEntriesForProj :: FilePath -> [GlobalTask] -> [FilePath]
 selectedCSourceEntriesForProj proj tasks =
     nub
-      [ collapseDots (makeRelativeOrAbsolute proj (outBase (gtPaths t) (tkMod (gtKey t)) ++ ".c"))
+      [ collapseDots (makeRelativeOrAbsolute proj (generatedPath (gtPaths t) (tkMod (gtKey t)) cFile))
       | t <- tasks
       ]
 

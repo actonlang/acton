@@ -2905,7 +2905,7 @@ runBackPasses gopts job shouldWrite onProgress = do
           pass BackPassRender (render h >> render c >> render support)
           current <- shouldWrite
           if current
-            then pass BackPassWrite (writeFileUtf8Atomic supportPath support >> writeFileUtf8Atomic (base ++ ".h") h >> writeFileUtf8Atomic (base ++ ".c") c)
+            then pass BackPassWrite (mapM_ writeGenerated [(closureSupportFile, support), (headerFile, h), (cFile, c)])
             else report BackPassWrite (fromEnum BackPassWrite + 1) BackPassSkipped
     timing <- reverse <$> readIORef laps
     return ( reportedTime gopts opts elapsed
@@ -2915,13 +2915,12 @@ runBackPasses gopts job shouldWrite onProgress = do
     paths          = bjPaths job
     mn             = tkMod (bjKey job)
     output         = backOutput opts
-    base           = outBase paths mn
-    supportPath    = closureSupportPath paths mn
     -- A build that writes the generated files puts the closure support in
     -- a file of its own, which the .c next to it includes by file name.
-    supportInclude = if output == WriteFiles then Just (takeFileName supportPath) else Nothing
+    supportInclude = if output == WriteFiles then Just (takeFileName (generatedPath paths mn closureSupportFile)) else Nothing
     relSrcBase     = makeRelative (projPath paths) (srcBase paths mn)
     total          = fromEnum (maxBound :: BackPass) + (if output == WriteFiles then 1 else 0)
+    writeGenerated (file, text) = writeFileUtf8Atomic (generatedPath paths mn file) text
 
 
 -- The run ------------------------------------------------------------------------------------------
@@ -3246,13 +3245,11 @@ parseStage build opts t = do
 -- Codegen status -----------------------------------------------------------------------------------
 
 -- | The hash a module's generated code should be tagged with, in hex, and
--- the tags its .c, .h and closure support file carry, Nothing for a file that
+-- the tag each of its generated files carries, Nothing for a file that
 -- cannot be read or is not tagged.
 data CodegenStatus = CodegenStatus
   { csExpected :: String
-  , csC        :: Maybe String
-  , csH        :: Maybe String
-  , csSupport  :: Maybe String
+  , csTags     :: [(GeneratedFile, Maybe String)]
   }
 
 -- | The hash tagged into a generated file's first line, when the file can
@@ -3265,24 +3262,22 @@ readCodegenHash path = either (const Nothing) taggedHash <$> trySync (withFile p
                                hex -> Just hex
 
 -- | The hash a module's generated code should be tagged with, and the tags
--- its .c, .h and closure support file carry, read in that order.
+-- its generated files carry, read in the order generatedFiles lists them.
 codegenStatus :: Paths -> A.ModName -> B.ByteString -> IO CodegenStatus
-codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> readCodegenHash (base ++ ".c") <*> readCodegenHash (base ++ ".h") <*> readCodegenHash (closureSupportPath paths mn)
-  where base = outBase paths mn
+codegenStatus paths mn expected = CodegenStatus (Hashing.hashHex expected) <$> mapM tagOf generatedFiles
+  where tagOf file = (,) file <$> readCodegenHash (generatedPath paths mn file)
 
--- | Whether the .c, the .h and the closure support file are all tagged with
--- the expected hash.
+-- | Whether every generated file is tagged with the expected hash.
 codegenUpToDate :: CodegenStatus -> Bool
-codegenUpToDate status =
-  all (== Just (csExpected status)) [csC status,csH status,csSupport status]
+codegenUpToDate status = all ((== Just (csExpected status)) . snd) (csTags status)
 
 -- | The verbose suffix of a module whose generated code is out of date: the
 -- first eight hex digits of each file's tag, or missing, and of the expected
--- hash.  The .c, the .h and the closure support file share one pair when
--- they carry the same tag.
+-- hash, after the file's label.  The files share one pair, without labels,
+-- when they all carry the same tag.
 formatCodegenDelta :: CodegenStatus -> String
-formatCodegenDelta status
-  | Just _ <- csC status, csC status == csH status, csH status == csSupport status
-                                                   = " {impl " ++ delta (csC status) ++ "}"
-  | otherwise                                      = " {impl c " ++ delta (csC status) ++ ", h " ++ delta (csH status) ++ ", support " ++ delta (csSupport status) ++ "}"
-  where delta tag                                  = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex (csExpected status)
+formatCodegenDelta status = case nub (map snd tags) of
+    [tag@(Just _)] -> " {impl " ++ delta tag ++ "}"
+    _              -> " {impl " ++ intercalate ", " [ generatedLabel file ++ " " ++ delta tag | (file, tag) <- tags ] ++ "}"
+  where tags      = csTags status
+        delta tag = maybe "missing" Hashing.shortHex tag ++ " -> " ++ Hashing.shortHex (csExpected status)
