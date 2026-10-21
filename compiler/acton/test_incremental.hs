@@ -3162,7 +3162,7 @@ eventsGlobalOptions =
 -- `acton build` does, then wait for its back jobs. Returns the result line.
 buildRecordingEvents :: Compile.CompileScheduler -> EventLog -> FilePath -> C.CompileOptions -> IO String
 buildRecordingEvents sched eventLog proj opts = do
-  names <- sort . map dropExtension . filter ((== ".act") . takeExtension) <$> listDirectory (proj </> "src")
+  names <- sort . map dropExtension . filter Project.isActFile <$> listDirectory (proj </> "src")
   let srcFiles = map (sourcePath proj) names
   plan <- planBuild eventsGlobalOptions sched opts (Compile.PlanRequest srcFiles Compile.WholeProject Nothing)
   gen <- Compile.currentGeneration sched

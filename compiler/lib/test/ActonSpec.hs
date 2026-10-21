@@ -58,7 +58,7 @@ import Error.Diagnose (printDiagnostic, prettyDiagnostic, WithUnicode(..), TabSi
 import Error.Diagnose.Report (Report(..))
 import Prettyprinter (unAnnotate, layoutPretty, defaultLayoutOptions)
 import Prettyprinter.Render.Text (renderStrict)
-import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories, takeExtension)
+import System.FilePath ((</>), joinPath, takeFileName, takeBaseName, takeDirectory, splitDirectories)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory, setCurrentDirectory, listDirectory, doesDirectoryExist, doesFileExist, removeFile)
 import System.IO.Temp (withSystemTempDirectory)
 import qualified System.IO.Unsafe
@@ -4222,7 +4222,7 @@ actFilesUnder root = do
     isDir <- doesDirectoryExist path
     if isDir
       then actFilesUnder path
-      else return [path | takeExtension path == ".act"]
+      else return [path | Project.isActFile path]
     ) entries
 
 expectModuleParseSuccess :: String -> IO ()

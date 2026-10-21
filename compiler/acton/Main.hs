@@ -485,9 +485,9 @@ buildFiles gopts opts files =
       _ -> do
         when (C.watch opts) $
           printErrorAndExit "Cannot use --watch with multiple files. Use `acton build --watch` for projects or `acton build FILE --watch` (or `acton FILE --watch`) for a single file."
-        mapM_ requireSourceFile (filter ((== ".act") . takeExtension) files)
+        mapM_ requireSourceFile (filter isActFile files)
         absFiles <- mapM canonicalizePath files
-        let onlyAct = all ((== ".act") . takeExtension) files
+        let onlyAct = all isActFile files
         projDirs <- mapM findProjectDir absFiles
         let projRoots = nub (catMaybes projDirs)
         case projRoots of
@@ -1004,7 +1004,7 @@ actWatchTrigger ev =
           FS.Unknown{} -> Just WatchFull
           _ -> Nothing
       FS.IsFile ->
-        if takeExtension (FS.eventPath ev) /= ".act"
+        if not (isActFile (FS.eventPath ev))
           then Nothing
           else case ev of
                  FS.ModifiedAttributes{} -> Nothing

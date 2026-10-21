@@ -21,7 +21,7 @@ import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import System.Directory (doesDirectoryExist, doesFileExist)
-import System.FilePath ((</>), takeExtension, takeFileName)
+import System.FilePath ((</>), takeFileName)
 import qualified System.FSNotify as FS
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -299,7 +299,7 @@ watchProjectShape rootProj watchedRoot =
   FS.withManager $ \mgr -> do
     let srcRoot = watchedRoot </> "src"
         invalidate _ = invalidateProjectCache rootProj
-        isActEvent ev = takeExtension (FS.eventPath ev) == ".act"
+        isActEvent ev = Project.isActFile (FS.eventPath ev)
         isBuildActEvent ev = takeFileName (FS.eventPath ev) == "Build.act"
     srcExists <- doesDirectoryExist srcRoot
     when srcExists $
