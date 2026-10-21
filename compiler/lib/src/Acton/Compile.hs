@@ -265,7 +265,6 @@ module Acton.Compile
   , readModuleTask
   , docIndexEntry
   , buildGlobalTasks
-  , importGraph
   , selectPlan
   , docNameCountThreshold
   , shouldGenerateDocOutput
@@ -741,7 +740,7 @@ data CompilePlan = CompilePlan
   , cpRequest     :: PlanRequest              -- as planned: a Build.act change drops requestChanged
   , cpProjMap     :: M.Map FilePath ProjCtx
   , cpGlobalTasks :: [GlobalTask]             -- every discovered module, in discovery order
-  , cpNeededTasks :: [GlobalTask]             -- the modules to compile, in discovery order
+  , cpNeededTasks :: [GlobalTask]             -- the modules to compile, closed under imports, in discovery order
   , cpDbpBlocked  :: Data.Set.Set TaskKey     -- library members used from outside their library
   , cpRootModules :: [A.ModName]              -- selected root-project modules, before library expansion
   , cpAllowPrune  :: Bool                     -- a whole-project, non-incremental plan

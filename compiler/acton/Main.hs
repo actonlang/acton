@@ -45,7 +45,7 @@ import qualified Acton.SourceProvider as Source
 import qualified Acton.Zon as Zon
 import Acton.Compile
 import Acton.Fetch
-import Acton.Graph (closure, depsOf)
+import Acton.Graph (closure)
 import Acton.Project
 import Utils
 import  Pretty
@@ -2114,7 +2114,6 @@ runCliPostCompile cliHooks gopts plan env = do
         sysAbs = ccSysAbs cctx
         rootModules = cpRootModules plan
         allowPrune' = cpAllowPrune plan
-        globalTasks = cpGlobalTasks plan
         neededTasks = cpNeededTasks plan
         projMap = cpProjMap plan
         proj = projName pathsRoot
@@ -2130,7 +2129,7 @@ runCliPostCompile cliHooks gopts plan env = do
     requestedModules <- mapM (moduleNameFromFile (srcDir pathsRoot) proj) (requestFiles (cpRequest plan))
     let preTestBinTasks = [ BinTask (A.GName mn (A.name "test_main")) True
                           | mn <- rootModules, mn `elem` requestedModules ]
-        selectedTasksByProj = selectedTasksWithProvidersByProj globalTasks neededTasks
+        selectedTasksByProj = M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- neededTasks ]
         depModuleOptsByProj = depModuleOptionsByProj selectedTasksByProj projMap
         rootSelectedModuleEntries = selectedCSourceEntriesForProj rootProj (M.findWithDefault [] rootProj selectedTasksByProj)
         rootBuildLibraries = explicitBuildLibraries rootSelectedModuleEntries rootSpec
@@ -2209,14 +2208,6 @@ excludeLibrarySources libs sources =
     filter (`Data.Set.notMember` libSourceSet) sources
   where
     libSourceSet = Data.Set.fromList (concatMap buildLibSources libs)
-
--- | For incremental builds, include providers so link inputs stay complete.
-selectedTasksWithProvidersByProj :: [GlobalTask] -> [GlobalTask] -> M.Map FilePath [GlobalTask]
-selectedTasksWithProvidersByProj globalTasks neededTasks =
-    M.fromListWith (++) [ (tkProj (gtKey t), [t]) | t <- selectedTasks ]
-  where
-    selectedKeys = closure (depsOf (importGraph globalTasks)) (map gtKey neededTasks)
-    selectedTasks = [ t | t <- globalTasks, Data.Set.member (gtKey t) selectedKeys ]
 
 -- | Relative root-stub C paths for selected binaries.
 selectedRootStubEntriesForBins :: Paths -> [BinTask] -> [FilePath]
