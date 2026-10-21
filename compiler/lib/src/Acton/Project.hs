@@ -768,26 +768,26 @@ discoverProjects :: C.GlobalOptions -> FilePath -> FilePath -> [(String, FilePat
 discoverProjects gopts sysAbs rootProj depOverrides = do
     rootAbs <- normalizePathSafe rootProj
     rootSpec <- loadOverriddenSpec depOverrides rootAbs
-    (projects, _) <- go Data.Set.empty M.empty M.empty (rootPins rootAbs rootSpec) rootAbs (Just rootSpec)
+    (projects, _) <- go (rootPins rootAbs rootSpec) Data.Set.empty (M.empty, M.empty) rootAbs (Just rootSpec)
     resolveFollows projects
   where
-    go seen acc fpMap pins dir mSpec = do
-      dirAbs <- normalizePathSafe dir
-      if Data.Set.member dirAbs seen
-        then return (acc, fpMap)
-        else do
-          spec <- maybe (loadOverriddenSpec depOverrides dirAbs) return mSpec
-          let fpMap1 = registerFingerprint dirAbs spec fpMap
-          (deps, fpMap2) <- foldM (collectDep pins dirAbs) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
-          let ctx = ProjCtx { projRoot      = dirAbs
-                            , projSrcDir    = projectSrcDir dirAbs
+    -- Every directory the walk visits is absolute and normalised: the root
+    -- above, and every dependency by resolveDepBase, as itself or as the
+    -- directory that registered its fingerprint first.
+    go pins seen (acc, fpMap) dir mSpec
+      | Data.Set.member dir seen  = return (acc, fpMap)
+      | otherwise                 = do
+          spec <- maybe (loadOverriddenSpec depOverrides dir) return mSpec
+          let fpMap1 = registerFingerprint dir spec fpMap
+          (deps, fpMap2) <- foldM (collectDep pins dir) ([], fpMap1) (M.toList (BuildSpec.concreteDependencies spec))
+          let ctx = ProjCtx { projRoot      = dir
+                            , projSrcDir    = projectSrcDir dir
                             , projSysPath   = sysAbs
                             , projBuildSpec = spec
                             , projDeps      = [ (n, p) | (n, p, _) <- reverse deps ]
                             }
-              acc' = M.insert dirAbs ctx acc
-              seen' = Data.Set.insert dirAbs seen
-          foldM (step seen' pins) (acc', fpMap2) (reverse deps)
+              seen' = Data.Set.insert dir seen
+          foldM (\state (_, depDir, depSpec) -> go pins seen' state depDir depSpec) (M.insert dir ctx acc, fpMap2) (reverse deps)
 
     collectDep pins base (accDeps, fpMap) (depName, dep) = do
       selected <- selectDepAndWarn gopts pins base depName dep
@@ -798,9 +798,6 @@ discoverProjects gopts sysAbs rootProj depOverrides = do
                   ++ " at " ++ depAbs ++ " deduplicated to " ++ depPath)
       let depSpec = if depPath == depAbs then Just spec else Nothing
       return ((depName, depPath, depSpec) : accDeps, fpMap')
-
-    step seen pins (acc, fpMap) (_, depBase, mSpec) =
-      go seen acc fpMap pins depBase mSpec
 
 -- | Bind passive dependency references after concrete selection and deduplication.
 -- A follows entry contributes neither a source nor a root pin. Every segment
