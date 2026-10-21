@@ -1584,7 +1584,7 @@ data ModuleEnv = ModuleEnv
   , moduleCurrent  :: CompileTask                       -- the parse stage's result, else the discovered task
   , moduleOptions  :: C.CompileOptions                  -- root or dependency options
   , moduleResolver :: Resolver
-  , checkedModules :: Acton.Env.Env0                    -- __builtin__ and every module checked before this one
+  , moduleBase     :: Acton.Env.Env0                    -- __builtin__ and every module checked before this one
   , moduleBlocked  :: Bool                              -- a library boundary: its back passes are not deferred
   , moduleForced   :: Bool                              -- alternative output for the requested module, or --always-build
   }
@@ -2315,14 +2315,14 @@ readInterfaceShell env pubHash = do
 -- the environment of the modules checked before it, tagged with the given
 -- impl hash.
 storedBackJob :: ModuleEnv -> InterfaceFiles.StoredModule -> B.ByteString -> IO BackJob
-storedBackJob env module' = loadBackJob (moduleBuild env) (checkedModules env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
+storedBackJob env module' = loadBackJob (moduleBuild env) (moduleBase env) (keyOf env) (pathsOf env) (moduleOptions env) (InterfaceFiles.storedTyped module')
 
 -- | A back job for a typed module read back from a .tydb: its source read
 -- again, its environment rebuilt with protocols converted.
 loadBackJob :: BuildEnv -> Acton.Env.Env0 -> TaskKey -> Paths -> C.CompileOptions -> A.Module -> B.ByteString -> IO BackJob
-loadBackJob build env key paths opts typed codegenHash = do
+loadBackJob build base key paths opts typed codegenHash = do
     snap  <- Source.readSource (buildSources build) (srcFile paths (tkMod key))
-    scope <- Acton.Env.mkEnv (searchPath paths) env typed
+    scope <- Acton.Env.mkEnv (searchPath paths) base typed
     return BackJob { bjKey = key, bjPaths = paths, bjOpts = opts, bjTypeEnv = Converter.convEnvProtos scope
                    , bjModule = typed, bjSource = Source.ssText snap, bjCodegenHash = codegenHash }
 
@@ -2335,7 +2335,7 @@ loadBackJob build env key paths opts typed codegenHash = do
 checkModule :: BuildEnv -> GlobalTask -> C.CompileOptions -> Acton.Env.Env0 -> ModuleSource -> A.Module -> IO (Either [Diagnostic String] FrontResult)
 checkModule build t opts base = runFrontPasses ModuleEnv
     { moduleBuild = build, moduleTask = t, moduleCurrent = gtTask t, moduleOptions = opts
-    , moduleResolver = cacheResolver (buildCache build) (gtPaths t), checkedModules = base
+    , moduleResolver = cacheResolver (buildCache build) (gtPaths t), moduleBase = base
     , moduleBlocked = False, moduleForced = False }
 
 -- | A module after its kinds, types and escape analysis.
@@ -2385,7 +2385,7 @@ runFrontPasses env source parsed = do
       dumpWhen opts mn C.parse     "parse"     (Pretty.print parsed)
       dumpWhen opts mn C.parse_ast "parse-ast" (renderStyle astStyle (ppDoc parsed))
       observer        <- newTypeObserver env
-      scope           <- Acton.Env.mkEnv (searchPath (pathsOf env)) (checkedModules env) parsed
+      scope           <- Acton.Env.mkEnv (searchPath (pathsOf env)) (moduleBase env) parsed
       envDone         <- now
       kinded          <- kindsPass env scope parsed
       kindsDone       <- now
@@ -2737,7 +2737,7 @@ addInterestDeps deps im =
 -- compared with the tags of the generated files before any statement is
 -- read, and the job is Nothing when the generated code is up to date.
 prepareDeferredBackJob :: BuildEnv -> Acton.Env.Env0 -> InterestMap -> DeferredBackJob -> IO (Maybe BackJob)
-prepareDeferredBackJob build env interestMap job = do
+prepareDeferredBackJob build base interestMap job = do
     roots    <- Data.Set.fromList <$> InterfaceFiles.readRoots tydb
     let interested = M.findWithDefault Data.Set.empty mn interestMap
     selected <- selectedRows tydb label (Data.Set.union interested roots)
@@ -2756,7 +2756,7 @@ prepareDeferredBackJob build env interestMap job = do
         -- whole-module read would mask that, and read gigabytes doing it.
         typed <- InterfaceFiles.readSelectedModule tydb (M.elems selected) names
                    >>= maybe (error ("Internal error: missing statement rows in " ++ tydb)) return
-        back  <- loadBackJob build env (deferredKey job) paths (deferredOptions job) (pruneModule names typed) codegenHash
+        back  <- loadBackJob build base (deferredKey job) paths (deferredOptions job) (pruneModule names typed) codegenHash
         info build (describeDbp label stats False)
         return (Just back)
   where paths = deferredPaths job
@@ -3223,7 +3223,7 @@ moduleEnv run state k = ModuleEnv
     , moduleCurrent  = M.findWithDefault (gtTask t) k (parsedModules state)
     , moduleOptions  = opts
     , moduleResolver = inRunResolver (buildCache (runBuild run)) (runTasks run) (finishedModules state) t
-    , checkedModules = accumulatedEnv state
+    , moduleBase     = accumulatedEnv state
     , moduleBlocked  = Data.Set.member k (runBlocked run)
     , moduleForced   = altOutputFor (runContext run) k || C.alwaysbuild opts
     }
