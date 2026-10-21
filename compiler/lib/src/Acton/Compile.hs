@@ -1300,7 +1300,7 @@ readModuleTask sp gopts opts paths mn file = do
       when (C.verbose gopts && Source.ssIsOverlay snap) $ do
         actTime <- Source.spGetModTime sp file
         tyTime  <- InterfaceFiles.interfaceModifiedTime tydb
-        putStrLn ("[debug] readModuleHeader " ++ modNameToString mn
+        putStrLn ("[debug] readModuleTask " ++ modNameToString mn
                   ++ " act=" ++ show actTime
                   ++ " ty=" ++ show tyTime
                   ++ " hash=" ++ Hashing.shortHash hash
