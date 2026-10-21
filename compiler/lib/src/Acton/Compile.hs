@@ -63,14 +63,15 @@ Call flow:
       the user asks to build / run a module
 
 State and orchestration:
-  - Acton.Compile holds only one in-process ModuleCache (.tydb paths, module
-    hashes and name hashes) to speed up .tydb lookups; all orchestration state
-    is owned by the caller.
+  - Acton.Compile holds no state of its own; all orchestration state is
+    owned by the caller.
   - Callers allocate and hold a CompileScheduler from this module. The
     scheduler encapsulates mutable state (generation id, cancelable async
-    handle, build-spec stamp, and a shared back-queue); callers pass it into
-    startCompile, runCompilePlan and waitBackJobs rather than mutating it
-    directly.
+    handle, build-spec stamp, a shared back-queue, and the ModuleCache of
+    .tydb paths, module hashes and name hashes that speeds up .tydb lookups
+    for its runs); callers pass it into startCompile, runCompilePlan and
+    waitBackJobs rather than mutating it directly. A run outside any
+    scheduler (standaloneBuild) has a ModuleCache of its own.
   - LSP additionally keeps overlaysRef for in-memory buffers and builds an
     overlay-aware SourceProvider on top of disk reads. acton watch reads
     directly from disk.
@@ -139,7 +140,6 @@ module Acton.Compile
   , BackPassFailure(..)
   , backPassFailureMessage
   , BackJobResult(..)
-  , clearModuleCaches
   , parseActSource
   , parseActFile
   , readModuleTask
@@ -220,7 +220,6 @@ import System.Environment (getExecutablePath)
 import System.FilePath ((</>))
 import System.FilePath.Posix
 import System.IO
-import System.IO.Unsafe (unsafePerformIO)
 import System.Posix.Files (deviceID, fileID, fileSize, getFileStatus, modificationTimeHiRes, statusChangeTimeHiRes)
 import Text.PrettyPrint (renderStyle, style, Style(..), Mode(PageMode))
 import Text.Show.Pretty (ppDoc)
@@ -435,12 +434,18 @@ currentGeneration sched = do
   return (Generation number (schedulerCounter sched))
 
 -- | A long-lived compiler. The back passes of every generation share one
--- pool of workers.
+-- pool of workers, and every run shares one module cache, so the interface
+-- hashes a run reads from disk or finishes are remembered for the
+-- scheduler's lifetime. The cache is keyed by module name, so it cannot
+-- tell two source trees apart, such as two checkouts of different Git
+-- revisions. Each independent tree is built by its own scheduler. Within
+-- one tree, a module that a run finishes replaces its own entries.
 data CompileScheduler = CompileScheduler
   { schedulerCounter   :: IORef Int                     -- the newest generation
   , schedulerRun       :: MVar (Maybe (Async ()))       -- the newest generation's run
   , schedulerBackQueue :: BackQueue
   , schedulerBuildSpec :: IORef (Maybe BuildSpecStamp)  -- Build.act at the last plan
+  , schedulerCache     :: ModuleCache
   }
 
 -- | Back jobs waiting for a worker, with the state waitBackJobs reads.
@@ -453,15 +458,16 @@ data BackQueue = BackQueue
 -- | A back job with its generation and the sink its events go to.
 data QueuedJob = QueuedJob Generation (BuildEvent -> IO ()) BackJob
 
--- | Create a scheduler at generation 0. Its back passes run on the given
--- number of workers (at least one) with the given global options, which
--- decide whether back passes report their time and timing.
+-- | Create a scheduler at generation 0 with an empty module cache. Its back
+-- passes run on the given number of workers (at least one) with the given
+-- global options, which decide whether back passes report their time and
+-- timing.
 newCompileScheduler :: C.GlobalOptions -> Int -> IO CompileScheduler
 newCompileScheduler gopts workers = do
   counter <- newIORef 0
   queue <- BackQueue <$> newTChanIO <*> newTVarIO M.empty <*> newTVarIO M.empty
   replicateM_ (max 1 workers) (forkIO (backWorker gopts queue))
-  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing
+  CompileScheduler counter <$> newMVar Nothing <*> pure queue <*> newIORef Nothing <*> newModuleCache
 
 -- | How many modules compile at once: --jobs when given, else one per
 -- capability.
@@ -682,17 +688,18 @@ runCompilePlan sp gopts sched gen plan onEvent = withAnalytics $ \analytics -> d
           _             -> return ()
         whenCurrent gen (onEvent event)
   outputs <- OutputJobs <$> newIORef []
-  compileModules (BuildEnv sp gopts gen events moduleCache outputs) plan
+  compileModules (BuildEnv sp gopts gen events (schedulerCache sched) outputs) plan
 
 -- | The services of a run outside any scheduler: a generation that stays
--- current, the process-wide module cache, no back queue, so BackReady
--- reaches only the handler, and a record of its own background outputs,
--- which awaitOutputs waits for.
+-- current, a module cache of its own, no back queue, so BackReady reaches
+-- only the handler, and a record of its own background outputs, which
+-- awaitOutputs waits for.
 standaloneBuild :: Source.SourceProvider -> C.GlobalOptions -> (BuildEvent -> IO ()) -> IO BuildEnv
 standaloneBuild sp gopts onEvent = do
   counter <- newIORef 0
+  cache <- newModuleCache
   outputs <- OutputJobs <$> newIORef []
-  return (BuildEnv sp gopts (Generation 0 counter) onEvent moduleCache outputs)
+  return (BuildEnv sp gopts (Generation 0 counter) onEvent cache outputs)
 
 -- | Compile a plan outside any scheduler, as acton sig does. Analytics do
 -- not sample it.
@@ -755,26 +762,6 @@ hashTable Impl                          = implHashTable
 
 newModuleCache :: IO ModuleCache
 newModuleCache = ModuleCache <$> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty <*> newMVar M.empty
-
--- | The process-wide module cache.  NOINLINE keeps GHC from inlining or
--- floating the initializer, so it runs once and the process has exactly one.
-{-# NOINLINE moduleCache #-}
-moduleCache :: ModuleCache
-moduleCache = unsafePerformIO newModuleCache
-
--- | Empty the process-wide cache before an independent build of another
--- source tree.  Its tables are keyed by module name, so they cannot tell two
--- revisions apart.  No compile job may be running.
-clearModuleCaches :: IO ()
-clearModuleCaches = do
-    clear tydbPathTable
-    clear pubHashTable
-    clear implHashTable
-    clear nameMapTable
-    clear nameReadTable
-  where
-    clear :: (ModuleCache -> MVar (M.Map k v)) -> IO ()
-    clear table = modifyMVar_ (table moduleCache) (const (return M.empty))
 
 -- | Look a key up, loading and remembering it on a miss.  Only found values
 -- are kept, so a miss is loaded again next time.  The table stays locked

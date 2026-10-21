@@ -738,7 +738,6 @@ runGitTestComparison gopts opts topts mode paths ref = do
                                    , C.dep_overrides = [(name, rebase path) | (name, path) <- overrides] }
                 studyOpts = topts { C.testCompile = compileOpts, C.testCompare = Nothing }
             withCurrentDirectory project $ do
-              clearModuleCaches
               treePaths <- loadProjectPathsAt project compileOpts
               modules <- buildTestModules gopts compileOpts treePaths studyOpts
               names <- selectedTestNames compileOpts treePaths studyOpts modules
